@@ -14,14 +14,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    private final class StageGate {
-        var continuation: CheckedContinuation<
-            ExtensionBridge.StoreMutationResult,
-            Never
-        >?
-        var pendingResult: ExtensionBridge.StoreMutationResult?
+    private final class AsyncGate<Value> {
+        var continuation: CheckedContinuation<Value, Never>?
+        var pendingResult: Value?
 
-        func run() async -> ExtensionBridge.StoreMutationResult {
+        func run() async -> Value {
             if let pendingResult {
                 self.pendingResult = nil
                 return pendingResult
@@ -31,7 +28,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
         }
 
-        func resume(_ result: ExtensionBridge.StoreMutationResult) {
+        func resume(_ result: Value) {
             let continuation = continuation
             self.continuation = nil
             if let continuation {
@@ -43,15 +40,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     private final class CoordinatorStore: NativeDeliveryStore {
-        var loadHandler: (ExtensionBridge.Handle) async ->
-            ExtensionBridge.SnapshotResult = { _ in .missing }
-        var recordHandler: (
+        var snapshot: ExtensionBridge.Snapshot?
+        var loadHandler: ((ExtensionBridge.Handle) async ->
+            ExtensionBridge.SnapshotResult)?
+        var recordCount = 0
+        var recordedOwner: ExtensionBridge.NativeDeliveryOwner?
+        var recordHandler: ((
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
-            UUID
-        ) async -> ExtensionBridge.StoreMutationResult = { _, _, _ in
-            .ownershipLost
-        }
+            UUID,
+            ExtensionBridge.NativeDeliveryOwner
+        ) async -> ExtensionBridge.StoreMutationResult)?
+        var unownedRejectHandler: (ExtensionBridge.Handle) async ->
+            ExtensionBridge.StoreMutationResult = { _ in .persisted }
         var stageHandler: (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
@@ -79,19 +80,57 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         func load(
             handle: ExtensionBridge.Handle
         ) async -> ExtensionBridge.SnapshotResult {
-            await loadHandler(handle)
+            if let loadHandler { return await loadHandler(handle) }
+            return snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
         }
 
         func recordNativeDeliveryReceipt(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID
+            runtimeInstanceIdentifier: UUID,
+            owner: ExtensionBridge.NativeDeliveryOwner
         ) async -> ExtensionBridge.StoreMutationResult {
-            await recordHandler(
-                handle,
-                nativeDeliveryNonce,
-                runtimeInstanceIdentifier
+            recordCount += 1
+            recordedOwner = owner
+            if let recordHandler {
+                return await recordHandler(
+                    handle, nativeDeliveryNonce, runtimeInstanceIdentifier, owner
+                )
+            }
+            guard case .found(let current) = await load(handle: handle),
+                  current.phase == .queued,
+                  current.nativeDeliveryNonce == nativeDeliveryNonce else {
+                return .ownershipLost
+            }
+            let receipt = ExtensionBridge.NativeDeliveryReceipt(
+                nativeDeliveryNonce: nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtimeInstanceIdentifier,
+                owner: owner
             )
+            if let existing = current.nativeDeliveryReceipt {
+                return existing == receipt ? .persisted : .ownershipLost
+            }
+            guard loadHandler == nil else { return .ownershipLost }
+            snapshot = ExtensionBridge.Snapshot(
+                handle: current.handle,
+                phase: current.phase,
+                request: current.request,
+                nativeDecisionStaged: current.nativeDecisionStaged,
+                nativeDeliveryNonce: current.nativeDeliveryNonce,
+                nativeDeliveryReceipt: receipt,
+                host: current.host,
+                configurationKey: current.configurationKey,
+                revisions: current.revisions,
+                createdAt: current.createdAt,
+                enqueueAttempt: current.enqueueAttempt,
+                sequence: current.sequence
+            )
+            return .persisted
+        }
+
+        func reject(handle: ExtensionBridge.Handle) async ->
+            ExtensionBridge.StoreMutationResult {
+            await unownedRejectHandler(handle)
         }
 
         func stageNativeDecision(
@@ -291,389 +330,400 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ))
     }
 
-    func testApprovalInboxCancellationIncludesInFlightValidation() {
-        var inbox = ApprovalInbox<String>()
-        let first = approvalKey(id: 100)
-        let second = approvalKey(id: 101)
-
-        XCTAssertTrue(inbox.register(first))
-        XCTAssertEqual(inbox.takeUnstartedValidations(), [first])
-        XCTAssertTrue(inbox.register(second))
-
-        XCTAssertEqual(
-            Set(inbox.markPendingAsCanceling().map(\.key)),
-            Set([first, second])
-        )
-        XCTAssertTrue(inbox.isCanceling(first))
-        XCTAssertTrue(inbox.isCanceling(second))
-        XCTAssertFalse(inbox.beginReceiptAcquisition(
-            first,
-            order: approvalOrder(id: 100)
-        ))
+    func testRegistrationWaitsForRuntimeAndStartIsIdempotent() async throws {
+        let fixture = try makeFixture()
+        fixture.coordinator.resumeAfterAuthentication()
+        XCTAssertEqual(fixture.coordinator.state, .registered)
+        XCTAssertEqual(fixture.store.recordCount, 0)
+        start(fixture)
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.store.recordedOwner, nativeOwner)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+        XCTAssertTrue(fixture.events.presentations.isEmpty)
     }
 
-    func testApprovalInboxSupportsSequentialCancellationsWithoutFixedFence() {
+    func testInitialUnavailableValidationFinishesWithoutRetryOrUI() async throws {
+        let fixture = try makeFixture()
+        fixture.store.loadHandler = { _ in .unavailable }
         var inbox = ApprovalInbox<String>()
-
-        for id in 0..<32 {
-            let key = approvalKey(id: id)
-            XCTAssertTrue(inbox.register(key))
-            XCTAssertEqual(
-                inbox.markPendingAsCanceling(),
-                [.init(key: key, receiptOwned: false)]
-            )
-            XCTAssertTrue(inbox.isCanceling(key))
-            inbox.remove(key)
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        fixture.coordinator.onEvent = { event in
+            if case .presentation(.finished) = event { inbox.remove(fixture.key) }
         }
-
+        start(fixture)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 0)
         XCTAssertEqual(inbox.count, 0)
+        XCTAssertNil(inbox.oldestActive(where: { _ in true }))
     }
 
-    func testApprovalInboxDoesNotApplyProfileCapacityGlobally() {
-        var inbox = ApprovalInbox<String>()
-
-        for id in 0..<24 {
-            let key = approvalKey(
-                id: id,
-                profileIdentifier: UUID()
-            )
-            XCTAssertTrue(inbox.register(key))
-            XCTAssertTrue(inbox.beginReceiptAcquisition(
-                key,
-                order: approvalOrder(id: id)
-            ))
-            XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-            XCTAssertTrue(inbox.activate("active-\(id)", for: key))
+    func testLateValidationCannotAcquireAfterCancellation() async throws {
+        let fixture = try makeFixture()
+        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let original = try XCTUnwrap(fixture.store.snapshot)
+        let loadStarted = expectation(description: "validation load started")
+        var loads = 0
+        var rejections = 0
+        fixture.store.loadHandler = { _ in
+            loads += 1
+            if loads == 1 {
+                loadStarted.fulfill()
+                return await gate.run()
+            }
+            return .found(original)
         }
-
-        XCTAssertEqual(inbox.count, 24)
+        fixture.store.unownedRejectHandler = { _ in
+            rejections += 1
+            return .persisted
+        }
+        start(fixture)
+        await fulfillment(of: [loadStarted], timeout: 1)
+        fixture.coordinator.cancelBeforeAuthentication()
+        await waitForState(fixture.coordinator, .finished)
+        gate.resume(.found(original))
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(fixture.store.recordCount, 0)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
     }
 
-    func testApprovalInboxBoundsOnlyUnverifiedRoutes() {
+    func testDelayedValidationStartsReceiptDeadlineAtAcquisition() async throws {
+        let fixture = try makeFixture()
+        let snapshot = try approvalSnapshot(
+            handle: fixture.key.handle,
+            nonce: fixture.key.nativeDeliveryNonce,
+            deadline: fixture.clock.now.addingTimeInterval(ExtensionBridge.requestTTL + 30)
+        )
+        fixture.store.snapshot = snapshot
+        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let loadStarted = expectation(description: "validation suspended")
+        fixture.store.loadHandler = { _ in
+            loadStarted.fulfill()
+            return await gate.run()
+        }
+        start(fixture)
+        await fulfillment(of: [loadStarted], timeout: 1)
+        fixture.clock.now.addTimeInterval(ExtensionBridge.requestTTL + 10)
+        fixture.store.loadHandler = nil
+        gate.resume(.found(snapshot))
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+        XCTAssertTrue(fixture.events.presentations.isEmpty)
+    }
+
+    func testForeignReceiptBeforeStartupNeverAuthenticatesOrPreparesWallets() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now },
+            wait: { _ in XCTFail("Foreign ownership must not retry") },
+            prepareWithoutWallets: { _ in
+                XCTFail("Foreign ownership must not prepare a request")
+                return nil
+            },
+            reloadWallets: {
+                XCTFail("Foreign ownership must not reload wallets")
+                return false
+            }
+        ))
+        fixture.store.snapshot = try ownedSnapshot(fixture, runtime: UUID())
+        start(fixture)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testLateBootstrapLoadCannotPresentAfterRejection() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let snapshot = try XCTUnwrap(fixture.store.snapshot)
+        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let loadStarted = expectation(description: "bootstrap load started")
+        let loadReturned = expectation(description: "canceled bootstrap load returned")
+        fixture.store.loadHandler = { _ in
+            loadStarted.fulfill()
+            let result = await gate.run()
+            loadReturned.fulfill()
+            return result
+        }
+        fixture.store.rejectHandler = { _, _, _ in .persisted }
+        fixture.coordinator.resumeAfterAuthentication()
+        await fulfillment(of: [loadStarted], timeout: 1)
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
+        gate.resume(.found(snapshot))
+        await fulfillment(of: [loadReturned], timeout: 1)
+        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+        guard case .finished = fixture.events.presentations.first else {
+            return XCTFail("A canceled bootstrap must only finish")
+        }
+    }
+
+    func testCancellationWaitsForInFlightReceiptThenRejectsExactOwner() async throws {
+        let fixture = try makeFixture()
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        fixture.store.recordHandler = { _, _, _, _ in await gate.run() }
+        var rejections = 0
+        fixture.store.rejectHandler = { handle, nonce, runtime in
+            XCTAssertEqual(handle, fixture.key.handle)
+            XCTAssertEqual(nonce, fixture.key.nativeDeliveryNonce)
+            XCTAssertEqual(runtime, fixture.runtime)
+            rejections += 1
+            return .persisted
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .acquiringReceipt(cancelRequested: false))
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        fixture.coordinator.cancelBeforeAuthentication()
+        fixture.coordinator.cancelBeforeAuthentication()
+        XCTAssertEqual(fixture.coordinator.state, .acquiringReceipt(cancelRequested: true))
+        XCTAssertEqual(rejections, 0)
+        fixture.store.snapshot = try ownedSnapshot(fixture)
+        gate.resume(.persisted)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testStagedPreauthenticationCancellationWaitsSilentlyForExplicitRetry() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("A staged decision must not be rejected")
+            return .ownershipLost
+        }
+        fixture.coordinator.cancelBeforeAuthentication()
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+        XCTAssertTrue(fixture.events.presentations.isEmpty)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .staged)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testPreauthenticationCancellationFinishesForForeignOrExecutingReceipt() async throws {
+        for foreign in [false, true] {
+            let fixture = try makeFixture()
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.store.snapshot = try ownedSnapshot(
+                fixture,
+                runtime: foreign ? UUID() : fixture.runtime,
+                phase: foreign ? .queued : .approving,
+                staged: true
+            )
+            fixture.store.rejectHandler = { _, _, _ in
+                XCTFail("Must not reject foreign or executing work")
+                return .ownershipLost
+            }
+            fixture.coordinator.cancelBeforeAuthentication()
+            await waitForState(fixture.coordinator, .finished)
+            XCTAssertEqual(fixture.events.authenticationCount, 1)
+        }
+    }
+
+    func testOwnedCancellationDeadlineAllowsLaterStorageRecovery() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now },
+            wait: { delay in
+                if delay < 1_000_000_000 {
+                    clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+                } else {
+                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                }
+            },
+            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.store.loadHandler = { _ in .unavailable }
+        fixture.coordinator.cancelBeforeAuthentication()
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+        fixture.store.loadHandler = nil
+        fixture.store.snapshot = try ownedSnapshot(fixture)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+        fixture.store.snapshot = nil
+    }
+
+    func testLostReceiptAfterAuthenticationCannotBeReacquired() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.store.snapshot = try approvalSnapshot(
+            handle: fixture.key.handle,
+            nonce: fixture.key.nativeDeliveryNonce,
+            deadline: fixture.clock.now.addingTimeInterval(300)
+        )
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        guard case .superseded = fixture.events.presentations.first else {
+            return XCTFail("Expected lost ownership")
+        }
+    }
+
+    func testReceiptAndWalletRetriesRemainOnTheirOwnSideOfAuthentication() async throws {
+        let clock = Clock()
+        var reloads = 0
+        var preparations = 0
+        var delays = [UInt64]()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now },
+            wait: { delay in
+                if delay < 1_000_000_000 { delays.append(delay) }
+                else { try? await Task.sleep(nanoseconds: 60_000_000_000) }
+            },
+            prepareWithoutWallets: { _ in nil },
+            reloadWallets: {
+                reloads += 1
+                return reloads > 1
+            },
+            prepare: { _ in
+                preparations += 1
+                return .approval(self.accountSelectionAction())
+            }
+        ))
+        fixture.store.recordHandler = { _, _, _, _ in
+            fixture.store.recordHandler = nil
+            return .retryablePersistenceFailure
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertEqual(reloads, 0)
+        XCTAssertEqual(preparations, 0)
+        XCTAssertEqual(fixture.store.recordCount, 2)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(reloads, 2)
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(delays, [250_000_000, 250_000_000])
+        fixture.store.snapshot = nil
+    }
+
+    func testPostauthenticationLoadingStopsAtAdmissionDeadline() async throws {
+        let clock = Clock()
+        var reloads = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now },
+            wait: { _ in clock.now.addTimeInterval(301) },
+            prepareWithoutWallets: { _ in nil },
+            reloadWallets: {
+                reloads += 1
+                return false
+            }
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(reloads, 1)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testPostauthenticationUnavailableLoadingStopsAtDeadline() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now },
+            wait: { _ in clock.now.addTimeInterval(ExtensionBridge.requestTTL) }
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.store.loadHandler = { _ in .unavailable }
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testApprovalInboxBoundsOnlyUnverifiedRoutesAndKeepsWalletIntentSeparate() async throws {
         var inbox = ApprovalInbox<String>(maximumUnverifiedCount: 2)
-        let first = approvalKey(id: 200)
-        let second = approvalKey(id: 201)
-        let third = approvalKey(id: 202)
-
-        XCTAssertTrue(inbox.register(first))
-        XCTAssertTrue(inbox.register(second))
-        XCTAssertFalse(inbox.register(third))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            first,
-            order: approvalOrder(id: 200)
-        ))
-        XCTAssertFalse(inbox.register(third))
-        XCTAssertEqual(inbox.receiptAcquired(first), .awaitAuthentication)
-        XCTAssertTrue(inbox.register(third))
-    }
-
-    func testApprovalInboxWaitsForReceiptBeforeAuthentication() {
-        var inbox = ApprovalInbox<String>()
-        let key = approvalKey(id: 203)
-
-        XCTAssertTrue(inbox.register(key))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            key,
-            order: approvalOrder(id: 203)
-        ))
-        XCTAssertTrue(inbox.isAcquiringReceipt(key))
-        XCTAssertFalse(inbox.hasAwaitingAuthentication)
-
-        XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-        XCTAssertTrue(inbox.hasAwaitingAuthentication)
-        XCTAssertTrue(inbox.isAwaitingAuthentication(key))
-    }
-
-    func testApprovalInboxCancellationAfterReceiptUsesExactOwner() {
-        var inbox = ApprovalInbox<String>()
-        let key = approvalKey(id: 204)
-        XCTAssertTrue(inbox.register(key))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            key,
-            order: approvalOrder(id: 204)
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-
-        XCTAssertEqual(
-            inbox.markPendingAsCanceling(),
-            [.init(key: key, receiptOwned: true)]
-        )
-        XCTAssertTrue(inbox.isCanceling(key))
-    }
-
-    func testApprovalInboxCancellationDuringReceiptAcquisitionWaitsForOutcome() {
-        var inbox = ApprovalInbox<String>()
-        let key = approvalKey(id: 205)
-        XCTAssertTrue(inbox.register(key))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            key,
-            order: approvalOrder(id: 205)
-        ))
-
-        XCTAssertTrue(inbox.markPendingAsCanceling().isEmpty)
-        XCTAssertEqual(inbox.receiptAcquired(key), .cancel)
-        XCTAssertTrue(inbox.isCanceling(key))
-    }
-
-    func testReceiptOwnedStagedCancellationRetainsExactReceiptForRetry() throws {
-        let handle = makeHandle(id: 206)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        let key = ApprovalRouteKey(
-            handle: handle,
-            nativeDeliveryNonce: nonce
-        )
-        let receipt = ExtensionBridge.NativeDeliveryReceipt(
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime
-        )
-        let deadline = Date(timeIntervalSince1970: 2_000_000_000)
-        let staged = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: deadline,
-            receipt: receipt,
-            nativeDecisionStaged: true
-        )
-        let unstaged = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: deadline,
-            receipt: receipt
-        )
-        let executing = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: deadline,
-            receipt: receipt,
-            phase: .approving,
-            nativeDecisionStaged: true
-        )
-
-        XCTAssertEqual(Agent.receiptOwnedCancellationAction(
-            snapshot: staged,
-            key: key,
-            runtimeInstanceIdentifier: runtime
-        ), .retainForAuthenticationRetry)
-        XCTAssertEqual(Agent.receiptOwnedCancellationAction(
-            snapshot: unstaged,
-            key: key,
-            runtimeInstanceIdentifier: runtime
-        ), .reject)
-        XCTAssertEqual(Agent.receiptOwnedCancellationAction(
-            snapshot: staged,
-            key: key,
-            runtimeInstanceIdentifier: UUID()
-        ), .finish)
-        XCTAssertEqual(Agent.receiptOwnedCancellationAction(
-            snapshot: executing,
-            key: key,
-            runtimeInstanceIdentifier: runtime
-        ), .finish)
-    }
-
-    func testApprovalInboxRestoresSameRuntimeAuthenticationRetry() {
-        var inbox = ApprovalInbox<String>()
-        let key = approvalKey(id: 207)
-
-        XCTAssertTrue(inbox.register(key))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            key,
-            order: approvalOrder(id: 207)
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-        XCTAssertEqual(
-            inbox.markPendingAsCanceling(),
-            [.init(key: key, receiptOwned: true)]
-        )
-
-        XCTAssertTrue(inbox.restoreAwaitingAuthentication(key))
-        XCTAssertTrue(inbox.isAwaitingAuthentication(key))
-        XCTAssertFalse(inbox.register(key))
-        XCTAssertFalse(inbox.restoreAwaitingAuthentication(key))
-    }
-
-    func testApprovalInboxPreservesActiveDeduplication() {
-        var inbox = ApprovalInbox<String>()
-        let key = approvalKey(id: 102)
-
-        XCTAssertTrue(inbox.register(key))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            key,
-            order: approvalOrder(id: 102)
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-        XCTAssertTrue(inbox.activate("active", for: key))
-        XCTAssertFalse(inbox.register(key))
-        XCTAssertEqual(inbox.active(for: key), "active")
-    }
-
-    func testWalletIntentIsIndependentFromApprovalInboxCapacity() {
-        var inbox = ApprovalInbox<String>()
+        let first = try makeFixture()
+        let second = try makeFixture()
+        let third = try makeFixture()
         var intent = PendingWalletOpenIntent()
         intent.record()
-
-        for id in 0..<32 {
-            let key = approvalKey(id: id)
-            XCTAssertTrue(inbox.register(key))
-            XCTAssertTrue(inbox.beginReceiptAcquisition(
-                key,
-                order: approvalOrder(id: id)
-            ))
-            XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-            XCTAssertTrue(inbox.activate("active-\(id)", for: key))
-        }
-
-        XCTAssertEqual(inbox.count, 32)
+        XCTAssertTrue(inbox.register(first.coordinator))
+        XCTAssertTrue(inbox.register(second.coordinator))
+        XCTAssertFalse(inbox.register(third.coordinator))
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        first.store.recordHandler = { _, _, _, _ in await gate.run() }
+        start(first)
+        await waitForState(first.coordinator, .acquiringReceipt(cancelRequested: false))
+        XCTAssertFalse(inbox.register(third.coordinator))
+        first.store.snapshot = try ownedSnapshot(first)
+        gate.resume(.persisted)
+        await waitForState(first.coordinator, .awaitingAuthentication)
+        XCTAssertTrue(inbox.register(third.coordinator))
+        XCTAssertTrue(inbox.activate("first", for: first.key))
+        XCTAssertFalse(inbox.activate("again", for: first.key))
+        XCTAssertFalse(inbox.register(first.coordinator))
+        XCTAssertEqual(inbox.active(for: first.key), "first")
         XCTAssertTrue(intent.consume())
     }
 
-    func testApprovalInboxOrdersAuthenticationBySnapshotAge() {
-        var inbox = ApprovalInbox<String>()
-        let newer = approvalKey(id: 301)
-        let older = approvalKey(id: 300)
-
-        XCTAssertTrue(inbox.register(newer))
-        XCTAssertTrue(inbox.register(older))
-        XCTAssertEqual(inbox.takeUnstartedValidations(), [newer, older])
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            newer,
-            order: approvalOrder(id: 301)
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(newer), .awaitAuthentication)
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            older,
-            order: approvalOrder(id: 300)
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(older), .awaitAuthentication)
-
-        XCTAssertEqual(inbox.awaitingAuthenticationKeys, [older, newer])
-        XCTAssertTrue(inbox.activate("newer", for: newer))
-        XCTAssertTrue(inbox.activate("older", for: older))
-        XCTAssertEqual(inbox.oldestActive(where: { _ in true })?.key, older)
-    }
-
-    func testApprovalInboxBreaksSnapshotTiesDeterministically() {
-        var inbox = ApprovalInbox<String>()
-        let higherSequence = approvalKey(id: 310)
-        let firstTie = approvalKey(id: 311)
-        let secondTie = approvalKey(id: 312)
-        let timestamp = Date(timeIntervalSince1970: 100)
-
-        for key in [higherSequence, firstTie, secondTie] {
-            XCTAssertTrue(inbox.register(key))
+    func testApprovalInboxDoesNotApplyProfileCapacityGlobally() async throws {
+        var inbox = ApprovalInbox<String>(maximumUnverifiedCount: 2)
+        for id in 0..<24 {
+            let fixture = try makeFixture(key: approvalKey(id: id, profileIdentifier: UUID()))
+            XCTAssertTrue(inbox.register(fixture.coordinator))
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            XCTAssertTrue(inbox.activate("active-\(id)", for: fixture.key))
         }
-        XCTAssertEqual(
-            inbox.takeUnstartedValidations(),
-            [higherSequence, firstTie, secondTie]
-        )
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            higherSequence,
-            order: .init(createdAt: timestamp, sequence: 2)
-        ))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            firstTie,
-            order: .init(createdAt: timestamp, sequence: 1)
-        ))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            secondTie,
-            order: .init(createdAt: timestamp, sequence: 1)
-        ))
-        for key in [higherSequence, firstTie, secondTie] {
-            XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-        }
-
-        XCTAssertEqual(
-            inbox.awaitingAuthenticationKeys,
-            [firstTie, secondTie, higherSequence]
-        )
+        XCTAssertEqual(inbox.count, 24)
     }
 
-    func testApprovalInboxOrderingIsStableWithValidationInProgress() {
+    func testApprovalInboxOrdersAuthenticationAndBreaksTiesDeterministically() async throws {
         var inbox = ApprovalInbox<String>()
-        let newer = approvalKey(id: 313)
-        let validating = approvalKey(id: 314)
-        let older = approvalKey(id: 315)
-
-        for key in [newer, validating, older] {
-            XCTAssertTrue(inbox.register(key))
+        let newer = try makeFixture(createdAt: 200)
+        let higherSequence = try makeFixture(createdAt: 100, sequence: 2)
+        let firstTie = try makeFixture(createdAt: 100, sequence: 1)
+        let secondTie = try makeFixture(createdAt: 100, sequence: 1)
+        let unstarted = try makeFixture()
+        let fixtures = [newer, higherSequence, firstTie, secondTie]
+        for fixture in fixtures + [unstarted] {
+            XCTAssertTrue(inbox.register(fixture.coordinator))
         }
-        XCTAssertEqual(
-            inbox.takeUnstartedValidations(),
-            [newer, validating, older]
-        )
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            newer,
-            order: .init(
-                createdAt: Date(timeIntervalSince1970: 200),
-                sequence: 0
-            )
-        ))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            older,
-            order: .init(
-                createdAt: Date(timeIntervalSince1970: 100),
-                sequence: 0
-            )
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(newer), .awaitAuthentication)
-        XCTAssertEqual(inbox.receiptAcquired(older), .awaitAuthentication)
-
-        XCTAssertEqual(inbox.awaitingAuthenticationKeys, [older, newer])
-        XCTAssertTrue(inbox.activate("newer", for: newer))
-        XCTAssertTrue(inbox.activate("older", for: older))
-        XCTAssertEqual(
-            inbox.oldestActive(where: { _ in true })?.key,
-            older
-        )
-    }
-
-    func testApprovalInboxRemovalPromotesNextOldestActiveApproval() {
-        var inbox = ApprovalInbox<String>()
-        let older = approvalKey(id: 320)
-        let newer = approvalKey(id: 321)
-
-        for (key, id) in [(newer, 321), (older, 320)] {
-            XCTAssertTrue(inbox.register(key))
-            XCTAssertTrue(inbox.beginReceiptAcquisition(
-                key,
-                order: approvalOrder(id: id)
-            ))
-            XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
-            XCTAssertTrue(inbox.activate("active-\(id)", for: key))
+        for fixture in fixtures.reversed() {
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
         }
-
-        XCTAssertEqual(inbox.oldestActive(where: { _ in true })?.key, older)
-        inbox.remove(older)
-        XCTAssertEqual(inbox.oldestActive(where: { _ in true })?.key, newer)
+        XCTAssertEqual(inbox.awaitingAuthenticationKeys, [firstTie.key, secondTie.key, higherSequence.key, newer.key])
+        XCTAssertEqual(inbox.coordinators.map(\.handle), (fixtures + [unstarted]).map { $0.key.handle })
+        for fixture in fixtures { XCTAssertTrue(inbox.activate("active", for: fixture.key)) }
+        XCTAssertEqual(inbox.oldestActive(where: { _ in true })?.key, firstTie.key)
+        inbox.remove(firstTie.key)
+        XCTAssertEqual(inbox.oldestActive(where: { _ in true })?.key, secondTie.key)
     }
 
-    func testApprovalInboxCancellationRemainsInRegistrationOrder() {
-        var inbox = ApprovalInbox<String>()
-        let first = approvalKey(id: 331)
-        let second = approvalKey(id: 330)
-
-        XCTAssertTrue(inbox.register(first))
-        XCTAssertTrue(inbox.register(second))
-        _ = inbox.takeUnstartedValidations()
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            first,
-            order: approvalOrder(id: 331)
-        ))
-        XCTAssertTrue(inbox.beginReceiptAcquisition(
-            second,
-            order: approvalOrder(id: 330)
-        ))
-        XCTAssertEqual(inbox.receiptAcquired(first), .awaitAuthentication)
-        XCTAssertEqual(inbox.receiptAcquired(second), .awaitAuthentication)
-
-        XCTAssertEqual(
-            inbox.markPendingAsCanceling().map(\.key),
-            [first, second]
-        )
+    func testSequentialCancellationsReleaseRegistrationsAndEmitOnce() async throws {
+        var inbox = ApprovalInbox<String>(maximumUnverifiedCount: 1)
+        for _ in 0..<8 {
+            let fixture = try makeFixture()
+            XCTAssertTrue(inbox.register(fixture.coordinator))
+            fixture.coordinator.cancelBeforeAuthentication()
+            fixture.coordinator.cancelBeforeAuthentication()
+            await waitForState(fixture.coordinator, .finished)
+            XCTAssertEqual(fixture.events.presentations.count, 1)
+            inbox.remove(fixture.key)
+        }
+        XCTAssertEqual(inbox.count, 0)
     }
 
-    func testOldestApprovalWindowCanBeFrontmostWithoutClosingNewer() throws {
+    func testOldestApprovalWindowCanBeFrontmostWithoutClosingNewer() async throws {
         var inbox = ApprovalInbox<WalletWindowController>()
         let olderKey = approvalKey(id: 340)
         let newerKey = approvalKey(id: 341)
@@ -706,17 +756,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             (newerKey, 341, newer),
             (olderKey, 340, older),
         ] {
-            XCTAssertTrue(inbox.register(key))
-            XCTAssertTrue(inbox.beginReceiptAcquisition(
-                key,
-                order: .init(
-                    createdAt: Date(
-                        timeIntervalSince1970: TimeInterval(id)
-                    ),
-                    sequence: 0
-                )
-            ))
-            XCTAssertEqual(inbox.receiptAcquired(key), .awaitAuthentication)
+            let fixture = try makeFixture(key: key, createdAt: TimeInterval(id))
+            XCTAssertTrue(inbox.register(fixture.coordinator))
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
             XCTAssertTrue(inbox.activate(controller, for: key))
         }
         let selected = try XCTUnwrap(inbox.oldestActive { approval in
@@ -1165,405 +1208,56 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(menu.cancellationCount, 1)
     }
 
-    func testBootstrapRetainsCoordinatorAcrossWalletAndReceiptFailures() async throws {
+    func testWalletIndependentBootstrapSkipsReloadAndDoesNotReacquireReceipt() async throws {
         let clock = Clock()
-        let handle = makeHandle(id: 1)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        var current = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300)
-        )
-        var reloadResults = [false, true, true]
-        var reloadCount = 0
-        var materializationCount = 0
-        var recordCount = 0
-        var delays = [UInt64]()
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(current) }
-        store.recordHandler = { _, _, _ in
-            recordCount += 1
-            current = try! self.approvalSnapshot(
-                handle: handle,
-                nonce: nonce,
-                deadline: clock.now.addingTimeInterval(300),
-                receipt: .init(
-                    nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: runtime
-                )
-            )
-            return .retryablePersistenceFailure
-        }
-        let environment = NativeApprovalCoordinator.Environment(
+        let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now },
-            wait: { delay in
-                if delay < 1_000_000_000 {
-                    delays.append(delay)
-                } else {
-                    try? await Task.sleep(nanoseconds: 60_000_000_000)
-                }
-            },
-            prepareWithoutWallets: { _ in nil },
+            wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
+            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
             reloadWallets: {
-                reloadCount += 1
-                return reloadResults.removeFirst()
+                XCTFail("Wallet-independent preparation must not reload wallets")
+                return false
             },
             prepare: { _ in
-                materializationCount += 1
+                XCTFail("Wallet-independent preparation must not access wallets")
                 return .approval(self.accountSelectionAction())
             }
-        )
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
-            store: store,
-            environment: environment
-        )
-
-        let presentation = await coordinator.loadPresentation()
-
-        guard case .approval = presentation else {
-            return XCTFail("Expected approval")
-        }
-        XCTAssertEqual(reloadCount, 3)
-        XCTAssertEqual(materializationCount, 2)
-        XCTAssertEqual(recordCount, 1)
-        XCTAssertEqual(delays, [250_000_000, 500_000_000])
-        XCTAssertEqual(coordinator.state, .reviewing)
-        XCTAssertEqual(
-            current.nativeDeliveryReceipt?.runtimeInstanceIdentifier,
-            runtime
-        )
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+        fixture.store.snapshot = nil
     }
 
-    func testBootstrapUnavailableStopsAtTerminalDeadline() async {
+    func testReleasedForeignApprovalFinishesLocalWaitingCoordinatorOnce() async throws {
         let clock = Clock()
-        let handle = makeHandle(id: 10)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        var loadCount = 0
-        var finishCount = 0
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in
-            loadCount += 1
-            return .unavailable
+        let gate = AsyncGate<Void>()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now },
+            wait: { _ in await gate.run() },
+            prepareWithoutWallets: { _ in
+                XCTFail("An executing approval must not be rematerialized")
+                return nil
+            }
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .staged)
+        fixture.store.snapshot = try ownedSnapshot(fixture, runtime: UUID())
+        gate.resume(())
+        await waitForState(fixture.coordinator, .finished)
+        fixture.coordinator.reject()
+        fixture.coordinator.cancelBeforeAuthentication()
+        XCTAssertEqual(fixture.events.presentations.count, 2)
+        guard case .waiting = fixture.events.presentations[0],
+              case .finished = fixture.events.presentations[1] else {
+            return XCTFail("Expected one waiting event followed by one finish")
         }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID(),
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { _ in
-                    clock.now.addTimeInterval(ExtensionBridge.requestTTL)
-                }
-            )
-        )
-        coordinator.onFinished = { finishCount += 1 }
-
-        let presentation = await coordinator.loadPresentation()
-
-        guard case .finished = presentation else {
-            return XCTFail("Expected finished presentation")
-        }
-        XCTAssertEqual(coordinator.state, .finished)
-        XCTAssertEqual(loadCount, 1)
-        XCTAssertEqual(finishCount, 1)
-    }
-
-    func testBootstrapRetryStopsAtRequestAdmissionDeadline() async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 11)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let snapshot = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(1)
-        )
-        var loadCount = 0
-        var reloadCount = 0
-        var receiptCount = 0
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in
-            loadCount += 1
-            return .found(snapshot)
-        }
-        store.recordHandler = { _, _, _ in
-            receiptCount += 1
-            return .persisted
-        }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID(),
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { _ in clock.now.addTimeInterval(2) },
-                prepareWithoutWallets: { _ in nil },
-                reloadWallets: {
-                    reloadCount += 1
-                    return false
-                }
-            )
-        )
-
-        guard case .finished = await coordinator.loadPresentation() else {
-            return XCTFail("Expected finished presentation")
-        }
-        XCTAssertEqual(coordinator.state, .finished)
-        XCTAssertEqual(loadCount, 1)
-        XCTAssertEqual(reloadCount, 1)
-        XCTAssertEqual(receiptCount, 0)
-    }
-
-    func testForeignReceiptSupersedesWithoutMaterialization() async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 2)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        var reloadCount = 0
-        var recordCount = 0
-        let snapshot = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
-            receipt: .init(
-                nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: UUID()
-            )
-        )
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(snapshot) }
-        store.recordHandler = { _, _, _ in
-            recordCount += 1
-            return .persisted
-        }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { delay in
-                    if delay >= 1_000_000_000 {
-                        try? await Task.sleep(nanoseconds: 60_000_000_000)
-                    }
-                },
-                prepareWithoutWallets: { _ in nil },
-                reloadWallets: {
-                    reloadCount += 1
-                    return true
-                },
-                prepare: { _ in .approval(self.accountSelectionAction()) }
-            )
-        )
-
-        let presentation = await coordinator.loadPresentation()
-
-        guard case .superseded = presentation else {
-            return XCTFail("Expected superseded delivery")
-        }
-        XCTAssertEqual(coordinator.state, .finished)
-        XCTAssertEqual(reloadCount, 0)
-        XCTAssertEqual(recordCount, 0)
-    }
-
-    func testReleasedForeignApprovalFinishesLocalWaitingCoordinatorOnce()
-        async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 7)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        let approving = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
-            phase: .approving
-        )
-        let queued = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
-            receipt: .init(
-                nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: UUID()
-            )
-        )
-        var loadCount = 0
-        var finishCount = 0
-        let finished = expectation(description: "local coordinator relinquished")
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in
-            loadCount += 1
-            return .found(loadCount == 1 ? approving : queued)
-        }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { _ in await Task.yield() },
-                prepareWithoutWallets: { _ in
-                    XCTFail("A foreign approval must not be materialized")
-                    return nil
-                }
-            )
-        )
-        coordinator.onFinished = {
-            finishCount += 1
-            finished.fulfill()
-        }
-
-        guard case .waiting = await coordinator.loadPresentation() else {
-            return XCTFail("Expected waiting presentation")
-        }
-        await fulfillment(of: [finished], timeout: 1)
-        await Task.yield()
-
-        XCTAssertEqual(coordinator.state, .finished)
-        XCTAssertEqual(finishCount, 1)
-        XCTAssertEqual(loadCount, 2)
-    }
-
-    func testWalletIndependentBootstrapSkipsReload() async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 3)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        let snapshot = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300)
-        )
-        var reloadCount = 0
-        var recordCount = 0
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(snapshot) }
-        store.recordHandler = { _, _, _ in
-            recordCount += 1
-            return .persisted
-        }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { delay in
-                    if delay >= 1_000_000_000 {
-                        try? await Task.sleep(nanoseconds: 60_000_000_000)
-                    }
-                },
-                prepareWithoutWallets: { _ in
-                    .approval(self.accountSelectionAction())
-                },
-                reloadWallets: {
-                    reloadCount += 1
-                    return true
-                },
-                prepare: { _ in fatalError("Wallet preparation is not expected") }
-            )
-        )
-
-        let presentation = await coordinator.loadPresentation()
-
-        guard case .approval = presentation else {
-            return XCTFail("Expected approval")
-        }
-        XCTAssertEqual(reloadCount, 0)
-        XCTAssertEqual(recordCount, 1)
-    }
-
-    func testBootstrapReusesEarlyReceiptWithoutRecordingAgain() async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 15)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        let snapshot = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
-            receipt: .init(
-                nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
-            )
-        )
-        var recordCount = 0
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(snapshot) }
-        store.recordHandler = { _, _, _ in
-            recordCount += 1
-            return .persisted
-        }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { delay in
-                    if delay >= 1_000_000_000 {
-                        try? await Task.sleep(nanoseconds: 60_000_000_000)
-                    }
-                },
-                prepareWithoutWallets: { _ in
-                    .approval(self.accountSelectionAction())
-                }
-            )
-        )
-
-        guard case .approval = await coordinator.loadPresentation() else {
-            return XCTFail("Expected approval")
-        }
-        XCTAssertEqual(recordCount, 0)
-        XCTAssertEqual(coordinator.state, .reviewing)
-    }
-
-    func testBootstrapFailsClosedWhenRequiredEarlyReceiptIsLost() async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 16)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let snapshot = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300)
-        )
-        var recordCount = 0
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(snapshot) }
-        store.recordHandler = { _, _, _ in
-            recordCount += 1
-            return .persisted
-        }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID(),
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                wait: { _ in },
-                prepareWithoutWallets: { _ in
-                    XCTFail("A receipt-lost request must not be materialized")
-                    return .approval(self.accountSelectionAction())
-                }
-            ),
-            requiresExistingReceipt: true
-        )
-
-        guard case .superseded = await coordinator.loadPresentation() else {
-            return XCTFail("Expected superseded presentation")
-        }
-        XCTAssertEqual(recordCount, 0)
-        XCTAssertEqual(coordinator.state, .finished)
     }
 
     func testImmediateResponseRetriesWithoutPrematureFailure() async throws {
@@ -1585,7 +1279,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var failureCount = 0
         let store = CoordinatorStore()
         store.loadHandler = { _ in .found(snapshot) }
-        store.recordHandler = { _, _, _ in
+        store.recordHandler = { _, _, _, _ in
             snapshot = try! self.approvalSnapshot(
                 handle: handle,
                 nonce: nonce,
@@ -1606,7 +1300,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1614,9 +1307,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 prepareWithoutWallets: { _ in .response(response) }
             )
         )
-        coordinator.onFailure = { failureCount += 1 }
+        coordinator.onEvent = { if case .presentation(.rejecting) = $0 { failureCount += 1 } }
 
-        guard case .finished = await coordinator.loadPresentation() else {
+        guard case .finished = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected immediate completion")
         }
         XCTAssertEqual(coordinator.state, .finished)
@@ -1657,7 +1350,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1669,8 +1361,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        coordinator.onDecisionStaged = { staged.fulfill() }
-        guard case .approval = await coordinator.loadPresentation() else {
+        coordinator.onEvent = { if case .presentation(.waiting) = $0 { staged.fulfill() } }
+        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
 
@@ -1703,7 +1395,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1720,15 +1411,26 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     finalized.fulfill()
                     return .responseReady
                 }
-            ),
-            requiresExistingReceipt: true
+            )
         )
-        coordinator.onFinished = { finished.fulfill() }
-
-        guard case .waiting = await coordinator.loadPresentation() else {
-            return XCTFail("Expected staged waiting presentation")
+        let authentication = expectation(description: "receipt ready for authentication")
+        let waiting = expectation(description: "staged waiting presentation")
+        coordinator.onEvent = { event in
+            switch event {
+            case .authenticationRequired: authentication.fulfill()
+            case .presentation(.waiting): waiting.fulfill()
+            case .presentation(.finished): finished.fulfill()
+            default: break
+            }
         }
-        await fulfillment(of: [finalized, finished], timeout: 1)
+        coordinator.start(
+            runtimeInstanceIdentifier: runtime,
+            nativeDeliveryOwner: nativeOwner
+        )
+        await fulfillment(of: [authentication], timeout: 1)
+        XCTAssertEqual(finalizationCount, 0)
+        coordinator.resumeAfterAuthentication()
+        await fulfillment(of: [waiting, finalized, finished], timeout: 1)
 
         XCTAssertEqual(finalizationCount, 1)
         XCTAssertEqual(coordinator.state, .finished)
@@ -1762,7 +1464,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1776,7 +1477,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        guard case .approval = await coordinator.loadPresentation() else {
+        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
 
@@ -1802,7 +1503,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 runtimeInstanceIdentifier: runtime
             )
         )
-        let gate = StageGate()
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
         let stageStarted = expectation(description: "stage started")
         let rejectionFinished = expectation(description: "rejection finished")
         let store = CoordinatorStore()
@@ -1818,7 +1519,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1832,7 +1532,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        guard case .approval = await coordinator.loadPresentation() else {
+        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
         coordinator.approveAccounts([], ethereumNetwork: nil)
@@ -1874,7 +1574,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1884,7 +1583,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        guard case .approval = await coordinator.loadPresentation() else {
+        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
 
@@ -1928,7 +1627,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let coordinator = NativeApprovalCoordinator(
             handle: handle,
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: runtime,
             store: store,
             environment: .init(
                 now: { clock.now },
@@ -1940,8 +1638,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        coordinator.onFinished = { finished.fulfill() }
-        guard case .approval = await coordinator.loadPresentation() else {
+        coordinator.onEvent = { if case .presentation(.finished) = $0 { finished.fulfill() } }
+        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
 
@@ -1950,6 +1648,141 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(rejectionCount, 1)
         XCTAssertEqual(coordinator.state, .finished)
+    }
+
+    private var nativeOwner: ExtensionBridge.NativeDeliveryOwner {
+        .init(
+            bundleURL: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
+            marketingVersion: "1.0.99",
+            buildVersion: "148"
+        )!
+    }
+
+    private final class Events {
+        var authenticationCount = 0
+        var presentations = [NativeApprovalCoordinator.Presentation]()
+
+        func record(_ event: NativeApprovalCoordinator.Event) {
+            switch event {
+            case .authenticationRequired: authenticationCount += 1
+            case .presentation(let value): presentations.append(value)
+            }
+        }
+    }
+
+    private struct Fixture {
+        let coordinator: NativeApprovalCoordinator
+        let store: CoordinatorStore
+        let runtime: UUID
+        let key: ApprovalRouteKey
+        let clock: Clock
+        let events: Events
+    }
+
+    private func makeFixture(
+        key: ApprovalRouteKey? = nil,
+        createdAt: TimeInterval = 1_800_000_000,
+        sequence: Int = 0,
+        clock: Clock = Clock(),
+        environment: NativeApprovalCoordinator.Environment? = nil
+    ) throws -> Fixture {
+        let key = key ?? approvalKey(id: 100)
+        let store = CoordinatorStore()
+        store.snapshot = try approvalSnapshot(
+            handle: key.handle,
+            nonce: key.nativeDeliveryNonce,
+            deadline: clock.now.addingTimeInterval(300),
+            createdAt: Date(timeIntervalSince1970: createdAt),
+            sequence: sequence
+        )
+        let action = accountSelectionAction()
+        let coordinator = NativeApprovalCoordinator(
+            handle: key.handle,
+            nativeDeliveryNonce: key.nativeDeliveryNonce,
+            store: store,
+            environment: environment ?? .init(
+                now: { clock.now },
+                wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
+                prepareWithoutWallets: { _ in .approval(action) }
+            )
+        )
+        let events = Events()
+        coordinator.onEvent = events.record
+        return Fixture(
+            coordinator: coordinator,
+            store: store,
+            runtime: UUID(),
+            key: key,
+            clock: clock,
+            events: events
+        )
+    }
+
+    private func start(_ fixture: Fixture) {
+        fixture.coordinator.start(
+            runtimeInstanceIdentifier: fixture.runtime,
+            nativeDeliveryOwner: nativeOwner
+        )
+    }
+
+    private func ownedSnapshot(
+        _ fixture: Fixture,
+        runtime: UUID? = nil,
+        phase: ExtensionBridge.Phase = .queued,
+        staged: Bool = false
+    ) throws -> ExtensionBridge.Snapshot {
+        try approvalSnapshot(
+            handle: fixture.key.handle,
+            nonce: fixture.key.nativeDeliveryNonce,
+            deadline: fixture.clock.now.addingTimeInterval(300),
+            receipt: .init(
+                nativeDeliveryNonce: fixture.key.nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime ?? fixture.runtime,
+                owner: nativeOwner
+            ),
+            phase: phase,
+            nativeDecisionStaged: staged
+        )
+    }
+
+    private func waitForState(
+        _ coordinator: NativeApprovalCoordinator,
+        _ expected: NativeApprovalCoordinator.State,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<1000 {
+            if coordinator.state == expected { return }
+            await Task.yield()
+        }
+        XCTAssertEqual(coordinator.state, expected, file: file, line: line)
+    }
+
+    private func loadPresentation(
+        _ coordinator: NativeApprovalCoordinator,
+        runtime: UUID
+    ) async -> NativeApprovalCoordinator.Presentation {
+        let ready = expectation(description: "first presentation")
+        var presentation: NativeApprovalCoordinator.Presentation?
+        let observer = coordinator.onEvent
+        coordinator.onEvent = { [weak coordinator] event in
+            observer?(event)
+            switch event {
+            case .authenticationRequired:
+                coordinator?.resumeAfterAuthentication()
+            case .presentation(let value):
+                if presentation == nil {
+                    presentation = value
+                    ready.fulfill()
+                }
+            }
+        }
+        coordinator.start(
+            runtimeInstanceIdentifier: runtime,
+            nativeDeliveryOwner: nativeOwner
+        )
+        await fulfillment(of: [ready], timeout: 1)
+        return presentation ?? .finished
     }
 
     private func titleTopSpacing(
@@ -1978,16 +1811,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    private func approvalOrder(
-        id: Int,
-        sequence: Int = 0
-    ) -> ApprovalInbox<String>.Order {
-        ApprovalInbox<String>.Order(
-            createdAt: Date(timeIntervalSince1970: TimeInterval(id)),
-            sequence: sequence
-        )
-    }
-
     private func makeHandle(id: Int) -> ExtensionBridge.Handle {
         ExtensionBridge.Handle(
             id: id,
@@ -2012,7 +1835,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         deadline: Date,
         receipt: ExtensionBridge.NativeDeliveryReceipt? = nil,
         phase: ExtensionBridge.Phase = .queued,
-        nativeDecisionStaged: Bool = false
+        nativeDecisionStaged: Bool = false,
+        createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000),
+        sequence: Int = 0
     ) throws -> ExtensionBridge.Snapshot {
         let data = try JSONSerialization.data(withJSONObject: [
             "id": handle.id,
@@ -2032,16 +1857,22 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             request: request,
             nativeDecisionStaged: nativeDecisionStaged,
             nativeDeliveryNonce: nonce,
-            nativeDeliveryReceipt: receipt,
+            nativeDeliveryReceipt: receipt.map {
+                ExtensionBridge.NativeDeliveryReceipt(
+                    nativeDeliveryNonce: $0.nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: $0.runtimeInstanceIdentifier,
+                    owner: $0.owner ?? nativeOwner
+                )
+            },
             host: request.host,
             configurationKey: request.configurationKey,
             revisions: ExtensionBridge.ProviderRevisions(rawValue: [
                 "ethereum": 0,
                 "solana": 0,
             ])!,
-            createdAt: Date(timeIntervalSince1970: 1_800_000_000),
+            createdAt: createdAt,
             enqueueAttempt: request.enqueueAttempt,
-            sequence: 0
+            sequence: sequence
         )
     }
 

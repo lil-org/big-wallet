@@ -323,6 +323,152 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
+    func testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast() async throws {
+        let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
+        let store = CompactPopupStore(clock: { clock.now })
+        let snapshot = try popupSnapshot(id: 456)
+        await store.insert(snapshot)
+        guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+            return XCTFail("Expected claim")
+        }
+        let executor = DurableApprovalExecutor(store: store, clock: { clock.now })
+        let response = try XCTUnwrap(snapshot.request).response(error: .internalError)
+        let gate = CompactPopupGate()
+        let finished = expectation(description: "timed out before gate opened")
+        let late = expectation(description: "late operation returned")
+        var result: DurableApprovalExecutor.Result?
+        var leases = 0
+        let task = Task { @MainActor in
+            result = await executor.executeSigning(
+                claim: claim,
+                deadline: clock.now.addingTimeInterval(0.01),
+                acquireWalletLease: {
+                    leases += 1
+                    return WalletExecutionLease()
+                }
+            ) {
+                await gate.wait()
+                XCTAssertTrue(Task.isCancelled)
+                late.fulfill()
+                return .broadcast(PreparedBroadcast(recoveryResponse: response, send: {
+                    XCTFail("Late prepared broadcast must not send")
+                    return response
+                }))
+            }
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 1)
+        XCTAssertEqual(result, .rolledBack)
+        XCTAssertEqual(leases, 0)
+        let eventsBeforeRelease = await store.events()
+        XCTAssertEqual(eventsBeforeRelease, ["claim", "begin", "rollback"])
+        await gate.open()
+        await task.value
+        await fulfillment(of: [late], timeout: 1)
+        let finalEvents = await store.events()
+        XCTAssertEqual(finalEvents, eventsBeforeRelease)
+    }
+
+    func testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease() async throws {
+        for offset in [0.0, -1.0] {
+            let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
+            let store = CompactPopupStore(clock: { clock.now })
+            let snapshot = try popupSnapshot(id: 457)
+            await store.insert(snapshot)
+            guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+                return XCTFail("Expected claim")
+            }
+            let executor = DurableApprovalExecutor(store: store, clock: { clock.now })
+            let response = try XCTUnwrap(snapshot.request).response(error: .internalError)
+            let result = await executor.executeSigning(
+                claim: claim,
+                deadline: clock.now.addingTimeInterval(offset),
+                acquireWalletLease: {
+                    XCTFail("Expired operation must not acquire a lease")
+                    return nil
+                }
+            ) {
+                XCTFail("Expired operation must not start")
+                return .response(response)
+            }
+            XCTAssertEqual(result, .rolledBack)
+            let events = await store.events()
+            XCTAssertEqual(events, ["claim", "begin", "rollback"])
+        }
+    }
+
+    func testCallerCancellationDoesNotAbortStartedDurableOperation() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 458)
+        await store.insert(snapshot)
+        guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+            return XCTFail("Expected claim")
+        }
+        let executor = DurableApprovalExecutor(store: store)
+        let response = try XCTUnwrap(snapshot.request).response(error: .userRejected)
+        let gate = CompactPopupGate()
+        let started = expectation(description: "operation started")
+        let task = Task { @MainActor in
+            await executor.executeSigning(
+                claim: claim,
+                deadline: Date().addingTimeInterval(60),
+                acquireWalletLease: { WalletExecutionLease() }
+            ) {
+                started.fulfill()
+                await gate.wait()
+                XCTAssertFalse(Task.isCancelled)
+                return .response(response)
+            }
+        }
+        await fulfillment(of: [started], timeout: 1)
+        task.cancel()
+        await gate.open()
+        let result = await task.value
+        XCTAssertEqual(result, .persisted)
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "begin", "complete"])
+    }
+
+    func testZeroBroadcastTimeoutPersistsRecoveryOnceDespiteLateSend() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 459)
+        await store.insert(snapshot)
+        guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+            return XCTFail("Expected claim")
+        }
+        let request = try XCTUnwrap(snapshot.request)
+        let executor = DurableApprovalExecutor(store: store, broadcastTimeoutNanoseconds: 0)
+        let gate = CompactPopupGate()
+        let finished = expectation(description: "zero timeout recovery")
+        let late = expectation(description: "late broadcast result")
+        let task = Task { @MainActor in
+            let result = await executor.executeOrdinary(claim: claim) {
+                .broadcast(PreparedBroadcast(
+                    recoveryResponse: request.response(error: .internalError),
+                    send: {
+                        await store.record("send")
+                        await gate.wait()
+                        late.fulfill()
+                        return request.response(error: .userRejected)
+                    }
+                ))
+            }
+            XCTAssertEqual(result, .persisted)
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 1)
+        let before = await store.completedErrorCode(handle: snapshot.handle)
+        XCTAssertEqual(before, ProviderResponseError.internalErrorCode)
+        await gate.open()
+        await task.value
+        await fulfillment(of: [late], timeout: 1)
+        let events = await store.events()
+        XCTAssertEqual(events.filter { $0 == "send" }.count, 1)
+        XCTAssertEqual(events.filter { $0 == "complete" }.count, 1)
+        let after = await store.completedErrorCode(handle: snapshot.handle)
+        XCTAssertEqual(after, before)
+    }
+
     func testExtensionHandlerAwaitsPopupDispatchBeforeResponding() throws {
         let source = try source(named: "Safari Shared/SafariWebExtensionHandler.swift")
         XCTAssertTrue(source.contains("response = await PopupRequestSessions.dispatch("))
@@ -3550,6 +3696,9 @@ extension PopupRequestSessionsTests {
 
     func testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce() async throws {
         let store = CompactPopupStore()
+        let gate = CompactPopupGate()
+        let recovered = expectation(description: "recovery before sender returns")
+        let late = expectation(description: "sender returned after recovery")
         let snapshot = try popupSnapshot(id: 8)
         await store.insert(snapshot)
         let processor = CompactPopupProcessor { request in
@@ -3563,8 +3712,9 @@ extension PopupRequestSessionsTests {
                         recoveryResponse: request.response(error: .internalError),
                         send: {
                             await store.record("send")
-                            try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                            await gate.wait()
                             await store.record("late")
+                            late.fulfill()
                             return request.response(error: .userRejected)
                         }
                     ))
@@ -3591,12 +3741,17 @@ extension PopupRequestSessionsTests {
             reviewToken: token,
             payload: ["revisions": snapshot.revisions.json]
         )
-        _ = await controller.dispatch(
-            try popupCommandValue(approve),
-            request: approve,
-            profileIdentifier: nil
-        )
+        let command = try popupCommandValue(approve)
+        let task = Task { @MainActor in
+            _ = await controller.dispatch(command, request: approve, profileIdentifier: nil)
+            recovered.fulfill()
+        }
+        await fulfillment(of: [recovered], timeout: 1)
         let events = await store.events()
+        XCTAssertFalse(events.contains("late"))
+        await gate.open()
+        await task.value
+        await fulfillment(of: [late], timeout: 1)
         XCTAssertEqual(events.filter { $0 == "send" }.count, 1)
         XCTAssertEqual(events.filter { $0 == "complete" }.count, 1)
         let completedErrorCode = await store.completedErrorCode(
@@ -3611,6 +3766,8 @@ extension PopupRequestSessionsTests {
         )
         XCTAssertTrue(checkpointWasCommitted)
         XCTAssertTrue(completionWasCommitted)
+        let finalEvents = await store.events()
+        XCTAssertEqual(finalEvents.filter { $0 == "complete" }.count, 1)
     }
 
     func testEthereumRevisionMismatchCompletesBeforeAuthenticationOrResolve() async throws {

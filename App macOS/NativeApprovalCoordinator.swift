@@ -9,8 +9,11 @@ protocol NativeDeliveryStore: AnyObject {
     func recordNativeDeliveryReceipt(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID
+        runtimeInstanceIdentifier: UUID,
+        owner: ExtensionBridge.NativeDeliveryOwner
     ) async -> ExtensionBridge.StoreMutationResult
+    func reject(handle: ExtensionBridge.Handle) async ->
+        ExtensionBridge.StoreMutationResult
     func stageNativeDecision(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -57,6 +60,11 @@ final class NativeApprovalCoordinator {
     }
 
     enum State: Equatable {
+        case registered
+        case validating
+        case acquiringReceipt(cancelRequested: Bool)
+        case awaitingAuthentication
+        case cancelingBeforeAuthentication(receiptOwned: Bool)
         case loading
         case reviewing
         case staging
@@ -71,6 +79,21 @@ final class NativeApprovalCoordinator {
         case rejecting
         case finished
         case superseded
+    }
+
+    enum Event {
+        case authenticationRequired
+        case presentation(Presentation)
+    }
+
+    struct Order: Equatable {
+        let createdAt: Date
+        let sequence: Int
+    }
+
+    private struct Runtime {
+        let instanceIdentifier: UUID
+        let owner: ExtensionBridge.NativeDeliveryOwner
     }
 
     struct Environment {
@@ -123,17 +146,16 @@ final class NativeApprovalCoordinator {
     private static let maximumDelayNanoseconds: UInt64 = 5_000_000_000
 
     let handle: ExtensionBridge.Handle
-    private(set) var state: State = .loading
+    private(set) var state: State = .registered
     let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
     private(set) var peer: PeerMeta?
-    var onDecisionStaged: (() -> Void)?
-    var onFinished: (() -> Void)?
-    var onFailure: (() -> Void)?
+    private(set) var order: Order?
+    var onEvent: ((Event) -> Void)?
 
     private let store: NativeDeliveryStore
     private let environment: Environment
-    private let runtimeInstanceIdentifier: UUID
-    private let requiresExistingReceipt: Bool
+    private var runtime: Runtime?
+    private var bootstrapTask: Task<Void, Never>?
     private var monitorTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     private var terminalDeadline: Date
@@ -144,80 +166,242 @@ final class NativeApprovalCoordinator {
     init(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
         store: NativeDeliveryStore = ExtensionBridge.shared,
-        environment: Environment = .live,
-        requiresExistingReceipt: Bool = false,
-        initialState: State = .loading
+        environment: Environment = .live
     ) {
         self.handle = handle
         self.nativeDeliveryNonce = nativeDeliveryNonce
-        self.runtimeInstanceIdentifier = runtimeInstanceIdentifier
         self.store = store
         self.environment = environment
-        self.requiresExistingReceipt = requiresExistingReceipt
-        state = initialState
         terminalDeadline = environment.now().addingTimeInterval(
             ExtensionBridge.requestTTL
         )
     }
 
     deinit {
+        bootstrapTask?.cancel()
         monitorTask?.cancel()
         persistenceTask?.cancel()
     }
 
-    func loadPresentation() async -> Presentation {
-        guard state == .loading else {
-            switch state {
-            case .staged:
-                return .waiting
-            case .rejecting:
-                return .rejecting
-            case .finished:
-                return .finished
-            case .loading, .reviewing, .staging:
-                return .superseded
+    var countsTowardUnverifiedLimit: Bool {
+        switch state {
+        case .registered, .validating, .acquiringReceipt,
+             .cancelingBeforeAuthentication(receiptOwned: false):
+            return true
+        default:
+            return false
+        }
+    }
+
+    func start(
+        runtimeInstanceIdentifier: UUID,
+        nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner
+    ) {
+        guard state == .registered else { return }
+        runtime = Runtime(
+            instanceIdentifier: runtimeInstanceIdentifier,
+            owner: nativeDeliveryOwner
+        )
+        state = .validating
+        bootstrapTask = Task { [weak self] in
+            await self?.validateAndAcquireReceipt()
+        }
+    }
+
+    private func validateAndAcquireReceipt() async {
+        let result = await store.load(handle: handle)
+        guard state == .validating else { return }
+        guard case .found(let snapshot) = result,
+              snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
+              snapshot.phase != .responded,
+              let runtime else {
+            finish()
+            return
+        }
+        order = Order(createdAt: snapshot.createdAt, sequence: snapshot.sequence)
+        terminalDeadline = environment.now().addingTimeInterval(
+            ExtensionBridge.requestTTL
+        )
+        recordDeadline(from: snapshot.request)
+        state = .acquiringReceipt(cancelRequested: false)
+        var retryDelay = Self.initialRetryDelayNanoseconds
+        while !Task.isCancelled, environment.now() < terminalDeadline {
+            let result = await store.recordNativeDeliveryReceipt(
+                handle: handle,
+                nativeDeliveryNonce: nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                owner: runtime.owner
+            )
+            guard case .acquiringReceipt(let cancelRequested) = state else {
+                return
+            }
+            switch result {
+            case .persisted:
+                bootstrapTask = nil
+                if cancelRequested {
+                    beginPreauthenticationCancellation(receiptOwned: true)
+                } else {
+                    state = .awaitingAuthentication
+                    onEvent?(.authenticationRequired)
+                }
+                return
+            case .ownershipLost:
+                finish()
+                return
+            case .retryablePersistenceFailure:
+                await waitBeforeDeadline(retryDelay)
+                retryDelay = nextDelay(after: retryDelay)
             }
         }
+        if case .acquiringReceipt = state { finish() }
+    }
+
+    func resumeAfterAuthentication() {
+        guard state == .awaitingAuthentication else { return }
+        terminalDeadline = environment.now().addingTimeInterval(
+            ExtensionBridge.requestTTL
+        )
+        state = .loading
+        bootstrapTask = Task { [weak self] in
+            await self?.preparePresentation()
+        }
+    }
+
+    func cancelBeforeAuthentication() {
+        switch state {
+        case .registered, .validating:
+            bootstrapTask?.cancel()
+            bootstrapTask = nil
+            beginPreauthenticationCancellation(receiptOwned: false)
+        case .acquiringReceipt:
+            state = .acquiringReceipt(cancelRequested: true)
+        case .awaitingAuthentication:
+            beginPreauthenticationCancellation(receiptOwned: true)
+        default:
+            break
+        }
+    }
+
+    private func beginPreauthenticationCancellation(receiptOwned: Bool) {
+        state = .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
+        terminalDeadline = environment.now().addingTimeInterval(
+            ExtensionBridge.requestTTL
+        )
+        persistenceTask = Task { [weak self] in
+            await self?.cancelUntilTerminal(receiptOwned: receiptOwned)
+        }
+    }
+
+    private func cancelUntilTerminal(receiptOwned: Bool) async {
+        let expectedState = State.cancelingBeforeAuthentication(
+            receiptOwned: receiptOwned
+        )
+        var retryDelay = Self.initialRetryDelayNanoseconds
+        while !Task.isCancelled, state == expectedState,
+              environment.now() < terminalDeadline {
+            let loaded = await store.load(handle: handle)
+            guard state == expectedState else { return }
+            switch loaded {
+            case .found(let snapshot):
+                guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
+                      snapshot.phase != .responded else {
+                    finish()
+                    return
+                }
+                recordDeadline(from: snapshot.request)
+                let result: ExtensionBridge.StoreMutationResult
+                if receiptOwned {
+                    guard let runtime,
+                          snapshot.nativeDeliveryReceipt?.matches(
+                              nativeDeliveryNonce: nativeDeliveryNonce,
+                              runtimeInstanceIdentifier: runtime.instanceIdentifier
+                          ) == true,
+                          snapshot.phase == .queued else {
+                        finish()
+                        return
+                    }
+                    if snapshot.nativeDecisionStaged {
+                        restoreAuthenticationWaiting()
+                        return
+                    }
+                    result = await store.rejectNativeDelivery(
+                        handle: handle,
+                        nativeDeliveryNonce: nativeDeliveryNonce,
+                        runtimeInstanceIdentifier: runtime.instanceIdentifier
+                    )
+                } else {
+                    guard snapshot.nativeDeliveryReceipt == nil,
+                          !snapshot.nativeDecisionStaged,
+                          snapshot.phase == .queued else {
+                        finish()
+                        return
+                    }
+                    result = await store.reject(handle: handle)
+                }
+                guard state == expectedState else { return }
+                if result == .persisted {
+                    finish()
+                    return
+                }
+            case .missing:
+                finish()
+                return
+            case .unavailable:
+                break
+            }
+            await waitBeforeDeadline(retryDelay)
+            retryDelay = nextDelay(after: retryDelay)
+        }
+        guard state == expectedState else { return }
+        if receiptOwned {
+            restoreAuthenticationWaiting()
+        } else {
+            finish()
+        }
+    }
+
+    private func restoreAuthenticationWaiting() {
+        persistenceTask = nil
+        state = .awaitingAuthentication
+    }
+
+    private func preparePresentation() async {
+        guard state == .loading else { return }
 
         var retryDelay = Self.initialRetryDelayNanoseconds
         while !Task.isCancelled, state == .loading {
             guard environment.now() < terminalDeadline else {
                 finish()
-                return .finished
+                return
             }
-            if let presentation = await loadPresentationAttempt() {
-                return presentation
-            }
+            if await preparePresentationAttempt() { return }
+            guard !Task.isCancelled, state == .loading else { return }
             guard environment.now() < terminalDeadline else {
                 finish()
-                return .finished
+                return
             }
             await waitBeforeDeadline(retryDelay)
             guard environment.now() < terminalDeadline else {
                 finish()
-                return .finished
+                return
             }
             retryDelay = nextDelay(after: retryDelay)
         }
-        return state == .finished ? .finished : .superseded
     }
 
-    private func loadPresentationAttempt() async -> Presentation? {
-        switch await storedStatus() {
+    private func preparePresentationAttempt() async -> Bool {
+        let status = await storedStatus()
+        guard state == .loading else { return false }
+        switch status {
         case .pending(let request, let receipt):
             guard environment.now() < terminalDeadline else {
                 finish()
-                return .finished
+                return true
             }
-            guard receipt != .foreign else {
+            guard receipt == .current else {
                 supersede()
-                return .superseded
-            }
-            guard !requiresExistingReceipt || receipt == .current else {
-                supersede()
-                return .superseded
+                return true
             }
             let preparation: DappRequestPreparation
             if let walletIndependent = environment.prepareWithoutWallets(
@@ -225,47 +409,34 @@ final class NativeApprovalCoordinator {
             ) {
                 preparation = walletIndependent
             } else {
-                guard environment.reloadWallets() else { return nil }
+                guard environment.reloadWallets() else { return false }
                 preparation = environment.prepare(request)
             }
             guard environment.now() < terminalDeadline else {
                 finish()
-                return .finished
-            }
-            if receipt == .none {
-                switch await recordReceipt() {
-                case .persisted:
-                    break
-                case .ownershipLost, .retryablePersistenceFailure:
-                    return nil
-                }
-            }
-            guard environment.now() < terminalDeadline else {
-                finish()
-                return .finished
+                return true
             }
             switch preparation {
             case .approval(let action):
                 state = .reviewing
                 startLifecycleMonitor()
-                return .approval(
-                    request: request,
-                    action: action
-                )
+                bootstrapTask = nil
+                onEvent?(.presentation(.approval(request: request, action: action)))
+                return true
             case .response(let response):
                 return await persistImmediateResponse(response)
             }
         case .staged:
-            enterWaitingState(notify: false)
-            return .waiting
+            enterWaitingState(notify: true)
+            return true
         case .responded, .missing:
             finish()
-            return .finished
+            return true
         case .unavailable:
-            return nil
+            return false
         case .superseded:
             supersede()
-            return .superseded
+            return true
         }
     }
 
@@ -310,6 +481,9 @@ final class NativeApprovalCoordinator {
 
     func reject() {
         switch state {
+        case .registered, .validating, .acquiringReceipt,
+             .awaitingAuthentication, .cancelingBeforeAuthentication:
+            cancelBeforeAuthentication()
         case .loading, .reviewing:
             takeRejectionOwnership()
         case .staging:
@@ -320,9 +494,9 @@ final class NativeApprovalCoordinator {
     }
 
     private func stage(_ decision: NativeApprovalDecision) {
-        guard state == .reviewing else { return }
+        guard state == .reviewing, let runtime else { return }
         state = .staging
-        Task {
+        bootstrapTask = Task {
             var retryDelay = Self.initialRetryDelayNanoseconds
             for _ in 0..<3 {
                 guard state == .staging else { return }
@@ -333,7 +507,7 @@ final class NativeApprovalCoordinator {
                 let result = await store.stageNativeDecision(
                     handle: handle,
                     nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtimeInstanceIdentifier,
+                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
                     decision: decision
                 )
                 guard state == .staging else { return }
@@ -365,7 +539,9 @@ final class NativeApprovalCoordinator {
 
     private func reconcileAfterLostOwnership() async {
         guard state == .staging else { return }
-        switch await storedStatus() {
+        let status = await storedStatus()
+        guard state == .staging else { return }
+        switch status {
         case .staged:
             enterWaitingState(notify: true)
         case .responded, .missing:
@@ -390,8 +566,9 @@ final class NativeApprovalCoordinator {
             guard let request = snapshot.request else { return .responded }
             let receipt: ReceiptOwnership
             if let owner = snapshot.nativeDeliveryReceipt {
-                receipt = owner.runtimeInstanceIdentifier ==
-                    runtimeInstanceIdentifier ? .current : .foreign
+                receipt = owner.nativeDeliveryNonce == nativeDeliveryNonce &&
+                    owner.runtimeInstanceIdentifier == runtime?.instanceIdentifier
+                    ? .current : .foreign
             } else {
                 receipt = .none
             }
@@ -403,28 +580,21 @@ final class NativeApprovalCoordinator {
         }
     }
 
-    private func recordReceipt() async -> ExtensionBridge.StoreMutationResult {
-        await store.recordNativeDeliveryReceipt(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier
-        )
-    }
-
     private func persist(_ intent: PersistenceIntent) async ->
         ExtensionBridge.StoreMutationResult {
+        guard let runtime else { return .ownershipLost }
         switch intent {
         case .rejection:
             return await store.rejectNativeDelivery(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtimeInstanceIdentifier
+                runtimeInstanceIdentifier: runtime.instanceIdentifier
             )
         case .response(let response):
             return await store.completeNativeDelivery(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtimeInstanceIdentifier,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier,
                 response: response
             )
         }
@@ -432,31 +602,36 @@ final class NativeApprovalCoordinator {
 
     private func persistImmediateResponse(
         _ response: ResponseToExtension
-    ) async -> Presentation? {
+    ) async -> Bool {
         let intent = PersistenceIntent.response(response)
         var retryDelay = Self.initialRetryDelayNanoseconds
         for attempt in 0..<3 {
+            guard state == .loading else { return false }
             guard environment.now() < terminalDeadline else {
                 finish()
-                return .finished
+                return true
             }
-            switch await persist(intent) {
+            let result = await persist(intent)
+            guard state == .loading else { return false }
+            switch result {
             case .persisted:
                 finish()
-                return .finished
+                return true
             case .ownershipLost:
-                switch await storedStatus() {
+                let status = await storedStatus()
+                guard state == .loading else { return false }
+                switch status {
                 case .staged:
-                    enterWaitingState(notify: false)
-                    return .waiting
+                    enterWaitingState(notify: true)
+                    return true
                 case .responded, .missing:
                     finish()
-                    return .finished
+                    return true
                 case .superseded:
                     supersede()
-                    return .superseded
+                    return true
                 case .pending, .unavailable:
-                    return nil
+                    return false
                 }
             case .retryablePersistenceFailure:
                 if attempt < 2 {
@@ -472,7 +647,7 @@ final class NativeApprovalCoordinator {
             retryDelay: retryDelay,
             waitBeforeFirstAttempt: true
         )
-        return .rejecting
+        return true
     }
 
     private func failAndReject() {
@@ -483,6 +658,8 @@ final class NativeApprovalCoordinator {
 
     private func takeRejectionOwnership() {
         state = .rejecting
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
         stopLifecycleMonitor()
         startPersistence(
             .rejection,
@@ -529,7 +706,9 @@ final class NativeApprovalCoordinator {
                     return
                 }
             }
-            switch await persist(intent) {
+            let result = await persist(intent)
+            guard state == .rejecting else { return }
+            switch result {
             case .persisted:
                 finish()
                 return
@@ -548,7 +727,9 @@ final class NativeApprovalCoordinator {
 
     private func reconcilePersistence(_ intent: PersistenceIntent) async {
         guard state == .rejecting else { return }
-        switch await storedStatus() {
+        let status = await storedStatus()
+        guard state == .rejecting else { return }
+        switch status {
         case .staged:
             let notify: Bool
             if case .rejection = intent {
@@ -580,9 +761,13 @@ final class NativeApprovalCoordinator {
                 guard !Task.isCancelled, isLifecycleMonitoredState else {
                     return
                 }
-                switch await storedStatus() {
+                let status = await storedStatus()
+                guard !Task.isCancelled, isLifecycleMonitoredState else { return }
+                switch status {
                 case .staged:
-                    switch await environment.finalizeNativeDecision(handle) {
+                    let result = await environment.finalizeNativeDecision(handle)
+                    guard !Task.isCancelled, isLifecycleMonitoredState else { return }
+                    switch result {
                     case .responseReady:
                         finish()
                     case .pending:
@@ -610,7 +795,7 @@ final class NativeApprovalCoordinator {
         switch state {
         case .reviewing, .staging, .staged:
             return true
-        case .loading, .rejecting, .finished:
+        default:
             return false
         }
     }
@@ -620,6 +805,8 @@ final class NativeApprovalCoordinator {
         let shouldRestartLifecycleMonitor = state != .staged
         let shouldNotify = notify && !didEnterWaitingState
         didEnterWaitingState = true
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
         rejectIfDecisionIsNotStaged = false
         persistenceTask?.cancel()
         persistenceTask = nil
@@ -628,7 +815,7 @@ final class NativeApprovalCoordinator {
             stopLifecycleMonitor()
         }
         if shouldNotify {
-            onDecisionStaged?()
+            onEvent?(.presentation(.waiting))
         }
         startLifecycleMonitor()
     }
@@ -662,23 +849,21 @@ final class NativeApprovalCoordinator {
     private func notifyFailureOnce() {
         guard !didNotifyFailure else { return }
         didNotifyFailure = true
-        onFailure?()
+        onEvent?(.presentation(.rejecting))
     }
 
-    private func finish() {
+    private func finish(_ presentation: Presentation = .finished) {
         guard state != .finished else { return }
         state = .finished
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
         stopLifecycleMonitor()
         persistenceTask?.cancel()
         persistenceTask = nil
-        onFinished?()
+        onEvent?(.presentation(presentation))
     }
 
     private func supersede() {
-        guard state != .finished else { return }
-        state = .finished
-        stopLifecycleMonitor()
-        persistenceTask?.cancel()
-        persistenceTask = nil
+        finish(.superseded)
     }
 }

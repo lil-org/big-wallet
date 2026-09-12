@@ -13,48 +13,18 @@ final class DurableApprovalExecutor {
         case rolledBack
     }
 
-    private final class BroadcastResolution {
-        private var continuation: CheckedContinuation<ResponseToExtension, Never>?
-        var sendTask: Task<Void, Never>?
-        var timeoutTask: Task<Void, Never>?
-
-        init(_ continuation: CheckedContinuation<ResponseToExtension, Never>) {
-            self.continuation = continuation
-        }
-
-        func finish(
-            with response: ResponseToExtension,
-            cancelSend: Bool = false
-        ) {
-            guard let continuation else { return }
-            self.continuation = nil
-            if cancelSend {
-                sendTask?.cancel()
-            } else {
-                timeoutTask?.cancel()
-            }
-            sendTask = nil
-            timeoutTask = nil
-            continuation.resume(returning: response)
-        }
-    }
-
-    private final class OperationResolution {
-        private var continuation: CheckedContinuation<
-            DappExecutionResult?,
-            Never
-        >?
+    @MainActor
+    private final class TimedResolution<Value> {
+        private var continuation: CheckedContinuation<Value, Never>?
         var operationTask: Task<Void, Never>?
         var timeoutTask: Task<Void, Never>?
 
-        init(
-            _ continuation: CheckedContinuation<DappExecutionResult?, Never>
-        ) {
+        init(_ continuation: CheckedContinuation<Value, Never>) {
             self.continuation = continuation
         }
 
         func finish(
-            with result: DappExecutionResult?,
+            with result: Value,
             cancelOperation: Bool = false
         ) {
             guard let continuation else { return }
@@ -369,41 +339,41 @@ final class DurableApprovalExecutor {
             remaining * 1_000_000_000,
             Double(UInt64.max)
         ))
-        return await withCheckedContinuation { continuation in
-            let resolution = OperationResolution(continuation)
-            resolution.operationTask = Task { @MainActor in
-                resolution.finish(with: await operation())
-            }
-            resolution.timeoutTask = Task { @MainActor in
-                do {
-                    try await Task.sleep(nanoseconds: timeout)
-                } catch {
-                    return
-                }
-                resolution.finish(with: nil, cancelOperation: true)
-            }
+        return await bounded(timeoutNanoseconds: timeout, timeoutValue: nil) {
+            await operation()
         }
     }
 
     private func boundedBroadcast(
         _ prepared: PreparedBroadcast
     ) async -> ResponseToExtension {
-        return await withCheckedContinuation { continuation in
-            let resolution = BroadcastResolution(continuation)
-            resolution.sendTask = Task { @MainActor in
-                resolution.finish(with: await prepared.send())
+        await bounded(
+            timeoutNanoseconds: broadcastTimeoutNanoseconds,
+            timeoutValue: prepared.recoveryResponse
+        ) {
+            await prepared.send()
+        }
+    }
+
+    private func bounded<Value>(
+        timeoutNanoseconds: UInt64,
+        timeoutValue: Value,
+        operation: @escaping @MainActor () async -> Value
+    ) async -> Value {
+        await withCheckedContinuation { continuation in
+            let resolution = TimedResolution(continuation)
+            resolution.operationTask = Task { @MainActor in
+                resolution.finish(with: await operation())
             }
             resolution.timeoutTask = Task { @MainActor in
                 do {
-                    try await Task.sleep(
-                        nanoseconds: broadcastTimeoutNanoseconds
-                    )
+                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
                 } catch {
                     return
                 }
                 resolution.finish(
-                    with: prepared.recoveryResponse,
-                    cancelSend: true
+                    with: timeoutValue,
+                    cancelOperation: true
                 )
             }
         }

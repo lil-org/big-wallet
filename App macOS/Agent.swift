@@ -115,19 +115,12 @@ class Agent: NSObject {
         case closeAndActivate
     }
 
-    enum ReceiptOwnedCancellationAction: Equatable {
-        case finish
-        case reject
-        case retainForAuthenticationRetry
-    }
-
     @MainActor
     private final class ActiveApproval {
         let coordinator: NativeApprovalCoordinator
         private let windowCloseObserver: NativeApprovalWindowCloseObserver
         private var sharedReviewCleanup: (() -> Void)?
         private(set) var acceptsReviewActions = true
-        var bootstrapTask: Task<Void, Never>?
         var windowController: NSWindowController? {
             didSet {
                 if let window = windowController?.window {
@@ -163,18 +156,12 @@ class Agent: NSObject {
         }
 
         func endReview() {
-            bootstrapTask?.cancel()
-            bootstrapTask = nil
             acceptsReviewActions = false
             sharedReviewCleanup?()
             sharedReviewCleanup = nil
             (windowController?.contentViewController as?
                 NativeApprovalReviewTeardown)?
                 .invalidateNativeApprovalReview()
-        }
-
-        deinit {
-            bootstrapTask?.cancel()
         }
     }
     
@@ -236,8 +223,8 @@ class Agent: NSObject {
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce
             )
-            guard approvalInbox.register(key) else {
-                if approvalInbox.isAwaitingAuthentication(key) {
+            if let existing = approvalInbox.coordinator(for: key) {
+                if existing.state == .awaitingAuthentication {
                     resumePendingWork()
                     startupAuthenticationPresentation.reactivateWindow()
                 } else {
@@ -245,7 +232,32 @@ class Agent: NSObject {
                 }
                 return
             }
-            startPendingApprovalValidations()
+            let coordinator = NativeApprovalCoordinator(
+                handle: handle,
+                nativeDeliveryNonce: nativeDeliveryNonce
+            )
+            guard approvalInbox.register(coordinator) else { return }
+            coordinator.onEvent = { [weak self, weak coordinator] event in
+                guard let self, let coordinator,
+                      self.approvalInbox.coordinator(for: key) === coordinator else {
+                    return
+                }
+                switch event {
+                case .authenticationRequired:
+                    self.handleReceiptOwnedApproval(key)
+                case .presentation(let presentation):
+                    if self.approvalInbox.active(for: key) == nil {
+                        if case .finished = presentation {
+                            self.approvalInbox.remove(key)
+                        } else if case .superseded = presentation {
+                            self.approvalInbox.remove(key)
+                        }
+                        return
+                    }
+                    self.present(presentation, for: handle, coordinator: coordinator)
+                }
+            }
+            startPendingApprovals()
         case .showWallet:
             open()
         }
@@ -266,7 +278,7 @@ class Agent: NSObject {
 
     private func resumePendingWork() {
         guard isReady else { return }
-        startPendingApprovalValidations()
+        startPendingApprovals()
 
         guard hasPassword else {
             guard pendingWalletOpenIntent.isPending ||
@@ -393,107 +405,21 @@ class Agent: NSObject {
         return onStart ? .showPassword : .failed
     }
         
-    private func startPendingApprovalValidations() {
-        guard isReady else { return }
-        for key in approvalInbox.takeUnstartedValidations() {
-            Task { [weak self] in
-                let result = await ExtensionBridge.shared.load(
-                    handle: key.handle
-                )
-                self?.completeApprovalValidation(result, for: key)
-            }
+    private func startPendingApprovals() {
+        guard isReady,
+              let runtimeInstanceIdentifier,
+              let nativeDeliveryOwner else { return }
+        for coordinator in approvalInbox.coordinators {
+            coordinator.start(
+                runtimeInstanceIdentifier: runtimeInstanceIdentifier,
+                nativeDeliveryOwner: nativeDeliveryOwner
+            )
         }
-    }
-
-    private func completeApprovalValidation(
-        _ result: ExtensionBridge.SnapshotResult,
-        for key: ApprovalRouteKey
-    ) {
-        guard approvalInbox.isValidating(key) else { return }
-        switch result {
-        case .found(let snapshot):
-            guard snapshot.nativeDeliveryNonce == key.nativeDeliveryNonce,
-                  snapshot.phase != .responded else {
-                approvalInbox.remove(key)
-                return
-            }
-            beginApprovalReceiptAcquisition(snapshot: snapshot, for: key)
-        case .missing, .unavailable:
-            approvalInbox.remove(key)
-        }
-    }
-
-    private func beginApprovalReceiptAcquisition(
-        snapshot: ExtensionBridge.Snapshot,
-        for key: ApprovalRouteKey
-    ) {
-        guard let runtimeInstanceIdentifier,
-              let nativeDeliveryOwner,
-              approvalInbox.beginReceiptAcquisition(
-                  key,
-                  order: .init(
-                      createdAt: snapshot.createdAt,
-                      sequence: snapshot.sequence
-                  )
-              ) else {
-            approvalInbox.remove(key)
-            return
-        }
-        var deadline = Date().addingTimeInterval(ExtensionBridge.requestTTL)
-        if let request = snapshot.request {
-            deadline = min(deadline, request.admissionDeadline)
-        }
-        Task { [weak self] in
-            var retryDelay: UInt64 = 250_000_000
-            while !Task.isCancelled, Date() < deadline {
-                switch await ExtensionBridge.shared.recordNativeDeliveryReceipt(
-                    handle: key.handle,
-                    nativeDeliveryNonce: key.nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-                    owner: nativeDeliveryOwner
-                ) {
-                case .persisted:
-                    self?.completeApprovalReceiptAcquisition(key)
-                    return
-                case .ownershipLost:
-                    self?.finishApprovalReceiptAcquisition(key)
-                    return
-                case .retryablePersistenceFailure:
-                    break
-                }
-                let remaining = max(0, deadline.timeIntervalSinceNow)
-                let remainingNanoseconds = UInt64(min(
-                    remaining * 1_000_000_000,
-                    Double(UInt64.max)
-                ))
-                try? await Task.sleep(
-                    nanoseconds: min(retryDelay, remainingNanoseconds)
-                )
-                retryDelay = min(retryDelay * 2, 5_000_000_000)
-            }
-            self?.finishApprovalReceiptAcquisition(key)
-        }
-    }
-
-    private func completeApprovalReceiptAcquisition(_ key: ApprovalRouteKey) {
-        guard let disposition = approvalInbox.receiptAcquired(key) else {
-            return
-        }
-        switch disposition {
-        case .awaitAuthentication:
-            handleReceiptOwnedApproval(key)
-        case .cancel:
-            rejectCanceledApproval(key, receiptOwned: true)
-        }
-    }
-
-    private func finishApprovalReceiptAcquisition(_ key: ApprovalRouteKey) {
-        guard approvalInbox.isAcquiringReceipt(key) else { return }
-        approvalInbox.remove(key)
     }
 
     private func handleReceiptOwnedApproval(_ key: ApprovalRouteKey) {
-        guard approvalInbox.isAwaitingAuthentication(key) else { return }
+        guard let coordinator = approvalInbox.coordinator(for: key),
+              coordinator.state == .awaitingAuthentication else { return }
         guard hasPassword else {
             switch Self.missingPasswordApprovalAction(
                 canCreatePassword: CurrentApp.canCreatePassword
@@ -501,8 +427,7 @@ class Agent: NSObject {
             case .awaitOnboarding:
                 resumePendingWork()
             case .rejectAndOpenDock:
-                guard approvalInbox.markOwnedAsCanceling(key) else { return }
-                rejectCanceledApproval(key, receiptOwned: true)
+                coordinator.cancelBeforeAuthentication()
                 requestDockOnboarding()
             }
             return
@@ -521,132 +446,14 @@ class Agent: NSObject {
     }
 
     private func cancelPendingApprovals() {
-        for cancellation in approvalInbox.markPendingAsCanceling() {
-            rejectCanceledApproval(
-                cancellation.key,
-                receiptOwned: cancellation.receiptOwned
-            )
+        for coordinator in approvalInbox.coordinators {
+            coordinator.cancelBeforeAuthentication()
         }
-    }
-
-    private func rejectCanceledApproval(
-        _ key: ApprovalRouteKey,
-        receiptOwned: Bool
-    ) {
-        let runtimeInstanceIdentifier = self.runtimeInstanceIdentifier
-        Task { [weak self] in
-            var retryDelay: UInt64 = 250_000_000
-            var deadline = Date().addingTimeInterval(ExtensionBridge.requestTTL)
-            while !Task.isCancelled, Date() < deadline {
-                switch await ExtensionBridge.shared.load(handle: key.handle) {
-                case .found(let snapshot):
-                    guard snapshot.nativeDeliveryNonce ==
-                            key.nativeDeliveryNonce else {
-                        self?.finishCancelingApproval(key)
-                        return
-                    }
-                    if let request = snapshot.request {
-                        deadline = min(deadline, request.admissionDeadline)
-                    }
-                    guard snapshot.phase != .responded else {
-                        self?.finishCancelingApproval(key)
-                        return
-                    }
-                    let result: ExtensionBridge.StoreMutationResult
-                    if receiptOwned {
-                        switch Self.receiptOwnedCancellationAction(
-                            snapshot: snapshot,
-                            key: key,
-                            runtimeInstanceIdentifier:
-                                runtimeInstanceIdentifier
-                        ) {
-                        case .finish:
-                            self?.finishCancelingApproval(key)
-                            return
-                        case .reject:
-                            guard let runtimeInstanceIdentifier else {
-                                self?.finishCancelingApproval(key)
-                                return
-                            }
-                            result = await ExtensionBridge.shared
-                                .rejectNativeDelivery(
-                                    handle: key.handle,
-                                    nativeDeliveryNonce:
-                                        key.nativeDeliveryNonce,
-                                    runtimeInstanceIdentifier:
-                                        runtimeInstanceIdentifier
-                                )
-                        case .retainForAuthenticationRetry:
-                            self?.approvalInbox
-                                .restoreAwaitingAuthentication(key)
-                            return
-                        }
-                    } else {
-                        guard snapshot.nativeDeliveryReceipt == nil,
-                              !snapshot.nativeDecisionStaged,
-                              snapshot.phase == .queued else {
-                            self?.finishCancelingApproval(key)
-                            return
-                        }
-                        result = await ExtensionBridge.shared.reject(
-                            handle: key.handle
-                        )
-                    }
-                    switch result {
-                    case .persisted:
-                        self?.finishCancelingApproval(key)
-                        return
-                    case .ownershipLost, .retryablePersistenceFailure:
-                        break
-                    }
-                case .missing:
-                    self?.finishCancelingApproval(key)
-                    return
-                case .unavailable:
-                    break
-                }
-                let remaining = max(0, deadline.timeIntervalSinceNow)
-                let remainingNanoseconds = UInt64(min(
-                    remaining * 1_000_000_000,
-                    Double(UInt64.max)
-                ))
-                try? await Task.sleep(
-                    nanoseconds: min(retryDelay, remainingNanoseconds)
-                )
-                retryDelay = min(retryDelay * 2, 5_000_000_000)
-            }
-            if receiptOwned {
-                self?.approvalInbox.restoreAwaitingAuthentication(key)
-            } else {
-                self?.finishCancelingApproval(key)
-            }
-        }
-    }
-
-    static func receiptOwnedCancellationAction(
-        snapshot: ExtensionBridge.Snapshot,
-        key: ApprovalRouteKey,
-        runtimeInstanceIdentifier: UUID?
-    ) -> ReceiptOwnedCancellationAction {
-        guard let runtimeInstanceIdentifier,
-              snapshot.nativeDeliveryReceipt?.matches(
-                  nativeDeliveryNonce: key.nativeDeliveryNonce,
-                  runtimeInstanceIdentifier: runtimeInstanceIdentifier
-              ) == true,
-              snapshot.phase == .queued else { return .finish }
-        return snapshot.nativeDecisionStaged
-            ? .retainForAuthenticationRetry
-            : .reject
     }
 
     func applicationDidBecomeActive() {
         guard approvalInbox.hasAwaitingAuthentication else { return }
         resumePendingWork()
-    }
-
-    private func finishCancelingApproval(_ key: ApprovalRouteKey) {
-        guard approvalInbox.isCanceling(key) else { return }
-        approvalInbox.remove(key)
     }
 
     private func requestDockOnboarding() {
@@ -719,53 +526,11 @@ class Agent: NSObject {
     }
 
     private func activateApproval(_ key: ApprovalRouteKey) {
-        guard let runtimeInstanceIdentifier else {
-            approvalInbox.remove(key)
-            return
-        }
-        let handle = key.handle
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: key.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            requiresExistingReceipt: true
-        )
+        guard let coordinator = approvalInbox.coordinator(for: key),
+              coordinator.state == .awaitingAuthentication else { return }
         let approval = ActiveApproval(coordinator: coordinator)
         guard approvalInbox.activate(approval, for: key) else { return }
-        coordinator.onDecisionStaged = { [weak self, weak coordinator] in
-            guard let self, let coordinator,
-                  let approval = self.activeApproval(
-                      for: handle,
-                      coordinator: coordinator
-                  ) else { return }
-            approval.disableRejectionOnWindowClose()
-            self.showWaiting(for: handle, coordinator: coordinator)
-        }
-        coordinator.onFailure = { [weak self, weak coordinator] in
-            guard let self, let coordinator else { return }
-            self.showFailureSurface(
-                for: handle,
-                coordinator: coordinator
-            )
-        }
-        coordinator.onFinished = { [weak self, weak coordinator] in
-            guard let self, let coordinator else { return }
-            self.finishApproval(handle: handle, coordinator: coordinator)
-        }
-
-        approval.bootstrapTask = Task { [weak self, weak coordinator] in
-            guard let self, let coordinator else { return }
-            let presentation = await coordinator.loadPresentation()
-            guard self.activeApproval(
-                for: handle,
-                coordinator: coordinator
-            ) != nil else { return }
-            self.present(
-                presentation,
-                for: handle,
-                coordinator: coordinator
-            )
-        }
+        coordinator.resumeAfterAuthentication()
     }
 
     private func present(
@@ -1283,7 +1048,9 @@ class Agent: NSObject {
         switch state {
         case .loading, .reviewing, .staging, .staged:
             return true
-        case .rejecting, .finished:
+        case .registered, .validating, .acquiringReceipt,
+             .awaitingAuthentication, .cancelingBeforeAuthentication,
+             .rejecting, .finished:
             return false
         }
     }
