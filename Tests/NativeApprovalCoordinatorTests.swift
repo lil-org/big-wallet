@@ -13,6 +13,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var now = Date(timeIntervalSince1970: 1_800_000_000)
     }
 
+    @MainActor
     private final class StageGate {
         var continuation: CheckedContinuation<
             ExtensionBridge.StoreMutationResult,
