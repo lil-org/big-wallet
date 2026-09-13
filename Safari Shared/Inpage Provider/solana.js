@@ -28,24 +28,17 @@ import ProviderRpcError, {
     normalizeSolanaProviderError,
     providerReplacementError,
 } from "./error";
-import { walletName } from "./wallet_standard";
+import {
+    makeWalletStandardFeatures,
+    solanaChains,
+    solanaDevnetChain,
+    solanaMainnetChain,
+    solanaTestnetChain,
+    walletName,
+} from "./wallet_standard";
 import { EventEmitter } from "events";
 
-const walletStandardVersion = "1.0.0";
-const solanaSignMessageFeatureVersion = "1.1.0";
-const solanaMainnetChain = "solana:mainnet";
-const solanaDevnetChain = "solana:devnet";
-const solanaTestnetChain = "solana:testnet";
-const solanaChains = Object.freeze([
-    solanaMainnetChain,
-    solanaDevnetChain,
-    solanaTestnetChain,
-]);
-const solanaSupportedTransactionVersions = Object.freeze(["legacy", 0]);
 const standardChangeEvent = "change";
-const standardConnect = "standard:connect";
-const standardDisconnect = "standard:disconnect";
-const standardEvents = "standard:events";
 const solanaSignAndSendTransaction = "solana:signAndSendTransaction";
 const solanaSignTransaction = "solana:signTransaction";
 const solanaSignMessage = "solana:signMessage";
@@ -1675,33 +1668,13 @@ class BigWalletSolana extends EventEmitter {
     standardFeatures() {
         const state = getProviderState(this);
         if (state.standardFeatures) { return state.standardFeatures; }
-        state.standardFeatures = freezeObjectNormally({
-            [standardConnect]: freezeObjectNormally({
-                version: walletStandardVersion,
-                connect: this.standardConnect,
-            }),
-            [standardDisconnect]: freezeObjectNormally({
-                version: walletStandardVersion,
-                disconnect: this.standardDisconnect,
-            }),
-            [standardEvents]: freezeObjectNormally({
-                version: walletStandardVersion,
-                on: this.standardOn,
-            }),
-            [solanaSignAndSendTransaction]: freezeObjectNormally({
-                version: walletStandardVersion,
-                supportedTransactionVersions: solanaSupportedTransactionVersions,
-                signAndSendTransaction: this.standardSignAndSendTransaction,
-            }),
-            [solanaSignTransaction]: freezeObjectNormally({
-                version: walletStandardVersion,
-                supportedTransactionVersions: solanaSupportedTransactionVersions,
-                signTransaction: this.standardSignTransaction,
-            }),
-            [solanaSignMessage]: freezeObjectNormally({
-                version: solanaSignMessageFeatureVersion,
-                signMessage: this.standardSignMessage,
-            }),
+        state.standardFeatures = makeWalletStandardFeatures({
+            connect: this.standardConnect,
+            disconnect: this.standardDisconnect,
+            on: this.standardOn,
+            signAndSendTransaction: this.standardSignAndSendTransaction,
+            signTransaction: this.standardSignTransaction,
+            signMessage: this.standardSignMessage,
         });
         return state.standardFeatures;
     }

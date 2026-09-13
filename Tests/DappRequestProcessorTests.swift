@@ -33,6 +33,7 @@ private final class CancellableCallbackProbe<Value: Sendable>: @unchecked Sendab
     }
 }
 
+@MainActor
 final class DappRequestProcessorTests: XCTestCase {
 
     func testPreparedMessageKeepsReviewedPayloadAndUsesExplicitExecutionAccess() async throws {
@@ -45,7 +46,7 @@ final class DappRequestProcessorTests: XCTestCase {
         )
         var reviewAccess: ProcessorWalletAccess? = ProcessorWalletAccess(accounts: [account])
         let retainedReviewAccess = ProcessorWeakWalletAccess(value: reviewAccess)
-        let preparation = DappRequestProcessor.prepare(
+        let preparation = DappRequestProcessor().prepare(
             request,
             walletAccess: try XCTUnwrap(reviewAccess)
         )
@@ -60,7 +61,7 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertNil(retainedReviewAccess.value)
 
         let executionAccess = ProcessorWalletAccess(accounts: [account], key: privateKey)
-        let result = await DappRequestProcessor.execute(
+        let result = await DappRequestProcessor().execute(
             request: request,
             action: .approveMessage(action),
             decision: .message(.init(solanaCluster: nil)),
@@ -81,7 +82,7 @@ final class DappRequestProcessorTests: XCTestCase {
         let account = processorAccount(privateKey: privateKey, coin: .ethereum)
         let access = ProcessorWalletAccess(accounts: [account])
         let request = try ethereumRequest(method: "requestAccounts", address: account.address)
-        guard case .approval(let action) = DappRequestProcessor.prepare(request, walletAccess: access)
+        guard case .approval(let action) = DappRequestProcessor().prepare(request, walletAccess: access)
         else { return XCTFail("Expected account selection") }
         for path in [account.derivationPath, "m/44'/60'/0'/0/9"] {
             let decision = DappApprovalDecision.accountSelection(.init(
@@ -96,7 +97,7 @@ final class DappRequestProcessorTests: XCTestCase {
             let encoded = try XCTUnwrap(decision.boundedData)
             let decoded = try XCTUnwrap(DappApprovalDecision.decodeBounded(encoded))
             XCTAssertEqual(decoded, decision)
-            let result = await DappRequestProcessor.execute(
+            let result = await DappRequestProcessor().execute(
                 request: request,
                 action: action,
                 decision: decoded,
@@ -133,11 +134,11 @@ final class DappRequestProcessorTests: XCTestCase {
             ]
         )
         guard case .approval(.approveMessage(let action)) =
-                DappRequestProcessor.prepare(request, walletAccess: access) else {
+                DappRequestProcessor().prepare(request, walletAccess: access) else {
             return XCTFail("Expected prepared Solana broadcast")
         }
         XCTAssertEqual(action.solanaClusterOptions?.suggestedCluster, .devnet)
-        let missingCluster = await DappRequestProcessor.execute(
+        let missingCluster = await DappRequestProcessor().execute(
             request: request,
             action: .approveMessage(action),
             decision: .message(.init(solanaCluster: nil)),
@@ -149,7 +150,7 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertNotNil(failure.json["error"])
         XCTAssertEqual(access.privateKeyReads, 0)
 
-        let result = await DappRequestProcessor.execute(
+        let result = await DappRequestProcessor().execute(
             request: request,
             action: .approveMessage(action),
             decision: .message(.init(solanaCluster: .testnet)),
@@ -233,7 +234,7 @@ final class DappRequestProcessorTests: XCTestCase {
         let request = try ethereumRequest(method: "requestAccounts", address: account.address)
         for (identities, accounts) in cases {
             let access = ProcessorWalletAccess(accounts: accounts, key: key)
-            let result = await DappRequestProcessor.execute(
+            let result = await DappRequestProcessor().execute(
                 request: request,
                 action: .selectAccount(action),
                 decision: .accountSelection(.init(accounts: identities, ethereumChainID: nil)),
@@ -302,7 +303,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 : solanaRequest(method: "signMessage", publicKey: account.address)
             for decision in [DappApprovalDecision.message(.init(solanaCluster: .devnet)),
                              .addEthereumChain] {
-                let result = await DappRequestProcessor.execute(
+                let result = await DappRequestProcessor().execute(
                     request: request, action: .approveMessage(action),
                     decision: decision, walletAccess: access
                 )
@@ -384,7 +385,7 @@ final class DappRequestProcessorTests: XCTestCase {
             initiallyConnectedProviders: [.ethereum],
             network: nil
         )
-        let result = await DappRequestProcessor.execute(
+        let result = await DappRequestProcessor().execute(
             request: request,
             action: .switchAccount(action),
             decision: .accountSelection(.init(
@@ -928,7 +929,7 @@ final class DappRequestProcessorTests: XCTestCase {
         ])
         let request = try XCTUnwrap(SafariRequest(data: requestData))
 
-        guard case let .approval(.switchAccount(action)) = DappRequestProcessor.prepare(request) else {
+        guard case let .approval(.switchAccount(action)) = DappRequestProcessor().prepare(request) else {
             return XCTFail("Expected switch-account action")
         }
 
@@ -939,7 +940,7 @@ final class DappRequestProcessorTests: XCTestCase {
     func testPrepareReturnsUnauthorizedForUnownedKnownChainSwitch() throws {
         let request = try ethereumRequest(method: "switchEthereumChain")
 
-        guard case let .response(response) = DappRequestProcessor.prepare(request) else {
+        guard case let .response(response) = DappRequestProcessor().prepare(request) else {
             return XCTFail("Expected immediate response")
         }
 
@@ -954,7 +955,7 @@ final class DappRequestProcessorTests: XCTestCase {
         )
 
         guard case let .response(response) =
-            DappRequestProcessor.prepareWithoutWallets(request) else {
+            DappRequestProcessor().prepareWithoutWallets(request) else {
             return XCTFail("Expected wallet-independent response")
         }
 
@@ -970,8 +971,8 @@ final class DappRequestProcessorTests: XCTestCase {
         )
 
         for preparation in [
-            DappRequestProcessor.prepare(request),
-            try XCTUnwrap(DappRequestProcessor.prepareWithoutWallets(request)),
+            DappRequestProcessor().prepare(request),
+            try XCTUnwrap(DappRequestProcessor().prepareWithoutWallets(request)),
         ] {
             guard case let .response(response) = preparation else {
                 return XCTFail("Expected wallet-independent response")
@@ -984,7 +985,7 @@ final class DappRequestProcessorTests: XCTestCase {
     func testPrepareSolanaConnectReturnsApproval() async throws {
         let request = try solanaRequest(method: "connect", publicKey: "")
 
-        guard case let .approval(.selectAccount(action)) = DappRequestProcessor.prepare(request) else {
+        guard case let .approval(.selectAccount(action)) = DappRequestProcessor().prepare(request) else {
             return XCTFail("Expected Solana account selection")
         }
 
@@ -1002,7 +1003,7 @@ final class DappRequestProcessorTests: XCTestCase {
             ]
         )
 
-        guard case let .response(response) = DappRequestProcessor.prepare(request) else {
+        guard case let .response(response) = DappRequestProcessor().prepare(request) else {
             return XCTFail("Expected unauthorized response")
         }
 
@@ -1015,7 +1016,7 @@ final class DappRequestProcessorTests: XCTestCase {
     func testPrepareEthereumAccountRequestReturnsApproval() async throws {
         let request = try ethereumRequest(method: "requestAccounts")
 
-        guard case let .approval(.selectAccount(action)) = DappRequestProcessor.prepare(request) else {
+        guard case let .approval(.selectAccount(action)) = DappRequestProcessor().prepare(request) else {
             return XCTFail("Expected Ethereum account selection")
         }
 
@@ -1025,7 +1026,7 @@ final class DappRequestProcessorTests: XCTestCase {
     func testPrepareMalformedEthereumSigningReturnsImmediateResponse() throws {
         let request = try ethereumRequest(method: "signMessage")
 
-        guard case let .response(response) = DappRequestProcessor.prepare(request) else {
+        guard case let .response(response) = DappRequestProcessor().prepare(request) else {
             return XCTFail("Expected malformed-request response")
         }
 

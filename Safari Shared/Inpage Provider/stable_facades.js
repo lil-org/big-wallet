@@ -6,7 +6,9 @@ import {EventEmitter} from "events";
 import {providerReplacementError} from "./error";
 import {
     dispatchWalletStandardRegistrationEvent,
+    makeWalletStandardFeatures,
     makeWalletStandardRegistrationCallback,
+    solanaChains,
     walletName,
 } from "./wallet_standard";
 
@@ -76,13 +78,6 @@ const solanaProperties = [
     "isPhantom",
     "isBigWallet",
 ];
-const solanaChains = Object.freeze([
-    "solana:mainnet",
-    "solana:devnet",
-    "solana:testnet",
-]);
-const supportedTransactionVersions = Object.freeze(["legacy", 0]);
-
 function unavailable() {
     return providerReplacementError();
 }
@@ -381,39 +376,19 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         }
     }
 
-    const features = Object.freeze({
-        "standard:connect": Object.freeze({
-            version: "1.0.0",
-            connect: (...arguments_) => callSolana("standardConnect", arguments_),
-        }),
-        "standard:disconnect": Object.freeze({
-            version: "1.0.0",
-            disconnect: (...arguments_) => callSolana("standardDisconnect", arguments_),
-        }),
-        "standard:events": Object.freeze({version: "1.0.0", on: standardOn}),
-        "solana:signAndSendTransaction": Object.freeze({
-            version: "1.0.0",
-            supportedTransactionVersions,
-            signAndSendTransaction: (...arguments_) => callSolana(
-                "standardSignAndSendTransaction",
-                arguments_
-            ),
-        }),
-        "solana:signTransaction": Object.freeze({
-            version: "1.0.0",
-            supportedTransactionVersions,
-            signTransaction: (...arguments_) => callSolana(
-                "standardSignTransaction",
-                arguments_
-            ),
-        }),
-        "solana:signMessage": Object.freeze({
-            version: "1.1.0",
-            signMessage: (...arguments_) => callSolana(
-                "standardSignMessage",
-                arguments_
-            ),
-        }),
+    const features = makeWalletStandardFeatures({
+        connect: (...arguments_) => callSolana("standardConnect", arguments_),
+        disconnect: (...arguments_) => callSolana("standardDisconnect", arguments_),
+        on: standardOn,
+        signAndSendTransaction: (...arguments_) => callSolana(
+            "standardSignAndSendTransaction",
+            arguments_
+        ),
+        signTransaction: (...arguments_) => callSolana(
+            "standardSignTransaction",
+            arguments_
+        ),
+        signMessage: (...arguments_) => callSolana("standardSignMessage", arguments_),
     });
     const wallet = Object.freeze({
         get version() { return "1.0.0"; },

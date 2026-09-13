@@ -1157,6 +1157,7 @@ final class SafariApprovalVaultHost {
                 integrityKey: integrityKey
             ) {
             case .current:
+                persistPublicationMetadata(metadata)
                 return
             case .stale:
                 break
@@ -1170,21 +1171,16 @@ final class SafariApprovalVaultHost {
         }
 
         do {
-            guard synchronizeDefaults(defaults) else {
-                throw SafariApprovalVault.Error.unavailable
-            }
             let publication = try vault.publish(
                 source: source,
                 integrityKey: integrityKey,
                 coordinationLease: coordinationLease
             )
-            guard persistPublicationMetadata(PublicationMetadata(
+            persistPublicationMetadata(PublicationMetadata(
                 generation: publication.generation,
                 envelopeDigest: publication.envelopeDigest,
                 sourceMAC: publication.sourceMAC
-            )) else {
-                throw SafariApprovalVault.Error.unavailable
-            }
+            ))
         } catch {
             SafariApprovalDiagnostics.record("publish approval vault", error: error)
             clearVaultLocked(
@@ -1221,7 +1217,7 @@ final class SafariApprovalVaultHost {
 
     private func persistPublicationMetadata(
         _ metadata: PublicationMetadata
-    ) -> Bool {
+    ) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data: Data
@@ -1229,19 +1225,15 @@ final class SafariApprovalVaultHost {
             data = try encoder.encode(metadata)
         } catch {
             SafariApprovalDiagnostics.record("encode publication metadata", error: error)
-            return false
+            return
         }
         defaults.set(data, forKey: Self.publicationMetadataKey)
-        guard synchronizeDefaults(defaults) else {
+        if !synchronizeDefaults(defaults) {
             SafariApprovalDiagnostics.record(
                 "persist publication metadata",
                 error: SafariApprovalVault.Error.unavailable
             )
-            defaults.removeObject(forKey: Self.publicationMetadataKey)
-            _ = synchronizeDefaults(defaults)
-            return false
         }
-        return true
     }
 
     @discardableResult

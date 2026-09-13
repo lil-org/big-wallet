@@ -12,13 +12,13 @@ final class DappRequestAdmission {
 #if os(iOS) || os(visionOS)
     static let shared = DappRequestAdmission(
         store: ExtensionBridge.shared,
-        requestProcessor: ProductionDappRequestProcessor(),
+        requestProcessor: DappRequestProcessor(),
         catalogAccess: { SafariApprovalVault.shared.catalogAccess() }
     )
 #else
     static let shared = DappRequestAdmission(
         store: ExtensionBridge.shared,
-        requestProcessor: ProductionDappRequestProcessor()
+        requestProcessor: DappRequestProcessor()
     )
 #endif
 

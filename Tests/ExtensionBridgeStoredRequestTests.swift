@@ -86,48 +86,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
     #endif
 
-    func testStoreUsesV7AndLeavesIntermediateStoresAndUnrelatedFilesUntouched()
-        async throws {
+    func testStoreLeavesUnrelatedFilesAndDirectoriesUntouched() async throws {
         var preservedFiles = [URL: Data]()
-        for version in [5, 6] {
-            let oldDirectory = rootURL.appendingPathComponent(
-                "profiles-v\(version)",
-                isDirectory: true
-            )
+        for name in ["other-profiles", "other-locks"] {
+            let directory = rootURL.appendingPathComponent(name, isDirectory: true)
             try FileManager.default.createDirectory(
-                at: oldDirectory,
+                at: directory,
                 withIntermediateDirectories: true
             )
-            let oldProfileURL = oldDirectory.appendingPathComponent("default.state")
-            let oldProfile = try PropertyListSerialization.data(
-                fromPropertyList: [
-                    "schemaVersion": version,
-                    "workflowVersion": ExtensionBridge.workflowVersion,
-                    "records": [],
-                ],
-                format: .binary,
-                options: 0
-            )
-            try oldProfile.write(to: oldProfileURL, options: .atomic)
-            preservedFiles[oldProfileURL] = oldProfile
-            for name in ["operation-locks", "native-execution-fences"] {
-                let directory = rootURL.appendingPathComponent(
-                    "\(name)-v\(version)",
-                    isDirectory: true
-                )
-                try FileManager.default.createDirectory(
-                    at: directory,
-                    withIntermediateDirectories: true
-                )
-                let url = directory.appendingPathComponent("intermediate.lock")
-                let data = Data("intermediate lock".utf8)
-                try data.write(to: url)
-                preservedFiles[url] = data
-            }
-            let oldLockURL = rootURL.appendingPathComponent("bridge-v\(version).lock")
-            let oldLock = Data("intermediate store lock".utf8)
-            try oldLock.write(to: oldLockURL)
-            preservedFiles[oldLockURL] = oldLock
+            let url = directory.appendingPathComponent("unrelated.state")
+            let data = Data("preserve unrelated state".utf8)
+            try data.write(to: url)
+            preservedFiles[url] = data
         }
         let unrelatedURL = rootURL.appendingPathComponent("unrelated.data")
         let unrelated = Data("preserve unrelated data".utf8)
@@ -136,7 +106,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         guard case .available(let initial) = await bridge.list(
             profileIdentifier: nil
-        ) else { return XCTFail("Expected V7 store") }
+        ) else { return XCTFail("Expected empty store") }
         XCTAssertTrue(initial.isEmpty)
 
         _ = try accepted(await bridge.enqueue(
@@ -531,7 +501,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: secondRuntime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(staged, .persisted)
         bridge = makeBridge(clock: { self.clock.now })
@@ -730,21 +701,24 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: stageAdmission.handle,
             nativeDeliveryNonce: wrongNonce,
             runtimeInstanceIdentifier: firstRuntime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(wrongNonceStage, .ownershipLost)
         let wrongOwnerStage = await bridge.stageNativeDecision(
             handle: stageAdmission.handle,
             nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: wrongRuntime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(wrongOwnerStage, .ownershipLost)
         let staged = await bridge.stageNativeDecision(
             handle: stageAdmission.handle,
             nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: firstRuntime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(staged, .persisted)
         guard case .found(let stagedSnapshot) = await bridge.load(
@@ -877,7 +851,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: stageAdmission.handle,
             nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: firstRuntime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(staged, .persisted)
 
@@ -1921,6 +1896,100 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertTrue(acknowledged.isEmpty)
     }
 
+    func testAmbiguousCompletionRequiresExactBytesFromASafeBoundedRead() async throws {
+        enum ReadBack: CaseIterable {
+            case exact, stale, altered, missing, symbolicLink, unreadable
+            case oversizedFile, oversizedData, emptyData
+        }
+        for mode in ReadBack.allCases {
+            let profileIdentifier = UUID()
+            let fixture = try makeFixture(id: 741)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress,
+                profileIdentifier: profileIdentifier
+            )).handle
+            let targetURL = profileURL(profileIdentifier)
+            var recovering = false
+            var recoveryReads = 0
+            let writer = makeBridge(
+                clock: { self.clock.now },
+                atomicWrite: { data, url in
+                    guard url == targetURL else {
+                        return try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                    }
+                    recovering = true
+                    switch mode {
+                    case .stale:
+                        break
+                    case .altered:
+                        var profile = try XCTUnwrap(PropertyListSerialization.propertyList(
+                            from: data,
+                            options: [],
+                            format: nil
+                        ) as? [String: Any])
+                        var records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+                        var state = try XCTUnwrap(records[0]["state"] as? [String: Any])
+                        var completed = try XCTUnwrap(state["completed"] as? [String: Any])
+                        completed["acknowledged"] = true
+                        state["completed"] = completed
+                        records[0]["state"] = state
+                        profile["records"] = records
+                        let altered = try PropertyListSerialization.data(
+                            fromPropertyList: profile,
+                            format: .binary,
+                            options: 0
+                        )
+                        try ExtensionRequestFileStore.defaultAtomicWrite(altered, url)
+                    case .missing:
+                        try FileManager.default.removeItem(at: url)
+                    case .symbolicLink:
+                        let otherURL = self.rootURL.appendingPathComponent("readback-target")
+                        try data.write(to: otherURL, options: .atomic)
+                        try FileManager.default.removeItem(at: url)
+                        try FileManager.default.createSymbolicLink(at: url, withDestinationURL: otherURL)
+                    case .exact, .unreadable, .oversizedFile, .oversizedData, .emptyData:
+                        try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                    }
+                    throw Failure.injectedWrite
+                },
+                readData: { url in
+                    if recovering, url == targetURL {
+                        recoveryReads += 1
+                        switch mode {
+                        case .unreadable:
+                            throw Failure.injectedWrite
+                        case .oversizedData:
+                            return Data(repeating: 0, count: ExtensionBridge.maximumRetainedBytes * 2)
+                        case .emptyData:
+                            return Data()
+                        default:
+                            break
+                        }
+                    }
+                    return try ExtensionRequestFileStore.defaultReadData(url)
+                },
+                readFileSize: { url in
+                    if recovering, url == targetURL, mode == .oversizedFile {
+                        return Int.max
+                    }
+                    return try ExtensionRequestFileStore.defaultReadFileSize(url)
+                }
+            )
+            let result = await writer.complete(
+                handle: handle,
+                response: response(for: fixture.request)
+            )
+            XCTAssertEqual(
+                result,
+                mode == .exact ? .persisted : .retryablePersistenceFailure,
+                "Read-back mode: \(mode)"
+            )
+            if [.missing, .symbolicLink, .oversizedFile].contains(mode) {
+                XCTAssertEqual(recoveryReads, 0, "Unsafe or unbounded data must not be read")
+            }
+        }
+    }
+
     func testResponseAcknowledgmentRequiresCompletedExactIdentity() async throws {
         let fixture = try makeFixture(id: 1)
         let handle = try accepted(await bridge.enqueue(
@@ -2212,7 +2281,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(staged, .persisted)
         let execution = try await makeNativeDecisionExecutable(
@@ -3178,14 +3248,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), corrupt)
     }
 
-    func testV7RejectsIntermediateSchemaInItsOwnDirectoryWithoutOverwriting()
+    func testUnsupportedSchemaFailsWithoutOverwriting()
         async throws {
         _ = try accepted(await bridge.enqueue(
             ingress: makeFixture(id: 730).ingress,
             profileIdentifier: nil
         ))
         var profile = try storedProfile()
-        profile["schemaVersion"] = 6
+        profile["schemaVersion"] = Int.max
         try PropertyListSerialization.data(
             fromPropertyList: profile,
             format: .binary,
@@ -3282,6 +3352,75 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
+    func testNativeDeliveryStagingPreservesApprovalTimeAcrossFailedAndDuplicateWrites()
+        async throws {
+        var failWrites = false
+        bridge = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                if failWrites, url.pathExtension == "state" {
+                    throw Failure.injectedWrite
+                }
+                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+            }
+        )
+        let fixture = try makeFixture(id: 719)
+        let admission = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        ))
+        let runtime = UUID()
+        let receipt = await bridge.recordNativeDeliveryReceipt(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtime,
+            owner: storedRequestNativeOwner
+        )
+        XCTAssertEqual(receipt, .persisted)
+        let approvedAt = clock.now
+        let decision = DappApprovalDecision.message(.init(solanaCluster: nil))
+        failWrites = true
+        let failed = await bridge.stageNativeDecision(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtime,
+            decision: decision,
+            approvedAt: approvedAt
+        )
+        XCTAssertEqual(failed, .retryablePersistenceFailure)
+        clock.now.addTimeInterval(60)
+        failWrites = false
+        let staged = await bridge.stageNativeDecision(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtime,
+            decision: decision,
+            approvedAt: approvedAt
+        )
+        XCTAssertEqual(staged, .persisted)
+        clock.now.addTimeInterval(10)
+        let duplicate = await bridge.stageNativeDecision(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtime,
+            decision: decision,
+            approvedAt: clock.now
+        )
+        XCTAssertEqual(duplicate, .persisted)
+        let execution = try await makeNativeDecisionExecutable(
+            handle: admission.handle,
+            configurationKey: fixture.request.configurationKey,
+            revisions: admission.revisions
+        )
+        defer { execution.fence.release() }
+        guard case .claimed(let claim) = await bridge.claimExecutableNativeDecision(
+            handle: admission.handle
+        ) else { return XCTFail("Expected the delayed native decision") }
+        XCTAssertEqual(claim.stagedAt, approvedAt)
+        let released = await bridge.release(claim: claim.approvalClaim)
+        XCTAssertEqual(released, .persisted)
+    }
+
     func testNativeDecisionStagingIsProfileScopedAndInvisibleToPopupClaims() async throws {
         let profile = UUID()
         let fixture = try makeFixture(id: 720)
@@ -3356,6 +3495,46 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(rejected, .ownershipLost)
     }
 
+    func testNativeExecutionContextVerifiesAmbiguousWrites() async throws {
+        let fixture = try makeFixture(id: 742)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        let staged = await bridge.stageNativeDecision(
+            handle: handle,
+            decision: .message(.init(solanaCluster: nil))
+        )
+        XCTAssertEqual(staged, .persisted)
+        bridge = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                throw Failure.injectedWrite
+            }
+        )
+        let execution = try await makeNativeDecisionExecutable(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey,
+            revisions: fixture.ingress.revisions
+        )
+        defer { execution.fence.release() }
+        guard case .found(let recorded) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected retained native context")
+        }
+        XCTAssertEqual(recorded.nativeExecutionContext, execution.context)
+        let cleared = await bridge.clearNativeExecutionContext(
+            handle: handle,
+            expected: execution.context
+        )
+        XCTAssertEqual(cleared, .persisted)
+        guard case .found(let retained) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected retained staged decision")
+        }
+        XCTAssertTrue(retained.nativeDecisionStaged)
+        XCTAssertNil(retained.nativeExecutionContext)
+    }
+
     func testNativeExecutionContextRefreshesAndRequiresMatchingLiveFence()
         async throws {
         let fixture = try makeFixture(id: 726)
@@ -3387,7 +3566,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtime,
-            decision: .message(.init(solanaCluster: nil))
+            decision: .message(.init(solanaCluster: nil)),
+            approvedAt: clock.now
         )
         XCTAssertEqual(stageResult, .persisted)
         let prematureClaim = await bridge.claimExecutableNativeDecision(
@@ -5594,11 +5774,20 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func makeBridge(
         clock: @escaping () -> Date = Date.init,
         atomicWrite: @escaping ExtensionRequestFileStore.AtomicWrite =
-            ExtensionRequestFileStore.defaultAtomicWrite
+            ExtensionRequestFileStore.defaultAtomicWrite,
+        readData: @escaping ExtensionRequestFileStore.ReadData =
+            ExtensionRequestFileStore.defaultReadData,
+        readFileSize: @escaping ExtensionRequestFileStore.ReadFileSize =
+            ExtensionRequestFileStore.defaultReadFileSize
     ) -> ExtensionBridge {
         ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: rootURL,
-            dependencies: .init(clock: clock, atomicWrite: atomicWrite)
+            dependencies: .init(
+                clock: clock,
+                atomicWrite: atomicWrite,
+                readData: readData,
+                readFileSize: readFileSize
+            )
         ))
     }
 

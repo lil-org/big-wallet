@@ -2,8 +2,46 @@
 
 "use strict";
 
+import {freezeObjectNormally} from "./intrinsics";
+
 export const walletName = "Big Wallet";
 export const walletStandardRegisterEvent = "wallet-standard:register-wallet";
+export const solanaMainnetChain = "solana:mainnet";
+export const solanaDevnetChain = "solana:devnet";
+export const solanaTestnetChain = "solana:testnet";
+export const solanaChains = freezeObjectNormally([
+    solanaMainnetChain,
+    solanaDevnetChain,
+    solanaTestnetChain,
+]);
+
+const supportedTransactionVersions = freezeObjectNormally(["legacy", 0]);
+
+export function makeWalletStandardFeatures({
+    connect,
+    disconnect,
+    on,
+    signAndSendTransaction,
+    signTransaction,
+    signMessage,
+}) {
+    return freezeObjectNormally({
+        "standard:connect": freezeObjectNormally({version: "1.0.0", connect}),
+        "standard:disconnect": freezeObjectNormally({version: "1.0.0", disconnect}),
+        "standard:events": freezeObjectNormally({version: "1.0.0", on}),
+        "solana:signAndSendTransaction": freezeObjectNormally({
+            version: "1.0.0",
+            supportedTransactionVersions,
+            signAndSendTransaction,
+        }),
+        "solana:signTransaction": freezeObjectNormally({
+            version: "1.0.0",
+            supportedTransactionVersions,
+            signTransaction,
+        }),
+        "solana:signMessage": freezeObjectNormally({version: "1.1.0", signMessage}),
+    });
+}
 
 export function makeWalletStandardRegistrationCallback({
     onError,

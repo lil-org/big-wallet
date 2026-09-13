@@ -4007,6 +4007,43 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
     };
 }
 
+test("Wallet Standard features remain cached and frozen after Object.freeze changes", () => {
+    const engine = solanaHarness();
+    const facade = facadeHarness();
+    for (const harness of [engine, facade]) {
+        vm.runInContext("Object.freeze = value => value", harness.context);
+    }
+    const wallet = facade.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000009",
+    }).wallet;
+    const engineFeatures = engine.provider.standardFeatures();
+    assert.equal(engine.provider.standardFeatures(), engineFeatures);
+    for (const features of [engineFeatures, wallet.features]) {
+        assert.equal(Object.isFrozen(features), true);
+        assert.deepEqual(Object.keys(features).sort(), [
+            "solana:signAndSendTransaction",
+            "solana:signMessage",
+            "solana:signTransaction",
+            "standard:connect",
+            "standard:disconnect",
+            "standard:events",
+        ]);
+        for (const [name, feature] of Object.entries(features)) {
+            assert.equal(Object.isFrozen(feature), true);
+            assert.equal(feature.version,
+                name === "solana:signMessage" ? "1.1.0" : "1.0.0");
+        }
+        for (const name of ["solana:signTransaction", "solana:signAndSendTransaction"]) {
+            assert.deepEqual(normalized(features[name].supportedTransactionVersions),
+                ["legacy", 0]);
+            assert.equal(Object.isFrozen(features[name].supportedTransactionVersions), true);
+        }
+    }
+    assert.deepEqual(normalized(wallet.chains),
+        ["solana:mainnet", "solana:devnet", "solana:testnet"]);
+    assert.equal(Object.isFrozen(wallet.chains), true);
+});
+
 test("stable facades retarget atomically while preserving identities and listeners", async () => {
     const harness = facadeHarness();
     const record = harness.exports.createStableFacadeRecord({
@@ -4025,9 +4062,24 @@ test("stable facades retarget atomically while preserving identities and listene
     });
     const eipProvider = record.eip6963.provider;
     const wallet = record.wallet;
+    const features = wallet.features;
+    const callbacks = [
+        ["standard:connect", "connect"],
+        ["standard:disconnect", "disconnect"],
+        ["solana:signAndSendTransaction", "signAndSendTransaction"],
+        ["solana:signTransaction", "signTransaction"],
+        ["solana:signMessage", "signMessage"],
+    ].map(([name, method]) => ({name, method, callback: features[name][method]}));
     const account = wallet.accounts[0];
     const events = [];
     const solanaEvents = [];
+    const accountEvents = [];
+    const on = features["standard:events"].on;
+    const unsubscribe = on("change", value => accountEvents.push(value));
+    assert.equal(firstSolana.changeListeners.size, 1);
+    for (const {callback} of callbacks) {
+        assert.equal(await callback({}), "first");
+    }
     eipProvider.on("accountsChanged", value => events.push(value));
     record.solana.on("accountChanged", value => solanaEvents.push(value));
     firstEthereum.provider.emit("accountsChanged", ["first"]);
@@ -4047,13 +4099,21 @@ test("stable facades retarget atomically while preserving identities and listene
         "00000000-0000-4000-8000-000000000001"
     );
     assert.equal(record.wallet, wallet);
+    assert.equal(wallet.features, features);
+    assert.equal(features["standard:events"].on, on);
     assert.equal(wallet.accounts[0], account);
     assert.equal(await eipProvider.request({method: "eth_chainId"}),
         "second:eth_chainId");
-    assert.equal(
-        await wallet.features["solana:signMessage"].signMessage({}),
-        "second"
-    );
+    for (const {name, method, callback} of callbacks) {
+        assert.equal(wallet.features[name][method], callback);
+        assert.equal(await callback({}), "second");
+    }
+    assert.equal(firstSolana.changeListeners.size, 0);
+    assert.equal(secondSolana.changeListeners.size, 1);
+    for (const listener of secondSolana.changeListeners) { listener({}); }
+    assert.equal(accountEvents.at(-1).accounts[0], account);
+    unsubscribe();
+    assert.equal(secondSolana.changeListeners.size, 0);
     firstEthereum.provider.emit("accountsChanged", ["stale"]);
     secondEthereum.provider.emit("accountsChanged", ["second"]);
     firstSolana.provider.emit("accountChanged", "stale");

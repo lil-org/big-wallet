@@ -1452,7 +1452,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotEqual(recovered.generation, first.generation)
     }
 
-    func testSourceMutationRecoversAfterPersistentMetadataSynchronizationFailure()
+    func testSourceMutationRemainsAvailableDuringPersistentMetadataSynchronizationFailure()
         async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -1509,40 +1509,52 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertEqual(result, "saved")
         XCTAssertEqual(mutations, 1)
-        XCTAssertEqual(stores, 1)
+        XCTAssertEqual(stores, 2)
         XCTAssertGreaterThan(synchronizationFailures, 0)
-        XCTAssertNil(vault.catalogAccess())
-        XCTAssertTrue(keys.keys.isEmpty)
-        XCTAssertEqual(try Data(contentsOf: url), Data())
-        XCTAssertNil(defaults.data(
+        let current = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let envelope = try Data(contentsOf: url)
+        let metadata = try XCTUnwrap(defaults.data(
             forKey: "SafariApprovalVault.hostPublicationMetadata.v1"
         ))
+        XCTAssertNotEqual(current.generation, originalIdentity.generation)
+        XCTAssertNotEqual(current.catalogData, originalIdentity.catalogData)
         XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
         XCTAssertNil(previousAccess.privateKey(
             walletID: "wallet",
             account: original.account
         ))
         XCTAssertNil(previousAccess.takeExecutionLease())
+        let replacementUnlock = await vault.unlock(reason: "During metadata failure")
+        let replacementAccess = try XCTUnwrap(replacementUnlock)
+        XCTAssertNotNil(replacementAccess.privateKey(
+            walletID: "mnemonic-wallet",
+            account: replacement.account
+        ))
 
         for _ in 0..<2 {
             let previousFailures = synchronizationFailures
             host.reconcile()
             XCTAssertGreaterThan(synchronizationFailures, previousFailures)
             XCTAssertEqual(mutations, 1)
-            XCTAssertEqual(stores, 1)
-            XCTAssertNil(vault.catalogAccess())
-            XCTAssertTrue(keys.keys.isEmpty)
-            XCTAssertEqual(try Data(contentsOf: url), Data())
+            XCTAssertEqual(stores, 2)
+            XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, current)
+            XCTAssertEqual(try Data(contentsOf: url), envelope)
+            XCTAssertEqual(defaults.data(
+                forKey: "SafariApprovalVault.hostPublicationMetadata.v1"
+            ), metadata)
+            XCTAssertNotNil(replacementAccess.privateKey(
+                walletID: "mnemonic-wallet",
+                account: replacement.account
+            ))
         }
 
         rejectSynchronization = false
         host.reconcile()
 
-        let recovered = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertEqual(mutations, 1)
         XCTAssertEqual(stores, 2)
-        XCTAssertNotEqual(recovered.generation, originalIdentity.generation)
-        XCTAssertNotEqual(recovered.catalogData, originalIdentity.catalogData)
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, current)
+        XCTAssertEqual(try Data(contentsOf: url), envelope)
         let recoveredUnlock = await vault.unlock(reason: "After metadata recovery")
         let recoveredAccess = try XCTUnwrap(recoveredUnlock)
         XCTAssertNotNil(recoveredAccess.privateKey(
@@ -1869,58 +1881,62 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(keys.keys.count, 1)
     }
 
-    func testPublicationMetadataFailureStaysUnavailableAndRecovers() throws {
+    func testInitialPublicationSurvivesMetadataFailureAndSynchronizesWithoutRotation()
+        async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
-        var rejectNextPublicationMetadata = false
-        var envelopeWasWritten = false
+        var stores = 0
+        keys.onStore = { _ in stores += 1 }
         let vault = SafariApprovalVault(
             fileURL: url,
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
-            authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 17, count: 32) },
-            atomicWrite: { data, destination in
-                try data.write(to: destination, options: .atomic)
-                if !data.isEmpty {
-                    envelopeWasWritten = true
-                }
-            }
+            authentication: { _, _, _ in true }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        var source = try fixture().source
+        let fixture = try fixture()
+        var rejectSynchronization = true
+        var synchronizedMetadata: Data?
         let host = SafariApprovalVaultHost(
             vault: vault,
             defaults: defaults,
-            integrityKeyStore: MemoryApprovalIntegrityKeyStore(
-                key: integrityKey
-            ),
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             synchronizeDefaults: { value in
-                if rejectNextPublicationMetadata && envelopeWasWritten {
-                    rejectNextPublicationMetadata = false
-                    envelopeWasWritten = false
-                    return false
-                }
+                guard !rejectSynchronization else { return false }
+                synchronizedMetadata = value.data(
+                    forKey: "SafariApprovalVault.hostPublicationMetadata.v1"
+                )
                 return value.synchronize()
             },
-            sourceSnapshot: { source }
+            sourceSnapshot: { fixture.source }
         )
         host.start()
-        envelopeWasWritten = false
-        source.password.append(0x23)
-        rejectNextPublicationMetadata = true
+        let initial = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let envelope = try Data(contentsOf: url)
+        let metadata = try XCTUnwrap(defaults.data(
+            forKey: "SafariApprovalVault.hostPublicationMetadata.v1"
+        ))
+        let unlocked = await vault.unlock(reason: "During metadata failure")
+        let access = try XCTUnwrap(unlocked)
+        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
+        XCTAssertNil(synchronizedMetadata)
+        host.reconcile()
+        XCTAssertEqual(stores, 1)
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, initial)
+        XCTAssertEqual(try Data(contentsOf: url), envelope)
+        XCTAssertNotNil(keys.keys[try XCTUnwrap(initial.generation)])
 
+        rejectSynchronization = false
         host.reconcile()
 
-        XCTAssertNil(vault.catalogAccess())
-        XCTAssertEqual(try Data(contentsOf: url), Data())
-        XCTAssertTrue(keys.keys.isEmpty)
-        host.reconcile()
-        XCTAssertNotNil(vault.catalogAccess())
-        XCTAssertEqual(keys.keys.count, 1)
+        XCTAssertEqual(synchronizedMetadata, metadata)
+        XCTAssertEqual(stores, 1)
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, initial)
+        XCTAssertEqual(try Data(contentsOf: url), envelope)
+        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
     }
 
     func testPublicationDeletionFailureStaysUnavailableAndRecovers() throws {

@@ -18,7 +18,8 @@ protocol NativeDeliveryStore: AnyObject {
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: DappApprovalDecision
+        decision: DappApprovalDecision,
+        approvedAt: Date
     ) async -> ExtensionBridge.StoreMutationResult
     func completeNativeDelivery(
         handle: ExtensionBridge.Handle,
@@ -75,18 +76,20 @@ final class NativeApprovalCoordinator {
         enum Action {
             case acquireReceipt(cancelRequested: Bool = false)
             case cancelBeforeAuthentication(receiptOwned: Bool)
-            case stage(DappApprovalDecision, cancelRequested: Bool = false)
+            case stage(
+                DappApprovalDecision,
+                approvedAt: Date,
+                cancelRequested: Bool = false
+            )
             case respond(
                 ResponseToExtension,
                 preparation: PreparationProgress,
                 cancelRequested: Bool = false
             )
-            case recoverResponse(ResponseToExtension)
             case reject
         }
 
         var action: Action
-        var remainingInitialAttempts = 3
         var nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
 
         init(_ action: Action) {
@@ -95,10 +98,10 @@ final class NativeApprovalCoordinator {
 
         var cancellationRequested: Bool {
             switch action {
-            case .acquireReceipt(let requested), .stage(_, let requested),
+            case .acquireReceipt(let requested), .stage(_, _, let requested),
                  .respond(_, _, let requested):
                 return requested
-            case .cancelBeforeAuthentication, .recoverResponse, .reject:
+            case .cancelBeforeAuthentication, .reject:
                 return false
             }
         }
@@ -107,11 +110,11 @@ final class NativeApprovalCoordinator {
             switch action {
             case .acquireReceipt:
                 action = .acquireReceipt(cancelRequested: true)
-            case .stage(let decision, _):
-                action = .stage(decision, cancelRequested: true)
+            case .stage(let decision, let approvedAt, _):
+                action = .stage(decision, approvedAt: approvedAt, cancelRequested: true)
             case .respond(let response, let preparation, _):
                 action = .respond(response, preparation: preparation, cancelRequested: true)
-            case .recoverResponse, .cancelBeforeAuthentication, .reject:
+            case .cancelBeforeAuthentication, .reject:
                 break
             }
         }
@@ -165,24 +168,24 @@ final class NativeApprovalCoordinator {
     struct Environment {
         let now: () -> Date
         let wait: (UInt64) async -> Void
-        let prepareWithoutWallets: (SafariRequest) -> DappRequestPreparation?
+        let prepareWithoutWallets: @MainActor (SafariRequest) -> DappRequestPreparation?
         let reloadWallets: () -> Bool
-        let prepare: (SafariRequest) -> DappRequestPreparation
+        let prepare: @MainActor (SafariRequest) -> DappRequestPreparation
         let finalizeNativeDecision: (ExtensionBridge.Handle) async ->
             NativeApprovalFinalizationResult
 
         init(
             now: @escaping () -> Date,
             wait: @escaping (UInt64) async -> Void,
-            prepareWithoutWallets: @escaping (SafariRequest) ->
+            prepareWithoutWallets: @escaping @MainActor (SafariRequest) ->
                 DappRequestPreparation? = {
-                    DappRequestProcessor.prepareWithoutWallets($0)
+                    DappRequestProcessor().prepareWithoutWallets($0)
                 },
             reloadWallets: @escaping () -> Bool = {
                 WalletsManager.shared.reloadFromStore()
             },
-            prepare: @escaping (SafariRequest) -> DappRequestPreparation = {
-                DappRequestProcessor.prepare($0)
+            prepare: @escaping @MainActor (SafariRequest) -> DappRequestPreparation = {
+                DappRequestProcessor().prepare($0)
             },
             finalizeNativeDecision: @escaping (ExtensionBridge.Handle) async ->
                 NativeApprovalFinalizationResult = { _ in .pending
@@ -228,7 +231,7 @@ final class NativeApprovalCoordinator {
             case .cancelBeforeAuthentication(let receiptOwned):
                 return .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
             case .stage: return .staging
-            case .respond, .recoverResponse: return .responding
+            case .respond: return .responding
             case .reject: return .rejecting
             }
         }
@@ -558,7 +561,7 @@ final class NativeApprovalCoordinator {
 
     private func stage(_ decision: DappApprovalDecision) {
         guard state == .reviewing, runtime != nil else { return }
-        startPersistence(.stage(decision))
+        startPersistence(.stage(decision, approvedAt: environment.now()))
     }
 
     private func storedStatus() async -> StoredStatus {
@@ -624,7 +627,7 @@ final class NativeApprovalCoordinator {
             )
         case .reject:
             stopLifecycleMonitor()
-        case .acquireReceipt, .stage, .respond, .recoverResponse:
+        case .acquireReceipt, .stage, .respond:
             break
         }
         return operation
@@ -652,7 +655,7 @@ final class NativeApprovalCoordinator {
             let step: PersistenceStep
             if operation.cancellationRequested,
                state == .staging || state == .responding {
-                step = .replace(.reject)
+                step = await reconcilePersistence(operation)
             } else {
                 step = await persistenceAttempt(operation)
             }
@@ -680,24 +683,6 @@ final class NativeApprovalCoordinator {
                 }
                 return
             case .retry:
-                switch operation.action {
-                case .stage:
-                    operation.remainingInitialAttempts -= 1
-                    if operation.remainingInitialAttempts == 0 {
-                        notifyFailureOnce()
-                        operation = installPersistence(.reject)
-                        continue
-                    }
-                case .respond(let response, _, _):
-                    operation.remainingInitialAttempts -= 1
-                    if operation.remainingInitialAttempts == 0 {
-                        operation.action = .recoverResponse(response)
-                        notifyFailureOnce()
-                    }
-                case .acquireReceipt, .cancelBeforeAuthentication,
-                     .recoverResponse, .reject:
-                    break
-                }
                 await waitBeforeDeadline(operation.nextRetryDelay)
                 guard isCurrent(operation) else { return }
                 operation.nextRetryDelay = nextDelay(after: operation.nextRetryDelay)
@@ -727,14 +712,15 @@ final class NativeApprovalCoordinator {
                 runtimeInstanceIdentifier: runtime.instanceIdentifier,
                 owner: runtime.owner
             )
-        case .stage(let decision, _):
+        case .stage(let decision, let approvedAt, _):
             result = await store.stageNativeDecision(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
                 runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                decision: decision
+                decision: decision,
+                approvedAt: approvedAt
             )
-        case .respond(let response, _, _), .recoverResponse(let response):
+        case .respond(let response, _, _):
             result = await store.completeNativeDelivery(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
@@ -762,82 +748,65 @@ final class NativeApprovalCoordinator {
                 onEvent?(.authenticationRequired)
             case .stage:
                 enterWaitingState(notify: true)
-            case .respond, .recoverResponse, .reject:
+            case .respond, .reject:
                 finish()
             case .cancelBeforeAuthentication:
                 break
             }
             return .stop
-        case .ownershipLost:
+        case .ownershipLost, .retryablePersistenceFailure:
             if case .acquireReceipt = operation.action {
-                finish()
-                return .stop
-            }
-            return await reconcilePersistence(operation)
-        case .retryablePersistenceFailure:
-            switch operation.action {
-            case .stage:
-                return operation.cancellationRequested ? .replace(.reject) : .retry
-            case .respond where operation.cancellationRequested:
-                return .replace(.reject)
-            case .reject:
-                notifyFailureOnce()
-                return await reconcilePersistence(operation)
-            case .recoverResponse:
-                notifyFailureOnce()
-                return await reconcilePersistence(operation)
-            default:
+                if result == .ownershipLost {
+                    finish()
+                    return .stop
+                }
                 return .retry
             }
+            if case .reject = operation.action, result == .retryablePersistenceFailure {
+                notifyFailureOnce()
+            }
+            return await reconcilePersistence(
+                operation,
+                ownershipLost: result == .ownershipLost
+            )
         }
     }
 
     private func reconcilePersistence(
-        _ operation: PersistenceOperation
+        _ operation: PersistenceOperation,
+        ownershipLost: Bool = false
     ) async -> PersistenceStep {
         let status = await storedStatus()
         guard isCurrent(operation) else { return .stop }
         switch status {
         case .staged:
-            let notify: Bool
-            if case .recoverResponse = operation.action {
-                notify = false
-            } else {
-                notify = true
-            }
-            enterWaitingState(notify: notify)
+            enterWaitingState(notify: true)
         case .responded, .missing:
             finish()
         case .superseded:
-            switch operation.action {
-            case .stage:
-                notifyFailureOnce()
-                return .replace(.reject)
-            case .respond:
-                supersede()
-            default:
-                finish()
+            if case .reject = operation.action { finish() }
+            else { supersede() }
+        case .unavailable:
+            return .retry
+        case .pending(_, let receipt):
+            guard receipt == .current else {
+                if case .reject = operation.action { finish() }
+                else { supersede() }
+                return .stop
             }
-        case .pending, .unavailable:
-            switch operation.action {
-            case .stage:
-                notifyFailureOnce()
-                return .replace(.reject)
-            case .respond:
-                return operation.cancellationRequested ? .replace(.reject) : .prepareAgain
-            default:
-                switch status {
-                case .pending(_, .current):
-                    return .retry
-                case .pending:
-                    finish()
-                case .unavailable:
+            if operation.cancellationRequested { return .replace(.reject) }
+            if ownershipLost {
+                switch operation.action {
+                case .stage:
                     notifyFailureOnce()
-                    return .retry
+                    return .replace(.reject)
+                case .respond:
+                    return .prepareAgain
                 default:
                     break
                 }
             }
+            return .retry
         }
         return .stop
     }
@@ -848,9 +817,7 @@ final class NativeApprovalCoordinator {
         switch operation.action {
         case .cancelBeforeAuthentication(receiptOwned: true):
             restoreAuthenticationWaiting()
-        case .respond:
-            finish()
-        case .reject, .recoverResponse:
+        case .stage, .respond, .reject:
             _ = await reconcilePersistence(operation)
             if isCurrent(operation) { finish() }
         default:

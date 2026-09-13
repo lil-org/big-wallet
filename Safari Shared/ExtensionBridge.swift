@@ -687,13 +687,15 @@ actor ExtensionBridge {
         handle: Handle,
         nativeDeliveryNonce: NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: DappApprovalDecision
+        decision: DappApprovalDecision,
+        approvedAt: Date
     ) -> StoreMutationResult {
         store.stageNativeDecision(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            decision: decision
+            decision: decision,
+            approvedAt: approvedAt
         )
     }
 

@@ -68,7 +68,7 @@ final class SolanaPreparedTransactionTests: XCTestCase {
     func testSolanaMessageSigningWrappersProduceValidSignatures() throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaSigningPrivateKey))
 
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
                                        message: Vectors.solanaMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         try assertValidSolanaSignature(Solana.shared.sign(message: Vectors.solanaMessageBase58,
@@ -81,13 +81,13 @@ final class SolanaPreparedTransactionTests: XCTestCase {
                                                           privateKey: privateKey),
                                        message: Vectors.solanaMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Data(), privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Data(), privateKey: privateKey),
                                        message: Data(),
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         try assertValidSolanaSignature(Solana.shared.sign(message: "", asHex: true, privateKey: privateKey),
                                        message: Data(),
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Data(repeating: 0, count: 32), privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Data(repeating: 0, count: 32), privateKey: privateKey),
                                        message: Data(repeating: 0, count: 32),
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
 
@@ -164,7 +164,7 @@ final class SolanaPreparedTransactionTests: XCTestCase {
             XCTAssertEqual(preparedTransaction.approvalMessage, Vectors.solanaPreparedApprovalMessage)
             XCTAssertEqual(WalletCrypto.base58Encode(data: preparedMessage.messageData), Vectors.solanaPreparedApprovalMessage)
 
-            switch Solana.shared.signedTransactionForSignAndSend(preparedSerializedTransaction: preparedTransaction,
+            switch Solana.signedTransactionForSignAndSend(preparedSerializedTransaction: preparedTransaction,
                                                                  privateKey: privateKey) {
             case .success(let signedTransaction):
                 let signedData = try XCTUnwrap(Data(base64Encoded: signedTransaction))

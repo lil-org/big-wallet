@@ -72,9 +72,9 @@ func awaitBackgroundOptionalOperation<Value: Sendable>(
     return value ?? nil
 }
 
-struct DappRequestProcessor {
+struct DappRequestProcessor: DappRequestProcessing {
 
-    static func prepare(
+    func prepare(
         _ request: SafariRequest,
         walletAccess: WalletAccess = SourceWalletAccess.shared
     ) -> DappRequestPreparation {
@@ -92,7 +92,7 @@ struct DappRequestProcessor {
                 walletAccess: walletAccess
             )
         case .unknown(let body):
-            return prepareSwitchAccount(
+            return Self.prepareSwitchAccount(
                 request: request,
                 body: body,
                 walletAccess: walletAccess
@@ -100,7 +100,7 @@ struct DappRequestProcessor {
         }
     }
 
-    static func prepareWithoutWallets(
+    func prepareWithoutWallets(
         _ request: SafariRequest
     ) -> DappRequestPreparation? {
         switch request.body {
@@ -119,7 +119,7 @@ struct DappRequestProcessor {
         }
     }
 
-    static func execute(
+    func execute(
         request: SafariRequest,
         action: DappRequestAction,
         decision: DappApprovalDecision,
@@ -145,17 +145,17 @@ struct DappRequestProcessor {
                case .approveMessage = action,
                case .message(let message) = decision,
                message.solanaCluster != nil {
-                return .response(response(to: request, error: .init(
+                return .response(Self.response(to: request, error: .init(
                     message: Strings.failedToSign,
                     code: ProviderResponseError.internalErrorCode
                 )))
             }
-            return .response(response(to: request, error: .internalError))
+            return .response(Self.response(to: request, error: .internalError))
         }
         switch (action, approval) {
         case (.selectAccount(let selectionAction), .accountSelection(let selection)),
              (.switchAccount(let selectionAction), .accountSelection(let selection)):
-            return .response(executeAccountSelection(
+            return .response(Self.executeAccountSelection(
                 request: request,
                 action: selectionAction,
                 selection: selection
@@ -180,7 +180,7 @@ struct DappRequestProcessor {
         default:
             break
         }
-        return .response(response(to: request, error: .internalError))
+        return .response(Self.response(to: request, error: .internalError))
     }
 
     private static func prepareSwitchAccount(

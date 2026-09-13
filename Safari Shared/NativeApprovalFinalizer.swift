@@ -13,7 +13,7 @@ final class NativeApprovalFinalizer {
 
     static let shared = NativeApprovalFinalizer(
         store: ExtensionBridge.shared,
-        requestProcessor: ProductionDappRequestProcessor()
+        requestProcessor: DappRequestProcessor()
     )
 
     private let store: NativeApprovalStore

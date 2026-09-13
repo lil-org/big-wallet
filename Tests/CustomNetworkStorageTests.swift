@@ -578,10 +578,10 @@ final class CustomNetworkStorageTests: XCTestCase {
         ]
 
         for value in rejectedURLs {
-            XCTAssertFalse(SharedDefaults.addNetwork(
+            XCTAssertEqual(SharedDefaults.insertNetwork(
                 customNetwork(chainId: 64_240, rpcURLs: [value]),
                 to: defaults
-            ), value)
+            ), .unavailable, value)
         }
         XCTAssertNil(defaults.object(forKey: SharedDefaults.customEthereumNetworksKey))
         XCTAssertEqual(

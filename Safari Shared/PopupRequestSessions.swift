@@ -310,7 +310,7 @@ final class PopupRequestSessions {
 #if os(iOS) || os(visionOS)
     static let shared = PopupRequestSessions(
         store: ExtensionBridge.shared,
-        requestProcessor: ProductionDappRequestProcessor(),
+        requestProcessor: DappRequestProcessor(),
         walletEnvironment: VaultPopupWalletEnvironment(
             catalogAccess: { SafariApprovalVault.shared.catalogAccess() },
             unlockWalletAccess: {

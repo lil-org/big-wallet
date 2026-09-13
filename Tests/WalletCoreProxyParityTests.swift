@@ -731,7 +731,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
 
         let batchSignatures = try XCTUnwrap(privateKey.sign(digests: messages, coin: .solana))
         let directBatchSignatures = try XCTUnwrap(Ed25519.sign(messages: messages, seed: Vectors.solanaSigningPrivateKey))
-        let encodedBatchSignatures = try XCTUnwrap(Solana.shared.sign(messageDataList: messages, privateKey: privateKey))
+        let encodedBatchSignatures = try XCTUnwrap(Solana.sign(messageDataList: messages, privateKey: privateKey))
         let singleSignatures = try messages.map { message in
             try XCTUnwrap(privateKey.sign(digest: message, coin: .solana))
         }
@@ -741,7 +741,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(encodedBatchSignatures.count, messages.count)
         XCTAssertEqual(singleSignatures.count, messages.count)
         XCTAssertEqual(try XCTUnwrap(privateKey.sign(digests: [Data](), coin: .solana)), [])
-        XCTAssertEqual(try XCTUnwrap(Solana.shared.sign(messageDataList: [], privateKey: privateKey)), [])
+        XCTAssertEqual(try XCTUnwrap(Solana.sign(messageDataList: [], privateKey: privateKey)), [])
         XCTAssertNil(Ed25519.sign(messages: messages, seed: Data()))
 
         for signatures in [batchSignatures, directBatchSignatures, singleSignatures] {
@@ -760,7 +760,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         let signature = try XCTUnwrap(privateKey.sign(digest: Vectors.solanaMessage, coin: .solana))
 
         try assertValidSolanaSignature(signature, message: Vectors.solanaMessage, publicKeyHex: Vectors.upstreamSolanaPublicKey)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
                                        message: Vectors.solanaMessage,
                                        publicKeyHex: Vectors.upstreamSolanaPublicKey)
     }
@@ -1574,8 +1574,8 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
         XCTAssertNil(invalidEthereumKey.sign(digests: [Vectors.ethereumRawSignDigest], coin: .ethereum))
         XCTAssertNil(invalidSolanaKey.sign(digest: Vectors.solanaMessage, coin: .solana))
         XCTAssertNil(invalidSolanaKey.sign(digests: [Vectors.solanaMessage], coin: .solana))
-        XCTAssertNil(Solana.shared.sign(messageDataList: [], privateKey: invalidSolanaKey))
-        XCTAssertNil(Solana.shared.sign(messageDataList: [Vectors.solanaMessage], privateKey: invalidSolanaKey))
+        XCTAssertNil(Solana.sign(messageDataList: [], privateKey: invalidSolanaKey))
+        XCTAssertNil(Solana.sign(messageDataList: [Vectors.solanaMessage], privateKey: invalidSolanaKey))
         XCTAssertEqual(WalletCrypto.previewDerivationIndex(derivationPath: "m/44'/60'/0'/0/2147483648",
                                                            coin: .ethereum),
                        0)
@@ -3316,7 +3316,7 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         XCTAssertEqual(Solana.shared.decodeMessage(binaryBase58, asHex: false), Vectors.solanaBinaryMessage)
         XCTAssertEqual(Solana.shared.decodeTransactionMessage(binaryBase58), Vectors.solanaBinaryMessage)
         XCTAssertEqual(Solana.shared.decodeMessage(binaryHex, asHex: true), Vectors.solanaBinaryMessage)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
                                        message: Vectors.solanaBinaryMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         try assertValidSolanaSignature(Solana.shared.sign(message: binaryBase58, asHex: false, privateKey: privateKey),
@@ -3325,7 +3325,7 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         try assertValidSolanaSignature(Solana.shared.sign(message: binaryHex, asHex: true, privateKey: privateKey),
                                        message: Vectors.solanaBinaryMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaLongMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaLongMessage, privateKey: privateKey),
                                        message: Vectors.solanaLongMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         try assertValidSolanaSignature(Solana.shared.sign(message: longBase58, asHex: false, privateKey: privateKey),

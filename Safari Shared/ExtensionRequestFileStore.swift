@@ -233,6 +233,18 @@ final class ExtensionRequestFileStore {
         case unavailable
     }
 
+    private enum ProfileDataRead {
+        case missing
+        case data(Data)
+        case corrupt
+        case unavailable
+    }
+
+    private enum WriteFailureRecovery {
+        case none
+        case readBack
+    }
+
     private enum PendingDeadlineTransition {
         case active(SafariRequest), expired, unavailable
     }
@@ -462,8 +474,7 @@ final class ExtensionRequestFileStore {
                 now: now
             ) else { return .rejected }
             profile.records.append(record)
-            guard writeProfileLocked(profile) ||
-                    verifyNewAdmissionLocked(record) else {
+            guard writeProfileLocked(profile, failureRecovery: .readBack) else {
                 return .unavailable
             }
             for handle in retiredHandles {
@@ -478,25 +489,6 @@ final class ExtensionRequestFileStore {
                 nativeDeliveryNonce: record.nativeDeliveryNonce
             )
         }
-    }
-
-    private func verifyNewAdmissionLocked(_ expected: Record) -> Bool {
-        guard let stored = persistedRecordLocked(handle: expected.handle),
-              stored.id == expected.id,
-              stored.profileIdentifier == expected.profileIdentifier,
-              stored.enqueueAttempt == expected.enqueueAttempt,
-              stored.host == expected.host,
-              stored.configurationKey == expected.configurationKey,
-              stored.requestFingerprint == expected.requestFingerprint,
-              stored.revisions == expected.revisions,
-              stored.admissionCreatedAt == expected.admissionCreatedAt,
-              stored.createdAt == expected.createdAt,
-              stored.nativeDeliveryNonce == expected.nativeDeliveryNonce,
-              case .pending(let storedRequest, .unowned) = stored.state,
-              case .pending(let expectedRequest, .unowned) = expected.state else {
-            return false
-        }
-        return storedRequest == expectedRequest
     }
 
     func list(profileIdentifier: UUID?) -> ExtensionBridge.SnapshotsResult {
@@ -701,7 +693,8 @@ final class ExtensionRequestFileStore {
         stageNativeDecision(
             handle: handle,
             expectedReceipt: nil,
-            decision: decision
+            decision: decision,
+            approvedAt: nil
         )
     }
 
@@ -709,7 +702,8 @@ final class ExtensionRequestFileStore {
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: DappApprovalDecision
+        decision: DappApprovalDecision,
+        approvedAt: Date
     ) -> ExtensionBridge.StoreMutationResult {
         stageNativeDecision(
             handle: handle,
@@ -717,14 +711,16 @@ final class ExtensionRequestFileStore {
                 nativeDeliveryNonce: nativeDeliveryNonce,
                 runtimeInstanceIdentifier: runtimeInstanceIdentifier
             ),
-            decision: decision
+            decision: decision,
+            approvedAt: approvedAt
         )
     }
 
     private func stageNativeDecision(
         handle: ExtensionBridge.Handle,
         expectedReceipt: ReceiptIdentity?,
-        decision: DappApprovalDecision
+        decision: DappApprovalDecision,
+        approvedAt: Date?
     ) -> ExtensionBridge.StoreMutationResult {
         guard let decisionData = decision.boundedData else {
             return .ownershipLost
@@ -751,37 +747,17 @@ final class ExtensionRequestFileStore {
             }
             let stagedApproval = Record.StagedApproval(
                 decision: decisionData,
-                stagedAt: max(profile.records[index].createdAt, clock()),
+                stagedAt: max(profile.records[index].createdAt, approvedAt ?? clock()),
                 receipt: profile.records[index].nativeDeliveryReceipt
             )
             profile.records[index].state = .pending(
                 request: request,
                 approval: .staged(stagedApproval, context: nil)
             )
-            return writeProfileLocked(profile) ||
-                verifyNativeDecisionLocked(
-                    handle: handle,
-                    expectedReceipt: expectedReceipt,
-                    expectedDecision: decisionData
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
-    }
-
-    private func verifyNativeDecisionLocked(
-        handle: ExtensionBridge.Handle,
-        expectedReceipt: ReceiptIdentity?,
-        expectedDecision: Data
-    ) -> Bool {
-        guard let record = persistedRecordLocked(handle: handle),
-              case .pending = record.state,
-              receiptMatches(
-                record.nativeDeliveryReceipt,
-                expected: expectedReceipt
-              ),
-              record.stagedApproval?.decision == expectedDecision else {
-            return false
-        }
-        return true
     }
 
     func recordNativeDeliveryReceipt(
@@ -815,11 +791,9 @@ final class ExtensionRequestFileStore {
                 request: request,
                 approval: approval.replacingReceipt(receipt)
             )
-            return writeProfileLocked(profile) ||
-                verifyNativeDeliveryReceiptLocked(
-                    handle: handle,
-                    expected: receipt
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
     }
 
@@ -853,23 +827,10 @@ final class ExtensionRequestFileStore {
                 request: request,
                 approval: approval.replacingReceipt(nil)
             )
-            return writeProfileLocked(profile) ||
-                verifyNativeDeliveryReceiptLocked(
-                    handle: handle,
-                    expected: nil
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
-    }
-
-    private func verifyNativeDeliveryReceiptLocked(
-        handle: ExtensionBridge.Handle,
-        expected: ExtensionBridge.NativeDeliveryReceipt?
-    ) -> Bool {
-        guard let record = persistedRecordLocked(handle: handle),
-              case .pending = record.state else {
-            return false
-        }
-        return record.nativeDeliveryReceipt == expected
     }
 
     func claimExecutableNativeDecision(
@@ -1040,11 +1001,9 @@ final class ExtensionRequestFileStore {
                     request: request,
                     approval: .staged(approval, context: context)
                 )
-                return writeProfileLocked(profile) ||
-                    verifyNativeExecutionContextLocked(
-                        handle: handle,
-                        expected: context
-                    ) ? .recorded(context) : .unavailable
+                return writeProfileLocked(profile, failureRecovery: .readBack)
+                    ? .recorded(context)
+                    : .unavailable
             }
         }
     }
@@ -1073,23 +1032,10 @@ final class ExtensionRequestFileStore {
                 request: request,
                 approval: .staged(approval, context: nil)
             )
-            return writeProfileLocked(profile) ||
-                verifyNativeExecutionContextLocked(
-                    handle: handle,
-                    expected: nil
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
-    }
-
-    private func verifyNativeExecutionContextLocked(
-        handle: ExtensionBridge.Handle,
-        expected: ExtensionBridge.NativeExecutionContext?
-    ) -> Bool {
-        guard let record = persistedRecordLocked(handle: handle),
-              case .pending(_, .staged) = record.state else {
-            return false
-        }
-        return record.nativeExecutionContext == expected
     }
 
     func release(
@@ -1208,11 +1154,9 @@ final class ExtensionRequestFileStore {
                 return .retryablePersistenceFailure
             }
             profile.records[index].complete(response: data, at: now)
-            return writeProfileLocked(profile) ||
-                verifyCompletionLocked(
-                    handle: handle,
-                    expectedResponse: data
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
     }
 
@@ -1439,22 +1383,10 @@ final class ExtensionRequestFileStore {
                 response: response,
                 acknowledged: true
             )
-            return writeProfileLocked(profile) ||
-                verifyResponseAcknowledgmentLocked(
-                    handle: handle,
-                    configurationKey: configurationKey
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
-    }
-
-    private func verifyResponseAcknowledgmentLocked(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String
-    ) -> Bool {
-        guard let record = persistedRecordLocked(handle: handle),
-              record.configurationKey == configurationKey,
-              case .completed = record.state else { return false }
-        return record.responseAcknowledged
     }
 
     private func finish(
@@ -1499,35 +1431,10 @@ final class ExtensionRequestFileStore {
                 return .retryablePersistenceFailure
             }
             profile.records[index].complete(response: responseData, at: now)
-            return writeProfileLocked(profile) ||
-                verifyCompletionLocked(
-                    handle: handle,
-                    expectedResponse: responseData
-                ) ? .persisted : .retryablePersistenceFailure
+            return writeProfileLocked(profile, failureRecovery: .readBack)
+                ? .persisted
+                : .retryablePersistenceFailure
         }
-    }
-
-    private func verifyCompletionLocked(
-        handle: ExtensionBridge.Handle,
-        expectedResponse: Data
-    ) -> Bool {
-        guard let record = persistedRecordLocked(handle: handle),
-              case .completed(_, let response, _) = record.state,
-              response == expectedResponse else {
-            return false
-        }
-        return true
-    }
-
-    private func persistedRecordLocked(
-        handle: ExtensionBridge.Handle
-    ) -> Record? {
-        guard case .state(let profile) = readProfileLocked(
-            profileIdentifier: handle.profileIdentifier,
-            now: clock(),
-            recover: false
-        ) else { return nil }
-        return profile.records.first { $0.handle == handle }
     }
 
     private func readProfileLocked(
@@ -1553,29 +1460,17 @@ final class ExtensionRequestFileStore {
         removeIfEmpty: Bool
     ) -> ProfileRead {
         let data: Data
-        switch regularFileStatusLocked(at: url) {
+        switch readProfileDataLocked(at: url) {
         case .missing:
             return .state(emptyProfile(profileIdentifier))
-        case .regular:
-            break
-        case .unsafe:
+        case .data(let storedData):
+            data = storedData
+        case .corrupt:
             return .corrupt
         case .unavailable:
             return .unavailable
         }
-        do {
-            guard let size = try readFileSize(url) else {
-                return .unavailable
-            }
-            guard size > 0, size <= Self.maximumProfileBytes else {
-                return .corrupt
-            }
-            data = try readData(url)
-        } catch {
-            return .unavailable
-        }
-        guard data.count <= Self.maximumProfileBytes,
-              var profile = try? PropertyListDecoder().decode(ProfileState.self, from: data),
+        guard var profile = try? PropertyListDecoder().decode(ProfileState.self, from: data),
               validate(
                   profile,
                   expectedIdentifier: profileIdentifier
@@ -2171,7 +2066,38 @@ final class ExtensionRequestFileStore {
         return nil
     }
 
-    private func writeProfileLocked(_ profile: ProfileState) -> Bool {
+    private func readProfileDataLocked(at url: URL) -> ProfileDataRead {
+        switch regularFileStatusLocked(at: url) {
+        case .missing:
+            return .missing
+        case .regular:
+            break
+        case .unsafe:
+            return .corrupt
+        case .unavailable:
+            return .unavailable
+        }
+        do {
+            guard let size = try readFileSize(url) else {
+                return .unavailable
+            }
+            guard size > 0, size <= Self.maximumProfileBytes else {
+                return .corrupt
+            }
+            let data = try readData(url)
+            guard !data.isEmpty, data.count <= Self.maximumProfileBytes else {
+                return .corrupt
+            }
+            return .data(data)
+        } catch {
+            return .unavailable
+        }
+    }
+
+    private func writeProfileLocked(
+        _ profile: ProfileState,
+        failureRecovery: WriteFailureRecovery = .none
+    ) -> Bool {
         guard prepareDirectoriesLocked() else { return false }
         let url = profileURL(profile.profileIdentifier)
         switch regularFileStatusLocked(at: url) {
@@ -2186,7 +2112,11 @@ final class ExtensionRequestFileStore {
             try atomicWrite(data, url)
             return true
         } catch {
-            return false
+            guard failureRecovery == .readBack,
+                  case .data(let persistedData) = readProfileDataLocked(at: url) else {
+                return false
+            }
+            return persistedData == data
         }
     }
 

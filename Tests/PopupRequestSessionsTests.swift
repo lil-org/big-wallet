@@ -1196,7 +1196,7 @@ extension PopupRequestSessionsTests {
         await store.insert(snapshot)
         let admission = DappRequestAdmission(
             store: store,
-            requestProcessor: ProductionDappRequestProcessor(),
+            requestProcessor: DappRequestProcessor(),
             catalogAccess: {
                 XCTFail("Wallet-independent rejection must not read the catalog")
                 return nil

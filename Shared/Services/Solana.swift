@@ -1480,10 +1480,6 @@ final class Solana {
 
     func sign(message: String, asHex: Bool, privateKey: WalletPrivateKey) -> String? {
         guard let messageData = decodeMessage(message, asHex: asHex) else { return nil }
-        return sign(messageData: messageData, privateKey: privateKey)
-    }
-
-    func sign(messageData: Data, privateKey: WalletPrivateKey) -> String? {
         return Self.sign(messageData: messageData, privateKey: privateKey)
     }
 
@@ -1493,13 +1489,6 @@ final class Solana {
             privateKey: privateKey
         ) else { return nil }
         return WalletCrypto.base58Encode(data: signedData)
-    }
-
-    func sign(messageDataList: [Data], privateKey: WalletPrivateKey) -> [String]? {
-        return Self.sign(
-            messageDataList: messageDataList,
-            privateKey: privateKey
-        )
     }
 
     static func sign(
@@ -1594,14 +1583,6 @@ final class Solana {
                 completion: completion
             )
         }
-    }
-
-    func signedTransactionForSignAndSend(preparedSerializedTransaction: PreparedSerializedTransaction,
-                                         privateKey: WalletPrivateKey) -> Result<String, SendTransactionError> {
-        return Self.signedTransactionForSignAndSend(
-            preparedSerializedTransaction: preparedSerializedTransaction,
-            privateKey: privateKey
-        )
     }
 
     static func signedTransactionForSignAndSend(

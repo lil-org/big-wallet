@@ -215,11 +215,6 @@ struct SharedDefaults {
         defaults?.synchronize()
     }
     
-    @discardableResult
-    static func addNetwork(_ network: EthereumNetworkFromDapp) -> Bool {
-        return insertNetwork(network).succeeded
-    }
-
     static func insertNetwork(
         _ network: EthereumNetworkFromDapp
     ) -> CustomNetworkInsertionResult {
@@ -234,25 +229,6 @@ struct SharedDefaults {
             CustomNetworkChangeNotification.post()
         }
         return result
-    }
-
-    @discardableResult
-    static func addNetwork(_ network: EthereumNetworkFromDapp,
-                           to defaults: UserDefaults) -> Bool {
-        return insertNetwork(network, to: defaults).succeeded
-    }
-
-    @discardableResult
-    static func addNetwork(
-        _ network: EthereumNetworkFromDapp,
-        to defaults: UserDefaults,
-        crossProcessLock: CrossProcessFileLock?
-    ) -> Bool {
-        return insertNetwork(
-            network,
-            to: defaults,
-            crossProcessLock: crossProcessLock
-        ).succeeded
     }
 
     static func insertNetwork(
