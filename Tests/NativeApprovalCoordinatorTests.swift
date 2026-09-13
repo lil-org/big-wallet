@@ -42,6 +42,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
+    @MainActor
     private final class ScheduledWaits {
         private(set) var delays = [UInt64]()
         private var continuations = [Int: CheckedContinuation<Void, Never>]()
