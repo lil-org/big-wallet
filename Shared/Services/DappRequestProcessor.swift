@@ -125,30 +125,53 @@ struct DappRequestProcessor {
         decision: DappApprovalDecision,
         walletAccess: WalletAccess?
     ) async -> DappExecutionResult {
-        switch (action, decision) {
+        let accounts: [SpecificWalletAccount]?
+        if case .accountSelection = decision {
+            accounts = walletAccess?.orderedAccounts
+        } else {
+            accounts = nil
+        }
+        let approval: DappApprovalValidator.Approval
+        switch DappApprovalValidator.resolve(
+            action: action,
+            decision: decision,
+            accounts: accounts,
+            networkResolver: Networks.withChainIdHex
+        ) {
+        case .success(let resolved):
+            approval = resolved
+        case .failure:
+            if case .ethereum = request.body,
+               case .approveMessage = action,
+               case .message(let message) = decision,
+               message.solanaCluster != nil {
+                return .response(response(to: request, error: .init(
+                    message: Strings.failedToSign,
+                    code: ProviderResponseError.internalErrorCode
+                )))
+            }
+            return .response(response(to: request, error: .internalError))
+        }
+        switch (action, approval) {
         case (.selectAccount(let selectionAction), .accountSelection(let selection)),
              (.switchAccount(let selectionAction), .accountSelection(let selection)):
             return .response(executeAccountSelection(
                 request: request,
                 action: selectionAction,
-                selection: selection,
-                walletAccess: walletAccess
+                selection: selection
             ))
-        case (.approveMessage, .message), (.approveTransaction, .transaction),
-             (.addEthereumChain, .addEthereumChain):
+        case (_, .message), (_, .transaction), (_, .addEthereumChain):
             switch request.body {
             case .ethereum:
                 return await EthereumDappRequestProcessor.execute(
                     request: request,
-                    action: action,
-                    decision: decision,
+                    approval: approval,
                     walletAccess: walletAccess
                 )
             case .solana:
                 return await SolanaDappRequestProcessor.execute(
                     request: request,
-                    action: action,
-                    decision: decision,
+                    approval: approval,
                     walletAccess: walletAccess
                 )
             case .unknown:
@@ -184,37 +207,10 @@ struct DappRequestProcessor {
     private static func executeAccountSelection(
         request: SafariRequest,
         action: SelectAccountAction,
-        selection: DappApprovalDecision.AccountSelection,
-        walletAccess: WalletAccess?
+        selection: DappApprovalValidator.Selection
     ) -> ResponseToExtension {
-        guard let walletAccess else {
-            return response(to: request, error: .internalError)
-        }
-        var accounts = [SpecificWalletAccount]()
-        var selectedCoins = Set<WalletCoin>()
-        for identity in selection.accounts {
-            guard let coin = WalletCoin.correspondingToInpageProvider(identity.provider),
-                  action.coinType == nil || action.coinType == coin,
-                  selectedCoins.insert(coin).inserted else {
-                return response(to: request, error: .internalError)
-            }
-            let matches = walletAccess.orderedAccounts.filter {
-                $0.walletId == identity.walletID &&
-                    $0.account.coin == coin &&
-                    coin.normalizedAddress($0.account.address) ==
-                        coin.normalizedAddress(identity.address) &&
-                    $0.account.derivationPath == identity.derivationPath
-            }
-            guard matches.count == 1 else {
-                return response(to: request, error: .internalError)
-            }
-            accounts.append(matches[0])
-        }
-        let chainID = selection.ethereumChainID ?? action.network?.chainIdHexString
-        let network = chainID.flatMap(Networks.withChainIdHex)
-        guard !(accounts.isEmpty && action.initiallyConnectedProviders.isEmpty),
-              !accounts.contains(where: { $0.account.coin == .ethereum }) || network != nil
-        else { return response(to: request, error: .internalError) }
+        let accounts = selection.accounts
+        let network = selection.network
 
         switch request.body {
         case .unknown:

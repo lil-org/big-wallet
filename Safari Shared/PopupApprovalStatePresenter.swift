@@ -2,6 +2,46 @@
 
 import Foundation
 
+struct PopupApprovalState {
+    enum State: String {
+        case review, authenticating, working, error, missing
+
+        init(_ state: PopupRequestSession.State) {
+            switch state {
+            case .review: self = .review
+            case .authenticating: self = .authenticating
+            case .working: self = .working
+            case .error: self = .error
+            }
+        }
+    }
+
+    enum Action: String {
+        case approve, reject, retry, editTransaction, setTransactionSpeed, resolveApprovalAlert
+    }
+
+    let id: Int
+    let state: State
+    var actions: [Action] = []
+    var host: String?
+    var error: String?
+    var review: [String: Any]?
+    var editsError: Bool?
+
+    var json: [String: Any] {
+        var response: [String: Any] = [
+            "id": id,
+            "state": state.rawValue,
+            "actions": actions.map(\.rawValue),
+        ]
+        if let host, !host.isEmpty { response["host"] = host }
+        response["error"] = error
+        if state == .review { response["review"] = review }
+        response["editsError"] = editsError
+        return response
+    }
+}
+
 @MainActor
 final class PopupApprovalStatePresenter {
 
@@ -31,20 +71,13 @@ final class PopupApprovalStatePresenter {
             return ["status": "unavailable"]
         }
 
-        let responseIsRejectable =
-            response["state"] as? String == PopupRequestSession.State.review.rawValue ||
-            response["canReject"] as? Bool == true
-        var fallback = if responseIsRejectable {
-            compactRejectableError(
-                id: request.id,
-                error: Strings.somethingWentWrong
-            )
-        } else {
-            compactError(
-                id: request.id,
-                error: Strings.somethingWentWrong
-            )
-        }
+        let responseIsRejectable = (response["actions"] as? [String])?
+            .contains(PopupApprovalState.Action.reject.rawValue) == true
+        var fallback = errorState(
+            id: request.id,
+            actions: responseIsRejectable ? [.reject] : [.retry],
+            error: Strings.somethingWentWrong
+        )
         if let host = response["host"] as? String, !host.isEmpty {
             var withHost = fallback
             withHost["host"] = host
@@ -55,44 +88,26 @@ final class PopupApprovalStatePresenter {
         return fallback
     }
 
-    nonisolated static func compactError(
+    nonisolated static func errorState(
         id: Int,
+        actions: [PopupApprovalState.Action] = [.retry],
         host: String? = nil,
         error: String
     ) -> [String: Any] {
-        var response: [String: Any] = [
-            "id": id,
-            "state": PopupRequestSession.State.error.rawValue,
-            "error": error,
-        ]
-        if let host, !host.isEmpty {
-            response["host"] = host
-        }
-        return response
-    }
-
-    nonisolated static func compactRejectableError(
-        id: Int,
-        host: String? = nil,
-        error: String
-    ) -> [String: Any] {
-        var response: [String: Any] = [
-            "id": id,
-            "state": PopupRequestSession.State.working.rawValue,
-            "error": error,
-            "canReject": true,
-        ]
-        if let host, !host.isEmpty {
-            response["host"] = host
-        }
-        return response
+        return PopupApprovalState(
+            id: id,
+            state: .error,
+            actions: actions,
+            host: host,
+            error: error
+        ).json
     }
 
     nonisolated private static func returnsApprovalState(
         _ command: InternalSafariRequest.PopupCommand
     ) -> Bool {
         switch command {
-        case .getApprovalState, .applyTransactionEdits, .resolveApprovalAlert:
+        case .getApprovalState, .retryApproval, .applyTransactionEdits, .resolveApprovalAlert:
             return true
         case .setTransactionSpeed:
             return true
@@ -115,17 +130,19 @@ final class PopupApprovalStatePresenter {
         from response: [String: Any]
     ) -> [String: Any] {
         var response = response
-        response["iconURL"] = nil
-        if var account = response["account"] as? [String: Any] {
+        guard var review = response["review"] as? [String: Any] else { return response }
+        review["iconURL"] = nil
+        if var account = review["account"] as? [String: Any] {
             account["icon"] = nil
-            response["account"] = account
+            review["account"] = account
         }
-        if var accounts = response["accounts"] as? [[String: Any]] {
+        if var accounts = review["accounts"] as? [[String: Any]] {
             for index in accounts.indices {
                 accounts[index]["icon"] = nil
             }
-            response["accounts"] = accounts
+            review["accounts"] = accounts
         }
+        response["review"] = review
         return response
     }
 
@@ -168,65 +185,85 @@ final class PopupApprovalStatePresenter {
 
     func state(
         id: Int,
-        state: PopupRequestSession.State
+        state: PopupRequestSession.State,
+        host: String? = nil
     ) -> [String: Any] {
-        return ["id": id, "state": state.rawValue]
+        return PopupApprovalState(id: id, state: .init(state), host: host).json
     }
 
     func missingState(id: Int) -> [String: Any] {
-        return ["id": id, "state": "missing"]
+        return PopupApprovalState(id: id, state: .missing).json
     }
 
     func secureSetupRequiredState(id: Int, host: String) -> [String: Any] {
-        return [
-            "id": id,
-            "state": PopupRequestSession.State.error.rawValue,
-            "host": host,
-            "error": Strings.secureApprovalSetupRequired,
-            "secureSetupRequired": true,
-        ]
+        return Self.errorState(
+            id: id,
+            host: host,
+            error: Strings.secureApprovalSetupRequired
+        )
     }
 
     func approvalState(
         for session: PopupRequestSession,
         action: DappRequestAction,
-        transactionMutationAllowed: Bool
+        transactionMutationAllowed: Bool,
+        editsError: Bool? = nil
     ) -> [String: Any] {
-        var state: [String: Any] = [
-            "reviewToken": session.reviewToken.uuidString.lowercased(),
-            "id": session.handle.id,
-            "kind": kind(for: action).rawValue,
-            "state": session.state.rawValue,
-            "title": title(for: action),
-            "host": session.request.host,
-        ]
-        if let errorText = session.errorText {
-            state["error"] = errorText
+        guard session.state == .review else {
+            return state(id: session.handle.id, state: session.state, host: session.request.host)
         }
+        var review: [String: Any] = [
+            "reviewToken": session.reviewToken.uuidString.lowercased(),
+            "kind": kind(for: action).rawValue,
+            "title": title(for: action),
+        ]
+        var actions: [PopupApprovalState.Action] = [.approve, .reject]
+        var error = session.errorText
         if let favicon = session.request.favicon {
-            state["iconURL"] = favicon
+            review["iconURL"] = favicon
         }
         switch action {
         case .selectAccount(let action), .switchAccount(let action):
             addSelectAccountState(
-                &state,
+                &review,
                 action: action,
                 walletAccess: session.walletAccess
             )
         case .approveMessage(let action):
-            addSignMessageState(&state, action: action)
+            addSignMessageState(&review, action: action)
         case .approveTransaction(let action):
+            actions = [.reject]
+            if let transaction = session.transaction {
+                let snapshot = transaction.snapshot
+                if snapshot.canApprove { actions.insert(.approve, at: 0) }
+                if transactionMutationAllowed {
+                    if snapshot.canEdit { actions.append(.editTransaction) }
+                    if snapshot.allowsMutation && snapshot.transaction.feeBasisBaseFeePerGas != nil {
+                        actions.append(.setTransactionSpeed)
+                    }
+                    if transaction.activeAlert != nil { actions.append(.resolveApprovalAlert) }
+                }
+            }
             addTransactionState(
-                &state,
+                &review,
                 session: session,
                 action: action,
-                mutationAllowed: transactionMutationAllowed
+                mutationAllowed: transactionMutationAllowed,
+                error: &error
             )
         case .addEthereumChain(let action):
-            state["chainName"] = action.chainToAdd.chainName
-            state["rpcURL"] = action.chainToAdd.defaultRpcUrl
+            review["chainName"] = action.chainToAdd.chainName
+            review["rpcURL"] = action.chainToAdd.defaultRpcUrl
         }
-        return state
+        return PopupApprovalState(
+            id: session.handle.id,
+            state: .review,
+            actions: actions,
+            host: session.request.host,
+            error: error,
+            review: review,
+            editsError: editsError
+        ).json
     }
 
     static func transactionAlertMessage(alert: TransactionApprovalAlertIntent) -> String {
@@ -338,7 +375,8 @@ final class PopupApprovalStatePresenter {
         _ state: inout [String: Any],
         session: PopupRequestSession,
         action: SendTransactionAction,
-        mutationAllowed: Bool
+        mutationAllowed: Bool,
+        error: inout String?
     ) {
         guard let transactionSession = session.transaction else { return }
         let chain = action.chain
@@ -358,14 +396,8 @@ final class PopupApprovalStatePresenter {
             state["dataInterpretation"] = interpretation
         }
         state["phase"] = snapshot.phase.rawValue
-        state["canApprove"] = snapshot.canApprove && session.state == .review
-        state["transactionMutationAllowed"] = mutationAllowed
-        state["canEdit"] = snapshot.canEdit && mutationAllowed
         state["slider"] = [
             "visible": chain.isEthMainnet && transactionSession.hasGasSpeedInfo,
-            "enabled": snapshot.allowsMutation &&
-                mutationAllowed &&
-                transaction.feeBasisBaseFeePerGas != nil,
             "position": transactionSession.gasSliderPosition(for: transaction),
             "maximum": GasSpeedConfiguration.maximumSliderPosition,
         ] as [String: Any]
@@ -385,7 +417,7 @@ final class PopupApprovalStatePresenter {
                     },
                 ] as [String: Any]
             } else {
-                state["error"] = message.isEmpty
+                error = message.isEmpty
                     ? presentation.title
                     : "\(presentation.title): \(message)"
             }

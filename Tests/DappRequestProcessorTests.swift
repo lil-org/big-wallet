@@ -170,6 +170,202 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(access.privateKeyReads, 1)
     }
 
+    func testApprovalSelectionNormalizesEthereumButPreservesSolanaCase() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            let catalog = [SpecificWalletAccount(walletId: "wallet", account: account)]
+            let action = SelectAccountAction(
+                coinType: coin,
+                selectedAccounts: [],
+                initiallyConnectedProviders: [],
+                network: Networks.ethereum
+            )
+            for address in [account.address, account.address.uppercased()] {
+                let result = DappApprovalValidator.resolveSelection(
+                    action: action,
+                    selection: .init(accounts: [.init(
+                        walletID: "wallet",
+                        address: address,
+                        provider: coin.correspondingInpageProvider,
+                        derivationPath: account.derivationPath
+                    )], ethereumChainID: nil),
+                    accounts: catalog,
+                    networkResolver: Networks.withChainIdHex
+                )
+                if coin == .ethereum || address == account.address {
+                    XCTAssertEqual(result?.accounts, catalog)
+                } else {
+                    XCTAssertNil(result)
+                }
+            }
+        }
+    }
+
+    func testApprovalSelectionRejectsAmbiguousOrMismatchedIdentityWithoutKeys() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let action = SelectAccountAction(
+            coinType: .ethereum,
+            selectedAccounts: [],
+            initiallyConnectedProviders: [],
+            network: Networks.ethereum
+        )
+        let identity = DappApprovalDecision.AccountIdentity(
+            walletID: "wallet", address: account.address, provider: .ethereum,
+            derivationPath: account.derivationPath
+        )
+        let invalidIdentities: [DappApprovalDecision.AccountIdentity] = [
+            .init(walletID: "other", address: account.address, provider: .ethereum,
+                  derivationPath: account.derivationPath),
+            .init(walletID: "wallet", address: "0x0000000000000000000000000000000000000000",
+                  provider: .ethereum, derivationPath: account.derivationPath),
+            .init(walletID: "wallet", address: account.address, provider: .solana,
+                  derivationPath: account.derivationPath),
+            .init(walletID: "wallet", address: account.address, provider: .ethereum,
+                  derivationPath: "m/44'/60'/0'/0/9"),
+        ]
+        let cases = invalidIdentities.map { ([$0], [account]) } + [
+            ([identity, identity], [account]),
+            ([identity], [account, account]),
+            ([identity], []),
+        ]
+        let request = try ethereumRequest(method: "requestAccounts", address: account.address)
+        for (identities, accounts) in cases {
+            let access = ProcessorWalletAccess(accounts: accounts, key: key)
+            let result = await DappRequestProcessor.execute(
+                request: request,
+                action: .selectAccount(action),
+                decision: .accountSelection(.init(accounts: identities, ethereumChainID: nil)),
+                walletAccess: access
+            )
+            guard case .response(let response) = result else {
+                return XCTFail("Invalid selections must not broadcast")
+            }
+            XCTAssertEqual(response.json["errorCode"] as? Int, ProviderResponseError.internalErrorCode)
+            XCTAssertNil(response.json["configurationToStore"])
+            XCTAssertEqual(access.privateKeyReads, 0)
+        }
+    }
+
+    func testApprovalSelectionRequiresResolvedNetworksOnlyForNonemptySelection() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            let catalog = [SpecificWalletAccount(walletId: "wallet", account: account)]
+            let identity = DappApprovalDecision.AccountIdentity(
+                walletID: "wallet", address: account.address,
+                provider: coin.correspondingInpageProvider,
+                derivationPath: account.derivationPath
+            )
+            for fallback in [nil, Networks.ethereum] as [EthereumNetwork?] {
+                let action = SelectAccountAction(
+                    coinType: nil, selectedAccounts: [],
+                    initiallyConnectedProviders: [.ethereum], network: fallback
+                )
+                for explicit in [nil, "0x1"] as [String?] {
+                    let result = DappApprovalValidator.resolveSelection(
+                        action: action,
+                        selection: .init(accounts: [identity], ethereumChainID: explicit),
+                        accounts: catalog,
+                        networkResolver: { _ in nil }
+                    )
+                    XCTAssertEqual(result != nil, coin == .solana && fallback == nil && explicit == nil)
+                    XCTAssertNotNil(DappApprovalValidator.resolveSelection(
+                        action: action,
+                        selection: .init(accounts: [], ethereumChainID: explicit),
+                        accounts: catalog,
+                        networkResolver: { _ in nil }
+                    ))
+                }
+            }
+        }
+        XCTAssertNil(DappApprovalValidator.resolveSelection(
+            action: .init(coinType: nil, selectedAccounts: [],
+                          initiallyConnectedProviders: [], network: nil),
+            selection: .init(accounts: [], ethereumChainID: nil),
+            accounts: [], networkResolver: { _ in nil }
+        ))
+    }
+
+    func testInvalidMessageDecisionsPreserveProviderErrorsWithoutReadingKeys() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            let access = ProcessorWalletAccess(accounts: [account], key: key)
+            let action = SignMessageAction(
+                subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
+                payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
+            )
+            let request = try coin == .ethereum
+                ? ethereumRequest(method: "signMessage", address: account.address)
+                : solanaRequest(method: "signMessage", publicKey: account.address)
+            for decision in [DappApprovalDecision.message(.init(solanaCluster: .devnet)),
+                             .addEthereumChain] {
+                let result = await DappRequestProcessor.execute(
+                    request: request, action: .approveMessage(action),
+                    decision: decision, walletAccess: access
+                )
+                guard case .response(let response) = result else {
+                    return XCTFail("Invalid decisions must not broadcast")
+                }
+                let isUnexpectedEthereumCluster = coin == .ethereum && {
+                    if case .message = decision { return true }
+                    return false
+                }()
+                XCTAssertEqual(response.json["error"] as? String,
+                               isUnexpectedEthereumCluster ? Strings.failedToSign : Strings.somethingWentWrong)
+                XCTAssertEqual(response.json["errorCode"] as? Int, ProviderResponseError.internalErrorCode)
+                XCTAssertEqual(access.orderedAccountReads, 0)
+                XCTAssertEqual(access.privateKeyReads, 0)
+            }
+        }
+    }
+
+    func testApprovalTransactionDistinguishesChangedNetworkFromUnreadyFee() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let network = try XCTUnwrap(resolvedEthereumNetworkResolution().resolvedNetwork)
+        let transaction = Transaction(
+            from: account.address, to: account.address, nonce: "0x1", gas: "0x5208",
+            value: "0x0", data: "0x", preparedFee: .legacy(gasPrice: 10)
+        )
+        let action = SendTransactionAction(
+            transaction: transaction, resolvedNetwork: network,
+            walletId: "wallet", account: account
+        )
+        let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+            transaction, reviewedNetwork: network
+        ))
+        guard case .success(.transaction(_, let rebuilt)) = DappApprovalValidator.resolve(
+            action: .approveTransaction(action), decision: .transaction(execution),
+            accounts: nil, networkResolver: { _ in nil }
+        ) else { return XCTFail("Expected a ready reconstructed transaction") }
+        XCTAssertEqual(rebuilt.nonce, transaction.nonce)
+        XCTAssertEqual(rebuilt.gas, transaction.gas)
+        XCTAssertEqual(rebuilt.preparedFee, transaction.preparedFee)
+
+        let changedNetwork = try XCTUnwrap(resolvedEthereumNetworkResolution(source: .alchemy).resolvedNetwork)
+        let changedAction = SendTransactionAction(
+            transaction: transaction, resolvedNetwork: changedNetwork,
+            walletId: "wallet", account: account
+        )
+        guard case .failure(.staleTransaction) = DappApprovalValidator.resolve(
+            action: .approveTransaction(changedAction), decision: .transaction(execution),
+            accounts: nil, networkResolver: { _ in nil }
+        ) else { return XCTFail("A changed reviewed network must be stale") }
+
+        var unready = transaction
+        unready.currentBaseFeePerGas = 11
+        let unreadyExecution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+            unready, reviewedNetwork: network
+        ))
+        guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
+            action: .approveTransaction(action), decision: .transaction(unreadyExecution),
+            accounts: nil, networkResolver: { _ in nil }
+        ) else { return XCTFail("Insufficient fees must be an invalid decision") }
+    }
+
     func testEmptyAccountSelectionDisconnectsAfterItsNetworkDisappears() async throws {
         let request = try XCTUnwrap(SafariRequest(json: [
             "id": 1,
@@ -1852,6 +2048,45 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
+    func testApprovalReadAndRetryDecodeOnlyTokenBoundIdentity() throws {
+        for subject in ["getApprovalState", "retryApproval"] {
+            let message: [String: Any] = [
+                "id": 42,
+                "workflowVersion": ExtensionBridge.workflowVersion,
+                "subject": subject,
+                "requestToken": "00000000-0000-0000-0000-000000000001",
+            ]
+            let request = try decodeInternalRequest(message)
+            XCTAssertEqual(request.id, 42)
+            switch request.command {
+            case .popup(.getApprovalState(let identity)):
+                XCTAssertEqual(subject, "getApprovalState")
+                XCTAssertNil(identity.reviewToken)
+            case .popup(.retryApproval(let identity)):
+                XCTAssertEqual(subject, "retryApproval")
+                XCTAssertNil(identity.reviewToken)
+            default:
+                XCTFail("Expected the requested popup command")
+            }
+            for field: (String, Any) in [
+                ("payload", ["mode": "full"]),
+                ("payload", ["mode": "poll"]),
+                ("payload", [:]),
+                ("reviewToken", "00000000-0000-0000-0000-000000000002"),
+                ("host", "example.com"),
+            ] {
+                var invalid = message
+                invalid[field.0] = field.1
+                XCTAssertThrowsError(try decodeInternalRequest(invalid))
+            }
+            for token: Any in [NSNull(), "invalid", ""] {
+                var invalid = message
+                invalid["requestToken"] = token
+                XCTAssertThrowsError(try decodeInternalRequest(invalid))
+            }
+        }
+    }
+
     func testConfigurationMutationClassificationUsesOneStrictContract() {
         XCTAssertEqual(
             ResponseToExtension.ConfigurationMutation.classify([
@@ -2042,18 +2277,24 @@ private final class ProcessorWalletAccess: WalletAccess {
         sourceRevision: nil,
         catalogData: Data()
     )
-    let orderedAccounts: [SpecificWalletAccount]
+    private let accounts: [SpecificWalletAccount]
     private let key: WalletPrivateKey?
+    private(set) var orderedAccountReads = 0
     private(set) var privateKeyReads = 0
 
+    var orderedAccounts: [SpecificWalletAccount] {
+        orderedAccountReads += 1
+        return accounts
+    }
+
     init(accounts: [WalletAccount], key: WalletPrivateKey? = nil) {
-        orderedAccounts = accounts.map { SpecificWalletAccount(walletId: "wallet", account: $0) }
+        self.accounts = accounts.map { SpecificWalletAccount(walletId: "wallet", account: $0) }
         self.key = key
     }
 
     func privateKey(walletID: String, account: WalletAccount) -> WalletPrivateKey? {
         privateKeyReads += 1
-        guard orderedAccounts.contains(where: {
+        guard accounts.contains(where: {
             $0.walletId == walletID && $0.account == account
         }) else { return nil }
         return key

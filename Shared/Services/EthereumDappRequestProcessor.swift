@@ -175,17 +175,15 @@ struct EthereumDappRequestProcessor {
 
     static func execute(
         request: SafariRequest,
-        action: DappRequestAction,
-        decision: DappApprovalDecision,
+        approval: DappApprovalValidator.Approval,
         walletAccess: WalletAccess?
     ) async -> DappExecutionResult {
-        switch (action, decision) {
-        case (.approveMessage(let action), .message(let approval)):
-            guard approval.solanaCluster == nil,
-                  let privateKey = walletAccess?.privateKey(
-                    walletID: action.walletId,
-                    account: action.account
-                  ) else {
+        switch approval {
+        case .message(let action, _):
+            guard let privateKey = walletAccess?.privateKey(
+                walletID: action.walletId,
+                account: action.account
+            ) else {
                 return .response(signingFailedResponse(to: request))
             }
             let signing: @Sendable () -> SigningResult
@@ -204,11 +202,7 @@ struct EthereumDappRequestProcessor {
                 return .response(genericFailureResponse(to: request))
             }
             return .response(response(to: request, signingResult: result))
-        case (.approveTransaction(let action), .transaction(let execution)):
-            guard let transaction = execution.applying(to: action),
-                  transaction.isReadyForApproval(on: action.chain) else {
-                return .response(response(to: request, error: .internalError))
-            }
+        case .transaction(let action, let transaction):
             guard let privateKey = walletAccess?.privateKey(
                 walletID: action.walletId,
                 account: action.account
@@ -221,7 +215,7 @@ struct EthereumDappRequestProcessor {
                 resolvedNetwork: action.resolvedNetwork,
                 request: request
             )
-        case (.addEthereumChain(let action), .addEthereumChain):
+        case .addEthereumChain(let action):
             guard let chainID = Int(hexString: action.chainToAdd.chainId),
                   completeApprovedChainAddition(action.chainToAdd, chainId: chainID),
                   case .ethereum(let body) = request.body else {

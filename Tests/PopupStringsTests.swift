@@ -12,7 +12,7 @@ final class PopupStringsTests: XCTestCase {
 
     private func popupRequest(
         subject: InternalSafariRequest.Subject.Popup,
-        payload: Any,
+        payload: Any? = nil,
         id: Int = 91
     ) throws -> InternalSafariRequest {
         var message: [String: Any] = [
@@ -20,9 +20,10 @@ final class PopupStringsTests: XCTestCase {
             "workflowVersion": ExtensionBridge.workflowVersion,
             "subject": subject.rawValue,
             "requestToken": "00000000-0000-4000-8000-000000000091",
-            "payload": payload,
         ]
-        if subject != .getApprovalState && subject != .getPendingRequests {
+        message["payload"] = payload
+        if subject != .getApprovalState && subject != .retryApproval &&
+            subject != .getPendingRequests && subject != .rejectRequest {
             message["reviewToken"] = "00000000-0000-4000-8000-000000000092"
         }
         let data = try JSONSerialization.data(withJSONObject: message)
@@ -32,28 +33,32 @@ final class PopupStringsTests: XCTestCase {
     private func approvalStateRequest(id: Int = 91) throws -> InternalSafariRequest {
         return try popupRequest(
             subject: .getApprovalState,
-            payload: ["mode": "full"],
             id: id
         )
     }
 
     private func oversizedResponse(
         state: String,
-        canReject: Bool? = nil,
+        actions: [String]? = nil,
         reviewToken: String? = "00000000-0000-4000-8000-000000000092"
     ) -> [String: Any] {
         var response: [String: Any] = [
             "id": 91,
             "state": state,
-            "kind": "signMessage",
+            "actions": actions ?? (state == "review" ? ["approve", "reject"] : []),
             "host": "wallet.example",
-            "meta": String(
-                repeating: "x",
-                count: PopupApprovalStatePresenter.maximumResponseBytes
-            ),
         ]
-        response["canReject"] = canReject
-        response["reviewToken"] = reviewToken
+        let largeText = String(
+            repeating: "x",
+            count: PopupApprovalStatePresenter.maximumResponseBytes
+        )
+        if state == "review" {
+            var review: [String: Any] = ["kind": "signMessage", "meta": largeText]
+            review["reviewToken"] = reviewToken
+            response["review"] = review
+        } else {
+            response["error"] = largeText
+        }
         return response
     }
 
@@ -151,18 +156,18 @@ final class PopupStringsTests: XCTestCase {
         }
     }
 
-    func testCompactApprovalErrorHasExactRefreshOnlyShape() {
-        let error = PopupApprovalStatePresenter.compactError(
+    func testApprovalErrorHasExactRefreshOnlyEnvelope() {
+        let error = PopupApprovalStatePresenter.errorState(
             id: 91,
             host: "wallet.example",
             error: Strings.failedToLoad
         )
 
-        XCTAssertEqual(Set(error.keys), ["id", "state", "host", "error"])
+        XCTAssertEqual(Set(error.keys), ["id", "state", "actions", "host", "error"])
         XCTAssertEqual(error["state"] as? String, "error")
         XCTAssertEqual(error["error"] as? String, Strings.failedToLoad)
-        XCTAssertNil(error["reviewToken"])
-        XCTAssertNil(error["canReject"])
+        XCTAssertNil(error["review"])
+        XCTAssertEqual(error["actions"] as? [String], ["retry"])
     }
 
     @MainActor
@@ -172,32 +177,90 @@ final class PopupStringsTests: XCTestCase {
 
         XCTAssertEqual(
             Set(state.keys),
-            ["id", "state", "host", "error", "secureSetupRequired"]
+            ["id", "state", "actions", "host", "error"]
         )
         XCTAssertEqual(state["state"] as? String, "error")
         XCTAssertEqual(
             state["error"] as? String,
             Strings.secureApprovalSetupRequired
         )
-        XCTAssertEqual(state["secureSetupRequired"] as? Bool, true)
-        XCTAssertNil(state["reviewToken"])
-        XCTAssertNil(state["canReject"])
+        XCTAssertEqual(state["actions"] as? [String], ["retry"])
+        XCTAssertNil(state["review"])
     }
 
-    func testCompactRejectableErrorHasExactRejectOnlyShape() {
-        let error = PopupApprovalStatePresenter.compactRejectableError(
+    @MainActor
+    func testBeginningApprovalRemovesReviewContentAndActions() throws {
+        let request = try XCTUnwrap(SafariRequest(json: [
+            "id": 91,
+            "name": "switchAccount",
+            "provider": "unknown",
+            "host": "wallet.example",
+            "configurationKey": "wallet.example",
+            "enqueueAttempt": String(repeating: "a", count: 32),
+            "admissionDeadline": 2_050_000_000_000,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "body": ["latestConfigurations": []],
+        ]))
+        let handle = ExtensionBridge.Handle(
+            id: request.id,
+            token: .init(value: UUID()),
+            profileIdentifier: nil
+        )
+        let action = DappRequestAction.switchAccount(SelectAccountAction(
+            coinType: nil,
+            selectedAccounts: [],
+            initiallyConnectedProviders: [],
+            network: nil
+        ))
+        let session = PopupRequestSession(
+            handle: handle,
+            request: request,
+            purpose: .approval(action)
+        )
+        let presenter = PopupApprovalStatePresenter()
+        let review = presenter.approvalState(
+            for: session,
+            action: action,
+            transactionMutationAllowed: false
+        )
+        XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
+        XCTAssertNotNil((review["review"] as? [String: Any])?["reviewToken"])
+        XCTAssertNil(review["reviewToken"])
+
+        let token = try XCTUnwrap(session.beginApproval())
+        let claim = ExtensionBridge.ApprovalClaim(handle: handle, value: UUID())
+        for expectedState in ["working", "authenticating"] {
+            if expectedState == "authenticating" {
+                XCTAssertTrue(session.acceptClaim(claim, token: token))
+                XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
+            }
+            let busy = presenter.approvalState(
+                for: session,
+                action: action,
+                transactionMutationAllowed: true
+            )
+            XCTAssertEqual(busy["state"] as? String, expectedState)
+            XCTAssertEqual(busy["actions"] as? [String], [])
+            XCTAssertNil(busy["review"])
+            XCTAssertEqual(Set(busy.keys), ["id", "state", "actions", "host"])
+        }
+    }
+
+    func testRejectableErrorHasExactRejectOnlyEnvelope() {
+        let error = PopupApprovalStatePresenter.errorState(
             id: 91,
+            actions: [.reject],
             host: "wallet.example",
             error: Strings.failedToLoad
         )
 
         XCTAssertEqual(
             Set(error.keys),
-            ["id", "state", "host", "error", "canReject"]
+            ["id", "state", "actions", "host", "error"]
         )
-        XCTAssertEqual(error["state"] as? String, "working")
-        XCTAssertNil(error["reviewToken"])
-        XCTAssertEqual(error["canReject"] as? Bool, true)
+        XCTAssertEqual(error["state"] as? String, "error")
+        XCTAssertNil(error["review"])
+        XCTAssertEqual(error["actions"] as? [String], ["reject"])
     }
 
     func testQueuePositionKeepsBothPositionalSpecifiers() {
@@ -236,11 +299,14 @@ final class PopupStringsTests: XCTestCase {
         let response: [String: Any] = [
             "id": 91,
             "state": "review",
-            "kind": "selectAccount",
             "host": "wallet.example",
-            "reviewToken": reviewToken,
-            "accounts": accounts,
-            "networks": networks,
+            "actions": ["approve", "reject"],
+            "review": [
+                "kind": "selectAccount",
+                "reviewToken": reviewToken,
+                "accounts": accounts,
+                "networks": networks,
+            ],
         ]
 
         let bounded = PopupApprovalStatePresenter.boundedResponse(
@@ -248,14 +314,14 @@ final class PopupStringsTests: XCTestCase {
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual((bounded["accounts"] as? [[String: Any]])?.count, choiceCount)
-        XCTAssertEqual((bounded["networks"] as? [[String: Any]])?.count, choiceCount)
+        XCTAssertEqual(((bounded["review"] as? [String: Any])?["accounts"] as? [[String: Any]])?.count, choiceCount)
+        XCTAssertEqual(((bounded["review"] as? [String: Any])?["networks"] as? [[String: Any]])?.count, choiceCount)
         XCTAssertEqual(
-            (bounded["accounts"] as? [[String: Any]])?.last?["name"] as? String,
+            ((bounded["review"] as? [String: Any])?["accounts"] as? [[String: Any]])?.last?["name"] as? String,
             "Account 299"
         )
         XCTAssertEqual(
-            (bounded["networks"] as? [[String: Any]])?.last?["name"] as? String,
+            ((bounded["review"] as? [String: Any])?["networks"] as? [[String: Any]])?.last?["name"] as? String,
             "Network 299"
         )
         XCTAssertLessThanOrEqual(
@@ -288,26 +354,29 @@ final class PopupStringsTests: XCTestCase {
         let response: [String: Any] = [
             "id": 91,
             "state": "review",
-            "kind": "selectAccount",
             "host": "wallet.example",
-            "reviewToken": reviewToken,
-            "accounts": accounts,
-            "networks": networks,
+            "actions": ["approve", "reject"],
+            "review": [
+                "kind": "selectAccount",
+                "reviewToken": reviewToken,
+                "accounts": accounts,
+                "networks": networks,
+            ],
         ]
 
-        XCTAssertEqual((response["accounts"] as? [[String: Any]])?.first?["name"] as? String, displayName)
+        XCTAssertEqual(((response["review"] as? [String: Any])?["accounts"] as? [[String: Any]])?.first?["name"] as? String, displayName)
         let bounded = PopupApprovalStatePresenter.boundedResponse(
             response,
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual(bounded["state"] as? String, "working")
+        XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
-        XCTAssertNil(bounded["kind"])
-        XCTAssertNil(bounded["accounts"])
-        XCTAssertNil(bounded["networks"])
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["kind"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["accounts"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["networks"])
         XCTAssertLessThanOrEqual(
             try JSONSerialization.data(withJSONObject: bounded).count,
             PopupApprovalStatePresenter.maximumResponseBytes
@@ -329,11 +398,14 @@ final class PopupStringsTests: XCTestCase {
         let response: [String: Any] = [
             "id": 91,
             "state": "review",
-            "kind": "selectAccount",
             "host": "wallet.example",
-            "reviewToken": reviewToken,
-            "accounts": accounts,
-            "networks": [[String: Any]](),
+            "actions": ["approve", "reject"],
+            "review": [
+                "kind": "selectAccount",
+                "reviewToken": reviewToken,
+                "accounts": accounts,
+                "networks": [[String: Any]](),
+            ],
         ]
 
         let bounded = PopupApprovalStatePresenter.boundedResponse(
@@ -341,13 +413,13 @@ final class PopupStringsTests: XCTestCase {
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual(bounded["state"] as? String, "working")
+        XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
-        XCTAssertNil(bounded["kind"])
-        XCTAssertNil(bounded["accounts"])
-        XCTAssertNil(bounded["networks"])
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["kind"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["accounts"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["networks"])
     }
 
     @MainActor
@@ -355,9 +427,12 @@ final class PopupStringsTests: XCTestCase {
         let response: [String: Any] = [
             "id": 91,
             "state": "review",
-            "kind": "selectAccount",
             "host": "wallet.example",
-            "accounts": [["invalid": Date()]],
+            "actions": ["approve", "reject"],
+            "review": [
+                "kind": "selectAccount",
+                "accounts": [["invalid": Date()]],
+            ],
         ]
 
         let bounded = PopupApprovalStatePresenter.boundedResponse(
@@ -374,10 +449,13 @@ final class PopupStringsTests: XCTestCase {
         let response: [String: Any] = [
             "id": 91,
             "state": "review",
-            "kind": "addChain",
             "host": "wallet.example",
-            "chainName": chainName,
-            "rpcURL": "https://rpc.example",
+            "actions": ["approve", "reject"],
+            "review": [
+                "kind": "addChain",
+                "chainName": chainName,
+                "rpcURL": "https://rpc.example",
+            ],
         ]
 
         let bounded = PopupApprovalStatePresenter.boundedResponse(
@@ -385,8 +463,8 @@ final class PopupStringsTests: XCTestCase {
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual(bounded["chainName"] as? String, chainName)
-        XCTAssertEqual(bounded["kind"] as? String, "addChain")
+        XCTAssertEqual((bounded["review"] as? [String: Any])?["chainName"] as? String, chainName)
+        XCTAssertEqual((bounded["review"] as? [String: Any])?["kind"] as? String, "addChain")
     }
 
     @MainActor
@@ -398,25 +476,28 @@ final class PopupStringsTests: XCTestCase {
         let response: [String: Any] = [
             "id": 91,
             "state": "review",
-            "kind": "selectAccount",
             "host": "wallet.example",
-            "iconURL": icon,
-            "accounts": [[
-                "name": "Account",
-                "croppedAddress": "0000...0000",
-                "icon": icon,
-            ]],
+            "actions": ["approve", "reject"],
+            "review": [
+                "kind": "selectAccount",
+                "iconURL": icon,
+                "accounts": [[
+                    "name": "Account",
+                    "croppedAddress": "0000...0000",
+                    "icon": icon,
+                ]],
+            ],
         ]
 
         let bounded = PopupApprovalStatePresenter.boundedResponse(
             response,
             for: try approvalStateRequest()
         )
-        let accounts = try XCTUnwrap(bounded["accounts"] as? [[String: Any]])
+        let accounts = try XCTUnwrap((bounded["review"] as? [String: Any])?["accounts"] as? [[String: Any]])
 
-        XCTAssertNil(bounded["iconURL"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["iconURL"])
         XCTAssertNil(accounts.first?["icon"])
-        XCTAssertEqual(bounded["kind"] as? String, "selectAccount")
+        XCTAssertEqual((bounded["review"] as? [String: Any])?["kind"] as? String, "selectAccount")
         let data = try JSONSerialization.data(withJSONObject: bounded)
         XCTAssertLessThanOrEqual(
             data.count,
@@ -432,12 +513,12 @@ final class PopupStringsTests: XCTestCase {
         )
 
         XCTAssertEqual(bounded["id"] as? Int, 91)
-        XCTAssertEqual(bounded["state"] as? String, "working")
+        XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["host"] as? String, "wallet.example")
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertNil(bounded["meta"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["meta"])
     }
 
     @MainActor
@@ -451,25 +532,25 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["host"] as? String, "wallet.example")
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertNil(bounded["canReject"])
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertNil(bounded["meta"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["retry"])
+        XCTAssertNil(bounded["review"])
+        XCTAssertNil((bounded["review"] as? [String: Any])?["meta"])
     }
 
     @MainActor
     func testOversizedResponsePreservesExistingRejectionCapability() throws {
         let bounded = PopupApprovalStatePresenter.boundedResponse(
-            oversizedResponse(state: "working", canReject: true),
+            oversizedResponse(state: "error", actions: ["reject"]),
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual(bounded["state"] as? String, "working")
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
+        XCTAssertEqual(bounded["state"] as? String, "error")
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
     }
 
     @MainActor
-    func testOversizedHostCannotOverflowCompactResponse() throws {
+    func testOversizedHostCannotOverflowErrorEnvelope() throws {
         var response = oversizedResponse(state: "review")
         response["host"] = String(
             repeating: "h",
@@ -482,9 +563,9 @@ final class PopupStringsTests: XCTestCase {
         )
 
         XCTAssertNil(bounded["host"])
-        XCTAssertEqual(bounded["state"] as? String, "working")
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
+        XCTAssertEqual(bounded["state"] as? String, "error")
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
         let data = try JSONSerialization.data(withJSONObject: bounded)
         XCTAssertLessThanOrEqual(
             data.count,
@@ -493,8 +574,9 @@ final class PopupStringsTests: XCTestCase {
     }
 
     @MainActor
-    func testOversizedMutationResponsesUseCompactApprovalState() throws {
+    func testOversizedMutationResponsesUseApprovalErrorEnvelope() throws {
         let requests = try [
+            popupRequest(subject: .retryApproval),
             popupRequest(
                 subject: .setTransactionSpeed,
                 payload: ["interaction": "ended", "value": 0.5]
@@ -515,13 +597,13 @@ final class PopupStringsTests: XCTestCase {
                 for: request
             )
             XCTAssertEqual(bounded["id"] as? Int, 91)
-            XCTAssertEqual(bounded["state"] as? String, "working")
+            XCTAssertEqual(bounded["state"] as? String, "error")
             XCTAssertEqual(bounded["host"] as? String, "wallet.example")
-            XCTAssertNil(bounded["reviewToken"])
-            XCTAssertEqual(bounded["canReject"] as? Bool, true)
+            XCTAssertNil(bounded["review"])
+            XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
             XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
             XCTAssertNil(bounded["status"])
-            XCTAssertNil(bounded["meta"])
+            XCTAssertNil((bounded["review"] as? [String: Any])?["meta"])
         }
     }
 
@@ -544,9 +626,9 @@ final class PopupStringsTests: XCTestCase {
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual(bounded["state"] as? String, "working")
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
+        XCTAssertEqual(bounded["state"] as? String, "error")
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
     }
 
     @MainActor
@@ -559,9 +641,9 @@ final class PopupStringsTests: XCTestCase {
             for: try approvalStateRequest()
         )
 
-        XCTAssertEqual(bounded["state"] as? String, "working")
-        XCTAssertNil(bounded["reviewToken"])
-        XCTAssertEqual(bounded["canReject"] as? Bool, true)
+        XCTAssertEqual(bounded["state"] as? String, "error")
+        XCTAssertNil(bounded["review"])
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
     }
 
 }

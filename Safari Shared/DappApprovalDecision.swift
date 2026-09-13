@@ -359,3 +359,95 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         }
     }
 }
+
+enum DappApprovalValidator {
+
+    struct Selection {
+        let accounts: [SpecificWalletAccount]
+        let network: EthereumNetwork?
+    }
+
+    enum Approval {
+        case accountSelection(Selection)
+        case message(SignMessageAction, Solana.Cluster?)
+        case transaction(SendTransactionAction, Transaction)
+        case addEthereumChain(AddEthereumChainAction)
+    }
+
+    enum Failure: Error {
+        case invalidDecision
+        case staleTransaction
+    }
+
+    static func resolve(
+        action: DappRequestAction,
+        decision: DappApprovalDecision,
+        accounts: [SpecificWalletAccount]?,
+        networkResolver: (String) -> EthereumNetwork?
+    ) -> Result<Approval, Failure> {
+        switch (action, decision) {
+        case (.selectAccount(let action), .accountSelection(let selection)),
+             (.switchAccount(let action), .accountSelection(let selection)):
+            guard let accounts,
+                  let resolved = resolveSelection(
+                    action: action,
+                    selection: selection,
+                    accounts: accounts,
+                    networkResolver: networkResolver
+                  ) else { return .failure(.invalidDecision) }
+            return .success(.accountSelection(resolved))
+        case (.approveMessage(let action), .message(let approval)):
+            guard (action.solanaClusterOptions != nil) ==
+                    (approval.solanaCluster != nil) else {
+                return .failure(.invalidDecision)
+            }
+            return .success(.message(action, approval.solanaCluster))
+        case (.approveTransaction(let action), .transaction(let execution)):
+            guard let transaction = execution.applying(to: action) else {
+                return .failure(.staleTransaction)
+            }
+            guard transaction.isReadyForApproval(on: action.chain) else {
+                return .failure(.invalidDecision)
+            }
+            return .success(.transaction(action, transaction))
+        case (.addEthereumChain(let action), .addEthereumChain):
+            return .success(.addEthereumChain(action))
+        default:
+            return .failure(.invalidDecision)
+        }
+    }
+
+    static func resolveSelection(
+        action: SelectAccountAction,
+        selection: DappApprovalDecision.AccountSelection,
+        accounts: [SpecificWalletAccount],
+        networkResolver: (String) -> EthereumNetwork?
+    ) -> Selection? {
+        var resolvedAccounts = [SpecificWalletAccount]()
+        var selectedCoins = Set<WalletCoin>()
+        for identity in selection.accounts {
+            guard let coin = WalletCoin.correspondingToInpageProvider(identity.provider),
+                  action.coinType == nil || action.coinType == coin,
+                  selectedCoins.insert(coin).inserted else { return nil }
+            let matches = accounts.filter {
+                $0.walletId == identity.walletID &&
+                    $0.account.coin == coin &&
+                    coin.normalizedAddress($0.account.address) ==
+                        coin.normalizedAddress(identity.address) &&
+                    $0.account.derivationPath == identity.derivationPath
+            }
+            guard matches.count == 1 else { return nil }
+            resolvedAccounts.append(matches[0])
+        }
+        let chainID = selection.ethereumChainID ?? action.network?.chainIdHexString
+        let network = chainID.flatMap(networkResolver)
+        if resolvedAccounts.isEmpty {
+            guard !action.initiallyConnectedProviders.isEmpty else { return nil }
+        } else {
+            guard chainID == nil || network != nil,
+                  !resolvedAccounts.contains(where: { $0.account.coin == .ethereum }) ||
+                    network != nil else { return nil }
+        }
+        return Selection(accounts: resolvedAccounts, network: network)
+    }
+}

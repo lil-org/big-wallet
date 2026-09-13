@@ -20,8 +20,7 @@ final class NativeApprovalFinalizer {
     private let requestProcessor: DappRequestProcessing
     private let startWalletsManager: () -> Bool
     private let reloadWalletsManager: () -> Bool
-    private let accountResolver: (DappApprovalDecision.AccountIdentity) ->
-        SpecificWalletAccount?
+    private let accountsProvider: () -> [SpecificWalletAccount]
     private let networkResolver: (String) -> EthereumNetwork?
     private let clock: () -> Date
     private let executor: DurableApprovalExecutor
@@ -36,8 +35,9 @@ final class NativeApprovalFinalizer {
         walletManagerReload: @escaping () -> Bool = {
             WalletsManager.shared.reloadFromStore()
         },
-        accountResolver: ((DappApprovalDecision.AccountIdentity) ->
-            SpecificWalletAccount?)? = nil,
+        accountsProvider: @escaping () -> [SpecificWalletAccount] = {
+            SourceWalletAccess.shared.orderedAccounts
+        },
         networkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
         },
@@ -49,22 +49,7 @@ final class NativeApprovalFinalizer {
         self.requestProcessor = requestProcessor
         startWalletsManager = walletManagerStart
         reloadWalletsManager = walletManagerReload
-        self.accountResolver = accountResolver ?? { identity in
-            guard let coin = WalletCoin.correspondingToInpageProvider(
-                      identity.provider
-                  ),
-                  let wallet = WalletsManager.shared.currentWallet(
-                      id: identity.walletID
-                  ),
-                  let account = wallet.accounts.first(where: {
-                      $0.coin == coin && $0.address == identity.address &&
-                          $0.derivationPath == identity.derivationPath
-                  }) else { return nil }
-            return SpecificWalletAccount(
-                walletId: identity.walletID,
-                account: account
-            )
-        }
+        self.accountsProvider = accountsProvider
         self.networkResolver = networkResolver
         self.clock = clock
         executor = DurableApprovalExecutor(
@@ -178,22 +163,27 @@ final class NativeApprovalFinalizer {
                 executionContext: executionContext
             ) { .response(response) }
         case .approval(let action):
-            if case (.approveTransaction(let transactionAction),
-                     .transaction(let execution)) =
-                    (action, nativeClaim.decision),
-               execution.applying(to: transactionAction) == nil {
-                return await execute(
-                    claim: nativeClaim.approvalClaim,
-                    markingApprovalCommitted: false,
-                    executionContext: executionContext
-                ) {
-                    .response(Self.staleResponse(for: request))
-                }
+            let accounts: [SpecificWalletAccount]?
+            if case .accountSelection = nativeClaim.decision {
+                accounts = accountsProvider()
+            } else {
+                accounts = nil
             }
-            guard canExecute(
+            switch DappApprovalValidator.resolve(
                 action: action,
-                decision: nativeClaim.decision
-            ) else {
+                decision: nativeClaim.decision,
+                accounts: accounts,
+                networkResolver: networkResolver
+            ) {
+            case .success:
+                break
+            case .failure(.staleTransaction):
+                return await completeStaleTransactionDecision(
+                    nativeClaim,
+                    request: request,
+                    executionContext: executionContext
+                )
+            case .failure(.invalidDecision):
                 return await persistInternalError(
                     claim: nativeClaim.approvalClaim,
                     request: request,
@@ -279,68 +269,6 @@ final class NativeApprovalFinalizer {
         }
         didStartWalletsManager = true
         return startWalletsManager()
-    }
-
-    private func canExecute(
-        action: DappRequestAction,
-        decision: DappApprovalDecision
-    ) -> Bool {
-        switch (action, decision) {
-        case (.selectAccount(let action), .accountSelection(let selection)),
-             (.switchAccount(let action), .accountSelection(let selection)):
-            guard let accounts = resolveAccounts(
-                      selection.accounts,
-                      requiredCoin: action.coinType
-                  ) else { return false }
-            let selectedChainID = selection.ethereumChainID ??
-                action.network?.chainIdHexString
-            let network = selectedChainID.flatMap(networkResolver)
-            let resolvedAction = SelectAccountAction(
-                coinType: action.coinType,
-                selectedAccounts: Set(accounts),
-                initiallyConnectedProviders: action.initiallyConnectedProviders,
-                network: network
-            )
-            guard selectedChainID == nil || network != nil,
-                  !(accounts.isEmpty && action.initiallyConnectedProviders.isEmpty),
-                  accounts.isEmpty || resolvedAction.canSubmitSelection(
-                      network: network
-                  )
-            else { return false }
-            return true
-        case (.approveMessage(let action), .message(let approval)):
-            return (action.solanaClusterOptions != nil) == (approval.solanaCluster != nil)
-        case (.approveTransaction(let action), .transaction(let execution)):
-            guard let transaction = execution.applying(to: action),
-                  transaction.isReadyForApproval(on: action.chain) else { return false }
-            return true
-        case (.addEthereumChain, .addEthereumChain):
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func resolveAccounts(
-        _ identities: [DappApprovalDecision.AccountIdentity],
-        requiredCoin: WalletCoin?
-    ) -> [SpecificWalletAccount]? {
-        var result = [SpecificWalletAccount]()
-        var coins = Set<WalletCoin>()
-        for identity in identities {
-            guard let coin = WalletCoin.correspondingToInpageProvider(
-                      identity.provider
-                  ),
-                  requiredCoin == nil || requiredCoin == coin,
-                  coins.insert(coin).inserted,
-                  let account = accountResolver(identity),
-                  account.walletId == identity.walletID,
-                  account.account.coin == coin,
-                  account.account.address == identity.address,
-                  account.account.derivationPath == identity.derivationPath else { return nil }
-            result.append(account)
-        }
-        return result
     }
 
     private func persistInternalError(

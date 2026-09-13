@@ -19,6 +19,10 @@ const BUILD_VERSION = BigWalletBridgeWire.BUILD_VERSION;
 const UPDATE_RECOVERY_STORAGE_KEY = "workflowUpdateRecoveryNeeded";
 const WORKFLOW_POLICY = BigWalletBridgeWire.WORKFLOW_POLICY;
 const APPROVAL_STATES = new Set(["missing", "review", "authenticating", "working", "error"]);
+const APPROVAL_ACTIONS = new Set([
+    "approve", "reject", "retry", "editTransaction",
+    "setTransactionSpeed", "resolveApprovalAlert",
+]);
 const APPROVAL_KINDS = new Set([
     "selectAccount",
     "switchAccount",
@@ -136,6 +140,13 @@ class PopupRequestController {
     start() {
         if (!this.isActive) { return; }
         show("working-overlay");
+        setText("request-title", "");
+        setText("request-host", this.request.host);
+        hide("request-favicon");
+        hide("request-error");
+        for (const section of ["accounts", "message", "transaction", "chain"]) {
+            hide("section-" + section);
+        }
         document.getElementById("tx-editor").open = false;
         return this.fetchAndRenderState();
     }
@@ -221,7 +232,7 @@ class PopupRequestController {
     }
 
     updateTransactionRefreshBackoff(state, unchanged) {
-        if (!unchanged || !STABLE_TRANSACTION_PHASES.has(state.phase)) {
+        if (!unchanged || !STABLE_TRANSACTION_PHASES.has(state.review?.phase)) {
             this.resetTransactionRefreshBackoff();
             return;
         }
@@ -231,12 +242,11 @@ class PopupRequestController {
         );
     }
 
-    async approvalState(value, mode) {
+    async approvalState(value) {
         const generation = this.responseEpoch;
-        const payload = { mode: typeof mode === "undefined" ? "full" : mode };
         return this.requestState(
             "getApprovalState",
-            payload,
+            undefined,
             value,
             "approval",
             null,
@@ -252,7 +262,7 @@ class PopupRequestController {
         const state = await this.approvalState(request);
         if (!this.acceptResponse(state, generation)) { return; }
         this.adoptState(state);
-        if (state.kind === "sendTransaction" && state.state === "review") {
+        if (state.review?.kind === "sendTransaction" && state.state === "review") {
             this.resetTransactionRefreshBackoff();
             this.scheduleTransactionRefresh(request);
         } else if (shouldPollApprovalState(state)) {
@@ -275,12 +285,12 @@ class PopupRequestController {
             // Most ticks return a state identical to the one on display, and rebuilding the DOM for
             // those wipes the user's text selection. The slider still follows the wallet so a stale
             // local value snaps back instead of silently diverging from the fee.
-            if (!this.transaction.sliderDragging &&
+            if (!state.review || !this.transaction.sliderDragging &&
                 !this.transaction.activeCommand) {
                 if (!unchanged) {
                     this.renderState(state);
-                } else if (state.slider && state.slider.visible) {
-                    document.getElementById("tx-slider").value = state.slider.position ?? 100;
+                } else if (state.review?.slider && state.review?.slider.visible) {
+                    document.getElementById("tx-slider").value = state.review?.slider.position ?? 100;
                 }
             }
             this.updateTransactionRefreshBackoff(state, unchanged);
@@ -300,31 +310,44 @@ class PopupRequestController {
         this.presentation.lastStateJSON = JSON.stringify(state);
         show("screen-request");
         hide("screen-idle");
-        setText("request-title", state.title || "");
+        document.getElementById("button-approve").textContent =
+            hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)
+                ? localized("refresh", "Refresh")
+                : state.review?.primaryTitle || localized("ok", "OK");
+        document.getElementById("button-reject").disabled = !canRejectApprovalState(state);
+        this.updateApproveEnabled(state);
+        const isBusy = shouldPollApprovalState(state);
+        setHidden("working-overlay", !isBusy);
+        if (!state.review) {
+            this.closeAlert(false);
+            this.discardSliderCommands(this.request);
+            document.getElementById("tx-slider").disabled = true;
+            document.getElementById("editor-apply").disabled = true;
+            document.getElementById("editor-suggested").disabled = true;
+            if (isBusy) {
+                document.getElementById("screen-request").inert = true;
+                return;
+            }
+            this.transaction.editorDirty = false;
+            document.getElementById("tx-editor").open = false;
+            hide("tx-editor");
+            hide("edits-error");
+        }
+
+        setText("request-title", state.review?.title || "");
         setText("request-host", state.host || "");
         const favicon = document.getElementById("request-favicon");
-        if (state.iconURL && favicon.src !== state.iconURL) {
-            favicon.src = state.iconURL;
+        if (state.review?.iconURL && favicon.src !== state.review.iconURL) {
+            favicon.src = state.review.iconURL;
         }
-        setHidden("request-favicon", !state.iconURL);
-        document.getElementById("button-approve").textContent =
-            state.state === "error" || shouldRefreshAccountSelection(state)
-                ? localized("refresh", "Refresh")
-                : state.primaryTitle || localized("ok", "OK");
-        document.getElementById("button-reject").disabled = !canRejectApprovalState(state);
-
+        setHidden("request-favicon", !state.review?.iconURL);
+        setOptionalText("request-error", "request-error", state.error);
         hide("section-accounts");
         hide("section-message");
         hide("section-transaction");
         hide("section-chain");
 
-        const isBusy = state.state === "working" && !canRejectApprovalState(state) ||
-            state.state === "authenticating";
-        setHidden("working-overlay", !isBusy);
-
-        setOptionalText("request-error", "request-error", state.error);
-
-        switch (state.kind) {
+        switch (state.review?.kind) {
             case "selectAccount":
             case "switchAccount":
                 this.renderAccountSelection(state);
@@ -339,20 +362,19 @@ class PopupRequestController {
                 renderAddChain(state);
                 break;
         }
-
         this.updateApproveEnabled(state);
         this.renderAlertIfNeeded(state);
-
     }
 
     renderAccountSelection(state) {
+        const review = state.review;
         show("section-accounts");
         this.reconcileAccountSelection(state);
 
-        if (state.canSelectNetwork && state.networks) {
+        if (review.canSelectNetwork && review.networks) {
             show("network-row");
             const select = document.getElementById("network-select");
-            const networksKey = JSON.stringify(state.networks.map(network => [
+            const networksKey = JSON.stringify(review.networks.map(network => [
                 network.chainId,
                 network.name,
                 network.isCustom === true,
@@ -360,7 +382,7 @@ class PopupRequestController {
             if (networksKey !== this.presentation.networksKey) {
                 this.presentation.networksKey = networksKey;
                 select.innerHTML = "";
-                for (const network of state.networks) {
+                for (const network of review.networks) {
                     const option = document.createElement("option");
                     option.value = network.chainId;
                     // A dapp picks the name of a chain it adds, so the chain id is what tells a
@@ -378,16 +400,17 @@ class PopupRequestController {
             hide("network-row");
         }
 
-        setOptionalText("accounts-empty", "accounts-empty", state.emptyMessage);
+        setOptionalText("accounts-empty", "accounts-empty", review.emptyMessage);
 
-        this.renderCheckedList("accounts-list", state.accounts || [], "account-row",
+        this.renderCheckedList("accounts-list", review.accounts || [], "account-row",
                           (row, account) => { fillAccountRow(row, account, true); },
                           account => this.isSelectedAccount(account),
                           account => this.toggleAccount(account));
     }
 
     reconcileAccountSelection(state) {
-        const availableAccounts = state.accounts || [];
+        const review = state.review;
+        const availableAccounts = review.accounts || [];
         if (this.presentation.accounts === null) {
             this.presentation.accounts = availableAccounts
                 .filter(account => account.isSelected)
@@ -399,13 +422,13 @@ class PopupRequestController {
                 .map(accountIdentity);
         }
 
-        if (!state.canSelectNetwork || !Array.isArray(state.networks)) {
+        if (!review.canSelectNetwork || !Array.isArray(review.networks)) {
             this.presentation.chainId = null;
             return;
         }
-        const selectedNetwork = state.networks.find(
+        const selectedNetwork = review.networks.find(
             network => network.chainId === this.presentation.chainId
-        ) || state.networks.find(network => network.isSelected) || state.networks[0];
+        ) || review.networks.find(network => network.isSelected) || review.networks[0];
         this.presentation.chainId = selectedNetwork ? selectedNetwork.chainId : null;
     }
 
@@ -451,11 +474,12 @@ class PopupRequestController {
     }
 
     canApproveAccountSelection(state) {
+        const review = state.review;
         if (!Array.isArray(this.presentation.accounts)) {
             return false;
         }
         if (this.presentation.accounts.length === 0) {
-            return state.allowsEmptySelection === true;
+            return review.allowsEmptySelection === true;
         }
         const selectedEthereum = this.presentation.accounts.some(account => account.coin === "ethereum");
         return !selectedEthereum || isCanonicalEthereumChainId(this.presentation.chainId);
@@ -463,29 +487,25 @@ class PopupRequestController {
 
     updateApproveEnabled(state) {
         const approve = document.getElementById("button-approve");
-        if (state.state === "error") {
+        if (hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)) {
             approve.disabled = false;
-        } else if (state.state !== "review") {
+        } else if (!hasApprovalAction(state, "approve")) {
             approve.disabled = true;
-        } else if (state.kind === "selectAccount" || state.kind === "switchAccount") {
-            approve.disabled = !shouldRefreshAccountSelection(state) &&
-                !this.canApproveAccountSelection(state);
-        } else if (state.kind === "sendTransaction") {
-            approve.disabled = state.canApprove !== true;
-        } else if (state.kind === "signMessage") {
-            approve.disabled = state.requiresClusterSelection === true && this.presentation.cluster === null;
-        } else if (state.kind === "addChain") {
-            approve.disabled = false;
+        } else if (state.review.kind === "selectAccount" || state.review.kind === "switchAccount") {
+            approve.disabled = !this.canApproveAccountSelection(state);
+        } else if (state.review.kind === "signMessage") {
+            approve.disabled = state.review.requiresClusterSelection === true && this.presentation.cluster === null;
         } else {
-            approve.disabled = true;
+            approve.disabled = false;
         }
     }
 
     renderSignMessage(state) {
+        const review = state.review;
         show("section-message");
-        renderAccountRow("signing-account", state.account);
-        setText("message-meta", state.meta || "");
-        const clusters = state.clusters || [];
+        renderAccountRow("signing-account", review.account);
+        setText("message-meta", review.meta || "");
+        const clusters = review.clusters || [];
         setHidden("clusters", !(clusters.length > 0));
         if (clusters.length > 0) {
             const current = clusters.find(cluster => cluster.value === this.presentation.cluster);
@@ -507,27 +527,28 @@ class PopupRequestController {
     }
 
     renderTransaction(state) {
+        const review = state.review;
         show("section-transaction");
-        renderAccountRow("tx-account", state.account);
-        setText("tx-network", state.networkName || "");
-        setOptionalText("tx-balance", "tx-balance-row", state.balance);
-        setOptionalText("tx-value", "tx-value-row", state.valueLine);
+        renderAccountRow("tx-account", review.account);
+        setText("tx-network", review.networkName || "");
+        setOptionalText("tx-balance", "tx-balance-row", review.balance);
+        setOptionalText("tx-value", "tx-value-row", review.valueLine);
         const feeLines = document.getElementById("tx-fee-lines");
         feeLines.innerHTML = "";
-        for (const line of state.feeLines || []) {
+        for (const line of review.feeLines || []) {
             const div = document.createElement("div");
             div.className = "fee-line";
             div.textContent = line;
             feeLines.appendChild(div);
         }
-        if (state.phase === "preparing" || state.phase === "idle") {
+        if (review.phase === "preparing" || review.phase === "idle") {
             const div = document.createElement("div");
             div.className = "fee-line";
             div.textContent = localized("calculating", "Calculating...");
             feeLines.appendChild(div);
         }
 
-        const sliderState = state.slider && state.slider.visible ? state.slider : null;
+        const sliderState = review.slider && review.slider.visible ? review.slider : null;
         setHidden("tx-slider-row", !sliderState);
         if (sliderState) {
             const slider = document.getElementById("tx-slider");
@@ -537,23 +558,17 @@ class PopupRequestController {
             if (!this.transaction.sliderDragging) {
                 slider.value = sliderState.position ?? 100;
             }
-            slider.disabled = sliderState.enabled !== true;
+            slider.disabled = !hasApprovalAction(state, "setTransactionSpeed");
             slider.setAttribute("aria-valuetext", firstFeeLine);
         }
 
-        setOptionalText("tx-data", "tx-data-details", state.dataInterpretation);
+        setOptionalText("tx-data", "tx-data-details", review.dataInterpretation);
 
-        const canApplyEdits = state.transactionMutationAllowed === true && state.canEdit === true;
+        const canApplyEdits = hasApprovalAction(state, "editTransaction");
         document.getElementById("editor-apply").disabled = !canApplyEdits;
         document.getElementById("editor-suggested").disabled = !canApplyEdits;
         const editorDetails = document.getElementById("tx-editor");
-        if (state.transactionMutationAllowed !== true) {
-            this.discardSliderCommands(this.request);
-            this.transaction.editorDirty = false;
-            hide("edits-error");
-            editorDetails.open = false;
-            hide("tx-editor");
-        } else if (state.canEdit || editorDetails.open) {
+        if (canApplyEdits || editorDetails.open) {
             show("tx-editor");
             // An open editor keeps whatever the user typed, but until they type it follows the fee:
             // applying fields left over from before a slider move would silently undo that move.
@@ -564,8 +579,8 @@ class PopupRequestController {
             const requestToken = request && request.id === state.id
                 ? request.requestToken || ""
                 : "";
-            const editorRequestKey = typeof state.editorRequestToken === "number"
-                ? requestToken + ":" + state.id + ":" + state.editorRequestToken
+            const editorRequestKey = typeof review.editorRequestToken === "number"
+                ? requestToken + ":" + state.id + ":" + review.editorRequestToken
                 : null;
             if (editorRequestKey !== null && editorRequestKey !== this.transaction.lastEditorRequestKey) {
                 this.transaction.lastEditorRequestKey = editorRequestKey;
@@ -577,8 +592,9 @@ class PopupRequestController {
     }
 
     populateEditor(state) {
+        const review = state.review;
         this.transaction.editorDirty = false;
-        const editor = state.editor || {};
+        const editor = review.editor || {};
         if (editor.usesEIP1559) {
             show("editor-eip1559");
             hide("editor-legacy");
@@ -598,10 +614,8 @@ class PopupRequestController {
     async approveCurrent() {
         if (!this.isActive || this.phase === "submitting") { return; }
         if (!this.state) { return; }
-        if (this.state.state === "error") {
-            document.getElementById("button-approve").disabled = true;
-            show("working-overlay");
-            await this.fetchAndRenderState();
+        if (hasApprovalAction(this.state, "retry")) {
+            await this.retryApproval();
             return;
         }
         if (shouldRefreshAccountSelection(this.state)) {
@@ -610,17 +624,43 @@ class PopupRequestController {
             return;
         }
         const payload = {};
-        if (this.state.kind === "selectAccount" || this.state.kind === "switchAccount") {
+        if (this.state.review?.kind === "selectAccount" || this.state.review?.kind === "switchAccount") {
             if (!this.canApproveAccountSelection(this.state)) { return; }
             payload.selectedAccounts = this.presentation.accounts;
-            if (this.state.canSelectNetwork &&
+            if (this.state.review?.canSelectNetwork &&
                 isCanonicalEthereumChainId(this.presentation.chainId)) {
                 payload.chainId = this.presentation.chainId;
             }
-        } else if (this.state.kind === "signMessage" && this.presentation.cluster) {
+        } else if (this.state.review?.kind === "signMessage" && this.presentation.cluster) {
             payload.cluster = this.presentation.cluster;
         }
         await this.submitCurrentDecision("approveRequest", payload);
+    }
+
+    async retryApproval() {
+        if (!this.isActive || this.phase === "submitting" ||
+            !hasApprovalAction(this.state, "retry")) { return; }
+        const request = this.request;
+        this.responseEpoch += 1;
+        const generation = this.responseEpoch;
+        this.stopTimers();
+        this.phase = "submitting";
+        document.getElementById("button-approve").disabled = true;
+        show("working-overlay");
+        const state = await this.requestState(
+            "retryApproval", undefined, request, "action", null,
+            () => this.responseEpoch === generation &&
+                hasApprovalAction(this.state, "retry"),
+            undefined
+        );
+        if (!this.acceptResponse(state, generation)) { return; }
+        this.adoptState(state);
+        if (shouldPollApprovalState(state)) {
+            this.pollApproval();
+        } else if (state.review?.kind === "sendTransaction") {
+            this.resetTransactionRefreshBackoff();
+            this.scheduleTransactionRefresh();
+        }
     }
 
     async rejectCurrent() {
@@ -651,12 +691,12 @@ class PopupRequestController {
             return;
         }
         const reviewToken = subject === "approveRequest"
-            ? state.reviewToken
+            ? state.review?.reviewToken
             : undefined;
         const remainsCurrent = () => this.isCurrentRequest(request) &&
             canSubmitDecision(subject, this.state) &&
             (subject !== "approveRequest" ||
-                this.state?.reviewToken === reviewToken);
+                this.state?.review?.reviewToken === reviewToken);
         show("working-overlay");
         let decisionPayload = payload;
         if (subject === "approveRequest") {
@@ -694,31 +734,20 @@ class PopupRequestController {
         const request = this.requestFor();
         if (!request) { return; }
         const generation = this.responseEpoch;
-        const state = await this.approvalState(request, "poll");
+        const state = await this.approvalState(request);
         if (!this.isActive) { return; }
         if (generation !== this.responseEpoch) {
             this.pollApproval();
             return;
         }
         if (!this.acceptResponse(state, generation)) { return; }
-        if (state.state === "error") {
-            this.stopTimers();
-            this.adoptState(state);
-        } else if (state.state === "review") {
-            this.stopTimers();
-            this.adoptState(state);
-            if (state.kind === "sendTransaction") {
-                this.resetTransactionRefreshBackoff();
-                this.scheduleTransactionRefresh();
-            }
-        } else if (canRejectApprovalState(state)) {
-            const retainedError = isCompactRejectableApprovalState(this.state)
-                ? this.state.error : null;
-            this.stopTimers();
-            this.adoptState(retainedError === null ? state : {...state, error: retainedError});
-            if (shouldPollApprovalState(state)) { this.pollApproval(); }
-        } else {
+        this.stopTimers();
+        this.adoptState(state);
+        if (shouldPollApprovalState(state)) {
             this.pollApproval();
+        } else if (state.review?.kind === "sendTransaction") {
+            this.resetTransactionRefreshBackoff();
+            this.scheduleTransactionRefresh();
         }
     }
 
@@ -751,7 +780,7 @@ class PopupRequestController {
     ) {
         if (!this.requestFor(value)) { return null; }
         const options = {isValid: remainsValid};
-        if (typeof reviewToken !== "undefined") {
+        if (subject === "retryApproval" || typeof reviewToken !== "undefined") {
             options.reviewToken = reviewToken;
         }
         const outcome = await this.dispatch(
@@ -777,6 +806,8 @@ class PopupRequestController {
         if (!this.isActive || this.phase === "submitting") { return null; }
         const request = this.requestFor(value);
         if (!request || !this.isCurrentRequest(request)) { return null; }
+        const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
+        if (!hasApprovalAction(this.state, action)) { return null; }
         const isRichMutation = subject !== "setTransactionSpeed";
         if (isRichMutation && sameRequest(this.mutation?.request, request)) {
             return null;
@@ -792,8 +823,7 @@ class PopupRequestController {
             if (isRichMutation && this.mutation !== mutation) {
                 return null;
             }
-            if (subject === "applyTransactionEdits" &&
-                this.state?.canEdit !== true) { return null; }
+            if (!hasApprovalAction(this.state, action)) { return null; }
             this.responseEpoch += 1;
             this.resetTransactionRefreshBackoff();
             const generation = this.responseEpoch;
@@ -805,8 +835,9 @@ class PopupRequestController {
                 "mutation",
                 ticketOwner,
                 () => generation === this.responseEpoch &&
+                    hasApprovalAction(this.state, action) &&
                     (typeof reviewToken === "undefined" ||
-                        this.state?.reviewToken === reviewToken),
+                        this.state?.review?.reviewToken === reviewToken),
                 reviewToken
             );
             if (generation !== this.responseEpoch) { return null; }
@@ -853,6 +884,7 @@ class PopupRequestController {
         this.state = {
             id: request.id,
             state: "error",
+            actions: ["retry"],
             ...(typeof previous.host === "string" && previous.host.length > 0
                 ? {host: previous.host}
                 : {}),
@@ -864,7 +896,7 @@ class PopupRequestController {
 
     keepFollowingTransaction() {
         if (!this.isActive || this.followUpMode === "poll") { return; }
-        if (this.state?.kind === "sendTransaction" && this.state.state === "review") {
+        if (this.state?.review?.kind === "sendTransaction" && this.state.state === "review") {
             this.scheduleTransactionRefresh();
         }
     }
@@ -881,7 +913,7 @@ class PopupRequestController {
         value,
         request,
         commandGeneration = this.transaction.generation,
-        reviewToken = this.state?.reviewToken
+        reviewToken = this.state?.review?.reviewToken
     ) {
         const capturedRequest = this.requestFor(request);
         if (!capturedRequest || !this.isCurrentRequest(capturedRequest)) { return false; }
@@ -895,7 +927,7 @@ class PopupRequestController {
             return false;
         };
         if (!isRequestToken(reviewToken) ||
-            this.state?.reviewToken !== reviewToken) {
+            this.state?.review?.reviewToken !== reviewToken) {
             return await refreshAuthoritativeState();
         }
         const state = await this.mutateState(
@@ -916,7 +948,7 @@ class PopupRequestController {
 
     beginSliderInteraction(
         request,
-        reviewToken = this.state?.reviewToken
+        reviewToken = this.state?.review?.reviewToken
     ) {
         const capturedRequest = this.requestFor(request);
         if (this.transaction.activeCommand ||
@@ -936,7 +968,7 @@ class PopupRequestController {
         interaction,
         value,
         request,
-        reviewToken = this.state?.reviewToken
+        reviewToken = this.state?.review?.reviewToken
     ) {
         const capturedRequest = this.requestFor(request);
         if (!capturedRequest || !this.isCurrentRequest(capturedRequest) ||
@@ -1035,9 +1067,8 @@ class PopupRequestController {
 
     async applyEdits() {
         if (!this.isActive) { return; }
-        if (this.state?.canEdit !== true ||
-            this.state.transactionMutationAllowed !== true) { return; }
-        const editor = (this.state.editor || {});
+        if (!hasApprovalAction(this.state, "editTransaction")) { return; }
+        const editor = (this.state.review?.editor || {});
         const payload = {
             mode: "custom",
             nonce: document.getElementById("edit-nonce").value,
@@ -1053,8 +1084,7 @@ class PopupRequestController {
 
     async applySuggested() {
         if (!this.isActive) { return; }
-        if (this.state?.canEdit !== true ||
-            this.state.transactionMutationAllowed !== true) { return; }
+        if (!hasApprovalAction(this.state, "editTransaction")) { return; }
         this.handleTransactionEditResult(await this.mutateState(
             "applyTransactionEdits",
             { mode: "suggested" }
@@ -1081,13 +1111,14 @@ class PopupRequestController {
     }
 
     renderAlertIfNeeded(state) {
-        if (!state.alert) {
+        if (!hasApprovalAction(state, "resolveApprovalAlert") || !state.review?.alert) {
             this.closeAlert(state.state === "review");
             return;
         }
-        const title = state.alert.title || "";
-        const message = state.alert.message || "";
-        const actions = state.alert.actions;
+        const alert = state.review.alert;
+        const title = alert.title || "";
+        const message = alert.message || "";
+        const actions = alert.actions;
         const alertKey = JSON.stringify([
             title,
             message,
@@ -1115,9 +1146,10 @@ class PopupRequestController {
             button.textContent = action.title;
             button.addEventListener("click", async () => {
                 if (!this.isActive) { return; }
-                const reviewToken = this.state?.reviewToken;
-                const currentAlert = this.state?.alert;
-                if (!isRequestToken(reviewToken) || !currentAlert ||
+                const reviewToken = this.state?.review?.reviewToken;
+                const currentAlert = this.state?.review?.alert;
+                if (!hasApprovalAction(this.state, "resolveApprovalAlert") ||
+                    !isRequestToken(reviewToken) || !currentAlert ||
                     !currentAlert.actions.some(currentAction =>
                         currentAction.action === action.action &&
                         currentAction.title === action.title
@@ -1127,7 +1159,7 @@ class PopupRequestController {
                 const state = await this.mutateState("resolveApprovalAlert", {
                     action: action.action,
                 }, undefined, reviewToken);
-                if (this.state?.reviewToken !== reviewToken) { return; }
+                if (this.state?.review?.reviewToken !== reviewToken) { return; }
                 this.adoptState(state);
                 this.keepFollowingTransaction();
             });
@@ -1238,7 +1270,7 @@ function scheduleNativeMessage(kind, subject, id, payload, requestToken, options
         const reviewToken = channel === "action"
             ? Object.prototype.hasOwnProperty.call(options, "reviewToken")
                 ? options.reviewToken
-                : currentRequestController?.state?.reviewToken
+                : currentRequestController?.state?.review?.reviewToken
             : undefined;
         ticket.state = "dispatched";
         let pendingResponse;
@@ -1888,7 +1920,7 @@ function parsePendingResponse(response) {
 }
 
 function normalizeApprovalImages(state) {
-    if (!isRecord(state) || !APPROVAL_KINDS.has(state.kind)) { return state; }
+    if (!isRecord(state?.review) || !APPROVAL_KINDS.has(state.review.kind)) { return state; }
 
     function withoutInvalidImage(record, key) {
         if (!isRecord(record) || isOptionalString(record[key])) { return record; }
@@ -1897,18 +1929,18 @@ function normalizeApprovalImages(state) {
         return copy;
     }
 
-    let normalized = withoutInvalidImage(state, "iconURL");
-    const account = withoutInvalidImage(state.account, "icon");
-    if (account !== state.account) {
-        normalized = {...normalized, account};
+    let review = withoutInvalidImage(state.review, "iconURL");
+    const account = withoutInvalidImage(review.account, "icon");
+    if (account !== review.account) {
+        review = {...review, account};
     }
-    if (Array.isArray(state.accounts)) {
-        const accounts = state.accounts.map(account => withoutInvalidImage(account, "icon"));
-        if (accounts.some((account, index) => account !== state.accounts[index])) {
-            normalized = {...normalized, accounts};
+    if (Array.isArray(review.accounts)) {
+        const accounts = review.accounts.map(account => withoutInvalidImage(account, "icon"));
+        if (accounts.some((account, index) => account !== review.accounts[index])) {
+            review = {...review, accounts};
         }
     }
-    return normalized;
+    return review === state.review ? state : {...state, review};
 }
 
 function isDisplayAccount(account) {
@@ -1933,18 +1965,10 @@ function isAlert(alert) {
 }
 
 function hasValidOptionalApprovalFields(state) {
-    return isOptionalString(state.title) &&
-        (typeof state.reviewToken === "undefined" ||
-            isRequestToken(state.reviewToken)) &&
-        (typeof state.host === "undefined" ||
+    return (typeof state.host === "undefined" ||
             typeof state.host === "string" && state.host.length > 0) &&
-        isOptionalString(state.iconURL) &&
-        isOptionalString(state.primaryTitle) &&
         isOptionalString(state.error) &&
-        isOptionalBoolean(state.canReject) &&
-        isOptionalBoolean(state.secureSetupRequired) &&
-        isOptionalBoolean(state.editsError) &&
-        isAlert(state.alert);
+        isOptionalBoolean(state.editsError);
 }
 
 function hasUniqueValues(items, valueFor) {
@@ -1964,8 +1988,8 @@ function accountIdentityKey(account) {
     ]);
 }
 
-function isSelectionState(state) {
-    if (!Array.isArray(state.accounts) || !state.accounts.every(account =>
+function isSelectionState(review) {
+    if (!Array.isArray(review.accounts) || !review.accounts.every(account =>
         isDisplayAccount(account) &&
         typeof account.walletId === "string" &&
             SELECTION_ACCOUNT_COINS.has(account.coin) &&
@@ -1976,55 +2000,55 @@ function isSelectionState(state) {
     )) {
         return false;
     }
-    if (!hasUniqueValues(state.accounts, accountIdentityKey) ||
-        !hasUniqueValues(state.accounts.filter(account => account.isSelected), account => account.coin)) {
+    if (!hasUniqueValues(review.accounts, accountIdentityKey) ||
+        !hasUniqueValues(review.accounts.filter(account => account.isSelected), account => account.coin)) {
         return false;
     }
-    if (typeof state.networks !== "undefined" &&
-        (!Array.isArray(state.networks) || !state.networks.every(network =>
+    if (typeof review.networks !== "undefined" &&
+        (!Array.isArray(review.networks) || !review.networks.every(network =>
             isRecord(network) &&
             isCanonicalEthereumChainId(network.chainId) &&
             typeof network.name === "string" &&
             typeof network.isSelected === "boolean" &&
             isOptionalBoolean(network.isCustom)
         ) ||
-        !hasUniqueValues(state.networks, network => network.chainId) ||
-        state.networks.filter(network => network.isSelected).length > 1)) {
+        !hasUniqueValues(review.networks, network => network.chainId) ||
+        review.networks.filter(network => network.isSelected).length > 1)) {
         return false;
     }
-    return typeof state.canSelectNetwork === "boolean" &&
-        typeof state.allowsEmptySelection === "boolean" &&
-        isOptionalString(state.emptyMessage) &&
-        (!state.accounts.some(account => account.coin === "ethereum") ||
-            state.canSelectNetwork) &&
-        (!state.canSelectNetwork || Array.isArray(state.networks));
+    return typeof review.canSelectNetwork === "boolean" &&
+        typeof review.allowsEmptySelection === "boolean" &&
+        isOptionalString(review.emptyMessage) &&
+        (!review.accounts.some(account => account.coin === "ethereum") ||
+            review.canSelectNetwork) &&
+        (!review.canSelectNetwork || Array.isArray(review.networks));
 }
 
-function isSignMessageState(state) {
-    if (!isDisplayAccount(state.account) || typeof state.meta !== "string") {
+function isSignMessageState(review) {
+    if (!isDisplayAccount(review.account) || typeof review.meta !== "string") {
         return false;
     }
-    const hasClusters = typeof state.clusters !== "undefined";
-    const hasRequirement = typeof state.requiresClusterSelection !== "undefined";
+    const hasClusters = typeof review.clusters !== "undefined";
+    const hasRequirement = typeof review.requiresClusterSelection !== "undefined";
     if (hasClusters !== hasRequirement) {
         return false;
     }
     if (!hasClusters) {
         return true;
     }
-    if (typeof state.requiresClusterSelection !== "boolean" ||
-        !Array.isArray(state.clusters) || state.clusters.length === 0 ||
-        !state.clusters.every(cluster =>
+    if (typeof review.requiresClusterSelection !== "boolean" ||
+        !Array.isArray(review.clusters) || review.clusters.length === 0 ||
+        !review.clusters.every(cluster =>
             isRecord(cluster) &&
             SOLANA_CLUSTER_VALUES.has(cluster.value) &&
             typeof cluster.label === "string" &&
             typeof cluster.isSelected === "boolean"
         ) ||
-        !hasUniqueValues(state.clusters, cluster => cluster.value)) {
+        !hasUniqueValues(review.clusters, cluster => cluster.value)) {
         return false;
     }
-    const selectedCount = state.clusters.filter(cluster => cluster.isSelected).length;
-    return state.requiresClusterSelection ? selectedCount === 0 : selectedCount === 1;
+    const selectedCount = review.clusters.filter(cluster => cluster.isSelected).length;
+    return review.requiresClusterSelection ? selectedCount === 0 : selectedCount === 1;
 }
 
 function isTransactionEditor(editor) {
@@ -2045,100 +2069,82 @@ function isTransactionEditor(editor) {
         : typeof editor.gasPriceGwei === "string";
 }
 
-function isTransactionState(state) {
-    return isDisplayAccount(state.account) &&
-        typeof state.networkName === "string" &&
-        Array.isArray(state.feeLines) &&
-        state.feeLines.every(line => typeof line === "string") &&
-        TRANSACTION_PHASES.has(state.phase) &&
-        typeof state.canApprove === "boolean" &&
-        typeof state.canEdit === "boolean" &&
-        typeof state.transactionMutationAllowed === "boolean" &&
-        isOptionalString(state.balance) &&
-        isOptionalString(state.valueLine) &&
-        isOptionalString(state.dataInterpretation) &&
-        (typeof state.editorRequestToken === "undefined" ||
-            Number.isSafeInteger(state.editorRequestToken)) &&
-        isRecord(state.slider) &&
-        typeof state.slider.visible === "boolean" &&
-        typeof state.slider.enabled === "boolean" &&
-        typeof state.slider.position === "number" &&
-        Number.isFinite(state.slider.position) &&
-        typeof state.slider.maximum === "number" &&
-        Number.isFinite(state.slider.maximum) &&
-        isTransactionEditor(state.editor);
+function isTransactionState(review) {
+    return isDisplayAccount(review.account) &&
+        typeof review.networkName === "string" &&
+        Array.isArray(review.feeLines) &&
+        review.feeLines.every(line => typeof line === "string") &&
+        TRANSACTION_PHASES.has(review.phase) &&
+        isOptionalString(review.balance) &&
+        isOptionalString(review.valueLine) &&
+        isOptionalString(review.dataInterpretation) &&
+        (typeof review.editorRequestToken === "undefined" ||
+            Number.isSafeInteger(review.editorRequestToken)) &&
+        isRecord(review.slider) &&
+        typeof review.slider.visible === "boolean" &&
+        typeof review.slider.position === "number" &&
+        Number.isFinite(review.slider.position) &&
+        typeof review.slider.maximum === "number" &&
+        Number.isFinite(review.slider.maximum) &&
+        isTransactionEditor(review.editor);
 }
 
 function isRenderableApprovalState(state, request) {
     if (!isApprovalStateEnvelope(state, request) ||
-        !hasValidOptionalApprovalFields(state)) {
+        !hasValidOptionalApprovalFields(state) ||
+        !Array.isArray(state.actions) ||
+        !state.actions.every(action => APPROVAL_ACTIONS.has(action)) ||
+        !hasUniqueValues(state.actions, action => action) ||
+        !Object.keys(state).every(key => [
+            "id", "state", "actions", "host", "error", "review", "editsError",
+        ].includes(key))) {
         return false;
     }
-    if (typeof state.kind === "undefined") {
-        if (isCompactApprovalErrorState(state) ||
-            isCompactRejectableApprovalState(state)) { return true; }
-        return state.state !== "review" &&
-            state.state !== "error" &&
-            Object.keys(state).every(key =>
-                key === "id" || key === "state" || key === "host"
-            );
+    if (state.state !== "review") {
+        return typeof state.review === "undefined" &&
+            (state.state === "error"
+                ? typeof state.error === "string" && state.actions.length === 1 &&
+                    (hasApprovalAction(state, "retry") || hasApprovalAction(state, "reject"))
+                : state.actions.length === 0);
     }
-    if (!APPROVAL_KINDS.has(state.kind)) {
+    const review = state.review;
+    if (!isRecord(review) || !APPROVAL_KINDS.has(review.kind) ||
+        !isRequestToken(review.reviewToken) ||
+        typeof review.title !== "string" ||
+        typeof state.host !== "string" || state.host.length === 0 ||
+        !isOptionalString(review.iconURL) ||
+        !isOptionalString(review.primaryTitle) || !isAlert(review.alert) ||
+        hasApprovalAction(state, "retry") ||
+        (review.kind !== "sendTransaction" && state.actions.some(action =>
+            action !== "approve" && action !== "reject"))) {
         return false;
     }
-    if (
-        typeof state.title !== "string" ||
-        typeof state.host !== "string" || state.host.length === 0) {
-        return false;
-    }
-    switch (state.kind) {
+    switch (review.kind) {
         case "selectAccount":
         case "switchAccount":
-            return typeof state.alert === "undefined" && isSelectionState(state);
+            return typeof review.alert === "undefined" && isSelectionState(review);
         case "signMessage":
-            return typeof state.alert === "undefined" && isSignMessageState(state);
+            return typeof review.alert === "undefined" && isSignMessageState(review);
         case "sendTransaction":
-            return isTransactionState(state);
+            return isTransactionState(review);
         case "addChain":
-            return typeof state.alert === "undefined" &&
-                typeof state.chainName === "string" &&
-                typeof state.rpcURL === "string";
+            return typeof review.alert === "undefined" &&
+                typeof review.chainName === "string" &&
+                typeof review.rpcURL === "string";
     }
     return false;
 }
 
-function isCompactApprovalErrorState(state) {
-    return isRecord(state) && state.state === "error" &&
-        isValidRequestId(state.id) && typeof state.error === "string" &&
-        (typeof state.host === "undefined" ||
-            typeof state.host === "string" && state.host.length > 0) &&
-        Object.keys(state).every(key =>
-            key === "id" || key === "state" || key === "host" ||
-                key === "error" || key === "secureSetupRequired"
-        );
-}
-
-function isCompactRejectableApprovalState(state) {
-    return isRecord(state) && state.state === "working" &&
-        isValidRequestId(state.id) && typeof state.error === "string" &&
-        state.canReject === true &&
-        (typeof state.host === "undefined" ||
-            typeof state.host === "string" && state.host.length > 0) &&
-        Object.keys(state).every(key =>
-            key === "id" || key === "state" || key === "host" ||
-                key === "error" || key === "canReject"
-        );
+function hasApprovalAction(state, action) {
+    return state?.actions?.includes(action) === true;
 }
 
 function shouldPollApprovalState(state) {
-    return state?.state === "authenticating" ||
-        state?.state === "working" &&
-            !isCompactRejectableApprovalState(state);
+    return state?.state === "authenticating" || state?.state === "working";
 }
 
 function canRejectApprovalState(state) {
-    return state?.state === "review" ||
-        isCompactRejectableApprovalState(state);
+    return hasApprovalAction(state, "reject");
 }
 
 function accountIdentity(account) {
@@ -2155,9 +2161,9 @@ function sameAccount(left, right) {
 }
 
 function shouldRefreshAccountSelection(state) {
-    return (state.kind === "selectAccount" || state.kind === "switchAccount") &&
-        Array.isArray(state.accounts) && state.accounts.length === 0 &&
-        state.allowsEmptySelection === false;
+    return (state.review?.kind === "selectAccount" || state.review?.kind === "switchAccount") &&
+        Array.isArray(state.review?.accounts) && state.review?.accounts.length === 0 &&
+        state.review?.allowsEmptySelection === false;
 }
 
 function renderAccountRow(elementId, account) {
@@ -2192,14 +2198,14 @@ function fillAccountRow(container, account, alwaysShowAddress) {
 
 function renderAddChain(state) {
     show("section-chain");
-    setText("chain-name", state.chainName || "");
-    setText("chain-rpc", state.rpcURL || "");
+    setText("chain-name", state.review?.chainName || "");
+    setText("chain-rpc", state.review?.rpcURL || "");
 }
 
 function canSubmitDecision(subject, state) {
     return subject === "rejectRequest"
         ? canRejectApprovalState(state)
-        : state?.state === "review" && isRequestToken(state.reviewToken);
+        : hasApprovalAction(state, "approve") && isRequestToken(state.review?.reviewToken);
 }
 
 async function applyCompletedResponse(request) {

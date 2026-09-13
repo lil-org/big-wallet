@@ -84,13 +84,10 @@ struct SolanaDappRequestProcessor {
 
     static func execute(
         request: SafariRequest,
-        action: DappRequestAction,
-        decision: DappApprovalDecision,
+        approval: DappApprovalValidator.Approval,
         walletAccess: WalletAccess?
     ) async -> DappExecutionResult {
-        guard case .approveMessage(let action) = action,
-              case .message(let approval) = decision,
-              (action.solanaClusterOptions != nil) == (approval.solanaCluster != nil)
+        guard case .message(let action, let cluster) = approval
         else { return .response(response(to: request, error: .internalError)) }
         guard let privateKey = walletAccess?.privateKey(
             walletID: action.walletId,
@@ -113,7 +110,7 @@ struct SolanaDappRequestProcessor {
             }) else { return .response(response(to: request, error: .failedToSign)) }
             return .response(response(to: request, solanaResponse: .init(results: results)))
         case .solanaLegacyBroadcast(let transaction, let options):
-            guard let cluster = approval.solanaCluster else {
+            guard let cluster else {
                 return .response(response(to: request, error: .internalError))
             }
             return await signAndSend(request: request, cluster: cluster, sendOptions: options) {
@@ -123,7 +120,7 @@ struct SolanaDappRequestProcessor {
                 )
             }
         case .solanaSerializedBroadcast(let transaction, let options):
-            guard let cluster = approval.solanaCluster else {
+            guard let cluster else {
                 return .response(response(to: request, error: .internalError))
             }
             return await signAndSend(request: request, cluster: cluster, sendOptions: options) {

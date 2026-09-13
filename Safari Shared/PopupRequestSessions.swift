@@ -195,11 +195,6 @@ final class PopupRequestSession {
         lifecycle = .error(message: message)
     }
 
-    func retry() {
-        lifecycle = .review(feedback: nil)
-        reviewToken = UUID()
-    }
-
     func rotateReviewToken() {
         presentationRevision &+= 1
         guard state == .review else { return }
@@ -411,7 +406,7 @@ final class PopupRequestSessions {
         switch command {
         case .getPendingRequests:
             return presenter.pendingResponse()
-        case .getApprovalState:
+        case .getApprovalState, .retryApproval:
             return presenter.missingState(id: request.id)
         case .approveRequest, .rejectRequest, .setTransactionSpeed,
              .applyTransactionEdits, .resolveApprovalAlert:
@@ -427,12 +422,20 @@ final class PopupRequestSessions {
         switch command {
         case .getPendingRequests:
             return await pendingRequestsResponse(profileIdentifier: profileIdentifier)
-        case .getApprovalState(_, let payload):
+        case .getApprovalState, .retryApproval:
             guard let snapshot = await snapshot(
                       for: request,
                       profileIdentifier: profileIdentifier
                   ) else { return missingState(id: request.id) }
-            return await approvalState(snapshot: snapshot, responseMode: payload.mode)
+            if case .retryApproval = command,
+               let session = sessions[snapshot.handle],
+               session.state == .error,
+               snapshot.phase == .queued,
+               snapshot.request != nil,
+               !isNativeOwned(snapshot) {
+                discardSession(handle: snapshot.handle)
+            }
+            return await approvalState(snapshot: snapshot)
         case .approveRequest(_, let payload):
             return await approve(
                 request: request,
@@ -518,9 +521,10 @@ final class PopupRequestSessions {
 
     private func stateResponse(
         id: Int,
-        state: PopupRequestSession.State
+        state: PopupRequestSession.State,
+        host: String? = nil
     ) -> [String: Any] {
-        return presenter.state(id: id, state: state)
+        return presenter.state(id: id, state: state, host: host)
     }
 
     private func refreshWalletsAndNetworks() -> Bool {
@@ -700,7 +704,7 @@ final class PopupRequestSessions {
 
     private func approvalState(
         snapshot: ExtensionBridge.Snapshot,
-        responseMode: InternalSafariRequest.ApprovalStatePayload.Mode = .full
+        editsError: Bool? = nil
     ) async -> [String: Any] {
         let handle = snapshot.handle
         if snapshot.phase == .responded {
@@ -709,24 +713,13 @@ final class PopupRequestSessions {
         }
         if isNativeOwned(snapshot) {
             discardSession(handle: handle)
-            var state = stateResponse(id: handle.id, state: .working)
-            state["host"] = snapshot.host
-            return state
-        }
-        if responseMode == .full,
-           let session = sessions[handle],
-           session.state == .error,
-           session.approvalClaim == nil,
-           snapshot.phase == .queued,
-           snapshot.request != nil {
-            session.transaction?.invalidate()
-            sessions[handle] = nil
+            return stateResponse(id: handle.id, state: .working, host: snapshot.host)
         }
         let sessionWasCached = sessions[handle] != nil
         let activeSession = activeSession(snapshot: snapshot)
         guard case .available(let session) = activeSession else {
             if case .unavailable = activeSession {
-                return PopupApprovalStatePresenter.compactError(
+                return PopupApprovalStatePresenter.errorState(
                     id: handle.id,
                     host: snapshot.host,
                     error: Strings.failedToLoad
@@ -741,20 +734,16 @@ final class PopupRequestSessions {
             if let session = sessions[handle],
                session.isImmediateResponsePersistence {
                 if session.state == .error {
-                    return PopupApprovalStatePresenter.compactError(
+                    return PopupApprovalStatePresenter.errorState(
                         id: handle.id,
                         host: snapshot.host,
                         error: session.errorText ?? Strings.failedToLoad
                     )
                 }
-                var state = stateResponse(id: handle.id, state: session.state)
-                state["host"] = snapshot.host
-                return state
+                return stateResponse(id: handle.id, state: session.state, host: snapshot.host)
             }
             if snapshot.phase == .approving {
-                var state = stateResponse(id: handle.id, state: .working)
-                state["host"] = snapshot.host
-                return state
+                return stateResponse(id: handle.id, state: .working, host: snapshot.host)
             }
             if case .found(let current) = await store.load(handle: handle),
                current.phase == .responded {
@@ -764,15 +753,14 @@ final class PopupRequestSessions {
             return missingState(id: handle.id)
         }
         if session.state == .error {
-            return PopupApprovalStatePresenter.compactError(
+            return PopupApprovalStatePresenter.errorState(
                 id: handle.id,
                 host: snapshot.host,
                 error: session.errorText ?? Strings.failedToLoad
             )
         }
-        if responseMode == .poll,
-           session.state != .review {
-            return stateResponse(id: handle.id, state: session.state)
+        if session.state != .review {
+            return stateResponse(id: handle.id, state: session.state, host: snapshot.host)
         }
         guard let action = session.approvalAction else {
             return stateResponse(id: handle.id, state: session.state)
@@ -792,7 +780,8 @@ final class PopupRequestSessions {
         return presenter.approvalState(
             for: session,
             action: action,
-            transactionMutationAllowed: transactionMutationAllowed
+            transactionMutationAllowed: transactionMutationAllowed,
+            editsError: editsError
         )
     }
 
@@ -889,11 +878,11 @@ final class PopupRequestSessions {
                             transaction,
                             reviewedNetwork: reviewedAction.resolvedNetwork
                         ),
-                      let refreshedTransaction = execution.applying(
-                          to: reviewedAction
-                      ),
-                      refreshedTransaction.isReadyForApproval(
-                          on: reviewedAction.chain
+                      case .success = DappApprovalValidator.resolve(
+                          action: action,
+                          decision: .transaction(execution),
+                          accounts: nil,
+                          networkResolver: selectionNetworkResolver
                       ) else {
                     await releaseApproval(
                         approval.claim,
@@ -977,35 +966,32 @@ final class PopupRequestSessions {
         guard let reviewedWalletAccess = session.walletAccess else {
             return false
         }
-        if let chainId,
-           selectionNetworkResolver(chainId) == nil {
-            return false
-        }
-        guard let resolved = resolvedSelectionAccounts(
-            selectedAccounts,
-            requiredCoin: action.coinType,
-            walletAccess: reviewedWalletAccess
+        let selection = DappApprovalDecision.AccountSelection(
+            accounts: selectedAccounts.map {
+                .init(
+                    walletID: $0.walletId,
+                    address: $0.address,
+                    provider: $0.coin,
+                    derivationPath: $0.derivationPath
+                )
+            },
+            ethereumChainID: chainId
+        )
+        guard let resolved = DappApprovalValidator.resolveSelection(
+            action: action,
+            selection: selection,
+            accounts: reviewedWalletAccess.orderedAccounts,
+            networkResolver: selectionNetworkResolver
         ) else {
             session.setFeedback(Strings.somethingWentWrong)
             return true
         }
-        let selectedChainId = chainId ?? action.network?.chainIdHexString
-        let network = selectedChainId.flatMap(selectionNetworkResolver)
         let updatedAction = selectionAction(
             action,
-            selectedAccounts: resolved,
-            network: network
+            selectedAccounts: resolved.accounts,
+            network: resolved.network
         )
         guard session.replaceSelectionAction(updatedAction) else { return false }
-        if resolved.isEmpty && updatedAction.initiallyConnectedProviders.isEmpty {
-            session.setFeedback(Strings.somethingWentWrong)
-            return true
-        }
-        if !resolved.isEmpty,
-           !updatedAction.canSubmitSelection(network: network) {
-            session.setFeedback(Strings.somethingWentWrong)
-            return true
-        }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
         guard refreshWalletsAndNetworks() else {
             session.setFeedback(Strings.somethingWentWrong)
@@ -1026,17 +1012,18 @@ final class PopupRequestSessions {
             )
             return true
         }
-        let refreshedNetwork = selectedChainId.flatMap(selectionNetworkResolver)
-        guard let refreshedAccounts = resolvedSelectionAccounts(
-            selectedAccounts,
-            requiredCoin: action.coinType,
-            walletAccess: refreshedWalletAccess
+        guard let refreshed = DappApprovalValidator.resolveSelection(
+            action: action,
+            selection: selection,
+            accounts: refreshedWalletAccess.orderedAccounts,
+            networkResolver: selectionNetworkResolver
         ) else {
             _ = session.replaceSelectionAction(
                 selectionAction(
                     action,
                     selectedAccounts: [],
-                    network: refreshedNetwork
+                    network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                        .flatMap(selectionNetworkResolver)
                 )
             )
             session.setFeedback(Strings.somethingWentWrong)
@@ -1049,25 +1036,13 @@ final class PopupRequestSessions {
         }
         let refreshedAction = selectionAction(
             action,
-            selectedAccounts: refreshedAccounts,
-            network: refreshedNetwork
+            selectedAccounts: refreshed.accounts,
+            network: refreshed.network
         )
-        guard session.replaceSelectionAction(refreshedAction),
-              (refreshedAccounts.isEmpty || selectedChainId == nil ||
-                  refreshedNetwork != nil),
-              (refreshedAccounts.isEmpty ||
-                  refreshedAction.canSubmitSelection(network: refreshedNetwork)) else {
-            session.setFeedback(Strings.somethingWentWrong)
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token
-            )
-            return true
-        }
+        guard session.replaceSelectionAction(refreshedAction) else { return false }
         guard let approvedAction = session.approvalAction else { return false }
         let decision = DappApprovalDecision.accountSelection(.init(
-            accounts: refreshedAccounts.map {
+            accounts: refreshed.accounts.map {
                 .init(
                     walletID: $0.walletId,
                     address: $0.account.address,
@@ -1075,7 +1050,7 @@ final class PopupRequestSessions {
                     derivationPath: $0.account.derivationPath
                 )
             },
-            ethereumChainID: refreshedNetwork?.chainIdHexString
+            ethereumChainID: refreshed.network?.chainIdHexString
         ))
         await beginExecution(
             claim: approval.claim,
@@ -1090,29 +1065,6 @@ final class PopupRequestSessions {
             )
         }
         return true
-    }
-
-    private func resolvedSelectionAccounts(
-        _ selectedAccounts: [InternalSafariRequest.SelectedAccount],
-        requiredCoin: WalletCoin?,
-        walletAccess: WalletAccess
-    ) -> [SpecificWalletAccount]? {
-        var resolved = [SpecificWalletAccount]()
-        var selectedCoins = Set<WalletCoin>()
-        resolved.reserveCapacity(selectedAccounts.count)
-        for item in selectedAccounts {
-            guard let coin = WalletCoin.correspondingToInpageProvider(item.coin),
-                  requiredCoin == nil || coin == requiredCoin else { return nil }
-            let matches = walletAccess.orderedAccounts.filter {
-                $0.walletId == item.walletId && $0.account.coin == coin &&
-                    coin.normalizedAddress($0.account.address) == coin.normalizedAddress(item.address) &&
-                    $0.account.derivationPath == item.derivationPath
-            }
-            guard matches.count == 1,
-                  selectedCoins.insert(coin).inserted else { return nil }
-            resolved.append(matches[0])
-        }
-        return resolved
     }
 
     private func selectionAction(
@@ -1135,7 +1087,12 @@ final class PopupRequestSessions {
         expectedRevisions: ExtensionBridge.ProviderRevisions?,
         executionDeadline: Date
     ) async -> Bool {
-        guard (action.solanaClusterOptions != nil) == (cluster != nil) else {
+        guard case .success = DappApprovalValidator.resolve(
+            action: .approveMessage(action),
+            decision: .message(.init(solanaCluster: cluster)),
+            accounts: nil,
+            networkResolver: selectionNetworkResolver
+        ) else {
             session.setFeedback(Strings.somethingWentWrong)
             return true
         }
@@ -1700,9 +1657,7 @@ final class PopupRequestSessions {
             return ignoredResponse()
         }
         guard transactionSession.applyEdits(payload, chain: action.chain) else {
-            var state = await approvalState(snapshot: snapshot)
-            state["editsError"] = true
-            return state
+            return await approvalState(snapshot: snapshot, editsError: true)
         }
         return await approvalState(snapshot: snapshot)
     }

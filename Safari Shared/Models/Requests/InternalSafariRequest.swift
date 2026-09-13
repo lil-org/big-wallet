@@ -50,22 +50,6 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    struct ApprovalStatePayload: Decodable {
-        enum Mode: String, Decodable {
-            case full, poll
-        }
-
-        let mode: Mode
-
-        init(from decoder: Decoder) throws {
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: ["mode"]
-            )
-            mode = try container.decode(Mode.self, forKey: "mode")
-        }
-    }
-
     struct ApprovalPayload: Decodable {
         let selectedAccounts: [SelectedAccount]?
         let chainId: String?
@@ -251,7 +235,8 @@ struct InternalSafariRequest: Decodable {
 
     enum PopupCommand {
         case getPendingRequests
-        case getApprovalState(PopupIdentity, ApprovalStatePayload)
+        case getApprovalState(PopupIdentity)
+        case retryApproval(PopupIdentity)
         case approveRequest(PopupIdentity, ApprovalPayload)
         case rejectRequest(PopupIdentity)
         case setTransactionSpeed(PopupIdentity, TransactionSpeedPayload)
@@ -264,6 +249,8 @@ struct InternalSafariRequest: Decodable {
                 return .getPendingRequests
             case .getApprovalState:
                 return .getApprovalState
+            case .retryApproval:
+                return .retryApproval
             case .approveRequest:
                 return .approveRequest
             case .rejectRequest:
@@ -281,7 +268,8 @@ struct InternalSafariRequest: Decodable {
             switch self {
             case .getPendingRequests:
                 return nil
-            case .getApprovalState(let identity, _),
+            case .getApprovalState(let identity),
+                 .retryApproval(let identity),
                  .approveRequest(let identity, _),
                  .setTransactionSpeed(let identity, _),
                  .applyTransactionEdits(let identity, _),
@@ -337,7 +325,7 @@ struct InternalSafariRequest: Decodable {
         }
 
         enum Popup: String {
-            case getPendingRequests, getApprovalState, approveRequest, rejectRequest
+            case getPendingRequests, getApprovalState, retryApproval, approveRequest, rejectRequest
             case setTransactionSpeed, applyTransactionEdits, resolveApprovalAlert
         }
 
@@ -437,16 +425,17 @@ struct InternalSafariRequest: Decodable {
                 required: common.union(["requestToken"])
             )
             command = .popup(.rejectRequest(try Self.decodeIdentity(from: container)))
-        case .popup(.getApprovalState):
-            let container = try Self.popupContainer(
+        case .popup(.getApprovalState), .popup(.retryApproval):
+            let container = try ExactKeyedContainer(
                 decoder: decoder,
-                common: common,
-                requiresReviewToken: false
+                required: common.union(["requestToken"])
             )
-            command = .popup(.getApprovalState(
-                try Self.decodeIdentity(from: container),
-                try container.decode(ApprovalStatePayload.self, forKey: "payload")
-            ))
+            let identity = try Self.decodeIdentity(from: container)
+            if case .popup(.retryApproval) = subject {
+                command = .popup(.retryApproval(identity))
+            } else {
+                command = .popup(.getApprovalState(identity))
+            }
         case .popup(.approveRequest):
             let container = try Self.popupContainer(decoder: decoder, common: common)
             command = .popup(.approveRequest(
@@ -476,14 +465,9 @@ struct InternalSafariRequest: Decodable {
 
     private static func popupContainer(
         decoder: Decoder,
-        common: Set<String>,
-        requiresReviewToken: Bool = true
+        common: Set<String>
     ) throws -> ExactKeyedContainer {
-        let required = common.union(
-            requiresReviewToken
-                ? ["requestToken", "reviewToken", "payload"]
-                : ["requestToken", "payload"]
-        )
+        let required = common.union(["requestToken", "reviewToken", "payload"])
         return try ExactKeyedContainer(
             decoder: decoder,
             required: required
