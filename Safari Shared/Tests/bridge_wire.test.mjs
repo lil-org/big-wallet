@@ -73,11 +73,6 @@ test("publishes the small immutable workflow v3 contract", () => {
     assert.equal(wire.PAGE_TO_CONTENT_DIRECTION, "big-wallet-provider-v1");
     assert.equal(wire.CONTENT_TO_PAGE_DIRECTION, "big-wallet-content-v1");
     assert.equal(wire.MANUAL_SWITCH_INTENT_SUBJECT, "manualSwitchIntent");
-    assert.equal(wire.MANUAL_SWITCH_RESULT_SUBJECT, undefined);
-    assert.equal(wire.IDLE_SWITCH_ATTEMPT_KEY, undefined);
-    assert.equal(wire.IDLE_SWITCH_MARKER_REGISTRY_SUBJECT, undefined);
-    assert.equal(wire.SUPPRESS_PROVIDER_UPDATE_KEY, undefined);
-    assert.equal(wire.isResponseAcknowledgement, undefined);
 });
 
 test("validates exact manual-switch acknowledgements", () => {

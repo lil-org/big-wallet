@@ -247,7 +247,7 @@ function postToPage(message) {
     return isCurrentInstallation();
 }
 
-const transport = Object.freeze({
+const transport = freezeObjectNormally({
     isCurrent: isCurrentInstallation,
     postRequest(message) {
         if (!message || typeof message !== "object") { return false; }

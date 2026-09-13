@@ -105,7 +105,7 @@ function ethereumHarness(initialState = null) {
     let current = true;
     let rpcObserver = null;
     let requestObserver = null;
-    const transport = {
+    const transport = Object.freeze({
         isCurrent() { return current; },
         postDisconnect(message) {
             disconnects.push(message);
@@ -121,7 +121,7 @@ function ethereumHarness(initialState = null) {
             rpcObserver?.(message, generation);
             return current;
         },
-    };
+    });
     const Ethereum = module.exports.default;
     const engine = new Ethereum("ethereum-generation", transport, initialState);
     const record = module.exports.createStableFacadeRecord({
@@ -163,7 +163,7 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
     let currentError = null;
     let disconnectPost = true;
     let requestPost = true;
-    const transport = {
+    const transport = Object.freeze({
         isCurrent() {
             if (currentError) { throw currentError; }
             return current;
@@ -176,7 +176,7 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
             requests.push(message);
             return current && requestPost;
         },
-    };
+    });
     const Solana = module.exports.default;
     const provider = new Solana("solana-generation", transport, initialState);
     return {
@@ -4369,6 +4369,39 @@ function pageMessages(harness, kind, provider) {
                 envelope.message?.provider === provider);
     });
 }
+
+test("inpage transport survives Object.freeze replacement during initialization", async () => {
+    const harness = inpageHarness({
+        beforeEvaluate(_window, context) {
+            vm.runInContext(`
+                const originalFreeze = Object.freeze;
+                window.crypto.randomUUID = () => {
+                    Object.freeze = value => {
+                        if (typeof value.postRPC === "function") {
+                            window.capturedTransport = value;
+                            return value;
+                        }
+                        return originalFreeze(value);
+                    };
+                    return "00000000-0000-4000-8000-000000000001";
+                };
+            `, context);
+        },
+    });
+    vm.runInContext(`
+        if (window.capturedTransport) {
+            window.capturedTransport.postRPC = () => false;
+        }
+    `, harness.context);
+    dispatchConfigurations(harness);
+    const result = harness.window.ethereum.request({method: "eth_blockNumber"})
+        .catch(error => error);
+    const requests = pageMessages(harness, "rpc");
+    assert.equal(requests.length, 1);
+    const id = requests[0].message.id;
+    harness.dispatch({kind: "rpc", id, response: {id, result: "0x10"}});
+    assert.equal(await result, "0x10");
+});
 
 function dispatchConfigurations(
     harness,

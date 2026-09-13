@@ -11,178 +11,94 @@ const [source, wireSource, markup] = await Promise.all([
     readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
     readFile(new URL("../Resources/popup.html", import.meta.url), "utf8"),
 ]);
-const packagedBuildVersion = wireSource.match(
-    /const BUILD_VERSION = "([^"\n]+)";/
-)?.[1];
+const wireContext = vm.createContext({URL});
+new vm.Script(wireSource).runInContext(wireContext);
+const packagedBuildVersion = wireContext.BigWalletBridgeWire.BUILD_VERSION;
 assert.match(packagedBuildVersion, /^.+\+[0-9]+$/);
 const previousBuildVersion = packagedBuildVersion.replace(
     /[0-9]+$/,
     value => String(Math.max(0, Number(value) - 1))
 );
 
-test("manual Switch Account allows a full native admission window", () => {
-    const nativeTimeout = Number(source.match(
-        /const NATIVE_MESSAGE_TIMEOUT = (\d+);/
-    )[1]);
-    const multiplier = Number(source.match(
-        /const MANUAL_SWITCH_TIMEOUT = NATIVE_MESSAGE_TIMEOUT \* (\d+);/
-    )[1]);
-    assert.equal(nativeTimeout * multiplier, 10_000);
-    const nativeOperationRelayTimeout = Number(source.match(
-        /const NATIVE_OPERATION_RELAY_TIMEOUT = (\d+) \* 1000;/
-    )[1]) * 1000;
-    assert.equal(nativeOperationRelayTimeout, 190_000);
-});
-
-test("popup never renders or transports a wallet password", () => {
+test("popup markup never renders a wallet password", () => {
     assert.doesNotMatch(markup, /type="password"|password-input|password-row/);
-    assert.doesNotMatch(source, /payload\.password|canUsePassword/);
-    assert.match(source, /Password payloads are not supported/);
 });
 
-test("uses the direct sender except for serialized approval", () => {
-    assert.match(source, /createTrustedNativeMessageSender\(\{\s*sendRawNativeMessage,\s*\}\)/);
-    assert.match(source, /subject: "approveRequestWithCurrentRevisions"/);
-    assert.doesNotMatch(source, /PRIVATE_BROWSING_CAPABILITY_TIMEOUT|capabilityTimeoutMilliseconds/);
+test("popup bounds extension messages and allows the full native approval relay", async () => {
+    const harness = popupHarness();
+    const extension = harness.call("settleExtensionMessage", deferred().promise);
+    const extensionTimer = harness.timerHistory.at(-1);
+    assert.equal(extensionTimer.delay, 5000);
+    await harness.fire(extensionTimer.id);
+    assert.deepEqual(normalized(await extension), {status: "timeout"});
+
+    const approval = harness.call("settleNativeMessage", deferred().promise, true);
+    const rejected = assert.rejects(approval, {name: "TimeoutError"});
+    const approvalTimer = harness.timerHistory.at(-1);
+    assert.equal(approvalTimer.delay, 190_000);
+    await harness.fire(approvalTimer.id);
+    await rejected;
 });
 
-test("manual Switch Account is a stateless content intent", () => {
-    assert.match(source, /browser\.tabs\.sendMessage\(tab\.id, message\)/);
-    assert.match(source, /configurationKey: tab\.configurationKey,\s+subject: BigWalletBridgeWire\.MANUAL_SWITCH_INTENT_SUBJECT,\s+workflowVersion: WORKFLOW_VERSION/);
-    const manual = extractedFunction("switchAccountFromIdle");
-    assert.doesNotMatch(manual,
-        /genId|genPrivateToken|admissionDeadline|enqueueAttempt|latestConfigurations|readLatestConfiguration|manualSwitchAttempt/);
-});
-
-test("configuration reads carry trusted tab identity", () => {
-    assert.match(source, /subject: "getLatestConfiguration",\s+host: tab\.host,\s+configurationKey: tab\.configurationKey,\s+workflowVersion: WORKFLOW_VERSION/);
-});
-
-test("defines the bounded extension-message transport used during boot", () => {
-    assert.match(source, /async function settleExtensionMessage\(/);
-    assert.match(source, /withTimeout\(pendingResponse, milliseconds\)/);
+test("configuration reads carry trusted tab identity", async () => {
+    const harness = popupHarness();
+    await harness.boot();
+    assert.deepEqual(harness.workerMessages.filter(message =>
+        message.subject === "getLatestConfiguration"
+    ), [{
+        subject: "getLatestConfiguration",
+        host: "wallet.example",
+        configurationKey: "https://wallet.example",
+        workflowVersion: 3,
+    }]);
 });
 
 test("native approve uses the worker proxy while other commands stay direct", async () => {
-    const extensionMessages = [];
-    const nativeMessages = [];
-    const context = vm.createContext({
-        WORKFLOW_VERSION: 3,
-        browser: {runtime: {sendMessage(message) {
-            extensionMessages.push(message);
-            return Promise.resolve({status: "ok"});
-        }}},
-        currentPrivateBrowsing: () => false,
-        isRecord: value => value !== null && typeof value === "object" &&
-            !Array.isArray(value),
-        sendTrustedNativeMessage(message, privateBrowsing) {
-            nativeMessages.push({message, privateBrowsing});
-            return Promise.resolve({status: "ok"});
-        },
-    });
-    const nativeMessage = vm.runInContext(
-        `(${extractedFunction("nativeMessage")})`,
-        context
+    const harness = popupHarness();
+    const request = pendingRequest();
+    await harness.call(
+        "nativeMessage", "approveRequest", 7, {cluster: "devnet"},
+        request.requestToken, requestToken(101), request
     );
-    const request = {
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-    };
+    await harness.call("nativeMessage", "rejectRequest", 7, undefined, request.requestToken);
+    await assert.rejects(harness.call(
+        "nativeMessage", "approveRequest", 8,
+        {password: "must-not-cross-native-boundary"},
+        request.requestToken, requestToken(101), request
+    ), /Password payloads are not supported/);
 
-    await nativeMessage(
-        "approveRequest",
-        7,
-        {cluster: "devnet"},
-        "123e4567-e89b-12d3-a456-426614174000",
-        "123e4567-e89b-12d3-a456-426614174001",
-        request
-    );
-    await nativeMessage("rejectRequest", 7, undefined, "token");
-    await assert.rejects(
-        nativeMessage(
-            "approveRequest",
-            8,
-            {password: "must-not-cross-native-boundary"},
-            "123e4567-e89b-12d3-a456-426614174000",
-            "123e4567-e89b-12d3-a456-426614174001",
-            request
-        ),
-        /Password payloads are not supported/
-    );
-
-    assert.deepEqual(JSON.parse(JSON.stringify(extensionMessages)), [{
+    assert.deepEqual(harness.workerMessages, [{
         subject: "approveRequestWithCurrentRevisions",
         id: 7,
         host: "wallet.example",
         configurationKey: "https://wallet.example",
-        requestToken: "123e4567-e89b-12d3-a456-426614174000",
-        reviewToken: "123e4567-e89b-12d3-a456-426614174001",
+        requestToken: request.requestToken,
+        reviewToken: requestToken(101),
         payload: {cluster: "devnet"},
         privateBrowsing: false,
         workflowVersion: 3,
     }]);
-    assert.equal(nativeMessages.length, 1);
-    assert.equal(nativeMessages[0].message.subject, "rejectRequest");
-});
-
-test("update recovery captures one build and uses one click-time lookup", () => {
-    assert.match(source,
-        /const BUILD_VERSION = BigWalletBridgeWire\.BUILD_VERSION;/);
-    assert.doesNotMatch(source, /const BUILD_VERSION = "[^"\n]*";/);
-    assert.match(wireSource, /const BUILD_VERSION = "[^"\n]+\+[0-9]+";/);
-    assert.doesNotMatch(source, /BUILD_VERSION = browser\.runtime\.getManifest/);
-    const refresh = extractedFunction("refreshIdleStatus");
-    assert.equal(refresh.match(/currentActiveTab\(\)/g)?.length, 1);
-    assert.doesNotMatch(refresh, /readUpdateRecoveryFlag/);
+    assert.deepEqual(harness.nativeMessages, [{
+        subject: "rejectRequest",
+        id: 7,
+        requestToken: request.requestToken,
+        workflowVersion: 3,
+        __bwPrivateBrowsing: false,
+    }]);
 });
 
 test("pending and completed queue entries require exact trusted identities", () => {
-    const context = {
-        hasExactKeys: (value, keys) => value !== null &&
-            typeof value === "object" &&
-            Object.keys(value).length === keys.length &&
-            keys.every(key => Object.hasOwn(value, key)),
-        isRecord: value => value !== null && typeof value === "object" &&
-            !Array.isArray(value),
-        isValidRequestId: Number.isSafeInteger,
-        isRequestToken: value => typeof value === "string",
-        isPrivateToken: value => typeof value === "string",
-        isProviderRevisions: value => value?.ethereum === 1 && value?.solana === 2,
-    };
-    vm.createContext(context);
-    const isPendingRequest = vm.runInContext(
-        `(${extractedFunction("isPendingRequest")})`,
-        context
-    );
-    const request = {
-        configurationKey: "https://wallet.example",
-        host: "wallet.example",
-        id: 7,
-        provider: "ethereum",
-        receivedAt: Date.now(),
-        requestToken: "request",
-        revisions: {ethereum: 1, solana: 2},
-        sequence: 0,
-    };
-    assert.equal(isPendingRequest(request), true);
-    assert.equal(isPendingRequest({...request, configurationKey: undefined}), false);
-    assert.equal(isPendingRequest({...request, provider: "other"}), false);
-    assert.equal(isPendingRequest({...request, revisions: undefined}), false);
+    const harness = popupHarness();
+    const request = {...pendingRequest(), revisions: {ethereum: 1, solana: 2}};
+    assert.equal(harness.call("isPendingRequest", request), true);
+    assert.equal(harness.call("isPendingRequest", {...request, configurationKey: undefined}), false);
+    assert.equal(harness.call("isPendingRequest", {...request, provider: "other"}), false);
+    assert.equal(harness.call("isPendingRequest", {...request, revisions: undefined}), false);
 
-    const isCompletedResponse = vm.runInContext(
-        `(${extractedFunction("isCompletedResponse")})`,
-        context
-    );
-    const completed = {
-        id: 8,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken: "request",
-        revisions: {ethereum: 1, solana: 2},
-    };
-    assert.equal(isCompletedResponse(completed), true);
-    assert.equal(isCompletedResponse({...completed, extra: true}), false);
-    assert.equal(isCompletedResponse({...completed, revisions: undefined}), false);
+    const completed = completedResponse(8);
+    assert.equal(harness.call("isCompletedResponse", completed), true);
+    assert.equal(harness.call("isCompletedResponse", {...completed, extra: true}), false);
+    assert.equal(harness.call("isCompletedResponse", {...completed, revisions: undefined}), false);
 });
 
 test("approval envelope validates capabilities and requires canonical review content", () => {
@@ -218,86 +134,45 @@ test("approval envelope validates capabilities and requires canonical review con
     }
 });
 
-function extractedFunction(name) {
-    let start = source.indexOf(`async function ${name}(`);
-    if (start === -1) { start = source.indexOf(`function ${name}(`); }
-    assert.notEqual(start, -1);
-    const bodyStart = source.indexOf(") {", start) + 2;
-    let depth = 0;
-    for (let index = bodyStart; index < source.length; index += 1) {
-        if (source[index] === "{") { depth += 1; }
-        if (source[index] === "}") {
-            depth -= 1;
-            if (depth === 0) {
-                return source.slice(start, index + 1);
-            }
-        }
-    }
-    throw new Error(`unterminated ${name}`);
-}
-
 const updateProbeTimeout = Symbol("timeout");
 const updateProbeNonce = "00000001000000020000000300000004";
 
 function updateRecoveryProbeHarness({
     incognito = false,
     permission = true,
-    permissionsAvailable = true,
     response,
 } = {}) {
-    const messages = [];
+    const harness = popupHarness({tab: async message => {
+        if (response instanceof Error) { throw response; }
+        if (response === updateProbeTimeout) { return deferred().promise; }
+        return typeof response === "function" ? response(message) : response;
+    }});
     const permissionQueries = [];
+    harness.browser.permissions.contains = async query => {
+        permissionQueries.push(normalized(query));
+        if (permission instanceof Error) { throw permission; }
+        return permission;
+    };
     const tab = {
         id: 7,
         configurationKey: "https://wallet.example",
         incognito,
         url: "https://wallet.example/dapp",
     };
-    const browser = {
-        tabs: {sendMessage(id, message) {
-            messages.push({id, message});
-            if (response instanceof Error) { return Promise.reject(response); }
-            return response === updateProbeTimeout
-                ? updateProbeTimeout
-                : Promise.resolve(typeof response === "function"
-                    ? response(message)
-                    : response);
-        }},
-    };
-    if (permissionsAvailable) {
-        browser.permissions = {contains(query) {
-            permissionQueries.push(query);
-            return permission instanceof Error
-                ? Promise.reject(permission)
-                : Promise.resolve(permission);
-        }};
-    }
-    const context = {
-        BUILD_VERSION: packagedBuildVersion,
-        WORKFLOW_VERSION: 3,
-        URL,
-        browser,
-        genPrivateToken: () => updateProbeNonce,
-        hasExactKeys: (value, keys) => value !== null &&
-            typeof value === "object" &&
-            Object.keys(value).length === keys.length &&
-            keys.every(key => Object.hasOwn(value, key)),
-        async settleExtensionMessage(pending) {
-            if (pending === updateProbeTimeout) { return {status: "timeout"}; }
-            try { return {response: await pending, status: "response"}; }
-            catch { return {status: "failure"}; }
-        },
-    };
-    vm.createContext(context);
-    context.updateRecoveryTabFor = vm.runInContext(
-        `(${extractedFunction("updateRecoveryTabFor")})`,
-        context
-    );
     return {
-        context,
-        messages,
         permissionQueries,
         tab,
+        tabMessages: harness.tabMessages,
+        async probe() {
+            const result = harness.call("updateRecoveryTabFor", tab);
+            await flushPopup();
+            if (response === updateProbeTimeout) {
+                const timer = harness.timerHistory.at(-1);
+                assert.equal(timer.delay, 5000);
+                await harness.fire(timer.id);
+            }
+            return result;
+        },
     };
 }
 
@@ -308,8 +183,8 @@ test("update recovery checks the exact content build response", async () => {
         subject: "workflowProbe",
         workflowVersion: 3,
     }});
-    assert.equal(await current.context.updateRecoveryTabFor(current.tab), null);
-    assert.deepEqual(JSON.parse(JSON.stringify(current.messages)), [{
+    assert.equal(await current.probe(), null);
+    assert.deepEqual(current.tabMessages, [{
         id: 7,
         message: {
             nonce: updateProbeNonce,
@@ -317,9 +192,7 @@ test("update recovery checks the exact content build response", async () => {
             workflowVersion: 3,
         },
     }]);
-    assert.deepEqual(JSON.parse(JSON.stringify(current.permissionQueries)), [{
-        origins: ["https://wallet.example/*"],
-    }]);
+    assert.deepEqual(current.permissionQueries, [{origins: ["https://wallet.example/*"]}]);
 
     const oldBuild = updateRecoveryProbeHarness({response: {
         buildVersion: previousBuildVersion,
@@ -327,19 +200,11 @@ test("update recovery checks the exact content build response", async () => {
         subject: "workflowProbe",
         workflowVersion: 3,
     }});
-    assert.equal(
-        await oldBuild.context.updateRecoveryTabFor(oldBuild.tab),
-        oldBuild.tab
-    );
-
+    assert.equal(await oldBuild.probe(), oldBuild.tab);
     for (const response of [undefined, updateProbeTimeout]) {
         const old = updateRecoveryProbeHarness({response});
-        assert.equal(
-            await old.context.updateRecoveryTabFor(old.tab),
-            old.tab
-        );
+        assert.equal(await old.probe(), old.tab);
     }
-
     for (const response of [
         {
             buildVersion: previousBuildVersion,
@@ -356,690 +221,367 @@ test("update recovery checks the exact content build response", async () => {
         },
     ]) {
         const forged = updateRecoveryProbeHarness({response});
-        assert.equal(await forged.context.updateRecoveryTabFor(forged.tab), null);
+        assert.equal(await forged.probe(), null);
     }
 });
 
 test("update recovery ignores private, denied, and receiverless tabs", async () => {
     const privateTab = updateRecoveryProbeHarness({incognito: true});
-    assert.equal(await privateTab.context.updateRecoveryTabFor(privateTab.tab), null);
-    assert.deepEqual(privateTab.messages, []);
-
+    assert.equal(await privateTab.probe(), null);
+    assert.deepEqual(privateTab.tabMessages, []);
     for (const permission of [false, new Error("permission check failed")]) {
         const denied = updateRecoveryProbeHarness({permission});
-        assert.equal(await denied.context.updateRecoveryTabFor(denied.tab), null);
-        assert.deepEqual(denied.messages, []);
+        assert.equal(await denied.probe(), null);
+        assert.deepEqual(denied.tabMessages, []);
     }
-
-    const receiverless = updateRecoveryProbeHarness({
-        response: new Error("no receiver"),
-    });
-    assert.equal(
-        await receiverless.context.updateRecoveryTabFor(receiverless.tab),
-        null
-    );
+    const receiverless = updateRecoveryProbeHarness({response: new Error("no receiver")});
+    assert.equal(await receiverless.probe(), null);
 });
 
-function idleRecoveryRefreshHarness(reload, options = {}) {
-    const button = {disabled: false};
-    const hidden = new Map;
-    const probes = [];
+async function idleRecoveryRefreshHarness(reload = async () => {}) {
+    const harness = popupHarness({updateRecovery: true, tab: message => ({
+        buildVersion: previousBuildVersion,
+        nonce: message.nonce,
+        subject: "workflowProbe",
+        workflowVersion: 3,
+    })});
+    await harness.boot();
+    harness.clearMessages();
+    let lookups = 0;
     const reloaded = [];
-    let closed = 0;
-    let refreshes = 0;
-    let rendered = 0;
-    const texts = new Map;
-    const recoveryTab = {
-        configurationKey: "https://wallet.example",
-        id: 7,
-        incognito: false,
-        url: "https://wallet.example/dapp",
-    };
-    const currentTab = Object.hasOwn(options, "currentTab")
-        ? options.currentTab
-        : recoveryTab;
-    const probeResult = Object.hasOwn(options, "probeResult")
-        ? options.probeResult
-        : recoveryTab;
-    let activeTabLookup = 0;
-    const context = {
-        browser: {tabs: {reload(id) {
-            reloaded.push(id);
-            return reload();
-        }}},
-        isCurrentIdlePresentation: () => true,
-        currentActiveTab: async () => {
-            activeTabLookup += 1;
-            return currentTab;
-        },
-        document: {getElementById: () => button},
-        hide() {},
-        localized: (_, fallback) => fallback,
-        queueTab: {
-            activeTab: recoveryTab,
-            items: [],
-            refreshGeneration: 4,
-            refreshInFlight: null,
-            refreshRequested: false,
-            refreshTimer: null,
-            snapshotStatus: "empty",
-            updateRecoveryTab: recoveryTab,
-        },
-        refreshQueue: async () => { refreshes += 1; },
-        renderIdleSwitchControls: () => { rendered += 1; },
-        setHidden: (id, value) => hidden.set(id, value),
-        setText: (id, value) => texts.set(id, value),
-        show() {},
-        async settleExtensionMessage(pending) {
-            try { return {response: await pending, status: "response"}; }
-            catch { return {status: "failure"}; }
-        },
-        updateRecoveryTabFor: async tab => {
-            probes.push(tab);
-            options.onProbe?.(context);
-            return probeResult;
-        },
-        window: {close: () => { closed += 1; }},
-    };
-    vm.createContext(context);
-    context.sameUpdateRecoveryTab = vm.runInContext(
-        `(${extractedFunction("sameUpdateRecoveryTab")})`, context
-    );
-    context.shouldShowUpdateRecovery = vm.runInContext(
-        `(${extractedFunction("shouldShowUpdateRecovery")})`, context
-    );
-    context.refreshIdleStatus = vm.runInContext(
-        `(${extractedFunction("refreshIdleStatus")})`, context
-    );
-    return {
-        button,
-        closed: () => closed,
-        context,
-        hidden,
-        lookups: () => activeTabLookup,
-        probes,
-        recoveryTab,
-        refreshes: () => refreshes,
-        reloaded,
-        rendered: () => rendered,
-        texts,
-    };
+    harness.browser.tabs.query = async () => { lookups += 1; return [harness.tab]; };
+    harness.browser.tabs.reload = id => { reloaded.push(id); return reload(); };
+    return Object.assign(harness, {reloaded, lookups: () => lookups});
 }
 
 test("update recovery reloads only the active tab on explicit Refresh", async () => {
-    const success = idleRecoveryRefreshHarness(() => Promise.resolve());
-    await success.context.refreshIdleStatus();
-    assert.deepEqual(success.reloaded, [7]);
-    assert.deepEqual(success.probes, [success.recoveryTab]);
+    const success = await idleRecoveryRefreshHarness();
+    assert.deepEqual(success.reloaded, []);
+    await success.call("refreshIdleStatus");
+    assert.deepEqual(success.reloaded, [success.tab.id]);
+    assert.equal(success.tabMessages.length, 1);
+    assert.equal(success.tabMessages[0].id, success.tab.id);
     assert.equal(success.lookups(), 1);
-    assert.equal(success.closed(), 1);
+    assert.equal(success.model.closed, 1);
 
-    const failure = idleRecoveryRefreshHarness(() => Promise.reject(
-        new Error("reload failed")
-    ));
-    await failure.context.refreshIdleStatus();
-    assert.deepEqual(failure.reloaded, [7]);
+    const failure = await idleRecoveryRefreshHarness(async () => { throw new Error("reload failed"); });
+    await failure.call("refreshIdleStatus");
+    assert.deepEqual(failure.reloaded, [failure.tab.id]);
     assert.equal(failure.lookups(), 1);
-    assert.equal(failure.closed(), 0);
-    assert.equal(failure.button.disabled, false);
-    assert.equal(failure.rendered(), 1);
-    assert.equal(failure.hidden.get("idle-check-status"), false);
-    assert.equal(failure.texts.get("idle-connection"), "Failed to load");
+    assert.equal(failure.model.closed, 0);
+    assert.equal(failure.get("idle-check-status").disabled, false);
+    assert.equal(failure.get("idle-check-status").classList.contains("hidden"), false);
+    assert.equal(failure.get("idle-connection").textContent, "Failed to load");
 
-    const unknownQueue = idleRecoveryRefreshHarness(() => Promise.resolve());
-    unknownQueue.context.queueTab.snapshotStatus = "unknown";
-    await unknownQueue.context.refreshIdleStatus();
+    const unknownQueue = await idleRecoveryRefreshHarness();
+    unknownQueue.notify();
+    await unknownQueue.call("refreshIdleStatus");
     assert.deepEqual(unknownQueue.reloaded, []);
-    assert.deepEqual(unknownQueue.probes, []);
+    assert.deepEqual(unknownQueue.tabMessages, []);
     assert.equal(unknownQueue.lookups(), 0);
-    assert.equal(unknownQueue.refreshes(), 1);
+    assert.equal(unknownQueue.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
 });
 
 test("update recovery requires the exact stored tab identity at click", async () => {
-    const base = {
-        configurationKey: "https://wallet.example",
-        id: 7,
-        incognito: false,
-        url: "https://wallet.example/dapp",
-    };
-    for (const currentTab of [
-        {...base, id: 8},
-        {...base, incognito: true},
-        {...base, configurationKey: "https://other.example"},
-        {...base, url: "https://wallet.example/after-navigation"},
+    for (const overrides of [
+        {id: 8}, {incognito: true},
+        {url: "https://other.example/dapp"},
+        {url: "https://wallet.example/after-navigation"},
     ]) {
-        const changed = idleRecoveryRefreshHarness(
-            () => Promise.resolve(),
-            {currentTab}
-        );
-        await changed.context.refreshIdleStatus();
+        const changed = await idleRecoveryRefreshHarness();
+        Object.assign(changed.tab, overrides);
+        await changed.call("refreshIdleStatus");
         assert.deepEqual(changed.reloaded, []);
-        assert.deepEqual(changed.probes, []);
+        assert.deepEqual(changed.tabMessages, []);
         assert.equal(changed.lookups(), 1);
-        assert.equal(changed.refreshes(), 1);
-        assert.equal(changed.context.queueTab.activeTab, currentTab);
-        assert.equal(changed.context.queueTab.updateRecoveryTab, null);
+        assert.equal(changed.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
+        assert.equal(changed.queue.activeTab.id, changed.tab.id);
+        assert.equal(changed.queue.activeTab.url, changed.tab.url);
+        assert.equal(changed.queue.updateRecoveryTab, null);
     }
 });
 
 test("update recovery clears a candidate that now answers with this build", async () => {
-    const recovered = idleRecoveryRefreshHarness(
-        () => Promise.resolve(),
-        {probeResult: null}
-    );
-    await recovered.context.refreshIdleStatus();
+    const recovered = await idleRecoveryRefreshHarness();
+    recovered.handlers.tab = undefined;
+    await recovered.call("refreshIdleStatus");
     assert.deepEqual(recovered.reloaded, []);
-    assert.deepEqual(recovered.probes, [recovered.recoveryTab]);
-    assert.equal(recovered.refreshes(), 1);
-    assert.equal(recovered.context.queueTab.updateRecoveryTab, null);
-    assert.equal(recovered.button.disabled, false);
+    assert.equal(recovered.tabMessages.length, 1);
+    assert.equal(recovered.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
+    assert.equal(recovered.queue.updateRecoveryTab, null);
+    assert.equal(recovered.get("idle-check-status").disabled, false);
 });
 
 test("queue notifications win the click probe without clearing recovery", async () => {
-    const raced = idleRecoveryRefreshHarness(
-        () => Promise.resolve(),
-        {
-            probeResult: null,
-            onProbe(context) {
-                context.queueTab.refreshGeneration += 1;
-                context.queueTab.refreshRequested = true;
-                context.queueTab.snapshotStatus = "unknown";
-            },
-        }
-    );
-    await raced.context.refreshIdleStatus();
+    const raced = await idleRecoveryRefreshHarness();
+    const recoveryTab = raced.queue.updateRecoveryTab;
+    const probe = deferred();
+    raced.handlers.tab = () => probe.promise;
+    const refresh = raced.call("refreshIdleStatus");
+    await flushPopup();
+    raced.notify();
+    probe.resolve({
+        buildVersion: packagedBuildVersion,
+        nonce: raced.tabMessages.at(-1).message.nonce,
+        subject: "workflowProbe",
+        workflowVersion: 3,
+    });
+    await refresh;
     assert.deepEqual(raced.reloaded, []);
     assert.equal(raced.lookups(), 1);
-    assert.deepEqual(raced.probes, [raced.recoveryTab]);
-    assert.equal(raced.context.queueTab.updateRecoveryTab, raced.recoveryTab);
-    assert.equal(raced.refreshes(), 1);
+    assert.equal(raced.tabMessages.length, 1);
+    assert.equal(raced.queue.updateRecoveryTab, recoveryTab);
+    assert.equal(raced.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
 });
 
-test("completed-response apply uses the exact worker contract", async () => {
-    const messages = [];
-    let workerResponse = {applied: true};
-    const request = {
-        id: 7,
+function completedResponse(id) {
+    return {
+        id,
         host: "wallet.example",
         configurationKey: "https://wallet.example",
-        requestToken: "request",
-        revisions: {ethereum: 3, solana: 5},
+        requestToken: requestToken(id),
+        revisions: {ethereum: 0, solana: 0},
     };
-    const context = {
-        WORKFLOW_VERSION: 3,
-        browser: {runtime: {sendMessage(message) {
-            messages.push(message);
-            return Promise.resolve(workerResponse);
-        }}},
-        hasExactKeys: (value, keys) => value !== null &&
-            typeof value === "object" &&
-            Object.keys(value).length === keys.length &&
-            keys.every(key => Object.hasOwn(value, key)),
-        settleExtensionMessage: async pending => ({
-            response: await pending,
-            status: "response",
-        }),
-    };
-    vm.createContext(context);
-    const applyCompletedResponse = vm.runInContext(
-        `(${extractedFunction("applyCompletedResponse")})`,
-        context
-    );
+}
 
-    assert.equal(await applyCompletedResponse(request), "applied");
+test("completed-response apply uses the exact worker contract", async () => {
+    let workerResponse = {applied: true};
+    const harness = popupHarness({worker: () => workerResponse});
+    const request = {...completedResponse(7), revisions: {ethereum: 3, solana: 5}};
+    assert.equal(await harness.call("applyCompletedResponse", request), "applied");
     workerResponse = {id: 7, missing: true};
-    assert.equal(await applyCompletedResponse(request), "missing");
+    assert.equal(await harness.call("applyCompletedResponse", request), "missing");
     workerResponse = {id: 8, missing: true};
-    assert.equal(await applyCompletedResponse(request), "failure");
-    assert.deepEqual(JSON.parse(JSON.stringify(messages[0])), {
+    assert.equal(await harness.call("applyCompletedResponse", request), "failure");
+    assert.deepEqual(harness.workerMessages[0], {
         subject: "applyCompletedResponse",
-        id: 7,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken: "request",
-        revisions: {ethereum: 3, solana: 5},
+        ...request,
         workflowVersion: 3,
     });
 });
 
-function recoveredQueueHarness({
-    failedID = null,
-    includeCompletions = true,
-    missingID = null,
-} = {}) {
-    const completedResponses = includeCompletions ? [
-        {
-            id: 1,
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            requestToken: "first",
-            revisions: {ethereum: 0, solana: 0},
-        },
-        {
-            id: 2,
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            requestToken: "second",
-            revisions: {ethereum: 1, solana: 0},
-        },
-    ] : [];
-    let remainingResponses = completedResponses;
-    const pending = {id: 3};
-    let resolveFirst;
-    const firstApply = new Promise(resolve => { resolveFirst = resolve; });
+function recoveredQueueHarness({failedID, includeCompletions = true, missingID} = {}) {
+    const firstApply = deferred();
     const applied = [];
-    const notified = [];
-    const shown = [];
-    const context = {
-        applyCompletedResponse: async response => {
-            applied.push(response.id);
-            const result = response.id === 1 ? await firstApply
-                : response.id === failedID ? "failure"
-                : response.id === missingID ? "missing" : "applied";
-            if (result !== "failure") {
-                remainingResponses = remainingResponses.filter(item => item.id !== response.id);
-            }
-            return result;
-        },
-        applyLayoutDirection: () => {},
-        applyStrings: () => {},
-        genId: () => 99,
-        notifyResponseReadyIds: ids => { notified.push(...ids); },
-        parsePendingResponse: value => value,
-        queueTab: {refreshGeneration: 0, refreshRequested: false},
-        scheduleNativeMessage: () => ({result: Promise.resolve({
-            status: "response",
-            response: {completedResponses: remainingResponses, requests: [pending]},
-        })}),
-        shouldDeferQueueRefreshForCurrentRequest: () => false,
-        showQueue: requests => { shown.push(requests); },
-    };
-    vm.createContext(context);
-    context.fetchPendingResponse = vm.runInContext(
-        `(${extractedFunction("fetchPendingResponse")})`,
-        context
-    );
-    context.performQueueRefresh = vm.runInContext(
-        `(${extractedFunction("performQueueRefresh")})`,
-        context
-    );
-    return {applied, context, notified, pending, resolveFirst, shown};
+    const pending = pendingRequest(3, 3);
+    const harness = popupHarness({requests: [pending], worker: async (message, fallback) => {
+        if (message.subject !== "applyCompletedResponse") { return fallback(message); }
+        applied.push(message.id);
+        if (message.id === 1) { await firstApply.promise; }
+        if (message.id === failedID) { throw new Error("apply failed"); }
+        const result = fallback(message);
+        return message.id === missingID ? {id: message.id, missing: true} : result;
+    }});
+    harness.model.completed = includeCompletions ? [completedResponse(1), completedResponse(2)] : [];
+    return Object.assign(harness, {applied, pending, firstApply,
+        notified: () => harness.workerMessages.filter(message => message.subject === "responseReady")
+            .flatMap(message => message.ids),
+    });
 }
 
 test("recovered completions apply in FIFO order before rendering queued work", async () => {
     const harness = recoveredQueueHarness();
-    const refresh = harness.context.performQueueRefresh();
-    for (let index = 0; index < 5; index += 1) { await Promise.resolve(); }
-    assert.equal(harness.applied.join(","), "1");
-    assert.deepEqual(harness.shown, []);
-
-    harness.resolveFirst("applied");
+    const refresh = harness.call("refreshQueue");
+    await flushPopup();
+    assert.deepEqual(harness.applied, [1]);
+    assert.equal(harness.controller, null);
+    assert.equal(harness.get("screen-request").classList.contains("hidden"), true);
+    harness.firstApply.resolve();
     await refresh;
-    assert.equal(harness.applied.join(","), "1,2");
-    assert.deepEqual(harness.notified, [1, 2]);
-    assert.deepEqual(harness.shown, [[harness.pending]]);
+    await flushPopup();
+    assert.deepEqual(harness.applied, [1, 2]);
+    assert.deepEqual(harness.notified(), [1, 2]);
+    assert.equal(harness.controller.request.requestToken, harness.pending.requestToken);
 });
 
 test("a failed recovered completion keeps the queue in failed-load state", async () => {
     const harness = recoveredQueueHarness({failedID: 2});
-    const refresh = harness.context.performQueueRefresh();
-    await Promise.resolve();
-    harness.resolveFirst("applied");
+    const refresh = harness.call("refreshQueue");
+    harness.firstApply.resolve();
     await refresh;
-    assert.equal(harness.applied.join(","), "1,2");
-    assert.deepEqual(harness.notified, [1]);
-    assert.deepEqual(harness.shown, [null]);
+    await flushPopup();
+    assert.deepEqual(harness.applied, [1, 2]);
+    assert.deepEqual(harness.notified(), [1]);
+    assert.equal(harness.controller, null);
+    assert.equal(harness.queue.snapshotStatus, "unknown");
+    assert.equal(harness.get("idle-connection").textContent, "Failed to load");
+    assert.deepEqual(harness.model.completed.map(item => item.id), [2]);
 });
 
 test("an absent missing response disappears through authoritative queue refresh", async () => {
     const harness = recoveredQueueHarness({includeCompletions: false});
-    await harness.context.performQueueRefresh();
+    await harness.call("refreshQueue");
+    await flushPopup();
     assert.deepEqual(harness.applied, []);
-    assert.deepEqual(harness.notified, []);
-    assert.deepEqual(harness.shown, [[harness.pending]]);
+    assert.deepEqual(harness.notified(), []);
+    assert.equal(harness.controller.request.requestToken, harness.pending.requestToken);
 });
 
 test("an evicted recovered completion is skipped without hiding queued work", async () => {
     const harness = recoveredQueueHarness({missingID: 2});
-    const refresh = harness.context.performQueueRefresh();
-    await Promise.resolve();
-    harness.resolveFirst("applied");
+    const refresh = harness.call("refreshQueue");
+    harness.firstApply.resolve();
     await refresh;
+    await flushPopup();
     assert.deepEqual(harness.applied, [1, 2]);
-    assert.deepEqual(harness.notified, [1]);
-    assert.deepEqual(harness.shown, [[harness.pending]]);
+    assert.deepEqual(harness.notified(), [1]);
+    assert.equal(harness.controller.request.requestToken, harness.pending.requestToken);
 });
 
 test("a reopened popup drains every outstanding completion across batches", async () => {
-    const completions = Array.from({length: 33}, (_, index) => ({
-        id: index + 1,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-        revisions: {ethereum: 0, solana: 0},
-    }));
+    const completions = Array.from({length: 33}, (_, index) => completedResponse(index + 1));
     let outstanding = completions.slice();
-    const pending = {id: 99};
-    function openPopup(failedID = null) {
+    const pending = pendingRequest(99, 99);
+    function openPopup(failedID) {
         const applied = [];
         const pageSizes = [];
-        const context = {
-            applyCompletedResponse: async response => {
-                if (response.id === failedID) { return "failure"; }
-                applied.push(response.id);
-                outstanding = outstanding.filter(item => item.id !== response.id);
-                return "applied";
-            },
-            applyLayoutDirection: () => {},
-            applyStrings: () => {},
-            genId: () => 100,
-            notifyResponseReadyIds: () => {},
-            parsePendingResponse: value => value,
-            scheduleNativeMessage: (_channel, subject) => {
-                assert.equal(subject, "getPendingRequests");
-                const completedResponses = outstanding.slice(0, 16);
-                pageSizes.push(completedResponses.length);
-                return {result: Promise.resolve({
-                    status: "response",
-                    response: {completedResponses, requests: [pending]},
-                })};
-            },
-        };
-        vm.createContext(context);
-        context.fetchPendingResponse = vm.runInContext(
-            `(${extractedFunction("fetchPendingResponse")})`, context
-        );
-        return {applied, pageSizes, context};
+        const harness = popupHarness({native: (message, fallback) => {
+            if (message.subject !== "getPendingRequests") { return fallback(message); }
+            const completedResponses = outstanding.slice(0, 16);
+            pageSizes.push(completedResponses.length);
+            return {completedResponses, requests: [pending]};
+        }, worker: (message, fallback) => {
+            if (message.subject !== "applyCompletedResponse") { return fallback(message); }
+            if (message.id === failedID) { throw new Error("apply failed"); }
+            applied.push(message.id);
+            outstanding = outstanding.filter(item => item.id !== message.id);
+            return {applied: true};
+        }});
+        return Object.assign(harness, {applied, pageSizes});
     }
-
     const first = openPopup(17);
-    assert.equal(await first.context.fetchPendingResponse(), null);
+    assert.equal(await first.call("fetchPendingResponse"), null);
     assert.deepEqual(first.applied, completions.slice(0, 16).map(item => item.id));
     assert.equal(outstanding[0].id, 17);
 
     const reopened = openPopup();
-    const response = await reopened.context.fetchPendingResponse();
+    const response = await reopened.call("fetchPendingResponse");
     assert.deepEqual(reopened.applied, completions.slice(16).map(item => item.id));
     assert.deepEqual(reopened.pageSizes, [16, 1, 0]);
-    assert.deepEqual(response.requests, [pending]);
+    assert.deepEqual(normalized(response.requests), [pending]);
     assert.deepEqual(outstanding, []);
 });
 
-function queueNotificationHarness(fetchPendingResponse) {
-    const rendered = [];
-    const timers = [];
-    const elements = {
-        "idle-switch-account": {disabled: false},
-        "screen-idle": {classList: {contains: () => false}},
-        "screen-request": {classList: {contains: () => true}},
-    };
-    const context = {
-        document: {getElementById: id => elements[id]},
-        fetchPendingResponse,
-        isPendingRequestAvailable: request => request?.subject ===
-            "pendingRequestAvailable" && request.workflowVersion === 3 &&
-            Object.keys(request).length === 2,
-        queueTab: {
-            booting: false,
-            domReady: true,
-            index: 0,
-            items: [],
-            refreshGeneration: 0,
-            refreshInFlight: null,
-            refreshRequested: false,
-            refreshTimer: null,
-            snapshotStatus: "empty",
-        },
-        renderIdleSwitchControls() {},
-        setTimeout(callback, delay) {
-            const timer = {callback, delay};
-            timers.push(timer);
-            return timer;
-        },
-        shouldDeferQueueRefreshForCurrentRequest: () => false,
-        showQueue(requests) {
-            rendered.push(requests);
-            context.queueTab.items = requests ?? [];
-            context.queueTab.snapshotStatus = requests?.length ? "nonempty" : "empty";
-        },
-        currentRequestController: null,
-    };
-    vm.createContext(context);
-    for (const name of [
-        "requestPendingQueueRefresh",
-        "schedulePendingQueueRefresh",
-        "handlePopupRuntimeMessage",
-        "performQueueRefresh",
-        "refreshQueue",
-    ]) {
-        context[name] = vm.runInContext(`(${extractedFunction(name)})`, context);
-    }
-    return {context, rendered, timers};
-}
-
 test("a pending-request notification refreshes an already-open idle popup", async () => {
-    const request = {id: 60};
-    const harness = queueNotificationHarness(async () => ({
-        completedResponses: [],
-        requests: [request],
-    }));
-    harness.context.handlePopupRuntimeMessage({
-        subject: "pendingRequestAvailable",
-        workflowVersion: 3,
-    });
-    assert.equal(harness.timers.length, 1);
-    assert.equal(harness.timers[0].delay, 0);
-    harness.timers[0].callback();
-    await harness.context.queueTab.refreshInFlight;
-    assert.deepEqual(harness.rendered, [[request]]);
-    assert.deepEqual(harness.context.queueTab.items, [request]);
+    const harness = popupHarness();
+    await harness.boot();
+    const request = pendingRequest(60, 60);
+    harness.model.requests = [request];
+    harness.notify();
+    assert.equal(harness.timers.get(harness.queue.refreshTimer).delay, 0);
+    await harness.fire(harness.queue.refreshTimer);
+    assert.equal(harness.controller.request.requestToken, request.requestToken);
+    assert.deepEqual(normalized(harness.queue.items), [request]);
 });
 
 test("a pending-request notification fences a stale initial empty queue", async () => {
-    let resolveInitial;
-    const initial = new Promise(resolve => { resolveInitial = resolve; });
-    const request = {id: 61};
+    const initial = deferred();
+    const request = pendingRequest(61, 61);
     let reads = 0;
-    const harness = queueNotificationHarness(() => ++reads === 1
-        ? initial
-        : Promise.resolve({completedResponses: [], requests: [request]}));
-    const bootRefresh = harness.context.refreshQueue();
-    await Promise.resolve();
-    harness.context.handlePopupRuntimeMessage({
-        subject: "pendingRequestAvailable",
-        workflowVersion: 3,
+    const harness = popupHarness({native: (message, fallback) =>
+        message.subject === "getPendingRequests" && ++reads === 1
+            ? initial.promise : fallback(message),
     });
-    resolveInitial({completedResponses: [], requests: []});
-    await bootRefresh;
-    assert.equal(reads, 2);
-    assert.deepEqual(harness.rendered, [[request]]);
+    await harness.boot();
+    harness.model.requests = [request];
+    harness.notify();
+    initial.resolve({completedResponses: [], requests: []});
+    await flushPopup();
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 2);
+    assert.equal(harness.controller.request.requestToken, request.requestToken);
+    assert.equal(harness.workerMessages.some(message => message.subject === "getLatestConfiguration"), false);
 });
 
-function manualSwitchHarness(sendMessage) {
-    const button = { disabled: false };
-    const sent = [];
-    const timeouts = [];
-    let refreshes = 0;
-    let controlRenders = 0;
-    let connectionText = null;
-    const context = {
-        URL,
-        MANUAL_SWITCH_TIMEOUT: 10_000,
-        WORKFLOW_VERSION: 3,
-        browser: { tabs: { sendMessage: async (tabID, message) => {
-            sent.push({ tabID, message });
-            return sendMessage(sent.length, message);
-        } } },
-        currentPrivateBrowsing: () => false,
-        isCurrentIdlePresentation: () => true,
-        localized: (_, fallback) => fallback,
-        queueTab: {
-            activeTab: {
-                id: 7,
-                configurationKey: "https://wallet.example",
-                incognito: false,
-            },
-            contentScriptUnavailableTab: null,
-        },
-        sameTab: (left, right) => left?.id === right?.id &&
-            left?.configurationKey === right?.configurationKey,
-        settleExtensionMessage: async (pending, milliseconds) => {
-            timeouts.push(milliseconds);
-            try { return { status: "response", response: await pending }; }
-            catch { return { status: "failure" }; }
-        },
-        document: { getElementById: id => id === "idle-switch-account" ? button : {} },
-        setText: (_id, value) => { connectionText = value; },
-        hide: () => {},
-        show: () => {},
-        renderIdleSwitchControls: () => { controlRenders += 1; },
-        refreshQueue: async () => { refreshes += 1; },
-    };
-    vm.createContext(context);
-    new vm.Script(wireSource).runInContext(context);
-    context.switchAccountFromIdle = vm.runInContext(
-        `(${extractedFunction("switchAccountFromIdle")})`,
-        context
-    );
-    return {
-        button,
-        context,
-        sent,
-        timeouts,
-        connectionText: () => connectionText,
-        controlRenders: () => controlRenders,
-        refreshes: () => refreshes,
-    };
+async function manualSwitchHarness(sendMessage) {
+    const harness = popupHarness({tab: message => sendMessage(harness.tabMessages.length, message)});
+    await harness.boot();
+    harness.clearMessages();
+    harness.timerHistory.length = 0;
+    return harness;
 }
 
-test("manual Switch Account sends one exact stateless intent", async () => {
-    const status = {
+function manualSwitchAcknowledgement(overrides = {}) {
+    return {
         approvalRequired: true,
         configurationKey: "https://wallet.example",
         id: 41,
-        requestToken: "00000000-0000-0000-0000-000000000001",
+        requestToken: requestToken(41),
         revisions: {ethereum: 0, solana: 0},
         subject: "manualSwitchAcknowledged",
         workflowVersion: 3,
+        ...overrides,
     };
-    const harness = manualSwitchHarness(async () => status);
-    await harness.context.switchAccountFromIdle();
+}
 
-    assert.deepEqual(JSON.parse(JSON.stringify(harness.sent)), [{
-        tabID: 7,
+test("manual Switch Account sends one exact stateless intent with a full native admission window", async () => {
+    const harness = await manualSwitchHarness(async () => manualSwitchAcknowledgement());
+    const queue = deferred();
+    harness.handlers.native = () => queue.promise;
+    const switching = harness.call("switchAccountFromIdle");
+    await flushPopup();
+    assert.deepEqual(harness.tabMessages, [{
+        id: harness.tab.id,
         message: {
             configurationKey: "https://wallet.example",
             subject: "manualSwitchIntent",
             workflowVersion: 3,
         },
     }]);
-    assert.equal(harness.refreshes(), 1);
-    assert.equal(harness.button.disabled, true);
-    assert.deepEqual(harness.timeouts, [10_000]);
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
+    assert.equal(harness.get("idle-switch-account").disabled, true);
+    assert.equal(harness.timerHistory[0].delay, 10_000);
+    queue.resolve({completedResponses: [], requests: []});
+    await switching;
 });
 
 test("manual Switch Account accepts canonical native handles and terminal responses", async () => {
     const responses = [
-        {
-            approvalRequired: false,
-            configurationKey: "https://wallet.example",
-            id: 17,
-            requestToken: "00000000-0000-0000-0000-000000000002",
-            revisions: {ethereum: 3, solana: 2},
-            subject: "manualSwitchAcknowledged",
-            workflowVersion: 3,
-        },
-        {
-            approvalRequired: true,
-            configurationKey: "https://wallet.example",
-            id: 41,
-            requestToken: "00000000-0000-0000-0000-000000000001",
-            revisions: {ethereum: 0, solana: 0},
-            subject: "manualSwitchAcknowledged",
-            workflowVersion: 3,
-        },
-        {
-            id: 41,
-            name: "switchAccount",
-            provider: "unknown",
-            error: "Canceled",
-            errorCode: 4001,
-        },
+        manualSwitchAcknowledgement({approvalRequired: false, id: 17, revisions: {ethereum: 3, solana: 2}}),
+        manualSwitchAcknowledgement(),
+        {id: 41, name: "switchAccount", provider: "unknown", error: "Canceled", errorCode: 4001},
     ];
     for (const response of responses) {
-        const harness = manualSwitchHarness(async () => response);
-        await harness.context.switchAccountFromIdle();
-        assert.equal(harness.refreshes(), 1);
-        assert.equal(harness.controlRenders(), 0);
+        const harness = await manualSwitchHarness(async () => response);
+        await harness.call("switchAccountFromIdle");
+        assert.equal(harness.nativeMessages.length, 1);
+        assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
+        assert.equal(harness.queue.snapshotStatus, "empty");
+        assert.notEqual(harness.get("idle-connection").textContent, "Failed to load");
     }
 });
 
 test("manual Switch Account rejects undefined malformed and cross-key replies", async () => {
-    const invalid = [
+    for (const response of [
         undefined,
         {id: 41, name: "switchAccount"},
-        {
-            admissionDeadline: Date.now() + 60_000,
-            configurationKey: "https://wallet.example",
-            id: 41,
-            subject: "manualSwitchInFlight",
-            workflowVersion: 3,
-        },
-        {
-            approvalRequired: true,
-            configurationKey: "https://other.example",
-            id: 41,
-            requestToken: "00000000-0000-0000-0000-000000000001",
-            revisions: {ethereum: 0, solana: 0},
-            subject: "manualSwitchAcknowledged",
-            workflowVersion: 3,
-        },
-        {
-            approvalRequired: true,
-            configurationKey: "https://wallet.example",
-            id: "41",
-            requestToken: "00000000-0000-0000-0000-000000000001",
-            revisions: {ethereum: 0, solana: 0},
-            subject: "manualSwitchAcknowledged",
-            workflowVersion: 3,
-        },
-    ];
-    for (const response of invalid) {
-        const harness = manualSwitchHarness(async () => response);
-        await harness.context.switchAccountFromIdle();
-        assert.equal(harness.button.disabled, false);
-        assert.equal(harness.refreshes(), 0);
-        assert.equal(harness.controlRenders(), 1);
-        assert.equal(harness.connectionText(), "Failed to load");
+        {admissionDeadline: Date.now() + 60_000, configurationKey: "https://wallet.example",
+            id: 41, subject: "manualSwitchInFlight", workflowVersion: 3},
+        manualSwitchAcknowledgement({configurationKey: "https://other.example"}),
+        manualSwitchAcknowledgement({id: "41"}),
+    ]) {
+        const harness = await manualSwitchHarness(async () => response);
+        await harness.call("switchAccountFromIdle");
+        assert.equal(harness.get("idle-switch-account").disabled, false);
+        assert.deepEqual(harness.nativeMessages, []);
+        assert.equal(harness.get("idle-connection").textContent, "Failed to load");
     }
 });
 
 test("manual Switch Account repeats the same intent after transport failure", async () => {
-    const status = {
-        approvalRequired: true,
-        configurationKey: "https://wallet.example",
-        id: 41,
-        requestToken: "00000000-0000-0000-0000-000000000001",
-        revisions: {ethereum: 0, solana: 0},
-        subject: "manualSwitchAcknowledged",
-        workflowVersion: 3,
-    };
-    const harness = manualSwitchHarness(async attempt => {
+    const harness = await manualSwitchHarness(async attempt => {
         if (attempt === 1) { throw new Error("unavailable"); }
-        return status;
+        return manualSwitchAcknowledgement();
     });
-    await harness.context.switchAccountFromIdle();
-    assert.equal(harness.button.disabled, false);
-    assert.equal(
-        harness.context.queueTab.contentScriptUnavailableTab,
-        harness.context.queueTab.activeTab
-    );
-    await harness.context.switchAccountFromIdle();
-
-    assert.equal(harness.sent.length, 2);
-    assert.deepEqual(harness.sent[0].message, harness.sent[1].message);
-    assert.equal(harness.context.queueTab.contentScriptUnavailableTab, null);
-    assert.equal(harness.refreshes(), 1);
+    await harness.call("switchAccountFromIdle");
+    assert.equal(harness.get("idle-switch-account").disabled, false);
+    assert.equal(harness.queue.contentScriptUnavailableTab, harness.queue.activeTab);
+    await harness.call("switchAccountFromIdle");
+    assert.equal(harness.tabMessages.length, 2);
+    assert.deepEqual(harness.tabMessages[0].message, harness.tabMessages[1].message);
+    assert.equal(harness.queue.contentScriptUnavailableTab, null);
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
 });
 
 for (const recovery of ["queue failure", "extension update"]) {

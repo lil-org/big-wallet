@@ -164,7 +164,7 @@ actor ExtensionBridge {
             phase: Phase,
             request: SafariRequest?,
             nativeDecisionStaged: Bool,
-            nativeDeliveryNonce: NativeDeliveryNonce? = nil,
+            nativeDeliveryNonce: NativeDeliveryNonce,
             nativeDeliveryReceipt: NativeDeliveryReceipt? = nil,
             nativeExecutionContext: NativeExecutionContext? = nil,
             host: String,
@@ -178,9 +178,7 @@ actor ExtensionBridge {
             self.phase = phase
             self.request = request
             self.nativeDecisionStaged = nativeDecisionStaged
-            self.nativeDeliveryNonce = nativeDeliveryNonce ?? .init(
-                value: handle.token.value
-            )
+            self.nativeDeliveryNonce = nativeDeliveryNonce
             self.nativeDeliveryReceipt = nativeDeliveryReceipt
             self.nativeExecutionContext = nativeExecutionContext
             self.host = host
@@ -367,13 +365,13 @@ actor ExtensionBridge {
         let approvalClaim: ApprovalClaim
         let decision: DappApprovalDecision
         let stagedAt: Date
-        let executionContext: NativeExecutionContext?
+        let executionContext: NativeExecutionContext
 
         init(
             approvalClaim: ApprovalClaim,
             decision: DappApprovalDecision,
             stagedAt: Date,
-            executionContext: NativeExecutionContext? = nil
+            executionContext: NativeExecutionContext
         ) {
             self.approvalClaim = approvalClaim
             self.decision = decision

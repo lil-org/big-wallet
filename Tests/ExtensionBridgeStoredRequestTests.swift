@@ -5104,8 +5104,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 loadCount += 1
                 return await self.bridge.load(handle: handle)
             },
-            runtimeStatus: { instanceIdentifier in
-                XCTAssertEqual(instanceIdentifier, runtimeInstanceIdentifier)
+            receiptRuntimeStatus: { receipt in
+                XCTAssertEqual(
+                    receipt.runtimeInstanceIdentifier,
+                    runtimeInstanceIdentifier
+                )
                 return .incompatible(owner)
             },
             clearReceipt: { handle, receipt in
@@ -5188,8 +5191,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 loadCount += 1
                 return .found(loadCount == 1 ? firstSnapshot : secondSnapshot)
             },
-            runtimeStatus: { instanceIdentifier in
-                instanceIdentifier == firstRuntime
+            receiptRuntimeStatus: { receipt in
+                receipt.runtimeInstanceIdentifier == firstRuntime
                     ? .incompatible(owner)
                     : .compatible(.running(
                         url: self.rootURL.appendingPathComponent("Owner.app"),
@@ -5234,7 +5237,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var clearCount = 0
         let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
             load: { handle in await self.bridge.load(handle: handle) },
-            runtimeStatus: { _ in .indeterminate },
+            receiptRuntimeStatus: { _ in .indeterminate },
             clearReceipt: { _, _ in
                 clearCount += 1
                 return .persisted
@@ -5383,7 +5386,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
             load: { await self.bridge.load(handle: $0) },
-            runtimeStatus: { _ in
+            receiptRuntimeStatus: { _ in
                 XCTFail("Undelivered request has no owner to resolve")
                 return .absent
             },

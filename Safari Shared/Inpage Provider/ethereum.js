@@ -84,40 +84,6 @@ function validChainId(chainId) {
     return BigWalletBridgeWire.isCanonicalEthereumChainId(chainId);
 }
 
-function captureTransport(transport) {
-    if (!transport || typeof transport !== "object") {
-        throw new TypeError("Ethereum transport must be an object");
-    }
-    const isCurrent = transport.isCurrent;
-    const postDisconnect = transport.postDisconnect;
-    const postRequest = transport.postRequest;
-    const postRPC = transport.postRPC;
-    if (typeof isCurrent !== "function" ||
-        typeof postDisconnect !== "function" ||
-        typeof postRequest !== "function" ||
-        typeof postRPC !== "function") {
-        throw new TypeError("Ethereum transport is incomplete");
-    }
-    return freezeObjectNormally({
-        isCurrent: () => applyFunction(isCurrent, transport, []),
-        postDisconnect: message => applyFunction(
-            postDisconnect,
-            transport,
-            [message]
-        ),
-        postRequest: message => applyFunction(
-            postRequest,
-            transport,
-            [message]
-        ),
-        postRPC: (message, generation) => applyFunction(
-            postRPC,
-            transport,
-            [message, generation]
-        ),
-    });
-}
-
 function transportIsCurrent(state) {
     try {
         return state.transport.isCurrent() === true;
@@ -1025,7 +991,6 @@ const metamaskAPI = freezeObjectNormally({
 class BigWalletEthereum {
 
     constructor(providerGeneration, transport, initialState = null) {
-        const capturedTransport = captureTransport(transport);
         let initial = null;
         if (initialState !== null) {
             initial = outboundDataSnapshot(initialState);
@@ -1072,7 +1037,7 @@ class BigWalletEthereum {
                 wireIdStep: 2,
             }),
             stateEpoch: 0,
-            transport: capturedTransport,
+            transport,
         };
         if (state.accountRevocationTombstone) { state.address = ""; }
         if (copiedInitialState) {

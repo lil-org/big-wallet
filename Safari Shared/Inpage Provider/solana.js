@@ -401,31 +401,6 @@ function inheritedDataFunction(value, name) {
     return null;
 }
 
-function capturedTransport(transport) {
-    if (!transport || typeof transport !== "object") {
-        throw new TypeError("Invalid Solana transport");
-    }
-    const isCurrentMethod = transport.isCurrent;
-    const postRequestMethod = transport.postRequest;
-    const postDisconnectMethod = transport.postDisconnect;
-    if (typeof isCurrentMethod !== "function" ||
-        typeof postRequestMethod !== "function" ||
-        typeof postDisconnectMethod !== "function") {
-        throw new TypeError("Invalid Solana transport");
-    }
-    return freezeObjectNormally({
-        isCurrent() {
-            return applyFunction(isCurrentMethod, transport, []);
-        },
-        postRequest(message) {
-            return applyFunction(postRequestMethod, transport, [message]);
-        },
-        postDisconnect(message) {
-            return applyFunction(postDisconnectMethod, transport, [message]);
-        },
-    });
-}
-
 function transactionAdapter(transaction, message = invalidSolanaTransactionRequest) {
     if (!transaction || typeof transaction !== "object") {
         throw new ProviderRpcError(4200, message);
@@ -1465,7 +1440,7 @@ class BigWalletSolana extends EventEmitter {
             standardAccountsByAddress: new MapConstructor,
             standardChangeListeners: new SetConstructor,
             standardFeatures: null,
-            transport: capturedTransport(transport),
+            transport,
             ...authorization,
         });
         definePropertyNormally(this, "isPhantom", {

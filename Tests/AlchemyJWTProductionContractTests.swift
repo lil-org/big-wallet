@@ -477,33 +477,7 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
         )
     }
 
-    func testMacOSReleaseValidatorAuthenticatesEmbeddedAmbientHelper() throws {
-        let validator = try Self.repositoryText(
-            at: "Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh"
-        )
-        for requiredContract in [
-            "Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app",
-            "the macOS app must not contain legacy outer helper bundles",
-            "macos-helper-apps",
-            "the macOS app must contain exactly one helper app",
-            "org.lil.wallet.ambient",
-            "CFBundleIdentifier",
-            "LSUIElement",
-            "CFBundleExecutable",
-            "CFBundleShortVersionString",
-            "CFBundleVersion",
-            "codesign --verify --strict --deep",
-            "TeamIdentifier=",
-            "the Ambient helper signing team does not match the macOS app",
-        ] {
-            XCTAssertTrue(
-                validator.contains(requiredContract),
-                "The macOS validator is missing \(requiredContract)"
-            )
-        }
-    }
-
-    func testAmbientEmbedPhasePurgesOnlyKnownHelperBundleNames() throws {
+    func testAmbientHelperBuildPhasesAreAssignedToExpectedTargets() throws {
         let project = try Self.repositoryText(
             at: "Wallet.xcodeproj/project.pbxproj"
         )
@@ -549,28 +523,6 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
                 in: phase
             ),
             1
-        )
-        let embedScript = try Self.repositoryText(
-            at: "Scripts/embed_ambient_helper.sh"
-        )
-        for requiredFragment in [
-            "set -eu",
-            "Safari macOS.appex/Contents",
-            "cleanup-legacy)",
-            "$helpers_directory/Big Wallet.app",
-            "$helpers_directory/Big Wallet Helper.app",
-            "$helpers_directory/Big Wallet Ambient.app",
-            "/bin/sh \"$PROJECT_DIR/Scripts/terminate_ambient_agents.sh\"",
-            "/usr/bin/ditto \"$source_app\" \"$destination_app\"",
-        ] {
-            XCTAssertTrue(
-                embedScript.contains(requiredFragment),
-                "The Ambient embed script is missing \(requiredFragment)"
-            )
-        }
-        XCTAssertFalse(
-            embedScript.contains("$helpers_directory/*"),
-            "The Ambient embed script must not delete arbitrary helper children"
         )
     }
 

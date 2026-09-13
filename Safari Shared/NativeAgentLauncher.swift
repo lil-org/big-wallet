@@ -123,25 +123,6 @@ actor NativeAgentLauncher {
         init(
             load: @escaping (ExtensionBridge.Handle) async ->
                 ExtensionBridge.SnapshotResult,
-            runtimeStatus: @escaping @MainActor (UUID) ->
-                ReceiptRuntimeStatus,
-            clearReceipt: @escaping (
-                ExtensionBridge.Handle,
-                ExtensionBridge.NativeDeliveryReceipt
-            ) async -> ExtensionBridge.StoreMutationResult,
-            wait: @escaping (UInt64) async -> Void
-        ) {
-            self.load = load
-            receiptRuntimeStatus = {
-                runtimeStatus($0.runtimeInstanceIdentifier)
-            }
-            self.clearReceipt = clearReceipt
-            self.wait = wait
-        }
-
-        init(
-            load: @escaping (ExtensionBridge.Handle) async ->
-                ExtensionBridge.SnapshotResult,
             receiptRuntimeStatus: @escaping @MainActor (
                 ExtensionBridge.NativeDeliveryReceipt
             ) -> ReceiptRuntimeStatus,

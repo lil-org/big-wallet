@@ -105,9 +105,7 @@ final class NativeApprovalFinalizer {
             return .unavailable
         }
 
-        guard let executionContext = nativeClaim.executionContext else {
-            return await releaseClaimForRetry(nativeClaim.approvalClaim)
-        }
+        let executionContext = nativeClaim.executionContext
         let now = clock()
         let age = now.timeIntervalSince(executionContext.observedAt)
         guard age >= 0,

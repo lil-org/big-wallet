@@ -21,9 +21,9 @@ const attempt = "00000001000000020000000300000004";
 const admissionDeadline = 1_700_000_900_000;
 const firstSolanaPublicKey = "11111111111111111111111111111111";
 const secondSolanaPublicKey = "So11111111111111111111111111111111111111112";
-const packagedBuildVersion = wireSource.match(
-    /const BUILD_VERSION = "([^"\n]+)";/
-)?.[1];
+const wireContext = vm.createContext({URL, crypto: webcrypto, clearTimeout, setTimeout});
+new vm.Script(wireSource).runInContext(wireContext);
+const packagedBuildVersion = wireContext.BigWalletBridgeWire.BUILD_VERSION;
 assert.match(packagedBuildVersion, /^.+\+[0-9]+$/);
 const packagedMarketingVersion = packagedBuildVersion.split("+")[0];
 const previousBuildVersion = packagedBuildVersion.replace(
@@ -31,33 +31,19 @@ const previousBuildVersion = packagedBuildVersion.replace(
     value => String(Math.max(0, Number(value) - 1))
 );
 const recoveryAlarmName = "manualSwitchRecovery";
-const approvalLeaseStoragePrefix = workerSource.match(
-    /const APPROVAL_LEASE_STORAGE_PREFIX = "([^"\n]+)";/
-)?.[1];
+const approvalLeaseStoragePrefix = makeHarness().read("APPROVAL_LEASE_STORAGE_PREFIX");
 assert.equal(typeof approvalLeaseStoragePrefix, "string");
 
 test("toolbar relays use distinct probe and manual-switch deadlines", () => {
-    const transportTimeout = Number(workerSource.match(
-        /const TRANSPORT_TIMEOUT = (\d+);/
-    )[1]);
-    const tabQueryTimeout = Number(workerSource.match(
-        /const TAB_QUERY_TIMEOUT = (\d+);/
-    )[1]);
-    const intentMultiplier = Number(workerSource.match(
-        /const MANUAL_SWITCH_INTENT_TIMEOUT = TRANSPORT_TIMEOUT \* (\d+);/
-    )[1]);
-    const nativeOperationTimeout = Number(workerSource.match(
-        /const NATIVE_OPERATION_TIMEOUT = (\d+) \* 1000;/
-    )[1]) * 1000;
-    const approvalExecutionTimeout = Number(workerSource.match(
-        /const APPROVAL_EXECUTION_TIMEOUT = (\d+) \* 1000;/
-    )[1]) * 1000;
-    const approvalLeaseGrace = Number(workerSource.match(
-        /const APPROVAL_LEASE_GRACE = (\d+) \* 1000;/
-    )[1]) * 1000;
+    const harness = makeHarness();
+    const transportTimeout = harness.read("TRANSPORT_TIMEOUT");
+    const tabQueryTimeout = harness.read("TAB_QUERY_TIMEOUT");
+    const nativeOperationTimeout = harness.read("NATIVE_OPERATION_TIMEOUT");
+    const approvalExecutionTimeout = harness.read("APPROVAL_EXECUTION_TIMEOUT");
+    const approvalLeaseGrace = harness.read("APPROVAL_LEASE_GRACE");
     assert.equal(tabQueryTimeout, 1000);
     assert.ok(tabQueryTimeout < transportTimeout);
-    assert.equal(transportTimeout * intentMultiplier, 10_000);
+    assert.equal(harness.read("MANUAL_SWITCH_INTENT_TIMEOUT"), 10_000);
     assert.equal(approvalExecutionTimeout, 150_000);
     assert.equal(approvalLeaseGrace, 10_000);
     assert.ok(approvalExecutionTimeout + approvalLeaseGrace <
@@ -305,6 +291,9 @@ function makeHarness({
         tabMessages,
         tabQueries() { return tabQueries; },
         timerDelays,
+        read(expression) {
+            return vm.runInContext(expression, context);
+        },
         install(details) {
             return installedListener(details);
         },

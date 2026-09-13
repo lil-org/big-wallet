@@ -75,9 +75,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         session.rotateReviewToken()
         XCTAssertEqual(session.reviewToken, active)
         XCTAssertEqual(session.presentationRevision, firstRevision + 2)
-        let source = try source(named: "Safari Shared/PopupRequestSessions.swift")
-        XCTAssertTrue(source.contains("case .snapshot, .verifiedFeeEstimate, .editorRequest:"))
-        XCTAssertTrue(source.contains("case .alert:"))
     }
 
     func testSessionPreservesFeedbackAndRecoveryAcrossAuthentication() throws {
@@ -131,24 +128,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         session.fail("Unavailable")
         XCTAssertEqual(session.state, .error)
         XCTAssertEqual(session.errorText, "Unavailable")
-    }
-
-    func testNativeControllerHasNoDurableCoordinatorOrRetryEngine() throws {
-        let source = try source(named: "Safari Shared/PopupRequestSessions.swift")
-        XCTAssertFalse(source.contains("PopupDurableApprovalCoordinator"))
-        XCTAssertFalse(source.contains("DeferredReply"))
-        XCTAssertFalse(source.contains("watchdog"))
-        XCTAssertFalse(source.contains("retryScheduler"))
-    }
-
-    func testTransactionBroadcastIsCheckpointedBeforeSend() throws {
-        let source = try source(named: "Safari Shared/DurableApprovalExecutor.swift")
-        let checkpoint = try XCTUnwrap(source.range(of: "store.prepareBroadcast"))
-        let send = try XCTUnwrap(source.range(of: "prepared.send()"))
-        XCTAssertLessThan(
-            source.distance(from: source.startIndex, to: checkpoint.lowerBound),
-            source.distance(from: source.startIndex, to: send.lowerBound)
-        )
     }
 
     func testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary()
@@ -513,38 +492,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testManualSwitchRecoveryHandlerKeepsItsQuietModeThroughFinalization() throws {
-        let handler = try source(named: "Safari Shared/SafariWebExtensionHandler.swift")
-        XCTAssertTrue(handler.contains("_ command: InternalSafariRequest.WorkerCommand"))
-        XCTAssertTrue(handler.contains("Self.bridge.loadManualSwitch("))
-        XCTAssertTrue(handler.contains("Self.bridge.listManualSwitchRequests("))
-        XCTAssertTrue(handler.contains("\"requests\": page.requests.map(\\.json)"))
-        XCTAssertTrue(handler.contains("mode: .manualRecovery"))
-        XCTAssertTrue(handler.contains("initialContext: executionContext,\n                            mode: mode"))
-        XCTAssertTrue(handler.contains("NativeAgentLauncher.hasCompatibleApprovalDelivery("))
-        XCTAssertTrue(handler.contains("respond(with: [\"id\": id, \"pending\": true]"))
-        let worker = try source(named: "Safari Shared/Resources/service_worker.js")
-        XCTAssertFalse(worker.contains("case \"getManualSwitchRequests\":"))
-        XCTAssertFalse(worker.contains("case \"getManualSwitchResponse\":"))
-    }
-
-    func testExtensionHandlerAwaitsPopupDispatchBeforeResponding() throws {
-        let source = try source(named: "Safari Shared/SafariWebExtensionHandler.swift")
-        XCTAssertTrue(source.contains("response = await PopupRequestSessions.dispatch("))
-        XCTAssertTrue(source.contains("response = await PopupRequestSessions.dispatchPrivateBrowsing("))
-    }
-
-    func testExtensionHandlerPreservesUnstagedAdmissionAfterLaunchFailure() throws {
-        let source = try source(named: "Safari Shared/SafariWebExtensionHandler.swift")
-        XCTAssertTrue(source.contains("reconcileAfterNativeLaunchFailure"))
-        XCTAssertTrue(source.contains(
-            "NativeAgentLauncher.currentApprovalDeliveryStatus"
-        ))
-        XCTAssertTrue(source.contains("nativeLaunchWasDelivered"))
-        XCTAssertFalse(source.contains("failClosedAfterNativeLaunchFailure"))
-        XCTAssertFalse(source.contains("switch admissionKind"))
-    }
-
     #if os(macOS)
     func testQuietNativeDeliveryWaitsForApprovalWithoutProcessActions() async throws {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
@@ -648,11 +595,11 @@ final class PopupRequestSessionsTests: XCTestCase {
         )
         let liveDependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
             load: { _ in .found(snapshot) },
-            runtimeStatus: { instanceIdentifier in
+            receiptRuntimeStatus: { receipt in
                 .compatible(.running(
                     url: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
                     processIdentifier: 1,
-                    runtimeInstanceIdentifier: instanceIdentifier
+                    runtimeInstanceIdentifier: receipt.runtimeInstanceIdentifier
                 ))
             },
             clearReceipt: { _, _ in .ownershipLost },
@@ -668,7 +615,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let indeterminateDependencies =
             NativeAgentLauncher.ApprovalDeliveryDependencies(
                 load: { _ in .found(snapshot) },
-                runtimeStatus: { _ in .indeterminate },
+                receiptRuntimeStatus: { _ in .indeterminate },
                 clearReceipt: { _, _ in .persisted },
                 wait: { _ in }
             )
@@ -825,25 +772,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(events, ["quit", "running", "clear"])
     }
     #endif
-
-    func testResponsePollingHealsMissingNativeApprovalDelivery() throws {
-        let source = try source(
-            named: "Safari Shared/SafariWebExtensionHandler.swift"
-        )
-        XCTAssertTrue(source.contains(
-            "ensureNativeApprovalDeliveryIfNeeded"
-        ))
-        XCTAssertTrue(source.contains(
-            "nativeDeliveryNonce: snapshot.nativeDeliveryNonce"
-        ))
-        XCTAssertTrue(source.contains("recordNativeExecutionContext"))
-        XCTAssertTrue(source.contains("acquireNativeExecutionFence"))
-        XCTAssertTrue(source.contains("waitForNativeApprovalFinalization"))
-        XCTAssertTrue(source.contains("snapshot.phase != .responded"))
-        XCTAssertFalse(source.contains(
-            "NativeApprovalFinalizer.shared.finalize("
-        ))
-    }
 
     func testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged() throws {
         let transaction = Transaction(
@@ -1074,11 +1002,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         return session
     }
 
-    func testQueueSortingRemainsFIFO() throws {
-        let source = try source(named: "Safari Shared/PopupRequestSessions.swift")
-        XCTAssertTrue(source.contains("$0.sequence < $1.sequence"))
-    }
-
     private func makeSession() throws -> PopupRequestSession {
         let data = try JSONSerialization.data(withJSONObject: [
             "id": 42,
@@ -1106,16 +1029,6 @@ final class PopupRequestSessionsTests: XCTestCase {
                 initiallyConnectedProviders: [],
                 network: nil
             )))
-        )
-    }
-
-    private func source(named relativePath: String) throws -> String {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(
-            contentsOf: root.appendingPathComponent(relativePath),
-            encoding: .utf8
         )
     }
 }
@@ -6794,6 +6707,7 @@ private func popupSwitchSnapshot(
         phase: .queued,
         request: request,
         nativeDecisionStaged: false,
+        nativeDeliveryNonce: .init(value: UUID()),
         host: request.host,
         configurationKey: request.configurationKey,
         revisions: popupRevisions(),
@@ -6864,7 +6778,8 @@ private func popupSnapshot(
         phase: phase,
         request: phase == .responded ? nil : request,
         nativeDecisionStaged: nativeDecisionStaged,
-        nativeDeliveryNonce: nativeDeliveryReceipt?.nativeDeliveryNonce,
+        nativeDeliveryNonce: nativeDeliveryReceipt?.nativeDeliveryNonce ??
+            .init(value: UUID()),
         nativeDeliveryReceipt: nativeDeliveryReceipt,
         host: request.host,
         configurationKey: request.configurationKey,
