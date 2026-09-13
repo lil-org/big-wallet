@@ -3283,7 +3283,7 @@ test("Solana final message validation rechecks authorization", async () => {
         result: validSignature,
     });
     await assert.rejects(request, error => error.code === 4900);
-    assert.equal(transaction.entry.signature, null);
+    assert.deepEqual([...transaction.entry.signature], new Array(64).fill(0));
 });
 
 test("Solana rejects invalid signatures, mutation, custom shapes, and oversized batches", async () => {
@@ -3336,13 +3336,61 @@ test("Solana rejects invalid signatures, mutation, custom shapes, and oversized 
     );
 });
 
-test("Solana rolls back attempted signature writes in reverse order", async () => {
+test("Solana preserves recreated signature slots for subsequent signing", async () => {
+    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
+        for (const enumerable of [false, true]) {
+            const harness = connectedSolanaHarness();
+            const first = makeTransaction(1);
+            const second = makeTransaction(2);
+            const target = first.entry || first.signatures;
+            const property = first.entry ? "signature" : "0";
+            Object.defineProperty(target, property, {enumerable});
+            const owner = second.entry ? second.transaction : second.transaction.message;
+            const method = second.entry ? "serializeMessage" : "serialize";
+            let deleteSlot = false;
+            owner[method] = () => {
+                if (deleteSlot) {
+                    deleteSlot = false;
+                    delete target[property];
+                }
+                return new Uint8Array([2]);
+            };
+            const signing = harness.provider.signAllTransactions([
+                first.transaction, second.transaction,
+            ]);
+            deleteSlot = true;
+            harness.Solana.applyEnvelope(harness.provider, {
+                id: harness.requests[0].id,
+                kind: "batchResult",
+                name: "signAllTransactions",
+                results: [validSignature, validSignature],
+            });
+            const signed = await signing;
+            assert.equal(signed[0], first.transaction);
+            const descriptor = Object.getOwnPropertyDescriptor(target, property);
+            assert.equal(descriptor.writable, true);
+            assert.equal(descriptor.enumerable, enumerable);
+            assert.equal(descriptor.configurable, true);
+
+            const nextSigning = harness.provider.signTransaction(first.transaction);
+            harness.Solana.applyEnvelope(harness.provider, {
+                id: harness.requests[1].id,
+                kind: "result",
+                name: "signTransaction",
+                result: validSignature,
+            });
+            assert.equal(await nextSigning, first.transaction);
+        }
+    }
+});
+
+test("Solana stops failed signature application without undoing completed writes", async () => {
     for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
         for (const failAfterWrite of [false, true]) {
             const harness = connectedSolanaHarness();
             const fixtures = [1, 2, 3].map(byte => makeTransaction(byte));
             const originals = [];
-            const restored = [];
+            const attempted = [];
             for (const [index, fixture] of fixtures.entries()) {
                 const target = fixture.entry || fixture.signatures;
                 const property = fixture.entry ? "signature" : "0";
@@ -3351,9 +3399,8 @@ test("Solana rolls back attempted signature writes in reverse order", async () =
                 const proxy = new Proxy(target, {
                     defineProperty(object, name, descriptor) {
                         if (name === property) {
-                            if (descriptor.value === original.value) {
-                                restored.push(index);
-                            } else if (index === 2) {
+                            attempted.push(index);
+                            if (index === 1) {
                                 if (failAfterWrite) {
                                     Reflect.defineProperty(object, name, descriptor);
                                 }
@@ -3379,80 +3426,21 @@ test("Solana rolls back attempted signature writes in reverse order", async () =
                 results: fixtures.map(() => validSignature),
             });
             await assert.rejects(signing, /apply failed/);
-            assert.deepEqual(restored, failAfterWrite ? [2, 1, 0] : [1, 0]);
-            for (const {target, property, original} of originals) {
-                assert.deepEqual(Object.getOwnPropertyDescriptor(target, property), original);
+            assert.deepEqual(attempted, [0, 1]);
+            for (const [index, {target, property, original}] of originals.entries()) {
+                const current = Object.getOwnPropertyDescriptor(target, property);
+                if (index === 0 || index === 1 && failAfterWrite) {
+                    assert.notEqual(current.value, original.value);
+                    assert.deepEqual([...current.value], new Array(64).fill(0));
+                    assert.equal(current.writable, original.writable);
+                    assert.equal(current.enumerable, original.enumerable);
+                    assert.equal(current.configurable, original.configurable);
+                } else {
+                    assert.deepEqual(current, original);
+                }
             }
         }
     }
-});
-
-test("Solana rollback leaves caller replacements and unrelated side effects intact", async () => {
-    const harness = connectedSolanaHarness();
-    const oldBytes = Buffer.alloc(64, 7);
-    const first = legacyTransaction(1, oldBytes);
-    const second = legacyTransaction(2);
-    const replacementBytes = new Uint8Array(64).fill(9);
-    const replacementArray = [{publicKey: publicKey(), signature: replacementBytes}];
-    const replacementPublicKey = publicKey(secondSolanaKey);
-    second.transaction.signatures[0] = new Proxy(second.entry, {
-        defineProperty(target, name, descriptor) {
-            if (name === "signature" && descriptor.value !== null) {
-                first.entry.signature = replacementBytes;
-                first.transaction.signatures = replacementArray;
-                oldBytes[0] = 8;
-                target.publicKey = replacementPublicKey;
-                Reflect.defineProperty(target, name, descriptor);
-                throw new Error("apply failed");
-            }
-            return Reflect.defineProperty(target, name, descriptor);
-        },
-    });
-    const signing = harness.provider.signAllTransactions([
-        first.transaction,
-        second.transaction,
-    ]);
-    harness.Solana.applyEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "batchResult",
-        name: "signAllTransactions",
-        results: [validSignature, validSignature],
-    });
-    await assert.rejects(signing, /apply failed/);
-    assert.equal(first.entry.signature, replacementBytes);
-    assert.equal(first.transaction.signatures, replacementArray);
-    assert.equal(oldBytes[0], 8);
-    assert.equal(second.entry.signature, null);
-    assert.equal(second.entry.publicKey, replacementPublicKey);
-});
-
-test("Solana rollback continues after restoration failure without masking the apply error", async () => {
-    const harness = connectedSolanaHarness();
-    const fixtures = [1, 2, 3].map(byte => legacyTransaction(byte));
-    fixtures[1].transaction.signatures[0] = new Proxy(fixtures[1].entry, {
-        defineProperty(target, name, descriptor) {
-            if (name === "signature" && descriptor.value === null) {
-                throw new Error("restore failed");
-            }
-            return Reflect.defineProperty(target, name, descriptor);
-        },
-    });
-    fixtures[2].transaction.signatures[0] = new Proxy(fixtures[2].entry, {
-        defineProperty() { throw new Error("apply failed"); },
-    });
-    const signing = harness.provider.signAllTransactions(
-        fixtures.map(fixture => fixture.transaction)
-    );
-    harness.Solana.applyEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "batchResult",
-        name: "signAllTransactions",
-        results: fixtures.map(() => validSignature),
-    });
-    await assert.rejects(signing, /apply failed/);
-    assert.equal(fixtures[0].entry.signature, null);
-    assert.equal(fixtures[1].entry.signature.length, 64);
-    assert.equal(fixtures[2].entry.signature, null);
 });
 
 test("Solana rejects a later batch setter that mutates an earlier message", async () => {
@@ -3495,8 +3483,8 @@ test("Solana rejects a later batch setter that mutates an earlier message", asyn
         results: [validSignature, validSignature],
     });
     await assert.rejects(request, error => error.code === 4200);
-    assert.equal(first.entry.signature, null);
-    assert.equal(secondTarget.signature, null);
+    assert.deepEqual([...first.entry.signature], new Array(64).fill(0));
+    assert.deepEqual([...secondTarget.signature], new Array(64).fill(0));
 });
 
 test("Solana rejects duplicate or aliased signer targets before writing", async () => {
@@ -3677,7 +3665,11 @@ test("Solana rechecks operation currentness around response callbacks", async ()
                 result: validSignature,
             });
             await assert.rejects(signing, error => error.code === 4900);
-            assert.equal(fixture.entry.signature, null);
+            if (phase === "preflight") {
+                assert.equal(fixture.entry.signature, null);
+            } else {
+                assert.deepEqual([...fixture.entry.signature], new Array(64).fill(0));
+            }
         }
     }
 });

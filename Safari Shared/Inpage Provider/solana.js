@@ -545,8 +545,8 @@ function signerPlan(adapter, publicKey, signature) {
         return {
             target: adapter.signatures,
             property: `${index}`,
-            originalDescriptor: descriptor,
-            replacement: new Uint8Array(signature),
+            descriptor,
+            signature: new Uint8Array(signature),
         };
     }
     for (let index = 0; index < adapter.signatures.length; index += 1) {
@@ -560,35 +560,19 @@ function signerPlan(adapter, publicKey, signature) {
             return {
                 target: entry,
                 property: "signature",
-                originalDescriptor: signatureDescriptor,
-                replacement: signature,
+                descriptor: signatureDescriptor,
+                signature,
             };
         }
     }
     throw new ProviderRpcError(4200, solanaSignatureApplicationError);
 }
 
-function restoreSignatureWrites(writes) {
-    for (let index = writes.length - 1; index >= 0; index -= 1) {
-        const write = writes[index];
-        try {
-            if (ownDataDescriptor(write.target, write.property)?.value ===
-                write.replacement) {
-                definePropertyNormally(
-                    write.target,
-                    write.property,
-                    write.originalDescriptor
-                );
-            }
-        } catch {
-        }
-    }
-}
-
 function applySignerPlan(plan) {
     definePropertyNormally(plan.target, plan.property, {
-        ...plan.originalDescriptor,
-        value: plan.replacement,
+        __proto__: null,
+        ...plan.descriptor,
+        value: plan.signature,
     });
 }
 
@@ -995,7 +979,6 @@ function signedResult(
         );
         return false;
     }
-    const writes = [];
     const plans = [];
     const signerTargets = new MapConstructor;
     try {
@@ -1027,7 +1010,6 @@ function signedResult(
             if (!operationIsCurrent(provider, record, approvalCommitted)) {
                 throw providerReplacementError();
             }
-            writes[writes.length] = plans[index];
             applySignerPlan(plans[index]);
             if (!operationIsCurrent(provider, record, approvalCommitted)) {
                 throw providerReplacementError();
@@ -1056,7 +1038,6 @@ function signedResult(
         if (!settled) { throw providerReplacementError(); }
         return true;
     } catch (error) {
-        restoreSignatureWrites(writes);
         if (state.runtime.owns(record)) {
             rejectOperation(provider, record, error);
         }

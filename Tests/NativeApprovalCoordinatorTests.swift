@@ -57,6 +57,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             continuations.removeValue(forKey: index)?.resume()
         }
 
+        func isPending(_ index: Int) -> Bool {
+            continuations[index] != nil
+        }
+
         func resumeAll() {
             let pending = continuations.values
             continuations.removeAll()
@@ -2533,11 +2537,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(waits.delays[1], 250_000_000)
         waits.resume(1)
         await fulfillment(of: [stageStarted], timeout: 1)
-        await waitForScheduledWait(waits, count: 3)
-        XCTAssertLessThanOrEqual(waits.delays[2], 1_000_000_000)
+        XCTAssertTrue(waits.isPending(0))
+        XCTAssertEqual(waits.delays.count, 2)
 
         fixture.store.snapshot = nil
-        waits.resume(2)
+        waits.resume(0)
         await waitForState(fixture.coordinator, .finished)
         stage.resume(.persisted)
         for _ in 0..<30 { await Task.yield() }
@@ -2545,7 +2549,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(stages, 2)
     }
 
-    func testSupersededWakeCannotPollTheNewApprovalState() async throws {
+    func testCanceledObservationWaitCannotPollTheNewApprovalState() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
         var finalizations = 0
@@ -2698,6 +2702,98 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         guard case .waiting = fixture.events.presentations[1],
               case .finished = fixture.events.presentations[2] else {
             return XCTFail("The observed decision must enter waiting and finish at expiry")
+        }
+    }
+
+    func testSuspendedTasksDoNotRetainCoordinator() async throws {
+        for suspendLoad in [true, false] {
+            let clock = Clock()
+            let waits = ScheduledWaits()
+            let load = AsyncGate<ExtensionBridge.SnapshotResult>()
+            var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now },
+                uptime: { clock.uptime },
+                wait: waits.wait,
+                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            ))
+            weak var coordinator = fixture?.coordinator
+            let events = try XCTUnwrap(fixture?.events)
+            if suspendLoad {
+                let loadStarted = expectation(description: "validation load suspended")
+                fixture?.store.loadHandler = { _ in
+                    loadStarted.fulfill()
+                    return await load.run()
+                }
+                start(try XCTUnwrap(fixture))
+                await fulfillment(of: [loadStarted], timeout: 1)
+            } else {
+                start(try XCTUnwrap(fixture))
+                await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
+                coordinator?.resumeAfterAuthentication()
+                await waitForState(try XCTUnwrap(coordinator), .reviewing)
+                await waitForScheduledWait(waits, count: 1)
+            }
+            let presentationCount = events.presentations.count
+            fixture = nil
+            XCTAssertNil(coordinator)
+            if suspendLoad { load.resume(.missing) }
+            waits.resumeAll()
+            for _ in 0..<30 { await Task.yield() }
+            XCTAssertEqual(events.presentations.count, presentationCount)
+        }
+    }
+
+    func testObsoleteFinalizerCannotFinishOrFailNewObservation() async throws {
+        for obsoleteResult in [NativeApprovalFinalizationResult.responseReady, .unavailable] {
+            let clock = Clock()
+            let waits = ScheduledWaits()
+            let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+            let stage = AsyncGate<ExtensionBridge.StoreMutationResult>()
+            let finalizerStarted = expectation(description: "obsolete finalizer suspended")
+            let stageStarted = expectation(description: "stage write suspended")
+            var finalizations = 0
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now },
+                uptime: { clock.uptime },
+                wait: waits.wait,
+                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                finalizeNativeDecision: { _ in
+                    finalizations += 1
+                    finalizerStarted.fulfill()
+                    return await finalizer.run()
+                }
+            ))
+            defer { waits.resumeAll() }
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication()
+            await waitForState(fixture.coordinator, .reviewing)
+            await waitForScheduledWait(waits, count: 1)
+            fixture.store.stageHandler = { _, _, _, _ in
+                stageStarted.fulfill()
+                return await stage.run()
+            }
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+            await fulfillment(of: [stageStarted], timeout: 1)
+            fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
+            waits.resume(0)
+            await fulfillment(of: [finalizerStarted], timeout: 1)
+
+            stage.resume(.persisted)
+            await waitForState(fixture.coordinator, .staged)
+            await waitForScheduledWait(waits, count: 2)
+            finalizer.resume(obsoleteResult)
+            for _ in 0..<30 { await Task.yield() }
+            XCTAssertEqual(fixture.coordinator.state, .staged)
+            XCTAssertEqual(fixture.events.presentations.count, 2)
+            XCTAssertTrue(waits.isPending(1))
+            XCTAssertEqual(finalizations, 1)
+            XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+
+            fixture.store.snapshot = nil
+            waits.resume(1)
+            await waitForState(fixture.coordinator, .finished)
+            XCTAssertEqual(fixture.events.presentations.count, 3)
         }
     }
 

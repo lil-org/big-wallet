@@ -141,15 +141,6 @@ struct DappRequestProcessor: DappRequestProcessing {
         case .success(let resolved):
             approval = resolved
         case .failure:
-            if case .ethereum = request.body,
-               case .approveMessage = action,
-               case .message(let message) = decision,
-               message.solanaCluster != nil {
-                return .response(Self.response(to: request, error: .init(
-                    message: Strings.failedToSign,
-                    code: ProviderResponseError.internalErrorCode
-                )))
-            }
             return .response(Self.response(to: request, error: .internalError))
         }
         switch (action, approval) {

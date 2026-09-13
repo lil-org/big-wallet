@@ -84,43 +84,6 @@ final class NativeApprovalCoordinator {
         }
     }
 
-    private enum ForegroundEffect {
-        case validate
-        case prepare
-        case cancelBeforeAuthentication(receiptOwned: Bool)
-        case persist(Mutation)
-        case reconcile(ownershipLost: Bool, expiring: Bool)
-    }
-
-    private enum Mutation {
-        case acquireReceipt
-        case stage(DappApprovalDecision, approvedAt: Date)
-        case respond(ResponseToExtension)
-        case reject(receiptOwned: Bool)
-    }
-
-    private enum ForegroundResult {
-        case loaded(ExtensionBridge.SnapshotResult)
-        case persisted(ExtensionBridge.StoreMutationResult)
-    }
-
-    private enum ForegroundWake {
-        case prepare
-        case persist
-        case prepareAgain
-    }
-
-    private enum WakePurpose: Equatable {
-        case foreground
-        case observation
-        case authenticationExpiry
-    }
-
-    private struct ScheduledWake: Equatable {
-        let purpose: WakePurpose
-        let uptime: TimeInterval
-    }
-
     enum State: Equatable {
         case registered
         case validating
@@ -246,11 +209,8 @@ final class NativeApprovalCoordinator {
     private var foregroundIdentifier: UUID?
     private var observationTask: Task<Void, Never>?
     private var observationIdentifier: UUID?
-    private var wakeTask: Task<Void, Never>?
-    private var wakeIdentifier: UUID?
-    private var scheduledWake: ScheduledWake?
-    private var foregroundWake: (action: ForegroundWake, uptime: TimeInterval)?
-    private var observationUptime: TimeInterval?
+    private var authenticationExpiryTask: Task<Void, Never>?
+    private var authenticationExpiryIdentifier: UUID?
     private var observationDelay = NativeApprovalCoordinator.initialPollingDelayNanoseconds
     private var terminalDeadline: Date
     private var didNotifyFailure = false
@@ -274,7 +234,7 @@ final class NativeApprovalCoordinator {
     deinit {
         foregroundTask?.cancel()
         observationTask?.cancel()
-        wakeTask?.cancel()
+        authenticationExpiryTask?.cancel()
     }
 
     var countsTowardUnverifiedLimit: Bool {
@@ -297,16 +257,17 @@ final class NativeApprovalCoordinator {
             owner: nativeDeliveryOwner
         )
         lifecycle = .validating
-        startForeground(.validate)
+        validate()
     }
 
     func resumeAfterAuthentication() {
         guard state == .awaitingAuthentication else { return }
+        cancelAuthenticationExpiry()
         terminalDeadline = environment.now().addingTimeInterval(
             ExtensionBridge.requestTTL
         )
         lifecycle = .loading(retryDelay: Self.initialRetryDelayNanoseconds)
-        startForeground(.prepare)
+        prepare()
     }
 
     func cancelBeforeAuthentication() {
@@ -328,103 +289,74 @@ final class NativeApprovalCoordinator {
         lifecycle = .persisting(operation)
     }
 
-    private func startForeground(_ effect: ForegroundEffect) {
+    private func startForeground<Value>(
+        operation: @escaping @MainActor () async -> Value,
+        completion: @escaping (NativeApprovalCoordinator, Value) -> Void
+    ) {
         cancelForeground()
         let identifier = UUID()
         foregroundIdentifier = identifier
-        let store = store
-        let handle = handle
-        let nonce = nativeDeliveryNonce
-        let runtime = runtime
         foregroundTask = Task { [weak self] in
-            guard !Task.isCancelled else { return }
-            let result: ForegroundResult
-            switch effect {
-            case .validate, .prepare, .cancelBeforeAuthentication, .reconcile:
-                result = .loaded(await store.load(handle: handle))
-            case .persist(let mutation):
-                let persisted: ExtensionBridge.StoreMutationResult
-                switch mutation {
-                case .acquireReceipt:
-                    guard let runtime else { return }
-                    persisted = await store.recordNativeDeliveryReceipt(
-                        handle: handle,
-                        nativeDeliveryNonce: nonce,
-                        runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                        owner: runtime.owner
-                    )
-                case .stage(let decision, let approvedAt):
-                    guard let runtime else { return }
-                    persisted = await store.stageNativeDecision(
-                        handle: handle,
-                        nativeDeliveryNonce: nonce,
-                        runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                        decision: decision,
-                        approvedAt: approvedAt
-                    )
-                case .respond(let response):
-                    guard let runtime else { return }
-                    persisted = await store.completeNativeDelivery(
-                        handle: handle,
-                        nativeDeliveryNonce: nonce,
-                        runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                        response: response
-                    )
-                case .reject(let receiptOwned):
-                    if receiptOwned {
-                        guard let runtime else { return }
-                        persisted = await store.rejectNativeDelivery(
-                            handle: handle,
-                            nativeDeliveryNonce: nonce,
-                            runtimeInstanceIdentifier: runtime.instanceIdentifier
-                        )
-                    } else {
-                        persisted = await store.reject(handle: handle)
-                    }
-                }
-                result = .persisted(persisted)
-            }
-            guard let self, foregroundIdentifier == identifier else { return }
+            guard !Task.isCancelled,
+                  self?.foregroundIdentifier == identifier else { return }
+            let result = await operation()
+            guard !Task.isCancelled,
+                  let self, foregroundIdentifier == identifier else { return }
             foregroundIdentifier = nil
             foregroundTask = nil
-            handleForeground(result, for: effect)
+            completion(self, result)
         }
-        scheduleNextWake()
     }
 
-    private func handleForeground(
-        _ result: ForegroundResult,
-        for effect: ForegroundEffect
-    ) {
-        switch (effect, result) {
-        case (.validate, .loaded(let loaded)):
-            guard case .found(let snapshot) = loaded,
-                  snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
-                  snapshot.phase != .responded,
-                  runtime != nil else {
-                finish()
-                return
-            }
-            order = Order(createdAt: snapshot.createdAt, sequence: snapshot.sequence)
-            terminalDeadline = environment.now().addingTimeInterval(
-                ExtensionBridge.requestTTL
-            )
-            recordDeadline(from: snapshot.request)
-            startPersistence(.acquireReceipt)
-        case (.prepare, .loaded(let loaded)):
-            handlePreparation(storedStatus(loaded))
-        case (.cancelBeforeAuthentication(let receiptOwned), .loaded(let loaded)):
-            handlePreauthenticationCancellation(loaded, receiptOwned: receiptOwned)
-        case (.persist, .persisted(let persisted)):
-            handlePersistence(persisted)
-        case (.reconcile(let ownershipLost, let expiring), .loaded(let loaded)):
-            handleReconciliation(
-                storedStatus(loaded),
+    private func validate() {
+        startForeground(operation: { [store, handle] in
+            await store.load(handle: handle)
+        }) { coordinator, loaded in
+            coordinator.handleValidation(loaded)
+        }
+    }
+
+    private func handleValidation(_ loaded: ExtensionBridge.SnapshotResult) {
+        guard case .found(let snapshot) = loaded,
+              snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
+              snapshot.phase != .responded,
+              runtime != nil else {
+            finish()
+            return
+        }
+        order = Order(createdAt: snapshot.createdAt, sequence: snapshot.sequence)
+        terminalDeadline = environment.now().addingTimeInterval(
+            ExtensionBridge.requestTTL
+        )
+        recordDeadline(from: snapshot.request)
+        startPersistence(.acquireReceipt)
+    }
+
+    private func prepare() {
+        startForeground(operation: { [store, handle] in
+            await store.load(handle: handle)
+        }) { coordinator, loaded in
+            coordinator.handlePreparation(coordinator.storedStatus(loaded))
+        }
+    }
+
+    private func reconcile(ownershipLost: Bool, expiring: Bool) {
+        startForeground(operation: { [store, handle] in
+            await store.load(handle: handle)
+        }) { coordinator, loaded in
+            coordinator.handleReconciliation(
+                coordinator.storedStatus(loaded),
                 ownershipLost: ownershipLost,
                 expiring: expiring
             )
-        default:
-            preconditionFailure()
+        }
+    }
+
+    private func checkPreauthenticationCancellation(receiptOwned: Bool) {
+        startForeground(operation: { [store, handle] in
+            await store.load(handle: handle)
+        }) { coordinator, loaded in
+            coordinator.handlePreauthenticationCancellation(loaded, receiptOwned: receiptOwned)
         }
     }
 
@@ -479,7 +411,13 @@ final class NativeApprovalCoordinator {
             return
         }
         lifecycle = .loading(retryDelay: nextDelay(after: delay))
-        scheduleForeground(.prepare, after: delay)
+        scheduleForeground(after: delay) { coordinator in
+            if coordinator.environment.now() >= coordinator.terminalDeadline {
+                coordinator.finish()
+            } else {
+                coordinator.prepare()
+            }
+        }
     }
 
     private func handlePreauthenticationCancellation(
@@ -516,7 +454,7 @@ final class NativeApprovalCoordinator {
                     return
                 }
             }
-            startForeground(.persist(.reject(receiptOwned: receiptOwned)))
+            persistRejection(receiptOwned: receiptOwned)
         case .missing:
             finish()
         case .unavailable:
@@ -528,7 +466,7 @@ final class NativeApprovalCoordinator {
         cancelForeground()
         stopObservation()
         lifecycle = .awaitingAuthentication
-        scheduleNextWake()
+        startAuthenticationExpiry()
     }
 
     func approveAccounts(
@@ -633,6 +571,7 @@ final class NativeApprovalCoordinator {
     }
 
     private func replacePersistence(_ action: PersistenceOperation.Action) {
+        cancelAuthenticationExpiry()
         cancelForeground()
         lifecycle = .persisting(PersistenceOperation(action))
         switch action {
@@ -657,31 +596,71 @@ final class NativeApprovalCoordinator {
         }
         if operation.cancellationRequested,
            state == .staging || state == .responding {
-            startForeground(.reconcile(ownershipLost: false, expiring: false))
+            reconcile(ownershipLost: false, expiring: false)
             return
         }
         if case .cancelBeforeAuthentication(let receiptOwned) = operation.action {
-            startForeground(.cancelBeforeAuthentication(receiptOwned: receiptOwned))
+            checkPreauthenticationCancellation(receiptOwned: receiptOwned)
             return
         }
-        guard runtime != nil else {
+        guard let runtime else {
             finish()
             return
         }
-        let mutation: Mutation
         switch operation.action {
         case .acquireReceipt:
-            mutation = .acquireReceipt
+            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
+                await store.recordNativeDeliveryReceipt(
+                    handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                    owner: runtime.owner
+                )
+            }) { $0.handlePersistence($1) }
         case .stage(let decision, let approvedAt):
-            mutation = .stage(decision, approvedAt: approvedAt)
+            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
+                await store.stageNativeDecision(
+                    handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                    decision: decision,
+                    approvedAt: approvedAt
+                )
+            }) { $0.handlePersistence($1) }
         case .respond(let response, _):
-            mutation = .respond(response)
+            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
+                await store.completeNativeDelivery(
+                    handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                    response: response
+                )
+            }) { $0.handlePersistence($1) }
         case .reject:
-            mutation = .reject(receiptOwned: true)
+            persistRejection(receiptOwned: true)
         case .cancelBeforeAuthentication:
-            return
+            break
         }
-        startForeground(.persist(mutation))
+    }
+
+    private func persistRejection(receiptOwned: Bool) {
+        if receiptOwned {
+            guard let runtime else {
+                finish()
+                return
+            }
+            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
+                await store.rejectNativeDelivery(
+                    handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: runtime.instanceIdentifier
+                )
+            }) { $0.handlePersistence($1) }
+        } else {
+            startForeground(operation: { [store, handle] in
+                await store.reject(handle: handle)
+            }) { $0.handlePersistence($1) }
+        }
     }
 
     private func handlePersistence(_ result: ExtensionBridge.StoreMutationResult) {
@@ -717,10 +696,7 @@ final class NativeApprovalCoordinator {
             if case .reject = operation.action, result == .retryablePersistenceFailure {
                 notifyFailureOnce()
             }
-            startForeground(.reconcile(
-                ownershipLost: result == .ownershipLost,
-                expiring: false
-            ))
+            reconcile(ownershipLost: result == .ownershipLost, expiring: false)
         }
     }
 
@@ -767,7 +743,9 @@ final class NativeApprovalCoordinator {
                         preparationDelay: nextDelay(after: delay)
                     )
                     lifecycle = .persisting(operation)
-                    scheduleForeground(.prepareAgain, after: delay)
+                    scheduleForeground(after: delay) { coordinator in
+                        coordinator.prepareAgain()
+                    }
                     return
                 default:
                     break
@@ -782,7 +760,9 @@ final class NativeApprovalCoordinator {
         let delay = operation.nextRetryDelay
         operation.nextRetryDelay = nextDelay(after: delay)
         lifecycle = .persisting(operation)
-        scheduleForeground(.persist, after: delay)
+        scheduleForeground(after: delay) { coordinator in
+            coordinator.performPersistence()
+        }
     }
 
     private func expirePersistence() {
@@ -791,44 +771,67 @@ final class NativeApprovalCoordinator {
         case .cancelBeforeAuthentication(receiptOwned: true):
             restoreAuthenticationWaiting()
         case .stage, .respond, .reject:
-            startForeground(.reconcile(ownershipLost: false, expiring: true))
+            reconcile(ownershipLost: false, expiring: true)
         default:
             finish()
         }
     }
 
-    private func startObservation() {
-        observationDelay = Self.initialPollingDelayNanoseconds
-        observationUptime = wakeUptime(after: observationDelay)
-        scheduleNextWake()
+    private func prepareAgain() {
+        guard case .persisting(let operation) = lifecycle,
+              case .respond(_, let delay) = operation.action else { return }
+        if operation.cancellationRequested {
+            replacePersistence(.reject)
+        } else {
+            lifecycle = .loading(retryDelay: delay)
+            if environment.now() >= terminalDeadline { finish() }
+            else { prepare() }
+        }
     }
 
-    private func observe() {
-        guard isLifecycleMonitoredState, observationIdentifier == nil else { return }
+    private func startObservation() {
+        observationDelay = Self.initialPollingDelayNanoseconds
+        scheduleObservation()
+    }
+
+    private func scheduleObservation() {
+        stopObservation()
+        guard isLifecycleMonitoredState else { return }
         let identifier = UUID()
         observationIdentifier = identifier
+        let deadline = wakeUptime(after: observationDelay)
+        let wait = environment.wait
+        let uptime = environment.uptime
         let store = store
         let handle = handle
         observationTask = Task { [weak self] in
             guard !Task.isCancelled else { return }
+            let remaining = max(0, deadline - uptime())
+            await wait(UInt64(remaining * 1_000_000_000))
+            guard !Task.isCancelled,
+                  self?.observationIdentifier == identifier else { return }
             let loaded = await store.load(handle: handle)
-            guard let self, observationIdentifier == identifier else { return }
+            guard !Task.isCancelled,
+                  let self, observationIdentifier == identifier else { return }
             observationIdentifier = nil
             observationTask = nil
-            switch storedStatus(loaded) {
-            case .staged:
-                finalizeObservedDecision()
-                return
-            case .responded, .missing, .superseded:
-                finish()
-            case .pending(_, let receipt):
-                if receipt != .current { finish() }
-            case .unavailable:
-                break
-            }
-            finishObservation()
+            handleObservation(loaded)
         }
-        scheduleNextWake()
+    }
+
+    private func handleObservation(_ loaded: ExtensionBridge.SnapshotResult) {
+        switch storedStatus(loaded) {
+        case .staged:
+            finalizeObservedDecision()
+            return
+        case .responded, .missing, .superseded:
+            finish()
+        case .pending(_, let receipt):
+            if receipt != .current { finish() }
+        case .unavailable:
+            break
+        }
+        finishObservation()
     }
 
     private func finalizeObservedDecision() {
@@ -839,7 +842,8 @@ final class NativeApprovalCoordinator {
         observationTask = Task { [weak self] in
             guard !Task.isCancelled else { return }
             let result = await finalize(handle)
-            guard let self, observationIdentifier == identifier else { return }
+            guard !Task.isCancelled,
+                  let self, observationIdentifier == identifier else { return }
             observationIdentifier = nil
             observationTask = nil
             switch result {
@@ -856,7 +860,6 @@ final class NativeApprovalCoordinator {
             }
             finishObservation()
         }
-        scheduleNextWake()
     }
 
     private func finishObservation() {
@@ -866,8 +869,7 @@ final class NativeApprovalCoordinator {
             return
         }
         observationDelay = nextDelay(after: observationDelay)
-        observationUptime = wakeUptime(after: observationDelay)
-        scheduleNextWake()
+        scheduleObservation()
     }
 
     private var isLifecycleMonitoredState: Bool {
@@ -884,33 +886,40 @@ final class NativeApprovalCoordinator {
         let restartObservation = state != .staged
         let shouldNotify = !didEnterWaitingState
         didEnterWaitingState = true
+        cancelAuthenticationExpiry()
         cancelForeground()
         lifecycle = .staged
         if restartObservation {
-            stopObservation()
             startObservation()
         }
         if shouldNotify { onEvent?(.presentation(.waiting)) }
-        scheduleNextWake()
     }
 
     private func cancelForeground() {
         foregroundIdentifier = nil
         foregroundTask?.cancel()
         foregroundTask = nil
-        foregroundWake = nil
     }
 
     private func stopObservation() {
         observationIdentifier = nil
         observationTask?.cancel()
         observationTask = nil
-        observationUptime = nil
     }
 
-    private func scheduleForeground(_ action: ForegroundWake, after delay: UInt64) {
-        foregroundWake = (action, wakeUptime(after: delay))
-        scheduleNextWake()
+    private func scheduleForeground(
+        after delay: UInt64,
+        completion: @escaping (NativeApprovalCoordinator) -> Void
+    ) {
+        let deadline = wakeUptime(after: delay)
+        let wait = environment.wait
+        let uptime = environment.uptime
+        startForeground(operation: {
+            let remaining = max(0, deadline - uptime())
+            await wait(UInt64(remaining * 1_000_000_000))
+        }) { coordinator, _ in
+            completion(coordinator)
+        }
     }
 
     private func wakeUptime(after delay: UInt64) -> TimeInterval {
@@ -920,82 +929,31 @@ final class NativeApprovalCoordinator {
         )
     }
 
-    private func scheduleNextWake() {
-        var candidates = [ScheduledWake]()
-        if let foregroundWake {
-            candidates.append(ScheduledWake(purpose: .foreground, uptime: foregroundWake.uptime))
-        }
-        if let observationUptime {
-            candidates.append(ScheduledWake(purpose: .observation, uptime: observationUptime))
-        }
-        if state == .awaitingAuthentication {
-            candidates.append(ScheduledWake(
-                purpose: .authenticationExpiry,
-                uptime: environment.uptime() + max(
-                    0, terminalDeadline.timeIntervalSince(environment.now())
-                )
-            ))
-        }
-        let next = candidates.min { $0.uptime < $1.uptime }
-        guard next != scheduledWake else { return }
-        wakeIdentifier = nil
-        wakeTask?.cancel()
-        wakeTask = nil
-        scheduledWake = next
-        guard let next else { return }
-        let identifier = UUID()
-        wakeIdentifier = identifier
-        let remaining = max(0, next.uptime - environment.uptime())
-        let wait = environment.wait
-        wakeTask = Task { [weak self] in
-            guard !Task.isCancelled else { return }
-            if next.purpose == .authenticationExpiry {
-                do {
-                    try await Task.sleep(for: .seconds(remaining))
-                } catch {
-                    return
-                }
-            } else {
-                await wait(UInt64(min(remaining * 1_000_000_000, Double(UInt64.max))))
-            }
-            guard let self, wakeIdentifier == identifier else { return }
-            wakeIdentifier = nil
-            wakeTask = nil
-            scheduledWake = nil
-            handleWake(next)
-        }
+    private func cancelAuthenticationExpiry() {
+        authenticationExpiryIdentifier = nil
+        authenticationExpiryTask?.cancel()
+        authenticationExpiryTask = nil
     }
 
-    private func handleWake(_ wake: ScheduledWake) {
-        switch wake.purpose {
-        case .foreground:
-            guard let scheduled = foregroundWake else { return }
-            foregroundWake = nil
-            switch scheduled.action {
-            case .prepare:
-                if environment.now() >= terminalDeadline { finish() }
-                else { startForeground(.prepare) }
-            case .persist:
-                performPersistence()
-            case .prepareAgain:
-                guard case .persisting(let operation) = lifecycle,
-                      case .respond(_, let delay) = operation.action else { return }
-                if operation.cancellationRequested {
-                    replacePersistence(.reject)
-                } else {
-                    lifecycle = .loading(retryDelay: delay)
-                    if environment.now() >= terminalDeadline { finish() }
-                    else { startForeground(.prepare) }
-                }
+    private func startAuthenticationExpiry() {
+        cancelAuthenticationExpiry()
+        guard state == .awaitingAuthentication else { return }
+        let identifier = UUID()
+        authenticationExpiryIdentifier = identifier
+        let remaining = max(0, terminalDeadline.timeIntervalSince(environment.now()))
+        authenticationExpiryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(remaining))
+            } catch {
+                return
             }
-        case .observation:
-            observationUptime = nil
-            observe()
-        case .authenticationExpiry:
-            if state == .awaitingAuthentication,
-               environment.now() >= terminalDeadline { finish() }
+            guard let self, authenticationExpiryIdentifier == identifier,
+                  state == .awaitingAuthentication else { return }
+            authenticationExpiryIdentifier = nil
+            authenticationExpiryTask = nil
+            if environment.now() >= terminalDeadline { finish() }
+            else { startAuthenticationExpiry() }
         }
-        scheduleNextWake()
     }
 
     private func recordDeadline(from request: SafariRequest?) {
@@ -1019,7 +977,7 @@ final class NativeApprovalCoordinator {
         lifecycle = .finished
         cancelForeground()
         stopObservation()
-        scheduleNextWake()
+        cancelAuthenticationExpiry()
         onEvent?(.presentation(presentation))
     }
 

@@ -11,7 +11,23 @@ struct EthereumDappRequestProcessor {
         body: SafariRequest.Ethereum,
         walletAccess: WalletAccess = SourceWalletAccess.shared
     ) -> DappRequestPreparation {
-        lazy var walletAndAccount = walletAccess.specificAccount(
+        prepareAvailable(request: request, body: body, walletAccess: walletAccess)
+            ?? .response(response(to: request, error: .internalError))
+    }
+
+    static func prepareWithoutWallets(
+        request: SafariRequest,
+        body: SafariRequest.Ethereum
+    ) -> DappRequestPreparation? {
+        prepareAvailable(request: request, body: body, walletAccess: nil)
+    }
+
+    private static func prepareAvailable(
+        request: SafariRequest,
+        body: SafariRequest.Ethereum,
+        walletAccess: WalletAccess?
+    ) -> DappRequestPreparation? {
+        lazy var walletAndAccount = walletAccess?.specificAccount(
             coin: .ethereum,
             address: body.address
         ).map { ($0.walletId, $0.account) }
@@ -20,6 +36,7 @@ struct EthereumDappRequestProcessor {
         case .addEthereumChain:
             return prepareAddChain(request: request, body: body)
         case .requestAccounts:
+            guard let walletAccess else { return nil }
             let action = SelectAccountAction(
                 coinType: .ethereum,
                 selectedAccounts: Set(walletAccess.suggestedAccounts(coin: .ethereum)),
@@ -28,7 +45,11 @@ struct EthereumDappRequestProcessor {
             )
             return .approval(.selectAccount(action))
         case .signTypedMessage:
-            guard let walletAndAccount, let raw = body.raw else {
+            guard let raw = body.raw else {
+                return .response(genericFailureResponse(to: request))
+            }
+            guard walletAccess != nil else { return nil }
+            guard let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
             return prepareMessageSigning(
@@ -39,7 +60,11 @@ struct EthereumDappRequestProcessor {
                 payload: .ethereumTypedData(raw)
             )
         case .signMessage:
-            guard let data = body.message, let walletAndAccount else {
+            guard let data = body.message else {
+                return .response(genericFailureResponse(to: request))
+            }
+            guard walletAccess != nil else { return nil }
+            guard let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
             return prepareMessageSigning(
@@ -50,7 +75,11 @@ struct EthereumDappRequestProcessor {
                 payload: .ethereumMessage(data)
             )
         case .signPersonalMessage:
-            guard let data = body.message, let walletAndAccount else {
+            guard let data = body.message else {
+                return .response(genericFailureResponse(to: request))
+            }
+            guard walletAccess != nil else { return nil }
+            guard let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
             let text = String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data)
@@ -76,6 +105,7 @@ struct EthereumDappRequestProcessor {
                   case .resolved(let resolvedNetwork) = Nodes.resolution(chainId: chainId) else {
                 return .response(response(to: request, error: .internalError))
             }
+            guard walletAccess != nil else { return nil }
             guard let walletAndAccount else {
                 return .response(response(
                     to: request,
@@ -115,13 +145,15 @@ struct EthereumDappRequestProcessor {
             let results: [String]
             if body.address.isEmpty {
                 results = []
-            } else if let account = walletAndAccount?.1 {
-                results = [account.address]
             } else {
-                return .response(response(
-                    to: request,
-                    error: .init(message: Strings.providerNotReady, code: 4100)
-                ))
+                guard walletAccess != nil else { return nil }
+                guard let account = walletAndAccount?.1 else {
+                    return .response(response(
+                        to: request,
+                        error: .init(message: Strings.providerNotReady, code: 4100)
+                    ))
+                }
+                results = [account.address]
             }
             return .response(response(
                 to: request,
@@ -130,46 +162,6 @@ struct EthereumDappRequestProcessor {
                     chainId: String.hex(chainId, withPrefix: true)
                 ))
             ))
-        }
-    }
-
-    static func prepareWithoutWallets(
-        request: SafariRequest,
-        body: SafariRequest.Ethereum
-    ) -> DappRequestPreparation? {
-        switch body.method {
-        case .addEthereumChain, .ecRecover:
-            return prepare(request: request, body: body)
-        case .switchEthereumChain:
-            guard let chainId = body.switchToChainId,
-                  Nodes.url(chainId: chainId) != nil else {
-                return prepare(request: request, body: body)
-            }
-            return body.address.isEmpty ? prepare(request: request, body: body) : nil
-        case .signTransaction:
-            switch body.transactionParsingResult {
-            case .failure(let error):
-                return .response(response(
-                    to: request,
-                    error: transactionProviderError(for: error)
-                ))
-            case .success:
-                guard let chainId = body.currentChainId,
-                      case .resolved = Nodes.resolution(chainId: chainId) else {
-                    return .response(response(to: request, error: .internalError))
-                }
-                return nil
-            }
-        case .signTypedMessage:
-            return body.raw == nil
-                ? .response(genericFailureResponse(to: request))
-                : nil
-        case .signMessage, .signPersonalMessage:
-            return body.message == nil
-                ? .response(genericFailureResponse(to: request))
-                : nil
-        case .requestAccounts:
-            return nil
         }
     }
 
