@@ -150,7 +150,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         try vault.publish(
             source: fixture.source,
-            sourceRevision: 7,
             integrityKey: integrityKey
         )
         let envelopeData = try Data(contentsOf: url)
@@ -168,12 +167,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             "generation",
             "header",
             "nonce",
-            "sourceRevision",
             "tag",
             "version",
         ])
         XCTAssertEqual(envelope["version"] as? Int, 1)
-        XCTAssertEqual(envelope["sourceRevision"] as? Int, 7)
         let catalogJSON = try XCTUnwrap(
             JSONSerialization.jsonObject(
                 with: SourceWalletAccess.encodeCatalog(fixture.source.catalog)
@@ -226,7 +223,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: fixture().source,
-            sourceRevision: 11,
             integrityKey: integrityKey
         )
 
@@ -234,11 +230,31 @@ final class SafariApprovalVaultTests: XCTestCase {
         var object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: data) as? [String: Any]
         )
-        object["sourceRevision"] = 12
+        let originalGeneration = try XCTUnwrap(
+            UUID(uuidString: try XCTUnwrap(object["generation"] as? String))
+        )
+        let replacementGeneration = UUID()
+        keys.keys[replacementGeneration] = try XCTUnwrap(keys.keys[originalGeneration])
+        let headerData = try XCTUnwrap(
+            Data(base64Encoded: try XCTUnwrap(object["header"] as? String))
+        )
+        var header = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: headerData) as? [String: Any]
+        )
+        header["generation"] = replacementGeneration.uuidString
+        object["generation"] = replacementGeneration.uuidString
+        object["header"] = try JSONSerialization.data(
+            withJSONObject: header,
+            options: [.sortedKeys]
+        ).base64EncodedString()
         try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
             .write(to: url, options: .atomic)
 
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity.generation, replacementGeneration)
+        var loadedKey = false
+        keys.onLoad = { loadedKey = true }
         let unlocked = await vault.unlock(reason: "Approve")
+        XCTAssertTrue(loadedKey)
         XCTAssertNil(unlocked)
     }
 
@@ -255,7 +271,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         let fixture = try mnemonicFixture()
         try vault.publish(
             source: fixture.source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
 
@@ -309,7 +324,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
 
@@ -340,7 +354,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: fixture().source,
-            sourceRevision: 3,
             integrityKey: integrityKey
         )
 
@@ -368,14 +381,13 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: source,
-            sourceRevision: 20,
             integrityKey: integrityKey
         )
+        let originalGeneration = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity.generation)
         keys.onLoad = {
             keys.onLoad = nil
             _ = try? vault.publish(
                 source: source,
-                sourceRevision: 21,
                 integrityKey: self.integrityKey
             )
         }
@@ -385,7 +397,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         guard case .unavailable = result else {
             return XCTFail("A rotated envelope must invalidate the unlock")
         }
-        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity.sourceRevision, 21)
+        let replacementGeneration = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity.generation)
+        XCTAssertNotEqual(replacementGeneration, originalGeneration)
     }
 
     func testCatalogAndUnlockedScopeRequireCurrentGenerationKey() async throws {
@@ -402,7 +415,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         let fixture = try fixture()
         try vault.publish(
             source: fixture.source,
-            sourceRevision: 30,
             integrityKey: integrityKey
         )
         let unlockedValue = await vault.unlock(reason: "Approve")
@@ -451,7 +463,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: fixture().source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
         let unlocked = await vault.unlock(reason: "Approve")
@@ -482,7 +493,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: fixture().source,
-            sourceRevision: 13,
             integrityKey: integrityKey
         )
 
@@ -532,7 +542,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: fixture.source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
 
@@ -576,7 +585,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try vault.publish(
             source: fixture.source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
         var envelope = try XCTUnwrap(
@@ -615,7 +623,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 canEvaluateAuthentication: { _, _ in true },
                 authentication: { _, _, _ in true }
             )
-            try vault.publish(source: source, sourceRevision: 1, integrityKey: integrityKey)
+            try vault.publish(source: source, integrityKey: integrityKey)
 
             XCTAssertNotNil(vault.catalogAccess())
             let unlocked = await vault.unlock(reason: "Approve")
@@ -642,7 +650,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertThrowsError(try vault.publish(
             source: source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )) { error in
             XCTAssertEqual(error as? SafariApprovalVault.Error, .payloadTooLarge)
@@ -669,7 +676,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         try publisher.publish(
             source: fixture().source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
         try FileManager.default.createSymbolicLink(
@@ -999,7 +1005,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let repaired = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertNotEqual(repaired.generation, first.generation)
-        XCTAssertEqual(repaired.sourceRevision, first.sourceRevision)
         XCTAssertEqual(repaired.catalogData, first.catalogData)
         XCTAssertEqual(keychain.keys.count, 1)
         XCTAssertEqual(keychain.events.filter { $0 == "add" }.count, 2)
@@ -1057,7 +1062,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         let source = try fixture().source
 
-        try vault.publish(source: source, sourceRevision: 1, integrityKey: integrityKey)
+        try vault.publish(source: source, integrityKey: integrityKey)
 
         XCTAssertEqual(keychain.events, ["tombstone", "delete", "add", "envelope"])
         XCTAssertEqual(keychain.keys.count, 1)
@@ -1067,7 +1072,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertThrowsError(try vault.publish(
             source: source,
-            sourceRevision: 2,
             integrityKey: integrityKey
         )) { error in
             XCTAssertEqual(error as? SafariApprovalVault.Error, .keychainFailure(errSecIO))
@@ -1100,7 +1104,6 @@ final class SafariApprovalVaultTests: XCTestCase {
             let fixture = try fixture()
             try vault.publish(
                 source: fixture.source,
-                sourceRevision: 1,
                 integrityKey: integrityKey
             )
             let catalog = try XCTUnwrap(vault.catalogAccess())
@@ -1157,7 +1160,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
         let second = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertNotEqual(second.generation, first.generation)
-        XCTAssertEqual(second.sourceRevision, first.sourceRevision.map { $0 + 1 })
     }
 
     func testHostAbortsSourceMutationWhenUnavailableTombstoneWriteFails()
@@ -1247,7 +1249,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let repaired = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertNotEqual(repaired.generation, firstGeneration)
-        XCTAssertEqual(repaired.sourceRevision, 1)
     }
 
     func testHostRepublishesSameCatalogWhenSourcePasswordChanges() throws {
@@ -1281,7 +1282,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let repaired = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertNotEqual(repaired.generation, first.generation)
-        XCTAssertEqual(repaired.sourceRevision, first.sourceRevision)
         XCTAssertEqual(repaired.catalogData, first.catalogData)
     }
 
@@ -1299,7 +1299,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         source.password = Data("wrong-password".utf8)
         try vault.publish(
             source: source,
-            sourceRevision: 1,
             integrityKey: integrityKey
         )
 
@@ -1347,7 +1346,6 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let repaired = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertNotEqual(repaired.generation, first.generation)
-        XCTAssertEqual(repaired.sourceRevision, first.sourceRevision)
         XCTAssertEqual(repaired.catalogData, first.catalogData)
     }
 
@@ -1409,7 +1407,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let source = try fixture().source
-        var rejectRevisionUpdates = false
+        var rejectMetadataUpdates = false
         let host = SafariApprovalVaultHost(
             vault: vault,
             defaults: defaults,
@@ -1417,9 +1415,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             synchronizeDefaults: { value in
-                if rejectRevisionUpdates && value.integer(
-                    forKey: "SafariApprovalVault.hostSourceRevision.v1"
-                ) > 1 {
+                if rejectMetadataUpdates {
                     return false
                 }
                 return value.synchronize()
@@ -1429,7 +1425,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         host.start()
         let first = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertEqual(stores, 1)
-        rejectRevisionUpdates = true
+        rejectMetadataUpdates = true
         var mutations = 0
 
         XCTAssertThrowsError(try host.performSourceMutation {
@@ -1448,32 +1444,16 @@ final class SafariApprovalVaultTests: XCTestCase {
             try fixture().source.wallets.map(\.storedKeyJSON)
         )
 
-        rejectRevisionUpdates = false
+        rejectMetadataUpdates = false
         host.reconcile()
 
         let recovered = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertEqual(stores, 2)
         XCTAssertNotEqual(recovered.generation, first.generation)
-        XCTAssertEqual(recovered.sourceRevision, first.sourceRevision.map { $0 + 1 })
     }
 
-    func testSourceMutationSurvivesFailedInitialRevisionSynchronization()
+    func testSourceMutationRecoversAfterPersistentMetadataSynchronizationFailure()
         async throws {
-        try await assertSourceMutationRecoversAfterRevisionSynchronizationFailure(
-            initializingRevision: true
-        )
-    }
-
-    func testSourceMutationSurvivesFailedRevisionIncrementSynchronization()
-        async throws {
-        try await assertSourceMutationRecoversAfterRevisionSynchronizationFailure(
-            initializingRevision: false
-        )
-    }
-
-    private func assertSourceMutationRecoversAfterRevisionSynchronizationFailure(
-        initializingRevision: Bool
-    ) async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -1491,7 +1471,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         let original = try fixture()
         let replacement = try mnemonicFixture()
         var source = original.source
-        var sourceLoads = 0
         var rejectSynchronization = false
         var synchronizationFailures = 0
         let host = SafariApprovalVaultHost(
@@ -1499,28 +1478,17 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: defaults,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             synchronizeDefaults: { value in
-                if rejectSynchronization && (initializingRevision || value.integer(
-                    forKey: "SafariApprovalVault.hostSourceRevision.v1"
-                ) > 1) {
+                if rejectSynchronization {
                     synchronizationFailures += 1
                     return false
                 }
                 return value.synchronize()
             },
             sourceSnapshot: {
-                sourceLoads += 1
                 return source
             }
         )
-        if initializingRevision {
-            try vault.publish(
-                source: source,
-                sourceRevision: 1,
-                integrityKey: integrityKey
-            )
-        } else {
-            host.start()
-        }
+        host.start()
         let originalIdentity = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         let unlocked = await vault.unlock(reason: "Before metadata failure")
         let previousAccess = try XCTUnwrap(unlocked)
@@ -1528,7 +1496,6 @@ final class SafariApprovalVaultTests: XCTestCase {
             walletID: "wallet",
             account: original.account
         ))
-        let initialSourceLoads = sourceLoads
         rejectSynchronization = true
         var mutations = 0
 
@@ -1543,7 +1510,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(result, "saved")
         XCTAssertEqual(mutations, 1)
         XCTAssertEqual(stores, 1)
-        XCTAssertEqual(sourceLoads, initialSourceLoads)
         XCTAssertGreaterThan(synchronizationFailures, 0)
         XCTAssertNil(vault.catalogAccess())
         XCTAssertTrue(keys.keys.isEmpty)
@@ -1577,7 +1543,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(stores, 2)
         XCTAssertNotEqual(recovered.generation, originalIdentity.generation)
         XCTAssertNotEqual(recovered.catalogData, originalIdentity.catalogData)
-        XCTAssertEqual(recovered.sourceRevision, initializingRevision ? 1 : 2)
         let recoveredUnlock = await vault.unlock(reason: "After metadata recovery")
         let recoveredAccess = try XCTUnwrap(recoveredUnlock)
         XCTAssertNotNil(recoveredAccess.privateKey(
@@ -1587,6 +1552,72 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(keys.keys[try XCTUnwrap(originalIdentity.generation)])
         XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
         XCTAssertNil(previousAccess.takeExecutionLease())
+    }
+
+    func testSourceMutationImmediatelyRecoversAfterTransientMetadataSynchronizationFailure()
+        async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        var stores = 0
+        keys.onStore = { _ in stores += 1 }
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let original = try fixture()
+        let replacement = try mnemonicFixture()
+        var source = original.source
+        var failNextSynchronization = false
+        var synchronizationFailures = 0
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            synchronizeDefaults: { value in
+                if failNextSynchronization {
+                    failNextSynchronization = false
+                    synchronizationFailures += 1
+                    return false
+                }
+                return value.synchronize()
+            },
+            sourceSnapshot: { source }
+        )
+        host.start()
+        let first = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let originalUnlock = await vault.unlock(reason: "Before mutation")
+        let previousAccess = try XCTUnwrap(originalUnlock)
+        failNextSynchronization = true
+        var mutations = 0
+
+        let result = try host.performSourceMutation {
+            mutations += 1
+            XCTAssertTrue(keys.keys.isEmpty)
+            XCTAssertEqual(try Data(contentsOf: url), Data())
+            source = replacement.source
+            return "saved"
+        }
+
+        XCTAssertEqual(result, "saved")
+        XCTAssertEqual(mutations, 1)
+        XCTAssertEqual(synchronizationFailures, 1)
+        XCTAssertEqual(stores, 2)
+        let current = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        XCTAssertNotEqual(current.generation, first.generation)
+        XCTAssertNotEqual(current.catalogData, first.catalogData)
+        XCTAssertNotNil(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
+        XCTAssertNil(keys.keys[try XCTUnwrap(first.generation)])
+        XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
+        XCTAssertNil(previousAccess.takeExecutionLease())
+        let replacementUnlock = await vault.unlock(reason: "After mutation")
+        let access = try XCTUnwrap(replacementUnlock)
+        XCTAssertNotNil(access.privateKey(walletID: "mnemonic-wallet", account: replacement.account))
     }
 
     func testSourceMutationRevokesCachedVaultEvenWithoutReconciliation()
@@ -2198,7 +2229,6 @@ private final class MemoryApprovalIntegrityKeyStore:
 private final class DerivationRaceWalletAccess: WalletAccess {
     let catalogIdentity = WalletCatalogIdentity(
         generation: UUID(),
-        sourceRevision: 1,
         catalogData: Data("catalog".utf8)
     )
     let orderedAccounts: [SpecificWalletAccount]

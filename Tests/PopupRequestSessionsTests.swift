@@ -6144,7 +6144,6 @@ private final class CompactWalletAccess: WalletAccess {
         self.orderedAccounts = accounts
         self.catalogIdentity = catalogIdentity ?? WalletCatalogIdentity(
             generation: UUID(),
-            sourceRevision: 1,
             catalogData: Data("catalog".utf8)
         )
     }

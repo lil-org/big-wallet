@@ -362,13 +362,11 @@ final class SafariApprovalVault {
     private struct Header: Codable, Equatable {
         let version: Int
         let generation: UUID
-        let sourceRevision: UInt64
     }
 
     private struct Envelope: Codable, Equatable {
         let version: Int
         let generation: UUID
-        let sourceRevision: UInt64
         let header: Data
         let catalog: Data
         let nonce: Data
@@ -449,14 +447,12 @@ final class SafariApprovalVault {
     @discardableResult
     func publish(
         source: SafariApprovalSourceSnapshot,
-        sourceRevision: UInt64,
         integrityKey: Data,
         coordinationLease: CoordinationLease? = nil
     ) throws -> Publication {
         try withCoordination(coordinationLease) {
             try publishCoordinated(
                 source: source,
-                sourceRevision: sourceRevision,
                 integrityKey: integrityKey
             )
         }
@@ -464,7 +460,6 @@ final class SafariApprovalVault {
 
     private func publishCoordinated(
         source: SafariApprovalSourceSnapshot,
-        sourceRevision: UInt64,
         integrityKey: Data
     ) throws -> Publication {
         guard source.catalog.isValid else { throw Error.invalidCatalog }
@@ -473,8 +468,7 @@ final class SafariApprovalVault {
         let catalogData = try SourceWalletAccess.encodeCatalog(source.catalog)
         let header = Header(
             version: Self.envelopeVersion,
-            generation: generation,
-            sourceRevision: sourceRevision
+            generation: generation
         )
         let headerData = try canonicalEncoder().encode(header)
         let aad = authenticatedData(header: headerData, catalog: catalogData)
@@ -506,7 +500,6 @@ final class SafariApprovalVault {
         let envelope = Envelope(
             version: header.version,
             generation: header.generation,
-            sourceRevision: header.sourceRevision,
             header: headerData,
             catalog: catalogData,
             nonce: sealed.nonce.withUnsafeBytes { Data($0) },
@@ -569,14 +562,12 @@ final class SafariApprovalVault {
         return CatalogWalletAccess(
             catalog: catalog,
             generation: envelope.generation,
-            sourceRevision: envelope.sourceRevision,
             catalogData: envelope.catalog
         )
     }
 
     func publicationStatus(
         source: SafariApprovalSourceSnapshot,
-        sourceRevision: UInt64,
         expectedGeneration: UUID,
         expectedEnvelopeDigest: Data,
         expectedSourceMAC: Data,
@@ -609,7 +600,6 @@ final class SafariApprovalVault {
         guard let record = loadEnvelopeRecordLocked() else { return .stale }
         let envelope = record.envelope
         guard envelope.generation == expectedGeneration,
-              envelope.sourceRevision == sourceRevision,
               envelope.catalog == catalogData,
               Self.digest(record.data) == expectedEnvelopeDigest else {
             return .stale
@@ -691,7 +681,6 @@ final class SafariApprovalVault {
               let access = UnlockedWalletAccess(
                   catalog: catalog,
                   generation: envelope.generation,
-                  sourceRevision: envelope.sourceRevision,
                   catalogData: envelope.catalog,
                   password: secret.password,
                   walletRecords: secret.wallets.map {
@@ -797,7 +786,6 @@ final class SafariApprovalVault {
               ),
               header.version == envelope.version,
               header.generation == envelope.generation,
-              header.sourceRevision == envelope.sourceRevision,
               (try? canonicalEncoder().encode(header)) == envelope.header,
               envelope.nonce.count == 12,
               envelope.tag.count == 16,
@@ -1108,13 +1096,11 @@ final class SafariApprovalVaultHost {
             throw SafariApprovalVault.Error.unavailable
         }
         defer { coordinationLease.release() }
-        let publicationReady = try willMutateSourceLocked(
+        try willMutateSourceLocked(
             coordinationLease: coordinationLease
         )
         let result = try operation()
-        if publicationReady {
-            reconcileLocked(coordinationLease: coordinationLease)
-        }
+        reconcileLocked(coordinationLease: coordinationLease)
         return result
     }
 
@@ -1140,8 +1126,6 @@ final class SafariApprovalVaultHost {
         }
         defer { source.resetSecrets() }
 
-        let revision = sourceRevision(coordinationLease: coordinationLease)
-        guard revision > 0 else { return }
         var integrityKey: Data
         do {
             integrityKey = try integrityKeyStore.loadOrCreate()
@@ -1167,7 +1151,6 @@ final class SafariApprovalVaultHost {
         if let metadata = publicationMetadata() {
             switch vault.publicationStatus(
                 source: source,
-                sourceRevision: revision,
                 expectedGeneration: metadata.generation,
                 expectedEnvelopeDigest: metadata.envelopeDigest,
                 expectedSourceMAC: metadata.sourceMAC,
@@ -1192,7 +1175,6 @@ final class SafariApprovalVaultHost {
             }
             let publication = try vault.publish(
                 source: source,
-                sourceRevision: revision,
                 integrityKey: integrityKey,
                 coordinationLease: coordinationLease
             )
@@ -1213,57 +1195,19 @@ final class SafariApprovalVaultHost {
 
     private func willMutateSourceLocked(
         coordinationLease: SafariApprovalVault.CoordinationLease
-    ) throws -> Bool {
+    ) throws {
         do {
             try vault.clear(coordinationLease: coordinationLease)
         } catch {
             throw SafariApprovalVault.Error.unavailable
         }
-        let current = sourceRevision(coordinationLease: coordinationLease)
-        guard current > 0, current < UInt64.max else {
-            clearVaultLocked(
-                coordinationLease: coordinationLease
-            )
-            return false
-        }
-        defaults.set(
-            NSNumber(value: current + 1),
-            forKey: Self.sourceRevisionKey
-        )
         defaults.removeObject(forKey: Self.publicationMetadataKey)
-        guard synchronizeDefaults(defaults) else {
+        if !synchronizeDefaults(defaults) {
             SafariApprovalDiagnostics.record(
-                "persist source revision",
+                "invalidate publication metadata",
                 error: SafariApprovalVault.Error.unavailable
             )
-            clearVaultLocked(
-                coordinationLease: coordinationLease
-            )
-            return false
         }
-        return true
-    }
-
-    private func sourceRevision(
-        coordinationLease: SafariApprovalVault.CoordinationLease
-    ) -> UInt64 {
-        if let value = defaults.object(
-            forKey: Self.sourceRevisionKey
-        ) as? NSNumber, value.uint64Value > 0 {
-            return value.uint64Value
-        }
-        defaults.set(NSNumber(value: UInt64(1)), forKey: Self.sourceRevisionKey)
-        guard synchronizeDefaults(defaults) else {
-            SafariApprovalDiagnostics.record(
-                "initialize source revision",
-                error: SafariApprovalVault.Error.unavailable
-            )
-            clearVaultLocked(
-                coordinationLease: coordinationLease
-            )
-            return 0
-        }
-        return 1
     }
 
     private func publicationMetadata() -> PublicationMetadata? {
@@ -1319,8 +1263,6 @@ final class SafariApprovalVaultHost {
         return cleared
     }
 
-    private static let sourceRevisionKey =
-        "SafariApprovalVault.hostSourceRevision.v1"
     private static let publicationMetadataKey =
         "SafariApprovalVault.hostPublicationMetadata.v1"
 }

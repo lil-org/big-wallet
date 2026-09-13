@@ -2274,7 +2274,6 @@ private struct ProcessorWeakWalletAccess {
 private final class ProcessorWalletAccess: WalletAccess {
     let catalogIdentity = WalletCatalogIdentity(
         generation: nil,
-        sourceRevision: nil,
         catalogData: Data()
     )
     private let accounts: [SpecificWalletAccount]

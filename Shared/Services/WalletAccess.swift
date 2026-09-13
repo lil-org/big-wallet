@@ -105,7 +105,6 @@ struct WalletAccountCatalog: Codable, Equatable, Sendable {
 
 struct WalletCatalogIdentity: Equatable, Sendable {
     let generation: UUID?
-    let sourceRevision: UInt64?
     let catalogData: Data
 }
 
@@ -210,7 +209,6 @@ final class SourceWalletAccess: WalletAccess {
         )
         return WalletCatalogIdentity(
             generation: nil,
-            sourceRevision: nil,
             catalogData: (try? Self.encodeCatalog(catalog)) ?? Data()
         )
     }
@@ -269,7 +267,6 @@ final class CatalogWalletAccess: WalletAccess {
     init?(
         catalog: WalletAccountCatalog,
         generation: UUID,
-        sourceRevision: UInt64,
         catalogData: Data
     ) {
         guard catalog.isValid,
@@ -277,7 +274,6 @@ final class CatalogWalletAccess: WalletAccess {
         else { return nil }
         catalogIdentity = WalletCatalogIdentity(
             generation: generation,
-            sourceRevision: sourceRevision,
             catalogData: catalogData
         )
         orderedAccounts = catalog.accounts.map(\.specificAccount)
@@ -301,7 +297,6 @@ final class UnlockedWalletAccess: WalletAccess {
     init?(
         catalog: WalletAccountCatalog,
         generation: UUID,
-        sourceRevision: UInt64,
         catalogData: Data,
         password: Data,
         walletRecords: [(id: String, data: Data)]
@@ -339,7 +334,6 @@ final class UnlockedWalletAccess: WalletAccess {
         }
         catalogIdentity = WalletCatalogIdentity(
             generation: generation,
-            sourceRevision: sourceRevision,
             catalogData: catalogData
         )
     }
@@ -452,7 +446,6 @@ final class RequestScopedWalletAccess: WalletAccess {
             invalidate()
             return WalletCatalogIdentity(
                 generation: nil,
-                sourceRevision: nil,
                 catalogData: Data()
             )
         }
@@ -461,13 +454,11 @@ final class RequestScopedWalletAccess: WalletAccess {
         guard !executionLeaseTaken else {
             return WalletCatalogIdentity(
                 generation: nil,
-                sourceRevision: nil,
                 catalogData: Data()
             )
         }
         return access?.catalogIdentity ?? WalletCatalogIdentity(
             generation: nil,
-            sourceRevision: nil,
             catalogData: Data()
         )
     }

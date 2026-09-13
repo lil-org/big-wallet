@@ -97,8 +97,8 @@ class PopupRequestController {
         this.responseEpoch = 0;
         this.completion = null;
         this.mutation = null;
-        this.followUpTimer = null;
-        this.followUpMode = null;
+        this.scheduledRead = null;
+        this.stateReadFlight = null;
         this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
         this.tickets = new Set();
         this.presentation = {
@@ -148,7 +148,7 @@ class PopupRequestController {
             hide("section-" + section);
         }
         document.getElementById("tx-editor").open = false;
-        return this.fetchAndRenderState();
+        return this.readState();
     }
 
     dispose() {
@@ -160,7 +160,7 @@ class PopupRequestController {
 
     invalidateOperations() {
         this.responseEpoch += 1;
-        this.stopTimers();
+        this.reconcileScheduling();
         for (const ticket of this.tickets) {
             cancelNativeMessageTicket(ticket);
         }
@@ -204,27 +204,43 @@ class PopupRequestController {
         }
     }
 
-    scheduleTransactionRefresh(value) {
-        if (!this.requestFor(value)) { return; }
-        this.scheduleFollowUp("refresh", this.refreshDelay);
+    get followUpTimer() {
+        return this.scheduledRead?.timer ?? null;
     }
 
-    scheduleFollowUp(mode, delay) {
-        if (!this.isActive || this.phase === "submitting") { return; }
-        this.stopTimers();
-        this.followUpMode = mode;
-        this.phase = mode === "poll" ? "following" : "displaying";
-        const timer = setTimeout(() => {
-            if (this.followUpTimer !== timer) { return; }
-            this.followUpTimer = null;
-            if (!this.isActive || this.followUpMode !== mode) { return; }
-            if (mode === "poll") {
-                void this.pollState();
-            } else {
-                void this.refreshTransactionState();
+    get followUpMode() {
+        if (!this.isActive || this.phase === "submitting" || this.stateReadFlight) {
+            return null;
+        }
+        if (this.phase === "following" || shouldPollApprovalState(this.state)) {
+            return "poll";
+        }
+        return this.state?.state === "review" &&
+            this.state.review?.kind === "sendTransaction" ? "refresh" : null;
+    }
+
+    reconcileScheduling() {
+        const mode = this.followUpMode;
+        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : this.refreshDelay;
+        const current = this.scheduledRead;
+        if (current && current.mode === mode && current.delay === delay &&
+            current.epoch === this.responseEpoch) { return; }
+        if (current) {
+            clearTimeout(current.timer);
+            this.scheduledRead = null;
+        }
+        if (mode === null) { return; }
+        const scheduled = {mode, delay, epoch: this.responseEpoch, timer: null};
+        scheduled.timer = setTimeout(() => {
+            if (this.scheduledRead !== scheduled) { return; }
+            this.scheduledRead = null;
+            if (this.responseEpoch !== scheduled.epoch || this.followUpMode !== mode) {
+                this.reconcileScheduling();
+                return;
             }
+            void this.readState({refresh: mode === "refresh"});
         }, delay);
-        this.followUpTimer = timer;
+        this.scheduledRead = scheduled;
     }
 
     resetTransactionRefreshBackoff() {
@@ -242,67 +258,53 @@ class PopupRequestController {
         );
     }
 
-    async approvalState(value) {
-        const generation = this.responseEpoch;
-        return this.requestState(
-            "getApprovalState",
-            undefined,
-            value,
-            "approval",
-            null,
-            () => generation === this.responseEpoch
-        );
-    }
-
-    async fetchAndRenderState(value) {
-        this.stopTimers();
-        const request = this.requestFor(value);
-        if (!request || !this.isCurrentRequest(request)) { return; }
-        const generation = this.responseEpoch;
-        const state = await this.approvalState(request);
-        if (!this.acceptResponse(state, generation)) { return; }
-        this.adoptState(state);
-        if (state.review?.kind === "sendTransaction" && state.state === "review") {
-            this.resetTransactionRefreshBackoff();
-            this.scheduleTransactionRefresh(request);
-        } else if (shouldPollApprovalState(state)) {
-            this.pollApproval(request);
-        }
-    }
-
-    async refreshTransactionState(value) {
-        const request = this.requestFor(value);
-        if (!request || !this.isCurrentRequest(request) || !this.state || this.state.id !== request.id) { return; }
-        // A state fetched before an approve or reject describes the screen that click replaced;
-        // adopting it would drop the working overlay while the wallet is still authenticating.
-        const generation = this.responseEpoch;
-        const state = await this.approvalState(request);
-        if (!this.acceptResponse(state, generation)) { return; }
-        if (this.state && this.state.id === request.id) {
-            const stateJSON = JSON.stringify(state);
-            const unchanged = stateJSON === this.presentation.lastStateJSON;
-            this.state = state;
-            // Most ticks return a state identical to the one on display, and rebuilding the DOM for
-            // those wipes the user's text selection. The slider still follows the wallet so a stale
-            // local value snaps back instead of silently diverging from the fee.
-            if (!state.review || !this.transaction.sliderDragging &&
-                !this.transaction.activeCommand) {
-                if (!unchanged) {
-                    this.renderState(state);
-                } else if (state.review?.slider && state.review?.slider.visible) {
-                    document.getElementById("tx-slider").value = state.review?.slider.position ?? 100;
-                }
+    async readState({refresh = false} = {}) {
+        if (!this.isActive || this.phase === "submitting") { return; }
+        const epoch = this.responseEpoch;
+        if (this.stateReadFlight) {
+            const flight = this.stateReadFlight;
+            if (flight.epoch === epoch) {
+                if (!refresh) { flight.refresh = false; }
+                return flight.result;
             }
-            this.updateTransactionRefreshBackoff(state, unchanged);
+            await flight.result;
+            if (epoch !== this.responseEpoch) { return; }
+            return this.readState({refresh});
         }
-        if (shouldPollApprovalState(state)) {
-            this.pollApproval(request);
-            return;
-        }
-        if (this.isCurrentRequest(request) && this.state &&
-            this.state.id === request.id && this.state.state === "review") {
-            this.scheduleTransactionRefresh(request);
-        }
+        const flight = {epoch, refresh, result: null};
+        this.stateReadFlight = flight;
+        this.reconcileScheduling();
+        flight.result = (async () => {
+            try {
+                const state = await this.requestState(
+                    "getApprovalState", undefined, this.request, "approval", null,
+                    () => flight.epoch === this.responseEpoch && this.phase !== "submitting"
+                );
+                if (!this.acceptResponse(state, flight.epoch)) { return; }
+                if (flight.refresh && this.state) {
+                    const unchanged = JSON.stringify(state) === this.presentation.lastStateJSON;
+                    this.state = state;
+                    this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
+                    if (!state.review || !this.transaction.sliderDragging &&
+                        !this.transaction.activeCommand) {
+                        if (!unchanged) {
+                            this.renderState(state);
+                        } else if (state.review?.slider?.visible) {
+                            document.getElementById("tx-slider").value = state.review.slider.position;
+                        }
+                    }
+                    this.updateTransactionRefreshBackoff(state, unchanged);
+                } else {
+                    this.resetTransactionRefreshBackoff();
+                    this.adoptState(state);
+                }
+                return state;
+            } finally {
+                if (this.stateReadFlight === flight) { this.stateReadFlight = null; }
+                this.reconcileScheduling();
+            }
+        })();
+        return flight.result;
     }
 
     renderState(state) {
@@ -620,7 +622,7 @@ class PopupRequestController {
         }
         if (shouldRefreshAccountSelection(this.state)) {
             document.getElementById("button-approve").disabled = true;
-            await this.fetchAndRenderState(this.state.id);
+            await this.readState();
             return;
         }
         const payload = {};
@@ -643,8 +645,8 @@ class PopupRequestController {
         const request = this.request;
         this.responseEpoch += 1;
         const generation = this.responseEpoch;
-        this.stopTimers();
         this.phase = "submitting";
+        this.reconcileScheduling();
         document.getElementById("button-approve").disabled = true;
         show("working-overlay");
         const state = await this.requestState(
@@ -654,13 +656,8 @@ class PopupRequestController {
             undefined
         );
         if (!this.acceptResponse(state, generation)) { return; }
+        this.resetTransactionRefreshBackoff();
         this.adoptState(state);
-        if (shouldPollApprovalState(state)) {
-            this.pollApproval();
-        } else if (state.review?.kind === "sendTransaction") {
-            this.resetTransactionRefreshBackoff();
-            this.scheduleTransactionRefresh();
-        }
     }
 
     async rejectCurrent() {
@@ -705,8 +702,8 @@ class PopupRequestController {
             delete decisionPayload.password;
         }
         this.responseEpoch += 1;
-        this.stopTimers();
         this.phase = "submitting";
+        this.reconcileScheduling();
         const outcome = await this.dispatch(
             "action", subject, decisionPayload,
             {isValid: remainsCurrent, reviewToken, approvalRequest: request}
@@ -715,6 +712,7 @@ class PopupRequestController {
         if (outcome.status === "cancelled") {
             this.phase = "displaying";
             rerenderCurrentReview();
+            this.reconcileScheduling();
             return;
         }
         if (outcome.status !== "response" || !isRecord(outcome.response)) {
@@ -722,33 +720,7 @@ class PopupRequestController {
             return;
         }
         this.phase = "following";
-        this.pollApproval(request);
-    }
-
-    pollApproval(value) {
-        if (!this.requestFor(value)) { return; }
-        this.scheduleFollowUp("poll", APPROVAL_POLL_INTERVAL);
-    }
-
-    async pollState() {
-        const request = this.requestFor();
-        if (!request) { return; }
-        const generation = this.responseEpoch;
-        const state = await this.approvalState(request);
-        if (!this.isActive) { return; }
-        if (generation !== this.responseEpoch) {
-            this.pollApproval();
-            return;
-        }
-        if (!this.acceptResponse(state, generation)) { return; }
-        this.stopTimers();
-        this.adoptState(state);
-        if (shouldPollApprovalState(state)) {
-            this.pollApproval();
-        } else if (state.review?.kind === "sendTransaction") {
-            this.resetTransactionRefreshBackoff();
-            this.scheduleTransactionRefresh();
-        }
+        this.reconcileScheduling();
     }
 
     reconcileMissingRequest(value) {
@@ -759,14 +731,6 @@ class PopupRequestController {
         this.closeAlert(false);
         this.completion = closeIfNothingIsLeft();
         return this.completion;
-    }
-
-    stopTimers() {
-        if (this.followUpTimer !== null) {
-            clearTimeout(this.followUpTimer);
-            this.followUpTimer = null;
-        }
-        this.followUpMode = null;
     }
 
     async requestState(
@@ -875,7 +839,6 @@ class PopupRequestController {
         const previous = this.state || {};
         this.presentation.lastStateJSON = null;
         this.resetTransactionRefreshBackoff();
-        this.stopTimers();
         this.closeAlert(false);
         document.getElementById("tx-editor").open = false;
         this.transaction.editorDirty = false;
@@ -892,13 +855,7 @@ class PopupRequestController {
         };
         this.phase = "displaying";
         this.renderState(this.state);
-    }
-
-    keepFollowingTransaction() {
-        if (!this.isActive || this.followUpMode === "poll") { return; }
-        if (this.state?.review?.kind === "sendTransaction" && this.state.state === "review") {
-            this.scheduleTransactionRefresh();
-        }
+        this.reconcileScheduling();
     }
 
     adoptState(state) {
@@ -906,6 +863,7 @@ class PopupRequestController {
         this.state = state;
         this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
         this.renderState(state);
+        this.reconcileScheduling();
     }
 
     async sendSliderEvent(
@@ -922,7 +880,7 @@ class PopupRequestController {
             if (!refreshed && commandGeneration === this.transaction.generation &&
                 this.isCurrentRequest(capturedRequest)) {
                 refreshed = true;
-                await this.fetchAndRenderState(capturedRequest);
+                await this.readState();
             }
             return false;
         };
@@ -942,7 +900,6 @@ class PopupRequestController {
         }
         if (!state) { return await refreshAuthoritativeState(); }
         this.adoptState(state);
-        this.keepFollowingTransaction();
         return true;
     }
 
@@ -1098,7 +1055,7 @@ class PopupRequestController {
         } else {
             this.closeEditorAndAdopt(state);
         }
-        this.keepFollowingTransaction();
+        this.reconcileScheduling();
     }
 
     closeEditorAndAdopt(state) {
@@ -1161,7 +1118,6 @@ class PopupRequestController {
                 }, undefined, reviewToken);
                 if (this.state?.review?.reviewToken !== reviewToken) { return; }
                 this.adoptState(state);
-                this.keepFollowingTransaction();
             });
             buttons.appendChild(button);
         }
@@ -1682,7 +1638,6 @@ function refreshQueue() {
     if (queueTab.refreshInFlight !== null) {
         return queueTab.refreshInFlight;
     }
-    currentRequestController?.stopTimers();
     queueTab.snapshotStatus = "unknown";
     if (queueTab.domReady) {
         document.getElementById("idle-switch-account").disabled = true;
@@ -1756,6 +1711,7 @@ async function showIdle(queueFetchFailed = false) {
     const generation = ++queueTab.idleGeneration;
     currentRequestController?.dispose();
     currentRequestController = null;
+    document.getElementById("idle-check-status").disabled = false;
     hide("screen-request");
     hide("working-overlay");
     show("screen-idle");
@@ -2240,7 +2196,6 @@ async function applyCompletedResponse(request) {
 // a request that arrived in the meantime gets shown instead of being left behind. A fetch
 // failure keeps the popup open too — an unreachable wallet does not mean the queue drained.
 async function closeIfNothingIsLeft() {
-    currentRequestController?.stopTimers();
     const requests = await refreshQueue();
     if (requests !== null && requests.length === 0 &&
         !shouldShowUpdateRecovery() &&
@@ -2259,10 +2214,18 @@ function finishSliderCommand(command, succeeded) {
     resolve(succeeded);
 }
 
+function isCurrentIdlePresentation(generation, tab) {
+    return queueTab.idleGeneration === generation &&
+        sameTab(queueTab.activeTab, tab) &&
+        !currentRequestController &&
+        !document.getElementById("screen-idle").classList.contains("hidden");
+}
+
 async function switchAccountFromIdle() {
     const button = document.getElementById("idle-switch-account");
     const tab = queueTab.activeTab;
     if (button.disabled || !tab || currentPrivateBrowsing()) { return; }
+    const generation = queueTab.idleGeneration;
     button.disabled = true;
     const message = {
         configurationKey: tab.configurationKey,
@@ -2280,6 +2243,10 @@ async function switchAccountFromIdle() {
         MANUAL_SWITCH_TIMEOUT
     );
     const response = outcome.status === "response" ? outcome.response : null;
+    if (!isCurrentIdlePresentation(generation, tab)) {
+        requestPendingQueueRefresh();
+        return;
+    }
     if (outcome.status === "failure") {
         queueTab.contentScriptUnavailableTab = tab;
     } else if (outcome.status === "response" &&
@@ -2317,13 +2284,17 @@ async function refreshIdleStatus() {
     }
     const button = document.getElementById("idle-check-status");
     if (button.disabled || !Number.isSafeInteger(tab.id)) { return; }
+    const generation = queueTab.idleGeneration;
+    const activeTab = queueTab.activeTab;
     button.disabled = true;
     const refreshGeneration = queueTab.refreshGeneration;
     const currentTab = await currentActiveTab();
+    if (!isCurrentIdlePresentation(generation, activeTab)) { return; }
     const sameCurrentTab = sameUpdateRecoveryTab(currentTab, tab);
     const currentRecoveryTab = sameCurrentTab
         ? await updateRecoveryTabFor(currentTab)
         : null;
+    if (!isCurrentIdlePresentation(generation, activeTab)) { return; }
     if (refreshGeneration !== queueTab.refreshGeneration ||
         queueTab.snapshotStatus !== "empty" || queueTab.items.length !== 0 ||
         queueTab.refreshRequested || queueTab.refreshInFlight !== null ||
@@ -2352,6 +2323,7 @@ async function refreshIdleStatus() {
     const outcome = reloadStarted
         ? await settleExtensionMessage(pendingReload)
         : {status: "failure"};
+    if (!isCurrentIdlePresentation(generation, activeTab)) { return; }
     if (outcome.status === "response") {
         window.close();
         return;

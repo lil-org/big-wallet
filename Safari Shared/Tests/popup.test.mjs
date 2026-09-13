@@ -407,6 +407,7 @@ function idleRecoveryRefreshHarness(reload, options = {}) {
             reloaded.push(id);
             return reload();
         }}},
+        isCurrentIdlePresentation: () => true,
         currentActiveTab: async () => {
             activeTabLookup += 1;
             return currentTab;
@@ -870,6 +871,7 @@ function manualSwitchHarness(sendMessage) {
             return sendMessage(sent.length, message);
         } } },
         currentPrivateBrowsing: () => false,
+        isCurrentIdlePresentation: () => true,
         localized: (_, fallback) => fallback,
         queueTab: {
             activeTab: {
@@ -1432,7 +1434,6 @@ async function reviewedPopup(stateFor = messageState) {
     const harness = popupHarness({requests: [request]});
     harness.setState(request, stateFor(request));
     await harness.boot();
-    harness.controller.stopTimers();
     harness.clearMessages();
     return harness;
 }
@@ -1523,7 +1524,7 @@ test("poll and transaction edit responses use the same nonfatal image normalizat
     const before = normalized(response);
     harness.setState(controller.request, response);
     controller.adoptState({id: controller.request.id, state: "working", actions: []});
-    controller.pollApproval();
+    controller.reconcileScheduling();
 
     await harness.fire(controller.followUpTimer);
 
@@ -1685,7 +1686,7 @@ test("approval polling adopts an error and stops its only follow-up timer", asyn
     const controller = harness.controller;
     harness.setState(controller.request, {id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"});
     controller.adoptState({id: controller.request.id, state: "working", actions: []});
-    controller.pollApproval();
+    controller.reconcileScheduling();
 
     await harness.fire(controller.followUpTimer);
 
@@ -1708,7 +1709,7 @@ test("the production approval lane uses the long timeout while reads remain inde
     assert.ok([...harness.timers.values()].some(timer => timer.delay === 190_000));
 
     const queued = controller.dispatch("mutation", "applyTransactionEdits", {mode: "suggested"});
-    const read = controller.approvalState();
+    const read = controller.dispatch("approval", "getApprovalState");
     await read;
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getApprovalState"]);
 
@@ -1814,7 +1815,7 @@ test("terminal decisions fence an older read and poll only after their native re
         };
         harness.handlers.worker = (message, fallback) =>
             message.subject === "approveRequestWithCurrentRevisions" ? actionGate.promise : fallback(message);
-        const refresh = controller.refreshTransactionState();
+        const refresh = controller.readState({refresh: true});
         await flushPopup();
         const decision = controller.submitCurrentDecision(subject, subject === "approveRequest" ? {} : undefined);
         await flushPopup();
@@ -1851,7 +1852,7 @@ test("replacement with the same numeric id disposes old reads actions and mutati
         harness.handlers.worker = (message, fallback) =>
             operation === "approval" && message.subject === "approveRequestWithCurrentRevisions"
                 ? gate.promise : fallback(message);
-        const pending = operation === "read" ? first.refreshTransactionState()
+        const pending = operation === "read" ? first.readState({refresh: true})
             : operation === "approval" ? first.submitCurrentDecision("approveRequest", {})
             : first.applyEdits();
         await flushPopup();
@@ -1964,18 +1965,22 @@ test("disposing a dispatched approval keeps its lane occupied until reply or tim
     }
 });
 
-test("one follow-up timer owns polling and refresh including stale callbacks", async () => {
+test("state transitions own one follow-up timer and ignore stale callbacks", async () => {
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
-    controller.scheduleTransactionRefresh();
-    const old = harness.timers.get(controller.followUpTimer);
-    controller.pollApproval();
+    const initial = controller.followUpTimer;
+    const old = harness.timers.get(initial);
+    controller.reconcileScheduling();
+    controller.reconcileScheduling();
+    assert.equal(controller.followUpTimer, initial);
+    assert.equal(old.delay, 600);
+    controller.adoptState({id: controller.request.id, state: "working", actions: []});
     const current = controller.followUpTimer;
     assert.equal(harness.timers.size, 1);
-    assert.equal(controller.followUpMode, "poll");
+    assert.equal(harness.timers.get(current).delay, 400);
 
     old.callback();
-    controller.keepFollowingTransaction();
+    controller.reconcileScheduling();
     await flushPopup();
 
     assert.equal(controller.followUpTimer, current);
@@ -1989,7 +1994,9 @@ test("one follow-up timer owns polling and refresh including stale callbacks", a
     assert.equal(harness.timers.size, 1);
     assert.equal(controller.followUpMode, "refresh");
     assert.equal(harness.timers.get(controller.followUpTimer).delay, 600);
+    const last = harness.timers.get(controller.followUpTimer);
     controller.dispose();
+    last.callback();
     assert.equal(controller.followUpTimer, null);
     assert.equal(harness.timers.size, 0);
 });
@@ -2288,7 +2295,7 @@ test("transaction refresh leaves rendered fees and slider value alone during a t
         harness.get("tx-slider").value = "145";
         const before = harness.visibleSnapshot();
 
-        await controller.refreshTransactionState();
+        await controller.readState({refresh: true});
 
         assert.deepEqual(harness.visibleSnapshot(), before);
         assert.equal(controller.state.review.title, refreshed.review.title);
@@ -2326,7 +2333,7 @@ test("editor inputs survive refresh and custom or suggested edits use exact nati
             editor: {...editor, nonce: "2"}, reviewToken: requestToken(102),
         }));
 
-        await controller.refreshTransactionState();
+        await controller.readState({refresh: true});
 
         assert.equal(harness.get("edit-nonce").value, "9");
         assert.equal(controller.transaction.editorDirty, true);
@@ -2499,10 +2506,9 @@ test("account selection belongs to one controller and old rows cannot change its
 test("approval reads have one token-only shape for refresh and polling", async () => {
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
-    await controller.refreshTransactionState();
-    controller.stopTimers();
+    await controller.readState({refresh: true});
     controller.adoptState({id: controller.request.id, state: "working", actions: []});
-    await controller.pollState();
+    await controller.readState();
     assert.deepEqual(harness.nativeMessages, Array.from({length: 2}, () => ({
         subject: "getApprovalState",
         id: controller.request.id,
@@ -2534,7 +2540,7 @@ test("busy polling removes capabilities while preserving the rendered review", a
         harness.get("edit-nonce").value = "9";
         harness.get("edit-nonce").emit("input");
         harness.setState(controller.request, {id: controller.request.id, state, actions: []});
-        await controller.pollState();
+        await controller.readState();
         assert.equal(controller.state.review, undefined);
         assert.equal(harness.get("request-title").textContent, "Send transaction");
         assert.deepEqual(harness.get("tx-fee-lines").children, feeRows);
@@ -2558,7 +2564,7 @@ test("busy polling removes capabilities while preserving the rendered review", a
             editor: {...transactionState(controller.request).review.editor, nonce: "2"},
             reviewToken: requestToken(202),
         }));
-        await controller.pollState();
+        await controller.readState();
         assert.equal(harness.get("tx-editor").open, true);
         assert.equal(harness.get("edit-nonce").value, "9");
         assert.equal(controller.transaction.editorDirty, true);
@@ -2574,13 +2580,13 @@ test("busy refresh blocks keyboard interaction and restores error and alert beha
     const busy = {id: controller.request.id, state: "working", actions: []};
     harness.get("edit-nonce").focus();
     harness.setState(controller.request, busy);
-    await controller.refreshTransactionState();
+    await controller.readState({refresh: true});
     assert.equal(harness.get("screen-request").inert, true);
 
     harness.setState(controller.request, {
         id: controller.request.id, state: "error", actions: ["retry"], error: "Failed",
     });
-    await controller.pollState();
+    await controller.readState();
     assert.equal(harness.get("screen-request").inert, false);
     assert.equal(harness.get("button-approve").disabled, false);
 
@@ -2613,7 +2619,7 @@ test("transaction permissions disable mutations while retaining a dirty review e
     harness.setState(controller.request, transactionState(controller.request, {
         phase: "preparing", editor: {...controller.state.review.editor, nonce: "2"},
     }, {actions: ["reject"]}));
-    await controller.refreshTransactionState();
+    await controller.readState({refresh: true});
     assert.equal(harness.get("tx-editor").open, true);
     assert.equal(harness.get("edit-nonce").value, "9");
     assert.equal(controller.transaction.editorDirty, true);
@@ -2638,7 +2644,7 @@ test("retry fences an older read and adopts its returned review without another 
         if (message.subject === "retryApproval") { return retryGate.promise; }
         return fallback(message);
     };
-    const oldRead = controller.fetchAndRenderState();
+    const oldRead = controller.readState();
     await flushPopup();
     controller.failClosedApprovalState(controller.request);
     const retry = controller.retryApproval();
@@ -2714,11 +2720,298 @@ test("a nonreview refresh interrupts a slider gesture and disables stale control
     const controller = harness.controller;
     assert.equal(controller.beginSliderInteraction(controller.request), true);
     harness.setState(controller.request, {id: controller.request.id, state: "working", actions: []});
-    await controller.refreshTransactionState();
+    await controller.readState({refresh: true});
     assert.equal(controller.transaction.sliderDragging, false);
     assert.equal(controller.state.review, undefined);
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.get("button-reject").disabled, true);
     assert.equal(harness.get("tx-slider").disabled, true);
+});
+
+test("late idle switch replies preserve preparing and working requests", async () => {
+    for (const busy of [false, true]) {
+        for (const succeeds of [false, true]) {
+            const intent = deferred();
+            const harness = popupHarness({tab: () => intent.promise});
+            await harness.boot();
+            const switching = harness.call("switchAccountFromIdle");
+            await flushPopup();
+            const request = pendingRequest();
+            harness.model.requests = [request];
+            harness.setState(request, busy
+                ? {id: request.id, state: "working", actions: []}
+                : transactionState(request, {phase: "preparing"}, {actions: ["reject"]}));
+            harness.notify();
+            await harness.fire(harness.queue.refreshTimer);
+            const controller = harness.controller;
+            const timer = controller.followUpTimer;
+            const title = harness.get("request-title").textContent;
+            const connection = harness.get("idle-connection").textContent;
+            if (succeeds) {
+                intent.resolve({
+                    approvalRequired: true,
+                    configurationKey: request.configurationKey,
+                    id: 8,
+                    requestToken: requestToken(2),
+                    revisions: {ethereum: 0, solana: 0},
+                    subject: "manualSwitchAcknowledged",
+                    workflowVersion: 3,
+                });
+            } else {
+                intent.reject(new Error("Late transport failure"));
+            }
+            await switching;
+            await flushPopup();
+            assert.equal(harness.controller, controller);
+            assert.equal(controller.followUpTimer, timer);
+            assert.equal(harness.get("request-title").textContent, title);
+            assert.equal(harness.get("idle-connection").textContent, connection);
+            assert.equal(harness.get("screen-loading").classList.contains("hidden"), true);
+            assert.equal(harness.get("button-approve").disabled, true);
+
+            harness.setState(request, transactionState(request));
+            await harness.fire(timer);
+            assert.equal(harness.get("button-approve").disabled, false);
+            const next = pendingRequest(8, 2);
+            harness.model.requests = succeeds ? [next] : [];
+            harness.setState(next, selectionState(next));
+            harness.setState(request, {id: request.id, state: "missing", actions: []});
+            await harness.fire(controller.followUpTimer);
+            assert.equal(controller.phase, "disposed");
+            if (succeeds) {
+                assert.equal(harness.controller.request.requestToken, next.requestToken);
+            } else {
+                assert.equal(harness.model.closed, 1);
+            }
+        }
+    }
+});
+
+test("state reads coalesce and transaction polling preserves its backoff", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "getApprovalState" ? gate.promise : fallback(message);
+    await harness.fire(controller.followUpTimer);
+    const duplicate = controller.readState({refresh: true});
+    controller.reconcileScheduling();
+    controller.reconcileScheduling();
+    await flushPopup();
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.equal(controller.followUpTimer, null);
+    gate.resolve(transactionState(controller.request));
+    await duplicate;
+    harness.handlers.native = undefined;
+    for (const delay of [1200, 2400, 4800, 9600, 10000, 10000]) {
+        const timer = controller.followUpTimer;
+        assert.equal(harness.timers.get(timer).delay, delay);
+        controller.reconcileScheduling();
+        assert.equal(controller.followUpTimer, timer);
+        await harness.fire(timer);
+    }
+    harness.setState(controller.request, transactionState(controller.request, {valueLine: "Changed value"}));
+    await harness.fire(controller.followUpTimer);
+    assert.equal(harness.timers.get(controller.followUpTimer).delay, 600);
+    harness.setState(controller.request, transactionState(controller.request, {phase: "preparing"}, {actions: ["reject"]}));
+    await harness.fire(controller.followUpTimer);
+    assert.equal(harness.timers.get(controller.followUpTimer).delay, 600);
+    harness.setState(controller.request, {id: controller.request.id, state: "authenticating", actions: []});
+    await harness.fire(controller.followUpTimer);
+    assert.equal(harness.timers.get(controller.followUpTimer).delay, 400);
+    harness.setState(controller.request, transactionState(controller.request));
+    await harness.fire(controller.followUpTimer);
+    assert.equal(harness.timers.get(controller.followUpTimer).delay, 600);
+});
+
+test("late idle status lookups probes and reloads cannot replace an active request", async () => {
+    for (const stage of ["query", "probe", "reload"]) {
+        for (const changed of [false, true]) {
+            const harness = popupHarness({
+                updateRecovery: true,
+                tab: message => ({
+                    buildVersion: previousBuildVersion,
+                    nonce: message.nonce,
+                    subject: "workflowProbe",
+                    workflowVersion: 3,
+                }),
+            });
+            await harness.boot();
+            assert.ok(harness.queue.updateRecoveryTab);
+            const originalTab = harness.queue.activeTab;
+            const recoveryTab = harness.queue.updateRecoveryTab;
+            const gate = deferred();
+            let reloads = 0;
+            harness.browser.tabs.reload = () => {
+                reloads += 1;
+                return stage === "reload" ? gate.promise : Promise.resolve();
+            };
+            if (stage === "query") { harness.browser.tabs.query = () => gate.promise; }
+            if (stage === "probe") { harness.handlers.tab = () => gate.promise; }
+            const refreshing = harness.call("refreshIdleStatus");
+            await flushPopup();
+            const request = pendingRequest();
+            harness.model.requests = [request];
+            harness.setState(request, {id: request.id, state: "working", actions: []});
+            harness.notify();
+            await harness.fire(harness.queue.refreshTimer);
+            const controller = harness.controller;
+            const timer = controller.followUpTimer;
+            if (stage === "query") {
+                gate.resolve([{...harness.tab, id: 99, incognito: changed}]);
+            } else if (stage === "probe") {
+                gate.resolve({
+                    buildVersion: changed ? packagedBuildVersion : previousBuildVersion,
+                    nonce: harness.tabMessages.at(-1).message.nonce,
+                    subject: "workflowProbe",
+                    workflowVersion: 3,
+                });
+            } else if (changed) {
+                gate.reject(new Error("Late reload failure"));
+            } else {
+                gate.resolve();
+            }
+            await refreshing;
+            assert.equal(harness.model.closed, 0);
+            assert.equal(reloads, stage === "reload" ? 1 : 0);
+            assert.equal(harness.queue.activeTab, originalTab);
+            assert.equal(harness.queue.updateRecoveryTab, recoveryTab);
+            assert.equal(harness.controller, controller);
+            assert.equal(controller.followUpTimer, timer);
+            assert.equal(harness.get("screen-loading").classList.contains("hidden"), true);
+            harness.setState(request, transactionState(request));
+            await harness.fire(timer);
+            assert.equal(harness.get("button-approve").disabled, false);
+        }
+    }
+});
+
+test("authoritative slider recovery upgrades a coalesced refresh before approval", async () => {
+    for (const sameTurn of [false, true]) {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        const sliderGate = deferred();
+        const readGate = deferred();
+        harness.handlers.native = (message, fallback) => {
+            if (message.subject === "setTransactionSpeed") { return sliderGate.promise; }
+            if (message.subject === "getApprovalState") { return readGate.promise; }
+            return fallback(message);
+        };
+        controller.beginSliderInteraction(controller.request);
+        harness.get("tx-slider").value = "145";
+        const command = controller.finishSliderInteraction("ended", controller.request);
+        await flushPopup();
+        controller.reconcileScheduling();
+        await harness.fire(controller.followUpTimer);
+        sliderGate.resolve({status: "ignored"});
+        if (!sameTurn) { await flushPopup(); }
+        const fresh = transactionState(controller.request, {
+            reviewToken: requestToken(102),
+            feeLines: ["Network fee: 99 ETH"],
+            slider: {maximum: 200, position: 180, visible: true},
+        });
+        readGate.resolve(fresh);
+        assert.equal(await command, false);
+        assert.equal(controller.transaction.activeCommand, null);
+        assert.deepEqual(harness.get("tx-fee-lines").children.map(row => row.textContent), fresh.review.feeLines);
+        assert.equal(controller.state.review.reviewToken, fresh.review.reviewToken);
+        if (!sameTurn) {
+            assert.equal(harness.nativeMessages.filter(message => message.subject === "getApprovalState").length, 1);
+        }
+        assert.deepEqual(harness.workerMessages, []);
+        await controller.approveCurrent();
+        assert.equal(harness.workerMessages[0].reviewToken, fresh.review.reviewToken);
+    }
+});
+
+test("a new empty idle presentation releases Refresh without disturbing its next action", async () => {
+    for (const stage of ["query", "probe", "reload"]) {
+        for (const fails of [false, true]) {
+            const probe = message => ({
+                buildVersion: previousBuildVersion,
+                nonce: message.nonce,
+                subject: "workflowProbe",
+                workflowVersion: 3,
+            });
+            const harness = popupHarness({updateRecovery: true, tab: probe});
+            await harness.boot();
+            const oldGate = deferred();
+            let reloads = 0;
+            harness.browser.tabs.reload = () => {
+                reloads += 1;
+                return oldGate.promise;
+            };
+            if (stage === "query") { harness.browser.tabs.query = () => oldGate.promise; }
+            if (stage === "probe") { harness.handlers.tab = () => oldGate.promise; }
+            const oldRefresh = harness.call("refreshIdleStatus");
+            await flushPopup();
+            const oldProbe = harness.tabMessages.at(-1).message;
+            assert.equal(harness.get("idle-check-status").disabled, true);
+            harness.notify();
+            await harness.fire(harness.queue.refreshTimer);
+            assert.equal(harness.queue.snapshotStatus, "empty");
+            assert.equal(harness.get("screen-idle").classList.contains("hidden"), false);
+            assert.equal(harness.get("idle-check-status").disabled, false);
+
+            const nextGate = deferred();
+            harness.browser.tabs.query = () => nextGate.promise;
+            harness.handlers.tab = probe;
+            harness.browser.tabs.reload = async () => { reloads += 1; };
+            const nextRefresh = harness.call("refreshIdleStatus");
+            await flushPopup();
+            assert.equal(harness.get("idle-check-status").disabled, true);
+            if (fails) { oldGate.reject(new Error("Superseded refresh failed")); }
+            else if (stage === "query") { oldGate.resolve([harness.tab]); }
+            else if (stage === "probe") { oldGate.resolve(probe(oldProbe)); }
+            else { oldGate.resolve(); }
+            await oldRefresh;
+            assert.equal(harness.get("idle-check-status").disabled, true);
+            assert.equal(harness.model.closed, 0);
+            nextGate.resolve([harness.tab]);
+            await nextRefresh;
+            assert.equal(reloads, stage === "reload" ? 2 : 1);
+            assert.equal(harness.model.closed, 1);
+        }
+    }
+});
+
+test("a superseded recovery waiting for an old read cannot clear a newer error", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const base = transactionState(controller.request);
+    const oldGate = deferred();
+    let reads = 0;
+    harness.handlers.native = (message, fallback) => {
+        if (message.subject === "getApprovalState") {
+            reads += 1;
+            return reads === 1 ? oldGate.promise : base;
+        }
+        if (message.subject === "setTransactionSpeed") { return {status: "ignored"}; }
+        if (message.subject === "rejectRequest") { return Promise.reject(new Error("Reject transport failed")); }
+        return fallback(message);
+    };
+    const oldRead = controller.readState({refresh: true});
+    await flushPopup();
+    controller.beginSliderInteraction(controller.request);
+    harness.get("tx-slider").value = "145";
+    const slider = controller.finishSliderInteraction("ended", controller.request);
+    await flushPopup();
+    await controller.rejectCurrent();
+    assert.equal(controller.state.state, "error");
+    oldGate.resolve(base);
+    await oldRead;
+    await slider;
+    await flushPopup();
+    assert.equal(controller.state.state, "error");
+    assert.equal(harness.get("request-error").classList.contains("hidden"), false);
+    assert.equal(controller.followUpTimer, null);
+    assert.equal(reads, 1);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
+        "getApprovalState", "setTransactionSpeed", "rejectRequest",
+    ]);
+    await controller.approveCurrent();
+    assert.equal(harness.nativeMessages.at(-1).subject, "retryApproval");
+    assert.equal(controller.state.state, "review");
+    assert.deepEqual(harness.workerMessages, []);
 });
