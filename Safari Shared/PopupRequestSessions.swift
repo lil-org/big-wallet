@@ -247,7 +247,6 @@ final class PopupRequestSessions {
     private final class TransactionApprovalResolution {
         let token: UUID
         private var continuation: CheckedContinuation<TransactionApprovalDecision, Never>?
-        private(set) var isAuthenticating = false
         private var walletAccess: RequestScopedWalletAccess?
 
         init(
@@ -256,16 +255,6 @@ final class PopupRequestSessions {
         ) {
             self.token = token
             self.continuation = continuation
-        }
-
-        func beginAuthentication() -> Bool {
-            guard continuation != nil, !isAuthenticating else { return false }
-            isAuthenticating = true
-            return true
-        }
-
-        func finishAuthentication() {
-            isAuthenticating = false
         }
 
         func install(walletAccess: RequestScopedWalletAccess) {
@@ -367,11 +356,7 @@ final class PopupRequestSessions {
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> [String: Any] {
-        guard case .popup(let command) = request.command else {
-            return shared.ignoredResponse()
-        }
         return await shared.dispatch(
-            command,
             request: request,
             profileIdentifier: profileIdentifier
         )
@@ -403,10 +388,12 @@ final class PopupRequestSessions {
     }
 
     func dispatch(
-        _ command: InternalSafariRequest.PopupCommand,
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> [String: Any] {
+        guard case .popup(let command) = request.command else {
+            return ignoredResponse()
+        }
         switch command {
         case .getPendingRequests:
             return await pendingRequestsResponse(profileIdentifier: profileIdentifier)
@@ -458,20 +445,6 @@ final class PopupRequestSessions {
                   ) else { return ignoredResponse() }
             return await resolveApprovalAlert(context: context, payload: payload)
         }
-    }
-
-    func dispatch(
-        _ subject: InternalSafariRequest.Subject.Popup,
-        request: InternalSafariRequest,
-        profileIdentifier: UUID?
-    ) async -> [String: Any] {
-        guard case .popup(let command) = request.command,
-              command.subject == subject else { return ignoredResponse() }
-        return await dispatch(
-            command,
-            request: request,
-            profileIdentifier: profileIdentifier
-        )
     }
 
     private func handle(
@@ -1546,7 +1519,6 @@ final class PopupRequestSessions {
             guard let resolution = transactionApprovalResolutions[session.handle],
                   resolution.token == session.reviewToken,
                   let claim = session.approvalClaim,
-                  resolution.beginAuthentication(),
                   session.beginAuthentication(
                       claim: claim,
                       token: resolution.token
@@ -1568,7 +1540,6 @@ final class PopupRequestSessions {
                 guard transactionApprovalResolutions[session.handle] === resolution else {
                     return
                 }
-                resolution.finishAuthentication()
                 let authenticationFinished = isCurrent(
                     session,
                     token: resolution.token

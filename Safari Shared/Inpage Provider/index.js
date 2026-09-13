@@ -547,8 +547,7 @@ function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
     };
     if (!ingressIsCurrent(ingressEpoch)) { return delivery; }
     const switchAccount = ownValue(response, "name") === "switchAccount" &&
-        (ownValue(response, "provider") === "unknown" ||
-            ownValue(response, "provider") === "multiple");
+        ownValue(response, "provider") === "multiple";
     if (!ingressIsCurrent(ingressEpoch)) {
         delivery.delivered = true;
         return delivery;
@@ -652,7 +651,6 @@ function rejectMalformedCorrelation(id, name, suppressUpdate, ingressEpoch) {
 function deliverDirect(
     response,
     inheritedId,
-    inheritedName,
     suppressUpdate,
     appliedConfigurations,
     ingressEpoch
@@ -667,39 +665,14 @@ function deliverDirect(
         return isSafeIntegerNormally(inheritedId)
             ? rejectMalformedCorrelation(
                 inheritedId,
-                inheritedName,
+                ownValue(response, "name"),
                 suppressUpdate,
                 ingressEpoch
             )
             : false;
     }
     const id = hasOwnId ? ownId : inheritedId;
-    const ownName = ownValue(response, "name");
-    const name = typeof ownName === "string" ? ownName : inheritedName;
-    if (name === "didLoadLatestConfiguration" || name === "switchAccount") {
-        if (claimedProvider !== "ethereum" && claimedProvider !== "solana") {
-            return isSafeIntegerNormally(id)
-                ? rejectMalformedCorrelation(
-                    id,
-                    name,
-                    suppressUpdate,
-                    ingressEpoch
-                )
-                : false;
-        }
-        if (claimedProvider === "ethereum"
-            ? !validEthereumConfiguration(response)
-            : !validSolanaConfiguration(response)) {
-            return false;
-        }
-        return deliverConfiguration(
-            claimedProvider,
-            response,
-            name === "switchAccount",
-            suppressUpdate,
-            ingressEpoch
-        ).delivered;
-    }
+    const name = ownValue(response, "name");
     if (!isSafeIntegerNormally(id)) { return false; }
     const providerName = providerForWireId(id);
     if (!providerName || claimedProvider !== providerName) {
@@ -753,58 +726,6 @@ function deliverDirect(
         canonical.suppressUpdate = true;
     }
     return applyCanonical(providerName, canonical);
-}
-
-function deliverMultiple(
-    id,
-    response,
-    suppressUpdate,
-    appliedConfigurations,
-    ingressEpoch
-) {
-    const bodies = ownValue(response, "bodies");
-    const count = boundedArrayLength(bodies);
-    if (count === null) { return false; }
-    const name = ownValue(response, "name");
-    let delivered = false;
-    for (let index = 0; index < count; index += 1) {
-        if (hasOwn(bodies, index)) {
-            delivered = deliverDirect(
-                bodies[index],
-                id,
-                name,
-                suppressUpdate,
-                appliedConfigurations,
-                ingressEpoch
-            ) || delivered;
-        }
-    }
-    if (suppressUpdate) { return delivered; }
-    const disconnect = ownValue(response, "providersToDisconnect");
-    const disconnectCount = boundedArrayLength(disconnect);
-    if (disconnectCount === null) { return delivered; }
-    for (let index = 0; index < disconnectCount; index += 1) {
-        if (!ingressIsCurrent(ingressEpoch)) { return delivered; }
-        if (!hasOwn(disconnect, index)) { continue; }
-        const providerName = disconnect[index];
-        if (!ingressIsCurrent(ingressEpoch)) { return delivered; }
-        if (providerName === "solana") {
-            try {
-                solanaProvider.externalDisconnect();
-                delivered = true;
-            } catch {
-            }
-        } else if (providerName === "ethereum") {
-            delivered = deliverConfiguration(
-                providerName,
-                {},
-                true,
-                false,
-                ingressEpoch
-            ).delivered || delivered;
-        }
-    }
-    return delivered;
 }
 
 function handleContentBridgeMessage(event) {
@@ -923,42 +844,23 @@ function handleContentBridgeMessage(event) {
                 !appliedManualSwitch &&
                 (isSafeIntegerNormally(id) ||
                     isSafeIntegerNormally(ownValue(response, "id")))) {
-                const terminalDelivered = responseProvider === "multiple"
-                    ? deliverMultiple(
-                        id,
-                        response,
-                        suppressUpdate,
-                        configurationDelivery.applied,
-                        ingressEpoch
-                    )
-                    : deliverDirect(
-                        response,
-                        id,
-                        responseName,
-                        suppressUpdate,
-                        configurationDelivery.applied,
-                        ingressEpoch
-                    );
+                const terminalDelivered = deliverDirect(
+                    response,
+                    id,
+                    suppressUpdate,
+                    configurationDelivery.applied,
+                    ingressEpoch
+                );
                 delivered = terminalDelivered || delivered;
             }
         } else {
-            const provider = ownValue(response, "provider");
-            delivered = provider === "multiple"
-                ? deliverMultiple(
-                    id,
-                    response,
-                    suppressUpdate,
-                    null,
-                    ingressEpoch
-                )
-                : deliverDirect(
-                    response,
-                    id,
-                    ownValue(response, "name"),
-                    suppressUpdate,
-                    null,
-                    ingressEpoch
-                );
+            delivered = deliverDirect(
+                response,
+                id,
+                suppressUpdate,
+                null,
+                ingressEpoch
+            );
         }
     } finally {
         finishIngress(delivered);

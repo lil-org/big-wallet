@@ -575,11 +575,9 @@ test("manual Switch Account repeats the same intent after transport failure", as
     });
     await harness.call("switchAccountFromIdle");
     assert.equal(harness.get("idle-switch-account").disabled, false);
-    assert.equal(harness.queue.contentScriptUnavailableTab, harness.queue.activeTab);
     await harness.call("switchAccountFromIdle");
     assert.equal(harness.tabMessages.length, 2);
     assert.deepEqual(harness.tabMessages[0].message, harness.tabMessages[1].message);
-    assert.equal(harness.queue.contentScriptUnavailableTab, null);
     assert.equal(harness.nativeMessages.length, 1);
     assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
 });
@@ -837,7 +835,6 @@ function popupHarness(options = {}) {
                 id: message.id, host: "wallet.example",
             });
         }
-        if (message.subject === "openApp") { return {id: message.id, opened: true}; }
         return {status: "ok"};
     };
     const defaultWorker = message => {
@@ -982,6 +979,16 @@ function popupHarness(options = {}) {
             }));
         },
     };
+}
+
+const queuedRejectionHandle = {id: 9001, requestToken: requestToken(9001)};
+
+function queueRejection(harness) {
+    return harness.commands.schedule({
+        lane: "action",
+        subject: "rejectRequest",
+        ...queuedRejectionHandle,
+    }).result;
 }
 
 async function reviewedPopup(stateFor = messageState) {
@@ -1264,14 +1271,14 @@ test("the production approval lane uses the long timeout while reads remain inde
     assert.equal(harness.workerMessages.length, 1);
     assert.ok([...harness.timers.values()].some(timer => timer.delay === 190_000));
 
-    const queued = harness.commands.openApp();
+    const queued = queueRejection(harness);
     await harness.commands.readQueue();
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests"]);
 
     gate.resolve({status: "ok"});
     await approval;
     assert.equal((await queued).status, "response");
-    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests", "openApp"]);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests", "rejectRequest"]);
 });
 
 test("timed-out native actions release their real lane before raw settlement", async () => {
@@ -1303,15 +1310,15 @@ test("queued edits select the dispatch-time review token", async () => {
     const harness = await reviewedPopup(transactionState);
     const gate = deferred();
     harness.handlers.native = (message, fallback) =>
-        message.subject === "openApp" ? gate.promise.then(() => ({id: message.id, opened: true})) : fallback(message);
-    const predecessor = harness.commands.openApp();
+        message.requestToken === queuedRejectionHandle.requestToken ? gate.promise : fallback(message);
+    const predecessor = queueRejection(harness);
     await flushPopup();
     const scope = harness.controller.scope;
     const queued = harness.commands.edit({scope, payload: {mode: "suggested"}});
     await flushPopup();
     harness.commands.adopt({scope, state: transactionState(scope.request, {reviewToken: requestToken(102)})});
 
-    gate.resolve();
+    gate.resolve({status: "ok"});
     await predecessor;
     await queued;
 
@@ -1325,24 +1332,27 @@ test("queued approval cancels on review rotation while tokenless rejection remai
         const controller = harness.controller;
         const gate = deferred();
         harness.handlers.native = (message, fallback) =>
-            message.subject === "openApp" ? gate.promise : fallback(message);
-        const predecessor = harness.commands.openApp();
+            message.requestToken === queuedRejectionHandle.requestToken ? gate.promise : fallback(message);
+        const predecessor = queueRejection(harness);
         await flushPopup();
         const decision = harness.commands[subject === "approveRequest" ? "approve" : "reject"]({scope: controller.scope, payload: subject === "approveRequest" ? {} : undefined});
         await flushPopup();
         harness.commands.adopt({scope: controller.scope, state: messageState(controller.request, {reviewToken: requestToken(102)})});
 
-        gate.resolve({id: 99, opened: true});
+        gate.resolve({status: "ok"});
         await predecessor;
         await decision;
 
         assert.deepEqual(harness.workerMessages, []);
         if (subject === "approveRequest") {
-            assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["openApp"]);
+            assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["rejectRequest"]);
             assert.equal(controller.scope.phase, "displaying");
             assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
         } else {
             assert.equal(harness.nativeMessages.at(-1).subject, "rejectRequest");
+            assert.deepEqual(harness.nativeMessages.map(message => message.requestToken), [
+                queuedRejectionHandle.requestToken, controller.request.requestToken,
+            ]);
             assert.equal(harness.nativeMessages.at(-1).reviewToken, undefined);
             assert.equal(harness.commands.followUpMode(controller.scope), "poll");
         }
@@ -1441,8 +1451,8 @@ test("disposing a queued approval prevents its native dispatch and preserves the
     const harness = await reviewedPopup();
     const gate = deferred();
     harness.handlers.native = (message, fallback) =>
-        message.subject === "openApp" ? gate.promise : fallback(message);
-    const predecessor = harness.commands.openApp();
+        message.requestToken === queuedRejectionHandle.requestToken ? gate.promise : fallback(message);
+    const predecessor = queueRejection(harness);
     await flushPopup();
     const first = harness.controller;
     let cancelledSettled = false;
@@ -1460,7 +1470,7 @@ test("disposing a queued approval prevents its native dispatch and preserves the
     await flushPopup();
     assert.deepEqual(harness.workerMessages.filter(message => message.subject === "approveRequestWithCurrentRevisions"), []);
 
-    gate.resolve({id: 99, opened: true});
+    gate.resolve({status: "ok"});
     await predecessor;
     await queued;
     await next;
@@ -1617,13 +1627,13 @@ test("queued and dispatched decisions cannot leave reconciliation after their la
         const queueGate = deferred();
         harness.handlers.native = (message, fallback) => {
             if (message.subject === "getPendingRequests") { return queueGate.promise; }
-            if (message.subject === "openApp") { return actionGate.promise; }
+            if (message.requestToken === queuedRejectionHandle.requestToken) { return actionGate.promise; }
             return fallback(message);
         };
         harness.handlers.worker = (message, fallback) =>
             message.subject === "approveRequestWithCurrentRevisions" ? actionGate.promise : fallback(message);
         const predecessor = stage === "queued"
-            ? harness.commands.openApp()
+            ? queueRejection(harness)
             : null;
         if (predecessor) { await flushPopup(); }
         const decision = harness.commands.approve({scope: controller.scope, payload: {}});
@@ -1777,8 +1787,8 @@ test("queued slider commands are fenced by their captured review token", async (
     const controller = harness.controller;
     const gate = deferred();
     harness.handlers.native = (message, fallback) =>
-        message.subject === "openApp" ? gate.promise : fallback(message);
-    const predecessor = harness.commands.openApp();
+        message.requestToken === queuedRejectionHandle.requestToken ? gate.promise : fallback(message);
+    const predecessor = queueRejection(harness);
     await flushPopup();
     const slider = harness.get("tx-slider");
     slider.emit("pointerdown");
@@ -1790,11 +1800,11 @@ test("queued slider commands are fenced by their captured review token", async (
     harness.setState(controller.request, fresh);
     harness.commands.adopt({scope: controller.scope, state: fresh});
 
-    gate.resolve({id: 99, opened: true});
+    gate.resolve({status: "ok"});
     await predecessor;
 
     assert.equal(await completion, false);
-    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["openApp", "getApprovalState"]);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["rejectRequest", "getApprovalState"]);
     assert.equal(controller.state.review.reviewToken, requestToken(102));
 });
 
@@ -2230,8 +2240,9 @@ test("queued and dispatched retries cannot affect a replacement request", async 
         await harness.failTransport(first);
         const gate = deferred();
         harness.handlers.native = (message, fallback) =>
-            message.subject === (queued ? "openApp" : "retryApproval") ? gate.promise : fallback(message);
-        const predecessor = queued ? harness.commands.openApp() : null;
+            (queued ? message.requestToken === queuedRejectionHandle.requestToken : message.subject === "retryApproval")
+                ? gate.promise : fallback(message);
+        const predecessor = queued ? queueRejection(harness) : null;
         if (predecessor) { await flushPopup(); }
         const retry = harness.commands.retry({scope: first.scope});
         await flushPopup();
@@ -2239,7 +2250,7 @@ test("queued and dispatched retries cannot affect a replacement request", async 
         harness.setState(replacement, messageState(replacement, {title: "Replacement", reviewToken: requestToken(202)}));
         await harness.show([replacement]);
         const before = harness.visibleSnapshot();
-        gate.resolve(queued ? {id: 99, opened: true} : messageState(first.request, {title: "Stale retry"}));
+        gate.resolve(queued ? {status: "ok"} : messageState(first.request, {title: "Stale retry"}));
         if (predecessor) { await predecessor; }
         await retry;
         assert.equal(harness.controller.request.requestToken, replacement.requestToken);

@@ -1,12 +1,6 @@
 
 // ∅ 2026 lil org
 
-const IS_DESKTOP_POPUP = navigator.maxTouchPoints === 0;
-
-if (IS_DESKTOP_POPUP && document.documentElement) {
-    document.documentElement.classList.add("desktop");
-}
-
 const TRANSACTION_REFRESH_INTERVAL = 600;
 const TRANSACTION_REFRESH_MAX_INTERVAL = 10000;
 const APPROVAL_POLL_INTERVAL = 400;
@@ -67,7 +61,6 @@ var withTimeout = BigWalletBridgeWire.withTimeout;
 const queueTab = {
     activeTab: null,
     booting: true,
-    contentScriptUnavailableTab: null,
     domReady: false,
     items: [],
     index: 0,
@@ -89,7 +82,6 @@ class PopupCommandCoordinator {
     constructor() {
         this.channels = {read: Promise.resolve(), action: Promise.resolve()};
         this.activeScope = null;
-        this.openAppCall = null;
     }
 
     attach(controller) {
@@ -183,22 +175,6 @@ class PopupCommandCoordinator {
 
     readQueue() {
         return this.schedule({lane: "read", subject: "getPendingRequests", id: genId()}).result;
-    }
-
-    openApp() {
-        if (this.openAppCall) { return this.openAppCall; }
-        const id = genId();
-        const result = this.schedule({lane: "action", subject: "openApp", id}).result.then(outcome => {
-            if (outcome.status === "response" && outcome.response?.id !== id) {
-                return {status: "failure"};
-            }
-            return outcome;
-        });
-        this.openAppCall = result;
-        void result.finally(() => {
-            if (this.openAppCall === result) { this.openAppCall = null; }
-        });
-        return result;
     }
 
     invalidate(scope) {
@@ -1655,11 +1631,6 @@ async function showIdle(queueFetchFailed = false) {
 }
 
 function renderIdleSwitchControls(pending) {
-    const canOpenApp = IS_DESKTOP_POPUP && (
-        queueTab.activeTab === null ||
-        sameTab(queueTab.contentScriptUnavailableTab, queueTab.activeTab)
-    );
-    setHidden("idle-open-app", !canOpenApp);
     const switchButton = document.getElementById("idle-switch-account");
     const canSwitch = canBeginIdleSwitch();
     const privateBrowsing = currentPrivateBrowsing();
@@ -2125,12 +2096,6 @@ async function switchAccountFromIdle() {
         requestPendingQueueRefresh();
         return;
     }
-    if (outcome.status === "failure") {
-        queueTab.contentScriptUnavailableTab = tab;
-    } else if (outcome.status === "response" &&
-        sameTab(queueTab.contentScriptUnavailableTab, tab)) {
-        queueTab.contentScriptUnavailableTab = null;
-    }
     const id = response?.id;
     const valid = Number.isSafeInteger(id) && (
         BigWalletBridgeWire.isManualSwitchAcknowledgement(
@@ -2212,32 +2177,11 @@ async function refreshIdleStatus() {
     setText("idle-connection", localized("failedToLoad", "Failed to load"));
 }
 
-async function openBigWallet() {
-    const button = document.getElementById("idle-open-app");
-    if (button.disabled) { return; }
-    button.disabled = true;
-    try {
-        const outcome = await popupCommands.openApp();
-        const response = outcome.status === "response" ? outcome.response : null;
-        if (!isRecord(response) || response.opened !== true) {
-            throw new Error("Failed to open Big Wallet");
-        }
-        window.close();
-    } catch {
-        setText(
-            "idle-connection",
-            localized("somethingWentWrong", "Something went wrong")
-        );
-        button.disabled = popupCommands.openAppCall !== null;
-    }
-}
-
 document.addEventListener("DOMContentLoaded", () => {
     queueTab.domReady = true;
     browser.runtime.onMessage.addListener(handlePopupRuntimeMessage);
     document.getElementById("button-approve").addEventListener("click", () => currentRequestController?.approveCurrent());
     document.getElementById("button-reject").addEventListener("click", () => currentRequestController?.rejectCurrent());
-    document.getElementById("idle-open-app").addEventListener("click", openBigWallet);
     document.getElementById("idle-switch-account").addEventListener("click", switchAccountFromIdle);
     document.getElementById("idle-check-status").addEventListener("click", refreshIdleStatus);
     document.getElementById("editor-apply").addEventListener("click", () => currentRequestController?.applyEdits());

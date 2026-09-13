@@ -36,12 +36,6 @@ body {
     margin: 0 auto;
 }
 
-.desktop body {
-    width: 380px;
-    max-height: 560px;
-    overflow-y: auto;
-}
-
 .hidden {
     display: none !important;
 }

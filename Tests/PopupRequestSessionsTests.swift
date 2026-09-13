@@ -1047,7 +1047,6 @@ extension PopupRequestSessionsTests {
         let request = try popupCommand(subject: "getPendingRequests", id: 99)
 
         let response = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1089,7 +1088,6 @@ extension PopupRequestSessionsTests {
         let request = try popupCommand(subject: "getPendingRequests", id: 99)
 
         let response = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1134,7 +1132,6 @@ extension PopupRequestSessionsTests {
         )
 
         let response = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1361,7 +1358,6 @@ extension PopupRequestSessionsTests {
         )
 
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -1381,7 +1377,7 @@ extension PopupRequestSessionsTests {
                 requestToken: snapshot.handle.requestToken
             )
             let current = await controller.dispatch(
-                try popupCommandValue(request), request: request, profileIdentifier: nil
+                request: request, profileIdentifier: nil
             )
             XCTAssertEqual(current["state"] as? String, "working")
             XCTAssertEqual(current["actions"] as? [String], [])
@@ -1395,7 +1391,7 @@ extension PopupRequestSessionsTests {
             payload: [:]
         )
         let approval = await controller.dispatch(
-            try popupCommandValue(approve), request: approve, profileIdentifier: nil
+            request: approve, profileIdentifier: nil
         )
         XCTAssertEqual(approval["status"] as? String, "ignored")
         XCTAssertEqual(preparations, 1)
@@ -1405,7 +1401,6 @@ extension PopupRequestSessionsTests {
         try await waitForEvent("complete", store: store)
         let pendingRequest = try popupCommand(subject: "getPendingRequests", id: 99)
         let pending = await controller.dispatch(
-            try popupCommandValue(pendingRequest),
             request: pendingRequest,
             profileIdentifier: nil
         )
@@ -1449,7 +1444,7 @@ extension PopupRequestSessionsTests {
             payload: [:]
         )
         _ = await controller.dispatch(
-            try popupCommandValue(approve), request: approve, profileIdentifier: nil
+            request: approve, profileIdentifier: nil
         )
         let read = try popupCommand(
             subject: "getApprovalState",
@@ -1458,7 +1453,7 @@ extension PopupRequestSessionsTests {
         )
         for _ in 0..<3 {
             let state = await controller.dispatch(
-                try popupCommandValue(read), request: read, profileIdentifier: nil
+                request: read, profileIdentifier: nil
             )
             XCTAssertEqual(state["state"] as? String, "error")
             XCTAssertEqual(state["actions"] as? [String], ["retry"])
@@ -1474,7 +1469,7 @@ extension PopupRequestSessionsTests {
                 subject: "retryApproval", id: snapshot.handle.id, requestToken: token
             )
             let state = await controller.dispatch(
-                try popupCommandValue(retry), request: retry, profileIdentifier: profile
+                request: retry, profileIdentifier: profile
             )
             XCTAssertEqual(state["state"] as? String, "missing")
             XCTAssertEqual(state["actions"] as? [String], [])
@@ -1489,7 +1484,7 @@ extension PopupRequestSessionsTests {
         var restoredToken: String?
         for _ in 0..<2 {
             let state = await controller.dispatch(
-                try popupCommandValue(retry), request: retry, profileIdentifier: nil
+                request: retry, profileIdentifier: nil
             )
             XCTAssertEqual(state["state"] as? String, "review")
             XCTAssertEqual(state["actions"] as? [String], ["approve", "reject"])
@@ -1525,12 +1520,12 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         _ = await controller.dispatch(
-            try popupCommandValue(read), request: read, profileIdentifier: nil
+            request: read, profileIdentifier: nil
         )
         try await waitForEvent("completeFailed", store: store)
         for _ in 0..<3 {
             let state = await controller.dispatch(
-                try popupCommandValue(read), request: read, profileIdentifier: nil
+                request: read, profileIdentifier: nil
             )
             XCTAssertEqual(state["state"] as? String, "error")
             XCTAssertEqual(state["actions"] as? [String], ["retry"])
@@ -1545,7 +1540,6 @@ extension PopupRequestSessionsTests {
                 subject: "retryApproval", id: snapshot.handle.id, requestToken: requestToken
             )
             let response = await controller.dispatch(
-                try popupCommandValue(retry),
                 request: retry,
                 profileIdentifier: profileIdentifier
             )
@@ -1560,7 +1554,7 @@ extension PopupRequestSessionsTests {
         )
         for _ in 0..<2 {
             let state = await controller.dispatch(
-                try popupCommandValue(retry), request: retry, profileIdentifier: nil
+                request: retry, profileIdentifier: nil
             )
             XCTAssertEqual(state["state"] as? String, "working")
             XCTAssertEqual(state["actions"] as? [String], [])
@@ -1571,7 +1565,7 @@ extension PopupRequestSessionsTests {
         await store.resumeCompletion()
         try await waitForEvent("complete", store: store)
         let completed = await controller.dispatch(
-            try popupCommandValue(retry), request: retry, profileIdentifier: nil
+            request: retry, profileIdentifier: nil
         )
         XCTAssertEqual(completed["state"] as? String, "missing")
         XCTAssertEqual(preparations, 2)
@@ -1604,12 +1598,12 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         _ = await controller.dispatch(
-            try popupCommandValue(read), request: read, profileIdentifier: nil
+            request: read, profileIdentifier: nil
         )
         try await waitForEvent("completeFailed", store: store)
         requiresReview = true
         let failed = await controller.dispatch(
-            try popupCommandValue(read), request: read, profileIdentifier: nil
+            request: read, profileIdentifier: nil
         )
         XCTAssertEqual(failed["state"] as? String, "error")
         XCTAssertEqual(preparations, 1)
@@ -1620,13 +1614,13 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let review = await controller.dispatch(
-            try popupCommandValue(retry), request: retry, profileIdentifier: nil
+            request: retry, profileIdentifier: nil
         )
         XCTAssertEqual(review["state"] as? String, "review")
         XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
         let token = try XCTUnwrap((review["review"] as? [String: Any])?["reviewToken"] as? String)
         let repeated = await controller.dispatch(
-            try popupCommandValue(retry), request: retry, profileIdentifier: nil
+            request: retry, profileIdentifier: nil
         )
         XCTAssertEqual((repeated["review"] as? [String: Any])?["reviewToken"] as? String, token)
         XCTAssertEqual(preparations, 2)
@@ -1655,7 +1649,7 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         _ = await controller.dispatch(
-            try popupCommandValue(read), request: read, profileIdentifier: nil
+            request: read, profileIdentifier: nil
         )
         try await waitForEvent("completeStarted", store: store)
         await store.setNativeDeliveryReceipt(.init(
@@ -1664,7 +1658,7 @@ extension PopupRequestSessionsTests {
             owner: popupNativeDeliveryOwner
         ), handle: snapshot.handle)
         let nativeOwned = await controller.dispatch(
-            try popupCommandValue(read), request: read, profileIdentifier: nil
+            request: read, profileIdentifier: nil
         )
         XCTAssertEqual(nativeOwned["state"] as? String, "working")
         XCTAssertEqual(preparations, 1)
@@ -1672,7 +1666,7 @@ extension PopupRequestSessionsTests {
         await store.setNativeDeliveryReceipt(nil, handle: snapshot.handle)
         await store.failNextCompletion()
         _ = await controller.dispatch(
-            try popupCommandValue(read), request: read, profileIdentifier: nil
+            request: read, profileIdentifier: nil
         )
         try await waitForEvent("completeFailed", store: store)
         XCTAssertEqual(preparations, 2)
@@ -1680,7 +1674,7 @@ extension PopupRequestSessionsTests {
         try await waitForEvent("completeResumed", store: store)
         for _ in 0..<3 {
             let failed = await controller.dispatch(
-                try popupCommandValue(read), request: read, profileIdentifier: nil
+                request: read, profileIdentifier: nil
             )
             XCTAssertEqual(failed["state"] as? String, "error")
             XCTAssertEqual(failed["actions"] as? [String], ["retry"])
@@ -1714,7 +1708,7 @@ extension PopupRequestSessionsTests {
                 reviewToken: token, payload: [:]
             )
             _ = await controller.dispatch(
-                try popupCommandValue(approve), request: approve, profileIdentifier: nil
+                request: approve, profileIdentifier: nil
             )
             if ownership == "receipt" {
                 await store.setNativeDeliveryReceipt(ExtensionBridge.NativeDeliveryReceipt(
@@ -1732,7 +1726,7 @@ extension PopupRequestSessionsTests {
                 requestToken: snapshot.handle.requestToken
             )
             let state = await controller.dispatch(
-                try popupCommandValue(retry), request: retry, profileIdentifier: nil
+                request: retry, profileIdentifier: nil
             )
             XCTAssertEqual(state["state"] as? String, "working", ownership)
             XCTAssertEqual(state["actions"] as? [String], [], ownership)
@@ -1764,7 +1758,6 @@ extension PopupRequestSessionsTests {
         )
 
         let response = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1797,7 +1790,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let initial = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1811,7 +1803,6 @@ extension PopupRequestSessionsTests {
         await store.setNativeDeliveryReceipt(receipt, handle: snapshot.handle)
 
         let owned = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1824,7 +1815,6 @@ extension PopupRequestSessionsTests {
 
         await store.setNativeDeliveryReceipt(nil, handle: snapshot.handle)
         let restored = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1859,7 +1849,6 @@ extension PopupRequestSessionsTests {
         )
 
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -1868,7 +1857,6 @@ extension PopupRequestSessionsTests {
             id: 99
         )
         let pending = await controller.dispatch(
-            try popupCommandValue(pendingRequest),
             request: pendingRequest,
             profileIdentifier: nil
         )
@@ -1894,7 +1882,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let initial = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1904,7 +1891,6 @@ extension PopupRequestSessionsTests {
         }
 
         let response = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -1947,14 +1933,12 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         _ = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
         refreshEvents.removeAll()
         catalogAvailable = false
         let response = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -2046,7 +2030,6 @@ extension PopupRequestSessionsTests {
             )
 
             let response = await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2061,7 +2044,6 @@ extension PopupRequestSessionsTests {
                 requestToken: snapshot.handle.requestToken
             )
             let state = await controller.dispatch(
-                try popupCommandValue(stateRequest),
                 request: stateRequest,
                 profileIdentifier: nil
             )
@@ -2082,7 +2064,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -2100,7 +2081,6 @@ extension PopupRequestSessionsTests {
                 payload: payload
             )
             let response = await controller.dispatch(
-                try popupCommandValue(request),
                 request: request,
                 profileIdentifier: nil
             )
@@ -2129,7 +2109,6 @@ extension PopupRequestSessionsTests {
             ]
         )
         let approvalResponse = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -2153,7 +2132,6 @@ extension PopupRequestSessionsTests {
             requestToken: rejected.handle.requestToken
         )
         _ = await controller.dispatch(
-            try popupCommandValue(reject),
             request: reject,
             profileIdentifier: nil
         )
@@ -2191,7 +2169,6 @@ extension PopupRequestSessionsTests {
         )
 
         let response = await controller.dispatch(
-            try popupCommandValue(reject),
             request: reject,
             profileIdentifier: nil
         )
@@ -2234,7 +2211,6 @@ extension PopupRequestSessionsTests {
             )
 
             let response = await controller.dispatch(
-                try popupCommandValue(reject),
                 request: reject,
                 profileIdentifier: nil
             )
@@ -2279,7 +2255,6 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -2291,7 +2266,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(refreshed),
             request: refreshed,
             profileIdentifier: nil
         )
@@ -2339,7 +2313,6 @@ extension PopupRequestSessionsTests {
                 payload: ["revisions": snapshot.revisions.json]
             )
             _ = await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2358,7 +2331,6 @@ extension PopupRequestSessionsTests {
                 requestToken: snapshot.handle.requestToken
             )
             let state = await controller.dispatch(
-                try popupCommandValue(stateRequest),
                 request: stateRequest,
                 profileIdentifier: nil
             )
@@ -2410,7 +2382,6 @@ extension PopupRequestSessionsTests {
                 executionDeadline: deadline
             )
             let response = await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2492,7 +2463,6 @@ extension PopupRequestSessionsTests {
 
         let dispatch = Task { @MainActor in
             await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2502,7 +2472,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(preparations, 1)
         let readsBeforeAuthentication = catalogReads
         authenticationCompletion?(true)
-        let response = try await dispatch.value
+        let response = await dispatch.value
 
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertEqual(preparations, 1)
@@ -2558,7 +2528,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -2606,7 +2575,6 @@ extension PopupRequestSessionsTests {
         )
         let dispatch = Task { @MainActor in
             let response = await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2624,7 +2592,7 @@ extension PopupRequestSessionsTests {
         XCTAssertFalse(dispatchCompleted)
 
         await store.resumeCompletion()
-        let response = try await dispatch.value
+        let response = await dispatch.value
         let completionEvents = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertTrue(dispatchCompleted)
@@ -2673,7 +2641,6 @@ extension PopupRequestSessionsTests {
         )
         let dispatch = Task { @MainActor in
             await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2684,7 +2651,7 @@ extension PopupRequestSessionsTests {
         XCTAssertTrue(executingSession.returnToReview(token: executingSession.reviewToken))
         executingSession.rotateReviewToken()
         await executionGate.open()
-        let response = try await dispatch.value
+        let response = await dispatch.value
         let events = await store.events()
         let approvalWasCommitted = await store.completedApprovalWasCommitted(
             handle: snapshot.handle
@@ -2733,7 +2700,6 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -2801,7 +2767,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -2872,7 +2837,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -2894,7 +2858,6 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
         _ = await controller.dispatch(
-            try popupCommandValue(retry),
             request: retry,
             profileIdentifier: nil
         )
@@ -2966,7 +2929,6 @@ extension PopupRequestSessionsTests {
         )
         let approval = Task { @MainActor in
             await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -2978,7 +2940,7 @@ extension PopupRequestSessionsTests {
             handle: snapshot.handle
         )
         await authenticationGate.open()
-        _ = try await approval.value
+        _ = await approval.value
 
         XCTAssertEqual(resolveCount, 0)
         let events = await store.events()
@@ -3026,7 +2988,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -3036,7 +2997,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -3093,7 +3053,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -3103,7 +3062,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -3161,7 +3119,6 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -3226,7 +3183,6 @@ extension PopupRequestSessionsTests {
             )
 
             let state = await controller.dispatch(
-                try popupCommandValue(stateRequest),
                 request: stateRequest,
                 profileIdentifier: nil
             )
@@ -3307,7 +3263,6 @@ extension PopupRequestSessionsTests {
                     requestToken: snapshot.handle.requestToken
                 )
                 let state = await controller.dispatch(
-                    try popupCommandValue(request),
                     request: request,
                     profileIdentifier: nil
                 )
@@ -3344,7 +3299,6 @@ extension PopupRequestSessionsTests {
         )
 
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -3397,7 +3351,6 @@ extension PopupRequestSessionsTests {
         )
         let dispatch = Task { @MainActor in
             let response = await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -3414,7 +3367,7 @@ extension PopupRequestSessionsTests {
         )
 
         await sendGate.open()
-        let response = try await dispatch.value
+        let response = await dispatch.value
         let events = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertTrue(dispatchCompleted)
@@ -3431,6 +3384,7 @@ extension PopupRequestSessionsTests {
         let transaction = popupReadyTransaction()
         let network = popupTransactionNetwork()
         var authenticationCompletion: ((Bool) -> Void)?
+        var authenticationCount = 0
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         var dispatchCompleted = false
         let operations = TransactionApprovalOperations(
@@ -3464,6 +3418,7 @@ extension PopupRequestSessionsTests {
             requestProcessor: processor,
             walletEnvironment: TestPopupWalletEnvironment(
                 authenticate: { _, _, completion in
+                    authenticationCount += 1
                     authenticationCompletion = completion
                 }
             ),
@@ -3481,7 +3436,6 @@ extension PopupRequestSessionsTests {
         )
         let dispatch = Task { @MainActor in
             let response = await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -3491,15 +3445,23 @@ extension PopupRequestSessionsTests {
 
         try await waitForCondition { authenticationCompletion != nil }
         XCTAssertFalse(dispatchCompleted)
+        let duplicateApproval = await controller.dispatch(
+            request: approve,
+            profileIdentifier: nil
+        )
+        XCTAssertEqual(duplicateApproval["status"] as? String, "ignored")
+        XCTAssertEqual(authenticationCount, 1)
+        XCTAssertFalse(dispatchCompleted)
         authenticationCompletion?(true)
         try await waitForCondition { preflightCompletion != nil }
         XCTAssertFalse(dispatchCompleted)
 
         preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
-        let response = try await dispatch.value
+        let response = await dispatch.value
         let events = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertTrue(dispatchCompleted)
+        XCTAssertEqual(authenticationCount, 1)
         XCTAssertEqual(events, ["claim", "begin", "resolve", "complete"])
     }
 
@@ -3585,7 +3547,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -3671,7 +3632,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -3753,7 +3713,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -3822,7 +3781,6 @@ extension PopupRequestSessionsTests {
         )
 
         let firstResponse = await controller.dispatch(
-            try popupCommandValue(firstApproval),
             request: firstApproval,
             profileIdentifier: nil
         )
@@ -3837,7 +3795,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -3854,7 +3811,6 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
         let secondResponse = await controller.dispatch(
-            try popupCommandValue(secondApproval),
             request: secondApproval,
             profileIdentifier: nil
         )
@@ -3927,7 +3883,6 @@ extension PopupRequestSessionsTests {
         )
         let dispatch = Task { @MainActor in
             await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -3939,7 +3894,7 @@ extension PopupRequestSessionsTests {
         preparationUpdate?(lateTransaction)
         await store.resumeClaim()
 
-        let response = try await dispatch.value
+        let response = await dispatch.value
         let events = await store.events()
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -3947,7 +3902,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -4010,7 +3964,6 @@ extension PopupRequestSessionsTests {
         )
         let dispatch = Task { @MainActor in
             await controller.dispatch(
-                try popupCommandValue(approve),
                 request: approve,
                 profileIdentifier: nil
             )
@@ -4018,7 +3971,7 @@ extension PopupRequestSessionsTests {
 
         try await waitForCondition { preflightCompletion != nil }
         preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
-        let response = try await dispatch.value
+        let response = await dispatch.value
         let events = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertEqual(events, ["claim", "release"])
@@ -4029,7 +3982,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(stateRequest),
             request: stateRequest,
             profileIdentifier: nil
         )
@@ -4084,9 +4036,8 @@ extension PopupRequestSessionsTests {
             reviewToken: token,
             payload: ["revisions": snapshot.revisions.json]
         )
-        let command = try popupCommandValue(approve)
         let task = Task { @MainActor in
-            _ = await controller.dispatch(command, request: approve, profileIdentifier: nil)
+            _ = await controller.dispatch(request: approve, profileIdentifier: nil)
             recovered.fulfill()
         }
         await fulfillment(of: [recovered], timeout: 1)
@@ -4158,7 +4109,6 @@ extension PopupRequestSessionsTests {
         )
 
         let response = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -4215,7 +4165,6 @@ extension PopupRequestSessionsTests {
         )
 
         let response = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -4266,7 +4215,6 @@ extension PopupRequestSessionsTests {
         )
 
         _ = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -4311,7 +4259,6 @@ extension PopupRequestSessionsTests {
         )
 
         let response = await controller.dispatch(
-            try popupCommandValue(approve),
             request: approve,
             profileIdentifier: nil
         )
@@ -6103,7 +6050,6 @@ extension PopupRequestSessionsTests {
             requestToken: snapshot.handle.requestToken
         )
         let state = await controller.dispatch(
-            try popupCommandValue(request),
             request: request,
             profileIdentifier: nil
         )
@@ -7040,15 +6986,6 @@ private func popupCommand(
     value["payload"] = payload
     let data = try JSONSerialization.data(withJSONObject: value)
     return try JSONDecoder().decode(InternalSafariRequest.self, from: data)
-}
-
-private func popupCommandValue(
-    _ request: InternalSafariRequest
-) throws -> InternalSafariRequest.PopupCommand {
-    guard case .popup(let command) = request.command else {
-        throw CocoaError(.coderInvalidValue)
-    }
-    return command
 }
 
 @MainActor

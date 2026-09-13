@@ -125,7 +125,6 @@ struct Strings {
     static let advanced = loc("Advanced")
     static let invalidValues = loc("Invalid values")
     static let noActivePage = loc("No active page")
-    static let openBigWallet = loc("Open Big Wallet")
     static let notConnected = loc("Not connected")
     static let connectWallet = loc("Connect Wallet")
     static let addAccountToConnect = loc("Add %@ account to connect")
@@ -157,10 +156,8 @@ struct Strings {
             "cancel": cancel,
             "ok": ok,
             "noActivePage": noActivePage,
-            "openBigWallet": openBigWallet,
             "notConnected": notConnected,
             "privateBrowsingUnsupported": privateBrowsingUnsupported,
-            "somethingWentWrong": somethingWentWrong,
             "failedToLoad": failedToLoad,
             "refresh": refresh,
             "calculating": calculating.withEllipsis,

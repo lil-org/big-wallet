@@ -4551,7 +4551,7 @@ function dispatchConfigurations(
         response: {
             latestConfigurations,
             ...(switchAccount
-                ? {name: "switchAccount", provider: "unknown"}
+                ? {name: "switchAccount", provider: "multiple"}
                 : {}),
         },
     });
@@ -5155,12 +5155,10 @@ test("combined manual switch applies its authoritative configuration once", () =
         id: 101,
         kind: "response",
         response: {
-            bodies: [ethereumConfiguration, solanaConfiguration],
             id: 101,
             latestConfigurations: [ethereumConfiguration, solanaConfiguration],
             name: "switchAccount",
             provider: "multiple",
-            providersToDisconnect: [],
         },
     });
 
@@ -5302,12 +5300,10 @@ test("manual switch does not undo a reentrant Solana disconnect", async () => {
         id: 103,
         kind: "response",
         response: {
-            bodies: [ethereumConfiguration, solanaConfiguration],
             id: 103,
             latestConfigurations: [ethereumConfiguration, solanaConfiguration],
             name: "switchAccount",
             provider: "multiple",
-            providersToDisconnect: [],
         },
     });
 
@@ -5671,37 +5667,6 @@ test("inpage rejects missing and ambiguous terminals and bounds bridge arrays", 
         malformedConfiguration,
         error => error.code === -32603
     );
-
-    const pending = harness.window.ethereum.request({
-        method: "eth_sendTransaction",
-        params: [{value: "0x2"}],
-    });
-    const pendingMessage = pageMessages(harness, "request", "ethereum").at(-1);
-    harness.dispatch({
-        id: pendingMessage.message.id,
-        kind: "response",
-        response: {
-            bodies: new Array(65).fill({
-                name: pendingMessage.message.name,
-                provider: "ethereum",
-                result: "stale",
-            }),
-            name: pendingMessage.message.name,
-            provider: "multiple",
-            providersToDisconnect: [],
-        },
-    });
-    let settled = false;
-    pending.finally(() => { settled = true; });
-    await Promise.resolve();
-    assert.equal(settled, false);
-    dispatchProviderResponse(harness, {
-        id: pendingMessage.message.id,
-        name: pendingMessage.message.name,
-        provider: "ethereum",
-        result: "current",
-    });
-    assert.equal(await pending, "current");
 });
 
 test("inpage configuration getter reentry preserves the newer configuration", () => {
@@ -6028,7 +5993,7 @@ test("Solana omission disconnects externally for ordinary and switch snapshots",
                     results: [],
                 }],
                 ...(switchAccount
-                    ? {name: "switchAccount", provider: "unknown"}
+                    ? {name: "switchAccount", provider: "multiple"}
                     : {}),
             },
         });
@@ -6086,7 +6051,7 @@ test("same-key Solana switch reauthorization fences a late 4100", async () => {
                 publicKey: firstSolanaKey,
             }],
             name: "switchAccount",
-            provider: "unknown",
+            provider: "multiple",
         },
     });
     assert.equal(
