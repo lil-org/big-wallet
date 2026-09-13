@@ -17,6 +17,20 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var now = Date(timeIntervalSince1970: 1_800_000_000)
     }
 
+    private final class RequestParseRecorder {
+        private var ids = [Int]()
+
+        func parse(_ json: [String: Any]) -> SafariRequest? {
+            ids.append(json["id"] as? Int ?? -1)
+            return SafariRequest(json: json)
+        }
+
+        func takeIDs() -> [Int] {
+            defer { ids.removeAll() }
+            return ids
+        }
+    }
+
     private struct Fixture {
         let request: SafariRequest
         let ingress: ExtensionBridge.Ingress
@@ -230,6 +244,278 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertFalse(terminal.nativeDecisionStaged)
         XCTAssertNil(terminal.nativeDeliveryReceipt)
         XCTAssertNil(terminal.nativeExecutionContext)
+    }
+
+    func testValidatedRequestsAreParsedOnceForSnapshotsAndManualSwitchDiscovery() throws {
+        let parsing = RequestParseRecorder()
+        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+            clock: { self.clock.now },
+            parseRequest: parsing.parse
+        ))
+        let ordinary = try makeFixture(id: 901)
+        let manual = try makeManualFixture(
+            id: 902,
+            enqueueAttempt: attempt(for: 902),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0]
+        )
+        let ordinaryHandle = try accepted(store.enqueue(
+            ingress: ordinary.ingress,
+            profileIdentifier: nil
+        )).handle
+        XCTAssertEqual(parsing.takeIDs(), [])
+        let manualHandle = try accepted(store.enqueue(
+            ingress: manual.ingress,
+            profileIdentifier: nil
+        )).handle
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id])
+
+        guard case .available(let snapshots) = store.list(profileIdentifier: nil) else {
+            return XCTFail("Expected validated snapshots")
+        }
+        XCTAssertEqual(snapshots[ordinaryHandle]?.request?.id, ordinary.request.id)
+        XCTAssertEqual(snapshots[manualHandle]?.request?.id, manual.request.id)
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
+
+        guard case .found(let ordinarySnapshot) = store.load(handle: ordinaryHandle) else {
+            return XCTFail("Expected ordinary snapshot")
+        }
+        XCTAssertEqual(ordinarySnapshot.request?.id, ordinary.request.id)
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
+
+        let page = try manualSwitchPage(store.listManualSwitchRequests(
+            profileIdentifier: nil,
+            cursor: nil
+        ))
+        XCTAssertEqual(page.requests.map(\.handle), [manualHandle])
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
+        guard case .found(let manualSnapshot) = store.loadManualSwitch(
+            handle: manualHandle,
+            configurationKey: manual.request.configurationKey
+        ) else { return XCTFail("Expected manual switch snapshot") }
+        XCTAssertEqual(manualSnapshot.request?.id, manual.request.id)
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
+
+        let coalescing = try makeManualFixture(
+            id: 903,
+            enqueueAttempt: attempt(for: 903),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0]
+        )
+        let admission = try accepted(store.enqueue(
+            ingress: coalescing.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(admission.handle, manualHandle)
+        XCTAssertEqual(admission.admissionKind, .coalesced)
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
+    }
+
+    func testValidatedRequestsAreRebuiltAfterAnotherStoreChangesTheProfile() throws {
+        let parsing = RequestParseRecorder()
+        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+            clock: { self.clock.now },
+            parseRequest: parsing.parse
+        ))
+        let otherStore = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+            clock: { self.clock.now }
+        ))
+        let first = try makeFixture(id: 904)
+        let handle = try accepted(store.enqueue(
+            ingress: first.ingress,
+            profileIdentifier: nil
+        )).handle
+        guard case .found = store.load(handle: handle) else {
+            return XCTFail("Expected initial request")
+        }
+        XCTAssertEqual(parsing.takeIDs(), [first.request.id])
+        guard case .found = store.load(handle: handle) else {
+            return XCTFail("Expected a fresh read of the same request")
+        }
+        XCTAssertEqual(parsing.takeIDs(), [first.request.id])
+
+        let second = try makeFixture(id: 905)
+        _ = try accepted(otherStore.enqueue(ingress: second.ingress, profileIdentifier: nil))
+        XCTAssertEqual(otherStore.complete(
+            handle: handle,
+            response: response(for: first.request)
+        ), .persisted)
+        guard case .found(let completed) = store.load(handle: handle) else {
+            return XCTFail("Expected the other store's completion")
+        }
+        XCTAssertEqual(completed.phase, .responded)
+        XCTAssertNil(completed.request)
+        XCTAssertEqual(parsing.takeIDs(), [second.request.id])
+
+        let persisted = try Data(contentsOf: defaultProfileURL)
+        try Data("corrupt profile".utf8).write(to: defaultProfileURL)
+        guard case .unavailable = store.load(handle: handle) else {
+            return XCTFail("Expected corruption to be observed on the next operation")
+        }
+        XCTAssertEqual(parsing.takeIDs(), [])
+        try persisted.write(to: defaultProfileURL)
+        guard case .found = store.load(handle: handle) else {
+            return XCTFail("Expected a fresh read after the profile is restored")
+        }
+        XCTAssertEqual(parsing.takeIDs(), [second.request.id])
+        try FileManager.default.removeItem(at: defaultProfileURL)
+        guard case .missing = store.load(handle: handle) else {
+            return XCTFail("Expected removal to be observed on the next operation")
+        }
+        XCTAssertEqual(parsing.takeIDs(), [])
+    }
+
+    func testValidatedRequestsSurviveStateTransitionsWithoutReencodingStoredBytes() throws {
+        let parsing = RequestParseRecorder()
+        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+            clock: { self.clock.now },
+            parseRequest: parsing.parse
+        ))
+        let fixture = try makeFixture(id: 906)
+        let rawObject = try JSONSerialization.jsonObject(with: fixture.ingress.canonicalData)
+        let originalData = try JSONSerialization.data(
+            withJSONObject: rawObject,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        XCTAssertNotEqual(originalData, fixture.ingress.canonicalData)
+        let ingress = ExtensionBridge.Ingress(
+            request: fixture.request,
+            canonicalData: originalData,
+            fingerprint: fixture.ingress.fingerprint,
+            revisions: fixture.ingress.revisions,
+            replayOnly: false
+        )
+        let handle = try accepted(store.enqueue(ingress: ingress, profileIdentifier: nil)).handle
+        XCTAssertEqual(parsing.takeIDs(), [])
+        let initialClaim = try approvalClaim(store.claim(handle: handle))
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        XCTAssertEqual(try firstStoredState("claimed")["request"] as? Data, originalData)
+        XCTAssertEqual(store.release(claim: initialClaim), .persisted)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        XCTAssertEqual(try firstStoredState("pending")["request"] as? Data, originalData)
+
+        let rollbackClaim = try approvalClaim(store.claim(handle: handle))
+        let rollbackPermit = try executionPermit(store.begin(claim: rollbackClaim))
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id, fixture.request.id])
+        XCTAssertEqual(store.rollback(permit: rollbackPermit), .persisted)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        XCTAssertEqual(try firstStoredState("pending")["request"] as? Data, originalData)
+
+        let claim = try approvalClaim(store.claim(handle: handle))
+        let permit = try executionPermit(store.begin(claim: claim))
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id, fixture.request.id])
+        let recovery = ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x1234")
+        XCTAssertEqual(store.prepareBroadcast(
+            permit: permit,
+            recoveryResponse: recovery,
+            authority: .ordinary
+        ), .persisted)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        XCTAssertEqual(try firstStoredState("broadcastPrepared")["request"] as? Data, originalData)
+        XCTAssertEqual(store.complete(
+            permit: permit,
+            response: response(for: fixture.request),
+            authority: .ordinary
+        ), .persisted)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        guard case .found(let completed) = store.load(handle: handle) else {
+            return XCTFail("Expected completed snapshot")
+        }
+        XCTAssertNil(completed.request)
+        XCTAssertEqual(parsing.takeIDs(), [])
+    }
+
+    func testValidatedRequestsAreReusedForExpiryAndAbandonedExecutionRecovery() throws {
+        let parsing = RequestParseRecorder()
+        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+            clock: { self.clock.now },
+            parseRequest: parsing.parse
+        ))
+        for (index, state) in ["pending", "claimed", "broadcastPrepared"].enumerated() {
+            let fixture = try makeFixture(id: 907 + index)
+            let handle = try accepted(store.enqueue(
+                ingress: fixture.ingress,
+                profileIdentifier: nil
+            )).handle
+            if state != "pending" {
+                let claim = try approvalClaim(store.claim(handle: handle))
+                if state == "broadcastPrepared" {
+                    let permit = try executionPermit(store.begin(claim: claim))
+                    let recovery = ambiguousSubmissionResponse(
+                        for: fixture.request,
+                        transactionHash: "0x1234"
+                    )
+                    XCTAssertEqual(store.prepareBroadcast(
+                        permit: permit,
+                        recoveryResponse: recovery,
+                        authority: .ordinary
+                    ), .persisted)
+                    permit.releaseLease()
+                } else {
+                    claim.releaseLease()
+                }
+            }
+            _ = parsing.takeIDs()
+            clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+            guard case .found(let recovered) = store.load(handle: handle) else {
+                return XCTFail("Expected recovery from \(state)")
+            }
+            XCTAssertEqual(recovered.phase, .responded)
+            XCTAssertNil(recovered.request)
+            XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+            let terminal = try responseJSON(store.readResponse(
+                handle: handle,
+                configurationKey: fixture.request.configurationKey
+            ))
+            let expected = state == "broadcastPrepared"
+                ? ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x1234")
+                : ResponseToExtension(for: fixture.request, payload: .error(.userRejected))
+            XCTAssertEqual(terminal as NSDictionary, expected.json as NSDictionary)
+            XCTAssertEqual(parsing.takeIDs(), [])
+        }
+    }
+
+    func testValidatedRequestsAreReparsedAfterFailedAndAmbiguousWrites() throws {
+        let parsing = RequestParseRecorder()
+        var failBeforeWrite = false
+        var failAfterWrite = false
+        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                if failBeforeWrite { throw Failure.injectedWrite }
+                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                if failAfterWrite { throw Failure.injectedWrite }
+            },
+            parseRequest: parsing.parse
+        ))
+        let fixture = try makeFixture(id: 910)
+        let handle = try accepted(store.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        failBeforeWrite = true
+        XCTAssertEqual(store.reject(handle: handle), .retryablePersistenceFailure)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        failBeforeWrite = false
+        guard case .found(let pending) = store.load(handle: handle) else {
+            return XCTFail("Expected the persisted pending request after a failed write")
+        }
+        XCTAssertEqual(pending.phase, .queued)
+        XCTAssertEqual(pending.request?.id, fixture.request.id)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+
+        failAfterWrite = true
+        XCTAssertEqual(store.complete(
+            handle: handle,
+            response: response(for: fixture.request)
+        ), .persisted)
+        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
+        failAfterWrite = false
+        guard case .found(let completed) = store.load(handle: handle) else {
+            return XCTFail("Expected completion after exact read-back recovery")
+        }
+        XCTAssertNil(completed.request)
+        XCTAssertEqual(parsing.takeIDs(), [])
     }
 
     func testLostEnqueueReplyDeduplicatesTheExactAttempt() async throws {

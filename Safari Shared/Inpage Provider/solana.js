@@ -343,6 +343,13 @@ function rejectOperation(provider, record, error) {
     );
 }
 
+function requireBase58String(value, message = invalidSolanaTransactionRequest) {
+    if (typeof value !== "string") {
+        throw new ProviderRpcError(4200, message);
+    }
+    return value;
+}
+
 function normalizedBase58Value(value, message) {
     if (typeof value === "string") {
         try {
@@ -352,7 +359,7 @@ function normalizedBase58Value(value, message) {
             throw new ProviderRpcError(4200, message);
         }
     }
-    return Base58.encode(bytesSnapshot(value, message));
+    return requireBase58String(Base58.encode(bytesSnapshot(value, message)), message);
 }
 
 function normalizedHexMessage(value) {
@@ -427,6 +434,7 @@ function transactionAdapter(transaction, message = invalidSolanaTransactionReque
             throw new ProviderRpcError(4200, message);
         }
         adapter.signatures = signaturesDescriptor.value;
+        requireBase58String(adapter.message, message);
         return adapter;
     }
     const serializeMessage = inheritedDataFunction(transaction, "serializeMessage");
@@ -461,6 +469,7 @@ function transactionAdapter(transaction, message = invalidSolanaTransactionReque
             throw new ProviderRpcError(4200, message);
         }
     }
+    requireBase58String(adapter.message, message);
     return adapter;
 }
 
@@ -613,17 +622,12 @@ function normalizedMessages(values, message) {
 }
 
 function messagePayload(message) {
-    const payload = {message};
-    return typeof message === "string"
-        ? trustedOutboundRecord(payload)
-        : outboundDataSnapshot(payload);
+    return trustedOutboundRecord({message: requireBase58String(message)});
 }
 
 function messagesPayload(messages) {
     for (let index = 0; index < messages.length; index += 1) {
-        if (typeof messages[index] !== "string") {
-            return outboundDataSnapshot({messages});
-        }
+        requireBase58String(messages[index], invalidSolanaTransactionBatchRequest);
     }
     return trustedOutboundRecord({messages: trustedOutboundArray(messages)});
 }
@@ -785,9 +789,9 @@ function normalizeRequest(method, params) {
                 } catch {
                     throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
                 }
-                transaction = Base58.encode(
+                transaction = requireBase58String(Base58.encode(
                     bytesSnapshot(serialized, invalidSolanaTransactionRequest)
-                );
+                ));
             } else if (typeof raw.transaction !== "undefined") {
                 transaction = normalizedBase58Value(
                     raw.transaction,
@@ -805,9 +809,8 @@ function normalizeRequest(method, params) {
             if (typeof raw.options !== "undefined") {
                 normalized.options = outboundDataSnapshot(raw.options);
             }
-            normalizedParams = typeof (transaction || normalized.message) === "string"
-                ? trustedOutboundRecord(normalized)
-                : outboundDataSnapshot(normalized);
+            requireBase58String(transaction || normalized.message);
+            normalizedParams = trustedOutboundRecord(normalized);
             metadata.messages = [transaction || normalized.message];
             break;
         }
@@ -1882,7 +1885,9 @@ class BigWalletSolana extends EventEmitter {
             const transaction = prepared[index];
             requireAuthorization(this, authorization);
             const response = await this.request(
-                this.signTransactionPayload(Base58.encode(transaction.messageBytes))
+                this.signTransactionPayload(requireBase58String(
+                    Base58.encode(transaction.messageBytes)
+                ))
             );
             const signature = this.standardBase58Signature(response.signature);
             const signedTransaction = new Uint8Array(

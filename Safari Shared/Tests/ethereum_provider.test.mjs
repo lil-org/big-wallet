@@ -2660,7 +2660,7 @@ test("Solana batch construction preserves messages with inherited array accessor
     }
 });
 
-test("Solana adapter payloads keep a snapshot of values exposed by inherited setters", async () => {
+test("Solana rejects adapter messages corrupted by inherited setters before dispatch", async () => {
     for (const versioned of [false, true]) {
         for (const field of ["message", "signatures"]) {
             const authorization = {
@@ -2693,32 +2693,22 @@ test("Solana adapter payloads keep a snapshot of values exposed by inherited set
             } finally {
                 delete prototype[field];
             }
-            const rejected = assert.rejects(pending, error => error.code === 4001);
-            injected.value = 2;
+            await assert.rejects(pending, error => error.code === 4200);
             applySolanaConfiguration(harness, authorization);
-            assert.deepEqual(structuredClone(harness.requests[0].body.object.params), {
-                message: {value: 1},
-            });
-            harness.Solana.applyEnvelope(harness.provider, {
-                id: harness.requests[0].id,
-                kind: "error",
-                name: "signTransaction",
-                error: {code: 4001, message: "Canceled"},
-            });
-            await rejected;
+            assert.equal(harness.requests.length, 0);
         }
     }
 });
 
-test("Solana non-string encoder results retain JSON snapshot isolation", async () => {
+test("Solana rejects non-string encoder results before dispatch", async () => {
     const cases = [
-        {method: "signTransaction", params: {message: new Uint8Array([0])}, field: "message"},
-        {method: "signTransaction", params: {transaction: legacyTransaction(0).transaction}, field: "message"},
-        {method: "signAllTransactions", params: {messages: [new Uint8Array([0])]}, field: "messages"},
-        {method: "signAndSendTransaction", params: {transaction: new Uint8Array([0])}, field: "transaction"},
-        {method: "signAndSendTransaction", params: {message: new Uint8Array([0])}, field: "message"},
+        {method: "signTransaction", params: {message: new Uint8Array([0])}},
+        {method: "signTransaction", params: {transaction: legacyTransaction(0).transaction}},
+        {method: "signAllTransactions", params: {messages: [new Uint8Array([0])]}},
+        {method: "signAndSendTransaction", params: {transaction: new Uint8Array([0])}},
+        {method: "signAndSendTransaction", params: {message: new Uint8Array([0])}},
     ];
-    for (const {method, params, field} of cases) {
+    for (const {method, params} of cases) {
         const authorization = {
             accountRevision: 1,
             isConnected: true,
@@ -2738,18 +2728,78 @@ test("Solana non-string encoder results retain JSON snapshot isolation", async (
         } finally {
             prototype.repeat = original;
         }
-        const rejected = assert.rejects(pending, error => error.code === 4001);
-        injected.value = 2;
+        await assert.rejects(pending, error => error.code === 4200);
         applySolanaConfiguration(harness, authorization);
-        assert.deepEqual(structuredClone(harness.requests[0].body.object.params[field]),
-            field === "messages" ? [{value: 1}] : {value: 1});
-        harness.Solana.applyEnvelope(harness.provider, {
-            id: harness.requests[0].id,
-            kind: "error",
-            name: method,
-            error: {code: 4001, message: "Canceled"},
+        assert.equal(harness.requests.length, 0, method);
+    }
+});
+
+test("Solana rejects a falsy transaction encoding instead of falling back to a message", async () => {
+    for (const encoded of [0, false, null, undefined]) {
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        };
+        const harness = solanaHarness(authorization);
+        const transaction = legacyTransaction(1).transaction;
+        transaction.serialize = () => new Uint8Array([0]);
+        const prototype = vm.runInContext("String.prototype", harness.context);
+        const original = prototype.repeat;
+        prototype.repeat = function (count) {
+            return String(this) === "1" && count === 1
+                ? encoded
+                : original.call(this, count);
+        };
+        let pending;
+        try {
+            pending = harness.provider.request({
+                method: "signAndSendTransaction",
+                params: {transaction, message: "2"},
+            });
+        } finally {
+            prototype.repeat = original;
+        }
+        await assert.rejects(pending, error => error.code === 4200);
+        applySolanaConfiguration(harness, authorization);
+        assert.equal(harness.requests.length, 0);
+    }
+});
+
+test("Wallet Standard rejects non-string encoder results before dispatch", async () => {
+    for (const method of ["standardSignTransaction", "standardSignAndSendTransaction"]) {
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        };
+        const harness = solanaHarness(authorization);
+        applySolanaConfiguration(harness, authorization);
+        const account = harness.provider.standardAccounts()[0];
+        harness.provider.preparedStandardTransaction = () => ({
+            messageBytes: new Uint8Array([0]),
+            signatureOffset: 1,
+            transactionBytes: new Uint8Array(66),
         });
-        await rejected;
+        const prototype = vm.runInContext("String.prototype", harness.context);
+        const original = prototype.repeat;
+        prototype.repeat = function (count) {
+            return String(this) === "1" ? {value: 1} : original.call(this, count);
+        };
+        let pending;
+        try {
+            pending = harness.provider[method]({
+                account,
+                chain: "solana:mainnet",
+                transaction: new Uint8Array([0]),
+            });
+        } finally {
+            prototype.repeat = original;
+        }
+        await assert.rejects(pending, error => error.code === 4200);
+        assert.equal(harness.requests.length, 0, method);
     }
 });
 

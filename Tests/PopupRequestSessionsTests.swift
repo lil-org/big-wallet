@@ -112,24 +112,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertNil(session.approvalClaim)
     }
 
-    func testImmediateResponseSessionStartsWorkingWithoutApprovalAuthority() throws {
-        let snapshot = try popupSnapshot(id: 475)
-        let session = PopupRequestSession(
-            handle: snapshot.handle,
-            request: try XCTUnwrap(snapshot.request),
-            purpose: .immediateResponsePersistence
-        )
-        XCTAssertEqual(session.state, .working)
-        XCTAssertTrue(session.isImmediateResponsePersistence)
-        XCTAssertNil(session.approvalClaim)
-        XCTAssertNil(session.approvalAction)
-        XCTAssertNil(session.beginApproval())
-        XCTAssertNil(session.errorText)
-        session.fail("Unavailable")
-        XCTAssertEqual(session.state, .error)
-        XCTAssertEqual(session.errorText, "Unavailable")
-    }
-
     func testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary()
         async throws {
         enum Boundary: CaseIterable, Equatable {
@@ -1023,12 +1005,12 @@ final class PopupRequestSessionsTests: XCTestCase {
         return PopupRequestSession(
             handle: handle,
             request: request,
-            purpose: .approval(.switchAccount(SelectAccountAction(
+            action: .switchAccount(SelectAccountAction(
                 coinType: nil,
                 selectedAccounts: [],
                 initiallyConnectedProviders: [],
                 network: nil
-            )))
+            ))
         )
     }
 }
@@ -1348,10 +1330,12 @@ extension PopupRequestSessionsTests {
         let snapshot = try popupSnapshot(id: 28)
         await store.insert(snapshot)
         await store.suspendNextCompletion()
+        var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupProcessor { request in
-                .response(request.response(error: .userRejected))
+                preparations += 1
+                return .response(request.response(error: .userRejected))
             },
             walletEnvironment: TestPopupWalletEnvironment(),
             loadsTransactionContext: false
@@ -1372,8 +1356,37 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(state["id"] as? Int, snapshot.handle.id)
         XCTAssertEqual(state["state"] as? String, "working")
         XCTAssertEqual(state["host"] as? String, snapshot.host)
+        XCTAssertEqual(state["actions"] as? [String], [])
+        XCTAssertNil(state["review"])
 
         try await waitForEvent("completeStarted", store: store)
+        for subject in ["getApprovalState", "retryApproval"] {
+            let request = try popupCommand(
+                subject: subject,
+                id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            )
+            let current = await controller.dispatch(
+                try popupCommandValue(request), request: request, profileIdentifier: nil
+            )
+            XCTAssertEqual(current["state"] as? String, "working")
+            XCTAssertEqual(current["actions"] as? [String], [])
+            XCTAssertNil(current["review"])
+        }
+        let approve = try popupCommand(
+            subject: "approveRequest",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            reviewToken: UUID().uuidString.lowercased(),
+            payload: [:]
+        )
+        let approval = await controller.dispatch(
+            try popupCommandValue(approve), request: approve, profileIdentifier: nil
+        )
+        XCTAssertEqual(approval["status"] as? String, "ignored")
+        XCTAssertEqual(preparations, 1)
+        let workingEvents = await store.events()
+        XCTAssertEqual(workingEvents, ["completeStarted"])
         await store.resumeCompletion()
         try await waitForEvent("complete", store: store)
         let pendingRequest = try popupCommand(subject: "getPendingRequests", id: 99)
@@ -1393,6 +1406,7 @@ extension PopupRequestSessionsTests {
             completed[0]["requestToken"] as? String,
             snapshot.handle.requestToken
         )
+        XCTAssertEqual(preparations, 1)
     }
 
     func testReadsPreserveCachedErrorUntilIdentityBoundRetry() async throws {
@@ -1509,6 +1523,21 @@ extension PopupRequestSessionsTests {
             XCTAssertNil(state["review"])
         }
         XCTAssertEqual(preparations, 1)
+        for (requestToken, profileIdentifier) in [
+            (UUID().uuidString.lowercased(), nil),
+            (snapshot.handle.requestToken, UUID()),
+        ] {
+            let retry = try popupCommand(
+                subject: "retryApproval", id: snapshot.handle.id, requestToken: requestToken
+            )
+            let response = await controller.dispatch(
+                try popupCommandValue(retry),
+                request: retry,
+                profileIdentifier: profileIdentifier
+            )
+            XCTAssertEqual(response["state"] as? String, "missing")
+        }
+        XCTAssertEqual(preparations, 1)
         await store.suspendNextCompletion()
         let retry = try popupCommand(
             subject: "retryApproval",
@@ -1531,6 +1560,118 @@ extension PopupRequestSessionsTests {
             try popupCommandValue(retry), request: retry, profileIdentifier: nil
         )
         XCTAssertEqual(completed["state"] as? String, "missing")
+        XCTAssertEqual(preparations, 2)
+    }
+
+    func testImmediatePersistenceRetryCanMaterializeAReview() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 484)
+        await store.insert(snapshot)
+        await store.failNextCompletion()
+        var preparations = 0
+        var requiresReview = false
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor { request in
+                preparations += 1
+                if requiresReview {
+                    return .approval(.addEthereumChain(AddEthereumChainAction(
+                        chainToAdd: popupTestNetwork()
+                    )))
+                }
+                return .response(request.response(error: .userRejected))
+            },
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
+        )
+        let read = try popupCommand(
+            subject: "getApprovalState",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        _ = await controller.dispatch(
+            try popupCommandValue(read), request: read, profileIdentifier: nil
+        )
+        try await waitForEvent("completeFailed", store: store)
+        requiresReview = true
+        let failed = await controller.dispatch(
+            try popupCommandValue(read), request: read, profileIdentifier: nil
+        )
+        XCTAssertEqual(failed["state"] as? String, "error")
+        XCTAssertEqual(preparations, 1)
+
+        let retry = try popupCommand(
+            subject: "retryApproval",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        let review = await controller.dispatch(
+            try popupCommandValue(retry), request: retry, profileIdentifier: nil
+        )
+        XCTAssertEqual(review["state"] as? String, "review")
+        XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
+        let token = try XCTUnwrap((review["review"] as? [String: Any])?["reviewToken"] as? String)
+        let repeated = await controller.dispatch(
+            try popupCommandValue(retry), request: retry, profileIdentifier: nil
+        )
+        XCTAssertEqual((repeated["review"] as? [String: Any])?["reviewToken"] as? String, token)
+        XCTAssertEqual(preparations, 2)
+        let events = await store.events()
+        XCTAssertEqual(events, ["completeFailed"])
+    }
+
+    func testOldImmediatePersistenceCompletionPreservesReplacementFailure() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 485)
+        await store.insert(snapshot)
+        await store.suspendNextCompletion()
+        var preparations = 0
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor { request in
+                preparations += 1
+                return .response(request.response(error: .userRejected))
+            },
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
+        )
+        let read = try popupCommand(
+            subject: "getApprovalState",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        _ = await controller.dispatch(
+            try popupCommandValue(read), request: read, profileIdentifier: nil
+        )
+        try await waitForEvent("completeStarted", store: store)
+        await store.setNativeDeliveryReceipt(.init(
+            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
+        ), handle: snapshot.handle)
+        let nativeOwned = await controller.dispatch(
+            try popupCommandValue(read), request: read, profileIdentifier: nil
+        )
+        XCTAssertEqual(nativeOwned["state"] as? String, "working")
+        XCTAssertEqual(preparations, 1)
+
+        await store.setNativeDeliveryReceipt(nil, handle: snapshot.handle)
+        await store.failNextCompletion()
+        _ = await controller.dispatch(
+            try popupCommandValue(read), request: read, profileIdentifier: nil
+        )
+        try await waitForEvent("completeFailed", store: store)
+        XCTAssertEqual(preparations, 2)
+        await store.resumeCompletion(result: .ownershipLost)
+        try await waitForEvent("completeResumed", store: store)
+        for _ in 0..<3 {
+            let failed = await controller.dispatch(
+                try popupCommandValue(read), request: read, profileIdentifier: nil
+            )
+            XCTAssertEqual(failed["state"] as? String, "error")
+            XCTAssertEqual(failed["actions"] as? [String], ["retry"])
+            XCTAssertEqual(failed["error"] as? String, Strings.failedToLoad)
+        }
         XCTAssertEqual(preparations, 2)
     }
 
@@ -6190,7 +6331,8 @@ private actor CompactPopupStore: NativeApprovalStore {
     private var suspendClaim = false
     private var claimContinuation: CheckedContinuation<Void, Never>?
     private var suspendCompletion = false
-    private var completionContinuation: CheckedContinuation<Void, Never>?
+    private var completionContinuation:
+        CheckedContinuation<ExtensionBridge.StoreMutationResult?, Never>?
     private var loadCountValue = 0
 
     init(clock: @escaping @Sendable () -> Date = { Date() }) {
@@ -6277,10 +6419,10 @@ private actor CompactPopupStore: NativeApprovalStore {
         continuation?.resume()
     }
     func suspendNextCompletion() { suspendCompletion = true }
-    func resumeCompletion() {
+    func resumeCompletion(result: ExtensionBridge.StoreMutationResult? = nil) {
         let continuation = completionContinuation
         completionContinuation = nil
-        continuation?.resume()
+        continuation?.resume(returning: result)
     }
 
     func list(profileIdentifier: UUID?) async -> ExtensionBridge.SnapshotsResult {
@@ -6522,9 +6664,13 @@ private actor CompactPopupStore: NativeApprovalStore {
         guard let snapshot = records[handle] else { return .ownershipLost }
         if suspendCompletion {
             suspendCompletion = false
-            await withCheckedContinuation { continuation in
+            let result = await withCheckedContinuation { continuation in
                 eventValues.append("completeStarted")
                 completionContinuation = continuation
+            }
+            if let result {
+                eventValues.append("completeResumed")
+                return result
             }
         }
         if shouldFailNextCompletion {

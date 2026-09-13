@@ -7,7 +7,7 @@ final class ExtensionRequestFileStore {
     typealias ReadData = (URL) throws -> Data
     typealias ReadFileSize = (URL) throws -> Int?
     typealias RemoveItem = (URL) throws -> Void
-    typealias ParseRequest = (Data) -> SafariRequest?
+    typealias ParseRequest = ([String: Any]) -> SafariRequest?
 
     struct Dependencies {
         let clock: () -> Date
@@ -31,7 +31,7 @@ final class ExtensionRequestFileStore {
             readData: @escaping ReadData = ExtensionRequestFileStore.defaultReadData,
             readFileSize: @escaping ReadFileSize = ExtensionRequestFileStore.defaultReadFileSize,
             removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem,
-            parseRequest: @escaping ParseRequest = { SafariRequest(data: $0) }
+            parseRequest: @escaping ParseRequest = { SafariRequest(json: $0) }
         ) {
             self.clock = clock
             self.token = token
@@ -56,6 +56,21 @@ final class ExtensionRequestFileStore {
         let workflowVersion: Int
         let profileIdentifier: UUID?
         var records: [Record]
+    }
+
+    private struct ValidatedProfile {
+        var state: ProfileState
+        var parsedRequests: [ExtensionBridge.Handle: SafariRequest]
+
+        func request(for record: Record) -> SafariRequest? {
+            guard record.state.requestData != nil else { return nil }
+            return parsedRequests[record.handle]
+        }
+
+        mutating func complete(at index: Int, response: Data, date: Date) {
+            state.records[index].complete(response: response, at: date)
+            parsedRequests.removeValue(forKey: state.records[index].handle)
+        }
     }
 
     private struct Record: Codable {
@@ -228,7 +243,7 @@ final class ExtensionRequestFileStore {
     }
 
     private enum ProfileRead {
-        case state(ProfileState)
+        case state(ValidatedProfile)
         case corrupt
         case unavailable
     }
@@ -377,7 +392,7 @@ final class ExtensionRequestFileStore {
                 recover: true
             ) else { return .unavailable }
 
-            if let existing = profile.records.first(where: {
+            if let existing = profile.state.records.first(where: {
                 $0.enqueueAttempt == ingress.request.enqueueAttempt
             }) {
                 guard existing.id == ingress.request.id,
@@ -427,9 +442,9 @@ final class ExtensionRequestFileStore {
 
             if ingress.request.name == "switchAccount",
                ingress.request.provider == .unknown,
-               let existing = profile.records.first(where: { record in
+               let existing = profile.state.records.first(where: { record in
                    record.configurationKey == ingress.request.configurationKey &&
-                       !record.responseAcknowledged && isManualSwitch(record)
+                       !record.responseAcknowledged && isManualSwitch(record, in: profile)
                }) {
                 return .accepted(
                     handle: existing.handle,
@@ -440,15 +455,15 @@ final class ExtensionRequestFileStore {
                 )
             }
 
-            let active = profile.records.filter(\.state.isActive)
+            let active = profile.state.records.filter(\.state.isActive)
             guard active.count < ExtensionBridge.maximumRequests,
                   active.filter({
                       $0.configurationKey == ingress.request.configurationKey
                   }).count <
                     ExtensionBridge.maximumRequestsPerHost,
-                  let requestToken = uniqueToken(in: profile.records),
+                  let requestToken = uniqueToken(in: profile.state.records),
                   let nativeDeliveryNonceValue = uniqueToken(
-                    in: profile.records,
+                    in: profile.state.records,
                     excluding: requestToken
                   ) else {
                 return .rejected
@@ -470,10 +485,14 @@ final class ExtensionRequestFileStore {
             )
             guard let retiredHandles = makeRoomForAdmission(
                 record,
-                in: &profile.records,
+                in: &profile.state.records,
                 now: now
             ) else { return .rejected }
-            profile.records.append(record)
+            profile.state.records.append(record)
+            profile.parsedRequests[record.handle] = ingress.request
+            for handle in retiredHandles {
+                profile.parsedRequests.removeValue(forKey: handle)
+            }
             guard writeProfileLocked(profile, failureRecovery: .readBack) else {
                 return .unavailable
             }
@@ -510,18 +529,19 @@ final class ExtensionRequestFileStore {
             let completedCount = max(
                 0,
                 ExtensionBridge.maximumRetainedRequests -
-                    profile.records.filter(\.state.isActive).count
+                    profile.state.records.filter(\.state.isActive).count
             )
-            let completedHandles = Set(profile.records.filter {
+            let completedHandles = Set(profile.state.records.filter {
                 !$0.state.isActive && !$0.responseAcknowledged
             }.prefix(completedCount).map(\.handle))
-            let snapshots = profile.records.enumerated().reduce(
+            let snapshots = profile.state.records.enumerated().reduce(
                 into: [ExtensionBridge.Handle: ExtensionBridge.Snapshot]()
             ) { result, item in
                 guard item.element.state.isActive ||
                     completedHandles.contains(item.element.handle) else { return }
                 result[item.element.handle] = snapshot(
                     item.element,
+                    request: profile.request(for: item.element),
                     sequence: item.offset
                 )
             }
@@ -536,12 +556,16 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
             }) else {
                 return .missing
             }
-            return .found(snapshot(profile.records[index], sequence: index))
+            return .found(snapshot(
+                profile.state.records[index],
+                request: profile.request(for: profile.state.records[index]),
+                sequence: index
+            ))
         }
     }
 
@@ -565,8 +589,8 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            let records = profile.records.filter {
-                !$0.responseAcknowledged && isManualSwitch($0) &&
+            let records = profile.state.records.filter {
+                !$0.responseAcknowledged && isManualSwitch($0, in: profile) &&
                     (position?.precedes($0) ?? true)
             }.sorted {
                 $0.admissionCreatedAt == $1.admissionCreatedAt
@@ -607,16 +631,20 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle && $0.configurationKey == configurationKey &&
-                    !$0.responseAcknowledged && isManualSwitch($0)
+                    !$0.responseAcknowledged && isManualSwitch($0, in: profile)
             }) else { return .missing }
-            return .found(snapshot(profile.records[index], sequence: index))
+            return .found(snapshot(
+                profile.state.records[index],
+                request: profile.request(for: profile.state.records[index]),
+                sequence: index
+            ))
         }
     }
 
-    private func isManualSwitch(_ record: Record) -> Bool {
-        if let request = record.state.requestData.flatMap(parseRequest) {
+    private func isManualSwitch(_ record: Record, in profile: ValidatedProfile) -> Bool {
+        if let request = profile.request(for: record) {
             return request.name == "switchAccount" && request.provider == .unknown
         }
         return record.state.responseData.flatMap {
@@ -652,10 +680,10 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            guard let index = profile.records.firstIndex(where: { $0.handle == handle }) else {
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == handle }) else {
                 return .missing
             }
-            switch profile.records[index].state {
+            switch profile.state.records[index].state {
             case .pending(let request, let approval):
                 guard case .unowned = approval else {
                     return .executing
@@ -664,7 +692,7 @@ final class ExtensionRequestFileStore {
                       let claimID = nextID(excluding: handle.token.value) else {
                     return .unavailable
                 }
-                profile.records[index].state = .claimed(
+                profile.state.records[index].state = .claimed(
                     claimID: claimID,
                     request: request,
                     approval: .ordinary
@@ -731,26 +759,26 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
-            }), case .pending(let request, _) = profile.records[index].state,
+            }), case .pending(let request, _) = profile.state.records[index].state,
                   receiptMatches(
-                    profile.records[index].nativeDeliveryReceipt,
+                    profile.state.records[index].nativeDeliveryReceipt,
                     expected: expectedReceipt
                   ) else {
                 return .ownershipLost
             }
-            if let existing = profile.records[index].stagedApproval {
+            if let existing = profile.state.records[index].stagedApproval {
                 return DappApprovalDecision.decodeBounded(existing.decision) == decision
                     ? .persisted
                     : .ownershipLost
             }
             let stagedApproval = Record.StagedApproval(
                 decision: decisionData,
-                stagedAt: max(profile.records[index].createdAt, approvedAt ?? clock()),
-                receipt: profile.records[index].nativeDeliveryReceipt
+                stagedAt: max(profile.state.records[index].createdAt, approvedAt ?? clock()),
+                receipt: profile.state.records[index].nativeDeliveryReceipt
             )
-            profile.records[index].state = .pending(
+            profile.state.records[index].state = .pending(
                 request: request,
                 approval: .staged(stagedApproval, context: nil)
             )
@@ -777,17 +805,17 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
-            }), case .pending(let request, let approval) = profile.records[index].state,
-                  profile.records[index].nativeDeliveryNonce ==
+            }), case .pending(let request, let approval) = profile.state.records[index].state,
+                  profile.state.records[index].nativeDeliveryNonce ==
                     nativeDeliveryNonce else {
                 return .ownershipLost
             }
-            if let existing = profile.records[index].nativeDeliveryReceipt {
+            if let existing = profile.state.records[index].nativeDeliveryReceipt {
                 return existing == receipt ? .persisted : .ownershipLost
             }
-            profile.records[index].state = .pending(
+            profile.state.records[index].state = .pending(
                 request: request,
                 approval: approval.replacingReceipt(receipt)
             )
@@ -808,14 +836,14 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
-            }), case .pending(let request, let approval) = profile.records[index].state,
-                  profile.records[index].nativeDeliveryNonce ==
+            }), case .pending(let request, let approval) = profile.state.records[index].state,
+                  profile.state.records[index].nativeDeliveryNonce ==
                     nativeDeliveryNonce else {
                 return .ownershipLost
             }
-            guard let existing = profile.records[index].nativeDeliveryReceipt else {
+            guard let existing = profile.state.records[index].nativeDeliveryReceipt else {
                 return .persisted
             }
             guard existing.nativeDeliveryNonce == nativeDeliveryNonce,
@@ -823,7 +851,7 @@ final class ExtensionRequestFileStore {
                     runtimeInstanceIdentifier else {
                 return .ownershipLost
             }
-            profile.records[index].state = .pending(
+            profile.state.records[index].state = .pending(
                 request: request,
                 approval: approval.replacingReceipt(nil)
             )
@@ -842,10 +870,10 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
             }) else { return .missing }
-            switch profile.records[index].state {
+            switch profile.state.records[index].state {
             case .pending(let request, let pendingApproval):
                 guard case .staged(let approval, let context) = pendingApproval,
                       let decision = DappApprovalDecision.decodeBounded(
@@ -860,7 +888,7 @@ final class ExtensionRequestFileStore {
                       let claimID = nextID(excluding: handle.token.value) else {
                     return .unavailable
                 }
-                profile.records[index].state = .claimed(
+                profile.state.records[index].state = .claimed(
                     claimID: claimID,
                     request: request,
                     approval: .native(approval, context: executionContext)
@@ -899,7 +927,7 @@ final class ExtensionRequestFileStore {
                       profileIdentifier: handle.profileIdentifier,
                       now: clock(),
                       recover: true
-                  ), let record = profile.records.first(where: {
+                  ), let record = profile.state.records.first(where: {
                       $0.handle == handle
                   }), record.state.isActive else { return nil }
             let url = nativeExecutionFenceURL(handle)
@@ -963,10 +991,10 @@ final class ExtensionRequestFileStore {
                 now: now,
                 recover: true
             ) else { return .unavailable }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
             }) else { return .missing }
-            let record = profile.records[index]
+            let record = profile.state.records[index]
             guard record.configurationKey == configurationKey else {
                 return .missing
             }
@@ -997,7 +1025,7 @@ final class ExtensionRequestFileStore {
                     executionDeadline: executionDeadline,
                     fenceToken: fenceToken
                 )
-                profile.records[index].state = .pending(
+                profile.state.records[index].state = .pending(
                     request: request,
                     approval: .staged(approval, context: context)
                 )
@@ -1018,17 +1046,17 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
             }), case .pending(let request, .staged(let approval, let context)) =
-                    profile.records[index].state else {
+                    profile.state.records[index].state else {
                 return .ownershipLost
             }
             guard let existing = context else {
                 return .persisted
             }
             guard existing == expected else { return .ownershipLost }
-            profile.records[index].state = .pending(
+            profile.state.records[index].state = .pending(
                 request: request,
                 approval: .staged(approval, context: nil)
             )
@@ -1048,16 +1076,17 @@ final class ExtensionRequestFileStore {
                 now: now,
                 recover: false
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == claim.handle
-            }), case .claimed(let claimID, _, _) = profile.records[index].state,
+            }), case .claimed(let claimID, _, _) = profile.state.records[index].state,
                   claim.matches(handle: claim.handle, value: claimID) else {
                 return .ownershipLost
             }
-            profile.records[index].restorePendingClaim()
+            profile.state.records[index].restorePendingClaim()
             let result: ExtensionBridge.StoreMutationResult
             switch transitionExpiredPending(
-                &profile.records[index],
+                in: &profile,
+                at: index,
                 now: now
             ) {
             case .active:
@@ -1135,13 +1164,12 @@ final class ExtensionRequestFileStore {
                 now: now,
                 recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: { $0.handle == handle }),
-                  let requestData = profile.records[index].state.requestData,
-                  let request = parseRequest(requestData),
-                  case .pending = profile.records[index].state,
-                  profile.records[index].stagedApproval == nil,
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == handle }),
+                  let request = profile.request(for: profile.state.records[index]),
+                  case .pending = profile.state.records[index].state,
+                  profile.state.records[index].stagedApproval == nil,
                   receiptMatches(
-                    profile.records[index].nativeDeliveryReceipt,
+                    profile.state.records[index].nativeDeliveryReceipt,
                     expected: expectedReceipt
                   ) else {
                 return .ownershipLost
@@ -1153,7 +1181,7 @@ final class ExtensionRequestFileStore {
             guard let data = boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }
-            profile.records[index].complete(response: data, at: now)
+            profile.complete(at: index, response: data, date: now)
             return writeProfileLocked(profile, failureRecovery: .readBack)
                 ? .persisted
                 : .retryablePersistenceFailure
@@ -1169,7 +1197,7 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: false
             ) else { return .retryablePersistenceFailure }
-            guard let record = profile.records.first(where: {
+            guard let record = profile.state.records.first(where: {
                 $0.handle == claim.handle
             }), case .claimed(let claimID, _, _) = record.state,
                   claim.matches(handle: claim.handle, value: claimID),
@@ -1199,20 +1227,20 @@ final class ExtensionRequestFileStore {
                 now: readTime,
                 recover: false
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == permit.handle
             }) else { return .ownershipLost }
-            switch profile.records[index].state {
+            switch profile.state.records[index].state {
             case .claimed(let claimID, let request, let approval):
                 let authorizationTime = clock()
                 guard permit.matches(handle: permit.handle, value: claimID),
                       permit.lease != nil,
                       executionAuthorityAuthorizesLocked(
-                          record: profile.records[index],
+                          record: profile.state.records[index],
                           authority: authority,
                           now: authorizationTime
                       ) else { return .ownershipLost }
-                profile.records[index].state = .broadcastPrepared(
+                profile.state.records[index].state = .broadcastPrepared(
                     claimID: claimID,
                     request: request,
                     recoveryResponse: responseData,
@@ -1245,20 +1273,17 @@ final class ExtensionRequestFileStore {
                 now: readTime,
                 recover: false
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == permit.handle
             }) else { return .ownershipLost }
-            let requestData: Data
             let claimID: UUID
             let recoveryResponseData: Data?
-            switch profile.records[index].state {
-            case .claimed(let value, let request, _):
+            switch profile.state.records[index].state {
+            case .claimed(let value, _, _):
                 claimID = value
-                requestData = request
                 recoveryResponseData = nil
-            case .broadcastPrepared(let value, let request, let recoveryResponse, _):
+            case .broadcastPrepared(let value, _, let recoveryResponse, _):
                 claimID = value
-                requestData = request
                 recoveryResponseData = recoveryResponse
             case .completed:
                 permit.releaseLease()
@@ -1269,11 +1294,11 @@ final class ExtensionRequestFileStore {
             let authorizationTime = clock()
             guard permit.matches(handle: permit.handle, value: claimID),
                   executionAuthorityAuthorizesLocked(
-                      record: profile.records[index],
+                      record: profile.state.records[index],
                       authority: authority,
                       now: authorizationTime
                   ),
-                  let request = parseRequest(requestData),
+                  let request = profile.request(for: profile.state.records[index]),
                   let responseData = boundedResponseData(
                       response,
                       request: request,
@@ -1281,9 +1306,10 @@ final class ExtensionRequestFileStore {
                   ) else {
                 return .ownershipLost
             }
-            profile.records[index].complete(
+            profile.complete(
+                at: index,
                 response: responseData,
-                at: authorizationTime
+                date: authorizationTime
             )
             guard writeProfileLocked(profile) else {
                 return .retryablePersistenceFailure
@@ -1305,16 +1331,17 @@ final class ExtensionRequestFileStore {
                 now: now,
                 recover: false
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == permit.handle
             }), case .claimed(let claimID, _, _) =
-                    profile.records[index].state,
+                    profile.state.records[index].state,
                   permit.matches(handle: permit.handle, value: claimID),
                   permit.lease != nil else { return .ownershipLost }
-            profile.records[index].restorePendingClaim()
+            profile.state.records[index].restorePendingClaim()
             let result: ExtensionBridge.StoreMutationResult
             switch transitionExpiredPending(
-                &profile.records[index],
+                in: &profile,
+                at: index,
                 now: now
             ) {
             case .active:
@@ -1344,7 +1371,7 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            guard let record = profile.records.first(where: { $0.handle == handle }),
+            guard let record = profile.state.records.first(where: { $0.handle == handle }),
                   record.configurationKey == configurationKey else { return .missing }
             switch record.state {
             case .pending, .claimed, .broadcastPrepared:
@@ -1368,17 +1395,17 @@ final class ExtensionRequestFileStore {
                 now: clock(),
                 recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.records.firstIndex(where: {
+            guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle && $0.configurationKey == configurationKey
             }) else { return .ownershipLost }
             guard case .completed(let since, let response, let acknowledged) =
-                    profile.records[index].state else {
+                    profile.state.records[index].state else {
                 return .retryablePersistenceFailure
             }
             if acknowledged {
                 return .persisted
             }
-            profile.records[index].state = .completed(
+            profile.state.records[index].state = .completed(
                 since: since,
                 response: response,
                 acknowledged: true
@@ -1402,20 +1429,21 @@ final class ExtensionRequestFileStore {
                     now: now,
                     recover: false
                   ),
-                  let index = profile.records.firstIndex(where: { $0.handle == handle }) else {
+                  let index = profile.state.records.firstIndex(where: { $0.handle == handle }) else {
                 return .ownershipLost
             }
-            guard case .pending = profile.records[index].state,
-                  profile.records[index].stagedApproval == nil,
+            guard case .pending = profile.state.records[index].state,
+                  profile.state.records[index].stagedApproval == nil,
                   receiptMatches(
-                    profile.records[index].nativeDeliveryReceipt,
+                    profile.state.records[index].nativeDeliveryReceipt,
                     expected: expectedReceipt
                   ) else {
                 return .ownershipLost
             }
             let request: SafariRequest
             switch transitionExpiredPending(
-                &profile.records[index],
+                in: &profile,
+                at: index,
                 now: now
             ) {
             case .active(let activeRequest):
@@ -1430,7 +1458,7 @@ final class ExtensionRequestFileStore {
             guard let responseData = boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }
-            profile.records[index].complete(response: responseData, at: now)
+            profile.complete(at: index, response: responseData, date: now)
             return writeProfileLocked(profile, failureRecovery: .readBack)
                 ? .persisted
                 : .retryablePersistenceFailure
@@ -1470,19 +1498,19 @@ final class ExtensionRequestFileStore {
         case .unavailable:
             return .unavailable
         }
-        guard var profile = try? PropertyListDecoder().decode(ProfileState.self, from: data),
-              validate(
-                  profile,
+        guard let state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
+              var profile = validateAndParse(
+                  state,
                   expectedIdentifier: profileIdentifier
               ) else {
             return .corrupt
         }
-        let normalizedDates = normalizeFutureDates(in: &profile, now: now)
+        let normalizedDates = normalizeFutureDates(in: &profile.state, now: now)
         guard recover else { return .state(profile) }
         var changed = normalizedDates
         var locksToRemove = [ExtensionBridge.Handle]()
         var kept = [Record]()
-        for var record in profile.records {
+        for var record in profile.state.records {
             switch record.state {
             case .claimed:
                 switch operationLockStatusLocked(handle: record.handle) {
@@ -1499,6 +1527,7 @@ final class ExtensionRequestFileStore {
                     break
                 case .unlocked:
                     record.complete(response: recoveryResponse, at: now)
+                    profile.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     locksToRemove.append(record.handle)
                 }
@@ -1507,10 +1536,16 @@ final class ExtensionRequestFileStore {
             }
             switch record.state {
             case .pending:
-                switch transitionExpiredPending(&record, now: now) {
+                let request = profile.request(for: record)
+                switch transitionExpiredPending(
+                    &record,
+                    request: request,
+                    now: now
+                ) {
                 case .active:
                     break
                 case .expired:
+                    profile.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     if !locksToRemove.contains(record.handle) {
                         locksToRemove.append(record.handle)
@@ -1522,6 +1557,7 @@ final class ExtensionRequestFileStore {
             case .completed(let since, _, _):
                 if now.timeIntervalSince(since) >= ExtensionBridge.responseExpiry,
                    canRetireAdmissionRecord(record, now: now) {
+                    profile.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     locksToRemove.append(record.handle)
                 } else {
@@ -1532,14 +1568,14 @@ final class ExtensionRequestFileStore {
             }
         }
         guard changed else {
-            if removeIfEmpty, profile.records.isEmpty,
+            if removeIfEmpty, profile.state.records.isEmpty,
                !removeProfileFileLocked(at: url) {
                 return .unavailable
             }
             return .state(profile)
         }
-        profile.records = kept
-        if removeIfEmpty, profile.records.isEmpty {
+        profile.state.records = kept
+        if removeIfEmpty, profile.state.records.isEmpty {
             guard removeProfileFileLocked(at: url) else { return .unavailable }
         } else {
             guard writeProfileLocked(profile) else { return .unavailable }
@@ -1653,11 +1689,28 @@ final class ExtensionRequestFileStore {
     }
 
     private func transitionExpiredPending(
-        _ record: inout Record,
+        in profile: inout ValidatedProfile,
+        at index: Int,
         now: Date
     ) -> PendingDeadlineTransition {
-        guard case .pending(let requestData, _) = record.state,
-              let request = parseRequest(requestData) else {
+        let request = profile.request(for: profile.state.records[index])
+        let transition = transitionExpiredPending(
+            &profile.state.records[index],
+            request: request,
+            now: now
+        )
+        if case .expired = transition {
+            profile.parsedRequests.removeValue(forKey: profile.state.records[index].handle)
+        }
+        return transition
+    }
+
+    private func transitionExpiredPending(
+        _ record: inout Record,
+        request: SafariRequest?,
+        now: Date
+    ) -> PendingDeadlineTransition {
+        guard case .pending = record.state, let request else {
             return .unavailable
         }
         guard request.admissionDeadline <= now else {
@@ -1670,10 +1723,10 @@ final class ExtensionRequestFileStore {
         return .expired
     }
 
-    private func validate(
+    private func validateAndParse(
         _ profile: ProfileState,
         expectedIdentifier: UUID?
-    ) -> Bool {
+    ) -> ValidatedProfile? {
         let active = profile.records.filter(\.state.isActive)
         guard profile.schemaVersion == Self.profileSchemaVersion,
               profile.workflowVersion == ExtensionBridge.workflowVersion,
@@ -1689,9 +1742,10 @@ final class ExtensionRequestFileStore {
                   [$0.requestToken, $0.nativeDeliveryNonce.value]
               }).count == profile.records.count * 2,
               Set(profile.records.map(\.enqueueAttempt)).count == profile.records.count else {
-            return false
+            return nil
         }
-        return profile.records.allSatisfy { record in
+        var parsedRequests = [ExtensionBridge.Handle: SafariRequest]()
+        for record in profile.records {
             guard record.profileIdentifier == expectedIdentifier,
                   !record.host.isEmpty,
                   ExtensionBridge.ProviderRevisions(
@@ -1720,7 +1774,7 @@ final class ExtensionRequestFileStore {
                       $0.nativeDeliveryNonce == record.nativeDeliveryNonce &&
                         $0.owner.isValid
                   }) ?? true else {
-                return false
+                return nil
             }
             if let requestData = record.state.requestData {
                 guard requestData.count <= ExtensionBridge.maximumPayloadBytes,
@@ -1732,7 +1786,7 @@ final class ExtensionRequestFileStore {
                       ) == record.revisions,
                       ExtensionBridge.correlationFingerprint(rawObject) ==
                         record.requestFingerprint,
-                      let request = parseRequest(requestData),
+                      let request = parseRequest(rawObject),
                       request.id == record.id,
                       request.host == record.host,
                       request.configurationKey == record.configurationKey,
@@ -1742,20 +1796,22 @@ final class ExtensionRequestFileStore {
                           now: record.admissionCreatedAt
                       ) == .admissible,
                       request.workflowVersion == ExtensionBridge.workflowVersion else {
-                    return false
+                    return nil
                 }
+                parsedRequests[record.handle] = request
             }
             if let responseData = record.state.responseData,
                responseJSON(responseData, id: record.id) == nil {
-                return false
+                return nil
             }
             switch record.state {
             case .completed(let since, _, _):
-                return since >= record.createdAt
+                guard since >= record.createdAt else { return nil }
             case .pending, .claimed, .broadcastPrepared:
-                return true
+                break
             }
         }
+        return ValidatedProfile(state: profile, parsedRequests: parsedRequests)
     }
 
     private func normalizeFutureDates(
@@ -1790,9 +1846,9 @@ final class ExtensionRequestFileStore {
 
     private func snapshot(
         _ record: Record,
+        request: SafariRequest?,
         sequence: Int
     ) -> ExtensionBridge.Snapshot {
-        let request = record.state.requestData.flatMap(parseRequest)
         let phase: ExtensionBridge.Phase
         switch record.state {
         case .pending:
@@ -2095,18 +2151,18 @@ final class ExtensionRequestFileStore {
     }
 
     private func writeProfileLocked(
-        _ profile: ProfileState,
+        _ profile: ValidatedProfile,
         failureRecovery: WriteFailureRecovery = .none
     ) -> Bool {
         guard prepareDirectoriesLocked() else { return false }
-        let url = profileURL(profile.profileIdentifier)
+        let url = profileURL(profile.state.profileIdentifier)
         switch regularFileStatusLocked(at: url) {
         case .missing, .regular:
             break
         case .unsafe, .unavailable:
             return false
         }
-        guard let data = try? Self.encode(profile),
+        guard let data = try? Self.encode(profile.state),
               data.count <= Self.maximumProfileBytes else { return false }
         do {
             try atomicWrite(data, url)
@@ -2158,12 +2214,15 @@ final class ExtensionRequestFileStore {
         }
     }
 
-    private func emptyProfile(_ profileIdentifier: UUID?) -> ProfileState {
-        ProfileState(
-            schemaVersion: Self.profileSchemaVersion,
-            workflowVersion: ExtensionBridge.workflowVersion,
-            profileIdentifier: profileIdentifier,
-            records: []
+    private func emptyProfile(_ profileIdentifier: UUID?) -> ValidatedProfile {
+        ValidatedProfile(
+            state: ProfileState(
+                schemaVersion: Self.profileSchemaVersion,
+                workflowVersion: ExtensionBridge.workflowVersion,
+                profileIdentifier: profileIdentifier,
+                records: []
+            ),
+            parsedRequests: [:]
         )
     }
 

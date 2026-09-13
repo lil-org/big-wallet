@@ -13,17 +13,11 @@ final class PopupRequestSession {
         case review, authenticating, working, error
     }
 
-    enum Purpose {
-        case approval(DappRequestAction)
-        case immediateResponsePersistence
-    }
-
     private enum Lifecycle {
         case review(feedback: String?)
         case claiming
         case working(ApprovalContext)
         case authenticating(ApprovalContext)
-        case persistingImmediateResponse
         case error(message: String)
     }
 
@@ -41,7 +35,7 @@ final class PopupRequestSession {
     let handle: ExtensionBridge.Handle
     let request: SafariRequest
     var walletAccess: WalletAccess?
-    private(set) var purpose: Purpose
+    private(set) var approvalAction: DappRequestAction
     var transaction: PopupTransactionSession?
     private var lifecycle: Lifecycle
     private(set) var reviewToken = UUID()
@@ -50,26 +44,21 @@ final class PopupRequestSession {
     init(
         handle: ExtensionBridge.Handle,
         request: SafariRequest,
-        purpose: Purpose,
+        action: DappRequestAction,
         walletAccess: WalletAccess? = nil
     ) {
         self.handle = handle
         self.request = request
-        self.purpose = purpose
+        self.approvalAction = action
         self.walletAccess = walletAccess
-        switch purpose {
-        case .approval:
-            lifecycle = .review(feedback: nil)
-        case .immediateResponsePersistence:
-            lifecycle = .persistingImmediateResponse
-        }
+        lifecycle = .review(feedback: nil)
     }
 
     var state: State {
         switch lifecycle {
         case .review:
             return .review
-        case .claiming, .working, .persistingImmediateResponse:
+        case .claiming, .working:
             return .working
         case .authenticating:
             return .authenticating
@@ -82,7 +71,7 @@ final class PopupRequestSession {
         switch lifecycle {
         case .working(let context), .authenticating(let context):
             return context.claim
-        case .review, .claiming, .persistingImmediateResponse, .error:
+        case .review, .claiming, .error:
             return nil
         }
     }
@@ -95,7 +84,7 @@ final class PopupRequestSession {
             return context.feedback
         case .error(let message):
             return message
-        case .claiming, .persistingImmediateResponse:
+        case .claiming:
             return nil
         }
     }
@@ -108,28 +97,18 @@ final class PopupRequestSession {
             updateApprovalContext { $0.feedback = message }
         case .error:
             lifecycle = .error(message: message)
-        case .claiming, .persistingImmediateResponse:
+        case .claiming:
             break
         }
     }
 
-    var approvalAction: DappRequestAction? {
-        guard case .approval(let action) = purpose else { return nil }
-        return action
-    }
-
-    var isImmediateResponsePersistence: Bool {
-        guard case .immediateResponsePersistence = purpose else { return false }
-        return true
-    }
-
     func replaceSelectionAction(_ action: SelectAccountAction) -> Bool {
-        switch purpose {
-        case .approval(.selectAccount):
-            purpose = .approval(.selectAccount(action))
+        switch approvalAction {
+        case .selectAccount:
+            approvalAction = .selectAccount(action)
             return true
-        case .approval(.switchAccount):
-            purpose = .approval(.switchAccount(action))
+        case .switchAccount:
+            approvalAction = .switchAccount(action)
             return true
         default:
             return false
@@ -224,7 +203,7 @@ final class PopupRequestSession {
         case .authenticating(var context):
             update(&context)
             lifecycle = .authenticating(context)
-        case .review, .claiming, .persistingImmediateResponse, .error:
+        case .review, .claiming, .error:
             break
         }
     }
@@ -246,9 +225,17 @@ final class PopupRequestSessions {
 
     private enum ActiveSessionResult {
         case available(PopupRequestSession)
+        case immediateResponse(ImmediateResponsePersistence.State)
         case absent
-        case unavailable
         case secureSetupRequired
+    }
+
+    private final class ImmediateResponsePersistence {
+        enum State {
+            case working, failed
+        }
+
+        var state: State = .working
     }
 
     private enum TransactionApprovalDecision {
@@ -333,6 +320,7 @@ final class PopupRequestSessions {
     private let durableApprovalExecutor: DurableApprovalExecutor
     private let presenter: PopupApprovalStatePresenter
     private var sessions = [ExtensionBridge.Handle: PopupRequestSession]()
+    private var immediateResponses = [ExtensionBridge.Handle: ImmediateResponsePersistence]()
     private var transactionApprovalResolutions = [
         ExtensionBridge.Handle: TransactionApprovalResolution
     ]()
@@ -428,12 +416,15 @@ final class PopupRequestSessions {
                       profileIdentifier: profileIdentifier
                   ) else { return missingState(id: request.id) }
             if case .retryApproval = command,
-               let session = sessions[snapshot.handle],
-               session.state == .error,
                snapshot.phase == .queued,
                snapshot.request != nil,
                !isNativeOwned(snapshot) {
-                discardSession(handle: snapshot.handle)
+                if sessions[snapshot.handle]?.state == .error {
+                    discardSession(handle: snapshot.handle)
+                }
+                if immediateResponses[snapshot.handle]?.state == .failed {
+                    immediateResponses[snapshot.handle] = nil
+                }
             }
             return await approvalState(snapshot: snapshot)
         case .approveRequest(_, let payload):
@@ -553,6 +544,10 @@ final class PopupRequestSessions {
             return handle
         }
         staleHandles.forEach { sessions[$0] = nil }
+        let staleImmediateResponses = immediateResponses.keys.filter {
+            $0.profileIdentifier == profileIdentifier && !currentHandles.contains($0)
+        }
+        staleImmediateResponses.forEach { immediateResponses[$0] = nil }
 
         var requests = [[String: Any]]()
         var completedResponses = [[String: Any]]()
@@ -562,6 +557,7 @@ final class PopupRequestSessions {
                 requests.append(presenter.pendingRequest(snapshot))
             case .responded:
                 sessions[snapshot.handle] = nil
+                immediateResponses[snapshot.handle] = nil
                 completedResponses.append(presenter.completedResponse(snapshot))
             }
         }
@@ -576,6 +572,7 @@ final class PopupRequestSessions {
     ) -> ActiveSessionResult {
         guard !isNativeOwned(snapshot) else {
             discardSession(handle: snapshot.handle)
+            immediateResponses[snapshot.handle] = nil
             return .absent
         }
         if let session = sessions[snapshot.handle] {
@@ -596,20 +593,18 @@ final class PopupRequestSessions {
                     return ensureSession(snapshot: snapshot)
                 }
             }
-            return session.isImmediateResponsePersistence
-                ? .absent
-                : .available(session)
+            return .available(session)
         }
         guard snapshot.phase == .queued,
               let request = snapshot.request else { return .absent }
+        if let persistence = immediateResponses[snapshot.handle] {
+            return .immediateResponse(persistence.state)
+        }
         let preparation: DappRequestPreparation
         var preparedWalletAccess: WalletAccess?
-        let isWalletIndependent: Bool
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent
-            isWalletIndependent = true
         } else {
-            isWalletIndependent = false
             guard let walletAccess = walletEnvironment.currentReviewAccess() else {
                 return .secureSetupRequired
             }
@@ -621,31 +616,13 @@ final class PopupRequestSessions {
         }
         switch preparation {
         case .response(let response):
-            guard snapshot.phase == .queued else { return .unavailable }
-            let session = PopupRequestSession(
-                handle: snapshot.handle,
-                request: request,
-                purpose: .immediateResponsePersistence
-            )
-            sessions[snapshot.handle] = session
-            Task { [weak self, weak session] in
-                guard let self, let session else { return }
-                switch await store.complete(handle: snapshot.handle, response: response) {
-                case .persisted, .ownershipLost:
-                    sessions[snapshot.handle] = nil
-                case .retryablePersistenceFailure:
-                    session.fail(Strings.failedToLoad)
-                }
-            }
-            return .absent
+            persistImmediateResponse(response, handle: snapshot.handle)
+            return .immediateResponse(.working)
         case .approval(let action):
-            if !isWalletIndependent && preparedWalletAccess == nil {
-                return .secureSetupRequired
-            }
             let session = PopupRequestSession(
                 handle: snapshot.handle,
                 request: request,
-                purpose: .approval(action),
+                action: action,
                 walletAccess: preparedWalletAccess
             )
             sessions[snapshot.handle] = session
@@ -653,6 +630,24 @@ final class PopupRequestSessions {
                 setupTransaction(for: session, action: transactionAction)
             }
             return .available(session)
+        }
+    }
+
+    private func persistImmediateResponse(
+        _ response: ResponseToExtension,
+        handle: ExtensionBridge.Handle
+    ) {
+        let persistence = ImmediateResponsePersistence()
+        immediateResponses[handle] = persistence
+        Task { [weak self, store] in
+            let result = await store.complete(handle: handle, response: response)
+            guard let self, immediateResponses[handle] === persistence else { return }
+            switch result {
+            case .persisted, .ownershipLost:
+                immediateResponses[handle] = nil
+            case .retryablePersistenceFailure:
+                persistence.state = .failed
+            }
         }
     }
 
@@ -709,38 +704,32 @@ final class PopupRequestSessions {
         let handle = snapshot.handle
         if snapshot.phase == .responded {
             sessions[handle] = nil
+            immediateResponses[handle] = nil
             return missingState(id: handle.id)
         }
         if isNativeOwned(snapshot) {
             discardSession(handle: handle)
+            immediateResponses[handle] = nil
             return stateResponse(id: handle.id, state: .working, host: snapshot.host)
         }
         let sessionWasCached = sessions[handle] != nil
         let activeSession = activeSession(snapshot: snapshot)
         guard case .available(let session) = activeSession else {
-            if case .unavailable = activeSession {
-                return PopupApprovalStatePresenter.errorState(
-                    id: handle.id,
-                    host: snapshot.host,
-                    error: Strings.failedToLoad
-                )
-            }
             if case .secureSetupRequired = activeSession {
                 return presenter.secureSetupRequiredState(
                     id: handle.id,
                     host: snapshot.host
                 )
             }
-            if let session = sessions[handle],
-               session.isImmediateResponsePersistence {
-                if session.state == .error {
+            if case .immediateResponse(let persistenceState) = activeSession {
+                if persistenceState == .failed {
                     return PopupApprovalStatePresenter.errorState(
                         id: handle.id,
                         host: snapshot.host,
-                        error: session.errorText ?? Strings.failedToLoad
+                        error: Strings.failedToLoad
                     )
                 }
-                return stateResponse(id: handle.id, state: session.state, host: snapshot.host)
+                return stateResponse(id: handle.id, state: .working, host: snapshot.host)
             }
             if snapshot.phase == .approving {
                 return stateResponse(id: handle.id, state: .working, host: snapshot.host)
@@ -748,6 +737,7 @@ final class PopupRequestSessions {
             if case .found(let current) = await store.load(handle: handle),
                current.phase == .responded {
                 sessions[handle] = nil
+                immediateResponses[handle] = nil
                 return missingState(id: handle.id)
             }
             return missingState(id: handle.id)
@@ -762,9 +752,7 @@ final class PopupRequestSessions {
         if session.state != .review {
             return stateResponse(id: handle.id, state: session.state, host: snapshot.host)
         }
-        guard let action = session.approvalAction else {
-            return stateResponse(id: handle.id, state: session.state)
-        }
+        let action = session.approvalAction
         if sessionWasCached, session.state == .review {
             switch action {
             case .selectAccount, .switchAccount:
@@ -798,10 +786,10 @@ final class PopupRequestSessions {
                   (snapshot.phase == .approving && snapshot.request != nil),
               case .available(let session) = activeSession(snapshot: snapshot),
               reviewToken(for: request) == session.reviewToken,
-              session.canBeginApproval,
-              let action = session.approvalAction else {
+              session.canBeginApproval else {
             return ignoredResponse()
         }
+        let action = session.approvalAction
         guard DurableApprovalExecutor.approvalRevisionsMatch(
             action: action,
             request: session.request,
@@ -1040,7 +1028,7 @@ final class PopupRequestSessions {
             network: refreshed.network
         )
         guard session.replaceSelectionAction(refreshedAction) else { return false }
-        guard let approvedAction = session.approvalAction else { return false }
+        let approvedAction = session.approvalAction
         let decision = DappApprovalDecision.accountSelection(.init(
             accounts: refreshed.accounts.map {
                 .init(
@@ -1359,6 +1347,7 @@ final class PopupRequestSessions {
         case .persisted:
             sessions[snapshot.handle]?.transaction?.invalidate()
             sessions[snapshot.handle] = nil
+            immediateResponses[snapshot.handle] = nil
             return ["status": "ok"]
         case .ownershipLost:
             return ignoredResponse()

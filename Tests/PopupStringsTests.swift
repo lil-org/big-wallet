@@ -215,7 +215,7 @@ final class PopupStringsTests: XCTestCase {
         let session = PopupRequestSession(
             handle: handle,
             request: request,
-            purpose: .approval(action)
+            action: action
         )
         let presenter = PopupApprovalStatePresenter()
         let review = presenter.approvalState(
