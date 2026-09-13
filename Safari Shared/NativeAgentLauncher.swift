@@ -83,6 +83,11 @@ actor NativeAgentLauncher {
         let identity: AmbientRuntimeIdentity?
     }
 
+    private enum ReceiptOwnerObservation {
+        case owner(ObservedRuntime)
+        case absent, indeterminate
+    }
+
     private struct RuntimeProcessKey: Hashable {
         let processIdentifier: Int32
         let processStartDate: Date?
@@ -94,7 +99,7 @@ actor NativeAgentLauncher {
     }
 
     struct ExactReceiptOwner {
-        let requestQuit: () -> Bool
+        let requestQuit: (_ isPending: () -> Bool) -> Bool
         let isRunning: () -> Bool
     }
 
@@ -792,8 +797,7 @@ actor NativeAgentLauncher {
         }
     ) async -> HelperTarget? {
         let currentURL = currentURL.standardizedFileURL
-        guard validate(currentURL),
-              let expectedVersion = AmbientRuntimeIdentity.bundleVersion(
+        guard let expectedVersion = AmbientRuntimeIdentity.bundleVersion(
                   at: currentURL
               ) else { return nil }
         let identityStartupGraceNanoseconds: UInt64 = 1_000_000_000
@@ -835,6 +839,17 @@ actor NativeAgentLauncher {
                 }
             }
             var mustWait = false
+            var verifiedCurrentBundle = false
+            func verifyBeforeQuit() -> Bool {
+                guard isPending() else { return false }
+                if !verifiedCurrentBundle {
+                    guard validate(currentURL) else { return false }
+                    verifiedCurrentBundle = true
+                }
+                return isPending() && AmbientRuntimeIdentity.bundleVersion(
+                    at: currentURL
+                ) == expectedVersion
+            }
             for runtime in unknownRuntimes {
                 let key = RuntimeProcessKey(runtime.helper)
                 let firstObservedAt = unknownFirstObservedAt[key] ??
@@ -844,6 +859,7 @@ actor NativeAgentLauncher {
                     monotonicNow - firstObservedAt >=
                         identityStartupGraceNanoseconds
                 if graceElapsed, !requestedQuit.contains(key) {
+                    guard verifyBeforeQuit() else { return nil }
                     let refreshedIdentity = verifiedRuntimeIdentity(
                         processIdentifier:
                             runtime.helper.processIdentifier,
@@ -869,6 +885,10 @@ actor NativeAgentLauncher {
                         }
                         continue
                     }
+                    guard runtime.helper.isRunning() else {
+                        mustWait = true
+                        continue
+                    }
                     requestedQuit.insert(key)
                     guard runtime.helper.requestQuit() else { return nil }
                 }
@@ -876,9 +896,26 @@ actor NativeAgentLauncher {
             }
             for runtime in incompatibleRuntimes {
                 let key = RuntimeProcessKey(runtime.helper)
-                if requestedQuit.insert(key).inserted,
-                   !runtime.helper.requestQuit() {
-                    return nil
+                if !requestedQuit.contains(key) {
+                    guard verifyBeforeQuit() else { return nil }
+                    if let refreshedIdentity = verifiedRuntimeIdentity(
+                        processIdentifier: runtime.helper.processIdentifier,
+                        bundleURL: currentURL,
+                        processStartDate: runtime.helper.processStartDate,
+                        identity: identity
+                    ), refreshedIdentity.isCompatible(
+                        withWorkflowVersion: ExtensionBridge.workflowVersion,
+                        expectedVersion: expectedVersion
+                    ) {
+                        mustWait = true
+                        continue
+                    }
+                    guard runtime.helper.isRunning() else {
+                        mustWait = true
+                        continue
+                    }
+                    requestedQuit.insert(key)
+                    guard runtime.helper.requestQuit() else { return nil }
                 }
                 mustWait = true
             }
@@ -1029,7 +1066,7 @@ actor NativeAgentLauncher {
                 case .unavailable:
                     return .unavailable
                 }
-                guard isPending(), helper.requestQuit() else {
+                guard isPending(), helper.requestQuit(isPending) else {
                     return .unavailable
                 }
                 while helper.isRunning() {
@@ -1059,6 +1096,23 @@ actor NativeAgentLauncher {
     }
 
     @MainActor
+    static func hasCompatibleApprovalDelivery(
+        handle: ExtensionBridge.Handle,
+        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
+        dependencies: ApprovalDeliveryDependencies = .live
+    ) async -> Bool {
+        guard case .found(let snapshot) = await dependencies.load(handle),
+              snapshot.nativeDeliveryNonce == nativeDeliveryNonce else { return false }
+        if snapshot.phase == .responded { return true }
+        guard snapshot.nativeDecisionStaged || snapshot.phase == .approving,
+              let receipt = snapshot.nativeDeliveryReceipt,
+              receipt.nativeDeliveryNonce == nativeDeliveryNonce,
+              case .compatible(.running(_, _, let runtimeInstanceIdentifier)) =
+                dependencies.receiptRuntimeStatus(receipt) else { return false }
+        return runtimeInstanceIdentifier == receipt.runtimeInstanceIdentifier
+    }
+
+    @MainActor
     static func currentApprovalDeliveryStatus(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -1080,7 +1134,6 @@ actor NativeAgentLauncher {
         receipt: ExtensionBridge.NativeDeliveryReceipt
     ) -> ReceiptRuntimeStatus {
         guard let expectedURL = embeddedHelperURL()?.standardizedFileURL,
-              validateEmbeddedHelper(expectedURL),
               let expectedVersion = AmbientRuntimeIdentity.bundleVersion(
                   at: expectedURL
               ) else { return .indeterminate }
@@ -1090,10 +1143,7 @@ actor NativeAgentLauncher {
             expectedVersion: expectedVersion,
             helpers: runningHelpers,
             identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) },
-            validate: { runtimeURL in
-                runtimeURL.standardizedFileURL == expectedURL ||
-                    validateEmbeddedHelper(runtimeURL)
-            }
+            validate: validateEmbeddedHelper
         )
     }
 
@@ -1102,62 +1152,112 @@ actor NativeAgentLauncher {
         receipt: ExtensionBridge.NativeDeliveryReceipt,
         expectedURL: URL,
         expectedVersion: AmbientRuntimeIdentity.Version,
-        helpers: () -> [RuntimeHelper],
-        identity: (Int32) -> AmbientRuntimeIdentity?,
-        validate: (URL) -> Bool
+        helpers: @escaping () -> [RuntimeHelper],
+        identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
+        validate: @escaping (URL) -> Bool
     ) -> ReceiptRuntimeStatus {
         let expectedURL = expectedURL.standardizedFileURL
+        switch observeReceiptOwner(receipt, helpers: helpers, identity: identity) {
+        case .absent:
+            return .absent
+        case .indeterminate:
+            return .indeterminate
+        case .owner(let runtime):
+            guard let runtimeURL = runtime.bundleURL,
+                  let runtimeIdentity = runtime.identity else { return .indeterminate }
+            if isCompatibleRuntimeIdentity(
+                runtimeIdentity,
+                runtimeURL: runtimeURL,
+                expectedURL: expectedURL,
+                expectedVersion: expectedVersion
+            ) {
+                guard verifyRuntime(
+                    runtime,
+                    expectedURL: expectedURL,
+                    expectedVersion: expectedVersion,
+                    identity: identity,
+                    validate: validate
+                ) else { return .indeterminate }
+                return .compatible(.running(
+                    url: runtimeURL,
+                    processIdentifier: runtime.helper.processIdentifier,
+                    runtimeInstanceIdentifier: runtimeIdentity.instanceIdentifier
+                ))
+            }
+            return .incompatible(ExactReceiptOwner(
+                requestQuit: { isPending in
+                    guard case .owner(let current) = observeReceiptOwner(
+                        receipt, helpers: helpers, identity: identity
+                    ), current.helper.processIdentifier == runtime.helper.processIdentifier,
+                       current.identity == runtimeIdentity,
+                       verifyRuntime(
+                        current,
+                        expectedURL: expectedURL,
+                        expectedVersion: expectedVersion,
+                        identity: identity,
+                        validate: validate
+                       ), isPending() else { return false }
+                    return current.helper.requestQuit()
+                },
+                isRunning: runtime.helper.isRunning
+            ))
+        }
+    }
+
+    private static func observeReceiptOwner(
+        _ receipt: ExtensionBridge.NativeDeliveryReceipt,
+        helpers: () -> [RuntimeHelper],
+        identity: (Int32) -> AmbientRuntimeIdentity?
+    ) -> ReceiptOwnerObservation {
         guard receipt.owner?.isValid ?? true else { return .indeterminate }
         var hasPossibleUnidentifiedOwner = false
-        var owner: ReceiptRuntimeStatus?
-        for runtime in observedRuntimes(
-            helpers(),
-            identity: identity
-        ) {
+        var owner: ObservedRuntime?
+        for runtime in observedRuntimes(helpers(), identity: identity) {
             guard let runtimeURL = runtime.bundleURL else {
                 hasPossibleUnidentifiedOwner = true
                 continue
             }
             guard let identity = runtime.identity else {
-                if let receiptOwner = receipt.owner {
-                    if receiptOwner.bundleURL == runtimeURL {
-                        hasPossibleUnidentifiedOwner = true
-                    }
-                } else {
+                if receipt.owner == nil || receipt.owner?.bundleURL == runtimeURL {
                     hasPossibleUnidentifiedOwner = true
                 }
                 continue
             }
-            guard identity.instanceIdentifier ==
-                    receipt.runtimeInstanceIdentifier else {
+            guard identity.instanceIdentifier == receipt.runtimeInstanceIdentifier else {
                 continue
             }
-            if let receiptOwner = receipt.owner,
-               !identity.matches(receiptOwner) {
+            guard owner == nil,
+                  receipt.owner.map(identity.matches) ?? true else {
                 return .indeterminate
             }
-            guard validate(runtimeURL), owner == nil else {
-                return .indeterminate
-            }
-            let helper = runtime.helper
-            let ownerProcess = ExactReceiptOwner(
-                requestQuit: helper.requestQuit,
-                isRunning: helper.isRunning
-            )
-            owner = isCompatibleRuntimeIdentity(
-                identity,
-                runtimeURL: runtimeURL,
-                expectedURL: expectedURL,
-                expectedVersion: expectedVersion
-            ) ? .compatible(.running(
-                url: runtimeURL,
-                processIdentifier: helper.processIdentifier,
-                runtimeInstanceIdentifier: identity.instanceIdentifier
-            )) : .incompatible(ownerProcess)
+            owner = runtime
         }
-        return owner ??
-            (hasPossibleUnidentifiedOwner ? .indeterminate : .absent)
+        if let owner { return .owner(owner) }
+        return hasPossibleUnidentifiedOwner ? .indeterminate : .absent
     }
+
+    private static func verifyRuntime(
+        _ runtime: ObservedRuntime,
+        expectedURL: URL,
+        expectedVersion: AmbientRuntimeIdentity.Version,
+        identity: (Int32) -> AmbientRuntimeIdentity?,
+        validate: (URL) -> Bool
+    ) -> Bool {
+        guard let runtimeURL = runtime.bundleURL,
+              let observedIdentity = runtime.identity,
+              validate(expectedURL),
+              runtimeURL == expectedURL || validate(runtimeURL),
+              AmbientRuntimeIdentity.bundleVersion(at: expectedURL) == expectedVersion,
+              runtime.helper.isRunning(),
+              verifiedRuntimeIdentity(
+                  processIdentifier: runtime.helper.processIdentifier,
+                  bundleURL: runtimeURL,
+                  processStartDate: runtime.helper.processStartDate,
+                  identity: identity
+              ) == observedIdentity else { return false }
+        return true
+    }
+
 #endif
 
     @MainActor
@@ -1172,20 +1272,15 @@ actor NativeAgentLauncher {
             at: helperURL
         ) else { return false }
         repeat {
-            for runtime in observedRuntimes(
-                runningHelpers(),
-                identity: {
-                    AmbientRuntimeIdentity.load(processIdentifier: $0)
-                }
-            ) where runtime.bundleURL == helperURL {
-                if let identity = runtime.identity,
-                   identity.isCompatible(
-                       withWorkflowVersion: ExtensionBridge.workflowVersion,
-                       expectedVersion: expectedVersion
-                   ), runtime.helper.isRunning(),
-                   AmbientRuntimeIdentity.bundleVersion(at: helperURL) ==
-                    expectedVersion {
-                    return true
+            for helper in runningHelpers() {
+                if isConfirmedRuntimeHelper(
+                    helper,
+                    expectedURL: helperURL,
+                    expectedVersion: expectedVersion,
+                    identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) },
+                    validate: validateEmbeddedHelper
+                ) {
+                    return isPending()
                 }
             }
             let now = DispatchTime.now().uptimeNanoseconds
@@ -1241,7 +1336,9 @@ actor NativeAgentLauncher {
     static func isConfirmedRuntimeHelper(
         _ helper: RuntimeHelper,
         expectedURL: URL,
-        identity: (Int32) -> AmbientRuntimeIdentity?
+        expectedVersion: AmbientRuntimeIdentity.Version? = nil,
+        identity: (Int32) -> AmbientRuntimeIdentity?,
+        validate: (URL) -> Bool
     ) -> Bool {
         let expectedURL = expectedURL.standardizedFileURL
         guard let runtime = observedRuntimes(
@@ -1249,7 +1346,7 @@ actor NativeAgentLauncher {
                   identity: identity
               ).first,
               runtime.bundleURL == expectedURL,
-              let expectedVersion = AmbientRuntimeIdentity.bundleVersion(
+              let expectedVersion = expectedVersion ?? AmbientRuntimeIdentity.bundleVersion(
                   at: expectedURL
               ),
               let runtimeIdentity = runtime.identity,
@@ -1257,7 +1354,17 @@ actor NativeAgentLauncher {
                   withWorkflowVersion: ExtensionBridge.workflowVersion,
                   expectedVersion: expectedVersion
               ) else { return false }
-        return true
+#if os(macOS)
+        return verifyRuntime(
+            runtime,
+            expectedURL: expectedURL,
+            expectedVersion: expectedVersion,
+            identity: identity,
+            validate: validate
+        )
+#else
+        return false
+#endif
     }
 
     static func isCompatibleRuntimeIdentity(

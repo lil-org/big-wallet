@@ -16,15 +16,10 @@ const APPROVAL_EXECUTION_TIMEOUT = 150 * 1000;
 const APPROVAL_LEASE_GRACE = 10 * 1000;
 const APPROVAL_LEASE_STORAGE_PREFIX = "providerApprovalLease:";
 const INVALID_APPROVAL_LEASE = Symbol("invalidApprovalLease");
-const MANUAL_SWITCH_POLL_ALARM_NAME = "manualSwitchCompletionPoll";
-const MANUAL_SWITCH_POLL_ALARM_MINUTES = 1;
-const MANUAL_SWITCH_FAST_POLL_INITIAL_DELAY = 1000;
-const MANUAL_SWITCH_FAST_POLL_DELAY = 3000;
-const MANUAL_SWITCH_FAST_POLL_DURATION = 60 * 1000;
-const MANUAL_SWITCH_ADMISSION_FUTURE_SKEW = 60 * 1000;
-const MANUAL_SWITCH_ADMISSION_ATTEMPTS = 2;
-const MANUAL_SWITCH_REPAIR_SCAN_LIMIT =
-    WIRE.WORKFLOW_POLICY.maximumRetainedRequests * 64;
+const MANUAL_SWITCH_POLL_DELAY = 1000;
+const MANUAL_SWITCH_RECOVERY_ALARM = "manualSwitchRecovery";
+const LEGACY_MANUAL_SWITCH_STORAGE_KEY = "manualSwitchOwnersV1";
+const LEGACY_MANUAL_SWITCH_POLL_ALARM_NAME = "manualSwitchCompletionPoll";
 const ETHEREUM_ACCOUNT_METHODS = new Set([
     "signMessage",
     "signPersonalMessage",
@@ -43,14 +38,9 @@ const SOLANA_ACCOUNT_METHODS = new Set([
 ]);
 const configurationOperationTails = new Map;
 const responseReadFlights = new Map;
-const manualSwitchResumeFlights = new Map;
-let manualSwitchRegistryTail = Promise.resolve();
-let manualSwitchPollingTail = Promise.resolve();
-let manualSwitchPollAlarmState = null;
-let manualSwitchFastPollTimer = null;
-let manualSwitchFastPollDeadline = 0;
-let manualSwitchFastPollDelay = MANUAL_SWITCH_FAST_POLL_INITIAL_DELAY;
-const MANUAL_SWITCH_MISSING = Symbol("manualSwitchMissing");
+const manualSwitches = new Map;
+let manualSwitchAlarmFlight = null;
+let manualSwitchRecoveryFlight = null;
 
 function sendRawNativeMessage(message) {
     return browser.runtime.sendNativeMessage(APPLICATION_ID, message);
@@ -429,7 +419,7 @@ function queueConfigurationOperation(
             state.legacyConfigurationKey = null;
         }
         return {
-            configurationState: result?.changed === true
+            configurationState: result?.changed === true || result?.broadcastConfiguration === true
                 ? publicConfigurationState(state)
                 : null,
             value: result?.value,
@@ -469,403 +459,6 @@ function publicConfigurations(state) {
         }
         return value;
     });
-}
-
-function emptyManualSwitchRegistry() {
-    return {owners: [], workflowVersion: WORKFLOW_VERSION};
-}
-
-function normalizeManualSwitchRegistry(candidate) {
-    if (!WIRE.hasExactKeys(candidate, ["owners", "workflowVersion"]) ||
-        candidate.workflowVersion !== WORKFLOW_VERSION ||
-        !Array.isArray(candidate.owners)) {
-        return emptyManualSwitchRegistry();
-    }
-    const owners = [];
-    const configurationKeys = new Set;
-    const ids = new Set;
-    let scanned = 0;
-    for (const owner of candidate.owners) {
-        if (owners.length >= WIRE.WORKFLOW_POLICY.maximumRequests ||
-            scanned >= MANUAL_SWITCH_REPAIR_SCAN_LIMIT) {
-            break;
-        }
-        scanned += 1;
-        if (!WIRE.isManualSwitchOwnerRecord(owner) ||
-            configurationKeys.has(owner.configurationKey) || ids.has(owner.id)) {
-            continue;
-        }
-        const copy = {...owner};
-        const next = {
-            owners: [...owners, copy],
-            workflowVersion: WORKFLOW_VERSION,
-        };
-        if (!WIRE.isManualSwitchOwnerRegistry(next)) { continue; }
-        configurationKeys.add(owner.configurationKey);
-        ids.add(owner.id);
-        owners.push(copy);
-    }
-    return {owners, workflowVersion: WORKFLOW_VERSION};
-}
-
-function canonicalManualSwitchConfigurations(configurations) {
-    return configurations.map(configuration => configuration.provider === "ethereum"
-        ? {
-            provider: "ethereum",
-            chainId: configuration.chainId,
-            results: [...configuration.results],
-        }
-        : {
-            provider: "solana",
-            publicKey: configuration.publicKey,
-        });
-}
-
-function queueManualSwitchRegistryOperation(operation) {
-    const pending = manualSwitchRegistryTail.catch(() => {}).then(async () => {
-        const stored = await browser.storage.local.get(
-            WIRE.MANUAL_SWITCH_OWNER_STORAGE_KEY
-        );
-        const hasStored = Object.prototype.hasOwnProperty.call(
-            stored || {},
-            WIRE.MANUAL_SWITCH_OWNER_STORAGE_KEY
-        );
-        const candidate = stored?.[WIRE.MANUAL_SWITCH_OWNER_STORAGE_KEY];
-        const registry = hasStored
-            ? normalizeManualSwitchRegistry(candidate)
-            : emptyManualSwitchRegistry();
-        const repaired = hasStored &&
-            !WIRE.isManualSwitchOwnerRegistry(candidate);
-        const result = await operation(registry);
-        const next = result?.registry || registry;
-        if (!WIRE.isManualSwitchOwnerRegistry(next)) {
-            throw new Error("Invalid manual-switch owner registry");
-        }
-        if (repaired || result?.changed === true) {
-            if (next.owners.length === 0) {
-                await browser.storage.local.remove(
-                    WIRE.MANUAL_SWITCH_OWNER_STORAGE_KEY
-                );
-            } else {
-                await browser.storage.local.set({
-                    [WIRE.MANUAL_SWITCH_OWNER_STORAGE_KEY]: next,
-                });
-            }
-        }
-        return result?.value;
-    });
-    manualSwitchRegistryTail = pending;
-    const clear = () => {
-        if (manualSwitchRegistryTail === pending) {
-            manualSwitchRegistryTail = Promise.resolve();
-        }
-    };
-    pending.then(clear, clear);
-    return pending;
-}
-
-async function reserveManualSwitchOwner(identity) {
-    const owners = await readAllManualSwitchOwners();
-    const existing = owners.find(owner =>
-        owner.configurationKey === identity.configurationKey
-    );
-    if (existing) { return existing; }
-    if (owners.length >= WIRE.WORKFLOW_POLICY.maximumRequests) { return null; }
-    const snapshot = await queueConfigurationOperation(
-        identity.configurationKey,
-        state => ({value: {
-            configurations: canonicalManualSwitchConfigurations(
-                state.configurations
-            ),
-            revisions: {...state.revisions},
-        }}),
-        identity.legacyConfigurationKey
-    );
-    return queueManualSwitchRegistryOperation(registry => {
-        const pruned = pruneExpiredManualSwitchOwners(registry);
-        const reserved = registry.owners.find(owner =>
-            owner.configurationKey === identity.configurationKey
-        );
-        if (reserved) { return {changed: pruned, value: reserved}; }
-        if (registry.owners.length >= WIRE.WORKFLOW_POLICY.maximumRequests) {
-            return {changed: pruned, value: null};
-        }
-        let id;
-        for (let attempt = 0; attempt < 16; attempt += 1) {
-            const candidate = WIRE.genId();
-            if (!registry.owners.some(owner => owner.id === candidate)) {
-                id = candidate;
-                break;
-            }
-        }
-        if (!WIRE.isValidRequestId(id)) {
-            return {changed: pruned, value: null};
-        }
-        const owner = {
-            admissionDeadline: Date.now() +
-                WIRE.WORKFLOW_POLICY.requestTTLMilliseconds,
-            configurationKey: identity.configurationKey,
-            enqueueAttempt: WIRE.genPrivateToken(),
-            favicon: identity.favicon,
-            host: identity.host,
-            id,
-            latestConfigurations: snapshot.configurations,
-            phase: "admitting",
-            revisions: snapshot.revisions,
-            workflowVersion: WORKFLOW_VERSION,
-        };
-        if (!WIRE.isManualSwitchOwnerRecord(owner)) {
-            owner.favicon = "";
-        }
-        if (!WIRE.isManualSwitchOwnerRecord(owner)) {
-            return {changed: pruned, value: null};
-        }
-        registry.owners.push(owner);
-        return {changed: true, value: owner};
-    });
-}
-
-function readManualSwitchOwner(configurationKey) {
-    return queueManualSwitchRegistryOperation(registry => {
-        const changed = pruneExpiredManualSwitchOwners(registry);
-        return {
-            changed,
-            value: registry.owners.find(owner =>
-                owner.configurationKey === configurationKey
-            ) || null,
-        };
-    });
-}
-
-async function matchingManualSwitchOwner(owner) {
-    const current = await readManualSwitchOwner(owner.configurationKey);
-    return current?.id === owner.id &&
-        current.enqueueAttempt === owner.enqueueAttempt ? current : null;
-}
-
-function updateManualSwitchOwner(owner, replacement) {
-    return queueManualSwitchRegistryOperation(registry => {
-        let index = registry.owners.findIndex(candidate =>
-            candidate.configurationKey === owner.configurationKey &&
-            candidate.id === owner.id &&
-            candidate.enqueueAttempt === owner.enqueueAttempt
-        );
-        if (replacement === null && index >= 0) {
-            registry.owners.splice(index, 1);
-            pruneExpiredManualSwitchOwners(registry);
-            return {changed: true, value: true};
-        }
-        const pruned = pruneExpiredManualSwitchOwners(registry);
-        index = registry.owners.findIndex(candidate =>
-            candidate.configurationKey === owner.configurationKey &&
-            candidate.id === owner.id &&
-            candidate.enqueueAttempt === owner.enqueueAttempt
-        );
-        if (index < 0) { return {changed: pruned, value: null}; }
-        if (!WIRE.isManualSwitchOwnerRecord(replacement)) {
-            return {changed: pruned, value: null};
-        }
-        registry.owners[index] = replacement;
-        return {changed: true, value: replacement};
-    });
-}
-
-function readManualSwitchOwnersForIds(ids) {
-    const ready = new Set(ids);
-    return queueManualSwitchRegistryOperation(registry => {
-        const changed = pruneExpiredManualSwitchOwners(registry);
-        return {
-            changed,
-            value: registry.owners.filter(owner => ready.has(owner.id)),
-        };
-    });
-}
-
-function readAllManualSwitchOwners() {
-    return queueManualSwitchRegistryOperation(registry => {
-        const changed = pruneExpiredManualSwitchOwners(registry);
-        return {changed, value: registry.owners.slice()};
-    });
-}
-
-function manualSwitchInFlightStatus(owner) {
-    return {
-        admissionDeadline: owner.admissionDeadline,
-        configurationKey: owner.configurationKey,
-        id: owner.id,
-        subject: WIRE.MANUAL_SWITCH_IN_FLIGHT_SUBJECT,
-        workflowVersion: WORKFLOW_VERSION,
-    };
-}
-
-function manualSwitchAcknowledgement(owner) {
-    return {
-        approvalRequired: owner.approvalRequired,
-        configurationKey: owner.configurationKey,
-        id: owner.id,
-        requestToken: owner.requestToken,
-        revisions: {...owner.revisions},
-        subject: WIRE.MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
-        workflowVersion: WORKFLOW_VERSION,
-    };
-}
-
-function manualSwitchPollingDeadline(owner) {
-    const deadline = owner.admissionDeadline +
-        WIRE.WORKFLOW_POLICY.responseExpiryMilliseconds;
-    return Number.isSafeInteger(deadline) ? deadline : 0;
-}
-
-function manualSwitchFastPollingDeadline(owner) {
-    const deadline = owner.admissionDeadline -
-        WIRE.WORKFLOW_POLICY.requestTTLMilliseconds +
-        MANUAL_SWITCH_FAST_POLL_DURATION;
-    return Number.isSafeInteger(deadline) ? deadline : 0;
-}
-
-function fastManualSwitchOwners(owners, now = Date.now()) {
-    return owners.filter(owner => manualSwitchFastPollingDeadline(owner) > now);
-}
-
-function liveManualSwitchOwners(owners, now = Date.now()) {
-    const maximumAdmissionDeadline = now +
-        WIRE.WORKFLOW_POLICY.requestTTLMilliseconds +
-        MANUAL_SWITCH_ADMISSION_FUTURE_SKEW;
-    if (!Number.isSafeInteger(maximumAdmissionDeadline)) { return []; }
-    return owners.filter(owner =>
-        owner.admissionDeadline <= maximumAdmissionDeadline &&
-        manualSwitchPollingDeadline(owner) >= now
-    );
-}
-
-function manualSwitchResumeKey(owner) {
-    return JSON.stringify([
-        owner.configurationKey,
-        owner.id,
-        owner.enqueueAttempt,
-    ]);
-}
-
-function manualSwitchOwnerCommitProtected(owner) {
-    return manualSwitchResumeFlights.get(
-        manualSwitchResumeKey(owner)
-    )?.commitProtected === true;
-}
-
-function pruneExpiredManualSwitchOwners(registry, now = Date.now()) {
-    const live = new Set(
-        liveManualSwitchOwners(registry.owners, now).map(manualSwitchResumeKey)
-    );
-    const owners = registry.owners.filter(owner =>
-        live.has(manualSwitchResumeKey(owner)) ||
-        manualSwitchOwnerCommitProtected(owner)
-    );
-    if (owners.length === registry.owners.length) { return false; }
-    registry.owners = owners;
-    return true;
-}
-
-async function setManualSwitchPollAlarm(enabled) {
-    if (manualSwitchPollAlarmState === enabled) { return; }
-    try {
-        if (enabled) {
-            await browser.alarms?.create?.(MANUAL_SWITCH_POLL_ALARM_NAME, {
-                delayInMinutes: MANUAL_SWITCH_POLL_ALARM_MINUTES,
-                periodInMinutes: MANUAL_SWITCH_POLL_ALARM_MINUTES,
-            });
-        } else {
-            await browser.alarms?.clear?.(MANUAL_SWITCH_POLL_ALARM_NAME);
-        }
-        manualSwitchPollAlarmState = enabled;
-    } catch {
-        manualSwitchPollAlarmState = null;
-    }
-}
-
-function stopManualSwitchFastPolling() {
-    if (manualSwitchFastPollTimer !== null) {
-        clearTimeout(manualSwitchFastPollTimer);
-        manualSwitchFastPollTimer = null;
-    }
-    manualSwitchFastPollDeadline = 0;
-    manualSwitchFastPollDelay = MANUAL_SWITCH_FAST_POLL_INITIAL_DELAY;
-}
-
-function scheduleManualSwitchFastPoll() {
-    if (manualSwitchFastPollTimer !== null) { return; }
-    const remaining = manualSwitchFastPollDeadline - Date.now();
-    if (remaining <= 0) {
-        manualSwitchFastPollDeadline = 0;
-        manualSwitchFastPollDelay = MANUAL_SWITCH_FAST_POLL_INITIAL_DELAY;
-        return;
-    }
-    manualSwitchFastPollTimer = setTimeout(() => {
-        manualSwitchFastPollTimer = null;
-        return Promise.resolve(runManualSwitchFastPoll()).catch(() => {});
-    }, Math.min(manualSwitchFastPollDelay, remaining));
-}
-
-function startManualSwitchFastPolling(owners) {
-    const fastOwners = fastManualSwitchOwners(owners);
-    if (fastOwners.length === 0) { return; }
-    const ownerDeadline = Math.max(
-        ...fastOwners.map(manualSwitchFastPollingDeadline)
-    );
-    manualSwitchFastPollDeadline = Math.max(
-        manualSwitchFastPollDeadline,
-        ownerDeadline
-    );
-    scheduleManualSwitchFastPoll();
-}
-
-function refreshManualSwitchPolling(startFast = false) {
-    const pending = manualSwitchPollingTail.catch(() => {}).then(async () => {
-        let owners;
-        try {
-            owners = await readAllManualSwitchOwners();
-        } catch {
-            await setManualSwitchPollAlarm(true);
-            return null;
-        }
-        if (owners.length === 0) {
-            stopManualSwitchFastPolling();
-            await setManualSwitchPollAlarm(false);
-            return owners;
-        }
-        await setManualSwitchPollAlarm(true);
-        if (startFast) { startManualSwitchFastPolling(owners); }
-        return owners;
-    });
-    manualSwitchPollingTail = pending;
-    return pending;
-}
-
-async function runManualSwitchFastPoll() {
-    const owners = await refreshManualSwitchPolling();
-    if (!owners?.length) { return; }
-    const fastOwners = fastManualSwitchOwners(owners);
-    if (fastOwners.length === 0) {
-        stopManualSwitchFastPolling();
-        return;
-    }
-    await resumeManualSwitchOwnerList(fastOwners);
-    const remainingOwners = await refreshManualSwitchPolling();
-    if (!remainingOwners?.length) { return; }
-    const remainingFastOwners = fastManualSwitchOwners(remainingOwners);
-    if (remainingFastOwners.length === 0) {
-        stopManualSwitchFastPolling();
-        return;
-    }
-    manualSwitchFastPollDelay = MANUAL_SWITCH_FAST_POLL_DELAY;
-    startManualSwitchFastPolling(remainingFastOwners);
-    scheduleManualSwitchFastPoll();
-}
-
-async function reconcileAllManualSwitchOwners(startFast = false) {
-    const owners = await refreshManualSwitchPolling(startFast);
-    if (!owners?.length) { return; }
-    await resumeManualSwitchOwnerList(owners);
-    await refreshManualSwitchPolling();
 }
 
 function configurationFor(state, provider) {
@@ -1196,6 +789,7 @@ function applyDappResponseToState(state, response, revisions) {
         !Object.prototype.hasOwnProperty.call(response, "error");
     return {
         changed: applied.changed,
+        broadcastConfiguration: manualSwitch,
         value: responseForPage(
             response,
             manualSwitch || applied.changed || applied.replay || applied.stale ||
@@ -1225,7 +819,7 @@ function readStoredResponse(context) {
         context.configurationKey,
         context.legacyConfigurationKey,
         lease => sendNativeMessage({
-            subject: "getResponse",
+            subject: context.quiet ? "getManualSwitchResponse" : "getResponse",
             id: context.id,
             configurationKey: context.configurationKey,
             requestToken: context.requestToken,
@@ -1236,22 +830,17 @@ function readStoredResponse(context) {
     );
 }
 
-async function completeResponse(context, response, {
-    validate = WIRE.isCorrelatedDappResponse,
-    prepareCommit = () => context.revisions,
-} = {}) {
+async function completeResponse(context, response) {
+    const validate = response?.name === "switchAccount"
+        ? WIRE.isManualSwitchTerminalResponse
+        : WIRE.isCorrelatedDappResponse;
     if (!validate(response, context.id)) { return undefined; }
-    const applied = await queueConfigurationOperation(
+    const applied = await applyDappResponse(
         context.configurationKey,
-        async state => {
-            const revisions = await prepareCommit();
-            return revisions === MANUAL_SWITCH_MISSING
-                ? {value: MANUAL_SWITCH_MISSING}
-                : applyDappResponseToState(state, response, revisions);
-        },
+        response,
+        context.revisions,
         context.legacyConfigurationKey
     );
-    if (applied === MANUAL_SWITCH_MISSING) { return MANUAL_SWITCH_MISSING; }
     if (!validate(applied, context.id)) { return undefined; }
     return {
         response: applied,
@@ -1270,25 +859,31 @@ async function readAndApplyDappResponse(
     configurationKey,
     requestToken,
     revisions,
-    legacyConfigurationKey = null
+    legacyConfigurationKey = null,
+    quiet = false
 ) {
     const key = JSON.stringify([configurationKey, id, requestToken]);
     const existing = responseReadFlights.get(key);
     if (existing) {
+        if (quiet && !existing.quiet) { return undefined; }
         return existing.revisions.ethereum === revisions.ethereum &&
             existing.revisions.solana === revisions.solana
             ? existing.promise
             : undefined;
     }
     const context = {
-        id, configurationKey, requestToken, revisions, legacyConfigurationKey,
+        id, configurationKey, requestToken, revisions, legacyConfigurationKey, quiet,
     };
     const promise = (async () => {
         const response = await readStoredResponse(context);
         if (isMissingStoredResponse(response, id)) { return {response}; }
+        if (quiet && WIRE.hasExactKeys(response, ["id", "pending"]) &&
+            response.id === id && response.pending === true) {
+            return {pending: true};
+        }
         return completeResponse(context, response);
     })();
-    const entry = {promise, revisions: {...revisions}};
+    const entry = {promise, revisions: {...revisions}, quiet};
     responseReadFlights.set(key, entry);
     const clear = () => {
         if (responseReadFlights.get(key) === entry) {
@@ -1324,198 +919,300 @@ function isMissingStoredResponse(response, id) {
         response.id === id && response.missing === true;
 }
 
-function nativeManualSwitchRequest(owner) {
-    return {
-        admissionDeadline: owner.admissionDeadline,
-        body: {
-            latestConfigurations: owner.latestConfigurations.map(configuration =>
-                configuration.provider === "ethereum"
-                    ? {...configuration, results: [...configuration.results]}
-                    : {...configuration}
-            ),
-        },
-        configurationKey: owner.configurationKey,
-        enqueueAttempt: owner.enqueueAttempt,
-        favicon: owner.favicon,
-        host: owner.host,
-        id: owner.id,
-        name: "switchAccount",
-        provider: "unknown",
-        revisions: {...owner.revisions},
-        workflowVersion: WORKFLOW_VERSION,
-    };
-}
-
-async function broadcastManualSwitchResult(configurationKey, response) {
-    const tabs = await boundedTabsQuery();
-    if (!tabs) { return; }
-    const message = {
-        configurationKey,
-        response,
-        subject: WIRE.MANUAL_SWITCH_RESULT_SUBJECT,
-        workflowVersion: WORKFLOW_VERSION,
-    };
-    const deliveries = [];
-    for (const tab of tabs) {
-        if (tab?.incognito === true || !Number.isSafeInteger(tab?.id) ||
-            WIRE.configurationIdentityForURL(tab.url)?.configurationKey !==
-                configurationKey) {
-            continue;
+function ensureManualSwitchAlarm() {
+    if (manualSwitchAlarmFlight) { return manualSwitchAlarmFlight; }
+    const pending = (async () => {
+        const alarm = await browser.alarms.get(MANUAL_SWITCH_RECOVERY_ALARM);
+        if (!alarm) {
+            await browser.alarms.create(MANUAL_SWITCH_RECOVERY_ALARM, {
+                delayInMinutes: 1,
+                periodInMinutes: 1,
+            });
         }
-        deliveries.push((async () => {
-            try {
-                await WIRE.withTimeout(
-                    browser.tabs.sendMessage(tab.id, message),
-                    TAB_QUERY_TIMEOUT
-                );
-            } catch {}
-        })());
-    }
-    await Promise.all(deliveries);
-}
-
-async function applyOwnedManualSwitchTerminal(owner, response) {
-    const identity = WIRE.configurationIdentityForURL(owner.configurationKey);
-    const completed = await completeResponse({
-        ...owner,
-        legacyConfigurationKey: identity?.legacyConfigurationKey,
-    }, response, {
-        validate: WIRE.isManualSwitchTerminalResponse,
-        async prepareCommit() {
-            const current = await matchingManualSwitchOwner(owner);
-            const flight = manualSwitchResumeFlights.get(
-                manualSwitchResumeKey(owner)
-            );
-            if (!current || !flight) { return MANUAL_SWITCH_MISSING; }
-            flight.commitProtected = true;
-            return current.revisions;
-        },
-    });
-    if (completed === MANUAL_SWITCH_MISSING) { return MANUAL_SWITCH_MISSING; }
-    if (!completed || !await completed.acknowledgement) { return null; }
-    const removed = await updateManualSwitchOwner(owner, null);
-    if (removed !== true) { return MANUAL_SWITCH_MISSING; }
-    await broadcastManualSwitchResult(owner.configurationKey, completed.response);
-    return completed.response;
-}
-
-async function performManualSwitchResume(initialOwner) {
-    let owner = await matchingManualSwitchOwner(initialOwner);
-    if (!owner) { return MANUAL_SWITCH_MISSING; }
-    if (owner.phase === "admitting") {
-        let response;
-        try {
-            response = await WIRE.withTimeout(
-                sendNativeMessage(nativeManualSwitchRequest(owner), false),
-                TRANSPORT_TIMEOUT
-            );
-        } catch {
-            owner = await matchingManualSwitchOwner(owner);
-            return owner ? manualSwitchInFlightStatus(owner) : MANUAL_SWITCH_MISSING;
-        }
-        owner = await matchingManualSwitchOwner(owner);
-        if (!owner) { return MANUAL_SWITCH_MISSING; }
-        if (WIRE.isNativeEnqueueAcknowledgement(response, owner.id)) {
-            const admitted = {
-                ...owner,
-                approvalRequired: response.approvalRequired,
-                phase: "admitted",
-                requestToken: response.requestToken,
-                revisions: {...response.revisions},
-            };
-            const stored = await updateManualSwitchOwner(owner, admitted);
-            if (!stored) { return MANUAL_SWITCH_MISSING; }
-            if (stored.approvalRequired) {
-                notifyPendingRequestAvailable();
-                cuePopup();
-            }
-            return manualSwitchAcknowledgement(stored);
-        }
-        const terminal = await applyOwnedManualSwitchTerminal(owner, response);
-        if (terminal === MANUAL_SWITCH_MISSING) { return terminal; }
-        return terminal || manualSwitchInFlightStatus(owner);
-    }
-    let response;
-    try {
-        const identity = WIRE.configurationIdentityForURL(owner.configurationKey);
-        response = await readStoredResponse({
-            ...owner,
-            legacyConfigurationKey: identity?.legacyConfigurationKey,
-        });
-    } catch {
-        owner = await matchingManualSwitchOwner(owner);
-        return owner ? manualSwitchAcknowledgement(owner) : MANUAL_SWITCH_MISSING;
-    }
-    owner = await matchingManualSwitchOwner(owner);
-    if (!owner) { return MANUAL_SWITCH_MISSING; }
-    if (isMissingStoredResponse(response, owner.id)) {
-        await updateManualSwitchOwner(owner, null);
-        return MANUAL_SWITCH_MISSING;
-    }
-    const terminal = await applyOwnedManualSwitchTerminal(owner, response);
-    if (terminal === MANUAL_SWITCH_MISSING) { return terminal; }
-    return terminal || manualSwitchAcknowledgement(owner);
-}
-
-function resumeManualSwitchOwner(owner) {
-    const key = manualSwitchResumeKey(owner);
-    const existing = manualSwitchResumeFlights.get(key);
-    if (existing) { return existing.promise; }
-    const entry = {commitProtected: false, promise: null};
-    const promise = Promise.resolve().then(() => performManualSwitchResume(owner));
-    entry.promise = promise;
-    manualSwitchResumeFlights.set(key, entry);
+    })();
+    manualSwitchAlarmFlight = pending;
     const clear = () => {
-        if (manualSwitchResumeFlights.get(key) === entry) {
-            manualSwitchResumeFlights.delete(key);
-        }
+        if (manualSwitchAlarmFlight === pending) { manualSwitchAlarmFlight = null; }
     };
-    promise.then(clear, clear);
-    return promise;
+    pending.then(clear, clear);
+    return pending;
 }
 
-async function resumeAdmittedManualSwitchOwner(
-    owner,
-    identity,
-    nextAttempt
-) {
-    let response;
-    try {
-        response = await resumeManualSwitchOwner(owner);
-    } catch {}
-    await refreshManualSwitchPolling();
-    if (response === MANUAL_SWITCH_MISSING &&
-        nextAttempt < MANUAL_SWITCH_ADMISSION_ATTEMPTS) {
-        await runManualSwitchAdmissionAttempts(identity, nextAttempt);
+function validManualSwitchDescriptor(request) {
+    if (!WIRE.hasExactKeys(request, [
+        "id", "host", "configurationKey", "requestToken", "revisions", "state",
+    ])) { return false; }
+    const identity = WIRE.configurationIdentityForURL(request.configurationKey);
+    return WIRE.isValidRequestId(request.id) &&
+        identity?.configurationKey === request.configurationKey &&
+        identity.host === request.host &&
+        WIRE.isRequestToken(request.requestToken) &&
+        WIRE.isProviderRevisions(request.revisions) &&
+        ["pending", "approved", "completed"].includes(request.state);
+}
+
+function hydrateManualSwitch(request) {
+    const existing = manualSwitches.get(request.configurationKey);
+    if (existing && (existing.id !== request.id ||
+        existing.requestToken !== request.requestToken)) {
+        return null;
     }
+    const identity = WIRE.configurationIdentityForURL(request.configurationKey);
+    const context = existing || {
+        ...identity,
+        id: request.id,
+        requestToken: request.requestToken,
+        revisions: {...request.revisions},
+        pollingDeadline: Infinity,
+        quiet: true,
+        polling: null,
+        timer: null,
+    };
+    if (context.quiet) {
+        context.fastPolling = request.state === "approved";
+        context.admission = Promise.resolve({
+            id: request.id,
+            requestToken: request.requestToken,
+            revisions: {...request.revisions},
+            approvalRequired: request.state !== "completed",
+            configurationKey: request.configurationKey,
+            subject: WIRE.MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
+            workflowVersion: WORKFLOW_VERSION,
+        });
+    }
+    manualSwitches.set(request.configurationKey, context);
+    return context;
 }
 
-async function runManualSwitchAdmissionAttempts(identity, firstAttempt) {
-    for (let attempt = firstAttempt;
-        attempt < MANUAL_SWITCH_ADMISSION_ATTEMPTS;
-        attempt += 1) {
-        let owner = await reserveManualSwitchOwner(identity);
-        if (!owner) { return undefined; }
-        await refreshManualSwitchPolling(true);
-        owner = await matchingManualSwitchOwner(owner);
-        if (!owner) { continue; }
-        if (owner.phase === "admitted") {
-            void resumeAdmittedManualSwitchOwner(
-                owner,
-                identity,
-                attempt + 1
-            ).catch(() => {});
-            return manualSwitchAcknowledgement(owner);
+function recoverManualSwitches() {
+    if (browser.extension?.inIncognitoContext === true) { return Promise.resolve(); }
+    if (manualSwitchRecoveryFlight) { return manualSwitchRecoveryFlight; }
+    const pending = (async () => {
+        await ensureManualSwitchAlarm();
+        const requests = [];
+        const cursors = new Set;
+        let cursor;
+        do {
+            const id = WIRE.genId();
+            const response = await WIRE.withTimeout(sendNativeMessage({
+                id,
+                subject: "getManualSwitchRequests",
+                workflowVersion: WORKFLOW_VERSION,
+                ...(cursor ? {cursor} : {}),
+            }, false), TRANSPORT_TIMEOUT);
+            if (!WIRE.hasExactKeys(response, ["id", "requests", "nextCursor"]) ||
+                response.id !== id || !Array.isArray(response.requests) ||
+                response.requests.length > WIRE.WORKFLOW_POLICY.maximumRetainedRequests ||
+                !response.requests.every(validManualSwitchDescriptor) ||
+                response.nextCursor !== null &&
+                    (typeof response.nextCursor !== "string" ||
+                        response.nextCursor.length === 0 ||
+                        response.nextCursor.length > 4096 ||
+                        cursors.has(response.nextCursor))) {
+                throw new Error("Invalid manual-switch discovery");
+            }
+            requests.push(...response.requests);
+            cursor = response.nextCursor;
+            if (cursor) { cursors.add(cursor); }
+        } while (cursor);
+        const discovered = new Set(requests.map(request => request.requestToken));
+        for (const context of manualSwitches.values()) {
+            if (context.quiet && !discovered.has(context.requestToken)) {
+                forgetManualSwitch(context);
+            }
         }
-        const response = await resumeManualSwitchOwner(owner);
-        await refreshManualSwitchPolling();
-        if (response !== MANUAL_SWITCH_MISSING) { return response; }
+        const origins = new Map;
+        for (const request of requests) {
+            const previous = origins.get(request.configurationKey) || Promise.resolve();
+            origins.set(request.configurationKey, previous.then(async () => {
+                const context = request.state === "completed"
+                    ? manualSwitches.get(request.configurationKey)
+                    : hydrateManualSwitch(request);
+                if (request.state === "pending") {
+                    if (context?.quiet) { clearTimeout(context.timer); }
+                    return;
+                }
+                if (context?.id === request.id &&
+                    context.requestToken === request.requestToken) {
+                    await pollManualSwitch(context, true);
+                    return;
+                }
+                const identity = WIRE.configurationIdentityForURL(request.configurationKey);
+                const completed = await readAndApplyDappResponse(
+                    request.id, request.configurationKey, request.requestToken,
+                    request.revisions, identity.legacyConfigurationKey, true
+                );
+                await completed?.acknowledgement;
+            }).catch(() => {}));
+        }
+        await Promise.all(origins.values());
+    })();
+    manualSwitchRecoveryFlight = pending;
+    const clear = () => {
+        if (manualSwitchRecoveryFlight === pending) { manualSwitchRecoveryFlight = null; }
+    };
+    pending.then(clear, clear);
+    return pending;
+}
+
+function forgetManualSwitch(context) {
+    clearTimeout(context.timer);
+    if (manualSwitches.get(context.configurationKey) === context) {
+        manualSwitches.delete(context.configurationKey);
     }
-    return undefined;
+}
+
+function scheduleManualSwitchPoll(context) {
+    clearTimeout(context.timer);
+    if (manualSwitches.get(context.configurationKey) !== context) { return; }
+    if (context.quiet && !context.fastPolling) { return; }
+    if (Date.now() >= context.pollingDeadline) {
+        forgetManualSwitch(context);
+        return;
+    }
+    context.timer = setTimeout(() => {
+        void pollManualSwitch(context).catch(() => {});
+    }, MANUAL_SWITCH_POLL_DELAY);
+}
+
+function pollManualSwitch(context, quiet = context.quiet === true) {
+    if (context.polling) {
+        return quiet && !context.polling.quiet
+            ? Promise.resolve()
+            : context.polling.promise;
+    }
+    if (!context.requestToken ||
+        manualSwitches.get(context.configurationKey) !== context) {
+        return Promise.resolve();
+    }
+    clearTimeout(context.timer);
+    if (Date.now() >= context.pollingDeadline) {
+        forgetManualSwitch(context);
+        return Promise.resolve();
+    }
+    const pending = (async () => {
+        try {
+            const completed = await readAndApplyDappResponse(
+                context.id,
+                context.configurationKey,
+                context.requestToken,
+                context.revisions,
+                context.legacyConfigurationKey,
+                quiet
+            );
+            if (completed?.pending && context.quiet) { context.fastPolling = false; }
+            if (isMissingStoredResponse(completed?.response, context.id)) {
+                if (manualSwitches.get(context.configurationKey) !== context) { return; }
+                forgetManualSwitch(context);
+                return true;
+            }
+            if (completed && await completed.acknowledgement) {
+                forgetManualSwitch(context);
+            }
+        } catch {}
+        finally {
+            context.polling = null;
+            scheduleManualSwitchPoll(context);
+        }
+    })();
+    context.polling = {promise: pending, quiet};
+    return pending;
 }
 
 function beginManualSwitch(identity) {
-    return runManualSwitchAdmissionAttempts(identity, 0);
+    const existing = manualSwitches.get(identity.configurationKey);
+    if (existing) {
+        if (Date.now() < existing.pollingDeadline) {
+            existing.quiet = false;
+            void pollManualSwitch(existing, false).then(missing => {
+                if (missing && !manualSwitches.has(identity.configurationKey)) {
+                    return beginManualSwitch(identity);
+                }
+            }).catch(() => {});
+            return existing.admission;
+        }
+        forgetManualSwitch(existing);
+    }
+    const admissionDeadline = Date.now() +
+        WIRE.WORKFLOW_POLICY.requestTTLMilliseconds;
+    const context = {
+        ...identity,
+        admissionDeadline,
+        pollingDeadline: admissionDeadline +
+            WIRE.WORKFLOW_POLICY.responseExpiryMilliseconds,
+        timer: null,
+        polling: null,
+    };
+    manualSwitches.set(identity.configurationKey, context);
+    context.admission = (async () => {
+        try {
+            await ensureManualSwitchAlarm();
+            const snapshot = await queueConfigurationOperation(
+                identity.configurationKey,
+                state => ({value: {
+                    configurations: state.configurations.map(configuration =>
+                        configuration.provider === "ethereum" ? {
+                            provider: "ethereum",
+                            chainId: configuration.chainId,
+                            results: [...configuration.results],
+                        } : {
+                            provider: "solana",
+                            publicKey: configuration.publicKey,
+                        }),
+                    revisions: {...state.revisions},
+                }}),
+                identity.legacyConfigurationKey
+            );
+            const id = WIRE.genId();
+            const response = await WIRE.withTimeout(sendNativeMessage({
+                admissionDeadline: context.admissionDeadline,
+                body: {latestConfigurations: snapshot.configurations},
+                configurationKey: identity.configurationKey,
+                enqueueAttempt: WIRE.genPrivateToken(),
+                favicon: identity.favicon.length <= 16 * 1024 ? identity.favicon : "",
+                host: identity.host,
+                id,
+                name: "switchAccount",
+                provider: "unknown",
+                revisions: snapshot.revisions,
+                workflowVersion: WORKFLOW_VERSION,
+            }, false), TRANSPORT_TIMEOUT);
+            if (WIRE.isValidRequestId(response?.id) &&
+                WIRE.isNativeEnqueueAcknowledgement(response, response.id)) {
+                Object.assign(context, {
+                    id: response.id,
+                    requestToken: response.requestToken,
+                    revisions: {...response.revisions},
+                });
+                if (response.approvalRequired) {
+                    notifyPendingRequestAvailable();
+                    cuePopup();
+                }
+                scheduleManualSwitchPoll(context);
+                return {
+                    ...response,
+                    configurationKey: identity.configurationKey,
+                    subject: WIRE.MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
+                    workflowVersion: WORKFLOW_VERSION,
+                };
+            }
+            if (!WIRE.isManualSwitchTerminalResponse(response, id)) {
+                forgetManualSwitch(context);
+                return undefined;
+            }
+            const completed = await completeResponse({
+                id,
+                ...identity,
+                revisions: snapshot.revisions,
+            }, response);
+            forgetManualSwitch(context);
+            return completed?.response;
+        } catch {
+            forgetManualSwitch(context);
+            return undefined;
+        }
+    })();
+    return context.admission;
 }
 
 async function handleManualSwitchIntent(request, sender) {
@@ -1535,22 +1232,6 @@ async function handleManualSwitchIntent(request, sender) {
                 ? sender.tab.favIconUrl
                 : "",
     });
-}
-
-async function resumeManualSwitchOwners(ids) {
-    let owners;
-    try {
-        owners = await readManualSwitchOwnersForIds(ids);
-    } catch {
-        return;
-    }
-    await resumeManualSwitchOwnerList(owners);
-}
-
-async function resumeManualSwitchOwnerList(owners) {
-    await Promise.all(owners.map(owner =>
-        resumeManualSwitchOwner(owner).catch(() => undefined)
-    ));
 }
 
 async function handleDappRequest(request, sender) {
@@ -1729,6 +1410,7 @@ async function latestConfiguration(request, sender) {
     if (!identity) {
         return {configurationReadFailed: true};
     }
+    void recoverManualSwitches().catch(() => {});
     try {
         const state = await readConfigurationState(
             identity.configurationKey,
@@ -1892,10 +1574,7 @@ async function handleToolbarClick(tab) {
         await openNativeWallet(tab);
         return;
     }
-    const valid = WIRE.isManualSwitchInFlightStatus(
-        response,
-        identity.configurationKey
-    ) || WIRE.isManualSwitchAcknowledgement(
+    const valid = WIRE.isManualSwitchAcknowledgement(
         response,
         response?.id,
         identity.configurationKey
@@ -1922,7 +1601,10 @@ async function handleToolbarClick(tab) {
 async function broadcastResponseReady(request) {
     const ids = WIRE.responseReadyIds(request);
     if (!ids) { return; }
-    const resuming = resumeManualSwitchOwners(ids);
+    const polling = [...manualSwitches.values()]
+        .filter(context => ids.includes(context.id))
+        .map(context => pollManualSwitch(context, true));
+    const recovery = recoverManualSwitches().catch(() => {});
     const tabs = await boundedTabsQuery();
     if (tabs) {
         for (const tab of tabs || []) {
@@ -1930,8 +1612,7 @@ async function broadcastResponseReady(request) {
             try { Promise.resolve(browser.tabs.sendMessage(tab.id, request)).catch(() => {}); } catch {}
         }
     }
-    await resuming;
-    await refreshManualSwitchPolling();
+    await Promise.all([...polling, recovery]);
 }
 
 async function boundedTabsQuery() {
@@ -2003,6 +1684,7 @@ async function handleMessage(request, sender) {
         await updateBadge(request, sender);
         return undefined;
     case "responseReady":
+        if (privateBrowsing(sender)) { return undefined; }
         await broadcastResponseReady(request);
         return undefined;
     case "pendingRequestAvailable":
@@ -2027,6 +1709,7 @@ try {
     browser.runtime.onInstalled?.addListener?.(details => {
         Promise.resolve(persistUpdateRecovery(details)).catch(() => {});
         Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
+        void recoverManualSwitches().catch(() => {});
     });
 } catch {}
 
@@ -2034,19 +1717,28 @@ try {
     browser.runtime.onStartup?.addListener?.(() => {
         Promise.resolve(clearUpdateRecovery()).catch(() => {});
         Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
-        Promise.resolve(reconcileAllManualSwitchOwners(true)).catch(() => {});
+        void recoverManualSwitches().catch(() => {});
     });
 } catch {}
 
 try {
     Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
-    Promise.resolve(reconcileAllManualSwitchOwners(true)).catch(() => {});
+    void recoverManualSwitches().catch(() => {});
 } catch {}
 
 try {
-    browser.alarms?.onAlarm?.addListener?.(alarm => {
-        if (alarm?.name !== MANUAL_SWITCH_POLL_ALARM_NAME) { return; }
-        return reconcileAllManualSwitchOwners();
+    Promise.resolve(browser.storage.local.remove(
+        LEGACY_MANUAL_SWITCH_STORAGE_KEY
+    )).catch(() => {});
+    Promise.resolve(browser.alarms?.clear?.(
+        LEGACY_MANUAL_SWITCH_POLL_ALARM_NAME
+    )).catch(() => {});
+} catch {}
+
+try {
+    browser.alarms.onAlarm.addListener(alarm => {
+        if (alarm?.name !== MANUAL_SWITCH_RECOVERY_ALARM) { return undefined; }
+        return recoverManualSwitches().catch(() => {});
     });
 } catch {}
 

@@ -608,52 +608,6 @@ function bigWalletRuntimeMessage(
         sendResponse();
         return true;
     }
-    if (request?.subject === bigWalletWire.MANUAL_SWITCH_RESULT_SUBJECT) {
-        const identity = bigWalletCurrentIdentity();
-        const targeted = bigWalletWire.hasExactKeys(request, [
-                "configurationKey", "response", "subject", "workflowVersion",
-            ]) && request.workflowVersion === bigWalletWorkflowVersion &&
-            request.configurationKey === identity?.configurationKey &&
-            bigWalletWire.isManualSwitchTerminalResponse(
-                request.response,
-                request.response?.id
-            );
-        let applied;
-        if (targeted && typeof bigWalletProviderGeneration === "string") {
-            const delivery = bigWalletConfigurationDelivery(
-                request.response,
-                identity.configurationKey,
-                bigWalletProviderGeneration,
-                true
-            );
-            const envelope = {
-                direction: bigWalletContentDirection,
-                kind: "response",
-                response: delivery.response,
-                id: request.response.id,
-                providerGeneration: bigWalletProviderGeneration,
-            };
-            if (delivery.suppressProviderUpdate) {
-                envelope.suppressProviderUpdate = true;
-            }
-            window.postMessage(envelope, "*");
-            applied = true;
-        } else if (targeted && !bigWalletShouldInjectProvider()) {
-            applied = false;
-        }
-        let acknowledgement;
-        if (typeof applied === "boolean") {
-            acknowledgement = {
-                applied,
-                configurationKey: identity.configurationKey,
-                id: request.response.id,
-                subject: bigWalletWire.MANUAL_SWITCH_RESULT_SUBJECT,
-                workflowVersion: bigWalletWorkflowVersion,
-            };
-        }
-        sendResponse(acknowledgement);
-        return true;
-    }
     const ids = bigWalletWire.responseReadyIds(request);
     if (ids) {
         for (const state of bigWalletRequests.values()) {

@@ -235,6 +235,20 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
+    enum WorkerCommand {
+        case getManualSwitchRequests(cursor: String?)
+        case getManualSwitchResponse(ResponseIdentity)
+
+        var subject: Subject.Worker {
+            switch self {
+            case .getManualSwitchRequests:
+                return .getManualSwitchRequests
+            case .getManualSwitchResponse:
+                return .getManualSwitchResponse
+            }
+        }
+    }
+
     enum PopupCommand {
         case getPendingRequests
         case getApprovalState(PopupIdentity, ApprovalStatePayload)
@@ -281,6 +295,7 @@ struct InternalSafariRequest: Decodable {
 
     enum Command {
         case page(PageCommand)
+        case worker(WorkerCommand)
         case popup(PopupCommand)
         case openApp
     }
@@ -293,6 +308,8 @@ struct InternalSafariRequest: Decodable {
         switch command {
         case .page(let command):
             return .page(command.subject)
+        case .worker(let command):
+            return .worker(command.subject)
         case .popup(let command):
             return .popup(command.subject)
         case .openApp:
@@ -307,11 +324,16 @@ struct InternalSafariRequest: Decodable {
 
     enum Subject: Decodable {
         case page(Page)
+        case worker(Worker)
         case popup(Popup)
         case openApp
 
         enum Page: String {
             case getResponse, acknowledgeResponse, showApproval, rpc
+        }
+
+        enum Worker: String {
+            case getManualSwitchRequests, getManualSwitchResponse
         }
 
         enum Popup: String {
@@ -324,6 +346,8 @@ struct InternalSafariRequest: Decodable {
             let rawValue = try container.decode(String.self)
             if let page = Page(rawValue: rawValue) {
                 self = .page(page)
+            } else if let worker = Worker(rawValue: rawValue) {
+                self = .worker(worker)
             } else if let popup = Popup(rawValue: rawValue) {
                 self = .popup(popup)
             } else if rawValue == "openApp" {
@@ -374,6 +398,22 @@ struct InternalSafariRequest: Decodable {
                 from: decoder,
                 common: common
             )))
+        case .worker(.getManualSwitchResponse):
+            command = .worker(.getManualSwitchResponse(try Self.decodeResponseIdentity(
+                from: decoder,
+                common: common
+            )))
+        case .worker(.getManualSwitchRequests):
+            let container = try ExactKeyedContainer(
+                decoder: decoder,
+                required: common,
+                optional: ["cursor"]
+            )
+            command = .worker(.getManualSwitchRequests(
+                cursor: container.container.contains(InternalCodingKey("cursor"))
+                    ? try container.decode(String.self, forKey: "cursor")
+                    : nil
+            ))
         case .page(.acknowledgeResponse), .page(.showApproval):
             let container = try ExactKeyedContainer(
                 decoder: decoder,

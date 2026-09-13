@@ -100,6 +100,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 privateBrowsing: privateBrowsing,
                 context: context
             )
+        case .worker(let command):
+            handle(
+                command,
+                request: request,
+                profileIdentifier: profileIdentifier,
+                privateBrowsing: privateBrowsing,
+                context: context
+            )
         case .popup:
             Task { @MainActor in
                 let response: [String: Any]
@@ -121,6 +129,48 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     context: context
                 )
             }
+        }
+    }
+
+    private func handle(
+        _ command: InternalSafariRequest.WorkerCommand,
+        request: InternalSafariRequest,
+        profileIdentifier: UUID?,
+        privateBrowsing: Bool,
+        context: NSExtensionContext
+    ) {
+        guard !privateBrowsing else {
+            context.cancelRequest(withError: HandlerError.unsupportedOperation)
+            return
+        }
+        switch command {
+        case .getManualSwitchRequests(let cursor):
+            Task {
+                switch await Self.bridge.listManualSwitchRequests(
+                    profileIdentifier: profileIdentifier,
+                    cursor: cursor
+                ) {
+                case .available(let page):
+                    Self.respond(with: [
+                        "id": request.id,
+                        "requests": page.requests.map(\.json),
+                        "nextCursor": page.nextCursor as Any? ?? NSNull(),
+                    ], context: context)
+                case .invalidCursor:
+                    context.cancelRequest(withError: HandlerError.invalidMessage)
+                case .unavailable:
+                    context.cancelRequest(withError: HandlerError.bridgeUnavailable)
+                }
+            }
+        case .getManualSwitchResponse(let identity):
+            readResponse(
+                id: request.id,
+                identity: identity,
+                profileIdentifier: profileIdentifier,
+                privateBrowsing: privateBrowsing,
+                mode: .manualRecovery,
+                context: context
+            )
         }
     }
 
@@ -173,13 +223,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 let handle,
                 let approvalRequired,
                 let revisions,
-                _,
+                let admissionKind,
                 let nativeDeliveryNonce
             ):
-                if ingress.replayOnly || !approvalRequired {
+                if ingress.replayOnly || !approvalRequired || admissionKind == .coalesced {
                     Self.respond(
                         with: Self.admissionResponse(
-                            request: request,
                             handle: handle,
                             approvalRequired: approvalRequired,
                             revisions: revisions
@@ -220,7 +269,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #endif
                     Self.respond(
                         with: Self.admissionResponse(
-                            request: request,
                             handle: handle,
                             approvalRequired: true,
                             revisions: revisions
@@ -230,7 +278,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 case .responseReady:
                     Self.respond(
                         with: Self.admissionResponse(
-                            request: request,
                             handle: handle,
                             approvalRequired: false,
                             revisions: revisions
@@ -262,13 +309,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }
 
     private static func admissionResponse(
-        request: SafariRequest,
         handle: ExtensionBridge.Handle,
         approvalRequired: Bool,
         revisions: ExtensionBridge.ProviderRevisions
     ) -> [String: Any] {
         return [
-            "id": request.id,
+            "id": handle.id,
             "requestToken": handle.requestToken,
             "approvalRequired": approvalRequired,
             "revisions": revisions.json,
@@ -347,124 +393,199 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 }
             }
         case .getResponse(let identity):
-            guard !privateBrowsing else {
-                context.cancelRequest(withError: HandlerError.unsupportedOperation)
-                return
-            }
-            Task { @MainActor in
-#if os(macOS)
-                let handle = ExtensionBridge.Handle(
-                    id: request.id,
-                    token: identity.token,
-                    profileIdentifier: profileIdentifier
-                )
-                var nativeExecutionFence: ExtensionBridge.NativeExecutionFence?
-                defer { nativeExecutionFence?.release() }
-                switch await Self.bridge.load(handle: handle) {
-                case .found(let snapshot):
-                    let fenceToken = UUID()
-                    if snapshot.nativeDecisionStaged ||
-                        snapshot.phase == .approving,
-                       let fence = await Self.bridge
-                        .acquireNativeExecutionFence(
-                            handle: handle,
-                            token: fenceToken
-                        ) {
-                        nativeExecutionFence = fence
-                        switch await Self.bridge.recordNativeExecutionContext(
-                            handle: handle,
-                            configurationKey: identity.configurationKey,
-                            revisions: identity.revisions,
-                            executionDeadline: identity.executionDeadline,
-                            fenceToken: fenceToken
-                        ) {
-                        case .responseReady, .missing:
-                            break
-                        case .recorded(let executionContext):
-                            guard executionContext.fenceToken == fenceToken else {
-                                break
-                            }
-                            guard await ensureNativeApprovalDeliveryIfNeeded(
-                                handle: handle,
-                                ) else {
-                                _ = await Self.bridge
-                                    .clearNativeExecutionContext(
-                                        handle: handle,
-                                        expected: executionContext
-                                    )
-                                context.cancelRequest(
-                                    withError: HandlerError.bridgeUnavailable
-                                )
-                                return
-                            }
-                            guard await waitForNativeApprovalFinalization(
-                                handle: handle,
-                                configurationKey: identity.configurationKey,
-                                initialContext: executionContext
-                            ) else {
-                                context.cancelRequest(
-                                    withError: HandlerError.requestPending
-                                )
-                                return
-                            }
-                        case .pending:
-                            guard await ensureNativeApprovalDeliveryIfNeeded(
-                                handle: handle
-                            ) else {
-                                context.cancelRequest(
-                                    withError: HandlerError.bridgeUnavailable
-                                )
-                                return
-                            }
-                        case .unavailable:
-                            context.cancelRequest(
-                                withError: HandlerError.bridgeUnavailable
-                            )
-                            return
-                        }
-                    } else if !snapshot.nativeDecisionStaged,
-                              snapshot.phase == .queued {
-                        guard await ensureNativeApprovalDeliveryIfNeeded(
-                            handle: handle
-                        ) else {
-                            context.cancelRequest(
-                                withError: HandlerError.bridgeUnavailable
-                            )
-                            return
-                        }
-                    }
-                case .missing:
-                    break
-                case .unavailable:
-                    context.cancelRequest(
-                        withError: HandlerError.bridgeUnavailable
-                    )
-                    return
-                }
-#endif
-                switch await Self.bridge.readResponse(
-                    id: request.id,
-                    configurationKey: identity.configurationKey,
-                    requestToken: identity.token.rawValue,
-                    profileIdentifier: profileIdentifier
+            readResponse(
+                id: request.id,
+                identity: identity,
+                profileIdentifier: profileIdentifier,
+                privateBrowsing: privateBrowsing,
+                mode: .page,
+                context: context
+            )
+        }
+    }
+
+    private enum ResponseReadMode {
+        case page, manualRecovery
+    }
+
+    private func readResponse(
+        id: Int,
+        identity: InternalSafariRequest.ResponseIdentity,
+        profileIdentifier: UUID?,
+        privateBrowsing: Bool,
+        mode: ResponseReadMode,
+        context: NSExtensionContext
+    ) {
+        guard !privateBrowsing else {
+            context.cancelRequest(withError: HandlerError.unsupportedOperation)
+            return
+        }
+        Task { @MainActor in
+            let handle = ExtensionBridge.Handle(
+                id: id,
+                token: identity.token,
+                profileIdentifier: profileIdentifier
+            )
+            var manualSnapshot: ExtensionBridge.Snapshot?
+            if mode == .manualRecovery {
+                switch await Self.bridge.loadManualSwitch(
+                    handle: handle,
+                    configurationKey: identity.configurationKey
                 ) {
-                case .response(let response):
-                    if case .addsEthereumChain =
-                        ResponseToExtension.ConfigurationMutation.classify(response) {
-                        CustomNetworkCache.shared.invalidate()
+                case .found(let snapshot):
+                    manualSnapshot = snapshot
+                    if snapshot.phase != .responded {
+#if os(macOS)
+                        guard await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+                            handle: handle,
+                            nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+                        ) else {
+                            Self.respondPending(id: id, mode: mode, context: context)
+                            return
+                        }
+#else
+                        Self.respondPending(id: id, mode: mode, context: context)
+                        return
+#endif
                     }
-                    Self.respond(with: response, context: context)
-                case .pending:
-                    context.cancelRequest(withError: HandlerError.requestPending)
                 case .missing:
-                    Self.respond(with: [
-                        "id": request.id,
-                        "missing": true,
-                    ], context: context)
+                    Self.respond(with: ["id": id, "missing": true], context: context)
+                    return
                 case .unavailable:
                     context.cancelRequest(withError: HandlerError.bridgeUnavailable)
+                    return
                 }
             }
+#if os(macOS)
+            var nativeExecutionFence: ExtensionBridge.NativeExecutionFence?
+            defer { nativeExecutionFence?.release() }
+            let loaded: ExtensionBridge.SnapshotResult = if let manualSnapshot {
+                .found(manualSnapshot)
+            } else {
+                await Self.bridge.load(handle: handle)
+            }
+            switch loaded {
+            case .found(let snapshot):
+                let fenceToken = UUID()
+                if snapshot.nativeDecisionStaged ||
+                    snapshot.phase == .approving,
+                   let fence = await Self.bridge
+                    .acquireNativeExecutionFence(
+                        handle: handle,
+                        token: fenceToken
+                    ) {
+                    nativeExecutionFence = fence
+                    switch await Self.bridge.recordNativeExecutionContext(
+                        handle: handle,
+                        configurationKey: identity.configurationKey,
+                        revisions: identity.revisions,
+                        executionDeadline: identity.executionDeadline,
+                        fenceToken: fenceToken
+                    ) {
+                    case .responseReady, .missing:
+                        break
+                    case .recorded(let executionContext):
+                        guard executionContext.fenceToken == fenceToken else {
+                            break
+                        }
+                        guard await ensureNativeApprovalDeliveryIfNeeded(
+                            handle: handle,
+                            mode: mode
+                        ) else {
+                            _ = await Self.bridge
+                                .clearNativeExecutionContext(
+                                    handle: handle,
+                                    expected: executionContext
+                                )
+                            Self.respondPending(
+                                id: id, mode: mode, context: context,
+                                error: .bridgeUnavailable
+                            )
+                            return
+                        }
+                        guard await waitForNativeApprovalFinalization(
+                            handle: handle,
+                            configurationKey: identity.configurationKey,
+                            initialContext: executionContext,
+                            mode: mode
+                        ) else {
+                            Self.respondPending(id: id, mode: mode, context: context)
+                            return
+                        }
+                    case .pending:
+                        guard await ensureNativeApprovalDeliveryIfNeeded(
+                            handle: handle,
+                            mode: mode
+                        ) else {
+                            Self.respondPending(
+                                id: id, mode: mode, context: context,
+                                error: .bridgeUnavailable
+                            )
+                            return
+                        }
+                    case .unavailable:
+                        context.cancelRequest(
+                            withError: HandlerError.bridgeUnavailable
+                        )
+                        return
+                    }
+                } else if !snapshot.nativeDecisionStaged,
+                          snapshot.phase == .queued {
+                    guard await ensureNativeApprovalDeliveryIfNeeded(
+                        handle: handle,
+                        mode: mode
+                    ) else {
+                        Self.respondPending(
+                            id: id, mode: mode, context: context,
+                            error: .bridgeUnavailable
+                        )
+                        return
+                    }
+                }
+            case .missing:
+                break
+            case .unavailable:
+                context.cancelRequest(
+                    withError: HandlerError.bridgeUnavailable
+                )
+                return
+            }
+#endif
+            switch await Self.bridge.readResponse(
+                id: id,
+                configurationKey: identity.configurationKey,
+                requestToken: identity.token.rawValue,
+                profileIdentifier: profileIdentifier
+            ) {
+            case .response(let response):
+                if case .addsEthereumChain =
+                    ResponseToExtension.ConfigurationMutation.classify(response) {
+                    CustomNetworkCache.shared.invalidate()
+                }
+                Self.respond(with: response, context: context)
+            case .pending:
+                Self.respondPending(id: id, mode: mode, context: context)
+            case .missing:
+                Self.respond(with: [
+                    "id": id,
+                    "missing": true,
+                ], context: context)
+            case .unavailable:
+                context.cancelRequest(withError: HandlerError.bridgeUnavailable)
+            }
+        }
+    }
+
+    private static func respondPending(
+        id: Int,
+        mode: ResponseReadMode,
+        context: NSExtensionContext,
+        error: HandlerError = .requestPending
+    ) {
+        if mode == .manualRecovery {
+            respond(with: ["id": id, "pending": true], context: context)
+        } else {
+            context.cancelRequest(withError: error)
         }
     }
 
@@ -537,11 +658,18 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #if os(macOS)
     @MainActor
     private func ensureNativeApprovalDeliveryIfNeeded(
-        handle: ExtensionBridge.Handle
+        handle: ExtensionBridge.Handle,
+        mode: ResponseReadMode
     ) async -> Bool {
         switch await Self.bridge.load(handle: handle) {
         case .found(let snapshot):
             guard snapshot.phase != .responded else { return true }
+            if mode == .manualRecovery {
+                return await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+                    handle: handle,
+                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+                )
+            }
             return await Self.nativeAgentLauncher.open(.approval(
                 workflowVersion: ExtensionBridge.workflowVersion,
                 handle: handle,
@@ -557,7 +685,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private func waitForNativeApprovalFinalization(
         handle: ExtensionBridge.Handle,
         configurationKey: String,
-        initialContext: ExtensionBridge.NativeExecutionContext
+        initialContext: ExtensionBridge.NativeExecutionContext,
+        mode: ResponseReadMode
     ) async -> Bool {
         let startedAt = DispatchTime.now().uptimeNanoseconds
         let deadline = startedAt.addingReportingOverflow(
@@ -606,7 +735,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                        snapshot.nativeDecisionStaged,
                        now >= nextDeliveryCheck {
                         guard await ensureNativeApprovalDeliveryIfNeeded(
-                            handle: handle
+                            handle: handle,
+                            mode: mode
                         ) else {
                             _ = await Self.bridge.clearNativeExecutionContext(
                                 handle: handle,
@@ -664,7 +794,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             if snapshot.phase == .responded {
                 Self.respond(
                     with: Self.admissionResponse(
-                        request: request,
                         handle: handle,
                         approvalRequired: false,
                         revisions: revisions
@@ -684,7 +813,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             }
             Self.respond(
                 with: Self.admissionResponse(
-                    request: request,
                     handle: handle,
                     approvalRequired: true,
                     revisions: revisions

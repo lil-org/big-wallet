@@ -39,9 +39,9 @@
     "default_popup": "popup.html"
   },
   "permissions": [
-    "alarms",
     "nativeMessaging",
     "storage",
+    "alarms",
     "activeTab",
     "tabs"
   ],

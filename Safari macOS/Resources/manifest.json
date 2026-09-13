@@ -38,9 +38,9 @@
     }
   },
   "permissions": [
-    "alarms",
     "nativeMessaging",
     "storage",
+    "alarms",
     "activeTab",
     "tabs"
   ],

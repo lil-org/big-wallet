@@ -758,7 +758,9 @@ class PopupRequestController {
             nativeCallKind, subject, payload, options, ticketOwner
         );
         if (outcome.status === "cancelled") { return NATIVE_MESSAGE_CANCELLED; }
-        return outcome.status === "response" ? outcome.response : null;
+        return outcome.status === "response"
+            ? normalizeApprovalImages(outcome.response)
+            : null;
     }
 
     acceptResponse(state, generation = this.responseEpoch) {
@@ -1885,6 +1887,30 @@ function parsePendingResponse(response) {
     };
 }
 
+function normalizeApprovalImages(state) {
+    if (!isRecord(state) || !APPROVAL_KINDS.has(state.kind)) { return state; }
+
+    function withoutInvalidImage(record, key) {
+        if (!isRecord(record) || isOptionalString(record[key])) { return record; }
+        const copy = {...record};
+        delete copy[key];
+        return copy;
+    }
+
+    let normalized = withoutInvalidImage(state, "iconURL");
+    const account = withoutInvalidImage(state.account, "icon");
+    if (account !== state.account) {
+        normalized = {...normalized, account};
+    }
+    if (Array.isArray(state.accounts)) {
+        const accounts = state.accounts.map(account => withoutInvalidImage(account, "icon"));
+        if (accounts.some((account, index) => account !== state.accounts[index])) {
+            normalized = {...normalized, accounts};
+        }
+    }
+    return normalized;
+}
+
 function isDisplayAccount(account) {
     return isRecord(account) &&
         typeof account.name === "string" &&
@@ -2255,15 +2281,12 @@ async function switchAccountFromIdle() {
         queueTab.contentScriptUnavailableTab = null;
     }
     const id = response?.id;
-    const valid = BigWalletBridgeWire.isManualSwitchInFlightStatus(
-        response,
-        tab.configurationKey
-    ) || (Number.isSafeInteger(id) &&
+    const valid = Number.isSafeInteger(id) && (
         BigWalletBridgeWire.isManualSwitchAcknowledgement(
             response,
             id,
             tab.configurationKey
-        )) || (Number.isSafeInteger(id) &&
+        ) ||
         BigWalletBridgeWire.isManualSwitchTerminalResponse(response, id));
     if (!valid) {
         setText("idle-connection", localized("failedToLoad", "Failed to load"));

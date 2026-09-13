@@ -964,10 +964,12 @@ function manualSwitchHarness(sendMessage) {
 
 test("manual Switch Account sends one exact stateless intent", async () => {
     const status = {
-        admissionDeadline: Date.now() + 60_000,
+        approvalRequired: true,
         configurationKey: "https://wallet.example",
         id: 41,
-        subject: "manualSwitchInFlight",
+        requestToken: "00000000-0000-0000-0000-000000000001",
+        revisions: {ethereum: 0, solana: 0},
+        subject: "manualSwitchAcknowledged",
         workflowVersion: 3,
     };
     const harness = manualSwitchHarness(async () => status);
@@ -986,13 +988,15 @@ test("manual Switch Account sends one exact stateless intent", async () => {
     assert.deepEqual(harness.timeouts, [10_000]);
 });
 
-test("manual Switch Account accepts every exact owner response class", async () => {
+test("manual Switch Account accepts canonical native handles and terminal responses", async () => {
     const responses = [
         {
-            admissionDeadline: Date.now() + 60_000,
+            approvalRequired: false,
             configurationKey: "https://wallet.example",
-            id: 41,
-            subject: "manualSwitchInFlight",
+            id: 17,
+            requestToken: "00000000-0000-0000-0000-000000000002",
+            revisions: {ethereum: 3, solana: 2},
+            subject: "manualSwitchAcknowledged",
             workflowVersion: 3,
         },
         {
@@ -1026,9 +1030,18 @@ test("manual Switch Account rejects undefined malformed and cross-key replies", 
         {id: 41, name: "switchAccount"},
         {
             admissionDeadline: Date.now() + 60_000,
-            configurationKey: "https://other.example",
+            configurationKey: "https://wallet.example",
             id: 41,
             subject: "manualSwitchInFlight",
+            workflowVersion: 3,
+        },
+        {
+            approvalRequired: true,
+            configurationKey: "https://other.example",
+            id: 41,
+            requestToken: "00000000-0000-0000-0000-000000000001",
+            revisions: {ethereum: 0, solana: 0},
+            subject: "manualSwitchAcknowledged",
             workflowVersion: 3,
         },
         {
@@ -1053,10 +1066,12 @@ test("manual Switch Account rejects undefined malformed and cross-key replies", 
 
 test("manual Switch Account repeats the same intent after transport failure", async () => {
     const status = {
-        admissionDeadline: Date.now() + 60_000,
+        approvalRequired: true,
         configurationKey: "https://wallet.example",
         id: 41,
-        subject: "manualSwitchInFlight",
+        requestToken: "00000000-0000-0000-0000-000000000001",
+        revisions: {ethereum: 0, solana: 0},
+        subject: "manualSwitchAcknowledged",
         workflowVersion: 3,
     };
     const harness = manualSwitchHarness(async attempt => {
@@ -1170,6 +1185,29 @@ function messageState(request = pendingRequest(), overrides = {}) {
         reviewToken: requestToken(101),
         state: "review",
         title: "Sign message",
+        ...overrides,
+    };
+}
+
+function selectionState(request = pendingRequest(), overrides = {}) {
+    return {
+        accounts: [{
+            name: "Primary",
+            croppedAddress: "1111…1111",
+            walletId: "wallet",
+            address: "11111111111111111111111111111111",
+            coin: "solana",
+            derivationPath: "m/44'/501'/0'",
+            isSelected: true,
+        }],
+        allowsEmptySelection: false,
+        canSelectNetwork: false,
+        host: request.host,
+        id: request.id,
+        kind: "selectAccount",
+        reviewToken: requestToken(101),
+        state: "review",
+        title: "Connect",
         ...overrides,
     };
 }
@@ -1460,6 +1498,132 @@ test("full popup boot renders FIFO requests through the production controller", 
         "getPendingRequests", "getApprovalState",
     ]);
     assert.ok(harness.nativeMessages.every(message => message.__bwPrivateBrowsing === false));
+});
+
+test("approval reviews omit malformed images without changing approval content or source responses", async () => {
+    const request = pendingRequest();
+    for (const original of [messageState(request), transactionState(request), selectionState(request)]) {
+        for (const image of [null, false, 7, {}, []]) {
+            const response = {
+                ...original,
+                iconURL: image,
+                ...(original.account ? {account: Object.freeze({...original.account, icon: image})} : {}),
+                ...(original.accounts ? {
+                    accounts: Object.freeze(original.accounts.map(account => Object.freeze({...account, icon: image}))),
+                } : {}),
+            };
+            Object.freeze(response);
+            const before = normalized(response);
+            const harness = popupHarness({requests: [request]});
+            harness.setState(request, response);
+
+            await harness.boot();
+
+            assert.deepEqual(normalized(harness.controller.state), original);
+            assert.equal(harness.get("request-favicon").classList.contains("hidden"), true);
+            assert.equal(harness.get("button-approve").disabled, false);
+            assert.deepEqual(normalized(response), before);
+        }
+    }
+});
+
+test("valid and absent approval images retain their existing rendering", async () => {
+    for (const images of [{}, {iconURL: "https://wallet.example/icon.png", icon: "data:image/png;base64,aW1hZ2U="}]) {
+        const request = pendingRequest();
+        const response = messageState(request, {
+            ...(images.iconURL ? {iconURL: images.iconURL} : {}),
+            account: {name: "Primary", croppedAddress: "0x1234", ...(images.icon ? {icon: images.icon} : {})},
+        });
+        const harness = popupHarness({requests: [request]});
+        harness.setState(request, response);
+
+        await harness.boot();
+
+        assert.deepEqual(normalized(harness.controller.state), response);
+        assert.equal(harness.get("request-favicon").classList.contains("hidden"), !images.iconURL);
+        if (images.iconURL) {
+            assert.equal(harness.get("request-favicon").src, images.iconURL);
+        }
+        const accountImages = harness.get("signing-account").children.filter(child => child.className === "account-icon");
+        assert.equal(accountImages.length, images.icon ? 1 : 0);
+        if (images.icon) { assert.equal(accountImages[0].src, images.icon); }
+    }
+});
+
+test("poll and transaction edit responses use the same nonfatal image normalization", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const response = transactionState(controller.request, {
+        iconURL: null,
+        account: {name: "Primary", croppedAddress: "0x1234", icon: false},
+        reviewToken: requestToken(102),
+        valueLine: "Value: 1 ETH",
+    });
+    const before = normalized(response);
+    harness.setState(controller.request, response);
+    controller.adoptState({id: controller.request.id, state: "working"});
+    controller.pollApproval();
+
+    await harness.fire(controller.followUpTimer);
+
+    assert.equal(controller.state.state, "review");
+    assert.equal(controller.state.reviewToken, requestToken(102));
+    assert.equal(harness.get("tx-value").textContent, "Value: 1 ETH");
+    assert.equal(harness.get("button-approve").disabled, false);
+    const edited = {
+        ...response,
+        editor: {...response.editor, gasPriceGwei: "3"},
+        reviewToken: requestToken(103),
+    };
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "applyTransactionEdits" ? edited : fallback(message);
+
+    await harness.get("editor-suggested").emit("click");
+
+    assert.equal(controller.state.state, "review");
+    assert.equal(controller.state.reviewToken, requestToken(103));
+    assert.equal(harness.get("edit-gas-price").value, "3");
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(Object.hasOwn(controller.state, "iconURL"), false);
+    assert.equal(Object.hasOwn(controller.state.account, "icon"), false);
+    assert.deepEqual(normalized(response), before);
+    assert.equal(edited.iconURL, null);
+    assert.equal(edited.account.icon, false);
+});
+
+test("discarding invalid images never makes malformed approval content actionable", async () => {
+    const request = pendingRequest();
+    for (const response of [
+        messageState(request, {id: request.id + 1}),
+        messageState(request, {reviewToken: "invalid"}),
+        messageState(request, {account: {name: 7, croppedAddress: "0x1234", icon: null}}),
+        selectionState(request, {accounts: [{...selectionState(request).accounts[0], address: 7, icon: null}]}),
+        messageState(request, {meta: {message: "invalid"}}),
+        messageState(request, {title: 7}),
+        transactionState(request, {feeLines: [7]}),
+        transactionState(request, {canApprove: "true"}),
+        transactionState(request, {dataInterpretation: {call: "approve"}}),
+        {id: request.id, state: "error", error: "Compact failure"},
+        {id: request.id, state: "working"},
+        {status: "ignored"},
+        messageState(request, {kind: "unknown"}),
+    ]) {
+        const harness = popupHarness({requests: [request]});
+        harness.setState(request, {...response, iconURL: null});
+
+        await harness.boot();
+
+        assert.equal(harness.controller.state.state, "error");
+        assert.equal(harness.get("request-error").textContent, "Failed to load");
+        assert.equal(harness.get("button-approve").textContent, "Refresh");
+        assert.equal(harness.get("button-reject").disabled, true);
+        harness.clearMessages();
+
+        await harness.get("button-approve").emit("click");
+
+        assert.deepEqual(harness.workerMessages, []);
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getApprovalState"]);
+    }
 });
 
 test("controller approval strips caller revisions and passwords at the actual worker boundary", async () => {

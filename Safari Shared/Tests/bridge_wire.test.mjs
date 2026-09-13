@@ -73,96 +73,15 @@ test("publishes the small immutable workflow v3 contract", () => {
     assert.equal(wire.PAGE_TO_CONTENT_DIRECTION, "big-wallet-provider-v1");
     assert.equal(wire.CONTENT_TO_PAGE_DIRECTION, "big-wallet-content-v1");
     assert.equal(wire.MANUAL_SWITCH_INTENT_SUBJECT, "manualSwitchIntent");
-    assert.equal(wire.MANUAL_SWITCH_RESULT_SUBJECT, "manualSwitchResult");
+    assert.equal(wire.MANUAL_SWITCH_RESULT_SUBJECT, undefined);
     assert.equal(wire.IDLE_SWITCH_ATTEMPT_KEY, undefined);
     assert.equal(wire.IDLE_SWITCH_MARKER_REGISTRY_SUBJECT, undefined);
     assert.equal(wire.SUPPRESS_PROVIDER_UPDATE_KEY, undefined);
     assert.equal(wire.isResponseAcknowledgement, undefined);
 });
 
-test("validates bounded durable manual-switch owner records", () => {
-    const admitting = {
-        admissionDeadline: 1_700_000_900_000,
-        configurationKey: "https://wallet.example",
-        enqueueAttempt: attempt,
-        favicon: "https://wallet.example/icon.png",
-        host: "wallet.example",
-        id: 31,
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
-        }],
-        phase: "admitting",
-        revisions: {ethereum: 2, solana: 3},
-        workflowVersion: 3,
-    };
-    const admitted = {
-        ...admitting,
-        phase: "admitted",
-        approvalRequired: true,
-        requestToken: token,
-    };
-
-    assert.equal(wire.isManualSwitchOwnerRecord(admitting), true);
-    assert.equal(wire.isManualSwitchOwnerRecord(admitted), true);
-    for (const invalid of [
-        {...admitting, extra: true},
-        {...admitting, admissionDeadline: 0},
-        {...admitting, enqueueAttempt: "invalid"},
-        {...admitting, host: "other.example"},
-        {...admitting, configurationKey: "invalid"},
-        {...admitting, phase: "admitted"},
-        {...admitted, requestToken: "invalid"},
-        {...admitted, latestConfigurations: [{
-            ...admitting.latestConfigurations[0],
-            accountRevision: 2,
-        }]},
-    ]) {
-        assert.equal(wire.isManualSwitchOwnerRecord(invalid), false);
-    }
-
-    const registry = {owners: [admitted], workflowVersion: 3};
-    assert.equal(wire.isManualSwitchOwnerRegistry(registry), true);
-    assert.equal(wire.isManualSwitchOwnerRegistry({
-        ...registry,
-        owners: [admitted, {...admitted}],
-    }), false);
-    assert.equal(wire.isManualSwitchOwnerRegistry({
-        ...registry,
-        owners: [
-            admitted,
-            {
-                ...admitted,
-                configurationKey: "https://other.example",
-                host: "other.example",
-            },
-        ],
-    }), false);
-    assert.equal(wire.isManualSwitchOwnerRegistry({
-        ...registry,
-        owners: Array.from({length: 9}, (_, index) => ({
-            ...admitted,
-            id: 100 + index,
-            configurationKey: `https://wallet${index}.example`,
-            host: `wallet${index}.example`,
-        })),
-    }), false);
-    assert.equal(wire.isManualSwitchOwnerRecord({
-        ...admitting,
-        host: `wallet.example${"x".repeat(256 * 1024)}`,
-    }), false);
-});
-
-test("validates exact manual-switch owner statuses", () => {
+test("validates exact manual-switch acknowledgements", () => {
     const configurationKey = "https://wallet.example";
-    const inFlight = {
-        admissionDeadline: 1_700_000_900_000,
-        configurationKey,
-        id: 31,
-        subject: wire.MANUAL_SWITCH_IN_FLIGHT_SUBJECT,
-        workflowVersion: 3,
-    };
     const acknowledged = {
         approvalRequired: true,
         configurationKey,
@@ -173,17 +92,6 @@ test("validates exact manual-switch owner statuses", () => {
         workflowVersion: 3,
     };
 
-    assert.equal(wire.isManualSwitchInFlightStatus(inFlight, configurationKey), true);
-    assert.equal(wire.isManualSwitchInFlightStatus(
-        {...inFlight, extra: true}, configurationKey
-    ), false);
-    assert.equal(wire.isManualSwitchInFlightStatus(
-        inFlight, "https://other.example"
-    ), false);
-    assert.equal(wire.isManualSwitchInFlightStatus({
-        ...inFlight,
-        configurationKey: "invalid",
-    }, "invalid"), false);
     assert.equal(wire.isManualSwitchAcknowledgement(
         acknowledged, 31, configurationKey
     ), true);

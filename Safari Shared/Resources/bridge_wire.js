@@ -22,10 +22,7 @@
     const NATIVE_STALE_RESPONSE_KEY = "__bwStale";
     const PRIVATE_BROWSING_KEY = "__bwPrivateBrowsing";
     const MAX_RESPONSE_READY_IDS = 16;
-    const MANUAL_SWITCH_OWNER_STORAGE_KEY = "manualSwitchOwnersV1";
     const MANUAL_SWITCH_INTENT_SUBJECT = "manualSwitchIntent";
-    const MANUAL_SWITCH_RESULT_SUBJECT = "manualSwitchResult";
-    const MANUAL_SWITCH_IN_FLIGHT_SUBJECT = "manualSwitchInFlight";
     const MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT = "manualSwitchAcknowledged";
     const MAX_MANUAL_SWITCH_JSON_LENGTH = 256 * 1024;
     const MINUTE = 60 * 1000;
@@ -237,65 +234,6 @@
             Number.isSafeInteger(value.solana) && value.solana >= 0;
     }
 
-    function isManualSwitchOwnerRecord(value) {
-        if (!isRecord(value) ||
-            (value.phase !== "admitting" && value.phase !== "admitted")) {
-            return false;
-        }
-        const keys = [
-            "admissionDeadline", "configurationKey", "enqueueAttempt", "favicon",
-            "host", "id", "latestConfigurations", "phase", "revisions",
-            "workflowVersion",
-        ];
-        if (value.phase === "admitted") {
-            keys.push("approvalRequired", "requestToken");
-        }
-        const identity = configurationIdentityForURL(value.configurationKey);
-        return hasExactKeys(value, keys) &&
-            value.workflowVersion === WORKFLOW_VERSION &&
-            Number.isSafeInteger(value.admissionDeadline) &&
-            value.admissionDeadline > 0 &&
-            isValidRequestId(value.id) &&
-            isPrivateToken(value.enqueueAttempt) &&
-            typeof value.favicon === "string" &&
-            identity?.configurationKey === value.configurationKey &&
-            identity.host === value.host &&
-            isCanonicalManualSwitchConfigurations(value.latestConfigurations) &&
-            isProviderRevisions(value.revisions) &&
-            (value.phase === "admitting" ||
-                typeof value.approvalRequired === "boolean" &&
-                isRequestToken(value.requestToken)) &&
-            hasBoundedJSON(value);
-    }
-
-    function isManualSwitchOwnerRegistry(value) {
-        if (!hasExactKeys(value, ["owners", "workflowVersion"]) ||
-            value.workflowVersion !== WORKFLOW_VERSION ||
-            !Array.isArray(value.owners) ||
-            value.owners.length > WORKFLOW_POLICY.maximumRequests ||
-            !value.owners.every(isManualSwitchOwnerRecord)) {
-            return false;
-        }
-        return new Set(value.owners.map(owner => owner.configurationKey)).size ===
-            value.owners.length &&
-            new Set(value.owners.map(owner => owner.id)).size ===
-                value.owners.length && hasBoundedJSON(value);
-    }
-
-    function isManualSwitchInFlightStatus(value, configurationKey) {
-        const identity = configurationIdentityForURL(value?.configurationKey);
-        return hasExactKeys(value, [
-                "admissionDeadline", "configurationKey", "id", "subject",
-                "workflowVersion",
-            ]) && value.subject === MANUAL_SWITCH_IN_FLIGHT_SUBJECT &&
-            value.workflowVersion === WORKFLOW_VERSION &&
-            value.configurationKey === configurationKey &&
-            identity?.configurationKey === value.configurationKey &&
-            isValidRequestId(value.id) &&
-            Number.isSafeInteger(value.admissionDeadline) &&
-            value.admissionDeadline > 0 && hasBoundedJSON(value);
-    }
-
     function isManualSwitchAcknowledgement(value, id, configurationKey) {
         const identity = configurationIdentityForURL(value?.configurationKey);
         return hasExactKeys(value, [
@@ -498,10 +436,7 @@
         ETHEREUM_AUTHORIZATION_FAILURE_VERSION,
         MAX_RESPONSE_READY_IDS,
         MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
-        MANUAL_SWITCH_IN_FLIGHT_SUBJECT,
         MANUAL_SWITCH_INTENT_SUBJECT,
-        MANUAL_SWITCH_OWNER_STORAGE_KEY,
-        MANUAL_SWITCH_RESULT_SUBJECT,
         NATIVE_STALE_RESPONSE_KEY,
         PAGE_BRIDGE_PROTOCOL_VERSION,
         PAGE_TO_CONTENT_DIRECTION,
@@ -524,9 +459,6 @@
         isCorrelatedRPCResponse,
         isLowercaseUUID: isRequestToken,
         isManualSwitchAcknowledgement,
-        isManualSwitchInFlightStatus,
-        isManualSwitchOwnerRecord,
-        isManualSwitchOwnerRegistry,
         isManualSwitchTerminalResponse,
         isNativeEnqueueAcknowledgement,
         isPendingRequestAvailable,

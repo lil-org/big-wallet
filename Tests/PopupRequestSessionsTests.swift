@@ -469,6 +469,83 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(after, before)
     }
 
+    func testManualSwitchWorkerCommandsUseExactNativeEnvelopes() throws {
+        func decode(_ values: [String: Any]) throws -> InternalSafariRequest {
+            try JSONDecoder().decode(
+                InternalSafariRequest.self,
+                from: JSONSerialization.data(withJSONObject: values)
+            )
+        }
+        let listing: [String: Any] = [
+            "id": 400,
+            "subject": "getManualSwitchRequests",
+            "workflowVersion": ExtensionBridge.workflowVersion,
+        ]
+        guard case .worker(.getManualSwitchRequests(let cursor)) =
+            try decode(listing).command else {
+            return XCTFail("Expected a worker-only discovery command")
+        }
+        XCTAssertNil(cursor)
+        var paginated = listing
+        paginated["cursor"] = "opaque-cursor"
+        guard case .worker(.getManualSwitchRequests(let next)) =
+            try decode(paginated).command else {
+            return XCTFail("Expected a paginated discovery command")
+        }
+        XCTAssertEqual(next, "opaque-cursor")
+        for invalid in [NSNull(), 1, true] as [Any] {
+            var malformed = listing
+            malformed["cursor"] = invalid
+            XCTAssertThrowsError(try decode(malformed))
+        }
+        let token = UUID().uuidString.lowercased()
+        let response: [String: Any] = [
+            "id": 401,
+            "subject": "getManualSwitchResponse",
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "configurationKey": "https://wallet.example",
+            "requestToken": token,
+            "revisions": ["ethereum": 1, "solana": 2],
+            "executionDeadline": 2_000_000_900_000,
+        ]
+        guard case .worker(.getManualSwitchResponse(let identity)) =
+            try decode(response).command else {
+            return XCTFail("Expected a worker-only response command")
+        }
+        XCTAssertEqual(identity.token.rawValue, token)
+        XCTAssertEqual(identity.configurationKey, "https://wallet.example")
+        XCTAssertEqual(identity.revisions.ethereum, 1)
+        XCTAssertEqual(identity.revisions.solana, 2)
+        XCTAssertEqual(identity.executionDeadline.timeIntervalSince1970, 2_000_000_900)
+        for extra in ["profileIdentifier", "privateBrowsing", "host", "payload"] {
+            for original in [listing, response] {
+                var malformed = original
+                malformed[extra] = "untrusted"
+                XCTAssertThrowsError(try decode(malformed))
+            }
+        }
+        for field in ["configurationKey", "requestToken", "revisions", "executionDeadline"] {
+            var malformed = response
+            malformed.removeValue(forKey: field)
+            XCTAssertThrowsError(try decode(malformed))
+        }
+    }
+
+    func testManualSwitchRecoveryHandlerKeepsItsQuietModeThroughFinalization() throws {
+        let handler = try source(named: "Safari Shared/SafariWebExtensionHandler.swift")
+        XCTAssertTrue(handler.contains("_ command: InternalSafariRequest.WorkerCommand"))
+        XCTAssertTrue(handler.contains("Self.bridge.loadManualSwitch("))
+        XCTAssertTrue(handler.contains("Self.bridge.listManualSwitchRequests("))
+        XCTAssertTrue(handler.contains("\"requests\": page.requests.map(\\.json)"))
+        XCTAssertTrue(handler.contains("mode: .manualRecovery"))
+        XCTAssertTrue(handler.contains("initialContext: executionContext,\n                            mode: mode"))
+        XCTAssertTrue(handler.contains("NativeAgentLauncher.hasCompatibleApprovalDelivery("))
+        XCTAssertTrue(handler.contains("respond(with: [\"id\": id, \"pending\": true]"))
+        let worker = try source(named: "Safari Shared/Resources/service_worker.js")
+        XCTAssertFalse(worker.contains("case \"getManualSwitchRequests\":"))
+        XCTAssertFalse(worker.contains("case \"getManualSwitchResponse\":"))
+    }
+
     func testExtensionHandlerAwaitsPopupDispatchBeforeResponding() throws {
         let source = try source(named: "Safari Shared/SafariWebExtensionHandler.swift")
         XCTAssertTrue(source.contains("response = await PopupRequestSessions.dispatch("))
@@ -487,6 +564,94 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
 
     #if os(macOS)
+    func testQuietNativeDeliveryWaitsForApprovalWithoutProcessActions() async throws {
+        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: nonce,
+            runtimeInstanceIdentifier: UUID()
+        )
+        var snapshot = try popupSnapshot(id: 403, nativeDeliveryReceipt: receipt)
+        var runtimeChecks = 0
+        var quitCount = 0
+        var clearCount = 0
+        var waitCount = 0
+        var compatible = true
+        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
+            load: { _ in .found(snapshot) },
+            receiptRuntimeStatus: { _ in
+                runtimeChecks += 1
+                if compatible {
+                    return .compatible(.running(
+                        url: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
+                        processIdentifier: 1,
+                        runtimeInstanceIdentifier: receipt.runtimeInstanceIdentifier
+                    ))
+                }
+                return .incompatible(.init(
+                    requestQuit: { _ in quitCount += 1; return true },
+                    isRunning: { true }
+                ))
+            },
+            clearReceipt: { _, _ in clearCount += 1; return .persisted },
+            wait: { _ in waitCount += 1 }
+        )
+        let pending = await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+            handle: snapshot.handle, nativeDeliveryNonce: nonce, dependencies: dependencies
+        )
+        XCTAssertFalse(pending)
+        XCTAssertEqual(runtimeChecks, 0)
+        snapshot = try popupSnapshot(
+            id: 403, nativeDecisionStaged: true, nativeDeliveryReceipt: receipt
+        )
+        let approved = await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+            handle: snapshot.handle, nativeDeliveryNonce: nonce, dependencies: dependencies
+        )
+        XCTAssertTrue(approved)
+        compatible = false
+        let incompatible = await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+            handle: snapshot.handle, nativeDeliveryNonce: nonce, dependencies: dependencies
+        )
+        XCTAssertFalse(incompatible)
+        XCTAssertEqual(quitCount, 0)
+        XCTAssertEqual(clearCount, 0)
+        XCTAssertEqual(waitCount, 0)
+    }
+
+    func testQuietNativeDeliveryRejectsAbsentOrMismatchedReceiptOwner() async throws {
+        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: nonce,
+            runtimeInstanceIdentifier: UUID()
+        )
+        let snapshot = try popupSnapshot(
+            id: 402, phase: .approving,
+            nativeDecisionStaged: true, nativeDeliveryReceipt: receipt
+        )
+        for runtimeStatus: NativeAgentLauncher.ReceiptRuntimeStatus in [
+            .absent, .indeterminate,
+            .compatible(.running(
+                url: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
+                processIdentifier: 1,
+                runtimeInstanceIdentifier: UUID()
+            )),
+        ] {
+            let allowed = await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+                handle: snapshot.handle,
+                nativeDeliveryNonce: nonce,
+                dependencies: .init(
+                    load: { _ in .found(snapshot) },
+                    receiptRuntimeStatus: { _ in runtimeStatus },
+                    clearReceipt: { _, _ in
+                        XCTFail("Quiet recovery must retain the receipt")
+                        return .persisted
+                    },
+                    wait: { _ in XCTFail("Quiet observation must not wait for a helper") }
+                )
+            )
+            XCTAssertFalse(allowed)
+        }
+    }
+
     func testNativeLaunchReconciliationRequiresLiveExactReceipt() async throws {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let snapshot = try popupSnapshot(
@@ -644,7 +809,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         )
         var events = [String]()
         let owner = NativeAgentLauncher.ExactReceiptOwner(
-            requestQuit: {
+            requestQuit: { _ in
                 events.append("quit")
                 return true
             },
@@ -5480,12 +5645,17 @@ extension PopupRequestSessionsTests {
         XCTAssertTrue(NativeAgentLauncher.isConfirmedRuntimeHelper(
             validRuntime,
             expectedURL: bundleURL,
-            identity: { _ in identity }
+            identity: { _ in identity },
+            validate: { $0 == bundleURL.standardizedFileURL }
         ))
         XCTAssertFalse(NativeAgentLauncher.isConfirmedRuntimeHelper(
             reusedPIDRuntime,
             expectedURL: bundleURL,
-            identity: { _ in identity }
+            identity: { _ in identity },
+            validate: { _ in
+                XCTFail("A replaced process must not reach code verification")
+                return true
+            }
         ))
     }
 

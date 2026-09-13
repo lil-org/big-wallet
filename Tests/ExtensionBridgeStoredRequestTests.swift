@@ -1069,6 +1069,467 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(body.providerConfigurations.count, 1)
     }
 
+    func testConcurrentManualSwitchAttemptsCoalesceAcrossStoreInstances() async throws {
+        let first = try makeManualFixture(
+            id: 410,
+            enqueueAttempt: attempt(for: 410),
+            latestConfigurations: [],
+            revisions: ["ethereum": 2, "solana": 3]
+        )
+        let second = try makeManualFixture(
+            id: 411,
+            enqueueAttempt: attempt(for: 411),
+            latestConfigurations: [],
+            revisions: ["ethereum": 2, "solana": 3]
+        )
+        let firstBridge = try XCTUnwrap(bridge)
+        let now = clock.now
+        let secondBridge = makeBridge(clock: { now })
+        async let firstResult = firstBridge.enqueue(
+            ingress: first.ingress,
+            profileIdentifier: nil
+        )
+        async let secondResult = secondBridge.enqueue(
+            ingress: second.ingress,
+            profileIdentifier: nil
+        )
+        let admissions = try await [accepted(firstResult), accepted(secondResult)]
+        XCTAssertEqual(admissions[0].handle, admissions[1].handle)
+        XCTAssertEqual(admissions.filter { $0.admissionKind == .new }.count, 1)
+        XCTAssertEqual(admissions.filter { $0.admissionKind == .coalesced }.count, 1)
+        guard case .available(let snapshots) = await bridge.list(
+            profileIdentifier: nil
+        ) else { return XCTFail("Expected native switch") }
+        XCTAssertEqual(snapshots.count, 1)
+    }
+
+    func testManualSwitchCoalescingRetainsCanonicalIdentityAndOriginalRevisions() async throws {
+        let original = try makeManualFixture(
+            id: 412,
+            enqueueAttempt: attempt(for: 412),
+            latestConfigurations: [[
+                "provider": "ethereum",
+                "chainId": "0x1",
+                "results": ["0x0000000000000000000000000000000000000001"],
+            ]],
+            revisions: ["ethereum": 2, "solana": 3]
+        )
+        let first = try accepted(await bridge.enqueue(
+            ingress: original.ingress,
+            profileIdentifier: nil
+        ))
+        let next = try makeManualFixture(
+            id: 413,
+            enqueueAttempt: attempt(for: 413),
+            latestConfigurations: [],
+            revisions: ["ethereum": 9, "solana": 10]
+        )
+        let observer = makeBridge(clock: { self.clock.now })
+        let resumed = try accepted(await observer.enqueue(
+            ingress: next.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(resumed.admissionKind, .coalesced)
+        XCTAssertEqual(resumed.handle, first.handle)
+        XCTAssertEqual(resumed.nativeDeliveryNonce, first.nativeDeliveryNonce)
+        XCTAssertEqual(resumed.revisions, first.revisions)
+        XCTAssertTrue(resumed.approvalRequired)
+        guard case .found(let snapshot) = await observer.load(handle: resumed.handle),
+              case .unknown(let body)? = snapshot.request?.body else {
+            return XCTFail("Expected original switch request")
+        }
+        XCTAssertEqual(snapshot.enqueueAttempt, original.request.enqueueAttempt)
+        XCTAssertEqual(body.providerConfigurations.count, 1)
+
+        let mismatchedAttempt = try makeManualFixture(
+            id: 414,
+            enqueueAttempt: original.request.enqueueAttempt,
+            latestConfigurations: [],
+            revisions: ["ethereum": 2, "solana": 3]
+        )
+        guard case .rejected = await observer.enqueue(
+            ingress: mismatchedAttempt.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("Exact-attempt mismatches must still be rejected") }
+    }
+
+    func testCompletedManualSwitchCoalescesUntilItsResponseIsAcknowledged() async throws {
+        let original = try makeManualFixture(
+            id: 415,
+            enqueueAttempt: attempt(for: 415),
+            latestConfigurations: [],
+            revisions: ["ethereum": 1, "solana": 2]
+        )
+        let first = try accepted(await bridge.enqueue(
+            ingress: original.ingress,
+            profileIdentifier: nil
+        ))
+        let completion = await bridge.complete(
+            handle: first.handle,
+            response: ResponseToExtension(for: original.request, payload: .error(.userRejected))
+        )
+        XCTAssertEqual(completion, .persisted)
+        let next = try makeManualFixture(
+            id: 416,
+            enqueueAttempt: attempt(for: 416),
+            latestConfigurations: [],
+            revisions: ["ethereum": 3, "solana": 4]
+        )
+        let recovered = try accepted(await bridge.enqueue(
+            ingress: next.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(recovered.admissionKind, .coalesced)
+        XCTAssertEqual(recovered.handle, first.handle)
+        XCTAssertEqual(recovered.revisions, first.revisions)
+        XCTAssertFalse(recovered.approvalRequired)
+        let acknowledgement = await bridge.acknowledgeResponse(
+            handle: recovered.handle,
+            configurationKey: original.request.configurationKey
+        )
+        XCTAssertEqual(acknowledgement, .persisted)
+        let fresh = try accepted(await bridge.enqueue(
+            ingress: next.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(fresh.admissionKind, .new)
+        XCTAssertEqual(fresh.handle.id, next.request.id)
+        XCTAssertNotEqual(fresh.handle, first.handle)
+    }
+
+    func testManualSwitchCoalescingIsScopedToProfileAndOrigin() async throws {
+        let first = try makeManualFixture(
+            id: 417,
+            enqueueAttempt: attempt(for: 417),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0]
+        )
+        let original = try accepted(await bridge.enqueue(
+            ingress: first.ingress,
+            profileIdentifier: nil
+        ))
+        let otherProfile = try accepted(await bridge.enqueue(
+            ingress: first.ingress,
+            profileIdentifier: UUID()
+        ))
+        XCTAssertEqual(otherProfile.admissionKind, .new)
+        XCTAssertNotEqual(otherProfile.handle, original.handle)
+
+        let http = try makeManualFixture(
+            id: 418,
+            enqueueAttempt: attempt(for: 418),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0],
+            configurationKey: "http://wallet.example"
+        )
+        let otherOrigin = try accepted(await bridge.enqueue(
+            ingress: http.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(otherOrigin.admissionKind, .new)
+        XCTAssertNotEqual(otherOrigin.handle, original.handle)
+
+        for id in 419...420 {
+            let ordinary = try accepted(await bridge.enqueue(
+                ingress: try makeFixture(id: id).ingress,
+                profileIdentifier: nil
+            ))
+            XCTAssertEqual(ordinary.admissionKind, .new)
+            XCTAssertEqual(ordinary.handle.id, id)
+        }
+    }
+
+    func testExpiredNewManualIntentDoesNotCoalesceWithExistingWork() async throws {
+        let original = try makeManualFixture(
+            id: 421,
+            enqueueAttempt: attempt(for: 421),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0]
+        )
+        _ = try accepted(await bridge.enqueue(
+            ingress: original.ingress,
+            profileIdentifier: nil
+        ))
+        let expired = try makeManualFixture(
+            id: 422,
+            enqueueAttempt: attempt(for: 422),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0],
+            admissionDeadline: clock.now.addingTimeInterval(-1)
+        )
+        guard case .expired = await bridge.enqueue(
+            ingress: expired.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("Expired new intent must not acquire a stored handle") }
+    }
+
+    func testManualSwitchDiscoveryDescribesStoredStatesAndRequiresExactIdentity()
+        async throws {
+        let pending = try makeManualFixture(
+            id: 430,
+            enqueueAttempt: attempt(for: 430),
+            latestConfigurations: [],
+            revisions: ["ethereum": 2, "solana": 3]
+        )
+        let pendingHandle = try accepted(await bridge.enqueue(
+            ingress: pending.ingress,
+            profileIdentifier: nil
+        )).handle
+        let approved = try makeManualFixture(
+            id: 431,
+            enqueueAttempt: attempt(for: 431),
+            latestConfigurations: [],
+            revisions: ["ethereum": 4, "solana": 5],
+            host: "approved.example",
+            configurationKey: "https://approved.example"
+        )
+        let approvedHandle = try accepted(await bridge.enqueue(
+            ingress: approved.ingress,
+            profileIdentifier: nil
+        )).handle
+        let staged = await bridge.stageNativeDecision(
+            handle: approvedHandle,
+            decision: .accountSelection(.init(accounts: [], ethereumChainID: nil))
+        )
+        XCTAssertEqual(staged, .persisted)
+        let completed = try makeManualFixture(
+            id: 432,
+            enqueueAttempt: attempt(for: 432),
+            latestConfigurations: [],
+            revisions: ["ethereum": 6, "solana": 7],
+            host: "completed.example",
+            configurationKey: "https://completed.example"
+        )
+        let completedHandle = try accepted(await bridge.enqueue(
+            ingress: completed.ingress,
+            profileIdentifier: nil
+        )).handle
+        let completion = await bridge.complete(
+            handle: completedHandle,
+            response: ResponseToExtension(for: completed.request, payload: .error(.userRejected))
+        )
+        XCTAssertEqual(completion, .persisted)
+        let ordinary = try accepted(await bridge.enqueue(
+            ingress: try makeFixture(id: 433).ingress,
+            profileIdentifier: nil
+        )).handle
+        let foreignProfile = UUID()
+        let foreign = try accepted(await bridge.enqueue(
+            ingress: pending.ingress,
+            profileIdentifier: foreignProfile
+        )).handle
+
+        let page = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil
+        ))
+        XCTAssertNil(page.nextCursor)
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: page.requests.map {
+            ($0.handle, $0.state)
+        }), [pendingHandle: .pending, approvedHandle: .approved, completedHandle: .completed])
+        for request in page.requests {
+            XCTAssertEqual(Set(request.json.keys), [
+                "id", "host", "configurationKey", "requestToken", "revisions", "state",
+            ])
+        }
+        let pendingDescriptor = try XCTUnwrap(page.requests.first { $0.handle == pendingHandle })
+        XCTAssertEqual(pendingDescriptor.revisions, pending.ingress.revisions)
+        XCTAssertEqual(pendingDescriptor.host, pending.request.host)
+        XCTAssertEqual(pendingDescriptor.configurationKey, pending.request.configurationKey)
+        guard case .found(let completedSnapshot) = await bridge.loadManualSwitch(
+            handle: completedHandle,
+            configurationKey: completed.request.configurationKey
+        ) else { return XCTFail("Completed switches must retain their classification") }
+        XCTAssertNil(completedSnapshot.request)
+        XCTAssertEqual(completedSnapshot.phase, .responded)
+
+        for (handle, origin) in [
+            (pendingHandle, "https://other.example"),
+            (ordinary, pending.request.configurationKey),
+            (ExtensionBridge.Handle(
+                id: foreign.id,
+                token: foreign.token,
+                profileIdentifier: nil
+            ), pending.request.configurationKey),
+        ] {
+            guard case .missing = await bridge.loadManualSwitch(
+                handle: handle,
+                configurationKey: origin
+            ) else { return XCTFail("Switch reads must require exact type, origin, and profile") }
+        }
+        let acknowledged = await bridge.acknowledgeResponse(
+            handle: completedHandle,
+            configurationKey: completed.request.configurationKey
+        )
+        XCTAssertEqual(acknowledged, .persisted)
+        guard case .missing = await bridge.loadManualSwitch(
+            handle: completedHandle,
+            configurationKey: completed.request.configurationKey
+        ) else { return XCTFail("Acknowledged switches must not be recovered") }
+        let remaining = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(Set(remaining.requests.map(\.handle)), [pendingHandle, approvedHandle])
+        let foreignPage = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: foreignProfile
+        ))
+        XCTAssertEqual(foreignPage.requests.map(\.handle), [foreign])
+    }
+
+    func testManualSwitchDiscoveryFiltersBeforePagingAndKeepsDeletedCursorPosition()
+        async throws {
+        for id in 450..<468 {
+            let ordinary = try makeFixture(id: id)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: ordinary.ingress,
+                profileIdentifier: nil
+            )).handle
+            let result = await bridge.complete(handle: handle, response: response(for: ordinary.request))
+            XCTAssertEqual(result, .persisted)
+        }
+        var handles = [ExtensionBridge.Handle]()
+        for id in 470..<489 {
+            let manual = try makeManualFixture(
+                id: id,
+                enqueueAttempt: attempt(for: id),
+                latestConfigurations: [],
+                revisions: ["ethereum": 0, "solana": 0],
+                host: "wallet\(id).example",
+                configurationKey: "https://wallet\(id).example"
+            )
+            let handle = try accepted(await bridge.enqueue(
+                ingress: manual.ingress,
+                profileIdentifier: nil
+            )).handle
+            handles.append(handle)
+            let completed = await bridge.complete(
+                handle: handle,
+                response: ResponseToExtension(for: manual.request, payload: .error(.userRejected))
+            )
+            XCTAssertEqual(completed, .persisted)
+        }
+        handles.sort { $0.requestToken < $1.requestToken }
+        let first = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(first.requests.map(\.handle), Array(handles.prefix(16)))
+        let cursor = try XCTUnwrap(first.nextCursor)
+        let boundary = try XCTUnwrap(first.requests.last?.handle)
+        var profile = try storedProfile()
+        var records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+        records.removeAll { $0["id"] as? Int == boundary.id }
+        profile["records"] = records
+        try PropertyListSerialization.data(
+            fromPropertyList: profile,
+            format: .binary,
+            options: 0
+        ).write(to: defaultProfileURL, options: .atomic)
+
+        let second = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil,
+            cursor: cursor
+        ))
+        XCTAssertEqual(second.requests.map(\.handle), Array(handles.dropFirst(16)))
+        XCTAssertNil(second.nextCursor)
+        for invalid in ["", "not-a-cursor", cursor + "=", String(repeating: "a", count: 1025)] {
+            let result = await bridge.listManualSwitchRequests(profileIdentifier: nil, cursor: invalid)
+            XCTAssertEqual(result, .invalidCursor)
+        }
+        let crossProfile = await bridge.listManualSwitchRequests(
+            profileIdentifier: UUID(),
+            cursor: cursor
+        )
+        XCTAssertEqual(crossProfile, .invalidCursor)
+    }
+
+    func testManualSwitchDiscoveryBoundsPagesWithoutLosingLargeValidOrigins()
+        async throws {
+        var handles = [ExtensionBridge.Handle]()
+        for id in 500..<502 {
+            let baseOrigin = "file:///tmp/entry-\(id)-"
+            let baseline = try makeManualFixture(
+                id: id,
+                enqueueAttempt: attempt(for: id),
+                latestConfigurations: [],
+                revisions: ["ethereum": 0, "solana": 0],
+                host: baseOrigin,
+                configurationKey: baseOrigin
+            )
+            let padding = (ExtensionBridge.maximumPayloadBytes - baseline.ingress.canonicalData.count - 64) / 2
+            let origin = baseOrigin + String(repeating: "a", count: padding)
+            let manual = try makeManualFixture(
+                id: id,
+                enqueueAttempt: attempt(for: id),
+                latestConfigurations: [],
+                revisions: ["ethereum": 0, "solana": 0],
+                host: origin,
+                configurationKey: origin
+            )
+            XCTAssertGreaterThan(manual.ingress.canonicalData.count, ExtensionBridge.maximumPayloadBytes - 128)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: manual.ingress,
+                profileIdentifier: nil
+            )).handle
+            handles.append(handle)
+            let completed = await bridge.complete(
+                handle: handle,
+                response: ResponseToExtension(for: manual.request, payload: .error(.userRejected))
+            )
+            XCTAssertEqual(completed, .persisted)
+            clock.now.addTimeInterval(0.125)
+        }
+
+        let first = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(first.requests.map(\.handle), [handles[0]])
+        let cursor = try XCTUnwrap(first.nextCursor)
+        let second = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil,
+            cursor: cursor
+        ))
+        XCTAssertEqual(second.requests.map(\.handle), [handles[1]])
+        XCTAssertNil(second.nextCursor)
+        for page in [first, second] {
+            let encoded = try XCTUnwrap(ExtensionBridge.payloadData([
+                "id": 9_007_199_254_740_991,
+                "requests": page.requests.map(\.json),
+                "nextCursor": page.nextCursor as Any? ?? NSNull(),
+            ]))
+            XCTAssertLessThanOrEqual(encoded.count, ExtensionBridge.maximumManualSwitchPageBytes)
+        }
+    }
+
+    func testManualSwitchDiscoveryRecoversExpirationAndReportsStoreFailures()
+        async throws {
+        let manual = try makeManualFixture(
+            id: 490,
+            enqueueAttempt: attempt(for: 490),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0]
+        )
+        let handle = try accepted(await bridge.enqueue(
+            ingress: manual.ingress,
+            profileIdentifier: nil
+        )).handle
+        clock.now = manual.request.admissionDeadline
+        let expired = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(expired.requests.map(\.state), [.completed])
+        clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
+        let retired = try manualSwitchPage(await bridge.listManualSwitchRequests(
+            profileIdentifier: nil
+        ))
+        XCTAssertTrue(retired.requests.isEmpty)
+        try Data("corrupt profile".utf8).write(to: defaultProfileURL, options: .atomic)
+        let unavailable = await bridge.listManualSwitchRequests(profileIdentifier: nil)
+        XCTAssertEqual(unavailable, .unavailable)
+        guard case .unavailable = await bridge.loadManualSwitch(
+            handle: handle,
+            configurationKey: manual.request.configurationKey
+        ) else { return XCTFail("Corrupt storage must not look like a missing switch") }
+    }
+
     func testCompletedRecordWithInvalidRevisionsFailsClosed() async throws {
         let fixture = try makeFixture(id: 6)
         let handle = try accepted(await bridge.enqueue(
@@ -3635,6 +4096,68 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ), current)
     }
 
+    func testNativeAgentResolutionDoesNotVerifyBeforeAProcessAction() async throws {
+        let currentURL = try makeAmbientBundle(name: "Unlaunched", build: "149")
+        let selected = await NativeAgentLauncher.resolveTargetHelper(
+            currentURL: currentURL,
+            deadline: UInt64.max,
+            isPending: { true },
+            helpers: { [] },
+            identity: { _ in nil },
+            validate: { _ in
+                XCTFail("Selecting a candidate must leave verification to launch")
+                return false
+            }
+        )
+
+        XCTAssertEqual(selected, .launch(
+            url: currentURL,
+            createsNewApplicationInstance: false
+        ))
+    }
+
+    func testNativeAgentUnknownRuntimePollsVerifyOnlyBeforeQuit() async throws {
+        let currentURL = try makeAmbientBundle(name: "Starting", build: "149")
+        var uptime: UInt64 = 0
+        var isRunning = true
+        var verifications = 0
+        var quitCount = 0
+        let selected = await NativeAgentLauncher.resolveTargetHelper(
+            currentURL: currentURL,
+            deadline: UInt64.max,
+            isPending: { true },
+            helpers: {
+                isRunning ? [self.runtimeHelper(
+                    processIdentifier: 798,
+                    bundleURL: currentURL,
+                    launchDate: Date(timeIntervalSince1970: 9_000),
+                    isRunning: { isRunning },
+                    requestQuit: {
+                        XCTAssertEqual(verifications, 1)
+                        quitCount += 1
+                        isRunning = false
+                        return true
+                    }
+                )] : []
+            },
+            identity: { _ in nil },
+            validate: { _ in
+                XCTAssertGreaterThanOrEqual(uptime, 1_000_000_000)
+                verifications += 1
+                return true
+            },
+            uptime: { uptime },
+            sleep: { uptime += $0 }
+        )
+
+        XCTAssertEqual(selected, .launch(
+            url: currentURL,
+            createsNewApplicationInstance: false
+        ))
+        XCTAssertEqual(verifications, 1)
+        XCTAssertEqual(quitCount, 1)
+    }
+
     func testNativeAgentResolutionIgnoresOtherPaths() async throws {
         let currentURL = try makeAmbientBundle(name: "Current", build: "148")
         let otherURL = try makeAmbientBundle(name: "Other", build: "149")
@@ -4155,6 +4678,155 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
+    func testReceiptObservationSkipsVerificationWithoutAnIdentifiedOwner() throws {
+        let expectedURL = try makeAmbientBundle(name: "No Owner", build: "149")
+        let version = try XCTUnwrap(AmbientRuntimeIdentity.bundleVersion(at: expectedURL))
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: .init(value: UUID()),
+            runtimeInstanceIdentifier: UUID(),
+            owner: try nativeDeliveryOwner(bundleURL: expectedURL)
+        )
+        for unidentifiedRuntime in [false, true] {
+            let status = NativeAgentLauncher.runtimeStatus(
+                receipt: receipt,
+                expectedURL: expectedURL,
+                expectedVersion: version,
+                helpers: {
+                    unidentifiedRuntime ? [self.runtimeHelper(
+                        processIdentifier: 844,
+                        bundleURL: expectedURL,
+                        launchDate: Date(timeIntervalSince1970: 14_000)
+                    )] : []
+                },
+                identity: { _ in nil },
+                validate: { _ in
+                    XCTFail("An unsuccessful observation must not verify signatures")
+                    return false
+                }
+            )
+            switch status {
+            case .absent:
+                XCTAssertFalse(unidentifiedRuntime)
+            case .indeterminate:
+                XCTAssertTrue(unidentifiedRuntime)
+            default:
+                XCTFail("Expected an unconfirmed runtime observation")
+            }
+        }
+    }
+
+    @MainActor
+    func testRuntimeConfirmationRechecksIdentityAfterCodeVerification() throws {
+        let bundleURL = try makeAmbientBundle(name: "Replaced During Verification", build: "149")
+        let launchDate = Date(timeIntervalSince1970: 14_100)
+        let original = try runtimeIdentity(
+            processIdentifier: 845,
+            bundleURL: bundleURL,
+            launchDate: launchDate
+        )
+        let replacement = try runtimeIdentity(
+            processIdentifier: 845,
+            bundleURL: bundleURL,
+            launchDate: launchDate
+        )
+        let helper = runtimeHelper(
+            processIdentifier: 845,
+            bundleURL: bundleURL,
+            launchDate: launchDate
+        )
+        var identity = original
+        var verifications = 0
+        let confirmed = NativeAgentLauncher.isConfirmedRuntimeHelper(
+            helper,
+            expectedURL: bundleURL,
+            identity: { _ in identity },
+            validate: { _ in
+                verifications += 1
+                identity = replacement
+                return true
+            }
+        )
+
+        XCTAssertFalse(confirmed)
+        XCTAssertEqual(verifications, 1)
+    }
+
+    @MainActor
+    func testNativeAgentRevalidatesReceiptOwnerAndDeadlineAfterStoreReloadBeforeQuit()
+        async throws {
+        for expiresDuringVerification in [false, true] {
+            let fixture = try makeFixture(id: expiresDuringVerification ? 847 : 846)
+            let helperURL = try makeAmbientBundle(name: "Receipt Revalidation", build: "149")
+            let launchDate = Date(timeIntervalSince1970: 14_200)
+            let runtime = try runtimeIdentity(
+                processIdentifier: 846,
+                bundleURL: helperURL,
+                launchDate: launchDate,
+                runtimeProtocolVersion: 2
+            )
+            let admission = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress,
+                profileIdentifier: nil
+            ))
+            let recorded = await bridge.recordNativeDeliveryReceipt(
+                handle: admission.handle,
+                nativeDeliveryNonce: admission.nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                owner: try nativeDeliveryOwner(bundleURL: helperURL)
+            )
+            XCTAssertEqual(recorded, .persisted)
+            var loads = 0
+            var verifications = 0
+            var pending = true
+            let status = await NativeAgentLauncher.approvalDeliveryStatus(
+                handle: admission.handle,
+                nativeDeliveryNonce: admission.nativeDeliveryNonce,
+                isPending: { pending },
+                dependencies: .init(
+                    load: { handle in
+                        loads += 1
+                        return await self.bridge.load(handle: handle)
+                    },
+                    receiptRuntimeStatus: { receipt in
+                        NativeAgentLauncher.runtimeStatus(
+                            receipt: receipt,
+                            expectedURL: helperURL,
+                            expectedVersion: runtime.version,
+                            helpers: {
+                                [self.runtimeHelper(
+                                    processIdentifier: 846,
+                                    bundleURL: helperURL,
+                                    launchDate: launchDate,
+                                    requestQuit: {
+                                        XCTFail("Failed verification or an expired deadline must prevent quitting")
+                                        return true
+                                    }
+                                )]
+                            },
+                            identity: { _ in runtime },
+                            validate: { _ in
+                                verifications += 1
+                                XCTAssertEqual(loads, 2)
+                                pending = !expiresDuringVerification
+                                return expiresDuringVerification
+                            }
+                        )
+                    },
+                    clearReceipt: { _, _ in
+                        XCTFail("The live owner must retain its receipt")
+                        return .persisted
+                    },
+                    wait: { _ in }
+                )
+            )
+
+            XCTAssertEqual(status, .unavailable)
+            XCTAssertEqual(loads, 2)
+            XCTAssertEqual(verifications, 1)
+        }
+    }
+
+    @MainActor
     func testReceiptOwnerMetadataIgnoresUnidentifiedOtherPath() throws {
         let expectedURL = try makeAmbientBundle(name: "Expected", build: "149")
         let otherURL = try makeAmbientBundle(name: "Other Legacy", build: "148")
@@ -4325,7 +4997,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var loadCount = 0
         var isRunning = true
         let owner = NativeAgentLauncher.ExactReceiptOwner(
-            requestQuit: {
+            requestQuit: { _ in
                 events.append("quit")
                 return true
             },
@@ -4410,7 +5082,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var quitCount = 0
         var clearCount = 0
         let owner = NativeAgentLauncher.ExactReceiptOwner(
-            requestQuit: {
+            requestQuit: { _ in
                 quitCount += 1
                 return true
             },
@@ -5032,19 +5704,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         id: Int,
         enqueueAttempt: String,
         latestConfigurations: [[String: Any]],
-        revisions: [String: Int]
+        revisions: [String: Int],
+        host: String = "wallet.example",
+        configurationKey: String = "https://wallet.example",
+        admissionDeadline: Date? = nil
     ) throws -> Fixture {
         let object: [String: Any] = [
             "id": id,
             "name": "switchAccount",
             "provider": "unknown",
-            "host": "wallet.example",
-            "configurationKey": "https://wallet.example",
+            "host": host,
+            "configurationKey": configurationKey,
             "enqueueAttempt": enqueueAttempt,
             "admissionDeadline": Int(
-                clock.now.addingTimeInterval(
+                (admissionDeadline ?? clock.now.addingTimeInterval(
                     ExtensionBridge.requestTTL
-                ).timeIntervalSince1970 * 1_000
+                )).timeIntervalSince1970 * 1_000
             ),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "favicon": "",
@@ -5057,6 +5732,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             rawObject: object
         ) else { throw Failure.expectedValue }
         return Fixture(request: request, ingress: ingress)
+    }
+
+    private func manualSwitchPage(
+        _ result: ExtensionBridge.ManualSwitchRequestsResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> ExtensionBridge.ManualSwitchRequestsPage {
+        guard case .available(let page) = result else {
+            XCTFail("Expected a manual switch page", file: file, line: line)
+            throw Failure.expectedValue
+        }
+        return page
     }
 
     private func attempt(for id: Int) -> String {

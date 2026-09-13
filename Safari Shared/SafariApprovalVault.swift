@@ -1108,12 +1108,13 @@ final class SafariApprovalVaultHost {
             throw SafariApprovalVault.Error.unavailable
         }
         defer { coordinationLease.release() }
-        guard willMutateSourceLocked(coordinationLease: coordinationLease)
-        else {
-            throw SafariApprovalVault.Error.unavailable
-        }
+        let publicationReady = try willMutateSourceLocked(
+            coordinationLease: coordinationLease
+        )
         let result = try operation()
-        reconcileLocked(coordinationLease: coordinationLease)
+        if publicationReady {
+            reconcileLocked(coordinationLease: coordinationLease)
+        }
         return result
     }
 
@@ -1186,6 +1187,9 @@ final class SafariApprovalVaultHost {
         }
 
         do {
+            guard synchronizeDefaults(defaults) else {
+                throw SafariApprovalVault.Error.unavailable
+            }
             let publication = try vault.publish(
                 source: source,
                 sourceRevision: revision,
@@ -1209,17 +1213,17 @@ final class SafariApprovalVaultHost {
 
     private func willMutateSourceLocked(
         coordinationLease: SafariApprovalVault.CoordinationLease
-    ) -> Bool {
+    ) throws -> Bool {
+        do {
+            try vault.clear(coordinationLease: coordinationLease)
+        } catch {
+            throw SafariApprovalVault.Error.unavailable
+        }
         let current = sourceRevision(coordinationLease: coordinationLease)
         guard current > 0, current < UInt64.max else {
             clearVaultLocked(
                 coordinationLease: coordinationLease
             )
-            return false
-        }
-        do {
-            try vault.clear(coordinationLease: coordinationLease)
-        } catch {
             return false
         }
         defaults.set(

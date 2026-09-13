@@ -1025,7 +1025,7 @@ class Agent: NSObject {
             return true
         case .registered, .validating, .acquiringReceipt,
              .awaitingAuthentication, .cancelingBeforeAuthentication,
-             .rejecting, .finished:
+             .responding, .rejecting, .finished:
             return false
         }
     }

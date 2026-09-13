@@ -55,8 +55,18 @@ final class NativeApprovalCoordinator {
     }
 
     private enum PersistenceIntent {
-        case rejection
-        case response(ResponseToExtension)
+        case acquireReceipt
+        case cancelBeforeAuthentication(receiptOwned: Bool)
+        case stage(NativeApprovalDecision)
+        case respond(ResponseToExtension)
+        case reject
+    }
+
+    private enum PersistenceStep {
+        case retry
+        case stop
+        case replace(PersistenceIntent)
+        case prepareAgain
     }
 
     enum State: Equatable {
@@ -69,6 +79,7 @@ final class NativeApprovalCoordinator {
         case reviewing
         case staging
         case staged
+        case responding
         case rejecting
         case finished
     }
@@ -159,8 +170,10 @@ final class NativeApprovalCoordinator {
     private var monitorTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     private var terminalDeadline: Date
+    private var preparationRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
     private var didNotifyFailure = false
-    private var rejectIfDecisionIsNotStaged = false
+    private var rejectIfWriteIsNotCommitted = false
+    private var canCancelResponse = false
     private var didEnterWaitingState = false
 
     init(
@@ -215,7 +228,7 @@ final class NativeApprovalCoordinator {
         guard case .found(let snapshot) = result,
               snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
               snapshot.phase != .responded,
-              let runtime else {
+              runtime != nil else {
             finish()
             return
         }
@@ -224,37 +237,7 @@ final class NativeApprovalCoordinator {
             ExtensionBridge.requestTTL
         )
         recordDeadline(from: snapshot.request)
-        state = .acquiringReceipt(cancelRequested: false)
-        var retryDelay = Self.initialRetryDelayNanoseconds
-        while !Task.isCancelled, environment.now() < terminalDeadline {
-            let result = await store.recordNativeDeliveryReceipt(
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                owner: runtime.owner
-            )
-            guard case .acquiringReceipt(let cancelRequested) = state else {
-                return
-            }
-            switch result {
-            case .persisted:
-                bootstrapTask = nil
-                if cancelRequested {
-                    beginPreauthenticationCancellation(receiptOwned: true)
-                } else {
-                    state = .awaitingAuthentication
-                    onEvent?(.authenticationRequired)
-                }
-                return
-            case .ownershipLost:
-                finish()
-                return
-            case .retryablePersistenceFailure:
-                await waitBeforeDeadline(retryDelay)
-                retryDelay = nextDelay(after: retryDelay)
-            }
-        }
-        if case .acquiringReceipt = state { finish() }
+        startPersistence(.acquireReceipt)
     }
 
     func resumeAfterAuthentication() {
@@ -262,6 +245,7 @@ final class NativeApprovalCoordinator {
         terminalDeadline = environment.now().addingTimeInterval(
             ExtensionBridge.requestTTL
         )
+        preparationRetryDelay = Self.initialRetryDelayNanoseconds
         state = .loading
         bootstrapTask = Task { [weak self] in
             await self?.preparePresentation()
@@ -284,81 +268,66 @@ final class NativeApprovalCoordinator {
     }
 
     private func beginPreauthenticationCancellation(receiptOwned: Bool) {
-        state = .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
-        terminalDeadline = environment.now().addingTimeInterval(
-            ExtensionBridge.requestTTL
-        )
-        persistenceTask = Task { [weak self] in
-            await self?.cancelUntilTerminal(receiptOwned: receiptOwned)
-        }
+        startPersistence(.cancelBeforeAuthentication(receiptOwned: receiptOwned))
     }
 
-    private func cancelUntilTerminal(receiptOwned: Bool) async {
+    private func cancelBeforeAuthenticationAttempt(
+        receiptOwned: Bool
+    ) async -> PersistenceStep {
         let expectedState = State.cancelingBeforeAuthentication(
             receiptOwned: receiptOwned
         )
-        var retryDelay = Self.initialRetryDelayNanoseconds
-        while !Task.isCancelled, state == expectedState,
-              environment.now() < terminalDeadline {
-            let loaded = await store.load(handle: handle)
-            guard state == expectedState else { return }
-            switch loaded {
-            case .found(let snapshot):
-                guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
-                      snapshot.phase != .responded else {
-                    finish()
-                    return
-                }
-                recordDeadline(from: snapshot.request)
-                let result: ExtensionBridge.StoreMutationResult
-                if receiptOwned {
-                    guard let runtime,
-                          snapshot.nativeDeliveryReceipt?.matches(
-                              nativeDeliveryNonce: nativeDeliveryNonce,
-                              runtimeInstanceIdentifier: runtime.instanceIdentifier
-                          ) == true,
-                          snapshot.phase == .queued else {
-                        finish()
-                        return
-                    }
-                    if snapshot.nativeDecisionStaged {
-                        restoreAuthenticationWaiting()
-                        return
-                    }
-                    result = await store.rejectNativeDelivery(
-                        handle: handle,
-                        nativeDeliveryNonce: nativeDeliveryNonce,
-                        runtimeInstanceIdentifier: runtime.instanceIdentifier
-                    )
-                } else {
-                    guard snapshot.nativeDeliveryReceipt == nil,
-                          !snapshot.nativeDecisionStaged,
-                          snapshot.phase == .queued else {
-                        finish()
-                        return
-                    }
-                    result = await store.reject(handle: handle)
-                }
-                guard state == expectedState else { return }
-                if result == .persisted {
-                    finish()
-                    return
-                }
-            case .missing:
+        let loaded = await store.load(handle: handle)
+        guard !Task.isCancelled, state == expectedState else { return .stop }
+        switch loaded {
+        case .found(let snapshot):
+            guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
+                  snapshot.phase != .responded else {
                 finish()
-                return
-            case .unavailable:
-                break
+                return .stop
             }
-            await waitBeforeDeadline(retryDelay)
-            retryDelay = nextDelay(after: retryDelay)
-        }
-        guard state == expectedState else { return }
-        if receiptOwned {
-            restoreAuthenticationWaiting()
-        } else {
+            recordDeadline(from: snapshot.request)
+            let result: ExtensionBridge.StoreMutationResult
+            if receiptOwned {
+                guard let runtime,
+                      snapshot.nativeDeliveryReceipt?.matches(
+                          nativeDeliveryNonce: nativeDeliveryNonce,
+                          runtimeInstanceIdentifier: runtime.instanceIdentifier
+                      ) == true,
+                      snapshot.phase == .queued else {
+                    finish()
+                    return .stop
+                }
+                if snapshot.nativeDecisionStaged {
+                    restoreAuthenticationWaiting()
+                    return .stop
+                }
+                result = await store.rejectNativeDelivery(
+                    handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: runtime.instanceIdentifier
+                )
+            } else {
+                guard snapshot.nativeDeliveryReceipt == nil,
+                      !snapshot.nativeDecisionStaged,
+                      snapshot.phase == .queued else {
+                    finish()
+                    return .stop
+                }
+                result = await store.reject(handle: handle)
+            }
+            guard !Task.isCancelled, state == expectedState else { return .stop }
+            if result == .persisted {
+                finish()
+                return .stop
+            }
+        case .missing:
             finish()
+            return .stop
+        case .unavailable:
+            break
         }
+        return .retry
     }
 
     private func restoreAuthenticationWaiting() {
@@ -369,7 +338,6 @@ final class NativeApprovalCoordinator {
     private func preparePresentation() async {
         guard state == .loading else { return }
 
-        var retryDelay = Self.initialRetryDelayNanoseconds
         while !Task.isCancelled, state == .loading {
             guard environment.now() < terminalDeadline else {
                 finish()
@@ -381,12 +349,12 @@ final class NativeApprovalCoordinator {
                 finish()
                 return
             }
-            await waitBeforeDeadline(retryDelay)
+            await waitBeforeDeadline(preparationRetryDelay)
             guard environment.now() < terminalDeadline else {
                 finish()
                 return
             }
-            retryDelay = nextDelay(after: retryDelay)
+            preparationRetryDelay = nextDelay(after: preparationRetryDelay)
         }
     }
 
@@ -424,7 +392,8 @@ final class NativeApprovalCoordinator {
                 onEvent?(.presentation(.approval(request: request, action: action)))
                 return true
             case .response(let response):
-                return await persistImmediateResponse(response)
+                startPersistence(.respond(response))
+                return true
             }
         case .staged:
             enterWaitingState(notify: true)
@@ -487,68 +456,17 @@ final class NativeApprovalCoordinator {
         case .loading, .reviewing:
             takeRejectionOwnership()
         case .staging:
-            rejectIfDecisionIsNotStaged = true
+            rejectIfWriteIsNotCommitted = true
+        case .responding:
+            if canCancelResponse { rejectIfWriteIsNotCommitted = true }
         case .staged, .rejecting, .finished:
             break
         }
     }
 
     private func stage(_ decision: NativeApprovalDecision) {
-        guard state == .reviewing, let runtime else { return }
-        state = .staging
-        bootstrapTask = Task {
-            var retryDelay = Self.initialRetryDelayNanoseconds
-            for _ in 0..<3 {
-                guard state == .staging else { return }
-                if rejectIfDecisionIsNotStaged {
-                    takeRejectionOwnership()
-                    return
-                }
-                let result = await store.stageNativeDecision(
-                    handle: handle,
-                    nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                    decision: decision
-                )
-                guard state == .staging else { return }
-                switch result {
-                case .persisted:
-                    enterWaitingState(notify: true)
-                    return
-                case .ownershipLost:
-                    await reconcileAfterLostOwnership()
-                    return
-                case .retryablePersistenceFailure:
-                    if rejectIfDecisionIsNotStaged {
-                        takeRejectionOwnership()
-                        return
-                    }
-                    guard state == .staging else { return }
-                    await environment.wait(retryDelay)
-                    guard state == .staging else { return }
-                    retryDelay = nextDelay(after: retryDelay)
-                }
-            }
-            if rejectIfDecisionIsNotStaged {
-                takeRejectionOwnership()
-                return
-            }
-            failAndReject()
-        }
-    }
-
-    private func reconcileAfterLostOwnership() async {
-        guard state == .staging else { return }
-        let status = await storedStatus()
-        guard state == .staging else { return }
-        switch status {
-        case .staged:
-            enterWaitingState(notify: true)
-        case .responded, .missing:
-            finish()
-        case .pending, .unavailable, .superseded:
-            failAndReject()
-        }
+        guard state == .reviewing, runtime != nil else { return }
+        startPersistence(.stage(decision))
     }
 
     private func storedStatus() async -> StoredStatus {
@@ -580,174 +498,277 @@ final class NativeApprovalCoordinator {
         }
     }
 
-    private func persist(_ intent: PersistenceIntent) async ->
-        ExtensionBridge.StoreMutationResult {
-        guard let runtime else { return .ownershipLost }
-        switch intent {
-        case .rejection:
-            return await store.rejectNativeDelivery(
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtime.instanceIdentifier
-            )
-        case .response(let response):
-            return await store.completeNativeDelivery(
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                response: response
-            )
-        }
-    }
-
-    private func persistImmediateResponse(
-        _ response: ResponseToExtension
-    ) async -> Bool {
-        let intent = PersistenceIntent.response(response)
-        var retryDelay = Self.initialRetryDelayNanoseconds
-        for attempt in 0..<3 {
-            guard state == .loading else { return false }
-            guard environment.now() < terminalDeadline else {
-                finish()
-                return true
-            }
-            let result = await persist(intent)
-            guard state == .loading else { return false }
-            switch result {
-            case .persisted:
-                finish()
-                return true
-            case .ownershipLost:
-                let status = await storedStatus()
-                guard state == .loading else { return false }
-                switch status {
-                case .staged:
-                    enterWaitingState(notify: true)
-                    return true
-                case .responded, .missing:
-                    finish()
-                    return true
-                case .superseded:
-                    supersede()
-                    return true
-                case .pending, .unavailable:
-                    return false
-                }
-            case .retryablePersistenceFailure:
-                if attempt < 2 {
-                    await waitBeforeDeadline(retryDelay)
-                    retryDelay = nextDelay(after: retryDelay)
-                }
-            }
-        }
-        state = .rejecting
-        notifyFailureOnce()
-        startPersistence(
-            intent,
-            retryDelay: retryDelay,
-            waitBeforeFirstAttempt: true
-        )
-        return true
-    }
-
     private func failAndReject() {
-        guard state != .rejecting, state != .finished else { return }
+        guard state != .rejecting, state != .responding, state != .finished else {
+            return
+        }
         notifyFailureOnce()
         takeRejectionOwnership()
     }
 
     private func takeRejectionOwnership() {
-        state = .rejecting
+        startPersistence(.reject)
+    }
+
+    private func startPersistence(_ intent: PersistenceIntent) {
+        guard persistenceTask == nil else { return }
+        configurePersistence(intent)
+        persistenceTask = Task { [weak self] in
+            await self?.runPersistence(intent)
+        }
+    }
+
+    private func configurePersistence(_ intent: PersistenceIntent) {
         bootstrapTask?.cancel()
         bootstrapTask = nil
-        stopLifecycleMonitor()
-        startPersistence(
-            .rejection,
-            retryDelay: Self.initialRetryDelayNanoseconds,
-            waitBeforeFirstAttempt: false
-        )
-    }
-
-    private func startPersistence(
-        _ intent: PersistenceIntent,
-        retryDelay: UInt64,
-        waitBeforeFirstAttempt: Bool
-    ) {
-        guard persistenceTask == nil else { return }
-        persistenceTask = Task { [weak self] in
-            guard let self else { return }
-            await persistUntilTerminal(
-                intent,
-                retryDelay: retryDelay,
-                waitBeforeFirstAttempt: waitBeforeFirstAttempt
+        rejectIfWriteIsNotCommitted = false
+        canCancelResponse = false
+        switch intent {
+        case .acquireReceipt:
+            state = .acquiringReceipt(cancelRequested: false)
+        case .cancelBeforeAuthentication(let receiptOwned):
+            state = .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
+            terminalDeadline = environment.now().addingTimeInterval(
+                ExtensionBridge.requestTTL
             )
+        case .stage:
+            state = .staging
+        case .respond:
+            state = .responding
+            canCancelResponse = true
+        case .reject:
+            state = .rejecting
+            stopLifecycleMonitor()
         }
     }
 
-    private func persistUntilTerminal(
-        _ intent: PersistenceIntent,
-        retryDelay: UInt64,
-        waitBeforeFirstAttempt: Bool
-    ) async {
-        var retryDelay = retryDelay
-        var shouldWait = waitBeforeFirstAttempt
-        while !Task.isCancelled, state == .rejecting {
+    private func isPersisting(_ intent: PersistenceIntent) -> Bool {
+        switch (intent, state) {
+        case (.acquireReceipt, .acquiringReceipt),
+             (.stage, .staging), (.respond, .responding), (.reject, .rejecting):
+            return true
+        case (.cancelBeforeAuthentication(let owned),
+              .cancelingBeforeAuthentication(let currentOwnership)):
+            return owned == currentOwnership
+        default:
+            return false
+        }
+    }
+
+    private func runPersistence(_ initialIntent: PersistenceIntent) async {
+        var intent = initialIntent
+        var attempts = 0
+        var retryDelay = Self.initialRetryDelayNanoseconds
+        while !Task.isCancelled, isPersisting(intent) {
             guard environment.now() < terminalDeadline else {
-                await reconcilePersistence(intent)
-                if state == .rejecting { finish() }
+                await expirePersistence(intent, attempts: attempts)
                 return
             }
-            if shouldWait {
-                await waitBeforeDeadline(retryDelay)
-                guard !Task.isCancelled, state == .rejecting else { return }
-                guard environment.now() < terminalDeadline else {
-                    await reconcilePersistence(intent)
-                    if state == .rejecting { finish() }
-                    return
+            let step: PersistenceStep
+            if rejectIfWriteIsNotCommitted,
+               state == .staging || (state == .responding && canCancelResponse) {
+                step = .replace(.reject)
+            } else {
+                step = await persistenceAttempt(intent, attempts: attempts)
+                attempts += 1
+            }
+            guard !Task.isCancelled, isPersisting(intent) else { return }
+            switch step {
+            case .stop:
+                return
+            case .replace(let nextIntent):
+                intent = nextIntent
+                attempts = 0
+                retryDelay = Self.initialRetryDelayNanoseconds
+                configurePersistence(intent)
+            case .prepareAgain:
+                await waitBeforeDeadline(preparationRetryDelay)
+                guard !Task.isCancelled, isPersisting(intent) else { return }
+                if rejectIfWriteIsNotCommitted {
+                    intent = .reject
+                    attempts = 0
+                    retryDelay = Self.initialRetryDelayNanoseconds
+                    configurePersistence(intent)
+                    continue
                 }
-            }
-            let result = await persist(intent)
-            guard state == .rejecting else { return }
-            switch result {
-            case .persisted:
-                finish()
+                preparationRetryDelay = nextDelay(after: preparationRetryDelay)
+                persistenceTask = nil
+                state = .loading
+                bootstrapTask = Task { [weak self] in
+                    await self?.preparePresentation()
+                }
                 return
-            case .ownershipLost:
-                await reconcilePersistence(intent)
-                if state != .rejecting { return }
-            case .retryablePersistenceFailure:
-                notifyFailureOnce()
-                await reconcilePersistence(intent)
-                if state != .rejecting { return }
+            case .retry:
+                if case .stage = intent, attempts >= 3 {
+                    notifyFailureOnce()
+                    intent = .reject
+                    attempts = 0
+                    retryDelay = Self.initialRetryDelayNanoseconds
+                    configurePersistence(intent)
+                    continue
+                }
+                if case .respond = intent, attempts == 3 {
+                    canCancelResponse = false
+                    notifyFailureOnce()
+                }
+                await waitBeforeDeadline(retryDelay)
+                guard !Task.isCancelled, isPersisting(intent) else { return }
+                retryDelay = nextDelay(after: retryDelay)
             }
-            shouldWait = true
-            retryDelay = nextDelay(after: retryDelay)
         }
     }
 
-    private func reconcilePersistence(_ intent: PersistenceIntent) async {
-        guard state == .rejecting else { return }
+    private func persistenceAttempt(
+        _ intent: PersistenceIntent,
+        attempts: Int
+    ) async -> PersistenceStep {
+        if case .cancelBeforeAuthentication(let receiptOwned) = intent {
+            return await cancelBeforeAuthenticationAttempt(receiptOwned: receiptOwned)
+        }
+        guard let runtime else {
+            finish()
+            return .stop
+        }
+        let result: ExtensionBridge.StoreMutationResult
+        switch intent {
+        case .acquireReceipt:
+            result = await store.recordNativeDeliveryReceipt(
+                handle: handle,
+                nativeDeliveryNonce: nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                owner: runtime.owner
+            )
+        case .stage(let decision):
+            result = await store.stageNativeDecision(
+                handle: handle,
+                nativeDeliveryNonce: nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                decision: decision
+            )
+        case .respond(let response):
+            result = await store.completeNativeDelivery(
+                handle: handle,
+                nativeDeliveryNonce: nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                response: response
+            )
+        case .reject:
+            result = await store.rejectNativeDelivery(
+                handle: handle,
+                nativeDeliveryNonce: nativeDeliveryNonce,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier
+            )
+        case .cancelBeforeAuthentication:
+            return .stop
+        }
+        guard !Task.isCancelled, isPersisting(intent) else { return .stop }
+        switch result {
+        case .persisted:
+            switch intent {
+            case .acquireReceipt:
+                if state == .acquiringReceipt(cancelRequested: true) {
+                    return .replace(.cancelBeforeAuthentication(receiptOwned: true))
+                }
+                persistenceTask = nil
+                state = .awaitingAuthentication
+                onEvent?(.authenticationRequired)
+            case .stage:
+                enterWaitingState(notify: true)
+            case .respond, .reject:
+                finish()
+            case .cancelBeforeAuthentication:
+                break
+            }
+            return .stop
+        case .ownershipLost:
+            if case .acquireReceipt = intent {
+                finish()
+                return .stop
+            }
+            return await reconcilePersistence(intent, attempts: attempts)
+        case .retryablePersistenceFailure:
+            switch intent {
+            case .stage:
+                return rejectIfWriteIsNotCommitted ? .replace(.reject) : .retry
+            case .respond where canCancelResponse && rejectIfWriteIsNotCommitted:
+                return .replace(.reject)
+            case .reject:
+                notifyFailureOnce()
+                return await reconcilePersistence(intent, attempts: attempts)
+            case .respond where attempts >= 3:
+                notifyFailureOnce()
+                return await reconcilePersistence(intent, attempts: attempts)
+            default:
+                return .retry
+            }
+        }
+    }
+
+    private func reconcilePersistence(
+        _ intent: PersistenceIntent,
+        attempts: Int
+    ) async -> PersistenceStep {
         let status = await storedStatus()
-        guard state == .rejecting else { return }
+        guard !Task.isCancelled, isPersisting(intent) else { return .stop }
         switch status {
         case .staged:
             let notify: Bool
-            if case .rejection = intent {
-                notify = true
+            if case .respond = intent {
+                notify = attempts < 3
             } else {
-                notify = false
+                notify = true
             }
             enterWaitingState(notify: notify)
         case .responded, .missing:
             finish()
         case .superseded:
+            switch intent {
+            case .stage:
+                notifyFailureOnce()
+                return .replace(.reject)
+            case .respond where attempts < 3:
+                supersede()
+            default:
+                finish()
+            }
+        case .pending, .unavailable:
+            switch intent {
+            case .stage:
+                notifyFailureOnce()
+                return .replace(.reject)
+            case .respond where attempts < 3:
+                return rejectIfWriteIsNotCommitted ? .replace(.reject) : .prepareAgain
+            default:
+                switch status {
+                case .pending(_, .current):
+                    return .retry
+                case .pending:
+                    finish()
+                case .unavailable:
+                    notifyFailureOnce()
+                    return .retry
+                default:
+                    break
+                }
+            }
+        }
+        return .stop
+    }
+
+    private func expirePersistence(
+        _ intent: PersistenceIntent,
+        attempts: Int
+    ) async {
+        switch intent {
+        case .cancelBeforeAuthentication(receiptOwned: true):
+            restoreAuthenticationWaiting()
+        case .respond where attempts < 3:
             finish()
-        case .pending(_, .current):
-            break
-        case .pending:
+        case .reject, .respond:
+            _ = await reconcilePersistence(intent, attempts: attempts)
+            if !Task.isCancelled, isPersisting(intent) { finish() }
+        default:
             finish()
-        case .unavailable:
-            notifyFailureOnce()
         }
     }
 
@@ -807,7 +828,7 @@ final class NativeApprovalCoordinator {
         didEnterWaitingState = true
         bootstrapTask?.cancel()
         bootstrapTask = nil
-        rejectIfDecisionIsNotStaged = false
+        rejectIfWriteIsNotCommitted = false
         persistenceTask?.cancel()
         persistenceTask = nil
         state = .staged

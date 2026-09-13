@@ -249,6 +249,45 @@ final class ExtensionRequestFileStore {
         let identity: ProfileFileIdentity
     }
 
+    private struct ManualSwitchCursor: Codable {
+        let version: Int
+        let profile: String
+        let admittedAt: Date
+        let requestToken: String
+
+        init(record: Record) {
+            version = 1
+            profile = record.profileIdentifier?.uuidString.lowercased() ?? "default"
+            admittedAt = record.admissionCreatedAt
+            requestToken = record.handle.requestToken
+        }
+
+        static func decode(_ value: String, profileIdentifier: UUID?) -> Self? {
+            guard value.utf8.count <= 1024,
+                  let data = Data(base64Encoded: value),
+                  data.base64EncodedString() == value,
+                  let cursor = try? JSONDecoder().decode(Self.self, from: data),
+                  cursor.version == 1,
+                  cursor.profile == (profileIdentifier?.uuidString.lowercased() ?? "default"),
+                  cursor.admittedAt.timeIntervalSinceReferenceDate.isFinite,
+                  ExtensionBridge.lowercaseUUID(cursor.requestToken) != nil,
+                  cursor.encoded == value else { return nil }
+            return cursor
+        }
+
+        var encoded: String? {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            return (try? encoder.encode(self))?.base64EncodedString()
+        }
+
+        func precedes(_ record: Record) -> Bool {
+            admittedAt < record.admissionCreatedAt ||
+                (admittedAt == record.admissionCreatedAt &&
+                    requestToken < record.handle.requestToken)
+        }
+    }
+
     private static let profileSchemaVersion = 7
     private static let profileDirectoryName = "profiles-v7"
     private static let profileSweepCursorName = "sweep.cursor"
@@ -367,6 +406,21 @@ final class ExtensionRequestFileStore {
                 return .expired
             case .invalid:
                 return .rejected
+            }
+
+            if ingress.request.name == "switchAccount",
+               ingress.request.provider == .unknown,
+               let existing = profile.records.first(where: { record in
+                   record.configurationKey == ingress.request.configurationKey &&
+                       !record.responseAcknowledged && isManualSwitch(record)
+               }) {
+                return .accepted(
+                    handle: existing.handle,
+                    approvalRequired: existing.state.isActive,
+                    revisions: existing.revisions,
+                    admissionKind: .coalesced,
+                    nativeDeliveryNonce: existing.nativeDeliveryNonce
+                )
             }
 
             let active = profile.records.filter(\.state.isActive)
@@ -492,6 +546,104 @@ final class ExtensionRequestFileStore {
             }
             return .found(snapshot(profile.records[index], sequence: index))
         }
+    }
+
+    func listManualSwitchRequests(
+        profileIdentifier: UUID?,
+        cursor: String?
+    ) -> ExtensionBridge.ManualSwitchRequestsResult {
+        let position: ManualSwitchCursor?
+        if let cursor {
+            guard let decoded = ManualSwitchCursor.decode(
+                cursor,
+                profileIdentifier: profileIdentifier
+            ) else { return .invalidCursor }
+            position = decoded
+        } else {
+            position = nil
+        }
+        return withLock(or: .unavailable) {
+            guard case .state(let profile) = readProfileLocked(
+                profileIdentifier: profileIdentifier,
+                now: clock(),
+                recover: true
+            ) else { return .unavailable }
+            let records = profile.records.filter {
+                !$0.responseAcknowledged && isManualSwitch($0) &&
+                    (position?.precedes($0) ?? true)
+            }.sorted {
+                $0.admissionCreatedAt == $1.admissionCreatedAt
+                    ? $0.handle.requestToken < $1.handle.requestToken
+                    : $0.admissionCreatedAt < $1.admissionCreatedAt
+            }
+            var requests = [ExtensionBridge.ManualSwitchRequest]()
+            var lastCursor: String?
+            for record in records.prefix(ExtensionBridge.maximumRetainedRequests) {
+                guard let cursor = ManualSwitchCursor(record: record).encoded else {
+                    return .unavailable
+                }
+                let candidate = requests + [manualSwitchRequest(record)]
+                guard let data = ExtensionBridge.payloadData([
+                    "requests": candidate.map(\.json),
+                    "nextCursor": cursor,
+                ]), data.count <= ExtensionBridge.maximumManualSwitchPageBytes - 1024 else {
+                    guard !requests.isEmpty else { return .unavailable }
+                    break
+                }
+                requests = candidate
+                lastCursor = cursor
+            }
+            return .available(.init(
+                requests: requests,
+                nextCursor: requests.count < records.count ? lastCursor : nil
+            ))
+        }
+    }
+
+    func loadManualSwitch(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String
+    ) -> ExtensionBridge.SnapshotResult {
+        withLock(or: .unavailable) {
+            guard case .state(let profile) = readProfileLocked(
+                profileIdentifier: handle.profileIdentifier,
+                now: clock(),
+                recover: true
+            ) else { return .unavailable }
+            guard let index = profile.records.firstIndex(where: {
+                $0.handle == handle && $0.configurationKey == configurationKey &&
+                    !$0.responseAcknowledged && isManualSwitch($0)
+            }) else { return .missing }
+            return .found(snapshot(profile.records[index], sequence: index))
+        }
+    }
+
+    private func isManualSwitch(_ record: Record) -> Bool {
+        if let request = record.state.requestData.flatMap(parseRequest) {
+            return request.name == "switchAccount" && request.provider == .unknown
+        }
+        return record.state.responseData.flatMap {
+            responseJSON($0, id: record.id)
+        }?["name"] as? String == "switchAccount"
+    }
+
+    private func manualSwitchRequest(_ record: Record) -> ExtensionBridge.ManualSwitchRequest {
+        let state: ExtensionBridge.ManualSwitchRequestState
+        switch record.state {
+        case .completed:
+            state = .completed
+        case .claimed, .broadcastPrepared:
+            state = .approved
+        case .pending:
+            state = record.stagedApproval == nil ? .pending : .approved
+        }
+        return .init(
+            handle: record.handle,
+            host: record.host,
+            configurationKey: record.configurationKey,
+            revisions: record.revisions,
+            state: state
+        )
     }
 
     func claim(

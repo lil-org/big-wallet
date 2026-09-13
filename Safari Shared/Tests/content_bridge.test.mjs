@@ -1367,13 +1367,6 @@ test("a disconnect transport failure does not revoke local authorization", async
 test("manual switch intent forwards exact trusted identity and worker status", async () => {
     const responses = [
         {
-            admissionDeadline: 1_700_000_900_000,
-            configurationKey: "https://wallet.example",
-            id: 30,
-            subject: "manualSwitchInFlight",
-            workflowVersion: 3,
-        },
-        {
             approvalRequired: true,
             configurationKey: "https://wallet.example",
             id: 30,
@@ -1445,93 +1438,33 @@ test("manual switch intent rejects mismatched and inexact messages", async () =>
     assert.equal(await unavailable.dispatchRuntime(base), undefined);
 });
 
-test("manual switch terminal broadcast applies only to its current origin", async () => {
+test("legacy manual-switch result broadcasts are ignored", async () => {
     const harness = makeHarness();
     await settle();
-    const configuration = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    const result = {
+    const before = harness.postedMessages.length;
+    assert.equal(await harness.dispatchRuntime({
         configurationKey: "https://wallet.example",
         response: {
             id: 31,
             name: "switchAccount",
             provider: "multiple",
-            latestConfigurations: [configuration],
+            latestConfigurations: [],
             revisions: {ethereum: 1, solana: 0},
         },
         subject: "manualSwitchResult",
         workflowVersion: 3,
-    };
-    const before = harness.postedMessages.length;
-    const acknowledgement = await harness.dispatchRuntime(result);
-
-    assert.equal(harness.postedMessages.length, before + 1);
-    assert.deepEqual(clone(acknowledgement), {
-        applied: true,
-        configurationKey: result.configurationKey,
-        id: result.response.id,
-        subject: "manualSwitchResult",
-        workflowVersion: 3,
-    });
-    assert.deepEqual(harness.postedMessages.at(-1).message, {
-        direction: "big-wallet-content-v1",
-        kind: "response",
-        response: result.response,
-        id: 31,
-        providerGeneration: harness.generation(),
-    });
-
-    for (const invalid of [
-        {...result, extra: true},
-        {...result, configurationKey: "https://other.example"},
-        {...result, workflowVersion: 2},
-        {...result, response: {id: 31, name: "switchAccount"}},
-    ]) {
-        assert.equal(await harness.dispatchRuntime(invalid), undefined);
-    }
-    assert.equal(harness.postedMessages.length, before + 1);
-});
-
-test("manual switch result distinguishes non-applicable documents from injection failure", async () => {
-    const response = {
-        id: 33,
-        name: "switchAccount",
-        provider: "multiple",
-        latestConfigurations: [],
-        revisions: {ethereum: 0, solana: 0},
-    };
-    const result = {
-        configurationKey: "https://wallet.example",
-        response,
-        subject: "manualSwitchResult",
-        workflowVersion: 3,
-    };
-    const pdf = makeHarness({url: "https://wallet.example/document.pdf"});
-    await settle();
-    assert.deepEqual(clone(await pdf.dispatchRuntime(result)), {
-        applied: false,
-        configurationKey: result.configurationKey,
-        id: response.id,
-        subject: "manualSwitchResult",
-        workflowVersion: 3,
-    });
-    assert.equal(pdf.postedMessages.length, 0);
-
-    const failed = makeHarness({failFirstInjection: true});
-    await settle();
-    assert.equal(await failed.dispatchRuntime(result), undefined);
-    assert.equal(failed.postedMessages.length, 0);
+    }), undefined);
+    assert.equal(harness.postedMessages.length, before);
 });
 
 test("manual switch adapter remains single across content reevaluation", async () => {
     const status = {
-        admissionDeadline: 1_700_000_900_000,
+        approvalRequired: true,
         configurationKey: "https://wallet.example",
         id: 32,
-        subject: "manualSwitchInFlight",
+        requestToken,
+        revisions: {ethereum: 0, solana: 0},
+        subject: "manualSwitchAcknowledged",
         workflowVersion: 3,
     };
     const harness = makeHarness({sendMessage: message =>

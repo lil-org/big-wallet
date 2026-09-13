@@ -1210,7 +1210,48 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(repaired.catalogData, first.catalogData)
     }
 
-    func testFailedSourceMutationStaysTombstonedUntilLaterReconcile() throws {
+    func testCurrentPublicationSurvivesUnrelatedMetadataSynchronizationFailure()
+        async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fixture = try fixture()
+        var rejectSynchronization = false
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            synchronizeDefaults: { value in
+                rejectSynchronization ? false : value.synchronize()
+            },
+            sourceSnapshot: { fixture.source }
+        )
+        host.start()
+        let initial = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let envelope = try Data(contentsOf: url)
+        let unlocked = await vault.unlock(reason: "Already approved")
+        let access = try XCTUnwrap(unlocked)
+        rejectSynchronization = true
+
+        host.reconcile()
+
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, initial)
+        XCTAssertEqual(try Data(contentsOf: url), envelope)
+        XCTAssertNotNil(keys.keys[try XCTUnwrap(initial.generation)])
+        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
+    }
+
+    func testFailedSourceMutationPreservesSourceErrorWhenMetadataSynchronizationFails()
+        throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -1227,22 +1268,37 @@ final class SafariApprovalVaultTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let source = try fixture().source
+        var rejectRevisionUpdates = false
         let host = SafariApprovalVaultHost(
             vault: vault,
             defaults: defaults,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(
                 key: integrityKey
             ),
+            synchronizeDefaults: { value in
+                if rejectRevisionUpdates && value.integer(
+                    forKey: "SafariApprovalVault.hostSourceRevision.v1"
+                ) > 1 {
+                    return false
+                }
+                return value.synchronize()
+            },
             sourceSnapshot: { source }
         )
         host.start()
         let first = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertEqual(stores, 1)
+        rejectRevisionUpdates = true
+        var mutations = 0
 
         XCTAssertThrowsError(try host.performSourceMutation {
-            throw SafariApprovalVault.Error.unavailable
-        })
+            mutations += 1
+            throw CocoaError(.fileWriteNoPermission)
+        }) { error in
+            XCTAssertEqual((error as? CocoaError)?.code, .fileWriteNoPermission)
+        }
 
+        XCTAssertEqual(mutations, 1)
         XCTAssertEqual(stores, 1)
         XCTAssertNil(vault.catalogAccess())
         XCTAssertEqual(source.password, try fixture().source.password)
@@ -1251,12 +1307,145 @@ final class SafariApprovalVaultTests: XCTestCase {
             try fixture().source.wallets.map(\.storedKeyJSON)
         )
 
+        rejectRevisionUpdates = false
         host.reconcile()
 
         let recovered = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertEqual(stores, 2)
         XCTAssertNotEqual(recovered.generation, first.generation)
         XCTAssertEqual(recovered.sourceRevision, first.sourceRevision.map { $0 + 1 })
+    }
+
+    func testSourceMutationSurvivesFailedInitialRevisionSynchronization()
+        async throws {
+        try await assertSourceMutationRecoversAfterRevisionSynchronizationFailure(
+            initializingRevision: true
+        )
+    }
+
+    func testSourceMutationSurvivesFailedRevisionIncrementSynchronization()
+        async throws {
+        try await assertSourceMutationRecoversAfterRevisionSynchronizationFailure(
+            initializingRevision: false
+        )
+    }
+
+    private func assertSourceMutationRecoversAfterRevisionSynchronizationFailure(
+        initializingRevision: Bool
+    ) async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        var stores = 0
+        keys.onStore = { _ in stores += 1 }
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let original = try fixture()
+        let replacement = try mnemonicFixture()
+        var source = original.source
+        var sourceLoads = 0
+        var rejectSynchronization = false
+        var synchronizationFailures = 0
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            synchronizeDefaults: { value in
+                if rejectSynchronization && (initializingRevision || value.integer(
+                    forKey: "SafariApprovalVault.hostSourceRevision.v1"
+                ) > 1) {
+                    synchronizationFailures += 1
+                    return false
+                }
+                return value.synchronize()
+            },
+            sourceSnapshot: {
+                sourceLoads += 1
+                return source
+            }
+        )
+        if initializingRevision {
+            try vault.publish(
+                source: source,
+                sourceRevision: 1,
+                integrityKey: integrityKey
+            )
+        } else {
+            host.start()
+        }
+        let originalIdentity = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let unlocked = await vault.unlock(reason: "Before metadata failure")
+        let previousAccess = try XCTUnwrap(unlocked)
+        XCTAssertNotNil(previousAccess.privateKey(
+            walletID: "wallet",
+            account: original.account
+        ))
+        let initialSourceLoads = sourceLoads
+        rejectSynchronization = true
+        var mutations = 0
+
+        let result = try host.performSourceMutation {
+            mutations += 1
+            XCTAssertTrue(keys.keys.isEmpty)
+            XCTAssertEqual(try Data(contentsOf: url), Data())
+            source = replacement.source
+            return "saved"
+        }
+
+        XCTAssertEqual(result, "saved")
+        XCTAssertEqual(mutations, 1)
+        XCTAssertEqual(stores, 1)
+        XCTAssertEqual(sourceLoads, initialSourceLoads)
+        XCTAssertGreaterThan(synchronizationFailures, 0)
+        XCTAssertNil(vault.catalogAccess())
+        XCTAssertTrue(keys.keys.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: url), Data())
+        XCTAssertNil(defaults.data(
+            forKey: "SafariApprovalVault.hostPublicationMetadata.v1"
+        ))
+        XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
+        XCTAssertNil(previousAccess.privateKey(
+            walletID: "wallet",
+            account: original.account
+        ))
+        XCTAssertNil(previousAccess.takeExecutionLease())
+
+        for _ in 0..<2 {
+            let previousFailures = synchronizationFailures
+            host.reconcile()
+            XCTAssertGreaterThan(synchronizationFailures, previousFailures)
+            XCTAssertEqual(mutations, 1)
+            XCTAssertEqual(stores, 1)
+            XCTAssertNil(vault.catalogAccess())
+            XCTAssertTrue(keys.keys.isEmpty)
+            XCTAssertEqual(try Data(contentsOf: url), Data())
+        }
+
+        rejectSynchronization = false
+        host.reconcile()
+
+        let recovered = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        XCTAssertEqual(mutations, 1)
+        XCTAssertEqual(stores, 2)
+        XCTAssertNotEqual(recovered.generation, originalIdentity.generation)
+        XCTAssertNotEqual(recovered.catalogData, originalIdentity.catalogData)
+        XCTAssertEqual(recovered.sourceRevision, initializingRevision ? 1 : 2)
+        let recoveredUnlock = await vault.unlock(reason: "After metadata recovery")
+        let recoveredAccess = try XCTUnwrap(recoveredUnlock)
+        XCTAssertNotNil(recoveredAccess.privateKey(
+            walletID: "mnemonic-wallet",
+            account: replacement.account
+        ))
+        XCTAssertNil(keys.keys[try XCTUnwrap(originalIdentity.generation)])
+        XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
+        XCTAssertNil(previousAccess.takeExecutionLease())
     }
 
     func testSourceMutationRevokesCachedVaultEvenWithoutReconciliation()
@@ -1274,16 +1463,22 @@ final class SafariApprovalVaultTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         var source: SafariApprovalSourceSnapshot? = try fixture().source
+        var synchronizationAttempts = 0
         let host = SafariApprovalVaultHost(
             vault: vault,
             defaults: defaults,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            synchronizeDefaults: { value in
+                synchronizationAttempts += 1
+                return value.synchronize()
+            },
             sourceSnapshot: { source }
         )
         host.start()
         let cachedEnvelope = try Data(contentsOf: url)
         let unlocked = await vault.unlock(reason: "Before mutation")
         let priorAccess = try XCTUnwrap(unlocked)
+        let attemptsBeforeRevocation = synchronizationAttempts
 
         keys.removeError = SafariApprovalVault.Error.keychainFailure(errSecIO)
         XCTAssertThrowsError(try host.performSourceMutation {
@@ -1291,6 +1486,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             source = nil
         })
         XCTAssertNotNil(source)
+        XCTAssertEqual(synchronizationAttempts, attemptsBeforeRevocation)
 
         keys.removeError = nil
         XCTAssertThrowsError(try host.performSourceMutation {

@@ -111,6 +111,39 @@ actor ExtensionBridge {
 
     enum Phase: String, Codable { case queued, approving, responded }
 
+    enum ManualSwitchRequestState: String, Sendable {
+        case pending, approved, completed
+    }
+
+    struct ManualSwitchRequest: Equatable, Sendable {
+        let handle: Handle
+        let host: String
+        let configurationKey: String
+        let revisions: ProviderRevisions
+        let state: ManualSwitchRequestState
+
+        var json: [String: Any] {
+            [
+                "id": handle.id,
+                "host": host,
+                "configurationKey": configurationKey,
+                "requestToken": handle.requestToken,
+                "revisions": revisions.json,
+                "state": state.rawValue,
+            ]
+        }
+    }
+
+    struct ManualSwitchRequestsPage: Equatable, Sendable {
+        let requests: [ManualSwitchRequest]
+        let nextCursor: String?
+    }
+
+    enum ManualSwitchRequestsResult: Equatable, Sendable {
+        case available(ManualSwitchRequestsPage)
+        case unavailable, invalidCursor
+    }
+
     struct Snapshot {
         let handle: Handle
         let phase: Phase
@@ -350,7 +383,7 @@ actor ExtensionBridge {
     }
 
     enum AdmissionKind: Equatable, Sendable {
-        case new, replay
+        case new, replay, coalesced
     }
 
     enum EnqueueResult {
@@ -403,6 +436,7 @@ actor ExtensionBridge {
     static let maximumRetainedRequests = 16
     static let maximumRetainedRequestsPerOrigin = 12
     static let maximumGlobalRetainedRequests = maximumRetainedRequests
+    static let maximumManualSwitchPageBytes = maximumPayloadBytes * 2
     static let maximumStoredRecordBytes = maximumPayloadBytes * 2
     static let maximumRetainedBytes = maximumRetainedRequests * maximumStoredRecordBytes
     static let maximumRetainedBytesPerOrigin =
@@ -574,6 +608,26 @@ actor ExtensionBridge {
 
     func list(profileIdentifier: UUID?) -> SnapshotsResult {
         store.list(profileIdentifier: profileIdentifier)
+    }
+
+    func listManualSwitchRequests(
+        profileIdentifier: UUID?,
+        cursor: String? = nil
+    ) -> ManualSwitchRequestsResult {
+        store.listManualSwitchRequests(
+            profileIdentifier: profileIdentifier,
+            cursor: cursor
+        )
+    }
+
+    func loadManualSwitch(
+        handle: Handle,
+        configurationKey: String
+    ) -> SnapshotResult {
+        store.loadManualSwitch(
+            handle: handle,
+            configurationKey: configurationKey
+        )
     }
 
     func load(handle: Handle) -> SnapshotResult { store.load(handle: handle) }
