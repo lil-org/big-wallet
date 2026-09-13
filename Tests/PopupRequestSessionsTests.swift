@@ -341,35 +341,49 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
 
     func testCallerCancellationDoesNotAbortStartedDurableOperation() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 458)
-        await store.insert(snapshot)
-        guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
-            return XCTFail("Expected claim")
-        }
-        let executor = DurableApprovalExecutor(store: store)
-        let response = try XCTUnwrap(snapshot.request).response(error: .userRejected)
-        let gate = CompactPopupGate()
-        let started = expectation(description: "operation started")
-        let task = Task { @MainActor in
-            await executor.executeSigning(
-                claim: claim,
-                deadline: Date().addingTimeInterval(60),
-                acquireWalletLease: { WalletExecutionLease() }
-            ) {
-                started.fulfill()
-                await gate.wait()
-                XCTAssertFalse(Task.isCancelled)
-                return .response(response)
+        for cancelDuringLease in [false, true] {
+            let store = CompactPopupStore()
+            let snapshot = try popupSnapshot(id: 458)
+            await store.insert(snapshot)
+            guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+                return XCTFail("Expected claim")
             }
+            let executor = DurableApprovalExecutor(store: store)
+            let response = try XCTUnwrap(snapshot.request).response(error: .userRejected)
+            let gate = CompactPopupGate()
+            let started = expectation(description: "cancellation boundary reached")
+            let walletAccess = RequestScopedWalletAccess(
+                CompactWalletAccess(account: popupTestAccount()),
+                acquireExecutionLease: {
+                    if cancelDuringLease {
+                        started.fulfill()
+                        await gate.wait()
+                    }
+                    return WalletExecutionLease()
+                }
+            )
+            let task = Task { @MainActor in
+                await executor.executeSigning(
+                    claim: claim,
+                    deadline: Date().addingTimeInterval(60),
+                    acquireWalletLease: { await walletAccess.takeExecutionLease() }
+                ) {
+                    if !cancelDuringLease {
+                        started.fulfill()
+                        await gate.wait()
+                    }
+                    XCTAssertFalse(Task.isCancelled)
+                    return .response(response)
+                }
+            }
+            await fulfillment(of: [started], timeout: 1)
+            task.cancel()
+            await gate.open()
+            let result = await task.value
+            XCTAssertEqual(result, .persisted)
+            let events = await store.events()
+            XCTAssertEqual(events, ["claim", "begin", "complete"])
         }
-        await fulfillment(of: [started], timeout: 1)
-        task.cancel()
-        await gate.open()
-        let result = await task.value
-        XCTAssertEqual(result, .persisted)
-        let events = await store.events()
-        XCTAssertEqual(events, ["claim", "begin", "complete"])
     }
 
     func testZeroBroadcastTimeoutPersistsRecoveryOnceDespiteLateSend() async throws {

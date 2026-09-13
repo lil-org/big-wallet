@@ -887,7 +887,7 @@ final class PopupRequestSessions {
                     token: approval.token,
                     deadline: executionDeadline,
                     acquireWalletLease: {
-                        walletAccess.takeExecutionLease()
+                        await walletAccess.takeExecutionLease()
                     }
                 ) {
                     await self.requestProcessor.execute(
@@ -1143,7 +1143,7 @@ final class PopupRequestSessions {
             token: approval.token,
             deadline: executionDeadline,
             acquireWalletLease: {
-                walletAccess.takeExecutionLease()
+                await walletAccess.takeExecutionLease()
             }
         ) {
             await self.requestProcessor.execute(

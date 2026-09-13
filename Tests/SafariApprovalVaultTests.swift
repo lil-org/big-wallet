@@ -467,8 +467,10 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         let unlocked = await vault.unlock(reason: "Approve")
         let access = try XCTUnwrap(unlocked)
-        let executionLease = try XCTUnwrap(access.takeExecutionLease())
-        XCTAssertNil(access.takeExecutionLease())
+        let executionLeaseValue = await access.takeExecutionLease()
+        let executionLease = try XCTUnwrap(executionLeaseValue)
+        let reusedLease = await access.takeExecutionLease()
+        XCTAssertNil(reusedLease)
 
         XCTAssertThrowsError(try vault.acquireCoordinationLease(
             timeoutNanoseconds: 1_000_000
@@ -478,6 +480,73 @@ final class SafariApprovalVaultTests: XCTestCase {
         executionLease.release()
         try vault.markUnavailable()
         XCTAssertNil(vault.catalogAccess())
+    }
+
+    @MainActor
+    func testOverlappingExecutionLeasesAllowMainActorRelease() async throws {
+        let url = temporaryURL()
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(
+                at: url.appendingPathExtension("coordination-lock")
+            )
+        }
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: MemoryApprovalKeyStore(),
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        try vault.publish(source: fixture().source, integrityKey: integrityKey)
+        let firstAccess = await vault.unlock(reason: "First approval")
+        let secondAccess = await vault.unlock(reason: "Second approval")
+        let firstLeaseValue = await firstAccess?.takeExecutionLease()
+        let firstLease = try XCTUnwrap(firstLeaseValue)
+        defer { firstLease.release() }
+        let releaseTask = Task { @MainActor in
+            try await Task.sleep(for: .milliseconds(50))
+            firstLease.release()
+        }
+        defer { releaseTask.cancel() }
+
+        let secondLease = await secondAccess?.takeExecutionLease()
+
+        XCTAssertNotNil(secondLease)
+        secondLease?.release()
+        try await releaseTask.value
+    }
+
+    @MainActor
+    func testExecutionLeaseIsReleasedWhenScopeEndsDuringAcquisition() async throws {
+        let account = try fixture().account
+        for cancel in [false, true] {
+            let started = expectation(description: "Lease acquisition started")
+            var continuation: CheckedContinuation<WalletExecutionLease?, Never>?
+            let access = RequestScopedWalletAccess(
+                DerivationRaceWalletAccess(account: account) {},
+                acquireExecutionLease: {
+                    await withCheckedContinuation {
+                        continuation = $0
+                        started.fulfill()
+                    }
+                }
+            )
+            let acquisition = Task { await access.takeExecutionLease() }
+            await fulfillment(of: [started], timeout: 1)
+            let finishAcquisition = try XCTUnwrap(continuation)
+            if cancel {
+                acquisition.cancel()
+            } else {
+                access.invalidate()
+            }
+            var released = false
+            finishAcquisition.resume(returning: WalletExecutionLease { released = true })
+
+            let lease = await acquisition.value
+
+            XCTAssertNil(lease)
+            XCTAssertTrue(released)
+        }
     }
 
     func testExactCatalogBytesAreAuthenticated() async throws {
@@ -934,7 +1003,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         let unlockedValue = await vault.unlock(reason: "Approve")
         let unlocked = try XCTUnwrap(unlockedValue)
         XCTAssertNotNil(unlocked.privateKey(walletID: "wallet", account: try fixture().account))
-        let lease = try XCTUnwrap(unlocked.takeExecutionLease())
+        let leaseValue = await unlocked.takeExecutionLease()
+        let lease = try XCTUnwrap(leaseValue)
         lease.release()
         XCTAssertEqual(keychain.protectedKeyReads, 1)
     }
@@ -1523,7 +1593,8 @@ final class SafariApprovalVaultTests: XCTestCase {
             walletID: "wallet",
             account: original.account
         ))
-        XCTAssertNil(previousAccess.takeExecutionLease())
+        let previousLease = await previousAccess.takeExecutionLease()
+        XCTAssertNil(previousLease)
         let replacementUnlock = await vault.unlock(reason: "During metadata failure")
         let replacementAccess = try XCTUnwrap(replacementUnlock)
         XCTAssertNotNil(replacementAccess.privateKey(
@@ -1563,7 +1634,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         ))
         XCTAssertNil(keys.keys[try XCTUnwrap(originalIdentity.generation)])
         XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
-        XCTAssertNil(previousAccess.takeExecutionLease())
+        let replayedLease = await previousAccess.takeExecutionLease()
+        XCTAssertNil(replayedLease)
     }
 
     func testSourceMutationImmediatelyRecoversAfterTransientMetadataSynchronizationFailure()
@@ -1626,7 +1698,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotNil(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
         XCTAssertNil(keys.keys[try XCTUnwrap(first.generation)])
         XCTAssertTrue(previousAccess.orderedAccounts.isEmpty)
-        XCTAssertNil(previousAccess.takeExecutionLease())
+        let previousLease = await previousAccess.takeExecutionLease()
+        XCTAssertNil(previousLease)
         let replacementUnlock = await vault.unlock(reason: "After mutation")
         let access = try XCTUnwrap(replacementUnlock)
         XCTAssertNotNil(access.privateKey(walletID: "mnemonic-wallet", account: replacement.account))
@@ -1685,7 +1758,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         let replayedAccess = await vault.unlock(reason: "After mutation")
         XCTAssertNil(replayedAccess)
         XCTAssertTrue(priorAccess.orderedAccounts.isEmpty)
-        XCTAssertNil(priorAccess.takeExecutionLease())
+        let priorLease = await priorAccess.takeExecutionLease()
+        XCTAssertNil(priorLease)
     }
 
     func testPublicationRevokesOldKeysBeforeSourceMutation()

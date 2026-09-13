@@ -426,13 +426,13 @@ final class RequestScopedWalletAccess: WalletAccess {
     private let lock = NSLock()
     private var access: WalletAccess?
     private let isCurrent: () -> Bool
-    private let acquireExecutionLease: () -> WalletExecutionLease?
+    private let acquireExecutionLease: () async -> WalletExecutionLease?
     private var executionLeaseTaken = false
 
     init(
         _ access: WalletAccess,
         isCurrent: @escaping () -> Bool = { true },
-        acquireExecutionLease: (() -> WalletExecutionLease?)? = nil
+        acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil
     ) {
         self.access = access
         self.isCurrent = isCurrent
@@ -499,16 +499,19 @@ final class RequestScopedWalletAccess: WalletAccess {
         return privateKey
     }
 
-    func takeExecutionLease() -> WalletExecutionLease? {
-        lock.lock()
-        guard access != nil, !executionLeaseTaken else {
-            lock.unlock()
+    func takeExecutionLease() async -> WalletExecutionLease? {
+        let canAcquire = lock.withLock {
+            guard access != nil, !executionLeaseTaken else { return false }
+            executionLeaseTaken = true
+            return true
+        }
+        guard canAcquire else { return nil }
+        defer { invalidate() }
+        let lease = await acquireExecutionLease()
+        guard !Task.isCancelled, lock.withLock({ access != nil }) else {
+            lease?.release()
             return nil
         }
-        executionLeaseTaken = true
-        lock.unlock()
-        let lease = acquireExecutionLease()
-        invalidate()
         return lease
     }
 

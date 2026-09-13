@@ -188,7 +188,8 @@ final class DurableApprovalExecutor {
         }
         var acquiredExecutionLease: WalletExecutionLease?
         if let acquireWalletLease = plan.acquireWalletLease {
-            guard let lease = await acquireWalletLease() else {
+            let lease = await Task { await acquireWalletLease() }.value
+            guard let lease else {
                 return await rollback(permit: permit)
             }
             acquiredExecutionLease = lease

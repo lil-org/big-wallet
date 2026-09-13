@@ -698,7 +698,7 @@ final class SafariApprovalVault {
                 self?.isCurrent(envelope) == true
             },
             acquireExecutionLease: { [weak self] in
-                self?.executionLease(ifCurrent: envelope)
+                await self?.executionLease(ifCurrent: envelope)
             }
         ))
     }
@@ -888,22 +888,32 @@ final class SafariApprovalVault {
     }
 
     private func executionLease(ifCurrent envelope: Envelope)
-        -> WalletExecutionLease? {
-        guard let coordinationLease = try? acquireCoordinationLease(
-                  timeoutNanoseconds:
-                    Self.coordinationLockTimeoutNanoseconds
-              ) else { return nil }
+        async -> WalletExecutionLease? {
+        let coordinationLock = CrossProcessFileLock(fileURL: coordinationLockURL)
+        let deadline = ContinuousClock.now + .nanoseconds(
+            Int64(Self.coordinationLockTimeoutNanoseconds)
+        )
+        do {
+            while true {
+                try Task.checkCancellation()
+                if try coordinationLock.tryAcquire() { break }
+                guard ContinuousClock.now < deadline else { return nil }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        } catch {
+            return nil
+        }
         let current = withLock {
             loadEnvelopeLocked() == envelope &&
                 keyStore.availability(generation: envelope.generation)
                     .permitsPublishedEnvelope
         }
         guard current else {
-            coordinationLease.release()
+            coordinationLock.release()
             return nil
         }
         return WalletExecutionLease {
-            coordinationLease.release()
+            coordinationLock.release()
         }
     }
 
