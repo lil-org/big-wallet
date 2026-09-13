@@ -84,7 +84,7 @@ struct Strings {
     static let transactionSubmissionStatusUnknown = loc("Transaction submission status is unknown. Check the transaction ID before trying again.")
     static let unsupportedSolanaSendOptions = loc("Unsupported Solana send options")
     static let privateBrowsingUnsupported = loc("Big Wallet requests are unavailable in Private Browsing.")
-    static let secureApprovalSetupRequired = loc("Open Big Wallet once to enable secure Safari approvals.")
+    static let secureApprovalSetupRequired = loc("Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry.")
     static let unrecognizedChainId = loc("Unrecognized chain ID")
     static let providerNotReady = loc("provider is not ready")
     static let done = loc("Done")

@@ -18258,286 +18258,6 @@
         }
       }
     },
-    "Open Big Wallet once to enable secure Safari approvals." : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "افتح Big Wallet مرة واحدة لتمكين موافقات Safari الآمنة."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "নিরাপদ Safari অনুমোদন চালু করতে একবার Big Wallet খুলুন।"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Obre Big Wallet una vegada per activar les aprovacions segures de Safari."
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otevřete jednou Big Wallet a povolte bezpečná schválení v Safari."
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Åbn Big Wallet én gang for at aktivere sikre Safari-godkendelser."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Öffne Big Wallet einmal, um sichere Safari-Genehmigungen zu aktivieren."
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ανοίξτε το Big Wallet μία φορά για να ενεργοποιήσετε τις ασφαλείς εγκρίσεις Safari."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Big Wallet once to enable secure Safari approvals."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre Big Wallet una vez para activar las aprobaciones seguras de Safari."
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre Big Wallet una vez para habilitar las aprobaciones seguras de Safari."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Avaa Big Wallet kerran ottaaksesi Safarin turvalliset hyväksynnät käyttöön."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvrez Big Wallet une fois pour activer les approbations Safari sécurisées."
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "સુરક્ષિત Safari મંજૂરીઓ સક્રિય કરવા Big Wallet એક વખત ખોલો."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "פתחו את Big Wallet פעם אחת כדי להפעיל אישורי Safari מאובטחים."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सुरक्षित Safari स्वीकृतियाँ सक्षम करने के लिए Big Wallet एक बार खोलें।"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otvorite Big Wallet jednom kako biste omogućili sigurna Safari odobrenja."
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nyissa meg egyszer a Big Walletet a biztonságos Safari-jóváhagyások engedélyezéséhez."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buka Big Wallet sekali untuk mengaktifkan persetujuan Safari yang aman."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apri Big Wallet una volta per abilitare le approvazioni sicure di Safari."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Safariで安全な承認を有効にするため、Big Walletを1度開いてください。"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಸುರಕ್ಷಿತ Safari ಅನುಮೋದನೆಗಳನ್ನು ಸಕ್ರಿಯಗೊಳಿಸಲು Big Wallet ಅನ್ನು ಒಮ್ಮೆ ತೆರೆಯಿರಿ."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "안전한 Safari 승인을 활성화하려면 Big Wallet을 한 번 여세요."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "സുരക്ഷിത Safari അംഗീകാരങ്ങൾ സജ്ജമാക്കാൻ Big Wallet ഒരിക്കൽ തുറക്കുക."
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सुरक्षित Safari मंजुर्या सक्षम करण्यासाठी Big Wallet एकदा उघडा."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buka Big Wallet sekali untuk mendayakan kelulusan Safari yang selamat."
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Åpne Big Wallet én gang for å aktivere sikre Safari-godkjenninger."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Big Wallet eenmaal om veilige Safari-goedkeuringen in te schakelen."
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ସୁରକ୍ଷିତ Safari ଅନୁମୋଦନ ସକ୍ରିୟ କରିବାକୁ Big Wallet ଥରେ ଖୋଲନ୍ତୁ।"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਸੁਰੱਖਿਅਤ Safari ਮਨਜ਼ੂਰੀਆਂ ਨੂੰ ਸਰਗਰਮ ਕਰਨ ਲਈ Big Wallet ਨੂੰ ਇੱਕ ਵਾਰ ਖੋਲ੍ਹੋ।"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otwórz raz Big Wallet, aby włączyć bezpieczne zatwierdzanie w Safari."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o Big Wallet uma vez para ativar aprovações seguras no Safari."
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abra o Big Wallet uma vez para ativar aprovações seguras no Safari."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deschideți Big Wallet o dată pentru a activa aprobările Safari securizate."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Откройте Big Wallet один раз, чтобы включить безопасные подтверждения Safari."
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otvorte raz Big Wallet a povoľte bezpečné schvaľovanie v Safari."
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enkrat odprite Big Wallet, da omogočite varne odobritve v Safariju."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Öppna Big Wallet en gång för att aktivera säkra Safari-godkännanden."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "பாதுகாப்பான Safari ஒப்புதல்களை இயக்க Big Wallet-ஐ ஒருமுறை திறக்கவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "సురక్షిత Safari ఆమోదాలను ప్రారంభించడానికి Big Walletను ఒకసారి తెరవండి."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "เปิด Big Wallet หนึ่งครั้งเพื่อเปิดใช้งานการอนุมัติ Safari ที่ปลอดภัย"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Güvenli Safari onaylarını etkinleştirmek için Big Wallet'ı bir kez açın."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Відкрийте Big Wallet один раз, щоб увімкнути безпечні схвалення Safari."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "محفوظ Safari منظوریاں فعال کرنے کے لیے Big Wallet ایک بار کھولیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mở Big Wallet một lần để bật phê duyệt Safari an toàn."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开一次 Big Wallet 以启用安全的 Safari 批准。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "開啟一次 Big Wallet 以啟用安全的 Safari 核准。"
-          }
-        }
-      }
-    },
     "Options:\n\n• Private key\n• Secret words\n• Keystore" : {
       "comment" : "4660872014287670039",
       "localizations" : {
@@ -24996,6 +24716,286 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重設為"
+          }
+        }
+      }
+    },
+    "Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تتطلب الموافقات في Safari رمز دخول للجهاز. فعِّله في الإعدادات إذا لزم الأمر، ثم افتح Big Wallet وعُد إلى Safari للمحاولة مجددًا."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari-তে অনুমোদন দিতে ডিভাইসের পাসকোড প্রয়োজন। প্রয়োজনে সেটিংস থেকে পাসকোড চালু করুন, তারপর Big Wallet খুলে আবার চেষ্টা করতে Safari-তে ফিরে যান।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les aprovacions a Safari requereixen un codi d’accés del dispositiu. Activa’n un a Configuració si cal, després obre Big Wallet i torna a Safari per tornar-ho a provar."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schvalování v Safari vyžaduje přístupový kód zařízení. V případě potřeby ho zapněte v Nastavení, pak otevřete Big Wallet a vraťte se do Safari, kde to zkuste znovu."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkendelser i Safari kræver en adgangskode til enheden. Slå en til i Indstillinger, hvis det er nødvendigt. Åbn derefter Big Wallet, og vend tilbage til Safari for at prøve igen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Genehmigungen in Safari erfordern einen Gerätecode. Aktiviere bei Bedarf einen Code in den Einstellungen, öffne dann Big Wallet und kehre zu Safari zurück, um es erneut zu versuchen."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Οι εγκρίσεις στο Safari απαιτούν κωδικό συσκευής. Ενεργοποιήστε έναν στις Ρυθμίσεις, αν χρειάζεται, και μετά ανοίξτε το Big Wallet και επιστρέψτε στο Safari για να δοκιμάσετε ξανά."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las aprobaciones en Safari requieren un código de acceso del dispositivo. Activa uno en Ajustes si es necesario, luego abre Big Wallet y vuelve a Safari para intentarlo de nuevo."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las aprobaciones en Safari requieren un código de acceso del dispositivo. Activa uno en Configuración si es necesario, luego abre Big Wallet y vuelve a Safari para intentarlo de nuevo."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hyväksynnät Safarissa edellyttävät laitteen pääsykoodia. Ota pääsykoodi tarvittaessa käyttöön Asetuksissa, avaa sitten Big Wallet ja palaa Safariin yrittämään uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les approbations dans Safari nécessitent un code d’accès à l’appareil. Activez-en un dans Réglages si nécessaire, puis ouvrez Big Wallet et revenez dans Safari pour réessayer."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safariમાં મંજૂરી આપવા માટે ડિવાઇસનો પાસકોડ જરૂરી છે. જો જરૂરી હોય તો સેટિંગ્સમાં પાસકોડ ચાલુ કરો, પછી Big Wallet ખોલો અને ફરી પ્રયાસ કરવા Safariમાં પાછા જાઓ."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אישורים ב-Safari דורשים קוד גישה למכשיר. במידת הצורך, יש להפעיל אותו בהגדרות, ואז לפתוח את Big Wallet ולחזור ל-Safari כדי לנסות שוב."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari में मंज़ूरी देने के लिए डिवाइस का पासकोड ज़रूरी है। ज़रूरत हो तो सेटिंग्स में पासकोड चालू करें, फिर Big Wallet खोलें और दोबारा कोशिश करने के लिए Safari में लौटें।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odobrenja u pregledniku Safari zahtijevaju šifru uređaja. Po potrebi je uključite u Postavkama, zatim otvorite Big Wallet i vratite se u Safari kako biste pokušali ponovno."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Safari-jóváhagyásokhoz a készülék jelkódja szükséges. Ha szükséges, kapcsoljon be egyet a Beállításokban, majd nyissa meg a Big Walletet, és térjen vissza a Safariba az újrapróbálkozáshoz."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Persetujuan di Safari memerlukan kode sandi perangkat. Aktifkan di Pengaturan jika diperlukan, lalu buka Big Wallet dan kembali ke Safari untuk mencoba lagi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le approvazioni in Safari richiedono un codice di accesso del dispositivo. Attivane uno in Impostazioni se necessario, poi apri Big Wallet e torna in Safari per riprovare."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safariで承認するには、デバイスのパスコードが必要です。必要に応じて「設定」でパスコードを有効にし、Big Walletを開いてからSafariに戻り、もう一度お試しください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safariಯಲ್ಲಿ ಅನುಮೋದಿಸಲು ಸಾಧನದ ಪಾಸ್‌ಕೋಡ್ ಅಗತ್ಯವಿದೆ. ಅಗತ್ಯವಿದ್ದರೆ ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಪಾಸ್‌ಕೋಡ್ ಸಕ್ರಿಯಗೊಳಿಸಿ, ನಂತರ Big Wallet ತೆರೆದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು Safariಗೆ ಹಿಂತಿರುಗಿ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari에서 승인하려면 기기 암호가 필요합니다. 필요한 경우 설정에서 기기 암호를 켠 다음, Big Wallet을 열고 Safari로 돌아가 다시 시도하세요."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safariയിൽ അംഗീകരിക്കാൻ ഉപകരണത്തിന്റെ പാസ്‌കോഡ് ആവശ്യമാണ്. ആവശ്യമെങ്കിൽ ക്രമീകരണങ്ങളിൽ പാസ്‌കോഡ് പ്രവർത്തനക്ഷമമാക്കുക, തുടർന്ന് Big Wallet തുറന്ന് വീണ്ടും ശ്രമിക്കാൻ Safariയിലേക്ക് മടങ്ങുക."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari मध्ये मंजुरी देण्यासाठी डिव्हाइसचा पासकोड आवश्यक आहे. गरज असल्यास सेटिंग्जमध्ये पासकोड सुरू करा, नंतर Big Wallet उघडा आणि पुन्हा प्रयत्न करण्यासाठी Safari मध्ये परत जा."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kelulusan dalam Safari memerlukan kod laluan peranti. Aktifkannya dalam Seting jika perlu, kemudian buka Big Wallet dan kembali ke Safari untuk mencuba lagi."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenninger i Safari krever en kode på enheten. Aktiver en i Innstillinger om nødvendig, åpne deretter Big Wallet og gå tilbake til Safari for å prøve igjen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goedkeuringen in Safari vereisen een toegangscode voor het apparaat. Stel zo nodig een code in via Instellingen, open daarna Big Wallet en ga terug naar Safari om het opnieuw te proberen."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safariରେ ଅନୁମୋଦନ କରିବା ପାଇଁ ଡିଭାଇସ୍‌ର ପାସ୍‌କୋଡ୍ ଆବଶ୍ୟକ। ଆବଶ୍ୟକ ହେଲେ ସେଟିଂସ୍‌ରେ ପାସ୍‌କୋଡ୍ ସକ୍ରିୟ କରନ୍ତୁ, ତାପରେ Big Wallet ଖୋଲନ୍ତୁ ଏବଂ ପୁଣି ଚେଷ୍ଟା କରିବାକୁ Safariକୁ ଫେରନ୍ତୁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari ਵਿੱਚ ਮਨਜ਼ੂਰੀ ਦੇਣ ਲਈ ਡਿਵਾਈਸ ਦਾ ਪਾਸਕੋਡ ਲੋੜੀਂਦਾ ਹੈ। ਲੋੜ ਪੈਣ ’ਤੇ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਪਾਸਕੋਡ ਚਾਲੂ ਕਰੋ, ਫਿਰ Big Wallet ਖੋਲ੍ਹੋ ਅਤੇ ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰਨ ਲਈ Safari ਵਿੱਚ ਵਾਪਸ ਜਾਓ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zatwierdzanie w Safari wymaga kodu dostępu do urządzenia. W razie potrzeby włącz go w Ustawieniach, następnie otwórz Big Wallet i wróć do Safari, aby spróbować ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As aprovações no Safari exigem um código de acesso do dispositivo. Ative um em Ajustes, se necessário, depois abra o Big Wallet e volte ao Safari para tentar novamente."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As aprovações no Safari requerem um código de acesso do dispositivo. Ative um nas Definições, se necessário, depois abra o Big Wallet e volte ao Safari para tentar novamente."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprobările în Safari necesită un cod de acces al dispozitivului. Activați unul în Configurări, dacă este necesar, apoi deschideți Big Wallet și reveniți la Safari pentru a încerca din nou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для подтверждений в Safari требуется код-пароль устройства. При необходимости включите его в Настройках, затем откройте Big Wallet и вернитесь в Safari, чтобы повторить попытку."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schvaľovanie v Safari vyžaduje prístupový kód zariadenia. V prípade potreby ho zapnite v Nastaveniach, potom otvorte Big Wallet a vráťte sa do Safari, kde to skúste znova."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odobritve v Safariju zahtevajo kodo za zaklepanje naprave. Po potrebi jo vklopite v Nastavitvah, nato odprite Big Wallet in se vrnite v Safari, da poskusite znova."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkännanden i Safari kräver en lösenkod för enheten. Aktivera en i Inställningar vid behov, öppna sedan Big Wallet och gå tillbaka till Safari för att försöka igen."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari-இல் ஒப்புதல் அளிக்க, சாதனத்தின் கடவுக்குறியீடு தேவை. தேவைப்பட்டால் அமைப்புகளில் கடவுக்குறியீட்டை இயக்கி, பின்னர் Big Wallet-ஐத் திறந்து, மீண்டும் முயற்சிக்க Safari-க்குத் திரும்பவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safariలో ఆమోదించడానికి పరికర పాస్‌కోడ్ అవసరం. అవసరమైతే సెట్టింగ్‌లలో పాస్‌కోడ్‌ను ప్రారంభించండి, ఆపై Big Wallet తెరిచి, మళ్లీ ప్రయత్నించడానికి Safariకి తిరిగి వెళ్లండి."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การอนุมัติใน Safari ต้องใช้รหัสปลดล็อกอุปกรณ์ หากจำเป็น ให้เปิดใช้รหัสในการตั้งค่า จากนั้นเปิด Big Wallet แล้วกลับไปที่ Safari เพื่อลองอีกครั้ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari onayları için bir aygıt parolası gerekir. Gerekirse Ayarlar’dan bir parola etkinleştirin, ardından Big Wallet’ı açın ve tekrar denemek için Safari’ye dönün."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для схвалень у Safari потрібен код допуску пристрою. За потреби ввімкніть його в Параметрах, потім відкрийте Big Wallet і поверніться до Safari, щоб спробувати знову."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari میں منظوری دینے کے لیے ڈیوائس کا پاس کوڈ ضروری ہے۔ ضرورت ہو تو سیٹنگز میں پاس کوڈ فعال کریں، پھر Big Wallet کھولیں اور دوبارہ کوشش کرنے کے لیے Safari پر واپس جائیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Việc phê duyệt trong Safari yêu cầu mật mã thiết bị. Nếu cần, hãy bật mật mã trong Cài đặt, sau đó mở Big Wallet rồi quay lại Safari để thử lại."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Safari 中批准请求需要设备密码。如有需要，请先在“设置”中启用设备密码，再打开 Big Wallet，然后返回 Safari 重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Safari 中核准要求需要裝置密碼。如有需要，請先在「設定」中啟用裝置密碼，再開啟 Big Wallet，然後返回 Safari 再試一次。"
           }
         }
       }

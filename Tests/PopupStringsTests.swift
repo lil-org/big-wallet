@@ -121,7 +121,7 @@ final class PopupStringsTests: XCTestCase {
 
         for key in [
             "Big Wallet requests are unavailable in Private Browsing.",
-            "Open Big Wallet once to enable secure Safari approvals.",
+            "Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry.",
             "Transaction submission status is unknown. Check the transaction ID before trying again.",
         ] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
