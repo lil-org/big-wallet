@@ -88,68 +88,6 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         }
     }
 
-    enum FeeSource: String, Codable, Equatable, Sendable {
-        case automatic, dapp, slider, manual
-
-        init(_ source: TransactionFeeSource) {
-            switch source {
-            case .automatic:
-                self = .automatic
-            case .dapp:
-                self = .dapp
-            case .slider:
-                self = .slider
-            case .manual:
-                self = .manual
-            }
-        }
-
-        var value: TransactionFeeSource {
-            switch self {
-            case .automatic:
-                return .automatic
-            case .dapp:
-                return .dapp
-            case .slider:
-                return .slider
-            case .manual:
-                return .manual
-            }
-        }
-    }
-
-    struct FeeProvenance: Codable, Equatable, Sendable {
-        let gasPrice: FeeSource?
-        let maxPriorityFeePerGas: FeeSource?
-        let maxFeePerGas: FeeSource?
-
-        init(
-            gasPrice: FeeSource?,
-            maxPriorityFeePerGas: FeeSource?,
-            maxFeePerGas: FeeSource?
-        ) {
-            self.gasPrice = gasPrice
-            self.maxPriorityFeePerGas = maxPriorityFeePerGas
-            self.maxFeePerGas = maxFeePerGas
-        }
-
-        init(_ provenance: TransactionFeeProvenance) {
-            gasPrice = provenance.gasPrice.map(FeeSource.init)
-            maxPriorityFeePerGas = provenance.maxPriorityFeePerGas.map(
-                FeeSource.init
-            )
-            maxFeePerGas = provenance.maxFeePerGas.map(FeeSource.init)
-        }
-
-        var value: TransactionFeeProvenance {
-            TransactionFeeProvenance(
-                gasPrice: gasPrice?.value,
-                maxPriorityFeePerGas: maxPriorityFeePerGas?.value,
-                maxFeePerGas: maxFeePerGas?.value
-            )
-        }
-    }
-
     struct NetworkIdentity: Codable, Equatable, Sendable {
 
         enum Source: String, Codable, Equatable, Sendable {
@@ -218,7 +156,7 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         let nonce: String
         let gasLimit: String
         let fee: TransactionFee
-        let feeProvenance: FeeProvenance
+        let feeProvenance: TransactionFeeProvenance
         let feeBasisBaseFeePerGas: String?
         let reviewedNetwork: NetworkIdentity
 
@@ -247,7 +185,7 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
                     maxFeePerGas: maximum.toHexString(withPrefix: true)
                 )
             }
-            feeProvenance = .init(transaction.feeProvenance)
+            feeProvenance = transaction.feeProvenance
             feeBasisBaseFeePerGas = transaction.feeBasisBaseFeePerGas?
                 .toHexString(withPrefix: true)
             self.reviewedNetwork = networkIdentity
@@ -305,7 +243,7 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
             result.gas = gasLimit
             result.replacePreparedFee(
                 preparedFee,
-                provenance: feeProvenance.value
+                provenance: feeProvenance
             )
             result.currentBaseFeePerGas = feeBasis
             result.nextBaseFeePerGas = nil

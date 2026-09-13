@@ -81,11 +81,12 @@ final class NativeApprovalCoordinator {
                 preparation: PreparationProgress,
                 cancelRequested: Bool = false
             )
+            case recoverResponse(ResponseToExtension)
             case reject
         }
 
         var action: Action
-        var retryCount = 0
+        var remainingInitialAttempts = 3
         var nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
 
         init(_ action: Action) {
@@ -97,7 +98,7 @@ final class NativeApprovalCoordinator {
             case .acquireReceipt(let requested), .stage(_, let requested),
                  .respond(_, _, let requested):
                 return requested
-            case .cancelBeforeAuthentication, .reject:
+            case .cancelBeforeAuthentication, .recoverResponse, .reject:
                 return false
             }
         }
@@ -108,9 +109,9 @@ final class NativeApprovalCoordinator {
                 action = .acquireReceipt(cancelRequested: true)
             case .stage(let decision, _):
                 action = .stage(decision, cancelRequested: true)
-            case .respond(let response, let preparation, _) where retryCount < 3:
+            case .respond(let response, let preparation, _):
                 action = .respond(response, preparation: preparation, cancelRequested: true)
-            case .respond, .cancelBeforeAuthentication, .reject:
+            case .recoverResponse, .cancelBeforeAuthentication, .reject:
                 break
             }
         }
@@ -227,7 +228,7 @@ final class NativeApprovalCoordinator {
             case .cancelBeforeAuthentication(let receiptOwned):
                 return .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
             case .stage: return .staging
-            case .respond: return .responding
+            case .respond, .recoverResponse: return .responding
             case .reject: return .rejecting
             }
         }
@@ -605,7 +606,7 @@ final class NativeApprovalCoordinator {
             )
         case .reject:
             stopLifecycleMonitor()
-        case .acquireReceipt, .stage, .respond:
+        case .acquireReceipt, .stage, .respond, .recoverResponse:
             break
         }
         return operation
@@ -661,14 +662,23 @@ final class NativeApprovalCoordinator {
                 }
                 return
             case .retry:
-                operation.retryCount += 1
-                if case .stage = operation.action, operation.retryCount >= 3 {
-                    notifyFailureOnce()
-                    operation = installPersistence(.reject)
-                    continue
-                }
-                if case .respond = operation.action, operation.retryCount == 3 {
-                    notifyFailureOnce()
+                switch operation.action {
+                case .stage:
+                    operation.remainingInitialAttempts -= 1
+                    if operation.remainingInitialAttempts == 0 {
+                        notifyFailureOnce()
+                        operation = installPersistence(.reject)
+                        continue
+                    }
+                case .respond(let response, _, _):
+                    operation.remainingInitialAttempts -= 1
+                    if operation.remainingInitialAttempts == 0 {
+                        operation.action = .recoverResponse(response)
+                        notifyFailureOnce()
+                    }
+                case .acquireReceipt, .cancelBeforeAuthentication,
+                     .recoverResponse, .reject:
+                    break
                 }
                 await waitBeforeDeadline(operation.nextRetryDelay)
                 guard isCurrent(operation) else { return }
@@ -706,7 +716,7 @@ final class NativeApprovalCoordinator {
                 runtimeInstanceIdentifier: runtime.instanceIdentifier,
                 decision: decision
             )
-        case .respond(let response, _, _):
+        case .respond(let response, _, _), .recoverResponse(let response):
             result = await store.completeNativeDelivery(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
@@ -735,7 +745,7 @@ final class NativeApprovalCoordinator {
                 onEvent?(.authenticationRequired)
             case .stage:
                 enterWaitingState(notify: true)
-            case .respond, .reject:
+            case .respond, .recoverResponse, .reject:
                 finish()
             case .cancelBeforeAuthentication:
                 break
@@ -756,7 +766,7 @@ final class NativeApprovalCoordinator {
             case .reject:
                 notifyFailureOnce()
                 return await reconcilePersistence(operation)
-            case .respond where operation.retryCount >= 3:
+            case .recoverResponse:
                 notifyFailureOnce()
                 return await reconcilePersistence(operation)
             default:
@@ -773,8 +783,8 @@ final class NativeApprovalCoordinator {
         switch status {
         case .staged:
             let notify: Bool
-            if case .respond = operation.action {
-                notify = operation.retryCount < 3
+            if case .recoverResponse = operation.action {
+                notify = false
             } else {
                 notify = true
             }
@@ -786,7 +796,7 @@ final class NativeApprovalCoordinator {
             case .stage:
                 notifyFailureOnce()
                 return .replace(.reject)
-            case .respond where operation.retryCount < 3:
+            case .respond:
                 supersede()
             default:
                 finish()
@@ -796,7 +806,7 @@ final class NativeApprovalCoordinator {
             case .stage:
                 notifyFailureOnce()
                 return .replace(.reject)
-            case .respond where operation.retryCount < 3:
+            case .respond:
                 return operation.cancellationRequested ? .replace(.reject) : .prepareAgain
             default:
                 switch status {
@@ -821,9 +831,9 @@ final class NativeApprovalCoordinator {
         switch operation.action {
         case .cancelBeforeAuthentication(receiptOwned: true):
             restoreAuthenticationWaiting()
-        case .respond where operation.retryCount < 3:
+        case .respond:
             finish()
-        case .reject, .respond:
+        case .reject, .recoverResponse:
             _ = await reconcilePersistence(operation)
             if isCurrent(operation) { finish() }
         default:

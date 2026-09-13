@@ -200,7 +200,7 @@ enum PreparedTransactionFee: Equatable, Sendable {
     }
 }
 
-enum TransactionFeeSource: Equatable, Sendable {
+enum TransactionFeeSource: String, Codable, Equatable, Sendable {
     case automatic
     case dapp
     case slider
@@ -215,7 +215,7 @@ enum TransactionFeeSource: Equatable, Sendable {
     }
 }
 
-struct TransactionFeeProvenance: Equatable, Sendable {
+struct TransactionFeeProvenance: Codable, Equatable, Sendable {
     var gasPrice: TransactionFeeSource?
     var maxPriorityFeePerGas: TransactionFeeSource?
     var maxFeePerGas: TransactionFeeSource?

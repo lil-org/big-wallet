@@ -72,6 +72,54 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
     }
 
+    private func orderedFixture() throws -> (
+        source: SafariApprovalSourceSnapshot,
+        accounts: [SpecificWalletAccount]
+    ) {
+        let password = WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword
+        let mnemonicKey = try XCTUnwrap(WalletStoredKey.importHDWallet(
+            mnemonic: WalletCoreProxyTestVectors.walletCoreJSONMnemonic,
+            name: "Mnemonic",
+            password: password,
+            coin: .solana
+        ))
+        let solanaAccount = try XCTUnwrap(mnemonicKey.account(index: 0))
+        let ethereumAccount = try XCTUnwrap(mnemonicKey.accountForCoin(
+            coin: .ethereum,
+            wallet: try XCTUnwrap(mnemonicKey.wallet(password: password))
+        ))
+        let privateKey = try XCTUnwrap(WalletStoredKey.importPrivateKey(
+            privateKey: Data(repeating: 1, count: 32),
+            name: "Imported",
+            password: password,
+            coin: .ethereum
+        ))
+        let importedAccount = try XCTUnwrap(privateKey.account(index: 0))
+        let wallets = [
+            WalletContainer(id: "z-wallet", key: mnemonicKey),
+            WalletContainer(id: "a-wallet", key: privateKey),
+        ]
+        return (
+            SafariApprovalSourceSnapshot(
+                catalog: WalletAccountCatalog(
+                    accounts: SourceWalletAccess.descriptors(for: wallets)
+                ),
+                password: password,
+                wallets: try wallets.map {
+                    SafariApprovalWalletRecord(
+                        walletID: $0.id,
+                        storedKeyJSON: try XCTUnwrap($0.key.exportJSON())
+                    )
+                }
+            ),
+            [
+                SpecificWalletAccount(walletId: "z-wallet", account: solanaAccount),
+                SpecificWalletAccount(walletId: "z-wallet", account: ethereumAccount),
+                SpecificWalletAccount(walletId: "a-wallet", account: importedAccount),
+            ]
+        )
+    }
+
     func testCatalogIsPublicOnlyAndUnlockedReadReusesAuthenticationContext()
         async throws {
         let url = temporaryURL()
@@ -135,12 +183,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             catalogJSON["accounts"] as? [[String: Any]]
         )
         XCTAssertEqual(Set(try XCTUnwrap(descriptors.first).keys), [
-            "accountOrder",
             "coin",
             "derivationPath",
             "normalizedAddress",
             "walletID",
-            "walletOrder",
         ])
         let catalogAccess = try XCTUnwrap(vault.catalogAccess())
         XCTAssertEqual(catalogAccess.orderedAccounts.count, 1)
@@ -467,19 +513,114 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(unlocked)
     }
 
-    func testCatalogRejectsDuplicateLogicalDescriptorWithDifferentOrder() throws {
+    func testCatalogRejectsDuplicateDescriptor() throws {
         let descriptor = try XCTUnwrap(fixture().source.catalog.accounts.first)
-        let duplicate = WalletAccountDescriptor(
-            walletID: descriptor.walletID,
-            coin: descriptor.coin,
-            normalizedAddress: descriptor.normalizedAddress,
-            derivationPath: descriptor.derivationPath,
-            walletOrder: descriptor.walletOrder,
-            accountOrder: descriptor.accountOrder + 1
-        )
         XCTAssertFalse(WalletAccountCatalog(
-            accounts: [descriptor, duplicate]
+            accounts: [descriptor, descriptor]
         ).isValid)
+    }
+
+    func testCatalogAndUnlockedAccessPreserveWalletAndAccountArrayOrder() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let fixture = try orderedFixture()
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: MemoryApprovalKeyStore(),
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        try vault.publish(
+            source: fixture.source,
+            sourceRevision: 1,
+            integrityKey: integrityKey
+        )
+
+        let catalog = try XCTUnwrap(vault.catalogAccess())
+        XCTAssertEqual(catalog.orderedAccounts.map(\.walletId), [
+            "z-wallet", "z-wallet", "a-wallet",
+        ])
+        XCTAssertEqual(catalog.orderedAccounts.map(\.account.coin), [
+            .solana, .ethereum, .ethereum,
+        ])
+        XCTAssertEqual(
+            catalog.orderedAccounts.map(\.account.address),
+            fixture.accounts.map { $0.account.coin.normalizedAddress($0.account.address) }
+        )
+        XCTAssertEqual(
+            catalog.orderedAccounts.map(\.account.derivationPath),
+            fixture.accounts.map(\.account.derivationPath)
+        )
+
+        let unlockedValue = await vault.unlock(reason: "Approve")
+        let unlocked = try XCTUnwrap(unlockedValue)
+        XCTAssertEqual(unlocked.catalogIdentity, catalog.catalogIdentity)
+        XCTAssertEqual(unlocked.orderedAccounts, fixture.accounts)
+        for account in fixture.accounts {
+            XCTAssertNotNil(unlocked.privateKey(
+                walletID: account.walletId,
+                account: account.account
+            ))
+        }
+    }
+
+    func testReorderedCatalogBytesFailAuthenticatedUnlock() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let fixture = try orderedFixture()
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: MemoryApprovalKeyStore(),
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        try vault.publish(
+            source: fixture.source,
+            sourceRevision: 1,
+            integrityKey: integrityKey
+        )
+        var envelope = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        )
+        let reordered = WalletAccountCatalog(
+            accounts: Array(fixture.source.catalog.accounts.reversed())
+        )
+        XCTAssertTrue(reordered.isValid)
+        envelope["catalog"] = try SourceWalletAccess.encodeCatalog(reordered)
+            .base64EncodedString()
+        try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+            .write(to: url, options: .atomic)
+
+        XCTAssertNotNil(vault.catalogAccess())
+        let unlocked = await vault.unlock(reason: "Approve")
+        XCTAssertNil(unlocked)
+    }
+
+    func testUnlockRejectsCatalogOrderThatDiffersFromDecryptedWalletRecords() async throws {
+        let fixture = try orderedFixture()
+        for order in [[1, 0, 2], [2, 0, 1]] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let catalog = WalletAccountCatalog(
+                accounts: order.map { fixture.source.catalog.accounts[$0] }
+            )
+            let source = SafariApprovalSourceSnapshot(
+                catalog: catalog,
+                password: fixture.source.password,
+                wallets: fixture.source.wallets
+            )
+            let vault = SafariApprovalVault(
+                fileURL: url,
+                keyStore: MemoryApprovalKeyStore(),
+                canEvaluateAuthentication: { _, _ in true },
+                authentication: { _, _, _ in true }
+            )
+            try vault.publish(source: source, sourceRevision: 1, integrityKey: integrityKey)
+
+            XCTAssertNotNil(vault.catalogAccess())
+            let unlocked = await vault.unlock(reason: "Approve")
+            XCTAssertNil(unlocked)
+        }
     }
 
     func testEnvelopeCapFailsClosedBeforeKeyPublication() throws {

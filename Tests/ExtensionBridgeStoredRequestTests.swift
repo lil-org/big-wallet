@@ -3935,6 +3935,100 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
+    func testTransactionDecisionPreservesFeeProvenanceEncoding() throws {
+        let network = ResolvedEthereumNetwork(
+            network: EthereumNetwork(
+                chainId: 1,
+                name: "Ethereum",
+                symbol: "ETH",
+                rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
+                isTestnet: false,
+                mightShowPrice: true,
+                explorer: nil
+            ),
+            source: .custom
+        )
+        let legacy = PreparedTransactionFee.legacy(gasPrice: 10)
+        let eip1559 = PreparedTransactionFee.eip1559(
+            maxPriorityFeePerGas: 2,
+            maxFeePerGas: 10
+        )
+        let sources: [(TransactionFeeSource, String)] = [
+            (.automatic, "automatic"), (.dapp, "dapp"),
+            (.slider, "slider"), (.manual, "manual"),
+        ]
+        var cases: [(PreparedTransactionFee, TransactionFeeProvenance, [String: String])] = [
+            (legacy, .init(), [:]),
+            (eip1559, .init(), [:]),
+            (eip1559, .init(maxPriorityFeePerGas: .dapp, maxFeePerGas: .manual), [
+                "maxPriorityFeePerGas": "dapp", "maxFeePerGas": "manual",
+            ]),
+        ]
+        for (source, encoded) in sources {
+            cases.append((legacy, .init(gasPrice: source), ["gasPrice": encoded]))
+            cases.append((eip1559, .init(
+                maxPriorityFeePerGas: source,
+                maxFeePerGas: source
+            ), ["maxPriorityFeePerGas": encoded, "maxFeePerGas": encoded]))
+        }
+
+        for (fee, provenance, expectedJSON) in cases {
+            let transaction = Transaction(
+                from: "0x0000000000000000000000000000000000000001",
+                to: "0x0000000000000000000000000000000000000002",
+                nonce: "0x1",
+                gas: "0x5208",
+                value: "0x0",
+                data: "0x",
+                preparedFee: fee,
+                feeProvenance: provenance
+            )
+            let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+                transaction,
+                reviewedNetwork: network
+            ))
+            let decision = DappApprovalDecision.transaction(execution)
+            let encoded = try XCTUnwrap(decision.boundedData)
+            let decoded = try XCTUnwrap(DappApprovalDecision.decodeBounded(encoded))
+            XCTAssertEqual(decoded, decision)
+            guard case .transaction(let decodedExecution) = decoded else {
+                return XCTFail("Expected transaction decision")
+            }
+            let action = SendTransactionAction(
+                transaction: transaction,
+                resolvedNetwork: network,
+                walletId: "wallet",
+                account: WalletAccount(
+                    address: transaction.from,
+                    coin: .ethereum,
+                    derivation: .default,
+                    derivationPath: "m/44'/60'/0'/0/0",
+                    publicKey: "",
+                    extendedPublicKey: ""
+                )
+            )
+            let rebuilt = try XCTUnwrap(decodedExecution.applying(to: action))
+            XCTAssertEqual(rebuilt.preparedFee, fee)
+            XCTAssertEqual(rebuilt.feeProvenance, provenance)
+
+            var object = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+            )
+            var fields = try XCTUnwrap(object["transaction"] as? [String: Any])
+            XCTAssertEqual(fields["feeProvenance"] as? [String: String], expectedJSON)
+            let sourceField = fee.isEIP1559 ? "maxPriorityFeePerGas" : "gasPrice"
+            for invalidSource: Any in ["unknown-source", 17] {
+                var invalidProvenance = expectedJSON as [String: Any]
+                invalidProvenance[sourceField] = invalidSource
+                fields["feeProvenance"] = invalidProvenance
+                object["transaction"] = fields
+                XCTAssertNil(DappApprovalDecision.decodeBounded(
+                    try JSONSerialization.data(withJSONObject: object)
+                ))
+            }
+        }
+    }
+
     #if os(macOS)
     func testRuntimeIdentityLoadsMismatchedProtocolForRejection() throws {
         let bundleURL = try makeAmbientBundle(name: "Protocol", build: "148")

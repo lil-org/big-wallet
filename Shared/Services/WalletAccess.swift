@@ -8,32 +8,24 @@ struct WalletAccountDescriptor: Codable, Equatable, Hashable, Sendable {
     let coin: WalletCoin
     let normalizedAddress: String
     let derivationPath: String
-    let walletOrder: Int
-    let accountOrder: Int
 
     private enum CodingKeys: String, CodingKey {
         case walletID
         case coin
         case normalizedAddress
         case derivationPath
-        case walletOrder
-        case accountOrder
     }
 
     init(
         walletID: String,
         coin: WalletCoin,
         normalizedAddress: String,
-        derivationPath: String,
-        walletOrder: Int,
-        accountOrder: Int
+        derivationPath: String
     ) {
         self.walletID = walletID
         self.coin = coin
         self.normalizedAddress = normalizedAddress
         self.derivationPath = derivationPath
-        self.walletOrder = walletOrder
-        self.accountOrder = accountOrder
     }
 
     init(from decoder: Decoder) throws {
@@ -56,8 +48,6 @@ struct WalletAccountDescriptor: Codable, Equatable, Hashable, Sendable {
             String.self,
             forKey: .derivationPath
         )
-        walletOrder = try container.decode(Int.self, forKey: .walletOrder)
-        accountOrder = try container.decode(Int.self, forKey: .accountOrder)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -66,8 +56,6 @@ struct WalletAccountDescriptor: Codable, Equatable, Hashable, Sendable {
         try container.encode(coin.rawValue, forKey: .coin)
         try container.encode(normalizedAddress, forKey: .normalizedAddress)
         try container.encode(derivationPath, forKey: .derivationPath)
-        try container.encode(walletOrder, forKey: .walletOrder)
-        try container.encode(accountOrder, forKey: .accountOrder)
     }
 
     var account: WalletAccount {
@@ -92,8 +80,6 @@ struct WalletAccountDescriptor: Codable, Equatable, Hashable, Sendable {
               normalizedAddress.utf8.count <= 256,
               !derivationPath.isEmpty,
               derivationPath.utf8.count <= 1_024,
-              walletOrder >= 0,
-              accountOrder >= 0,
               coin.normalizedAddress(normalizedAddress) == normalizedAddress
         else { return false }
 
@@ -110,69 +96,10 @@ struct WalletAccountCatalog: Codable, Equatable, Sendable {
 
     let accounts: [WalletAccountDescriptor]
 
-    private struct LogicalDescriptor: Hashable {
-        let walletID: String
-        let coin: WalletCoin
-        let normalizedAddress: String
-        let derivationPath: String
-    }
-
     var isValid: Bool {
-        guard accounts.count <= 16_384,
-              accounts.allSatisfy(\.isValid),
-              Set(accounts).count == accounts.count,
-              Set(accounts.map {
-                  LogicalDescriptor(
-                      walletID: $0.walletID,
-                      coin: $0.coin,
-                      normalizedAddress: $0.normalizedAddress,
-                      derivationPath: $0.derivationPath
-                  )
-              }).count == accounts.count else { return false }
-
-        var walletOrderByID = [String: Int]()
-        var accountOrdersByWallet = [String: Set<Int>]()
-        var walletIDsByOrder = [Int: String]()
-        var previousPosition: (wallet: Int, account: Int)?
-
-        for descriptor in accounts {
-            if let previousPosition,
-               (descriptor.walletOrder < previousPosition.wallet ||
-                (descriptor.walletOrder == previousPosition.wallet &&
-                 descriptor.accountOrder <= previousPosition.account)) {
-                return false
-            }
-            previousPosition = (
-                wallet: descriptor.walletOrder,
-                account: descriptor.accountOrder
-            )
-
-            if let existingOrder = walletOrderByID[descriptor.walletID],
-               existingOrder != descriptor.walletOrder {
-                return false
-            }
-            if let existingWalletID = walletIDsByOrder[descriptor.walletOrder],
-               existingWalletID != descriptor.walletID {
-                return false
-            }
-            walletOrderByID[descriptor.walletID] = descriptor.walletOrder
-            walletIDsByOrder[descriptor.walletOrder] = descriptor.walletID
-            guard accountOrdersByWallet[
-                descriptor.walletID,
-                default: []
-            ].insert(descriptor.accountOrder).inserted else {
-                return false
-            }
-        }
-
-        let walletOrders = walletIDsByOrder.keys.sorted()
-        guard walletOrders == Array(0..<walletOrders.count) else { return false }
-        for (walletID, orders) in accountOrdersByWallet {
-            let sorted = orders.sorted()
-            guard sorted == Array(0..<sorted.count),
-                  walletOrderByID[walletID] != nil else { return false }
-        }
-        return true
+        accounts.count <= 16_384 &&
+            accounts.allSatisfy(\.isValid) &&
+            Set(accounts).count == accounts.count
     }
 }
 
@@ -313,17 +240,15 @@ final class SourceWalletAccess: WalletAccess {
     static func descriptors(
         for wallets: [WalletContainer]
     ) -> [WalletAccountDescriptor] {
-        wallets.enumerated().flatMap { walletOrder, wallet in
-            wallet.accounts.enumerated().map { accountOrder, account in
+        wallets.flatMap { wallet in
+            wallet.accounts.map { account in
                 WalletAccountDescriptor(
                     walletID: wallet.id,
                     coin: account.coin,
                     normalizedAddress: account.coin.normalizedAddress(
                         account.address
                     ),
-                    derivationPath: account.derivationPath,
-                    walletOrder: walletOrder,
-                    accountOrder: accountOrder
+                    derivationPath: account.derivationPath
                 )
             }
         }
