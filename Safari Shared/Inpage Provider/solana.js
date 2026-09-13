@@ -559,7 +559,12 @@ function signerPlan(adapter, publicKey, signature) {
             !isByteArray(descriptor.value)) {
             throw new ProviderRpcError(4200, solanaSignatureApplicationError);
         }
-        return {adapter, descriptor, index, signature};
+        return {
+            target: adapter.signatures,
+            property: `${index}`,
+            originalDescriptor: descriptor,
+            replacement: new Uint8Array(signature),
+        };
     }
     for (let index = 0; index < adapter.signatures.length; index += 1) {
         const entry = adapter.signatures[index];
@@ -569,132 +574,39 @@ function signerPlan(adapter, publicKey, signature) {
             if (!signatureDescriptor?.writable) {
                 throw new ProviderRpcError(4200, solanaSignatureApplicationError);
             }
-            return {adapter, entry, signatureDescriptor, signature};
+            return {
+                target: entry,
+                property: "signature",
+                originalDescriptor: signatureDescriptor,
+                replacement: signature,
+            };
         }
     }
     throw new ProviderRpcError(4200, solanaSignatureApplicationError);
 }
 
-function byteState(value) {
-    return isByteArray(value)
-        ? {bytes: bytesSnapshot(value, solanaSignatureApplicationError), value}
-        : null;
-}
-
-function transactionSignatureState(adapter) {
-    const transactionSignaturesDescriptor = ownDataDescriptor(
-        adapter.transaction,
-        "signatures"
-    );
-    if (!transactionSignaturesDescriptor ||
-        !isArrayNormally(transactionSignaturesDescriptor.value)) {
-        throw new ProviderRpcError(4200, solanaSignatureApplicationError);
-    }
-    const signatures = transactionSignaturesDescriptor.value;
-    const slots = [];
-    for (let index = 0; index < signatures.length; index += 1) {
-        const descriptor = getOwnPropertyDescriptorNormally(signatures, `${index}`);
-        if (!descriptor || !("value" in descriptor)) {
-            throw new ProviderRpcError(4200, solanaSignatureApplicationError);
-        }
-        const value = descriptor.value;
-        const slot = {descriptor, value, bytes: byteState(value)};
-        if (adapter.type === "legacy") {
-            const publicKeyDescriptor = ownDataDescriptor(value, "publicKey");
-            const signatureDescriptor = ownDataDescriptor(value, "signature");
-            if (!publicKeyDescriptor || !signatureDescriptor) {
-                throw new ProviderRpcError(4200, solanaSignatureApplicationError);
-            }
-            slot.publicKeyDescriptor = publicKeyDescriptor;
-            slot.signatureDescriptor = signatureDescriptor;
-            slot.signatureBytes = byteState(signatureDescriptor.value);
-        }
-        slots[slots.length] = slot;
-    }
-    return {
-        adapter,
-        length: signatures.length,
-        signatures,
-        slots,
-        transactionSignaturesDescriptor,
-    };
-}
-
-function restoreByteState(state) {
-    if (!state) {
-        return;
-    }
-    const destination = byteView(state.value);
-    if (!destination || destination.length !== state.bytes.length) {
-        return;
-    }
-    for (let index = 0; index < state.bytes.length; index += 1) {
-        destination[index] = state.bytes[index];
-    }
-}
-
-function restoreTransactionSignatures(states) {
-    for (let stateIndex = 0; stateIndex < states.length; stateIndex += 1) {
-        const state = states[stateIndex];
+function restoreSignatureWrites(writes) {
+    for (let index = writes.length - 1; index >= 0; index -= 1) {
+        const write = writes[index];
         try {
-            for (let slotIndex = 0; slotIndex < state.slots.length; slotIndex += 1) {
-                const slot = state.slots[slotIndex];
-                restoreByteState(slot.bytes);
-                restoreByteState(slot.signatureBytes);
-                if (slot.publicKeyDescriptor) {
-                    definePropertyNormally(
-                        slot.value,
-                        "publicKey",
-                        slot.publicKeyDescriptor
-                    );
-                }
-                if (slot.signatureDescriptor) {
-                    definePropertyNormally(
-                        slot.value,
-                        "signature",
-                        slot.signatureDescriptor
-                    );
-                }
-            }
-            state.signatures.length = 0;
-            for (let slotIndex = 0; slotIndex < state.slots.length; slotIndex += 1) {
+            if (ownDataDescriptor(write.target, write.property)?.value ===
+                write.replacement) {
                 definePropertyNormally(
-                    state.signatures,
-                    `${slotIndex}`,
-                    state.slots[slotIndex].descriptor
+                    write.target,
+                    write.property,
+                    write.originalDescriptor
                 );
             }
-            state.signatures.length = state.length;
-            definePropertyNormally(
-                state.adapter.transaction,
-                "signatures",
-                state.transactionSignaturesDescriptor
-            );
         } catch {
         }
     }
 }
 
 function applySignerPlan(plan) {
-    if (plan.adapter.type === "versioned") {
-        definePropertyNormally(plan.adapter.signatures, `${plan.index}`, {
-            ...plan.descriptor,
-            value: new Uint8Array(plan.signature),
-        });
-        return;
-    }
-    definePropertyNormally(plan.entry, "signature", {
-        ...plan.signatureDescriptor,
-        value: plan.signature,
+    definePropertyNormally(plan.target, plan.property, {
+        ...plan.originalDescriptor,
+        value: plan.replacement,
     });
-}
-
-function signerTargetsMatch(first, second) {
-    if (first.adapter.type !== second.adapter.type) { return false; }
-    return first.adapter.type === "versioned"
-        ? first.adapter.signatures === second.adapter.signatures &&
-            first.index === second.index
-        : first.entry === second.entry;
 }
 
 function normalizedTransactionBatch(transactions, message) {
@@ -1107,12 +1019,10 @@ function signedResult(
         );
         return false;
     }
-    const states = [];
+    const writes = [];
     const plans = [];
+    const signerTargets = new MapConstructor;
     try {
-        for (let index = 0; index < metadata.adapters.length; index += 1) {
-            states[index] = transactionSignatureState(metadata.adapters[index]);
-        }
         for (let index = 0; index < metadata.adapters.length; index += 1) {
             const adapter = metadata.adapters[index];
             if (!transactionMessageMatches(adapter)) {
@@ -1121,46 +1031,31 @@ function signedResult(
                     mismatchedSolanaTransactionSignatures
                 );
             }
-            plans[index] = signerPlan(
+            const plan = signerPlan(
                 adapter,
                 metadata.authorization.publicKey,
                 signatures[index]
             );
-            for (let previous = 0; previous < index; previous += 1) {
-                if (signerTargetsMatch(plans[previous], plans[index])) {
-                    throw new ProviderRpcError(
-                        4200,
-                        solanaSignatureApplicationError
-                    );
-                }
+            let properties = getMapEntry(signerTargets, plan.target);
+            if (!properties) {
+                properties = new MapConstructor;
+                setMapEntry(signerTargets, plan.target, properties);
             }
+            if (getMapEntry(properties, plan.property)) {
+                throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+            }
+            setMapEntry(properties, plan.property, true);
+            plans[index] = plan;
         }
         for (let index = 0; index < plans.length; index += 1) {
             if (!operationIsCurrent(provider, record, approvalCommitted)) {
                 throw providerReplacementError();
             }
-            if (!transactionMessagesMatch(metadata.adapters)) {
-                throw new ProviderRpcError(
-                    4200,
-                    mismatchedSolanaTransactionSignatures
-                );
-            }
-            if (!operationIsCurrent(provider, record, approvalCommitted)) {
-                throw providerReplacementError();
-            }
+            writes[writes.length] = plans[index];
             applySignerPlan(plans[index]);
             if (!operationIsCurrent(provider, record, approvalCommitted)) {
                 throw providerReplacementError();
             }
-            if (!transactionMessagesMatch(metadata.adapters)) {
-                throw new ProviderRpcError(
-                    4200,
-                    mismatchedSolanaTransactionSignatures
-                );
-            }
-        }
-        if (!operationIsCurrent(provider, record, approvalCommitted)) {
-            throw providerReplacementError();
         }
         if (!transactionMessagesMatch(metadata.adapters)) {
             throw new ProviderRpcError(
@@ -1185,7 +1080,7 @@ function signedResult(
         if (!settled) { throw providerReplacementError(); }
         return true;
     } catch (error) {
-        restoreTransactionSignatures(states);
+        restoreSignatureWrites(writes);
         if (state.runtime.owns(record)) {
             rejectOperation(provider, record, error);
         }
