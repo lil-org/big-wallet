@@ -159,14 +159,15 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
     const module = moduleHarness(solanaSource, extraGlobals);
     const requests = [];
     const disconnects = [];
-    const epochs = [];
     let current = true;
+    let currentError = null;
     let disconnectPost = true;
-    let epochError = null;
-    let epochPost = true;
     let requestPost = true;
     const transport = {
-        isCurrent() { return current; },
+        isCurrent() {
+            if (currentError) { throw currentError; }
+            return current;
+        },
         postDisconnect(message) {
             disconnects.push(message);
             return current && disconnectPost;
@@ -175,24 +176,17 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
             requests.push(message);
             return current && requestPost;
         },
-        synchronizeSolanaEpoch(epoch) {
-            epochs.push(epoch);
-            if (epochError) { throw epochError; }
-            return current && epochPost;
-        },
     };
     const Solana = module.exports.default;
     const provider = new Solana("solana-generation", transport, initialState);
     return {
         ...module,
         disconnects,
-        epochs,
         provider,
         requests,
         setCurrent(value) { current = value; },
+        setCurrentError(value) { currentError = value; },
         setDisconnectPost(value) { disconnectPost = value; },
-        setEpochError(value) { epochError = value; },
-        setEpochPost(value) { epochPost = value; },
         setRequestPost(value) { requestPost = value; },
         Solana,
     };
@@ -2272,7 +2266,7 @@ test("Solana shares disconnect work and manual switch clears its tombstone", asy
     const second = harness.provider.disconnect();
     assert.equal(first, second);
     assert.equal(harness.disconnects.length, 1);
-    assert.deepEqual(harness.epochs, []);
+    assert.equal(harness.provider.solanaAuthorizationEpoch, 0);
     assert.equal(harness.provider.publicKey.toString(), firstSolanaKey);
     harness.Solana.applyEnvelope(harness.provider, {
         id: harness.disconnects[0].id,
@@ -2281,7 +2275,7 @@ test("Solana shares disconnect work and manual switch clears its tombstone", asy
         result: true,
     });
     assert.equal(await first, true);
-    assert.deepEqual(harness.epochs, [1]);
+    assert.equal(harness.provider.solanaAuthorizationEpoch, 1);
     assert.equal(harness.provider.publicKey, null);
     const state = harness.Solana.snapshot(harness.provider);
     applySolanaConfiguration(harness, {
@@ -2363,7 +2357,6 @@ test("Solana failed disconnect preserves authorization and concurrent signing", 
     const signing = harness.provider.signMessage(new Uint8Array([1]));
     const signingRequest = harness.requests.at(-1);
 
-    assert.deepEqual(harness.epochs, []);
     assert.deepEqual(harness.Solana.snapshot(harness.provider), before);
     harness.Solana.applyEnvelope(harness.provider, {
         error: {code: -32603, message: "Failed to revoke permissions"},
@@ -2394,7 +2387,6 @@ test("Solana failed disconnect preserves authorization and concurrent signing", 
         normalized(transportFailure.Solana.snapshot(transportFailure.provider)),
         normalized(before)
     );
-    assert.deepEqual(transportFailure.epochs, []);
     assert.equal(transportFailure.provider.retired, false);
 });
 
@@ -2426,7 +2418,7 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
         result: null,
     });
     assert.equal(await disconnect, true);
-    assert.deepEqual(harness.epochs, [3]);
+    assert.equal(harness.provider.solanaAuthorizationEpoch, 3);
     assert.equal(harness.provider.publicKey, null);
 
     harness.Solana.applyEnvelope(harness.provider, {
@@ -3785,138 +3777,99 @@ test("Solana retires all work when a generation transport returns false", async 
         assert.rejects(second, error => error.code === 4900),
     ]);
     assert.equal(requestHarness.provider.retired, true);
+});
 
-    const epochHarness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    applySolanaConfiguration(epochHarness, {
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    epochHarness.setEpochPost(false);
-    const disconnect = epochHarness.provider.disconnect();
-    epochHarness.Solana.applyEnvelope(epochHarness.provider, {
-        id: epochHarness.disconnects[0].id,
-        kind: "result",
-        name: "revokePermissions",
-        result: null,
-    });
-    await assert.rejects(
-        disconnect,
-        error => error.code === 4900
-    );
-    assert.equal(epochHarness.provider.retired, true);
+test("Solana revocation retires pending work when its transport loses ownership", async () => {
+    for (const kind of ["disconnect", "externalDisconnect", "authorizationFailure"]) {
+        const harness = connectedSolanaHarness();
+        const pending = harness.provider.signMessage(new Uint8Array([1]));
+        const rejected = assert.rejects(pending, error => error.code === 4900);
+        const unrelated = harness.provider.signMessage(new Uint8Array([2]));
+        const unrelatedRejected = assert.rejects(unrelated, error => error.code === 4900);
+        if (kind === "externalDisconnect") {
+            harness.setCurrent(false);
+            assert.equal(await harness.provider.externalDisconnect(), true);
+        } else {
+            const disconnect = kind === "disconnect"
+                ? harness.provider.disconnect()
+                : null;
+            const disconnected = disconnect && assert.rejects(
+                disconnect,
+                error => error.code === 4900
+            );
+            const response = disconnect ? {
+                id: harness.disconnects[0].id,
+                kind: "result",
+                name: "revokePermissions",
+                result: null,
+            } : {
+                authorizationFailure: true,
+                error: {code: 4100, message: "Unauthorized"},
+                id: harness.requests[0].id,
+                kind: "error",
+                name: "signMessage",
+            };
+            assert.equal(harness.Solana.applyEnvelope(harness.provider, {
+                toJSON() {
+                    harness.setCurrent(false);
+                    return response;
+                },
+            }), false);
+            await disconnected;
+        }
+        await Promise.all([rejected, unrelatedRejected]);
+        assert.equal(harness.provider.retired, true);
+        assert.equal(harness.provider.publicKey, null);
+        assert.equal(harness.provider.solanaAuthorizationEpoch, 2);
+    }
+});
 
-    const externalHarness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    applySolanaConfiguration(externalHarness, {
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    const externalPending = externalHarness.provider.signMessage(
-        new Uint8Array([1])
-    );
-    const externalRejected = assert.rejects(
-        externalPending,
-        error => error.code === 4900
-    );
-    externalHarness.setEpochPost(false);
-    await externalHarness.provider.externalDisconnect();
-    await externalRejected;
-    assert.equal(externalHarness.provider.retired, true);
+test("Solana external disconnect retires work when currentness checking throws", async () => {
+    const harness = connectedSolanaHarness();
+    const pending = harness.provider.signMessage(new Uint8Array([1]));
+    const rejected = assert.rejects(pending, error => error.code === 4900);
+    harness.setCurrentError(new Error("Currentness unavailable"));
+    assert.equal(await harness.provider.externalDisconnect(), true);
+    await rejected;
+    assert.equal(harness.provider.retired, true);
+    assert.equal(harness.provider.publicKey, null);
+    assert.equal(harness.provider.solanaAuthorizationEpoch, 2);
+});
 
-    const failureHarness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    applySolanaConfiguration(failureHarness, {
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    const failed = failureHarness.provider.signMessage(new Uint8Array([1]));
-    const unrelated = failureHarness.provider.signMessage(new Uint8Array([2]));
-    const failedRejected = assert.rejects(failed, error => error.code === 4900);
-    const unrelatedRejected = assert.rejects(
-        unrelated,
-        error => error.code === 4900
-    );
-    failureHarness.setEpochPost(false);
-    failureHarness.Solana.applyEnvelope(failureHarness.provider, {
-        authorizationFailure: true,
-        error: {code: 4100, message: "Unauthorized"},
-        id: failureHarness.requests[0].id,
-        kind: "error",
-        name: "signMessage",
-    });
-    await Promise.all([failedRejected, unrelatedRejected]);
-    assert.equal(failureHarness.provider.retired, true);
-
-    const throwingHarness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    applySolanaConfiguration(throwingHarness, {
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    const throwingPending = throwingHarness.provider.signMessage(
-        new Uint8Array([1])
-    );
-    const throwingRejected = assert.rejects(
-        throwingPending,
-        error => error.code === 4900
-    );
-    throwingHarness.setEpochError(new Error("synchronization failed"));
-    await throwingHarness.provider.externalDisconnect();
-    await throwingRejected;
-    assert.equal(throwingHarness.provider.retired, true);
-
-    const exhaustedHarness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: Number.MAX_SAFE_INTEGER,
-    });
-    applySolanaConfiguration(exhaustedHarness, {
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: Number.MAX_SAFE_INTEGER,
-    });
-    const exhaustedPending = exhaustedHarness.provider.signMessage(
-        new Uint8Array([1])
-    );
-    const exhaustedRejected = assert.rejects(
-        exhaustedPending,
-        error => error.code === 4900
-    );
-    await Promise.all([
-        exhaustedRejected,
-        assert.rejects(
-            exhaustedHarness.provider.disconnect(),
-            error => error.code === 4900
-        ),
-    ]);
-    assert.equal(exhaustedHarness.provider.retired, true);
+test("Solana retires work when its authorization epoch cannot advance", async () => {
+    for (const kind of ["disconnect", "externalDisconnect", "authorizationFailure"]) {
+        const configuration = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: Number.MAX_SAFE_INTEGER,
+        };
+        const harness = solanaHarness(configuration);
+        applySolanaConfiguration(harness, configuration);
+        const pending = harness.provider.signMessage(new Uint8Array([1]));
+        const rejected = assert.rejects(pending, error => error.code === 4900);
+        if (kind === "disconnect") {
+            await assert.rejects(
+                harness.provider.disconnect(),
+                error => error.code === 4900
+            );
+            assert.equal(harness.disconnects.length, 0);
+        } else if (kind === "externalDisconnect") {
+            assert.equal(await harness.provider.externalDisconnect(), true);
+        } else {
+            assert.equal(harness.Solana.applyEnvelope(harness.provider, {
+                authorizationFailure: true,
+                error: {code: 4100, message: "Unauthorized"},
+                id: harness.requests[0].id,
+                kind: "error",
+                name: "signMessage",
+            }), false);
+        }
+        await rejected;
+        assert.equal(harness.provider.retired, true);
+        assert.equal(harness.provider.publicKey, null);
+        assert.equal(harness.provider.solanaAuthorizationEpoch, Number.MAX_SAFE_INTEGER);
+    }
 });
 
 test("Solana fences stale authorization and retires pending work", async () => {
@@ -4507,6 +4460,9 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
         value: "0x1",
     });
     assert.equal(solanaRequest.message.name, "connect");
+    assert.deepEqual(Object.keys(solanaRequest).sort(), [
+        "direction", "kind", "message", "providerGeneration",
+    ]);
     dispatchProviderResponse(harness, {
         id: ethereumRequest.message.id,
         name: "signTransaction",
@@ -4547,6 +4503,23 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
         provider: "ethereum",
     });
     await assert.rejects(denied, error => error.code === 4001);
+
+    const disconnect = window.solana.disconnect();
+    const disconnectRequest = pageMessages(harness, "disconnect", "solana").at(-1);
+    assert.deepEqual(Object.keys(disconnectRequest).sort(), [
+        "direction", "kind", "message", "providerGeneration",
+    ]);
+    const beforeEpoch = window.solana.solanaAuthorizationEpoch;
+    const postedCount = harness.postedMessages.length;
+    dispatchProviderResponse(harness, {
+        id: disconnectRequest.message.id,
+        name: "revokePermissions",
+        provider: "solana",
+        result: null,
+    });
+    assert.equal(await disconnect, true);
+    assert.equal(window.solana.solanaAuthorizationEpoch, beforeEpoch + 1);
+    assert.equal(harness.postedMessages.length, postedCount);
     assert.deepEqual(harness.listenerErrors, []);
 });
 
@@ -5856,6 +5829,7 @@ test("Solana 4100 ingress revokes authorization and advances its epoch", async (
     const beforeEpoch = harness.window.solana.solanaAuthorizationEpoch;
     const request = harness.window.solana.signMessage(new Uint8Array([1]));
     const message = pageMessages(harness, "request", "solana").at(-1);
+    const postedCount = harness.postedMessages.length;
     dispatchProviderResponse(harness, {
         error: "Unauthorized",
         errorCode: 4100,
@@ -5875,10 +5849,7 @@ test("Solana 4100 ingress revokes authorization and advances its epoch", async (
         harness.window.solana.solanaAuthorizationEpoch > beforeEpoch,
         true
     );
-    assert.equal(
-        pageMessages(harness, "solanaAuthorizationEpoch").length > 0,
-        true
-    );
+    assert.equal(harness.postedMessages.length, postedCount);
 });
 
 test("Solana 4100 without an account marker leaves authorization intact", async () => {
@@ -5904,6 +5875,7 @@ test("Solana omission disconnects externally for ordinary and switch snapshots",
         const harness = inpageHarness();
         dispatchConfigurations(harness, {publicKey: firstSolanaKey});
         const beforeEpoch = harness.window.solana.solanaAuthorizationEpoch;
+        const postedCount = harness.postedMessages.length;
         harness.dispatch({
             kind: "response",
             response: {
@@ -5923,10 +5895,7 @@ test("Solana omission disconnects externally for ordinary and switch snapshots",
             harness.window.solana.solanaAuthorizationEpoch,
             beforeEpoch + 1
         );
-        assert.equal(
-            pageMessages(harness, "solanaAuthorizationEpoch").length > 0,
-            true
-        );
+        assert.equal(harness.postedMessages.length, postedCount);
     }
 });
 

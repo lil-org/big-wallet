@@ -294,6 +294,17 @@ function advanceEpoch(state) {
     return state.solanaAuthorizationEpoch;
 }
 
+function advanceAuthorizationEpoch(provider) {
+    const state = getProviderState(provider);
+    try {
+        advanceEpoch(state);
+        if (state.transport.isCurrent() === true) { return true; }
+    } catch {
+    }
+    retire(provider, providerReplacementError());
+    return false;
+}
+
 function clearAuthorization(provider, tombstone, emitChanges = true) {
     const state = getProviderState(provider);
     const previousPublicKey = state.publicKey?.toString() || null;
@@ -397,11 +408,9 @@ function capturedTransport(transport) {
     const isCurrentMethod = transport.isCurrent;
     const postRequestMethod = transport.postRequest;
     const postDisconnectMethod = transport.postDisconnect;
-    const synchronizeEpochMethod = transport.synchronizeSolanaEpoch;
     if (typeof isCurrentMethod !== "function" ||
         typeof postRequestMethod !== "function" ||
-        typeof postDisconnectMethod !== "function" ||
-        typeof synchronizeEpochMethod !== "function") {
+        typeof postDisconnectMethod !== "function") {
         throw new TypeError("Invalid Solana transport");
     }
     return freezeObjectNormally({
@@ -413,9 +422,6 @@ function capturedTransport(transport) {
         },
         postDisconnect(message) {
             return applyFunction(postDisconnectMethod, transport, [message]);
-        },
-        synchronizeSolanaEpoch(epoch) {
-            return applyFunction(synchronizeEpochMethod, transport, [epoch]);
         },
     });
 }
@@ -904,7 +910,6 @@ function dispatchOperation(provider, record) {
         name: method,
         provider: "solana",
         providerGeneration: state.generation,
-        solanaAuthorizationEpoch: authorization.solanaAuthorizationEpoch,
     };
     if (!state.runtime.owns(record)) {
         return false;
@@ -1227,18 +1232,7 @@ function applyEnvelope(provider, envelope) {
     if (envelope.kind === "error") {
         if (envelope.suppressUpdate !== true && envelope.authorizationFailure &&
             authorizationMatches(state, record.metadata.authorization)) {
-            let synchronized = false;
-            try {
-                advanceEpoch(state);
-                synchronized = state.transport.synchronizeSolanaEpoch(
-                    state.solanaAuthorizationEpoch
-                ) !== false && state.transport.isCurrent() === true;
-            } catch {
-            }
-            if (!synchronized) {
-                retire(provider, providerReplacementError());
-                return false;
-            }
+            if (!advanceAuthorizationEpoch(provider)) { return false; }
             clearAuthorization(provider, true);
         }
         return state.runtime.reject(
@@ -1258,18 +1252,7 @@ function applyEnvelope(provider, envelope) {
             );
         }
         if (authorizationMatches(state, record.metadata.authorization)) {
-            let synchronized = false;
-            try {
-                advanceEpoch(state);
-                synchronized = state.transport.synchronizeSolanaEpoch(
-                    state.solanaAuthorizationEpoch
-                ) !== false && state.transport.isCurrent() === true;
-            } catch {
-            }
-            if (!synchronized) {
-                retire(provider, providerReplacementError());
-                return false;
-            }
+            if (!advanceAuthorizationEpoch(provider)) { return false; }
             clearAuthorization(provider, true);
         }
         return state.runtime.resolve(record, true);
@@ -1628,7 +1611,6 @@ class BigWalletSolana extends EventEmitter {
                 id: record.wireId,
                 provider: "solana",
                 providerGeneration: state.generation,
-                solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
             }) === true;
         } catch (error) {
             state.runtime.reject(record, error);
@@ -1643,16 +1625,7 @@ class BigWalletSolana extends EventEmitter {
     externalDisconnect() {
         const state = getProviderState(this);
         if (state.runtime.phase === "retired") { return Promise.resolve(true); }
-        let synchronized = false;
-        try {
-            advanceEpoch(state);
-            synchronized = state.transport.synchronizeSolanaEpoch(
-                state.solanaAuthorizationEpoch
-            ) !== false && state.transport.isCurrent() === true;
-        } catch {
-        }
-        if (!synchronized) {
-            retire(this, providerReplacementError());
+        if (!advanceAuthorizationEpoch(this)) {
             return Promise.resolve(true);
         }
         clearAuthorization(this, true);

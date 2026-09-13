@@ -18,7 +18,7 @@ protocol NativeDeliveryStore: AnyObject {
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) async -> ExtensionBridge.StoreMutationResult
     func completeNativeDelivery(
         handle: ExtensionBridge.Handle,
@@ -54,18 +54,72 @@ final class NativeApprovalCoordinator {
         case superseded
     }
 
-    private enum PersistenceIntent {
-        case acquireReceipt
-        case cancelBeforeAuthentication(receiptOwned: Bool)
-        case stage(NativeApprovalDecision)
-        case respond(ResponseToExtension)
-        case reject
+    private enum Lifecycle {
+        case registered
+        case validating
+        case awaitingAuthentication
+        case loading(PreparationProgress)
+        case reviewing
+        case persisting(PersistenceOperation)
+        case staged
+        case finished
+    }
+
+    @MainActor
+    private final class PreparationProgress {
+        var nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
+    }
+
+    @MainActor
+    private final class PersistenceOperation {
+        enum Action {
+            case acquireReceipt(cancelRequested: Bool = false)
+            case cancelBeforeAuthentication(receiptOwned: Bool)
+            case stage(DappApprovalDecision, cancelRequested: Bool = false)
+            case respond(
+                ResponseToExtension,
+                preparation: PreparationProgress,
+                cancelRequested: Bool = false
+            )
+            case reject
+        }
+
+        var action: Action
+        var retryCount = 0
+        var nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
+
+        init(_ action: Action) {
+            self.action = action
+        }
+
+        var cancellationRequested: Bool {
+            switch action {
+            case .acquireReceipt(let requested), .stage(_, let requested),
+                 .respond(_, _, let requested):
+                return requested
+            case .cancelBeforeAuthentication, .reject:
+                return false
+            }
+        }
+
+        func requestCancellation() {
+            switch action {
+            case .acquireReceipt:
+                action = .acquireReceipt(cancelRequested: true)
+            case .stage(let decision, _):
+                action = .stage(decision, cancelRequested: true)
+            case .respond(let response, let preparation, _) where retryCount < 3:
+                action = .respond(response, preparation: preparation, cancelRequested: true)
+            case .respond, .cancelBeforeAuthentication, .reject:
+                break
+            }
+        }
     }
 
     private enum PersistenceStep {
         case retry
         case stop
-        case replace(PersistenceIntent)
+        case replace(PersistenceOperation.Action)
         case prepareAgain
     }
 
@@ -157,7 +211,27 @@ final class NativeApprovalCoordinator {
     private static let maximumDelayNanoseconds: UInt64 = 5_000_000_000
 
     let handle: ExtensionBridge.Handle
-    private(set) var state: State = .registered
+    var state: State {
+        switch lifecycle {
+        case .registered: return .registered
+        case .validating: return .validating
+        case .awaitingAuthentication: return .awaitingAuthentication
+        case .loading: return .loading
+        case .reviewing: return .reviewing
+        case .staged: return .staged
+        case .finished: return .finished
+        case .persisting(let operation):
+            switch operation.action {
+            case .acquireReceipt(let cancelRequested):
+                return .acquiringReceipt(cancelRequested: cancelRequested)
+            case .cancelBeforeAuthentication(let receiptOwned):
+                return .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
+            case .stage: return .staging
+            case .respond: return .responding
+            case .reject: return .rejecting
+            }
+        }
+    }
     let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
     private(set) var peer: PeerMeta?
     private(set) var order: Order?
@@ -165,15 +239,13 @@ final class NativeApprovalCoordinator {
 
     private let store: NativeDeliveryStore
     private let environment: Environment
+    private var lifecycle = Lifecycle.registered
     private var runtime: Runtime?
     private var bootstrapTask: Task<Void, Never>?
     private var monitorTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     private var terminalDeadline: Date
-    private var preparationRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
     private var didNotifyFailure = false
-    private var rejectIfWriteIsNotCommitted = false
-    private var canCancelResponse = false
     private var didEnterWaitingState = false
 
     init(
@@ -216,7 +288,7 @@ final class NativeApprovalCoordinator {
             instanceIdentifier: runtimeInstanceIdentifier,
             owner: nativeDeliveryOwner
         )
-        state = .validating
+        lifecycle = .validating
         bootstrapTask = Task { [weak self] in
             await self?.validateAndAcquireReceipt()
         }
@@ -237,7 +309,7 @@ final class NativeApprovalCoordinator {
             ExtensionBridge.requestTTL
         )
         recordDeadline(from: snapshot.request)
-        startPersistence(.acquireReceipt)
+        startPersistence(.acquireReceipt())
     }
 
     func resumeAfterAuthentication() {
@@ -245,8 +317,7 @@ final class NativeApprovalCoordinator {
         terminalDeadline = environment.now().addingTimeInterval(
             ExtensionBridge.requestTTL
         )
-        preparationRetryDelay = Self.initialRetryDelayNanoseconds
-        state = .loading
+        lifecycle = .loading(PreparationProgress())
         bootstrapTask = Task { [weak self] in
             await self?.preparePresentation()
         }
@@ -259,7 +330,9 @@ final class NativeApprovalCoordinator {
             bootstrapTask = nil
             beginPreauthenticationCancellation(receiptOwned: false)
         case .acquiringReceipt:
-            state = .acquiringReceipt(cancelRequested: true)
+            if case .persisting(let operation) = lifecycle {
+                operation.requestCancellation()
+            }
         case .awaitingAuthentication:
             beginPreauthenticationCancellation(receiptOwned: true)
         default:
@@ -272,13 +345,11 @@ final class NativeApprovalCoordinator {
     }
 
     private func cancelBeforeAuthenticationAttempt(
+        _ operation: PersistenceOperation,
         receiptOwned: Bool
     ) async -> PersistenceStep {
-        let expectedState = State.cancelingBeforeAuthentication(
-            receiptOwned: receiptOwned
-        )
         let loaded = await store.load(handle: handle)
-        guard !Task.isCancelled, state == expectedState else { return .stop }
+        guard isCurrent(operation) else { return .stop }
         switch loaded {
         case .found(let snapshot):
             guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
@@ -316,7 +387,7 @@ final class NativeApprovalCoordinator {
                 }
                 result = await store.reject(handle: handle)
             }
-            guard !Task.isCancelled, state == expectedState else { return .stop }
+            guard isCurrent(operation) else { return .stop }
             if result == .persisted {
                 finish()
                 return .stop
@@ -332,35 +403,36 @@ final class NativeApprovalCoordinator {
 
     private func restoreAuthenticationWaiting() {
         persistenceTask = nil
-        state = .awaitingAuthentication
+        lifecycle = .awaitingAuthentication
     }
 
     private func preparePresentation() async {
-        guard state == .loading else { return }
+        guard case .loading(let progress) = lifecycle else { return }
 
-        while !Task.isCancelled, state == .loading {
+        while isCurrent(progress) {
             guard environment.now() < terminalDeadline else {
                 finish()
                 return
             }
-            if await preparePresentationAttempt() { return }
-            guard !Task.isCancelled, state == .loading else { return }
+            if await preparePresentationAttempt(progress: progress) { return }
+            guard isCurrent(progress) else { return }
             guard environment.now() < terminalDeadline else {
                 finish()
                 return
             }
-            await waitBeforeDeadline(preparationRetryDelay)
+            await waitBeforeDeadline(progress.nextRetryDelay)
+            guard isCurrent(progress) else { return }
             guard environment.now() < terminalDeadline else {
                 finish()
                 return
             }
-            preparationRetryDelay = nextDelay(after: preparationRetryDelay)
+            progress.nextRetryDelay = nextDelay(after: progress.nextRetryDelay)
         }
     }
 
-    private func preparePresentationAttempt() async -> Bool {
+    private func preparePresentationAttempt(progress: PreparationProgress) async -> Bool {
         let status = await storedStatus()
-        guard state == .loading else { return false }
+        guard isCurrent(progress) else { return false }
         switch status {
         case .pending(let request, let receipt):
             guard environment.now() < terminalDeadline else {
@@ -386,13 +458,13 @@ final class NativeApprovalCoordinator {
             }
             switch preparation {
             case .approval(let action):
-                state = .reviewing
+                lifecycle = .reviewing
                 startLifecycleMonitor()
                 bootstrapTask = nil
                 onEvent?(.presentation(.approval(request: request, action: action)))
                 return true
             case .response(let response):
-                startPersistence(.respond(response))
+                startPersistence(.respond(response, preparation: progress))
                 return true
             }
         case .staged:
@@ -414,10 +486,11 @@ final class NativeApprovalCoordinator {
         ethereumNetwork: EthereumNetwork?
     ) {
         let identities = accounts.map {
-            NativeApprovalDecision.AccountIdentity(
+            DappApprovalDecision.AccountIdentity(
                 walletID: $0.walletId,
                 address: $0.account.address,
-                provider: $0.account.coin.correspondingInpageProvider
+                provider: $0.account.coin.correspondingInpageProvider,
+                derivationPath: $0.account.derivationPath
             )
         }
         stage(.accountSelection(.init(
@@ -434,7 +507,7 @@ final class NativeApprovalCoordinator {
         _ transaction: Transaction,
         reviewedNetwork: ResolvedEthereumNetwork
     ) {
-        guard let execution = NativeApprovalDecision.TransactionExecution(
+        guard let execution = DappApprovalDecision.TransactionExecution(
             transaction,
             reviewedNetwork: reviewedNetwork
         ) else {
@@ -455,16 +528,16 @@ final class NativeApprovalCoordinator {
             cancelBeforeAuthentication()
         case .loading, .reviewing:
             takeRejectionOwnership()
-        case .staging:
-            rejectIfWriteIsNotCommitted = true
-        case .responding:
-            if canCancelResponse { rejectIfWriteIsNotCommitted = true }
+        case .staging, .responding:
+            if case .persisting(let operation) = lifecycle {
+                operation.requestCancellation()
+            }
         case .staged, .rejecting, .finished:
             break
         }
     }
 
-    private func stage(_ decision: NativeApprovalDecision) {
+    private func stage(_ decision: DappApprovalDecision) {
         guard state == .reviewing, runtime != nil else { return }
         startPersistence(.stage(decision))
     }
@@ -510,127 +583,115 @@ final class NativeApprovalCoordinator {
         startPersistence(.reject)
     }
 
-    private func startPersistence(_ intent: PersistenceIntent) {
-        guard persistenceTask == nil else { return }
-        configurePersistence(intent)
+    private func startPersistence(_ action: PersistenceOperation.Action) {
+        if case .persisting = lifecycle { return }
+        let operation = installPersistence(action)
         persistenceTask = Task { [weak self] in
-            await self?.runPersistence(intent)
+            await self?.runPersistence(operation)
         }
     }
 
-    private func configurePersistence(_ intent: PersistenceIntent) {
+    private func installPersistence(
+        _ action: PersistenceOperation.Action
+    ) -> PersistenceOperation {
         bootstrapTask?.cancel()
         bootstrapTask = nil
-        rejectIfWriteIsNotCommitted = false
-        canCancelResponse = false
-        switch intent {
-        case .acquireReceipt:
-            state = .acquiringReceipt(cancelRequested: false)
-        case .cancelBeforeAuthentication(let receiptOwned):
-            state = .cancelingBeforeAuthentication(receiptOwned: receiptOwned)
+        let operation = PersistenceOperation(action)
+        lifecycle = .persisting(operation)
+        switch action {
+        case .cancelBeforeAuthentication:
             terminalDeadline = environment.now().addingTimeInterval(
                 ExtensionBridge.requestTTL
             )
-        case .stage:
-            state = .staging
-        case .respond:
-            state = .responding
-            canCancelResponse = true
         case .reject:
-            state = .rejecting
             stopLifecycleMonitor()
+        case .acquireReceipt, .stage, .respond:
+            break
         }
+        return operation
     }
 
-    private func isPersisting(_ intent: PersistenceIntent) -> Bool {
-        switch (intent, state) {
-        case (.acquireReceipt, .acquiringReceipt),
-             (.stage, .staging), (.respond, .responding), (.reject, .rejecting):
-            return true
-        case (.cancelBeforeAuthentication(let owned),
-              .cancelingBeforeAuthentication(let currentOwnership)):
-            return owned == currentOwnership
-        default:
-            return false
-        }
+    private func isCurrent(_ operation: PersistenceOperation) -> Bool {
+        guard !Task.isCancelled,
+              case .persisting(let current) = lifecycle else { return false }
+        return current === operation
     }
 
-    private func runPersistence(_ initialIntent: PersistenceIntent) async {
-        var intent = initialIntent
-        var attempts = 0
-        var retryDelay = Self.initialRetryDelayNanoseconds
-        while !Task.isCancelled, isPersisting(intent) {
+    private func isCurrent(_ progress: PreparationProgress) -> Bool {
+        guard !Task.isCancelled,
+              case .loading(let current) = lifecycle else { return false }
+        return current === progress
+    }
+
+    private func runPersistence(_ initialOperation: PersistenceOperation) async {
+        var operation = initialOperation
+        while isCurrent(operation) {
             guard environment.now() < terminalDeadline else {
-                await expirePersistence(intent, attempts: attempts)
+                await expirePersistence(operation)
                 return
             }
             let step: PersistenceStep
-            if rejectIfWriteIsNotCommitted,
-               state == .staging || (state == .responding && canCancelResponse) {
+            if operation.cancellationRequested,
+               state == .staging || state == .responding {
                 step = .replace(.reject)
             } else {
-                step = await persistenceAttempt(intent, attempts: attempts)
-                attempts += 1
+                step = await persistenceAttempt(operation)
             }
-            guard !Task.isCancelled, isPersisting(intent) else { return }
+            guard isCurrent(operation) else { return }
             switch step {
             case .stop:
                 return
-            case .replace(let nextIntent):
-                intent = nextIntent
-                attempts = 0
-                retryDelay = Self.initialRetryDelayNanoseconds
-                configurePersistence(intent)
+            case .replace(let action):
+                operation = installPersistence(action)
             case .prepareAgain:
-                await waitBeforeDeadline(preparationRetryDelay)
-                guard !Task.isCancelled, isPersisting(intent) else { return }
-                if rejectIfWriteIsNotCommitted {
-                    intent = .reject
-                    attempts = 0
-                    retryDelay = Self.initialRetryDelayNanoseconds
-                    configurePersistence(intent)
+                guard case .respond(_, let progress, _) = operation.action else {
+                    return
+                }
+                await waitBeforeDeadline(progress.nextRetryDelay)
+                guard isCurrent(operation) else { return }
+                if operation.cancellationRequested {
+                    operation = installPersistence(.reject)
                     continue
                 }
-                preparationRetryDelay = nextDelay(after: preparationRetryDelay)
+                progress.nextRetryDelay = nextDelay(after: progress.nextRetryDelay)
                 persistenceTask = nil
-                state = .loading
+                lifecycle = .loading(progress)
                 bootstrapTask = Task { [weak self] in
                     await self?.preparePresentation()
                 }
                 return
             case .retry:
-                if case .stage = intent, attempts >= 3 {
+                operation.retryCount += 1
+                if case .stage = operation.action, operation.retryCount >= 3 {
                     notifyFailureOnce()
-                    intent = .reject
-                    attempts = 0
-                    retryDelay = Self.initialRetryDelayNanoseconds
-                    configurePersistence(intent)
+                    operation = installPersistence(.reject)
                     continue
                 }
-                if case .respond = intent, attempts == 3 {
-                    canCancelResponse = false
+                if case .respond = operation.action, operation.retryCount == 3 {
                     notifyFailureOnce()
                 }
-                await waitBeforeDeadline(retryDelay)
-                guard !Task.isCancelled, isPersisting(intent) else { return }
-                retryDelay = nextDelay(after: retryDelay)
+                await waitBeforeDeadline(operation.nextRetryDelay)
+                guard isCurrent(operation) else { return }
+                operation.nextRetryDelay = nextDelay(after: operation.nextRetryDelay)
             }
         }
     }
 
     private func persistenceAttempt(
-        _ intent: PersistenceIntent,
-        attempts: Int
+        _ operation: PersistenceOperation
     ) async -> PersistenceStep {
-        if case .cancelBeforeAuthentication(let receiptOwned) = intent {
-            return await cancelBeforeAuthenticationAttempt(receiptOwned: receiptOwned)
+        if case .cancelBeforeAuthentication(let receiptOwned) = operation.action {
+            return await cancelBeforeAuthenticationAttempt(
+                operation,
+                receiptOwned: receiptOwned
+            )
         }
         guard let runtime else {
             finish()
             return .stop
         }
         let result: ExtensionBridge.StoreMutationResult
-        switch intent {
+        switch operation.action {
         case .acquireReceipt:
             result = await store.recordNativeDeliveryReceipt(
                 handle: handle,
@@ -638,14 +699,14 @@ final class NativeApprovalCoordinator {
                 runtimeInstanceIdentifier: runtime.instanceIdentifier,
                 owner: runtime.owner
             )
-        case .stage(let decision):
+        case .stage(let decision, _):
             result = await store.stageNativeDecision(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
                 runtimeInstanceIdentifier: runtime.instanceIdentifier,
                 decision: decision
             )
-        case .respond(let response):
+        case .respond(let response, _, _):
             result = await store.completeNativeDelivery(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce,
@@ -661,16 +722,16 @@ final class NativeApprovalCoordinator {
         case .cancelBeforeAuthentication:
             return .stop
         }
-        guard !Task.isCancelled, isPersisting(intent) else { return .stop }
+        guard isCurrent(operation) else { return .stop }
         switch result {
         case .persisted:
-            switch intent {
-            case .acquireReceipt:
-                if state == .acquiringReceipt(cancelRequested: true) {
+            switch operation.action {
+            case .acquireReceipt(let cancelRequested):
+                if cancelRequested {
                     return .replace(.cancelBeforeAuthentication(receiptOwned: true))
                 }
                 persistenceTask = nil
-                state = .awaitingAuthentication
+                lifecycle = .awaitingAuthentication
                 onEvent?(.authenticationRequired)
             case .stage:
                 enterWaitingState(notify: true)
@@ -681,23 +742,23 @@ final class NativeApprovalCoordinator {
             }
             return .stop
         case .ownershipLost:
-            if case .acquireReceipt = intent {
+            if case .acquireReceipt = operation.action {
                 finish()
                 return .stop
             }
-            return await reconcilePersistence(intent, attempts: attempts)
+            return await reconcilePersistence(operation)
         case .retryablePersistenceFailure:
-            switch intent {
+            switch operation.action {
             case .stage:
-                return rejectIfWriteIsNotCommitted ? .replace(.reject) : .retry
-            case .respond where canCancelResponse && rejectIfWriteIsNotCommitted:
+                return operation.cancellationRequested ? .replace(.reject) : .retry
+            case .respond where operation.cancellationRequested:
                 return .replace(.reject)
             case .reject:
                 notifyFailureOnce()
-                return await reconcilePersistence(intent, attempts: attempts)
-            case .respond where attempts >= 3:
+                return await reconcilePersistence(operation)
+            case .respond where operation.retryCount >= 3:
                 notifyFailureOnce()
-                return await reconcilePersistence(intent, attempts: attempts)
+                return await reconcilePersistence(operation)
             default:
                 return .retry
             }
@@ -705,16 +766,15 @@ final class NativeApprovalCoordinator {
     }
 
     private func reconcilePersistence(
-        _ intent: PersistenceIntent,
-        attempts: Int
+        _ operation: PersistenceOperation
     ) async -> PersistenceStep {
         let status = await storedStatus()
-        guard !Task.isCancelled, isPersisting(intent) else { return .stop }
+        guard isCurrent(operation) else { return .stop }
         switch status {
         case .staged:
             let notify: Bool
-            if case .respond = intent {
-                notify = attempts < 3
+            if case .respond = operation.action {
+                notify = operation.retryCount < 3
             } else {
                 notify = true
             }
@@ -722,22 +782,22 @@ final class NativeApprovalCoordinator {
         case .responded, .missing:
             finish()
         case .superseded:
-            switch intent {
+            switch operation.action {
             case .stage:
                 notifyFailureOnce()
                 return .replace(.reject)
-            case .respond where attempts < 3:
+            case .respond where operation.retryCount < 3:
                 supersede()
             default:
                 finish()
             }
         case .pending, .unavailable:
-            switch intent {
+            switch operation.action {
             case .stage:
                 notifyFailureOnce()
                 return .replace(.reject)
-            case .respond where attempts < 3:
-                return rejectIfWriteIsNotCommitted ? .replace(.reject) : .prepareAgain
+            case .respond where operation.retryCount < 3:
+                return operation.cancellationRequested ? .replace(.reject) : .prepareAgain
             default:
                 switch status {
                 case .pending(_, .current):
@@ -756,17 +816,16 @@ final class NativeApprovalCoordinator {
     }
 
     private func expirePersistence(
-        _ intent: PersistenceIntent,
-        attempts: Int
+        _ operation: PersistenceOperation
     ) async {
-        switch intent {
+        switch operation.action {
         case .cancelBeforeAuthentication(receiptOwned: true):
             restoreAuthenticationWaiting()
-        case .respond where attempts < 3:
+        case .respond where operation.retryCount < 3:
             finish()
         case .reject, .respond:
-            _ = await reconcilePersistence(intent, attempts: attempts)
-            if !Task.isCancelled, isPersisting(intent) { finish() }
+            _ = await reconcilePersistence(operation)
+            if isCurrent(operation) { finish() }
         default:
             finish()
         }
@@ -828,10 +887,9 @@ final class NativeApprovalCoordinator {
         didEnterWaitingState = true
         bootstrapTask?.cancel()
         bootstrapTask = nil
-        rejectIfWriteIsNotCommitted = false
         persistenceTask?.cancel()
         persistenceTask = nil
-        state = .staged
+        lifecycle = .staged
         if shouldRestartLifecycleMonitor {
             stopLifecycleMonitor()
         }
@@ -875,7 +933,7 @@ final class NativeApprovalCoordinator {
 
     private func finish(_ presentation: Presentation = .finished) {
         guard state != .finished else { return }
-        state = .finished
+        lifecycle = .finished
         bootstrapTask?.cancel()
         bootstrapTask = nil
         stopLifecycleMonitor()

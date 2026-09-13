@@ -119,6 +119,47 @@ struct DappRequestProcessor {
         }
     }
 
+    static func execute(
+        request: SafariRequest,
+        action: DappRequestAction,
+        decision: DappApprovalDecision,
+        walletAccess: WalletAccess?
+    ) async -> DappExecutionResult {
+        switch (action, decision) {
+        case (.selectAccount(let selectionAction), .accountSelection(let selection)),
+             (.switchAccount(let selectionAction), .accountSelection(let selection)):
+            return .response(executeAccountSelection(
+                request: request,
+                action: selectionAction,
+                selection: selection,
+                walletAccess: walletAccess
+            ))
+        case (.approveMessage, .message), (.approveTransaction, .transaction),
+             (.addEthereumChain, .addEthereumChain):
+            switch request.body {
+            case .ethereum:
+                return await EthereumDappRequestProcessor.execute(
+                    request: request,
+                    action: action,
+                    decision: decision,
+                    walletAccess: walletAccess
+                )
+            case .solana:
+                return await SolanaDappRequestProcessor.execute(
+                    request: request,
+                    action: action,
+                    decision: decision,
+                    walletAccess: walletAccess
+                )
+            case .unknown:
+                break
+            }
+        default:
+            break
+        }
+        return .response(response(to: request, error: .internalError))
+    }
+
     private static func prepareSwitchAccount(
         request: SafariRequest,
         body: SafariRequest.Unknown,
@@ -136,33 +177,78 @@ struct DappRequestProcessor {
             selectedAccounts: Set(preselectedAccounts),
             initiallyConnectedProviders: initiallyConnectedProviders,
             network: network
-        ) { chain, selectedAccounts in
-            guard let selectedAccounts else {
-                return response(to: request, error: .userRejected)
-            }
+        )
+        return .approval(.switchAccount(action))
+    }
 
-            let resolvedChain = chain ?? network ?? Networks.ethereum
-            let bodies = selectedAccounts.compactMap {
+    private static func executeAccountSelection(
+        request: SafariRequest,
+        action: SelectAccountAction,
+        selection: DappApprovalDecision.AccountSelection,
+        walletAccess: WalletAccess?
+    ) -> ResponseToExtension {
+        guard let walletAccess else {
+            return response(to: request, error: .internalError)
+        }
+        var accounts = [SpecificWalletAccount]()
+        var selectedCoins = Set<WalletCoin>()
+        for identity in selection.accounts {
+            guard let coin = WalletCoin.correspondingToInpageProvider(identity.provider),
+                  action.coinType == nil || action.coinType == coin,
+                  selectedCoins.insert(coin).inserted else {
+                return response(to: request, error: .internalError)
+            }
+            let matches = walletAccess.orderedAccounts.filter {
+                $0.walletId == identity.walletID &&
+                    $0.account.coin == coin &&
+                    coin.normalizedAddress($0.account.address) ==
+                        coin.normalizedAddress(identity.address) &&
+                    $0.account.derivationPath == identity.derivationPath
+            }
+            guard matches.count == 1 else {
+                return response(to: request, error: .internalError)
+            }
+            accounts.append(matches[0])
+        }
+        let chainID = selection.ethereumChainID ?? action.network?.chainIdHexString
+        let network = chainID.flatMap(Networks.withChainIdHex)
+        guard !(accounts.isEmpty && action.initiallyConnectedProviders.isEmpty),
+              !accounts.contains(where: { $0.account.coin == .ethereum }) || network != nil
+        else { return response(to: request, error: .internalError) }
+
+        switch request.body {
+        case .unknown:
+            let resolvedChain = network ?? Networks.ethereum
+            let bodies = accounts.compactMap {
                 selectedAccountResponseBody(for: $0.account, chain: resolvedChain)
             }
-            guard bodies.count == selectedAccounts.count else {
-                return response(
-                    to: request,
-                    error: .init(message: Strings.somethingWentWrong)
-                )
+            guard bodies.count == accounts.count else {
+                return response(to: request, error: .internalError)
             }
-
-            let disconnected = disconnectedProviders(
-                initiallyConnectedProviders: initiallyConnectedProviders,
-                selectedAccounts: selectedAccounts
-            )
-            let body = ResponseToExtension.Multiple(
+            return response(to: request, body: .multiple(.init(
                 bodies: bodies,
-                providersToDisconnect: Array(disconnected)
-            )
-            return response(to: request, body: .multiple(body))
+                providersToDisconnect: Array(disconnectedProviders(
+                    initiallyConnectedProviders: action.initiallyConnectedProviders,
+                    selectedAccounts: accounts
+                ))
+            )))
+        case .ethereum(let body) where body.method == .requestAccounts:
+            guard let network, let account = accounts.first?.account,
+                  account.coin == .ethereum else {
+                return response(to: request, error: .internalError)
+            }
+            return response(to: request, body: .ethereum(.init(
+                results: [account.address],
+                chainId: network.chainIdHexString
+            )))
+        case .solana(let body) where body.method == .connect:
+            guard let account = accounts.first?.account, account.coin == .solana else {
+                return response(to: request, error: .internalError)
+            }
+            return response(to: request, body: .solana(.init(publicKey: account.address)))
+        case .ethereum, .solana:
+            return response(to: request, error: .internalError)
         }
-        return .approval(.switchAccount(action))
     }
 
     private static func selectedAccountResponseBody(

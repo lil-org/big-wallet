@@ -1,5 +1,7 @@
 // ∅ 2026 lil org
 
+import Foundation
+
 enum DappRequestAction {
     case switchAccount(SelectAccountAction)
     case selectAccount(SelectAccountAction)
@@ -25,10 +27,9 @@ enum DappExecutionResult {
 
 struct SelectAccountAction {
     let coinType: WalletCoin?
-    var selectedAccounts: Set<SpecificWalletAccount>
+    let selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
     let network: EthereumNetwork?
-    let resolve: (EthereumNetwork?, [SpecificWalletAccount]?) async -> ResponseToExtension
 
     var canSelectEthereumNetwork: Bool {
         if let coinType {
@@ -47,54 +48,44 @@ struct SelectAccountAction {
 }
 
 struct SignMessageAction {
+    enum Payload {
+        case ethereumMessage(Data)
+        case ethereumPersonalMessage(Data)
+        case ethereumTypedData(String)
+        case solanaMessage(Data)
+        case solanaTransaction(SolanaPreparedTransactionMessage)
+        case solanaTransactions([SolanaPreparedTransactionMessage])
+        case solanaLegacyBroadcast(
+            Solana.PreparedLegacySignAndSendTransaction,
+            Solana.PreparedSendOptions
+        )
+        case solanaSerializedBroadcast(
+            Solana.PreparedSerializedTransaction,
+            Solana.PreparedSendOptions
+        )
+    }
+
     let subject: ApprovalSubject
     let walletId: String
     let account: WalletAccount
     let meta: String
-    private(set) var solanaClusterSelection: SolanaClusterSelection? = nil
-    let resolve: (Bool) async -> DappExecutionResult
+    let payload: Payload
 
-    init(
-        subject: ApprovalSubject,
-        walletId: String,
-        account: WalletAccount,
-        meta: String,
-        solanaClusterSelection: SolanaClusterSelection? = nil,
-        resolve: @escaping (Bool) async -> ResponseToExtension
-    ) {
-        self.init(
-            subject: subject,
-            walletId: walletId,
-            account: account,
-            meta: meta,
-            solanaClusterSelection: solanaClusterSelection,
-            resolve: { approved -> DappExecutionResult in
-                return .response(await resolve(approved))
-            }
-        )
-    }
-
-    init(
-        subject: ApprovalSubject,
-        walletId: String,
-        account: WalletAccount,
-        meta: String,
-        solanaClusterSelection: SolanaClusterSelection? = nil,
-        resolve: @escaping (Bool) async -> DappExecutionResult
-    ) {
-        self.subject = subject
-        self.walletId = walletId
-        self.account = account
-        self.meta = meta
-        self.solanaClusterSelection = solanaClusterSelection
-        self.resolve = resolve
+    var solanaClusterOptions: SolanaClusterOptions? {
+        switch payload {
+        case .solanaLegacyBroadcast(_, let options),
+             .solanaSerializedBroadcast(_, let options):
+            return SolanaClusterOptions(suggestedCluster: options.clusterHint)
+        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData,
+             .solanaMessage, .solanaTransaction, .solanaTransactions:
+            return nil
+        }
     }
 }
 
-final class SolanaClusterSelection {
-    var selectedCluster: Solana.Cluster?
+struct SolanaClusterOptions {
     let suggestedCluster: Solana.Cluster?
-    let clusters = Solana.Cluster.allCases
+    var clusters: [Solana.Cluster] { Solana.Cluster.allCases }
 
     func description(for cluster: Solana.Cluster) -> String {
         var components = [
@@ -106,11 +97,6 @@ final class SolanaClusterSelection {
         }
         return components.joined(separator: " - ")
     }
-
-    init(selectedCluster: Solana.Cluster? = nil, suggestedCluster: Solana.Cluster? = nil) {
-        self.selectedCluster = selectedCluster
-        self.suggestedCluster = suggestedCluster
-    }
 }
 
 struct SendTransactionAction {
@@ -118,39 +104,6 @@ struct SendTransactionAction {
     let resolvedNetwork: ResolvedEthereumNetwork
     let walletId: String
     let account: WalletAccount
-    let resolve: (Transaction?) async -> DappExecutionResult
-
-    init(
-        transaction: Transaction,
-        resolvedNetwork: ResolvedEthereumNetwork,
-        walletId: String,
-        account: WalletAccount,
-        resolve: @escaping (Transaction?) async -> ResponseToExtension
-    ) {
-        self.init(
-            transaction: transaction,
-            resolvedNetwork: resolvedNetwork,
-            walletId: walletId,
-            account: account,
-            resolve: { transaction -> DappExecutionResult in
-                return .response(await resolve(transaction))
-            }
-        )
-    }
-
-    init(
-        transaction: Transaction,
-        resolvedNetwork: ResolvedEthereumNetwork,
-        walletId: String,
-        account: WalletAccount,
-        resolve: @escaping (Transaction?) async -> DappExecutionResult
-    ) {
-        self.transaction = transaction
-        self.resolvedNetwork = resolvedNetwork
-        self.walletId = walletId
-        self.account = account
-        self.resolve = resolve
-    }
 
     var chain: EthereumNetwork {
         return resolvedNetwork.network
@@ -163,5 +116,4 @@ struct SendTransactionAction {
 
 struct AddEthereumChainAction {
     let chainToAdd: EthereumNetworkFromDapp
-    let resolve: (Bool) async -> ResponseToExtension
 }

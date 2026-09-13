@@ -13,14 +13,14 @@ final class NativeApprovalFinalizer {
 
     static let shared = NativeApprovalFinalizer(
         store: ExtensionBridge.shared,
-        requestProcessor: ProductionPopupRequestProcessor()
+        requestProcessor: ProductionDappRequestProcessor()
     )
 
     private let store: NativeApprovalStore
-    private let requestProcessor: PopupRequestProcessing
+    private let requestProcessor: DappRequestProcessing
     private let startWalletsManager: () -> Bool
     private let reloadWalletsManager: () -> Bool
-    private let accountResolver: (NativeApprovalDecision.AccountIdentity) ->
+    private let accountResolver: (DappApprovalDecision.AccountIdentity) ->
         SpecificWalletAccount?
     private let networkResolver: (String) -> EthereumNetwork?
     private let clock: () -> Date
@@ -29,14 +29,14 @@ final class NativeApprovalFinalizer {
 
     init(
         store: NativeApprovalStore,
-        requestProcessor: PopupRequestProcessing,
+        requestProcessor: DappRequestProcessing,
         walletManagerStart: @escaping () -> Bool = {
             WalletsManager.shared.start()
         },
         walletManagerReload: @escaping () -> Bool = {
             WalletsManager.shared.reloadFromStore()
         },
-        accountResolver: ((NativeApprovalDecision.AccountIdentity) ->
+        accountResolver: ((DappApprovalDecision.AccountIdentity) ->
             SpecificWalletAccount?)? = nil,
         networkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
@@ -57,7 +57,8 @@ final class NativeApprovalFinalizer {
                       id: identity.walletID
                   ),
                   let account = wallet.accounts.first(where: {
-                      $0.coin == coin && $0.address == identity.address
+                      $0.coin == coin && $0.address == identity.address &&
+                          $0.derivationPath == identity.derivationPath
                   }) else { return nil }
             return SpecificWalletAccount(
                 walletId: identity.walletID,
@@ -152,8 +153,10 @@ final class NativeApprovalFinalizer {
         }
 
         let preparation: DappRequestPreparation
+        let walletAccess: WalletAccess?
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent
+            walletAccess = nil
         } else {
             guard prepareWallets() else {
                 return await releaseClaimForRetry(
@@ -161,7 +164,11 @@ final class NativeApprovalFinalizer {
                 )
             }
             CustomNetworkCache.shared.invalidate()
-            preparation = requestProcessor.prepare(request)
+            walletAccess = SourceWalletAccess.shared
+            preparation = requestProcessor.prepare(
+                request,
+                walletAccess: SourceWalletAccess.shared
+            )
         }
         switch preparation {
         case .response(let response):
@@ -183,7 +190,7 @@ final class NativeApprovalFinalizer {
                     .response(Self.staleResponse(for: request))
                 }
             }
-            guard let operation = operation(
+            guard canExecute(
                 action: action,
                 decision: nativeClaim.decision
             ) else {
@@ -203,9 +210,15 @@ final class NativeApprovalFinalizer {
                         ? nil
                         : Self.staleResponse(for: request)
                 },
-                executionContext: executionContext,
-                operation: operation
-            )
+                executionContext: executionContext
+            ) {
+                await self.requestProcessor.execute(
+                    request: request,
+                    action: action,
+                    decision: nativeClaim.decision,
+                    walletAccess: walletAccess
+                )
+            }
         }
     }
 
@@ -268,17 +281,17 @@ final class NativeApprovalFinalizer {
         return startWalletsManager()
     }
 
-    private func operation(
+    private func canExecute(
         action: DappRequestAction,
-        decision: NativeApprovalDecision
-    ) -> (() async -> DappExecutionResult)? {
+        decision: DappApprovalDecision
+    ) -> Bool {
         switch (action, decision) {
         case (.selectAccount(let action), .accountSelection(let selection)),
              (.switchAccount(let action), .accountSelection(let selection)):
             guard let accounts = resolveAccounts(
                       selection.accounts,
                       requiredCoin: action.coinType
-                  ) else { return nil }
+                  ) else { return false }
             let selectedChainID = selection.ethereumChainID ??
                 action.network?.chainIdHexString
             let network = selectedChainID.flatMap(networkResolver)
@@ -286,37 +299,30 @@ final class NativeApprovalFinalizer {
                 coinType: action.coinType,
                 selectedAccounts: Set(accounts),
                 initiallyConnectedProviders: action.initiallyConnectedProviders,
-                network: network,
-                resolve: action.resolve
+                network: network
             )
             guard selectedChainID == nil || network != nil,
                   !(accounts.isEmpty && action.initiallyConnectedProviders.isEmpty),
                   accounts.isEmpty || resolvedAction.canSubmitSelection(
                       network: network
                   )
-            else { return nil }
-            return { .response(await resolvedAction.resolve(network, accounts)) }
+            else { return false }
+            return true
         case (.approveMessage(let action), .message(let approval)):
-            if let clusterSelection = action.solanaClusterSelection {
-                guard let cluster = approval.solanaCluster else { return nil }
-                clusterSelection.selectedCluster = cluster
-            } else if approval.solanaCluster != nil {
-                return nil
-            }
-            return { await action.resolve(true) }
+            return (action.solanaClusterOptions != nil) == (approval.solanaCluster != nil)
         case (.approveTransaction(let action), .transaction(let execution)):
             guard let transaction = execution.applying(to: action),
-                  transaction.isReadyForApproval(on: action.chain) else { return nil }
-            return { await action.resolve(transaction) }
-        case (.addEthereumChain(let action), .addEthereumChain):
-            return { .response(await action.resolve(true)) }
+                  transaction.isReadyForApproval(on: action.chain) else { return false }
+            return true
+        case (.addEthereumChain, .addEthereumChain):
+            return true
         default:
-            return nil
+            return false
         }
     }
 
     private func resolveAccounts(
-        _ identities: [NativeApprovalDecision.AccountIdentity],
+        _ identities: [DappApprovalDecision.AccountIdentity],
         requiredCoin: WalletCoin?
     ) -> [SpecificWalletAccount]? {
         var result = [SpecificWalletAccount]()
@@ -330,7 +336,8 @@ final class NativeApprovalFinalizer {
                   let account = accountResolver(identity),
                   account.walletId == identity.walletID,
                   account.account.coin == coin,
-                  account.account.address == identity.address else { return nil }
+                  account.account.address == identity.address,
+                  account.account.derivationPath == identity.derivationPath else { return nil }
             result.append(account)
         }
         return result

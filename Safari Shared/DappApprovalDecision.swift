@@ -2,17 +2,24 @@
 
 import Foundation
 
-enum NativeApprovalDecision: Codable, Equatable, Sendable {
+enum DappApprovalDecision: Codable, Equatable, Sendable {
 
     struct AccountIdentity: Codable, Equatable, Sendable {
         let walletID: String
         let address: String
         let provider: InpageProvider
+        let derivationPath: String
 
-        init(walletID: String, address: String, provider: InpageProvider) {
+        init(
+            walletID: String,
+            address: String,
+            provider: InpageProvider,
+            derivationPath: String
+        ) {
             self.walletID = walletID
             self.address = address
             self.provider = provider
+            self.derivationPath = derivationPath
         }
     }
 
@@ -399,6 +406,7 @@ enum NativeApprovalDecision: Codable, Equatable, Sendable {
                   selection.accounts.allSatisfy({
                       !$0.walletID.isEmpty && $0.walletID.count <= 256 &&
                         !$0.address.isEmpty && $0.address.count <= 256 &&
+                        !$0.derivationPath.isEmpty && $0.derivationPath.count <= 1_024 &&
                         $0.provider != .unknown && $0.provider != .multiple
                   }) else { return false }
             return selection.ethereumChainID.map {

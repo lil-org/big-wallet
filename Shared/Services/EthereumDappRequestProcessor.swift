@@ -25,44 +25,29 @@ struct EthereumDappRequestProcessor {
                 selectedAccounts: Set(walletAccess.suggestedAccounts(coin: .ethereum)),
                 initiallyConnectedProviders: [],
                 network: nil
-            ) { chain, selectedAccounts in
-                guard let chain,
-                      let account = selectedAccounts?.first?.account,
-                      account.coin == .ethereum else {
-                    return response(to: request, error: .userRejected)
-                }
-                let body = ResponseToExtension.Ethereum(
-                    results: [account.address],
-                    chainId: chain.chainIdHexString
-                )
-                return response(to: request, body: .ethereum(body))
-            }
+            )
             return .approval(.selectAccount(action))
         case .signTypedMessage:
             guard let walletAndAccount, let raw = body.raw else {
                 return .response(genericFailureResponse(to: request))
             }
             return prepareMessageSigning(
-                request: request,
                 walletId: walletAndAccount.0,
                 account: walletAndAccount.1,
                 subject: .signTypedData,
                 meta: raw,
-                walletAccess: walletAccess,
-                signing: { signTypedData(privateKey: $0, raw: raw) }
+                payload: .ethereumTypedData(raw)
             )
         case .signMessage:
             guard let data = body.message, let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
             return prepareMessageSigning(
-                request: request,
                 walletId: walletAndAccount.0,
                 account: walletAndAccount.1,
                 subject: .signMessage,
                 meta: WalletCrypto.hexString(data: data),
-                walletAccess: walletAccess,
-                signing: { signMessage(privateKey: $0, data: data) }
+                payload: .ethereumMessage(data)
             )
         case .signPersonalMessage:
             guard let data = body.message, let walletAndAccount else {
@@ -70,13 +55,11 @@ struct EthereumDappRequestProcessor {
             }
             let text = String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data)
             return prepareMessageSigning(
-                request: request,
                 walletId: walletAndAccount.0,
                 account: walletAndAccount.1,
                 subject: .signPersonalMessage,
                 meta: text,
-                walletAccess: walletAccess,
-                signing: { signPersonalMessage(privateKey: $0, data: data) }
+                payload: .ethereumPersonalMessage(data)
             )
         case .signTransaction:
             let transaction: Transaction
@@ -107,24 +90,7 @@ struct EthereumDappRequestProcessor {
                 resolvedNetwork: resolvedNetwork,
                 walletId: walletId,
                 account: account
-            ) { approvedTransaction in
-                guard let approvedTransaction else {
-                    return .response(response(to: request, error: .userRejected))
-                }
-                guard let privateKey = privateKey(
-                    walletId: walletId,
-                    account: account,
-                    walletAccess: walletAccess
-                ) else {
-                    return .response(signingFailedResponse(to: request))
-                }
-                return await prepareTransactionBroadcast(
-                    privateKey: privateKey,
-                    transaction: approvedTransaction,
-                    resolvedNetwork: resolvedNetwork,
-                    request: request
-                )
-            }
+            )
             return .approval(.approveTransaction(action))
         case .ecRecover:
             if let (signature, message) = body.signatureAndMessage,
@@ -204,6 +170,69 @@ struct EthereumDappRequestProcessor {
                 : nil
         case .requestAccounts:
             return nil
+        }
+    }
+
+    static func execute(
+        request: SafariRequest,
+        action: DappRequestAction,
+        decision: DappApprovalDecision,
+        walletAccess: WalletAccess?
+    ) async -> DappExecutionResult {
+        switch (action, decision) {
+        case (.approveMessage(let action), .message(let approval)):
+            guard approval.solanaCluster == nil,
+                  let privateKey = walletAccess?.privateKey(
+                    walletID: action.walletId,
+                    account: action.account
+                  ) else {
+                return .response(signingFailedResponse(to: request))
+            }
+            let signing: @Sendable () -> SigningResult
+            switch action.payload {
+            case .ethereumMessage(let data):
+                signing = { signMessage(privateKey: privateKey, data: data) }
+            case .ethereumPersonalMessage(let data):
+                signing = { signPersonalMessage(privateKey: privateKey, data: data) }
+            case .ethereumTypedData(let raw):
+                signing = { signTypedData(privateKey: privateKey, raw: raw) }
+            case .solanaMessage, .solanaTransaction, .solanaTransactions,
+                 .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+                return .response(signingFailedResponse(to: request))
+            }
+            guard let result = await awaitBackgroundOperation(signing) else {
+                return .response(genericFailureResponse(to: request))
+            }
+            return .response(response(to: request, signingResult: result))
+        case (.approveTransaction(let action), .transaction(let execution)):
+            guard let transaction = execution.applying(to: action),
+                  transaction.isReadyForApproval(on: action.chain) else {
+                return .response(response(to: request, error: .internalError))
+            }
+            guard let privateKey = walletAccess?.privateKey(
+                walletID: action.walletId,
+                account: action.account
+            ) else {
+                return .response(signingFailedResponse(to: request))
+            }
+            return await prepareTransactionBroadcast(
+                privateKey: privateKey,
+                transaction: transaction,
+                resolvedNetwork: action.resolvedNetwork,
+                request: request
+            )
+        case (.addEthereumChain(let action), .addEthereumChain):
+            guard let chainID = Int(hexString: action.chainToAdd.chainId),
+                  completeApprovedChainAddition(action.chainToAdd, chainId: chainID),
+                  case .ethereum(let body) = request.body else {
+                return .response(genericFailureResponse(to: request))
+            }
+            return .response(response(to: request, body: .ethereum(.init(
+                results: [body.address],
+                chainId: action.chainToAdd.chainId
+            ))))
+        default:
+            return .response(response(to: request, error: .internalError))
         }
     }
 
@@ -291,22 +320,7 @@ struct EthereumDappRequestProcessor {
             guard chainToAdd.defaultRpcURL != nil else {
                 return .response(genericFailureResponse(to: request))
             }
-            let action = AddEthereumChainAction(chainToAdd: chainToAdd) { approved in
-                guard approved else {
-                    return response(to: request, error: .userRejected)
-                }
-                guard completeApprovedChainAddition(
-                    chainToAdd,
-                    chainId: chainId
-                ) else {
-                    return genericFailureResponse(to: request)
-                }
-                let responseBody = ResponseToExtension.Ethereum(
-                    results: [body.address],
-                    chainId: chainToAdd.chainId
-                )
-                return response(to: request, body: .ethereum(responseBody))
-            }
+            let action = AddEthereumChainAction(chainToAdd: chainToAdd)
             return .approval(.addEthereumChain(action))
         }
     }
@@ -335,50 +349,25 @@ struct EthereumDappRequestProcessor {
         }
     }
 
-    private static func privateKey(
-        walletId: String,
-        account: WalletAccount,
-        walletAccess: WalletAccess
-    ) -> WalletPrivateKey? {
-        walletAccess.privateKey(walletID: walletId, account: account)
-    }
-
     private enum SigningResult: Sendable {
         case success(String)
         case failure
     }
 
     private static func prepareMessageSigning(
-        request: SafariRequest,
         walletId: String,
         account: WalletAccount,
         subject: ApprovalSubject,
         meta: String,
-        walletAccess: WalletAccess,
-        signing: @escaping @Sendable (WalletPrivateKey) -> SigningResult
+        payload: SignMessageAction.Payload
     ) -> DappRequestPreparation {
-        let action = SignMessageAction(
+        .approval(.approveMessage(SignMessageAction(
             subject: subject,
             walletId: walletId,
             account: account,
-            meta: meta
-        ) { approved in
-            guard approved else {
-                return response(to: request, error: .userRejected)
-            }
-            guard let privateKey = privateKey(
-                walletId: walletId,
-                account: account,
-                walletAccess: walletAccess
-            ) else {
-                return signingFailedResponse(to: request)
-            }
-            guard let result = await awaitBackgroundOperation({ signing(privateKey) }) else {
-                return genericFailureResponse(to: request)
-            }
-            return response(to: request, signingResult: result)
-        }
-        return .approval(.approveMessage(action))
+            meta: meta,
+            payload: payload
+        )))
     }
 
     private static func signTypedData(

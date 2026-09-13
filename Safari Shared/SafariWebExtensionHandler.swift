@@ -109,6 +109,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 context: context
             )
         case .popup:
+#if os(macOS)
+            context.cancelRequest(withError: HandlerError.unsupportedOperation)
+#else
             Task { @MainActor in
                 let response: [String: Any]
                 if privateBrowsing {
@@ -129,6 +132,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     context: context
                 )
             }
+#endif
         }
     }
 
@@ -237,16 +241,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     )
                     return
                 }
-#if os(macOS)
-                let materializesWalletDependentRequests = false
-#else
-                let materializesWalletDependentRequests = true
-#endif
-                switch await PopupRequestSessions.materializeAfterAdmission(
-                    handle: handle,
-                    materializesWalletDependentRequests:
-                        materializesWalletDependentRequests
-                ) {
+                switch await DappRequestAdmission.shared.materialize(handle: handle) {
                 case .approvalRequired:
 #if os(macOS)
                     let launched = await Self.nativeAgentLauncher.open(

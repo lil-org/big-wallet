@@ -26,7 +26,7 @@
 		A8B102012FC3000000000001 /* NativeAgentLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */; };
 		A8B201012FC3000000000001 /* NativeApprovalCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B200002FC3000000000001 /* NativeApprovalCoordinatorTests.swift */; };
 		00CF41022A422F5907638DCA /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
-		0116FE5F2C90433188343E29 /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		0116FE5F2C90433188343E29 /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		05250C3E4C747AA2FC37ECFE /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		077DB2CBB740B186C83CAD6B /* SolanaDappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100042FC1000000000001 /* SolanaDappRequestProcessor.swift */; };
 		091B9B768A0ECF31B7DED48A /* NSEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0F8B312FA2770000F094FC /* NSEvent.swift */; };
@@ -94,7 +94,9 @@
 		2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
 		2C264BDF27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
 		2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		EE4127A26A984386BB8C8542 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		1D6DB6E97C4A43E69A0FDA72 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
 		2C2AA1D328AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
 		2C2AA1D528AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
@@ -167,6 +169,7 @@
 		2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2C773FEB2D53C17000879A1F /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		2C773FEE2D53C17000879A1F /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		9C4CC04A297F451190068C42 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		2C773FEF2D53C17000879A1F /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
 		2C773FF02D53C17000879A1F /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
 		2C773FF12D53C18C00879A1F /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
@@ -452,12 +455,12 @@
 		32E601E3CA4B19106269DC01 /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5043FECAA8BA2EEB19DA712 /* PeerMeta.swift */; };
 		3353DB2C803596E5F2F920DE /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		336082751D4350DA77C44EC0 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
-		33A92FE79328033EE2F8B0E3 /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		33A92FE79328033EE2F8B0E3 /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		343A8BF1F96EAD3551AAC4F0 /* BigUInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8ED8DB2AEADDC400818D74 /* BigUInt.swift */; };
-		38530D5A7DAD3B1CFFC2D561 /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		38530D5A7DAD3B1CFFC2D561 /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		3978D7903376E3711E4FB1DB /* WalletCoin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768B32826ED83005E8D4D /* WalletCoin.swift */; };
 		3BC843FEE76A4631BF5D0468 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
-		3DAE6D4151111D16E57E3B59 /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		3DAE6D4151111D16E57E3B59 /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		3E84305CA4F4418E8CF7C815 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
 		40FB4F91F97B18196FB868FA /* NativeAgentRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12F8F1E6BA79CB4183B8B2F4 /* NativeAgentRoute.swift */; };
 		4144282057E712BE9D0D0402 /* WalletCoreProxyEthereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */; };
@@ -471,13 +474,14 @@
 		507E85CFCBFEC94679A1C9DC /* TransactionApprovalCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA801002FBE000000000001 /* TransactionApprovalCoordinator.swift */; };
 		509007B205C635C0ADD89B3A /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
 		5120574DEEFEEC2EF4401F4D /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		37D3666F19AD4AFB9F0F4ADE /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		3AED825DAAAD493D9417B990 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		521739D67137E0C51C520435 /* EthereumAccessListEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA700012FBD000000000001 /* EthereumAccessListEntry.swift */; };
 		524B29428DE7AE12532F2955 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
 		534E85F01D5C14194B602B89 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		56637A5578AEC821BCBCF285 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		5756048BE887B5571DDD3DB2 /* PreviewAccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A8282598C5005E8D4D /* PreviewAccountCellView.swift */; };
-		59A1A94FB148E10F582F87A2 /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		59A1A94FB148E10F582F87A2 /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		5F2BEF23EB0D6F827F1B8B5D /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
 		625264DBCEAE01A2E231C075 /* NativeApprovalCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2419DDB6D67104CD553ACC9 /* NativeApprovalCoordinator.swift */; };
 		62653310FBB03BC461C0E1F9 /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
@@ -556,7 +560,9 @@
 		B8D5828F503448E2A147283E /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
 		B9AC7DD412DB92E7FF10CFD1 /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E425CE4050A1EE7120DCFB /* ApproveTransactionViewController.swift */; };
 		BF3B00012FB1000000000000 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		942B489956B14790B025CDD9 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		BF3B00022FB1000000000000 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		805CE1D6F3A4485D8110071A /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		BF3B00032FB1000000000000 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		BF3B00042FB1000000000000 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		BF3B00052FB1000000000000 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
@@ -644,8 +650,10 @@
 		BF3C00022FB2000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3C00032FB2000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3C00122FB2000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		5E9587A6E00141569DE3AAC0 /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		6B09353D062B4A18AF585777 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF3C00132FB2000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		10B12F31FF844302961D7DAF /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		4CFC396D859F42529D24FD82 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF3C00212FB2000000000000 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		BF3C00222FB2000000000000 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
@@ -659,9 +667,11 @@
 		BF3C00632FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
 		BF3C00642FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
 		BF3D00012FB3000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		4727EE588FE24F25917280DF /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		AB16AB7CC4BA407EB7F29E86 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF3D00022FB3000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3D00032FB3000000000000 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		46BF935BCF9B4F5187DF9C12 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		BF3D00042FB3000000000000 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		BF3D00052FB3000000000000 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
 		BF3D00062FB3000000000000 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
@@ -720,10 +730,13 @@
 		BF4100032FB7000000000000 /* bridge_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = BF4100012FB7000000000000 /* bridge_wire.js */; };
 		BF4100042FB7000000000000 /* bridge_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = BF4100012FB7000000000000 /* bridge_wire.js */; };
 		BF5C00012FB5000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		1FB10BCC67404AAA872FD9EB /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		09A140789AB54750B3ECD793 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF5C00022FB5000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		503713F256B14678AEAF8A72 /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		05650BE638214FFD8A06173E /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF5C00032FB5000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		F6DF51B9CEF34695B59AC8C5 /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
 		BAF4BC0B7CE643988625263B /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF5C00042FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		BF5C00052FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
@@ -743,7 +756,7 @@
 		C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
 		C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
 		C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
-		C2E85F200AE9A68DAAA48CAA /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		C2E85F200AE9A68DAAA48CAA /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		C3D101012FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
 		C3D101022FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
 		C3D101032FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
@@ -765,6 +778,7 @@
 		D8BB8BA36F08B232E7CE4B3F /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
 		D9AC903EA1DAF053972DCFEF /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09DE267579EA00993638 /* AccountsListViewController.swift */; };
 		DA9FB8358944795B37D484B7 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		6EA0CF0BF3F545A8838E8A15 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
 		DB1C86D19343F197C58BB0DB /* DurableApprovalExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249CB855F657541977C5004B /* DurableApprovalExecutor.swift */; };
 		DB606D9E2DF88B13E9A1ECDE /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
 		DC667B4578CDC76FB1641D4B /* NSViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4B72CA2B0E7EA800113087 /* NSViewController.swift */; };
@@ -786,7 +800,7 @@
 		FA86DF9CB5F9EB40DF73ED7C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB9B5672FA24B0000F094FB /* AppDelegate.swift */; };
 		FAFE2FE3B281DF1B53EA2BEC /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127EA3F95C0D28D818422B49 /* NetworksListView.swift */; };
 		FB0F5B37D913E78CAB23D589 /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FA19F180DFA7F9B54883C7 /* Browser.swift */; };
-		FB12F6FE618B20F87E5F9E8E /* NativeApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */; };
+		FB12F6FE618B20F87E5F9E8E /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		FBC23ECE1F9B298FB2265AFA /* EditTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C17BC1A0EB4948D11C9B1226 /* EditTransactionView.swift */; };
 		FC01761F2ED5A47B9372AB11 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
 		FC7CDB5CFEC2D6AB8BF28CB3 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
@@ -928,6 +942,7 @@
 		2C264BD427B5806200234393 /* InpageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InpageProvider.swift; sourceTree = "<group>"; };
 		2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumResponseToExtension.swift; sourceTree = "<group>"; };
 		2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessor.swift; sourceTree = "<group>"; };
+		BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessing.swift; sourceTree = "<group>"; };
 		2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecificWalletAccount.swift; sourceTree = "<group>"; };
 		2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipleResponseToExtension.swift; sourceTree = "<group>"; };
 		2C3024FB28C1193100C304ED /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -1082,6 +1097,7 @@
 		AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCatalog.swift; sourceTree = "<group>"; };
 		BF3C00012FB2000000000000 /* DeviceAuthentication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAuthentication.swift; sourceTree = "<group>"; };
 		BF3C00112FB2000000000000 /* PopupRequestSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupRequestSessions.swift; sourceTree = "<group>"; };
+		60773283A0904680972780A2 /* DappRequestAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAdmission.swift; sourceTree = "<group>"; };
 		7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupWalletEnvironment.swift; sourceTree = "<group>"; };
 		BF3C00312FB2000000000000 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
 		BF3C00412FB2000000000000 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
@@ -1095,7 +1111,7 @@
 		C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupApprovalStatePresenter.swift; sourceTree = "<group>"; };
 		C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossProcessLockTestFixture.swift; sourceTree = "<group>"; };
 		C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeApprovalDecision.swift; sourceTree = "<group>"; };
+		C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DappApprovalDecision.swift; sourceTree = "<group>"; };
 		CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeApprovalFinalizer.swift; sourceTree = "<group>"; };
 		D2419DDB6D67104CD553ACC9 /* NativeApprovalCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeApprovalCoordinator.swift; sourceTree = "<group>"; };
 		DB2B8110AC144397915962B1 /* NetworkCatalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = NetworkCatalog.json; sourceTree = "<group>"; };
@@ -1556,6 +1572,7 @@
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */,
 				BF3C00112FB2000000000000 /* PopupRequestSessions.swift */,
+				60773283A0904680972780A2 /* DappRequestAdmission.swift */,
 				7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */,
 				A2F100022FC1000000000001 /* PopupTransactionSession.swift */,
 				C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */,
@@ -1565,7 +1582,7 @@
 				2C264BDA27B5A94400234393 /* Models */,
 				2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */,
 				2CB3844027654A0D00A189B9 /* Resources */,
-				C96ED201BA6F59A61E7E4D01 /* NativeApprovalDecision.swift */,
+				C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */,
 				12F8F1E6BA79CB4183B8B2F4 /* NativeAgentRoute.swift */,
 				249CB855F657541977C5004B /* DurableApprovalExecutor.swift */,
 				CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */,
@@ -1642,6 +1659,7 @@
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				BF3C00012FB2000000000000 /* DeviceAuthentication.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
+				BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */,
 				A2F100032FC1000000000001 /* EthereumDappRequestProcessor.swift */,
 				A2F100042FC1000000000001 /* SolanaDappRequestProcessor.swift */,
 				2F1A00032E20000100A1A001 /* Solana.swift */,
@@ -2649,6 +2667,7 @@
 			files = (
 				D0A101012FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3D00012FB3000000000000 /* PopupRequestSessions.swift in Sources */,
+				4727EE588FE24F25917280DF /* DappRequestAdmission.swift in Sources */,
 				AB16AB7CC4BA407EB7F29E86 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101012FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102012FC1000000000001 /* PopupTransactionSession.swift in Sources */,
@@ -2657,6 +2676,7 @@
 				A2F104012FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF3D00022FB3000000000000 /* DeviceAuthentication.swift in Sources */,
 				BF3D00032FB3000000000000 /* DappRequestProcessor.swift in Sources */,
+				46BF935BCF9B4F5187DF9C12 /* DappRequestProcessing.swift in Sources */,
 				BF3D00042FB3000000000000 /* GasService.swift in Sources */,
 				BF3D00052FB3000000000000 /* Solana.swift in Sources */,
 				BF3D00062FB3000000000000 /* Keychain.swift in Sources */,
@@ -2720,7 +2740,7 @@
 				2C0F8B302FA2770000F094FB /* Notification.swift in Sources */,
 				2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				0C6CF9D674254089B74FE085 /* NetworkCatalog.swift in Sources */,
-				38530D5A7DAD3B1CFFC2D561 /* NativeApprovalDecision.swift in Sources */,
+				38530D5A7DAD3B1CFFC2D561 /* DappApprovalDecision.swift in Sources */,
 				8BDB2B9574B8A42F68035914 /* DurableApprovalExecutor.swift in Sources */,
 				40FB4F91F97B18196FB868FA /* NativeAgentRoute.swift in Sources */,
 				B7582E561DBD6717675B43CE /* NativeAgentLauncher.swift in Sources */,
@@ -2735,6 +2755,7 @@
 				D0A201012FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101022FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00032FB5000000000000 /* PopupRequestSessions.swift in Sources */,
+				F6DF51B9CEF34695B59AC8C5 /* DappRequestAdmission.swift in Sources */,
 				BAF4BC0B7CE643988625263B /* PopupWalletEnvironment.swift in Sources */,
 				A2F101062FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102062FC1000000000001 /* PopupTransactionSession.swift in Sources */,
@@ -2751,6 +2772,7 @@
 				2C773FEB2D53C17000879A1F /* GasService.swift in Sources */,
 				2FA801032FBE000000000001 /* TransactionApprovalCoordinator.swift in Sources */,
 				2C773FEE2D53C17000879A1F /* DappRequestProcessor.swift in Sources */,
+				9C4CC04A297F451190068C42 /* DappRequestProcessing.swift in Sources */,
 				2F1A10232E20000100A1A001 /* Solana.swift in Sources */,
 				2C773FEF2D53C17000879A1F /* Keychain.swift in Sources */,
 				2C7740212D53CBF200879A1F /* AccountsListViewController.swift in Sources */,
@@ -2823,7 +2845,7 @@
 				2C77401A2D53C28200879A1F /* Images.swift in Sources */,
 				2CF9B1102D526F8B00B5CE82 /* TransactionInspector.swift in Sources */,
 				2CF9B1042D526E2300B5CE82 /* WalletContainer.swift in Sources */,
-				FB12F6FE618B20F87E5F9E8E /* NativeApprovalDecision.swift in Sources */,
+				FB12F6FE618B20F87E5F9E8E /* DappApprovalDecision.swift in Sources */,
 				8617A228000664850D566022 /* DurableApprovalExecutor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2834,6 +2856,7 @@
 			files = (
 				D0A101032FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00012FB5000000000000 /* PopupRequestSessions.swift in Sources */,
+				1FB10BCC67404AAA872FD9EB /* DappRequestAdmission.swift in Sources */,
 				09A140789AB54750B3ECD793 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101042FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102042FC1000000000001 /* PopupTransactionSession.swift in Sources */,
@@ -2914,6 +2937,7 @@
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
 				2C2AA1D528AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
+				EE4127A26A984386BB8C8542 /* DappRequestProcessing.swift in Sources */,
 				2FA700022FBD000000000001 /* EthereumAccessListEntry.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
@@ -2936,7 +2960,7 @@
 				FACA00000000000000000011 /* RemoteImageLoader.swift in Sources */,
 				FBC23ECE1F9B298FB2265AFA /* EditTransactionView.swift in Sources */,
 				4B3CF891ECE90EA2569AED0C /* NetworksListView.swift in Sources */,
-				0116FE5F2C90433188343E29 /* NativeApprovalDecision.swift in Sources */,
+				0116FE5F2C90433188343E29 /* DappApprovalDecision.swift in Sources */,
 				6F551D42D70146111F42CBE7 /* NativeAgentRoute.swift in Sources */,
 				B1B97DE11956ECF17232F9B8 /* DurableApprovalExecutor.swift in Sources */,
 				C7C2E11CE19948DE81D1D989 /* NativeApprovalFinalizer.swift in Sources */,
@@ -2952,6 +2976,7 @@
 				D0A201022FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101042FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00022FB5000000000000 /* PopupRequestSessions.swift in Sources */,
+				503713F256B14678AEAF8A72 /* DappRequestAdmission.swift in Sources */,
 				05650BE638214FFD8A06173E /* PopupWalletEnvironment.swift in Sources */,
 				A2F101052FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102052FC1000000000001 /* PopupTransactionSession.swift in Sources */,
@@ -2997,6 +3022,7 @@
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
+				1D6DB6E97C4A43E69A0FDA72 /* DappRequestProcessing.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */,
@@ -3041,7 +3067,7 @@
 				2C90E62327B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2CC79DF92AFD4BD6002B5A2D /* TransactionInspector.swift in Sources */,
 				2C2AA1D628AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
-				C2E85F200AE9A68DAAA48CAA /* NativeApprovalDecision.swift in Sources */,
+				C2E85F200AE9A68DAAA48CAA /* DappApprovalDecision.swift in Sources */,
 				DEF4288923C5F7AC9E2AE1F0 /* DurableApprovalExecutor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3053,6 +3079,7 @@
 				D0A201032FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101052FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3C00132FB2000000000000 /* PopupRequestSessions.swift in Sources */,
+				10B12F31FF844302961D7DAF /* DappRequestAdmission.swift in Sources */,
 				4CFC396D859F42529D24FD82 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101032FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102032FC1000000000001 /* PopupTransactionSession.swift in Sources */,
@@ -3082,6 +3109,7 @@
 				2F1A10062E20000100A1A001 /* SolanaSafariRequest.swift in Sources */,
 				2C773FD42D53A5B400879A1F /* SafariRequest.swift in Sources */,
 				BF3B00022FB1000000000000 /* DappRequestProcessor.swift in Sources */,
+				805CE1D6F3A4485D8110071A /* DappRequestProcessing.swift in Sources */,
 				BF3B00042FB1000000000000 /* GasService.swift in Sources */,
 				BF3B00062FB1000000000000 /* Solana.swift in Sources */,
 				BF3B00082FB1000000000000 /* Keychain.swift in Sources */,
@@ -3124,7 +3152,7 @@
 				BF3B00542FB1000000000000 /* Image.swift in Sources */,
 				BF3B00562FB1000000000000 /* Notification.swift in Sources */,
 				BF3B00582FB1000000000000 /* URL.swift in Sources */,
-				3DAE6D4151111D16E57E3B59 /* NativeApprovalDecision.swift in Sources */,
+				3DAE6D4151111D16E57E3B59 /* DappApprovalDecision.swift in Sources */,
 				D0E4B4B1FBEDBC86037563A5 /* DurableApprovalExecutor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3169,6 +3197,7 @@
 				D0A101062FD1000000000001 /* WalletAccess.swift in Sources */,
 				FA86DF9CB5F9EB40DF73ED7C /* AppDelegate.swift in Sources */,
 				5120574DEEFEEC2EF4401F4D /* PopupRequestSessions.swift in Sources */,
+				37D3666F19AD4AFB9F0F4ADE /* DappRequestAdmission.swift in Sources */,
 				3AED825DAAAD493D9417B990 /* PopupWalletEnvironment.swift in Sources */,
 				9537DFE804784E44D508C1C3 /* ExtensionRequestFileStore.swift in Sources */,
 				119114F00C583856DF846F3E /* PopupTransactionSession.swift in Sources */,
@@ -3248,6 +3277,7 @@
 				18340F43767E53A38FB53E8C /* NSPasteboard.swift in Sources */,
 				C9AB4DD84EBCCB2DF94A0E50 /* MultipleResponseToExtension.swift in Sources */,
 				DA9FB8358944795B37D484B7 /* DappRequestProcessor.swift in Sources */,
+				6EA0CF0BF3F545A8838E8A15 /* DappRequestProcessing.swift in Sources */,
 				521739D67137E0C51C520435 /* EthereumAccessListEntry.swift in Sources */,
 				A4D3CE4C5C66D3A71BE0CC03 /* Transaction.swift in Sources */,
 				10166FF41BF1F479FEC60913 /* SafariRequest+Helpers.swift in Sources */,
@@ -3270,7 +3300,7 @@
 				FACA00000000000000000012 /* RemoteImageLoader.swift in Sources */,
 				F005F722978C41C60B039650 /* EditTransactionView.swift in Sources */,
 				FAFE2FE3B281DF1B53EA2BEC /* NetworksListView.swift in Sources */,
-				33A92FE79328033EE2F8B0E3 /* NativeApprovalDecision.swift in Sources */,
+				33A92FE79328033EE2F8B0E3 /* DappApprovalDecision.swift in Sources */,
 				69424A652579E50C33ED9159 /* NativeAgentRoute.swift in Sources */,
 				FF6953A51811D3F7C4884094 /* DurableApprovalExecutor.swift in Sources */,
 				A9F700012FE0000000000001 /* NativeApprovalFinalizer.swift in Sources */,
@@ -3285,6 +3315,7 @@
 				D0A201042FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101072FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3C00122FB2000000000000 /* PopupRequestSessions.swift in Sources */,
+				5E9587A6E00141569DE3AAC0 /* DappRequestAdmission.swift in Sources */,
 				6B09353D062B4A18AF585777 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101022FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102022FC1000000000001 /* PopupTransactionSession.swift in Sources */,
@@ -3314,6 +3345,7 @@
 				2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */,
 				3BC843FEE76A4631BF5D0468 /* NetworkCatalog.swift in Sources */,
 				BF3B00012FB1000000000000 /* DappRequestProcessor.swift in Sources */,
+				942B489956B14790B025CDD9 /* DappRequestProcessing.swift in Sources */,
 				BF3B00032FB1000000000000 /* GasService.swift in Sources */,
 				BF3B00052FB1000000000000 /* Solana.swift in Sources */,
 				BF3B00072FB1000000000000 /* Keychain.swift in Sources */,
@@ -3356,7 +3388,7 @@
 				BF3B00532FB1000000000000 /* Image.swift in Sources */,
 				BF3B00552FB1000000000000 /* Notification.swift in Sources */,
 				BF3B00572FB1000000000000 /* URL.swift in Sources */,
-				59A1A94FB148E10F582F87A2 /* NativeApprovalDecision.swift in Sources */,
+				59A1A94FB148E10F582F87A2 /* DappApprovalDecision.swift in Sources */,
 				DB1C86D19343F197C58BB0DB /* DurableApprovalExecutor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

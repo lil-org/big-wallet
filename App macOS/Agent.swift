@@ -595,19 +595,17 @@ class Agent: NSObject {
                 meta: action.meta,
                 account: action.account,
                 walletId: action.walletId,
-                solanaClusterSelection: action.solanaClusterSelection
-            ) { [weak self, weak coordinator] approved in
+                solanaClusterOptions: action.solanaClusterOptions
+            ) { [weak self, weak coordinator] decision in
                 guard let self, let coordinator,
                       self.acceptsReviewAction(
                           for: handle,
                           coordinator: coordinator
                       ) else { return }
-                if approved {
-                    coordinator.approveMessage(
-                        solanaCluster:
-                            action.solanaClusterSelection?.selectedCluster
-                    )
-                } else {
+                switch decision {
+                case .approved(let cluster):
+                    coordinator.approveMessage(solanaCluster: cluster)
+                case .rejected:
                     coordinator.reject()
                 }
             }
@@ -798,8 +796,8 @@ class Agent: NSObject {
         meta: String,
         account: WalletAccount,
         walletId: String,
-        solanaClusterSelection: SolanaClusterSelection?,
-        completion: @escaping (Bool) -> Void
+        solanaClusterOptions: SolanaClusterOptions?,
+        completion: @escaping (ApproveViewController.Decision) -> Void
     ) {
         let window = windowController.window
         var authenticationContext: LAContext?
@@ -809,12 +807,12 @@ class Agent: NSObject {
             meta: meta,
             account: account,
             walletId: walletId,
-            solanaClusterSelection: solanaClusterSelection
-        ) { [weak self, weak window] approved in
-            guard approved else {
+            solanaClusterOptions: solanaClusterOptions
+        ) { [weak self, weak window] decision in
+            guard case .approved = decision else {
                 guard !didResolveAuthentication else { return }
                 didResolveAuthentication = true
-                completion(false)
+                completion(.rejected)
                 return
             }
             authenticationContext = self?.askAuthentication(
@@ -830,7 +828,7 @@ class Agent: NSObject {
                 guard !didResolveAuthentication else { return }
                 didResolveAuthentication = true
                 authenticationContext = nil
-                completion(success)
+                completion(success ? decision : .rejected)
                 if success {
                     (window?.contentViewController as? ApproveViewController)?
                         .enableWaiting()

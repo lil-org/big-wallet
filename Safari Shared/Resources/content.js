@@ -169,8 +169,6 @@ function bigWalletPageMessage(event) {
         bigWalletEnqueue(event.data.message, generation);
     } else if (event.data.kind === "disconnect") {
         bigWalletDisconnect(event.data.message, generation);
-    } else if (event.data.kind === "solanaAuthorizationEpoch") {
-        return;
     }
 }
 

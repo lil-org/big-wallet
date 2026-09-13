@@ -3289,7 +3289,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: fixture.ingress,
             profileIdentifier: profile
         )).handle
-        let decision = NativeApprovalDecision.message(.init(solanaCluster: nil))
+        let decision = DappApprovalDecision.message(.init(solanaCluster: nil))
 
         let staged = await bridge.stageNativeDecision(
             handle: handle,
@@ -3666,7 +3666,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: fixture.ingress,
             profileIdentifier: nil
         )).handle
-        let decision = NativeApprovalDecision.message(.init(solanaCluster: nil))
+        let decision = DappApprovalDecision.message(.init(solanaCluster: nil))
         let staged = await bridge.stageNativeDecision(
             handle: handle,
             decision: decision
@@ -3832,7 +3832,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             source: .custom
         )
         let execution = try XCTUnwrap(
-            NativeApprovalDecision.TransactionExecution(
+            DappApprovalDecision.TransactionExecution(
                 edited,
                 reviewedNetwork: resolvedNetwork
             )
@@ -3849,8 +3849,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             transaction: original,
             resolvedNetwork: resolvedNetwork,
             walletId: "wallet",
-            account: account,
-            resolve: { _ -> DappExecutionResult in fatalError() }
+            account: account
         )
         let rebuilt = try XCTUnwrap(execution.applying(to: action))
         XCTAssertEqual(rebuilt.from, original.from)
@@ -3881,16 +3880,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             transaction: original,
             resolvedNetwork: changedEndpoint,
             walletId: "wallet",
-            account: account,
-            resolve: { _ -> DappExecutionResult in fatalError() }
+            account: account
         )
         XCTAssertNil(execution.applying(to: changedAction))
 
         let encoded = try XCTUnwrap(
-            NativeApprovalDecision.transaction(execution).boundedData
+            DappApprovalDecision.transaction(execution).boundedData
         )
         XCTAssertEqual(
-            NativeApprovalDecision.decodeBounded(encoded),
+            DappApprovalDecision.decodeBounded(encoded),
             .transaction(execution)
         )
         var object = try XCTUnwrap(
@@ -3922,7 +3920,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(staged, .persisted)
         let originalProfile = try Data(contentsOf: defaultProfileURL)
         for invalid in invalidDecisions {
-            XCTAssertNil(NativeApprovalDecision.decodeBounded(invalid))
+            XCTAssertNil(DappApprovalDecision.decodeBounded(invalid))
             try originalProfile.write(to: defaultProfileURL, options: .atomic)
             try mutateFirstStoredState("pending") { pending in
                 var ownership = try XCTUnwrap(pending["approval"] as? [String: Any])

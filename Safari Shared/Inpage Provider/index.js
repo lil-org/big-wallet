@@ -273,12 +273,6 @@ const transport = Object.freeze({
             message: {body, id, name, provider},
             providerGeneration: generation,
         };
-        if (provider === "solana") {
-            const epoch = ownValue(message, "solanaAuthorizationEpoch");
-            if (isSafeIntegerNormally(epoch) && epoch >= 0) {
-                envelope.solanaAuthorizationEpoch = epoch;
-            }
-        }
         return postToPage(envelope);
     },
     postRPC(message, messageGeneration) {
@@ -303,22 +297,7 @@ const transport = Object.freeze({
             message: request,
             providerGeneration: generation,
         };
-        if (provider === "solana") {
-            const epoch = ownValue(message, "solanaAuthorizationEpoch");
-            if (isSafeIntegerNormally(epoch) && epoch >= 0) {
-                envelope.solanaAuthorizationEpoch = epoch;
-            }
-        }
         return postToPage(envelope);
-    },
-    synchronizeSolanaEpoch(epoch) {
-        if (!isSafeIntegerNormally(epoch) || epoch < 0) { return false; }
-        return postToPage({
-            direction: PAGE_TO_CONTENT_DIRECTION,
-            kind: "solanaAuthorizationEpoch",
-            providerGeneration: generation,
-            solanaAuthorizationEpoch: epoch,
-        });
     },
 });
 

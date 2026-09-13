@@ -3,7 +3,12 @@
 import Cocoa
 
 class ApproveViewController: NSViewController {
-    
+
+    enum Decision {
+        case rejected
+        case approved(solanaCluster: Solana.Cluster?)
+    }
+
     @IBOutlet weak var buttonsStackView: NSStackView!
     @IBOutlet weak var progressIndicator: NSProgressIndicator!
     @IBOutlet weak var titleLabel: NSTextField!
@@ -23,23 +28,23 @@ class ApproveViewController: NSViewController {
     private var approveTitle: String!
     private var meta: String!
     private var account: WalletAccount!
-    private var completion: ((Bool) -> Void)!
+    private var completion: ((Decision) -> Void)!
     private var didCallCompletion = false
     private var walletId: String!
-    private var solanaClusterSelection: SolanaClusterSelection?
+    private var solanaClusterOptions: SolanaClusterOptions?
+    private var selectedCluster: Solana.Cluster?
     var localWindowCloseCompletion: (() -> Void)?
     private weak var clusterPopUpButton: NSPopUpButton?
     private var canApprove: Bool {
-        guard let solanaClusterSelection else { return true }
-        return solanaClusterSelection.selectedCluster != nil
+        return solanaClusterOptions == nil || selectedCluster != nil
     }
     
     static func with(subject: ApprovalSubject,
                      meta: String,
                      account: WalletAccount,
                      walletId: String,
-                     solanaClusterSelection: SolanaClusterSelection? = nil,
-                     completion: @escaping (Bool) -> Void) -> ApproveViewController {
+                     solanaClusterOptions: SolanaClusterOptions? = nil,
+                     completion: @escaping (Decision) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.walletId = walletId
         new.completion = completion
@@ -47,7 +52,8 @@ class ApproveViewController: NSViewController {
         new.meta = meta
         new.account = account
         new.approveTitle = subject.title
-        new.solanaClusterSelection = solanaClusterSelection
+        new.solanaClusterOptions = solanaClusterOptions
+        new.selectedCluster = solanaClusterOptions?.suggestedCluster
         return new
     }
     
@@ -94,7 +100,7 @@ class ApproveViewController: NSViewController {
     }
 
     private func configureSolanaClusterSelectionIfNeeded() {
-        guard let solanaClusterSelection else { return }
+        guard let solanaClusterOptions else { return }
 
         let popUpButton = NSPopUpButton(frame: .zero, pullsDown: false)
         popUpButton.controlSize = .small
@@ -104,12 +110,12 @@ class ApproveViewController: NSViewController {
         popUpButton.translatesAutoresizingMaskIntoConstraints = false
 
         popUpButton.addItem(withTitle: Strings.selectNetwork)
-        for cluster in solanaClusterSelection.clusters {
-            popUpButton.addItem(withTitle: solanaClusterSelection.description(for: cluster))
+        for cluster in solanaClusterOptions.clusters {
+            popUpButton.addItem(withTitle: solanaClusterOptions.description(for: cluster))
             popUpButton.lastItem?.representedObject = cluster
         }
-        if let selectedCluster = solanaClusterSelection.selectedCluster,
-           let index = solanaClusterSelection.clusters.firstIndex(of: selectedCluster) {
+        if let selectedCluster,
+           let index = solanaClusterOptions.clusters.firstIndex(of: selectedCluster) {
             popUpButton.selectItem(at: index + 1)
         }
 
@@ -128,9 +134,8 @@ class ApproveViewController: NSViewController {
     }
 
     @objc private func solanaClusterSelectionChanged(_ sender: NSPopUpButton) {
-        guard let solanaClusterSelection else { return }
-
-        solanaClusterSelection.selectedCluster = sender.selectedItem?.representedObject as? Solana.Cluster
+        guard solanaClusterOptions != nil else { return }
+        selectedCluster = sender.selectedItem?.representedObject as? Solana.Cluster
         updateOkButtonState()
     }
 
@@ -149,7 +154,7 @@ class ApproveViewController: NSViewController {
         metaTextView.textStorage?.setAttributedString(fullString)
     }
     
-    private func callCompletion(result: Bool) {
+    private func callCompletion(result: Decision) {
         if !didCallCompletion {
             didCallCompletion = true
             completion(result)
@@ -159,11 +164,11 @@ class ApproveViewController: NSViewController {
     @IBAction func actionButtonTapped(_ sender: Any) {
         guard canApprove else { return }
 
-        callCompletion(result: true)
+        callCompletion(result: .approved(solanaCluster: selectedCluster))
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        callCompletion(result: false)
+        callCompletion(result: .rejected)
     }
     
 }

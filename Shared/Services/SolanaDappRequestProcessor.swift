@@ -7,13 +7,12 @@ struct SolanaDappRequestProcessor {
     private static let solana = Solana.shared
 
     private struct SigningPayload {
-        let messageData: Data
+        let payload: SignMessageAction.Payload
         let approvalSubject: ApprovalSubject
         let approvalMessage: String
     }
 
     private enum ProviderError: Error {
-        case canceled
         case failedToSign
         case internalError
         case malformedPayload
@@ -22,8 +21,6 @@ struct SolanaDappRequestProcessor {
 
         var responseError: ProviderResponseError {
             switch self {
-            case .canceled:
-                return .userRejected
             case .failedToSign:
                 return .init(
                     message: Strings.failedToSign,
@@ -52,7 +49,7 @@ struct SolanaDappRequestProcessor {
     ) -> DappRequestPreparation {
         switch body.method {
         case .connect:
-            return prepareConnect(request: request, walletAccess: walletAccess)
+            return prepareConnect(walletAccess: walletAccess)
         case .signAllTransactions:
             return prepareSignAllTransactions(
                 request: request,
@@ -85,6 +82,72 @@ struct SolanaDappRequestProcessor {
         }
     }
 
+    static func execute(
+        request: SafariRequest,
+        action: DappRequestAction,
+        decision: DappApprovalDecision,
+        walletAccess: WalletAccess?
+    ) async -> DappExecutionResult {
+        guard case .approveMessage(let action) = action,
+              case .message(let approval) = decision,
+              (action.solanaClusterOptions != nil) == (approval.solanaCluster != nil)
+        else { return .response(response(to: request, error: .internalError)) }
+        guard let privateKey = walletAccess?.privateKey(
+            walletID: action.walletId,
+            account: action.account
+        ) else { return .response(response(to: request, error: .failedToSign)) }
+
+        switch action.payload {
+        case .solanaMessage(let data):
+            return await signMessage(data, privateKey: privateKey, request: request)
+        case .solanaTransaction(let prepared):
+            return await signMessage(
+                prepared.messageData,
+                privateKey: privateKey,
+                request: request
+            )
+        case .solanaTransactions(let prepared):
+            let messages = prepared.map(\.messageData)
+            guard let results = await awaitBackgroundOptionalOperation({
+                Solana.sign(messageDataList: messages, privateKey: privateKey)
+            }) else { return .response(response(to: request, error: .failedToSign)) }
+            return .response(response(to: request, solanaResponse: .init(results: results)))
+        case .solanaLegacyBroadcast(let transaction, let options):
+            guard let cluster = approval.solanaCluster else {
+                return .response(response(to: request, error: .internalError))
+            }
+            return await signAndSend(request: request, cluster: cluster, sendOptions: options) {
+                Solana.signedTransactionForSignAndSend(
+                    preparedLegacyTransaction: transaction,
+                    privateKey: privateKey
+                )
+            }
+        case .solanaSerializedBroadcast(let transaction, let options):
+            guard let cluster = approval.solanaCluster else {
+                return .response(response(to: request, error: .internalError))
+            }
+            return await signAndSend(request: request, cluster: cluster, sendOptions: options) {
+                Solana.signedTransactionForSignAndSend(
+                    preparedSerializedTransaction: transaction,
+                    privateKey: privateKey
+                )
+            }
+        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
+            return .response(response(to: request, error: .internalError))
+        }
+    }
+
+    private static func signMessage(
+        _ data: Data,
+        privateKey: WalletPrivateKey,
+        request: SafariRequest
+    ) async -> DappExecutionResult {
+        guard let signed = await awaitBackgroundOptionalOperation({
+            Solana.sign(messageData: data, privateKey: privateKey)
+        }) else { return .response(response(to: request, error: .failedToSign)) }
+        return .response(response(to: request, solanaResponse: .init(result: signed)))
+    }
+
     static func decodedSignMessage(
         _ message: String,
         messageEncoding: SafariRequest.Solana.MessageEncoding
@@ -98,7 +161,6 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func prepareConnect(
-        request: SafariRequest,
         walletAccess: WalletAccess
     ) -> DappRequestPreparation {
         let action = SelectAccountAction(
@@ -106,16 +168,7 @@ struct SolanaDappRequestProcessor {
             selectedAccounts: Set(walletAccess.suggestedAccounts(coin: .solana)),
             initiallyConnectedProviders: [],
             network: nil
-        ) { _, selectedAccounts in
-            guard let account = selectedAccounts?.first?.account,
-                  account.coin == .solana else {
-                return response(to: request, error: .canceled)
-            }
-            return response(
-                to: request,
-                body: .solana(.init(publicKey: account.address))
-            )
-        }
+        )
         return .approval(.selectAccount(action))
     }
 
@@ -155,28 +208,13 @@ struct SolanaDappRequestProcessor {
             encodedMessages: messages,
             preparedMessages: preparedMessages
         )
-        let messageDataList = preparedMessages.map(\.messageData)
         let action = approvalAction(
-            request: request,
             walletID: walletID,
             account: account,
             subject: .approveTransaction,
             meta: displayMessage,
-            walletAccess: walletAccess
-        ) { privateKey in
-            guard let results = await awaitBackgroundOptionalOperation({
-                Solana.sign(
-                    messageDataList: messageDataList,
-                    privateKey: privateKey
-                )
-            }) else {
-                return .response(response(to: request, error: .failedToSign))
-            }
-            return .response(response(
-                to: request,
-                solanaResponse: .init(results: results)
-            ))
-        }
+            payload: .solanaTransactions(preparedMessages)
+        )
         return .approval(action)
     }
 
@@ -203,8 +241,7 @@ struct SolanaDappRequestProcessor {
                 request: request,
                 body: body,
                 walletID: walletID,
-                account: account,
-                walletAccess: walletAccess
+                account: account
             )
         case .signMessage, .signTransaction:
             let payload: SigningPayload
@@ -214,29 +251,13 @@ struct SolanaDappRequestProcessor {
             case .failure(let error):
                 return .response(response(to: request, error: error))
             }
-            let messageData = payload.messageData
-
             let action = approvalAction(
-                request: request,
                 walletID: walletID,
                 account: account,
                 subject: payload.approvalSubject,
                 meta: payload.approvalMessage,
-                walletAccess: walletAccess
-            ) { privateKey in
-                guard let signed = await awaitBackgroundOptionalOperation({
-                    Solana.sign(
-                        messageData: messageData,
-                        privateKey: privateKey
-                    )
-                }) else {
-                    return .response(response(to: request, error: .failedToSign))
-                }
-                return .response(response(
-                    to: request,
-                    solanaResponse: .init(result: signed)
-                ))
-            }
+                payload: payload.payload
+            )
             return .approval(action)
         case .connect, .signAllTransactions:
             return .response(response(to: request, error: .internalError))
@@ -247,8 +268,7 @@ struct SolanaDappRequestProcessor {
         request: SafariRequest,
         body: SafariRequest.Solana,
         walletID: String,
-        account: WalletAccount,
-        walletAccess: WalletAccess
+        account: WalletAccount
     ) -> DappRequestPreparation {
         let sendOptions: Solana.PreparedSendOptions
         switch Solana.preparedSendOptions(from: body.sendOptions) {
@@ -258,20 +278,14 @@ struct SolanaDappRequestProcessor {
             return .response(response(to: request, error: .sendTransaction(error)))
         }
 
-        let clusterSelection = SolanaClusterSelection(
-            selectedCluster: sendOptions.clusterHint,
-            suggestedCluster: sendOptions.clusterHint
-        )
         if let serializedTransaction = body.transaction {
             return prepareSerializedSignAndSend(
                 request: request,
                 body: body,
                 serializedTransaction: serializedTransaction,
                 sendOptions: sendOptions,
-                clusterSelection: clusterSelection,
                 walletID: walletID,
-                account: account,
-                walletAccess: walletAccess
+                account: account
             )
         }
 
@@ -284,7 +298,6 @@ struct SolanaDappRequestProcessor {
         }
 
         let action = approvalAction(
-            request: request,
             walletID: walletID,
             account: account,
             subject: .approveTransaction,
@@ -292,20 +305,8 @@ struct SolanaDappRequestProcessor {
                 message: transaction.approvalMessage,
                 preparedMessage: transaction.preparedMessage
             ),
-            clusterSelection: clusterSelection,
-            walletAccess: walletAccess
-        ) { selectedCluster, privateKey in
-            return await signAndSend(
-                request: request,
-                cluster: selectedCluster,
-                sendOptions: sendOptions
-            ) {
-                Solana.signedTransactionForSignAndSend(
-                    preparedLegacyTransaction: transaction,
-                    privateKey: privateKey
-                )
-            }
-        }
+            payload: .solanaLegacyBroadcast(transaction, sendOptions)
+        )
         return .approval(action)
     }
 
@@ -314,10 +315,8 @@ struct SolanaDappRequestProcessor {
         body: SafariRequest.Solana,
         serializedTransaction: String,
         sendOptions: Solana.PreparedSendOptions,
-        clusterSelection: SolanaClusterSelection,
         walletID: String,
-        account: WalletAccount,
-        walletAccess: WalletAccess
+        account: WalletAccount
     ) -> DappRequestPreparation {
         switch solana.preparedSerializedTransactionForSignAndSend(
             serializedTransaction: serializedTransaction,
@@ -327,7 +326,6 @@ struct SolanaDappRequestProcessor {
             return .response(response(to: request, error: .sendTransaction(error)))
         case .success(let transaction):
             let action = approvalAction(
-                request: request,
                 walletID: walletID,
                 account: account,
                 subject: .approveTransaction,
@@ -335,20 +333,8 @@ struct SolanaDappRequestProcessor {
                     message: transaction.approvalMessage,
                     preparedMessage: transaction.preparedMessage
                 ),
-                clusterSelection: clusterSelection,
-                walletAccess: walletAccess
-            ) { selectedCluster, privateKey in
-                return await signAndSend(
-                    request: request,
-                    cluster: selectedCluster,
-                    sendOptions: sendOptions
-                ) {
-                    Solana.signedTransactionForSignAndSend(
-                        preparedSerializedTransaction: transaction,
-                        privateKey: privateKey
-                    )
-                }
-            }
+                payload: .solanaSerializedBroadcast(transaction, sendOptions)
+            )
             return .approval(action)
         }
     }
@@ -370,7 +356,7 @@ struct SolanaDappRequestProcessor {
                 return .failure(.malformedPayload)
             }
             return .success(SigningPayload(
-                messageData: messageData,
+                payload: .solanaMessage(messageData),
                 approvalSubject: .signMessage,
                 approvalMessage: approvalMessage(
                     for: body,
@@ -382,7 +368,7 @@ struct SolanaDappRequestProcessor {
             switch preparedTransactionMessage(canonicalMessage, publicKey: body.publicKey) {
             case .success(let preparedMessage):
                 return .success(SigningPayload(
-                    messageData: preparedMessage.messageData,
+                    payload: .solanaTransaction(preparedMessage),
                     approvalSubject: .approveTransaction,
                     approvalMessage: transactionApprovalMessage(
                         message: canonicalMessage,
@@ -461,63 +447,19 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func approvalAction(
-        request: SafariRequest,
         walletID: String,
         account: WalletAccount,
         subject: ApprovalSubject,
         meta: String,
-        clusterSelection: SolanaClusterSelection,
-        walletAccess: WalletAccess,
-        onApprove: @escaping (
-            Solana.Cluster,
-            WalletPrivateKey
-        ) async -> DappExecutionResult
+        payload: SignMessageAction.Payload
     ) -> DappRequestAction {
-        return approvalAction(
-            request: request,
-            walletID: walletID,
-            account: account,
-            subject: subject,
-            meta: meta,
-            solanaClusterSelection: clusterSelection,
-            walletAccess: walletAccess
-        ) { privateKey in
-            guard let selectedCluster = clusterSelection.selectedCluster else {
-                return .response(response(to: request, error: .internalError))
-            }
-            return await onApprove(selectedCluster, privateKey)
-        }
-    }
-
-    private static func approvalAction(
-        request: SafariRequest,
-        walletID: String,
-        account: WalletAccount,
-        subject: ApprovalSubject,
-        meta: String,
-        solanaClusterSelection: SolanaClusterSelection? = nil,
-        walletAccess: WalletAccess,
-        onApprove: @escaping (WalletPrivateKey) async -> DappExecutionResult
-    ) -> DappRequestAction {
-        let action = SignMessageAction(
+        .approveMessage(SignMessageAction(
             subject: subject,
             walletId: walletID,
             account: account,
             meta: meta,
-            solanaClusterSelection: solanaClusterSelection
-        ) { approved in
-            guard approved else {
-                return .response(response(to: request, error: .canceled))
-            }
-            guard let privateKey = walletAccess.privateKey(
-                walletID: walletID,
-                account: account
-            ) else {
-                return .response(response(to: request, error: .failedToSign))
-            }
-            return await onApprove(privateKey)
-        }
-        return .approveMessage(action)
+            payload: payload
+        ))
     }
 
     private static func signAndSend(

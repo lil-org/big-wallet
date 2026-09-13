@@ -321,9 +321,8 @@ final class PopupApprovalStatePresenter {
     ) {
         state["meta"] = action.meta
         state["account"] = accountModel(walletId: action.walletId, account: action.account)
-        if let clusterSelection = action.solanaClusterSelection {
-            let effectiveCluster = clusterSelection.selectedCluster ??
-                clusterSelection.suggestedCluster
+        if let clusterSelection = action.solanaClusterOptions {
+            let effectiveCluster = clusterSelection.suggestedCluster
             state["clusters"] = clusterSelection.clusters.map { cluster in
                 return [
                     "value": cluster.rawValue,

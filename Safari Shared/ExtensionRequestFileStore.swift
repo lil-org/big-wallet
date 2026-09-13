@@ -696,7 +696,7 @@ final class ExtensionRequestFileStore {
 
     func stageNativeDecision(
         handle: ExtensionBridge.Handle,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) -> ExtensionBridge.StoreMutationResult {
         stageNativeDecision(
             handle: handle,
@@ -709,7 +709,7 @@ final class ExtensionRequestFileStore {
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) -> ExtensionBridge.StoreMutationResult {
         stageNativeDecision(
             handle: handle,
@@ -724,7 +724,7 @@ final class ExtensionRequestFileStore {
     private func stageNativeDecision(
         handle: ExtensionBridge.Handle,
         expectedReceipt: ReceiptIdentity?,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) -> ExtensionBridge.StoreMutationResult {
         guard let decisionData = decision.boundedData else {
             return .ownershipLost
@@ -745,7 +745,7 @@ final class ExtensionRequestFileStore {
                 return .ownershipLost
             }
             if let existing = profile.records[index].stagedApproval {
-                return NativeApprovalDecision.decodeBounded(existing.decision) == decision
+                return DappApprovalDecision.decodeBounded(existing.decision) == decision
                     ? .persisted
                     : .ownershipLost
             }
@@ -887,7 +887,7 @@ final class ExtensionRequestFileStore {
             switch profile.records[index].state {
             case .pending(let request, let pendingApproval):
                 guard case .staged(let approval, let context) = pendingApproval,
-                      let decision = NativeApprovalDecision.decodeBounded(
+                      let decision = DappApprovalDecision.decodeBounded(
                           approval.decision
                       ) else { return .notStaged }
                 guard let executionContext = context,
@@ -1809,7 +1809,7 @@ final class ExtensionRequestFileStore {
                   ExtensionBridge.isValidEnqueueAttempt(record.enqueueAttempt),
                   record.createdAt <= record.admissionCreatedAt,
                   record.stagedApproval.map({
-                      NativeApprovalDecision.decodeBounded($0.decision) != nil &&
+                      DappApprovalDecision.decodeBounded($0.decision) != nil &&
                         $0.stagedAt >= record.createdAt
                   }) ?? true,
                   record.nativeExecutionContext.map({ context in
@@ -1979,7 +1979,7 @@ final class ExtensionRequestFileStore {
         }
         return data.count + (record.state.isActive
             ? ExtensionBridge.maximumStoredRecordBytes +
-                NativeApprovalDecision.maximumEncodedBytes + 32 * 1024
+                DappApprovalDecision.maximumEncodedBytes + 32 * 1024
             : 0)
     }
 

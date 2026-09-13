@@ -365,13 +365,13 @@ actor ExtensionBridge {
 
     struct NativeDecisionClaim: Equatable, Sendable {
         let approvalClaim: ApprovalClaim
-        let decision: NativeApprovalDecision
+        let decision: DappApprovalDecision
         let stagedAt: Date
         let executionContext: NativeExecutionContext?
 
         init(
             approvalClaim: ApprovalClaim,
-            decision: NativeApprovalDecision,
+            decision: DappApprovalDecision,
             stagedAt: Date,
             executionContext: NativeExecutionContext? = nil
         ) {
@@ -680,7 +680,7 @@ actor ExtensionBridge {
 
     func stageNativeDecision(
         handle: Handle,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) -> StoreMutationResult {
         store.stageNativeDecision(handle: handle, decision: decision)
     }
@@ -689,7 +689,7 @@ actor ExtensionBridge {
         handle: Handle,
         nativeDeliveryNonce: NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) -> StoreMutationResult {
         store.stageNativeDecision(
             handle: handle,
@@ -852,7 +852,7 @@ protocol NativeApprovalStore: PopupRequestStore {
     ) async -> ExtensionBridge.NativeDecisionClaimResult
     func stageNativeDecision(
         handle: ExtensionBridge.Handle,
-        decision: NativeApprovalDecision
+        decision: DappApprovalDecision
     ) async -> ExtensionBridge.StoreMutationResult
 }
 
