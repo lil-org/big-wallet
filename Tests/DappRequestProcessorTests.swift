@@ -1985,7 +1985,7 @@ final class DappRequestProcessorTests: XCTestCase {
         ))
     }
 
-    func testExistingCustomChainAdditionAllowsGrandfatheredLocalDefinitionMatch() throws {
+    func testExistingCustomChainAdditionAllowsLocalDefinitionMatch() throws {
         var approvedNetwork = approvedEthereumNetwork()
         approvedNetwork.rpcUrls = [
             "http://localhost:8545",

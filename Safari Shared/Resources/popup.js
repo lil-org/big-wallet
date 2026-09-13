@@ -85,22 +85,410 @@ let currentRequestController = null;
 let popupStrings = {};
 let ignoreSliderUntilRelease = false;
 
-const NATIVE_MESSAGE_CANCELLED = Symbol("nativeMessageCancelled");
-const nativeChannels = { read: Promise.resolve(), action: Promise.resolve() };
-let unresolvedOpenAppCall = null;
+class PopupCommandCoordinator {
+    constructor() {
+        this.channels = {read: Promise.resolve(), action: Promise.resolve()};
+        this.activeScope = null;
+        this.openAppCall = null;
+    }
+
+    attach(controller) {
+        const scope = {
+            controller,
+            request: controller.request,
+            nativeState: null,
+            transportError: false,
+            phase: "loading",
+            revision: 0,
+            readFlight: null,
+            mutation: null,
+            speedCommand: null,
+            scheduledRead: null,
+            refreshDelay: TRANSACTION_REFRESH_INTERVAL,
+            tickets: new Set(),
+            completion: null,
+        };
+        this.activeScope = scope;
+        return scope;
+    }
+
+    isActive(scope) {
+        return this.activeScope === scope && scope.phase !== "disposed" &&
+            scope.phase !== "reconciling" &&
+            sameRequest(scope.request, queueTab.items[queueTab.index]);
+    }
+
+    isCurrent(scope, revision = scope.revision) {
+        return this.isActive(scope) && scope.revision === revision;
+    }
+
+    allows(scope, action) {
+        return this.isActive(scope) && !scope.transportError &&
+            hasApprovalAction(scope.nativeState, action);
+    }
+
+    schedule({lane, subject, id, payload, requestToken, reviewToken, approvalRequest, isValid}) {
+        let resolveResult;
+        const ticket = {
+            state: "waiting",
+            result: new Promise(resolve => { resolveResult = resolve; }),
+            cancel() {
+                if (ticket.state !== "waiting") { return false; }
+                ticket.state = "cancelled";
+                resolveResult({status: "cancelled"});
+                return true;
+            },
+        };
+        const operation = this.channels[lane].then(async () => {
+            if (ticket.state === "cancelled" || isValid && !isValid()) {
+                ticket.state = "cancelled";
+                return {status: "cancelled"};
+            }
+            ticket.state = "dispatched";
+            try {
+                const response = await settleNativeMessage(Promise.resolve(nativeMessage(
+                    subject, id, payload, requestToken,
+                    typeof reviewToken === "function" ? reviewToken() : reviewToken,
+                    approvalRequest
+                )), subject === "approveRequest");
+                return {status: "response", response};
+            } catch {
+                return {status: "failure"};
+            } finally {
+                ticket.state = "settled";
+            }
+        });
+        this.channels[lane] = operation.then(() => {}, () => {});
+        operation.then(resolveResult, () => resolveResult({status: "failure"}));
+        return ticket;
+    }
+
+    async send({scope, subject, payload, lane = "action", reviewToken, isValid, owner}) {
+        if (!this.isActive(scope)) { return {status: "cancelled"}; }
+        const ticket = this.schedule({
+            lane, subject, payload, reviewToken,
+            id: scope.request.id,
+            requestToken: scope.request.requestToken,
+            approvalRequest: scope.request,
+            isValid: () => this.isActive(scope) && (!isValid || isValid()),
+        });
+        scope.tickets.add(ticket);
+        if (owner) { owner.ticket = ticket; }
+        try {
+            return await ticket.result;
+        } finally {
+            scope.tickets.delete(ticket);
+        }
+    }
+
+    readQueue() {
+        return this.schedule({lane: "read", subject: "getPendingRequests", id: genId()}).result;
+    }
+
+    openApp() {
+        if (this.openAppCall) { return this.openAppCall; }
+        const id = genId();
+        const result = this.schedule({lane: "action", subject: "openApp", id}).result.then(outcome => {
+            if (outcome.status === "response" && outcome.response?.id !== id) {
+                return {status: "failure"};
+            }
+            return outcome;
+        });
+        this.openAppCall = result;
+        void result.finally(() => {
+            if (this.openAppCall === result) { this.openAppCall = null; }
+        });
+        return result;
+    }
+
+    invalidate(scope) {
+        scope.revision += 1;
+        this.reconcileScheduling(scope);
+        for (const ticket of scope.tickets) { ticket.cancel(); }
+        this.discardSpeed({scope});
+    }
+
+    dispose({scope}) {
+        if (scope.phase === "disposed") { return; }
+        scope.phase = "disposed";
+        this.invalidate(scope);
+        if (this.activeScope === scope) { this.activeScope = null; }
+    }
+
+    reconcile({scope}) {
+        if (scope.completion) { return scope.completion; }
+        if (!this.isActive(scope)) { return Promise.resolve(); }
+        scope.phase = "reconciling";
+        this.invalidate(scope);
+        scope.controller.closeAlert(false);
+        scope.completion = closeIfNothingIsLeft();
+        return scope.completion;
+    }
+
+    followUpMode(scope) {
+        if (!this.isActive(scope) || scope.transportError ||
+            scope.phase === "submitting" || scope.readFlight) { return null; }
+        if (scope.phase === "following" || shouldPollApprovalState(scope.nativeState)) {
+            return "poll";
+        }
+        return scope.nativeState?.state === "review" &&
+            scope.nativeState.review?.kind === "sendTransaction" ? "refresh" : null;
+    }
+
+    reconcileScheduling(scope) {
+        const mode = this.followUpMode(scope);
+        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : scope.refreshDelay;
+        const current = scope.scheduledRead;
+        if (current && current.mode === mode && current.delay === delay &&
+            current.revision === scope.revision) { return; }
+        if (current) {
+            clearTimeout(current.timer);
+            scope.scheduledRead = null;
+        }
+        if (mode === null) { return; }
+        const scheduled = {mode, delay, revision: scope.revision, timer: null};
+        scheduled.timer = setTimeout(() => {
+            if (scope.scheduledRead !== scheduled) { return; }
+            scope.scheduledRead = null;
+            if (!this.isCurrent(scope, scheduled.revision) || this.followUpMode(scope) !== mode) {
+                this.reconcileScheduling(scope);
+                return;
+            }
+            void this.read({scope, refresh: mode === "refresh"});
+        }, delay);
+        scope.scheduledRead = scheduled;
+    }
+
+    accept({scope, outcome, revision, allowsIgnored = false}) {
+        if (!this.isCurrent(scope, revision) || outcome.status === "cancelled") { return null; }
+        const state = outcome.status === "response"
+            ? normalizeApprovalImages(outcome.response) : null;
+        if (allowsIgnored && isRecord(state) && state.status === "ignored" &&
+            Object.keys(state).length === 1) { return null; }
+        if (!isRenderableApprovalState(state, scope.request)) {
+            this.fail(scope);
+            return null;
+        }
+        if (state.state === "missing") {
+            void this.reconcile({scope});
+            return null;
+        }
+        return state;
+    }
+
+    fail(scope) {
+        if (!this.isActive(scope)) { return; }
+        scope.transportError = true;
+        scope.phase = "displaying";
+        scope.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+        this.invalidate(scope);
+        scope.controller.renderTransportFailure();
+    }
+
+    adopt({scope, state, refresh = false}) {
+        if (!this.isActive(scope) || !state?.state) { return; }
+        const hadState = scope.nativeState !== null;
+        scope.nativeState = state;
+        scope.transportError = false;
+        scope.phase = shouldPollApprovalState(state) ? "following" : "displaying";
+        const unchanged = scope.controller.presentState(state, refresh && hadState);
+        scope.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
+            ? Math.min(scope.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
+            : TRANSACTION_REFRESH_INTERVAL;
+        this.reconcileScheduling(scope);
+    }
+
+    async read({scope, refresh = false}) {
+        if (!this.isActive(scope) || scope.phase === "submitting") { return; }
+        const revision = scope.revision;
+        if (scope.readFlight) {
+            const flight = scope.readFlight;
+            if (flight.revision === revision) {
+                if (!refresh) { flight.refresh = false; }
+                return flight.result;
+            }
+            await flight.result;
+            if (!this.isCurrent(scope, revision)) { return; }
+            return this.read({scope, refresh});
+        }
+        const flight = {revision, refresh, result: null};
+        scope.readFlight = flight;
+        this.reconcileScheduling(scope);
+        flight.result = (async () => {
+            try {
+                const outcome = await this.send({
+                    scope, lane: "read", subject: "getApprovalState",
+                    isValid: () => this.isCurrent(scope, revision) && scope.phase !== "submitting",
+                });
+                const state = this.accept({scope, outcome, revision});
+                if (state) { this.adopt({scope, state, refresh: flight.refresh}); }
+                return state;
+            } finally {
+                if (scope.readFlight === flight) { scope.readFlight = null; }
+                this.reconcileScheduling(scope);
+            }
+        })();
+        return flight.result;
+    }
+
+    async retry({scope}) {
+        if (!this.isActive(scope) || scope.phase === "submitting" ||
+            !scope.transportError && !this.allows(scope, "retry")) { return; }
+        const revision = ++scope.revision;
+        scope.phase = "submitting";
+        this.reconcileScheduling(scope);
+        scope.controller.showSubmitting();
+        const outcome = await this.send({
+            scope, subject: "retryApproval",
+            isValid: () => this.isCurrent(scope, revision) &&
+                (scope.transportError || this.allows(scope, "retry")),
+        });
+        const state = this.accept({scope, outcome, revision});
+        if (state) { this.adopt({scope, state}); }
+    }
+
+    approve({scope, payload}) {
+        return this.decide({scope, subject: "approveRequest", payload});
+    }
+
+    reject({scope}) {
+        return this.decide({scope, subject: "rejectRequest"});
+    }
+
+    async decide({scope, subject, payload}) {
+        const canSubmit = () => this.isActive(scope) && !scope.transportError &&
+            canSubmitDecision(subject, scope.nativeState);
+        if (scope.phase === "submitting" || !canSubmit()) { return; }
+        if (subject === "approveRequest") {
+            scope.controller.finishSliderDragForDecision(scope.request);
+            if (!await this.waitForSpeed({scope})) { return; }
+        } else {
+            this.discardSpeed({scope});
+        }
+        if (!canSubmit() || scope.phase === "submitting") { return; }
+        const reviewToken = subject === "approveRequest" ? scope.nativeState.review?.reviewToken : undefined;
+        const revision = ++scope.revision;
+        scope.phase = "submitting";
+        this.reconcileScheduling(scope);
+        scope.controller.showSubmitting();
+        let decisionPayload = payload;
+        if (subject === "approveRequest") {
+            decisionPayload = {...(isRecord(payload) ? payload : {})};
+            delete decisionPayload.revisions;
+            delete decisionPayload.password;
+        }
+        const outcome = await this.send({
+            scope, subject, payload: decisionPayload, reviewToken,
+            isValid: () => canSubmit() && (subject !== "approveRequest" ||
+                scope.nativeState?.review?.reviewToken === reviewToken),
+        });
+        if (!this.isCurrent(scope, revision)) { return; }
+        if (outcome.status === "cancelled") {
+            scope.phase = "displaying";
+            scope.controller.renderState(scope.nativeState);
+        } else if (outcome.status !== "response" || !isRecord(outcome.response)) {
+            this.fail(scope);
+            return;
+        } else {
+            scope.phase = "following";
+        }
+        this.reconcileScheduling(scope);
+    }
+
+    edit({scope, payload}) {
+        return this.mutate({scope, subject: "applyTransactionEdits", payload});
+    }
+
+    async resolveAlert({scope, payload, reviewToken}) {
+        const state = await this.mutate({scope, subject: "resolveApprovalAlert", payload, reviewToken});
+        if (scope.nativeState?.review?.reviewToken === reviewToken) {
+            this.adopt({scope, state});
+        }
+    }
+
+    async mutate({scope, subject, payload, reviewToken, owner}) {
+        const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
+        if (scope.phase === "submitting" || !this.allows(scope, action)) { return null; }
+        const isSpeed = subject === "setTransactionSpeed";
+        if (!isSpeed && scope.mutation) { return null; }
+        const mutation = {};
+        if (!isSpeed) { scope.mutation = mutation; }
+        try {
+            if (!isSpeed && !await this.waitForSpeed({scope})) { return null; }
+            if (scope.phase === "submitting" || !this.allows(scope, action) ||
+                !isSpeed && scope.mutation !== mutation) { return null; }
+            const revision = ++scope.revision;
+            scope.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+            const outcome = await this.send({
+                scope, subject, payload, owner: owner || mutation,
+                reviewToken: subject === "applyTransactionEdits"
+                    ? () => scope.nativeState?.review?.reviewToken : reviewToken,
+                isValid: () => this.isCurrent(scope, revision) && this.allows(scope, action) &&
+                    (typeof reviewToken === "undefined" || scope.nativeState?.review?.reviewToken === reviewToken),
+            });
+            return this.accept({scope, outcome, revision, allowsIgnored: subject !== "applyTransactionEdits"});
+        } finally {
+            if (scope.mutation === mutation) { scope.mutation = null; }
+        }
+    }
+
+    setSpeed({scope, payload, reviewToken}) {
+        if (!this.isActive(scope) || scope.speedCommand ||
+            !isRequestToken(reviewToken)) { return null; }
+        let resolveCompletion;
+        const command = {
+            cancelled: false,
+            result: new Promise(resolve => { resolveCompletion = resolve; }),
+            finish: succeeded => resolveCompletion(succeeded),
+        };
+        scope.speedCommand = command;
+        void (async () => {
+            let succeeded = false;
+            try {
+                let state = null;
+                if (scope.nativeState?.review?.reviewToken === reviewToken) {
+                    state = await this.mutate({scope, subject: "setTransactionSpeed", payload, reviewToken, owner: command});
+                }
+                if (!this.isActive(scope) || command.cancelled) { return; }
+                if (state) {
+                    this.adopt({scope, state});
+                    succeeded = true;
+                } else {
+                    await this.read({scope});
+                }
+            } finally {
+                if (scope.speedCommand === command) { scope.speedCommand = null; }
+                command.finish(succeeded);
+            }
+        })();
+        return command.result;
+    }
+
+    async waitForSpeed({scope}) {
+        if (scope.controller.transaction.sliderDragging) { return false; }
+        const command = scope.speedCommand;
+        if (!command) { return this.isActive(scope); }
+        const succeeded = await command.result;
+        return succeeded === true && !command.cancelled && this.isActive(scope);
+    }
+
+    discardSpeed({scope}) {
+        const command = scope.speedCommand;
+        if (command) {
+            command.cancelled = true;
+            command.ticket?.cancel();
+            command.finish(false);
+            scope.speedCommand = null;
+        }
+        scope.controller.discardSliderGesture();
+    }
+}
+
+const popupCommands = new PopupCommandCoordinator();
 
 class PopupRequestController {
     constructor(request) {
         this.request = request;
-        this.state = null;
-        this.phase = "loading";
-        this.responseEpoch = 0;
-        this.completion = null;
-        this.mutation = null;
-        this.scheduledRead = null;
-        this.stateReadFlight = null;
-        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
-        this.tickets = new Set();
         this.presentation = {
             accounts: null,
             chainId: null,
@@ -114,17 +502,18 @@ class PopupRequestController {
             sliderDragging: false,
             sliderRequest: null,
             sliderReviewToken: null,
-            activeCommand: null,
-            generation: 0,
             lastEditorRequestKey: null,
             editorDirty: false,
         };
+        this.scope = popupCommands.attach(this);
     }
 
     get isActive() {
-        return currentRequestController === this &&
-            this.phase !== "disposed" && this.phase !== "reconciling" &&
-            sameRequest(this.request, queueTab.items[queueTab.index]);
+        return popupCommands.isActive(this.scope);
+    }
+
+    get state() {
+        return this.scope.nativeState;
     }
 
     requestFor(value) {
@@ -148,43 +537,12 @@ class PopupRequestController {
             hide("section-" + section);
         }
         document.getElementById("tx-editor").open = false;
-        return this.readState();
+        return popupCommands.read({scope: this.scope});
     }
 
     dispose() {
-        if (this.phase === "disposed") { return; }
-        this.phase = "disposed";
-        this.invalidateOperations();
+        popupCommands.dispose({scope: this.scope});
         this.closeAlert(false);
-    }
-
-    invalidateOperations() {
-        this.responseEpoch += 1;
-        this.reconcileScheduling();
-        for (const ticket of this.tickets) {
-            cancelNativeMessageTicket(ticket);
-        }
-        this.discardSliderCommands(this.request);
-    }
-
-    async dispatch(kind, subject, payload, options = {}, ticketOwner = null) {
-        if (!this.isActive) { return {status: "cancelled"}; }
-        const ticket = scheduleNativeMessage(
-            kind,
-            subject,
-            this.request.id,
-            payload,
-            this.request.requestToken,
-            {...options, isValid: () => this.isActive &&
-                (!options.isValid || options.isValid())}
-        );
-        this.tickets.add(ticket);
-        if (ticketOwner) { ticketOwner.nativeTicket = ticket; }
-        try {
-            return await ticket.result;
-        } finally {
-            this.tickets.delete(ticket);
-        }
     }
 
     closeAlert(restoreFocus) {
@@ -204,109 +562,6 @@ class PopupRequestController {
         }
     }
 
-    get followUpTimer() {
-        return this.scheduledRead?.timer ?? null;
-    }
-
-    get followUpMode() {
-        if (!this.isActive || this.phase === "submitting" || this.stateReadFlight) {
-            return null;
-        }
-        if (this.phase === "following" || shouldPollApprovalState(this.state)) {
-            return "poll";
-        }
-        return this.state?.state === "review" &&
-            this.state.review?.kind === "sendTransaction" ? "refresh" : null;
-    }
-
-    reconcileScheduling() {
-        const mode = this.followUpMode;
-        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : this.refreshDelay;
-        const current = this.scheduledRead;
-        if (current && current.mode === mode && current.delay === delay &&
-            current.epoch === this.responseEpoch) { return; }
-        if (current) {
-            clearTimeout(current.timer);
-            this.scheduledRead = null;
-        }
-        if (mode === null) { return; }
-        const scheduled = {mode, delay, epoch: this.responseEpoch, timer: null};
-        scheduled.timer = setTimeout(() => {
-            if (this.scheduledRead !== scheduled) { return; }
-            this.scheduledRead = null;
-            if (this.responseEpoch !== scheduled.epoch || this.followUpMode !== mode) {
-                this.reconcileScheduling();
-                return;
-            }
-            void this.readState({refresh: mode === "refresh"});
-        }, delay);
-        this.scheduledRead = scheduled;
-    }
-
-    resetTransactionRefreshBackoff() {
-        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
-    }
-
-    updateTransactionRefreshBackoff(state, unchanged) {
-        if (!unchanged || !STABLE_TRANSACTION_PHASES.has(state.review?.phase)) {
-            this.resetTransactionRefreshBackoff();
-            return;
-        }
-        this.refreshDelay = Math.min(
-            this.refreshDelay * 2,
-            TRANSACTION_REFRESH_MAX_INTERVAL
-        );
-    }
-
-    async readState({refresh = false} = {}) {
-        if (!this.isActive || this.phase === "submitting") { return; }
-        const epoch = this.responseEpoch;
-        if (this.stateReadFlight) {
-            const flight = this.stateReadFlight;
-            if (flight.epoch === epoch) {
-                if (!refresh) { flight.refresh = false; }
-                return flight.result;
-            }
-            await flight.result;
-            if (epoch !== this.responseEpoch) { return; }
-            return this.readState({refresh});
-        }
-        const flight = {epoch, refresh, result: null};
-        this.stateReadFlight = flight;
-        this.reconcileScheduling();
-        flight.result = (async () => {
-            try {
-                const state = await this.requestState(
-                    "getApprovalState", undefined, this.request, "approval", null,
-                    () => flight.epoch === this.responseEpoch && this.phase !== "submitting"
-                );
-                if (!this.acceptResponse(state, flight.epoch)) { return; }
-                if (flight.refresh && this.state) {
-                    const unchanged = JSON.stringify(state) === this.presentation.lastStateJSON;
-                    this.state = state;
-                    this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
-                    if (!state.review || !this.transaction.sliderDragging &&
-                        !this.transaction.activeCommand) {
-                        if (!unchanged) {
-                            this.renderState(state);
-                        } else if (state.review?.slider?.visible) {
-                            document.getElementById("tx-slider").value = state.review.slider.position;
-                        }
-                    }
-                    this.updateTransactionRefreshBackoff(state, unchanged);
-                } else {
-                    this.resetTransactionRefreshBackoff();
-                    this.adoptState(state);
-                }
-                return state;
-            } finally {
-                if (this.stateReadFlight === flight) { this.stateReadFlight = null; }
-                this.reconcileScheduling();
-            }
-        })();
-        return flight.result;
-    }
-
     renderState(state) {
         if (!this.isActive) { return; }
         this.presentation.lastStateJSON = JSON.stringify(state);
@@ -322,7 +577,7 @@ class PopupRequestController {
         setHidden("working-overlay", !isBusy);
         if (!state.review) {
             this.closeAlert(false);
-            this.discardSliderCommands(this.request);
+            popupCommands.discardSpeed({scope: this.scope});
             document.getElementById("tx-slider").disabled = true;
             document.getElementById("editor-apply").disabled = true;
             document.getElementById("editor-suggested").disabled = true;
@@ -450,7 +705,7 @@ class PopupRequestController {
             check.setAttribute("aria-hidden", "true");
             row.appendChild(check);
             row.addEventListener("click", () => {
-                if (!this.isActive) { return; }
+                if (!this.isActive || this.scope.transportError) { return; }
                 select(item);
                 this.renderState(this.state);
                 const replacement = document.getElementById(containerId).children[index];
@@ -614,15 +869,19 @@ class PopupRequestController {
     }
 
     async approveCurrent() {
-        if (!this.isActive || this.phase === "submitting") { return; }
+        if (!this.isActive || this.scope.phase === "submitting") { return; }
+        if (this.scope.transportError) {
+            await popupCommands.retry({scope: this.scope});
+            return;
+        }
         if (!this.state) { return; }
         if (hasApprovalAction(this.state, "retry")) {
-            await this.retryApproval();
+            await popupCommands.retry({scope: this.scope});
             return;
         }
         if (shouldRefreshAccountSelection(this.state)) {
             document.getElementById("button-approve").disabled = true;
-            await this.readState();
+            await popupCommands.read({scope: this.scope});
             return;
         }
         const payload = {};
@@ -636,271 +895,11 @@ class PopupRequestController {
         } else if (this.state.review?.kind === "signMessage" && this.presentation.cluster) {
             payload.cluster = this.presentation.cluster;
         }
-        await this.submitCurrentDecision("approveRequest", payload);
-    }
-
-    async retryApproval() {
-        if (!this.isActive || this.phase === "submitting" ||
-            !hasApprovalAction(this.state, "retry")) { return; }
-        const request = this.request;
-        this.responseEpoch += 1;
-        const generation = this.responseEpoch;
-        this.phase = "submitting";
-        this.reconcileScheduling();
-        document.getElementById("button-approve").disabled = true;
-        show("working-overlay");
-        const state = await this.requestState(
-            "retryApproval", undefined, request, "action", null,
-            () => this.responseEpoch === generation &&
-                hasApprovalAction(this.state, "retry"),
-            undefined
-        );
-        if (!this.acceptResponse(state, generation)) { return; }
-        this.resetTransactionRefreshBackoff();
-        this.adoptState(state);
+        await popupCommands.approve({scope: this.scope, payload});
     }
 
     async rejectCurrent() {
-        await this.submitCurrentDecision("rejectRequest");
-    }
-
-    async submitCurrentDecision(subject, payload) {
-        if (!this.isActive || this.phase === "submitting") { return; }
-        const request = this.request;
-        const initialState = this.state;
-        if (!request || !canSubmitDecision(subject, initialState)) { return; }
-        const rerenderCurrentReview = () => {
-            const currentState = this.state;
-            if (this.isCurrentRequest(request) && currentState?.state === "review") {
-                this.renderState(currentState);
-            }
-        };
-        if (subject === "approveRequest") {
-            this.finishSliderDragForDecision(request);
-            if (!await this.waitForSliderCommands(request)) { return; }
-        } else {
-            this.discardSliderCommands(request);
-        }
-        if (!this.isActive || this.phase === "submitting") { return; }
-        const state = this.state;
-        if (!this.isCurrentRequest(request) || !canSubmitDecision(subject, state)) {
-            rerenderCurrentReview();
-            return;
-        }
-        const reviewToken = subject === "approveRequest"
-            ? state.review?.reviewToken
-            : undefined;
-        const remainsCurrent = () => this.isCurrentRequest(request) &&
-            canSubmitDecision(subject, this.state) &&
-            (subject !== "approveRequest" ||
-                this.state?.review?.reviewToken === reviewToken);
-        show("working-overlay");
-        let decisionPayload = payload;
-        if (subject === "approveRequest") {
-            decisionPayload = {...(isRecord(payload) ? payload : {})};
-            delete decisionPayload.revisions;
-            delete decisionPayload.password;
-        }
-        this.responseEpoch += 1;
-        this.phase = "submitting";
-        this.reconcileScheduling();
-        const outcome = await this.dispatch(
-            "action", subject, decisionPayload,
-            {isValid: remainsCurrent, reviewToken, approvalRequest: request}
-        );
-        if (!this.isCurrentRequest(request)) { return; }
-        if (outcome.status === "cancelled") {
-            this.phase = "displaying";
-            rerenderCurrentReview();
-            this.reconcileScheduling();
-            return;
-        }
-        if (outcome.status !== "response" || !isRecord(outcome.response)) {
-            this.failClosedApprovalState(request);
-            return;
-        }
-        this.phase = "following";
-        this.reconcileScheduling();
-    }
-
-    reconcileMissingRequest(value) {
-        if (this.completion !== null) { return this.completion; }
-        if (!this.requestFor(value)) { return Promise.resolve(); }
-        this.phase = "reconciling";
-        this.invalidateOperations();
-        this.closeAlert(false);
-        this.completion = closeIfNothingIsLeft();
-        return this.completion;
-    }
-
-    async requestState(
-        subject,
-        payload,
-        value,
-        nativeCallKind = "approval",
-        ticketOwner = null,
-        remainsValid = null,
-        reviewToken
-    ) {
-        if (!this.requestFor(value)) { return null; }
-        const options = {isValid: remainsValid};
-        if (subject === "retryApproval" || typeof reviewToken !== "undefined") {
-            options.reviewToken = reviewToken;
-        }
-        const outcome = await this.dispatch(
-            nativeCallKind, subject, payload, options, ticketOwner
-        );
-        if (outcome.status === "cancelled") { return NATIVE_MESSAGE_CANCELLED; }
-        return outcome.status === "response"
-            ? normalizeApprovalImages(outcome.response)
-            : null;
-    }
-
-    acceptResponse(state, generation = this.responseEpoch) {
-        if (!this.isActive || generation !== this.responseEpoch ||
-            state === NATIVE_MESSAGE_CANCELLED) { return false; }
-        if (!isRenderableApprovalState(state, this.request)) {
-            this.failClosedApprovalState(this.request);
-            return false;
-        }
-        return !this.handleMissingState(state, this.request);
-    }
-
-    async mutateState(subject, payload, value, reviewToken) {
-        if (!this.isActive || this.phase === "submitting") { return null; }
-        const request = this.requestFor(value);
-        if (!request || !this.isCurrentRequest(request)) { return null; }
-        const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
-        if (!hasApprovalAction(this.state, action)) { return null; }
-        const isRichMutation = subject !== "setTransactionSpeed";
-        if (isRichMutation && sameRequest(this.mutation?.request, request)) {
-            return null;
-        }
-        const mutation = { request: request, subject: subject };
-        if (isRichMutation) {
-            this.mutation = mutation;
-        }
-        try {
-            if (isRichMutation && !await this.waitForSliderCommands(request)) { return null; }
-            if (!this.isActive || this.phase === "submitting") { return null; }
-            if (!this.isCurrentRequest(request)) { return null; }
-            if (isRichMutation && this.mutation !== mutation) {
-                return null;
-            }
-            if (!hasApprovalAction(this.state, action)) { return null; }
-            this.responseEpoch += 1;
-            this.resetTransactionRefreshBackoff();
-            const generation = this.responseEpoch;
-            const ticketOwner = isRichMutation ? mutation : this.transaction.activeCommand;
-            const state = await this.requestState(
-                subject,
-                payload,
-                request,
-                "mutation",
-                ticketOwner,
-                () => generation === this.responseEpoch &&
-                    hasApprovalAction(this.state, action) &&
-                    (typeof reviewToken === "undefined" ||
-                        this.state?.review?.reviewToken === reviewToken),
-                reviewToken
-            );
-            if (generation !== this.responseEpoch) { return null; }
-            if (!this.isCurrentRequest(request)) { return null; }
-            if (state === NATIVE_MESSAGE_CANCELLED) { return null; }
-            if (!isRenderableApprovalState(state, request)) {
-                if ((subject === "resolveApprovalAlert" ||
-                    subject === "setTransactionSpeed") && isRecord(state) &&
-                    state.status === "ignored" && Object.keys(state).length === 1) {
-                    return null;
-                }
-                this.failClosedApprovalState(request);
-                return null;
-            }
-            if (this.handleMissingState(state, request)) { return null; }
-            return state;
-        } finally {
-            if (this.mutation === mutation) {
-                this.mutation = null;
-            }
-        }
-    }
-
-    handleMissingState(state, value) {
-        if (!state || state.state !== "missing") { return false; }
-        const request = this.requestFor(value);
-        if (!request || !this.isCurrentRequest(request)) { return true; }
-        void this.reconcileMissingRequest(request);
-        return true;
-    }
-
-    failClosedApprovalState(request) {
-        if (!request || !this.isCurrentRequest(request)) { return; }
-        this.responseEpoch += 1;
-        const previous = this.state || {};
-        this.presentation.lastStateJSON = null;
-        this.resetTransactionRefreshBackoff();
-        this.closeAlert(false);
-        document.getElementById("tx-editor").open = false;
-        this.transaction.editorDirty = false;
-        hide("edits-error");
-        document.getElementById("button-approve").disabled = true;
-        this.state = {
-            id: request.id,
-            state: "error",
-            actions: ["retry"],
-            ...(typeof previous.host === "string" && previous.host.length > 0
-                ? {host: previous.host}
-                : {}),
-            error: localized("failedToLoad", "Failed to load"),
-        };
-        this.phase = "displaying";
-        this.renderState(this.state);
-        this.reconcileScheduling();
-    }
-
-    adoptState(state) {
-        if (!this.isActive || !state?.state) { return; }
-        this.state = state;
-        this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
-        this.renderState(state);
-        this.reconcileScheduling();
-    }
-
-    async sendSliderEvent(
-        interaction,
-        value,
-        request,
-        commandGeneration = this.transaction.generation,
-        reviewToken = this.state?.review?.reviewToken
-    ) {
-        const capturedRequest = this.requestFor(request);
-        if (!capturedRequest || !this.isCurrentRequest(capturedRequest)) { return false; }
-        let refreshed = false;
-        const refreshAuthoritativeState = async () => {
-            if (!refreshed && commandGeneration === this.transaction.generation &&
-                this.isCurrentRequest(capturedRequest)) {
-                refreshed = true;
-                await this.readState();
-            }
-            return false;
-        };
-        if (!isRequestToken(reviewToken) ||
-            this.state?.review?.reviewToken !== reviewToken) {
-            return await refreshAuthoritativeState();
-        }
-        const state = await this.mutateState(
-            "setTransactionSpeed",
-            {value, interaction},
-            capturedRequest,
-            reviewToken
-        );
-        if (commandGeneration !== this.transaction.generation ||
-            !this.isCurrentRequest(capturedRequest)) {
-            return false;
-        }
-        if (!state) { return await refreshAuthoritativeState(); }
-        this.adoptState(state);
-        return true;
+        await popupCommands.reject({scope: this.scope});
     }
 
     beginSliderInteraction(
@@ -908,7 +907,8 @@ class PopupRequestController {
         reviewToken = this.state?.review?.reviewToken
     ) {
         const capturedRequest = this.requestFor(request);
-        if (this.transaction.activeCommand ||
+        if (!popupCommands.allows(this.scope, "setTransactionSpeed") ||
+            this.scope.phase === "submitting" || this.scope.speedCommand ||
             this.transaction.sliderDragging ||
             !capturedRequest || !this.isCurrentRequest(capturedRequest) ||
             !isRequestToken(reviewToken)) {
@@ -919,81 +919,6 @@ class PopupRequestController {
         this.transaction.sliderRequest = capturedRequest;
         this.transaction.sliderReviewToken = reviewToken;
         return true;
-    }
-
-    startSliderCommand(
-        interaction,
-        value,
-        request,
-        reviewToken = this.state?.review?.reviewToken
-    ) {
-        const capturedRequest = this.requestFor(request);
-        if (!capturedRequest || !this.isCurrentRequest(capturedRequest) ||
-            !isRequestToken(reviewToken) || this.transaction.activeCommand) {
-            return null;
-        }
-        let resolveCompletion;
-        const command = {
-            commandGeneration: this.transaction.generation,
-            completion: new Promise(resolve => { resolveCompletion = resolve; }),
-            interaction: interaction,
-            request: capturedRequest,
-            reviewToken: reviewToken,
-            resolveCompletion: null,
-            value: value,
-        };
-        command.resolveCompletion = resolveCompletion;
-        this.transaction.activeCommand = command;
-        document.getElementById("tx-slider").disabled = true;
-        void (async () => {
-            let succeeded = false;
-            try {
-                succeeded = await this.sendSliderEvent(
-                    command.interaction,
-                    command.value,
-                    command.request,
-                    command.commandGeneration,
-                    command.reviewToken
-                );
-            } finally {
-                if (this.transaction.activeCommand === command) {
-                    this.transaction.activeCommand = null;
-                }
-                finishSliderCommand(command, succeeded);
-            }
-        })();
-        return command.completion;
-    }
-
-    async waitForSliderCommands(request) {
-        const generation = this.transaction.generation;
-        if (this.transaction.sliderDragging &&
-            sameRequest(this.transaction.sliderRequest, request)) {
-            return false;
-        }
-        const command = this.transaction.activeCommand;
-        if (!command) { return true; }
-        if (command.commandGeneration !== generation ||
-            !sameRequest(command.request, request)) { return false; }
-        const succeeded = await command.completion;
-        return succeeded === true && generation === this.transaction.generation &&
-            this.isCurrentRequest(request);
-    }
-
-    discardSliderCommands(request) {
-        this.transaction.generation += 1;
-        const command = this.transaction.activeCommand;
-        if (sameRequest(command?.request, request)) {
-            cancelNativeMessageTicket(command.nativeTicket);
-            finishSliderCommand(command, false);
-            this.transaction.activeCommand = null;
-        }
-        if (sameRequest(this.transaction.sliderRequest, request)) {
-            ignoreSliderUntilRelease = true;
-            this.transaction.sliderDragging = false;
-            this.transaction.sliderRequest = null;
-            this.transaction.sliderReviewToken = null;
-        }
     }
 
     finishSliderInteraction(interaction, request) {
@@ -1007,12 +932,9 @@ class PopupRequestController {
         this.transaction.sliderDragging = false;
         this.transaction.sliderRequest = null;
         this.transaction.sliderReviewToken = null;
-        return this.startSliderCommand(
-            interaction,
-            value,
-            capturedRequest,
-            reviewToken
-        );
+        if (!this.isCurrentRequest(capturedRequest)) { return null; }
+        document.getElementById("tx-slider").disabled = true;
+        return popupCommands.setSpeed({scope: this.scope, payload: {interaction, value}, reviewToken});
     }
 
     finishSliderDragForDecision(request) {
@@ -1036,16 +958,13 @@ class PopupRequestController {
         } else {
             payload.gasPriceGwei = document.getElementById("edit-gas-price").value;
         }
-        this.handleTransactionEditResult(await this.mutateState("applyTransactionEdits", payload));
+        this.handleTransactionEditResult(await popupCommands.edit({scope: this.scope, payload}));
     }
 
     async applySuggested() {
         if (!this.isActive) { return; }
         if (!hasApprovalAction(this.state, "editTransaction")) { return; }
-        this.handleTransactionEditResult(await this.mutateState(
-            "applyTransactionEdits",
-            { mode: "suggested" }
-        ));
+        this.handleTransactionEditResult(await popupCommands.edit({scope: this.scope, payload: {mode: "suggested"}}));
     }
 
     handleTransactionEditResult(state) {
@@ -1055,7 +974,7 @@ class PopupRequestController {
         } else {
             this.closeEditorAndAdopt(state);
         }
-        this.reconcileScheduling();
+        popupCommands.reconcileScheduling(this.scope);
     }
 
     closeEditorAndAdopt(state) {
@@ -1064,7 +983,7 @@ class PopupRequestController {
         this.transaction.editorDirty = false;
         hide("edits-error");
         document.getElementById("tx-editor").open = false;
-        this.adoptState(state);
+        popupCommands.adopt({scope: this.scope, state});
     }
 
     renderAlertIfNeeded(state) {
@@ -1113,11 +1032,9 @@ class PopupRequestController {
                     )) {
                     return;
                 }
-                const state = await this.mutateState("resolveApprovalAlert", {
-                    action: action.action,
-                }, undefined, reviewToken);
-                if (this.state?.review?.reviewToken !== reviewToken) { return; }
-                this.adoptState(state);
+                await popupCommands.resolveAlert({
+                    scope: this.scope, payload: {action: action.action}, reviewToken,
+                });
             });
             buttons.appendChild(button);
         }
@@ -1125,6 +1042,47 @@ class PopupRequestController {
         show("alert-overlay");
         const focusTarget = buttons.children[0] || document.getElementById("alert-box");
         focusTarget.focus();
+    }
+
+    presentState(state, refresh) {
+        const unchanged = JSON.stringify(state) === this.presentation.lastStateJSON;
+        if (!refresh || !state.review ||
+            !this.transaction.sliderDragging && !this.scope.speedCommand) {
+            if (!refresh || !unchanged) {
+                this.renderState(state);
+            } else if (state.review?.slider?.visible) {
+                document.getElementById("tx-slider").value = state.review.slider.position;
+            }
+        }
+        return unchanged;
+    }
+
+    showSubmitting() {
+        document.getElementById("button-approve").disabled = true;
+        show("working-overlay");
+    }
+
+    renderTransportFailure() {
+        this.presentation.lastStateJSON = null;
+        this.closeAlert(false);
+        document.getElementById("tx-editor").open = false;
+        this.transaction.editorDirty = false;
+        hide("edits-error");
+        this.renderState({
+            id: this.request.id,
+            state: "error",
+            actions: ["retry"],
+            host: this.state?.host,
+            error: localized("failedToLoad", "Failed to load"),
+        });
+    }
+
+    discardSliderGesture() {
+        if (!this.transaction.sliderDragging) { return; }
+        ignoreSliderUntilRelease = true;
+        this.transaction.sliderDragging = false;
+        this.transaction.sliderRequest = null;
+        this.transaction.sliderReviewToken = null;
     }
 }
 
@@ -1197,72 +1155,6 @@ function nativeMessage(
         });
     }
     return sendTrustedNativeMessage(message, currentPrivateBrowsing());
-}
-
-function scheduleNativeMessage(kind, subject, id, payload, requestToken, options = {}) {
-    const channel = kind === "queue" || kind === "approval" ? "read" : "action";
-    const ticket = { cancelled: false, state: "waiting" };
-    ticket.cancel = () => {
-        if (ticket.state !== "waiting") { return false; }
-        ticket.cancelled = true;
-        ticket.state = "cancelled";
-        return true;
-    };
-    const predecessor = nativeChannels[channel];
-    let releaseChannel;
-    let channelReleased = false;
-    const channelOccupancy = new Promise(resolve => { releaseChannel = resolve; });
-    const release = () => {
-        if (channelReleased) { return; }
-        channelReleased = true;
-        releaseChannel();
-    };
-    nativeChannels[channel] = channelOccupancy;
-    const operation = predecessor.then(async () => {
-        if (ticket.cancelled || options.isValid && !options.isValid()) {
-            release();
-            return { status: "cancelled" };
-        }
-        const reviewToken = channel === "action"
-            ? Object.prototype.hasOwnProperty.call(options, "reviewToken")
-                ? options.reviewToken
-                : currentRequestController?.state?.review?.reviewToken
-            : undefined;
-        ticket.state = "dispatched";
-        let pendingResponse;
-        try {
-            pendingResponse = Promise.resolve(nativeMessage(
-                subject,
-                id,
-                payload,
-                requestToken,
-                reviewToken,
-                options.approvalRequest
-            ));
-        } catch {
-            release();
-            ticket.state = "settled";
-            return {status: "failure"};
-        }
-        try {
-            const response = await settleNativeMessage(
-                pendingResponse,
-                subject === "approveRequest"
-            );
-            return { response: response, status: "response" };
-        } catch {
-            return { status: "failure" };
-        } finally {
-            release();
-            ticket.state = "settled";
-        }
-    });
-    ticket.result = operation;
-    return ticket;
-}
-
-function cancelNativeMessageTicket(ticket) {
-    return ticket?.cancel?.() === true;
 }
 
 async function settleNativeMessage(pendingResponse, nativeOperation = false) {
@@ -1387,7 +1279,7 @@ function requestPendingQueueRefresh() {
 
 function shouldDeferQueueRefreshForCurrentRequest() {
     const currentRequest = queueTab.items[queueTab.index];
-    if (!currentRequest || currentRequestController?.phase === "reconciling") {
+    if (!currentRequest || currentRequestController?.scope.phase === "reconciling") {
         return false;
     }
     return !document.getElementById("screen-request").classList.contains("hidden") ||
@@ -1591,14 +1483,7 @@ function setPendingRequestBadge(count) {
 // popup cannot open itself — exactly as it was.
 async function fetchPendingResponse() {
     while (true) {
-        const ticket = scheduleNativeMessage(
-            "queue",
-            "getPendingRequests",
-            genId(),
-            undefined,
-            undefined
-        );
-        const outcome = await ticket.result;
+        const outcome = await popupCommands.readQueue();
         if (outcome.status !== "response") { return null; }
         const response = parsePendingResponse(outcome.response);
         if (!response) { return null; }
@@ -2207,13 +2092,6 @@ async function closeIfNothingIsLeft() {
     }
 }
 
-function finishSliderCommand(command, succeeded) {
-    if (!command?.resolveCompletion) { return; }
-    const resolve = command.resolveCompletion;
-    command.resolveCompletion = null;
-    resolve(succeeded);
-}
-
 function isCurrentIdlePresentation(generation, tab) {
     return queueTab.idleGeneration === generation &&
         sameTab(queueTab.activeTab, tab) &&
@@ -2334,45 +2212,14 @@ async function refreshIdleStatus() {
     setText("idle-connection", localized("failedToLoad", "Failed to load"));
 }
 
-function releaseOpenAppCall(call) {
-    if (unresolvedOpenAppCall !== call) { return; }
-    unresolvedOpenAppCall = null;
-    document.getElementById("idle-open-app").disabled = false;
-}
-
-function getOpenAppCall() {
-    if (unresolvedOpenAppCall !== null) {
-        return unresolvedOpenAppCall;
-    }
-    const call = {
-        id: genId(),
-        result: null,
-    };
-    const ticket = scheduleNativeMessage(
-        "app",
-        "openApp",
-        call.id,
-        undefined,
-        undefined
-    );
-    call.result = ticket.result;
-    unresolvedOpenAppCall = call;
-    void call.result.then(
-        () => releaseOpenAppCall(call),
-        () => releaseOpenAppCall(call)
-    );
-    return call;
-}
-
 async function openBigWallet() {
     const button = document.getElementById("idle-open-app");
     if (button.disabled) { return; }
     button.disabled = true;
     try {
-        const call = getOpenAppCall();
-        const outcome = await call.result;
+        const outcome = await popupCommands.openApp();
         const response = outcome.status === "response" ? outcome.response : null;
-        if (!isRecord(response) || response.id !== call.id || response.opened !== true) {
+        if (!isRecord(response) || response.opened !== true) {
             throw new Error("Failed to open Big Wallet");
         }
         window.close();
@@ -2381,7 +2228,7 @@ async function openBigWallet() {
             "idle-connection",
             localized("somethingWentWrong", "Something went wrong")
         );
-        button.disabled = unresolvedOpenAppCall !== null;
+        button.disabled = popupCommands.openAppCall !== null;
     }
 }
 

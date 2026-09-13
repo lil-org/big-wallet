@@ -135,7 +135,7 @@ enum CustomNetworkDefinition {
     ) -> [URL] {
         var normalized = Set<String>()
         let candidates = [record.defaultRpcURL].compactMap { $0 } +
-            record.rpcUrls.compactMap(CustomEthereumRPC.storedURL(from:))
+            record.rpcUrls.compactMap(CustomEthereumRPC.url(from:))
         return candidates.compactMap { candidate in
             return normalized.insert(normalizedRPCURL(candidate)).inserted
                 ? candidate
@@ -147,9 +147,8 @@ enum CustomNetworkDefinition {
         for record: EthereumNetworkFromDapp,
         legacyOverride: String?
     ) -> URL? {
-        return legacyOverride.flatMap(CustomEthereumRPC.storedURL(from:)) ??
-            record.defaultRpcURL ??
-            record.storedRpcURL
+        return legacyOverride.flatMap(CustomEthereumRPC.url(from:)) ??
+            record.defaultRpcURL
     }
 
     static func normalizedRPCURL(_ url: URL) -> String {

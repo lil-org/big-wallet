@@ -7,7 +7,7 @@ import XCTest
 final class CustomNetworkStorageTests: XCTestCase {
 
 #if os(macOS)
-    func testCustomRPCPlistsAllowNativePublicLiteralHTTPWithoutLocalNetworkUsageDescription() throws {
+    func testCustomRPCPlistsAllowHTTPAndDescribeLocalNetworkAccess() throws {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -20,6 +20,7 @@ final class CustomNetworkStorageTests: XCTestCase {
             "App macOS/Info.plist",
             "App iOS/Info.plist",
             "App visionOS/Info.plist",
+            "Big Wallet Ambient/Info.plist",
         ]
 
         for relativePath in extensionPlists {
@@ -32,7 +33,11 @@ final class CustomNetworkStorageTests: XCTestCase {
         }
         for relativePath in appPlists {
             let plist = try propertyList(at: repositoryRoot.appendingPathComponent(relativePath))
-            XCTAssertNil(plist["NSLocalNetworkUsageDescription"], relativePath)
+            XCTAssertEqual(
+                plist["NSLocalNetworkUsageDescription"] as? String,
+                "Big Wallet connects to custom blockchain RPC endpoints you choose on your local network.",
+                relativePath
+            )
         }
     }
 #endif
@@ -240,7 +245,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         )
     }
 
-    func testInsertionStoresOnlyStrictURLsAndReloadsTheValidatedEndpoint() throws {
+    func testInsertionStoresValidHTTPAndHTTPSURLsAndReloadsPreferredEndpoint() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let network = customNetwork(
@@ -250,6 +255,9 @@ final class CustomNetworkStorageTests: XCTestCase {
                 "https://safe.example",
                 "http://rpc.example:8545",
                 "http://1.1.1.1:8545",
+                "ws://localhost:8546",
+                "file:///tmp/node",
+                "relative-endpoint",
             ]
         )
 
@@ -257,7 +265,9 @@ final class CustomNetworkStorageTests: XCTestCase {
 
         let stored = try XCTUnwrap(storedNetworks(in: defaults).first)
         XCTAssertEqual(stored.rpcUrls, [
+            "https://10.0.0.1:8545",
             "https://safe.example",
+            "http://rpc.example:8545",
             "http://1.1.1.1:8545",
         ])
         XCTAssertEqual(
@@ -267,7 +277,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(
             SharedDefaults.loadCustomNetworkSnapshot(from: defaults)
                 .entriesByChainId[64_240]?.rpcURL.absoluteString,
-            "https://safe.example"
+            "https://10.0.0.1:8545"
         )
     }
 
@@ -297,7 +307,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: SharedDefaults.customEthereumNetworksKey), archive)
     }
 
-    func testMixedLegacyArchivePrefersStrictEndpointUnlessOverridden() throws {
+    func testMixedArchivePrefersFirstHTTPSUnlessOverridden() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let network = customNetwork(
@@ -314,7 +324,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(
             SharedDefaults.loadCustomNetworkSnapshot(from: defaults)
                 .entriesByChainId[64_240]?.rpcURL.absoluteString,
-            "https://safe.example"
+            "https://localhost:8545"
         )
 
         defaults.set("http://localhost:9545", forKey: key)
@@ -460,7 +470,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: SharedDefaults.customEthereumNetworksKey), archive)
     }
 
-    func testGrandfatheredLocalArchiveMatchesExactlyAndStillRejectsConflicts() throws {
+    func testStoredLocalArchiveMatchesExactlyAndStillRejectsConflicts() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let existing = customNetwork(
@@ -489,7 +499,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: SharedDefaults.customEthereumNetworksKey), archive)
     }
 
-    func testGrandfatheredLocalOverrideMatchesExactlyAndStillRejectsConflicts() throws {
+    func testStoredLocalOverrideMatchesExactlyAndStillRejectsConflicts() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let archived = customNetwork(
@@ -562,42 +572,48 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(try storedNetworks(in: defaults).count, 1)
     }
 
-    func testInvalidAndNonGlobalRPCEndpointsAreRejectedWithoutWrites() {
+    func testLocalAndPublicHTTPSEndpointsRoundTrip() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let rejectedURLs = [
-            "relative-endpoint",
-            "http://rpc.example:8545",
-            "http://localhost:8545",
-            "https://node.local",
-            "http://127.0.0.1",
-            "http://10.0.0.1",
-            "http://192.168.1.1",
-            "https://[::1]",
-            "https://[fd00::1]",
+        let urls = [
+            "http://localhost:8545", "http://127.0.0.1:8545",
+            "http://192.168.1.1", "https://10.0.0.1:8545",
+            "https://node.local", "http://node:8545",
+            "http://[::1]:8545", "https://[fd00::1]",
+            "https://[2606:4700:4700::1111]", "http://rpc.example:8545",
+            "https://rpc.example", "HTTP://rpc.example:8545",
         ]
+        for (index, url) in urls.enumerated() {
+            let chainId = 64_240 + index
+            XCTAssertEqual(SharedDefaults.insertNetwork(
+                customNetwork(chainId: chainId, rpcURLs: [url]),
+                to: defaults
+            ), .inserted, url)
+            XCTAssertEqual(
+                SharedDefaults.loadCustomNetworkSnapshot(from: defaults)
+                    .entriesByChainId[chainId]?.rpcURL,
+                URL(string: url), url
+            )
+        }
+        XCTAssertEqual(try storedNetworks(in: defaults).count, urls.count)
+    }
 
-        for value in rejectedURLs {
+    func testInvalidAndUnsupportedRPCEndpointsAreRejectedWithoutWrites() {
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        for value in [
+            "relative-endpoint", "http://", "https:///path",
+            "ws://localhost:8546", "wss://rpc.example", "file:///tmp/node",
+        ] {
             XCTAssertEqual(SharedDefaults.insertNetwork(
                 customNetwork(chainId: 64_240, rpcURLs: [value]),
                 to: defaults
             ), .unavailable, value)
         }
         XCTAssertNil(defaults.object(forKey: SharedDefaults.customEthereumNetworksKey))
-        XCTAssertEqual(
-            SharedDefaults.insertNetwork(
-                customNetwork(
-                    chainId: 64_241,
-                    rpcURLs: ["http://localhost:8545"]
-                ),
-                to: defaults
-            ),
-            .unavailable
-        )
-        XCTAssertNil(defaults.object(forKey: SharedDefaults.customEthereumNetworksKey))
     }
 
-    func testRPCSelectionPrefersPublicHTTPSThenPublicLiteralHTTP() {
+    func testRPCSelectionPrefersHTTPSThenFirstHTTP() {
         let secure = customNetwork(
             chainId: 64_240,
             rpcURLs: [
@@ -612,7 +628,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         )
 
         XCTAssertEqual(secure.defaultRpcUrl, "https://secure.example")
-        XCTAssertEqual(literalHTTP.defaultRpcUrl, "http://1.1.1.1:9545")
+        XCTAssertEqual(literalHTTP.defaultRpcUrl, "http://192.168.1.1")
     }
 
     func testFailedSynchronizationRestoresPreviousArchive() throws {
