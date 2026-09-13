@@ -315,6 +315,7 @@ final class NativeApprovalCoordinator {
 
     func resumeAfterAuthentication() {
         guard state == .awaitingAuthentication else { return }
+        stopLifecycleMonitor()
         terminalDeadline = environment.now().addingTimeInterval(
             ExtensionBridge.requestTTL
         )
@@ -342,6 +343,7 @@ final class NativeApprovalCoordinator {
     }
 
     private func beginPreauthenticationCancellation(receiptOwned: Bool) {
+        stopLifecycleMonitor()
         startPersistence(.cancelBeforeAuthentication(receiptOwned: receiptOwned))
     }
 
@@ -405,6 +407,22 @@ final class NativeApprovalCoordinator {
     private func restoreAuthenticationWaiting() {
         persistenceTask = nil
         lifecycle = .awaitingAuthentication
+        stopLifecycleMonitor()
+        let remaining = max(0, terminalDeadline.timeIntervalSince(environment.now()))
+        monitorTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(remaining))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  let self, state == .awaitingAuthentication else { return }
+            guard environment.now() >= terminalDeadline else {
+                restoreAuthenticationWaiting()
+                return
+            }
+            finish()
+        }
     }
 
     private func preparePresentation() async {
@@ -740,8 +758,7 @@ final class NativeApprovalCoordinator {
                 if cancelRequested {
                     return .replace(.cancelBeforeAuthentication(receiptOwned: true))
                 }
-                persistenceTask = nil
-                lifecycle = .awaitingAuthentication
+                restoreAuthenticationWaiting()
                 onEvent?(.authenticationRequired)
             case .stage:
                 enterWaitingState(notify: true)

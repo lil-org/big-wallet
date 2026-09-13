@@ -549,7 +549,107 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testOwnedCancellationDeadlineAllowsLaterStorageRecovery() async throws {
+    func testAuthenticationWaitingExpiresAndLeavesInbox() async throws {
+        let fixture = try makeFixture()
+        let deadline = fixture.clock.now.addingTimeInterval(0.02)
+        fixture.store.snapshot = try approvalSnapshot(
+            handle: fixture.key.handle,
+            nonce: fixture.key.nativeDeliveryNonce,
+            deadline: deadline
+        )
+        let finished = expectation(description: "unauthenticated approval expired")
+        var inbox = ApprovalInbox<String>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        let events = fixture.events
+        let key = fixture.key
+        fixture.coordinator.onEvent = { event in
+            events.record(event)
+            if case .presentation(.finished) = event {
+                inbox.remove(key)
+                finished.fulfill()
+            }
+        }
+        defer { fixture.coordinator.onEvent = nil }
+
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.clock.now = deadline
+        await fulfillment(of: [finished], timeout: 1)
+
+        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(inbox.count, 0)
+        XCTAssertEqual(events.authenticationCount, 1)
+        XCTAssertEqual(events.presentations.count, 1)
+        fixture.coordinator.resumeAfterAuthentication()
+        fixture.coordinator.cancelBeforeAuthentication()
+        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(events.presentations.count, 1)
+    }
+
+    func testAuthenticationWaitingDoesNotExpireBeforeRecordedDeadline() async throws {
+        let fixture = try makeFixture()
+        let deadline = fixture.clock.now.addingTimeInterval(0.02)
+        fixture.store.snapshot = try approvalSnapshot(
+            handle: fixture.key.handle,
+            nonce: fixture.key.nativeDeliveryNonce,
+            deadline: deadline
+        )
+        let prematureFinish = expectation(description: "deadline has not elapsed")
+        prematureFinish.isInverted = true
+        fixture.coordinator.onEvent = { event in
+            if case .presentation(.finished) = event { prematureFinish.fulfill() }
+        }
+        start(fixture)
+        await fulfillment(of: [prematureFinish], timeout: 0.1)
+        XCTAssertEqual(fixture.coordinator.state, .awaitingAuthentication)
+
+        let finished = expectation(description: "recorded deadline elapsed")
+        fixture.coordinator.onEvent = { event in
+            if case .presentation(.finished) = event { finished.fulfill() }
+        }
+        fixture.clock.now = deadline
+        await fulfillment(of: [finished], timeout: 1)
+        XCTAssertEqual(fixture.coordinator.state, .finished)
+    }
+
+    func testAuthenticationExpiryDoesNotInterruptCancellationPersistence() async throws {
+        let fixture = try makeFixture()
+        let deadline = fixture.clock.now.addingTimeInterval(0.02)
+        fixture.store.snapshot = try approvalSnapshot(
+            handle: fixture.key.handle,
+            nonce: fixture.key.nativeDeliveryNonce,
+            deadline: deadline
+        )
+        let writeStarted = expectation(description: "rejection write started")
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        fixture.store.rejectHandler = { _, _, _ in
+            writeStarted.fulfill()
+            return await gate.run()
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.cancelBeforeAuthentication()
+        await fulfillment(of: [writeStarted], timeout: 1)
+
+        fixture.clock.now = deadline
+        let prematureFinish = expectation(description: "rejection write still pending")
+        prematureFinish.isInverted = true
+        fixture.coordinator.onEvent = { event in
+            if case .presentation(.finished) = event { prematureFinish.fulfill() }
+        }
+        await fulfillment(of: [prematureFinish], timeout: 0.1)
+        XCTAssertEqual(
+            fixture.coordinator.state,
+            .cancelingBeforeAuthentication(receiptOwned: true)
+        )
+
+        fixture.coordinator.onEvent = fixture.events.record
+        gate.resume(.persisted)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testOwnedCancellationDeadlineExpiresAuthenticationWaiting() async throws {
         let clock = Clock()
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now },
@@ -566,14 +666,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.store.loadHandler = { _ in .unavailable }
         fixture.coordinator.cancelBeforeAuthentication()
-        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.authenticationCount, 1)
         fixture.store.loadHandler = nil
         fixture.store.snapshot = try ownedSnapshot(fixture)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(fixture.coordinator.state, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 1)
-        fixture.store.snapshot = nil
     }
 
     func testLostReceiptAfterAuthenticationCannotBeReacquired() async throws {
