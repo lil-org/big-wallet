@@ -213,7 +213,7 @@ enum NativeApprovalDecision: Codable, Equatable, Sendable {
         let fee: TransactionFee
         let feeProvenance: FeeProvenance
         let feeBasisBaseFeePerGas: String?
-        let reviewedNetwork: NetworkIdentity?
+        let reviewedNetwork: NetworkIdentity
 
         init?(
             _ transaction: Transaction,
@@ -247,14 +247,13 @@ enum NativeApprovalDecision: Codable, Equatable, Sendable {
         }
 
         func applying(to action: SendTransactionAction) -> Transaction? {
-            guard let reviewedNetwork,
-                  let currentNetwork = NetworkIdentity(action.resolvedNetwork),
+            guard let currentNetwork = NetworkIdentity(action.resolvedNetwork),
                   reviewedNetwork == currentNetwork else { return nil }
             return applyingTransactionFields(to: action.transaction)
         }
 
         fileprivate var isValid: Bool {
-            guard reviewedNetwork?.isValid ?? true else { return false }
+            guard reviewedNetwork.isValid else { return false }
             return applyingTransactionFields(to: Transaction(
                 from: "0x0000000000000000000000000000000000000000",
                 to: "0x0000000000000000000000000000000000000000",
@@ -322,7 +321,7 @@ enum NativeApprovalDecision: Codable, Equatable, Sendable {
     }
 
     private enum Kind: String, Codable {
-        case accountSelection, message, transaction, transactionV2,
+        case accountSelection, message, transactionV2,
              addEthereumChain
     }
 
@@ -341,7 +340,7 @@ enum NativeApprovalDecision: Codable, Equatable, Sendable {
                 MessageApproval.self,
                 forKey: .message
             ))
-        case .transaction, .transactionV2:
+        case .transactionV2:
             self = .transaction(try container.decode(
                 TransactionExecution.self,
                 forKey: .transaction

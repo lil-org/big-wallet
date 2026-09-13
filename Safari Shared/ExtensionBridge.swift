@@ -69,12 +69,12 @@ actor ExtensionBridge {
     struct NativeDeliveryReceipt: Codable, Equatable, Sendable {
         let nativeDeliveryNonce: NativeDeliveryNonce
         let runtimeInstanceIdentifier: UUID
-        let owner: NativeDeliveryOwner?
+        let owner: NativeDeliveryOwner
     
         init(
             nativeDeliveryNonce: NativeDeliveryNonce,
             runtimeInstanceIdentifier: UUID,
-            owner: NativeDeliveryOwner? = nil
+            owner: NativeDeliveryOwner
         ) {
             self.nativeDeliveryNonce = nativeDeliveryNonce
             self.runtimeInstanceIdentifier = runtimeInstanceIdentifier
@@ -696,18 +696,6 @@ actor ExtensionBridge {
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier,
             decision: decision
-        )
-    }
-
-    func recordNativeDeliveryReceipt(
-        handle: Handle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID
-    ) -> StoreMutationResult {
-        store.recordNativeDeliveryReceipt(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier
         )
     }
 

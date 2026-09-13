@@ -1109,7 +1109,7 @@ class BigWalletEthereum {
     get ready() { return !!stateFor(this)?.address; }
     get selectedAddress() { return stateFor(this)?.address || null; }
 
-    // Frozen v2 facades install one private forwarder for each ordinary event.
+    // Stable facades install one private forwarder for each ordinary event.
     on(eventName, listener) {
         const state = stateFor(this);
         if (state && typeof eventName === "string" &&

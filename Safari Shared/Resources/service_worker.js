@@ -18,8 +18,6 @@ const APPROVAL_LEASE_STORAGE_PREFIX = "providerApprovalLease:";
 const INVALID_APPROVAL_LEASE = Symbol("invalidApprovalLease");
 const MANUAL_SWITCH_POLL_DELAY = 1000;
 const MANUAL_SWITCH_RECOVERY_ALARM = "manualSwitchRecovery";
-const LEGACY_MANUAL_SWITCH_STORAGE_KEY = "manualSwitchOwnersV1";
-const LEGACY_MANUAL_SWITCH_POLL_ALARM_NAME = "manualSwitchCompletionPoll";
 const ETHEREUM_ACCOUNT_METHODS = new Set([
     "signMessage",
     "signPersonalMessage",
@@ -286,7 +284,7 @@ function cleanConfiguration(configuration) {
     return clean;
 }
 
-function normalizedLegacyEthereumConfiguration(configuration) {
+function normalizedReleasedEthereumConfiguration(configuration) {
     if (!WIRE.isRecord(configuration) || configuration.provider !== "ethereum" ||
         typeof configuration.chainId !== "string" ||
         !/^0x[0-9a-f]+$/i.test(configuration.chainId)) {
@@ -300,52 +298,56 @@ function normalizedLegacyEthereumConfiguration(configuration) {
         : configuration;
 }
 
-function normalizedLegacyConfigurationState(value) {
+function normalizedReleasedHostConfigurationState(value) {
     if (Array.isArray(value)) {
-        return value.map(normalizedLegacyEthereumConfiguration);
+        return value.map(normalizedReleasedEthereumConfiguration);
     }
     if (!WIRE.isRecord(value)) { return value; }
     if (Array.isArray(value.latestConfigurations)) {
         return {
             ...value,
             latestConfigurations: value.latestConfigurations.map(
-                normalizedLegacyEthereumConfiguration
+                normalizedReleasedEthereumConfiguration
             ),
         };
     }
-    return normalizedLegacyEthereumConfiguration(value);
+    return normalizedReleasedEthereumConfiguration(value);
 }
 
-function decodeConfigurationState(value) {
-    const isV3 = WIRE.isRecord(value) &&
-        value.workflowVersion === STORAGE_VERSION;
-    const candidate = isV3
-        ? value
-        : normalizedLegacyConfigurationState(value);
-    const parsed = WIRE.parseLatestConfigurations(candidate);
-    if (!parsed.valid) { throw new Error("Invalid stored configuration"); }
-    const configurations = parsed.latestConfigurations.map(cleanConfiguration);
-    if (isV3) {
-        if (!WIRE.isProviderRevisions(value.revisions)) {
-            throw new Error("Invalid stored revisions");
-        }
-        return {
-            configurations,
-            revisions: {...value.revisions},
-            migrated: false,
-        };
+function decodeCurrentConfigurationState(value) {
+    if (!WIRE.hasExactKeys(value, [
+            "latestConfigurations", "revisions", "workflowVersion",
+        ]) || value.workflowVersion !== STORAGE_VERSION ||
+        !Array.isArray(value.latestConfigurations)) {
+        throw new Error("Invalid stored configuration");
     }
-    const legacyRevision = Number.isSafeInteger(candidate?.bridgeState?.revision) &&
-        candidate.bridgeState.revision >= 0 ? candidate.bridgeState.revision : 0;
-    const legacySolanaRevision = Number.isSafeInteger(
-        candidate?.bridgeState?.solanaAuthorizationEpoch
-    ) && candidate.bridgeState.solanaAuthorizationEpoch >= 0
-        ? candidate.bridgeState.solanaAuthorizationEpoch
-        : legacyRevision;
+    const parsed = WIRE.parseLatestConfigurations(value.latestConfigurations);
+    if (!parsed.valid) { throw new Error("Invalid stored configuration"); }
+    if (!WIRE.isProviderRevisions(value.revisions)) {
+        throw new Error("Invalid stored revisions");
+    }
     return {
-        configurations,
-        revisions: {ethereum: legacyRevision, solana: legacySolanaRevision},
-        migrated: typeof value !== "undefined",
+        configurations: parsed.latestConfigurations.map(cleanConfiguration),
+        revisions: {...value.revisions},
+        migrated: false,
+    };
+}
+
+function decodeReleasedHostConfigurationState(value) {
+    if (typeof value === "undefined" || WIRE.isRecord(value) && (
+        Object.prototype.hasOwnProperty.call(value, "workflowVersion") ||
+        Object.prototype.hasOwnProperty.call(value, "bridgeState")
+    )) {
+        throw new Error("Invalid stored configuration");
+    }
+    const parsed = WIRE.parseLatestConfigurations(
+        normalizedReleasedHostConfigurationState(value)
+    );
+    if (!parsed.valid) { throw new Error("Invalid stored configuration"); }
+    return {
+        configurations: parsed.latestConfigurations.map(cleanConfiguration),
+        revisions: {ethereum: 0, solana: 0},
+        migrated: true,
     };
 }
 
@@ -365,7 +367,7 @@ async function readConfigurationState(configurationKey, legacyConfigurationKey) 
         : configurationKey;
     const result = await browser.storage.local.get(keys);
     if (Object.prototype.hasOwnProperty.call(result || {}, configurationKey)) {
-        const state = decodeConfigurationState(result[configurationKey]);
+        const state = decodeCurrentConfigurationState(result[configurationKey]);
         state.legacyConfigurationKey = hasLegacyKey &&
             Object.prototype.hasOwnProperty.call(result, legacyConfigurationKey)
             ? legacyConfigurationKey
@@ -374,14 +376,16 @@ async function readConfigurationState(configurationKey, legacyConfigurationKey) 
     }
     if (hasLegacyKey &&
         Object.prototype.hasOwnProperty.call(result || {}, legacyConfigurationKey)) {
-        const state = decodeConfigurationState(result[legacyConfigurationKey]);
-        state.migrated = true;
+        const state = decodeReleasedHostConfigurationState(result[legacyConfigurationKey]);
         state.legacyConfigurationKey = legacyConfigurationKey;
         return state;
     }
-    const state = decodeConfigurationState(undefined);
-    state.legacyConfigurationKey = null;
-    return state;
+    return {
+        configurations: [],
+        revisions: {ethereum: 0, solana: 0},
+        migrated: false,
+        legacyConfigurationKey: null,
+    };
 }
 
 function queueConfigurationOperation(
@@ -1724,15 +1728,6 @@ try {
 try {
     Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
     void recoverManualSwitches().catch(() => {});
-} catch {}
-
-try {
-    Promise.resolve(browser.storage.local.remove(
-        LEGACY_MANUAL_SWITCH_STORAGE_KEY
-    )).catch(() => {});
-    Promise.resolve(browser.alarms?.clear?.(
-        LEGACY_MANUAL_SWITCH_POLL_ALARM_NAME
-    )).catch(() => {});
 } catch {}
 
 try {

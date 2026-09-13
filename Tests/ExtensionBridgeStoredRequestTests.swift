@@ -4,6 +4,12 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
+private let storedRequestNativeOwner = ExtensionBridge.NativeDeliveryOwner(
+    bundleURL: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
+    marketingVersion: "1.0.99",
+    buildVersion: "148"
+)!
+
 final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private enum Failure: Error { case expectedValue, injectedWrite }
 
@@ -483,7 +489,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let conflictingRecord = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: secondRuntime
+            runtimeInstanceIdentifier: secondRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(conflictingRecord, .ownershipLost)
         bridge = makeBridge(clock: { self.clock.now })
@@ -566,6 +573,66 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(completed.nativeDeliveryReceipt)
     }
 
+    func testNativeDeliveryReceiptRequiresOwnerMetadata() throws {
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: .init(value: UUID()),
+            runtimeInstanceIdentifier: UUID(),
+            owner: storedRequestNativeOwner
+        )
+        let data = try JSONEncoder().encode(receipt)
+        XCTAssertEqual(
+            try JSONDecoder().decode(ExtensionBridge.NativeDeliveryReceipt.self, from: data),
+            receipt
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        for owner: Any? in [nil, NSNull()] {
+            object["owner"] = owner
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                ExtensionBridge.NativeDeliveryReceipt.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            ))
+        }
+    }
+
+    func testMalformedReceiptOwnerIsUnavailableWithoutOverwriting() async throws {
+        let admission = try accepted(await bridge.enqueue(
+            ingress: makeFixture(id: 735).ingress,
+            profileIdentifier: nil
+        ))
+        let recorded = await bridge.recordNativeDeliveryReceipt(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: UUID(),
+            owner: storedRequestNativeOwner
+        )
+        XCTAssertEqual(recorded, .persisted)
+        let original = try Data(contentsOf: defaultProfileURL)
+        let invalidOwners: [Any?] = [
+            nil,
+            "invalid owner",
+            [
+                "bundlePath": "/not-an-app",
+                "marketingVersion": "1.0.99",
+                "buildVersion": "148",
+            ],
+        ]
+        for owner in invalidOwners {
+            try original.write(to: defaultProfileURL, options: .atomic)
+            try mutateFirstStoredState("pending") { pending in
+                var approval = try XCTUnwrap(pending["approval"] as? [String: Any])
+                var delivered = try XCTUnwrap(approval["delivered"] as? [String: Any])
+                var receipt = try XCTUnwrap(delivered["_0"] as? [String: Any])
+                receipt["owner"] = owner
+                delivered["_0"] = receipt
+                approval["delivered"] = delivered
+                pending["approval"] = approval
+            }
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
+    }
+
     func testNativeDeliveryReceiptClearsWhenPendingRequestExpires() async throws {
         let deadline = clock.now.addingTimeInterval(30)
         let fixture = try makeFixture(
@@ -579,7 +646,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recorded = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recorded, .persisted)
 
@@ -618,7 +686,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recorded = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime
+            runtimeInstanceIdentifier: runtime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recorded, .persisted)
 
@@ -648,7 +717,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recordedStage = await bridge.recordNativeDeliveryReceipt(
             handle: stageAdmission.handle,
             nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recordedStage, .persisted)
         let ownerlessStage = await bridge.stageNativeDecision(
@@ -694,7 +764,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recordedCompletion = await bridge.recordNativeDeliveryReceipt(
             handle: completeAdmission.handle,
             nativeDeliveryNonce: completeAdmission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recordedCompletion, .persisted)
         let ownerlessCompletion = await bridge.complete(
@@ -737,7 +808,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recordedRejection = await bridge.recordNativeDeliveryReceipt(
             handle: rejectAdmission.handle,
             nativeDeliveryNonce: rejectAdmission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recordedRejection, .persisted)
         let ownerlessRejection = await bridge.reject(
@@ -796,7 +868,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let stageReceipt = await bridge.recordNativeDeliveryReceipt(
             handle: stageAdmission.handle,
             nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(stageReceipt, .persisted)
         writes.throwsRemaining = 1
@@ -816,7 +889,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let completeReceipt = await bridge.recordNativeDeliveryReceipt(
             handle: completeAdmission.handle,
             nativeDeliveryNonce: completeAdmission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(completeReceipt, .persisted)
         writes.throwsRemaining = 1
@@ -836,7 +910,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let rejectReceipt = await bridge.recordNativeDeliveryReceipt(
             handle: rejectAdmission.handle,
             nativeDeliveryNonce: rejectAdmission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(rejectReceipt, .persisted)
         writes.throwsRemaining = 1
@@ -3293,7 +3368,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let receiptResult = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime
+            runtimeInstanceIdentifier: runtime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(receiptResult, .persisted)
         let prematureContext = await bridge.recordNativeExecutionContext(
@@ -3416,7 +3492,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let replacementResult = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: replacementRuntime
+            runtimeInstanceIdentifier: replacementRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(replacementResult, .persisted)
         guard case .claimed(let claim) =
@@ -3722,7 +3799,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
     #endif
 
-    func testNativeTransactionDecisionRebuildsOnlyMutableExecutionFields() throws {
+    func testNativeTransactionDecisionRebuildsOnlyMutableExecutionFields() async throws {
         let original = Transaction(
             from: "0x0000000000000000000000000000000000000001",
             to: "0x0000000000000000000000000000000000000002",
@@ -3826,25 +3903,49 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var transactionObject = try XCTUnwrap(
             object["transaction"] as? [String: Any]
         )
-        transactionObject.removeValue(forKey: "reviewedNetwork")
         object["kind"] = "transaction"
-        object["transaction"] = transactionObject
-        let legacyData = try JSONSerialization.data(withJSONObject: object)
-        guard case .transaction(let legacyExecution) =
-                NativeApprovalDecision.decodeBounded(legacyData) else {
-            return XCTFail("Expected compatible legacy decision decoding")
+        var invalidDecisions = [try JSONSerialization.data(withJSONObject: object)]
+        object["kind"] = "transactionV2"
+        for network: Any? in [nil, NSNull()] {
+            transactionObject["reviewedNetwork"] = network
+            object["transaction"] = transactionObject
+            invalidDecisions.append(try JSONSerialization.data(withJSONObject: object))
         }
-        XCTAssertNil(legacyExecution.applying(to: action))
+        let handle = try accepted(await bridge.enqueue(
+            ingress: makeFixture(id: 736).ingress,
+            profileIdentifier: nil
+        )).handle
+        let staged = await bridge.stageNativeDecision(
+            handle: handle,
+            decision: .transaction(execution)
+        )
+        XCTAssertEqual(staged, .persisted)
+        let originalProfile = try Data(contentsOf: defaultProfileURL)
+        for invalid in invalidDecisions {
+            XCTAssertNil(NativeApprovalDecision.decodeBounded(invalid))
+            try originalProfile.write(to: defaultProfileURL, options: .atomic)
+            try mutateFirstStoredState("pending") { pending in
+                var ownership = try XCTUnwrap(pending["approval"] as? [String: Any])
+                var staged = try XCTUnwrap(ownership["staged"] as? [String: Any])
+                var approval = try XCTUnwrap(staged["_0"] as? [String: Any])
+                approval["decision"] = invalid
+                staged["_0"] = approval
+                ownership["staged"] = staged
+                pending["approval"] = ownership
+            }
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
     }
 
     #if os(macOS)
-    func testRuntimeIdentityLoadsOlderProtocolForCompatibilityChecks() throws {
+    func testRuntimeIdentityLoadsMismatchedProtocolForRejection() throws {
         let bundleURL = try makeAmbientBundle(name: "Protocol", build: "148")
         let identity = try runtimeIdentity(
             processIdentifier: 791,
             bundleURL: bundleURL,
             launchDate: Date(timeIntervalSince1970: 1_789_118_464.514548),
-            runtimeProtocolVersion: 2
+            runtimeProtocolVersion:
+                AmbientRuntimeIdentity.currentRuntimeProtocolVersion + 1
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
 
@@ -3852,11 +3953,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(
             AmbientRuntimeIdentity.load(
                 processIdentifier: identity.processIdentifier,
-                directoryURL: directoryURL,
-                legacyData: { _ in
-                    XCTFail("An existing identity file must not read defaults")
-                    return nil
-                }
+                directoryURL: directoryURL
             ),
             identity
         )
@@ -3884,8 +3981,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ))
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in nil }
+            directoryURL: directoryURL
         ))
         XCTAssertTrue(identity.persist(directoryURL: directoryURL))
         XCTAssertEqual(AmbientRuntimeIdentity.load(
@@ -3921,8 +4017,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertTrue(identity.clear(directoryURL: directoryURL))
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in nil }
+            directoryURL: directoryURL
         ))
     }
 
@@ -3981,24 +4076,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             try invalid.write(to: fileURL, options: .atomic)
             XCTAssertNil(AmbientRuntimeIdentity.load(
                 processIdentifier: identity.processIdentifier,
-                directoryURL: directoryURL,
-                legacyData: { _ in
-                    XCTFail("An invalid file must not fall back to defaults")
-                    return data
-                }
+                directoryURL: directoryURL
             ))
         }
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: 0,
-            directoryURL: directoryURL,
-            legacyData: { _ in
-                XCTFail("Invalid PIDs must not read defaults")
-                return data
-            }
+            directoryURL: directoryURL
         ))
     }
 
-    func testRuntimeIdentityDoesNotFallBackForUnreadableOrUnsafeFiles() throws {
+    func testRuntimeIdentityRejectsUnreadableOrUnsafeFiles() throws {
         let bundleURL = try makeAmbientBundle(name: "Unreadable", build: "148")
         let identity = try runtimeIdentity(
             processIdentifier: 796,
@@ -4020,11 +4107,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in
-                XCTFail("An unreadable file must not read defaults")
-                return nil
-            }
+            directoryURL: directoryURL
         ))
         try FileManager.default.removeItem(at: fileURL)
         try FileManager.default.createSymbolicLink(
@@ -4033,67 +4116,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in
-                XCTFail("An unsafe file must not read defaults")
-                return nil
-            }
+            directoryURL: directoryURL
         ))
     }
 
-    func testRuntimeIdentityReadsLegacyDefaultsOnlyForOlderMissingFiles() throws {
-        let bundleURL = try makeAmbientBundle(name: "Legacy", build: "148")
-        let identity = try runtimeIdentity(
-            processIdentifier: 797,
-            bundleURL: bundleURL,
-            launchDate: Date(timeIntervalSince1970: 9_007),
-            runtimeProtocolVersion: 3
-        )
+    func testRuntimeIdentityReturnsNilForMissingFile() throws {
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
-        let legacyData = try JSONEncoder().encode(identity)
-        XCTAssertEqual(AmbientRuntimeIdentity.currentRuntimeProtocolVersion, 4)
-        XCTAssertEqual(AmbientRuntimeIdentity.load(
-            processIdentifier: identity.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { pid in
-                XCTAssertEqual(pid, identity.processIdentifier)
-                return legacyData
-            }
-        ), identity)
-        XCTAssertFalse(identity.isCompatible(
-            withWorkflowVersion: ExtensionBridge.workflowVersion
-        ))
-
-        let current = try runtimeIdentity(
-            processIdentifier: identity.processIdentifier,
-            bundleURL: bundleURL,
-            launchDate: Date(timeIntervalSince1970: 9_008)
-        )
-        let currentData = try JSONEncoder().encode(current)
         XCTAssertNil(AmbientRuntimeIdentity.load(
-            processIdentifier: current.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in currentData }
+            processIdentifier: 797,
+            directoryURL: directoryURL
         ))
-        XCTAssertNil(AmbientRuntimeIdentity.load(
-            processIdentifier: current.processIdentifier + 1,
-            directoryURL: directoryURL,
-            legacyData: { _ in legacyData }
-        ))
-        XCTAssertNil(AmbientRuntimeIdentity.load(
-            processIdentifier: current.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in Data(repeating: 0x20, count: 4_097) }
-        ))
-        XCTAssertTrue(current.persist(directoryURL: directoryURL))
-        XCTAssertEqual(AmbientRuntimeIdentity.load(
-            processIdentifier: current.processIdentifier,
-            directoryURL: directoryURL,
-            legacyData: { _ in
-                XCTFail("Current runtime identity must come from its file")
-                return legacyData
-            }
-        ), current)
     }
 
     func testNativeAgentResolutionDoesNotVerifyBeforeAProcessAction() async throws {
@@ -4892,38 +4924,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testOwnerlessReceiptRetainsCrossPathAmbiguity() throws {
-        let expectedURL = try makeAmbientBundle(name: "Expected", build: "149")
-        let otherURL = try makeAmbientBundle(name: "Other", build: "148")
-        let version = try XCTUnwrap(
-            AmbientRuntimeIdentity.bundleVersion(at: expectedURL)
-        )
-        let receipt = ExtensionBridge.NativeDeliveryReceipt(
-            nativeDeliveryNonce: .init(value: UUID()),
-            runtimeInstanceIdentifier: UUID()
-        )
-
-        let status = NativeAgentLauncher.runtimeStatus(
-            receipt: receipt,
-            expectedURL: expectedURL,
-            expectedVersion: version,
-            helpers: {
-                [self.runtimeHelper(
-                    processIdentifier: 838,
-                    bundleURL: otherURL,
-                    launchDate: Date(timeIntervalSince1970: 13_900)
-                )]
-            },
-            identity: { _ in nil },
-            validate: { $0 == expectedURL }
-        )
-
-        guard case .indeterminate = status else {
-            return XCTFail("Legacy receipt must fail closed")
-        }
-    }
-
-    @MainActor
     func testNativeAgentClearsReceiptWhoseRuntimeIsAbsent() async throws {
         let fixture = try makeFixture(id: 824)
         let helperURL = try makeAmbientBundle(name: "Receipt Owner", build: "149")
@@ -4990,7 +4990,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recorded = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier
+            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recorded, .persisted)
         var events = [String]()
@@ -5053,7 +5054,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recorded = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: firstRuntime
+            runtimeInstanceIdentifier: firstRuntime,
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recorded, .persisted)
         guard case .found(let firstSnapshot) = await bridge.load(
@@ -5062,7 +5064,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let secondRuntime = UUID()
         let secondReceipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: secondRuntime
+            runtimeInstanceIdentifier: secondRuntime,
+            owner: storedRequestNativeOwner
         )
         let secondSnapshot = ExtensionBridge.Snapshot(
             handle: firstSnapshot.handle,
@@ -5132,7 +5135,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let recorded = await bridge.recordNativeDeliveryReceipt(
             handle: admission.handle,
             nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: storedRequestNativeOwner
         )
         XCTAssertEqual(recorded, .persisted)
         var clearCount = 0

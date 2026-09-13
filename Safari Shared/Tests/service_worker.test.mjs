@@ -30,8 +30,6 @@ const previousBuildVersion = packagedBuildVersion.replace(
     /[0-9]+$/,
     value => String(Math.max(0, Number(value) - 1))
 );
-const manualOwnerStorageKey = "manualSwitchOwnersV1";
-const manualSwitchPollAlarmName = "manualSwitchCompletionPoll";
 const recoveryAlarmName = "manualSwitchRecovery";
 const approvalLeaseStoragePrefix = workerSource.match(
     /const APPROVAL_LEASE_STORAGE_PREFIX = "([^"\n]+)";/
@@ -584,7 +582,7 @@ test("updates persist recovery until the next browser startup", async () => {
     harness.startup();
     await settle();
     assert.equal(harness.storage.has("workflowUpdateRecoveryNeeded"), false);
-    assert.deepEqual(harness.storageRemovals, [manualOwnerStorageKey, "workflowUpdateRecoveryNeeded"]);
+    assert.deepEqual(harness.storageRemovals, ["workflowUpdateRecoveryNeeded"]);
     assert.equal(harness.tabQueries(), 0);
 });
 
@@ -901,7 +899,6 @@ test("simultaneous manual clicks share one admission and accept its canonical na
     await settle();
     assert.equal(harness.nativeMessages.length, 1);
     assert.equal(harness.storageWrites.length, 0);
-    assert.equal(harness.storage.has(manualOwnerStorageKey), false);
     const nativeRequest = harness.nativeMessages[0].message;
     assert.equal(nativeRequest.name, "switchAccount");
     assert.deepEqual(nativeRequest.body, {latestConfigurations: []});
@@ -1197,7 +1194,6 @@ test("a lost switch admission reply requires another click and resumes the canon
     };
     const first = makeHarness({storage, native});
     assert.equal(await first.dispatch(manualSwitchIntent(), contentSender()), undefined);
-    assert.equal(storage.has(manualOwnerStorageKey), false);
     const restarted = makeHarness({storage, native});
     restarted.startup();
     await settle();
@@ -1356,21 +1352,18 @@ test("manual polling rejects malformed switch terminals and stops after response
     ).length, 2);
 });
 
-test("upgrade removes legacy switch metadata and discovers native work without admitting", async () => {
-    const storage = new Map([[manualOwnerStorageKey, {
-        owners: [{phase: "admitting", id: 31}],
-        workflowVersion: 3,
-    }], ["unrelated", true]]);
+test("startup discovers native work without admitting or changing unrelated storage", async () => {
+    const storage = new Map([["unrelated", true]]);
     const harness = makeHarness({storage, native: () => assert.fail("no automatic recovery")});
     harness.startup();
     await settle();
-    assert.equal(storage.has(manualOwnerStorageKey), false);
     assert.equal(storage.get("unrelated"), true);
     assert.deepEqual(harness.alarmCreates, [{
         name: recoveryAlarmName,
         options: {delayInMinutes: 1, periodInMinutes: 1},
     }]);
-    assert.deepEqual(harness.alarmClears, [manualSwitchPollAlarmName]);
+    assert.deepEqual(harness.alarmClears, []);
+    assert.deepEqual(harness.storageRemovals, ["workflowUpdateRecoveryNeeded"]);
     assert.equal(harness.recoveryMessages.length, 1);
     assert.equal(await harness.fireAlarm(), undefined);
     assert.equal(await harness.runTimer(), false);
@@ -1394,7 +1387,6 @@ test("an alarm recovers an approval after worker termination before its admissio
     void first.dispatch(manualSwitchIntent(), contentSender());
     await settle();
     assert.equal(first.nativeMessages.length, 1);
-    assert.equal(storage.has(manualOwnerStorageKey), false);
     const second = makeHarness({
         alarms, storage, recoveryNative: discovery,
         tabs: [{id: 9, url: "https://wallet.example/dapp"}],
@@ -1799,7 +1791,6 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
         }, {});
 
         const reauthorizationRevision = revisions[selected.provider] + 1;
-        assert.equal(storage.has(manualOwnerStorageKey), false);
         assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
             {...selected, reauthorizationRevision},
         ]);
@@ -1857,7 +1848,6 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
             item.provider === selected.provider
         ).reauthorizationRevision, reauthorizationRevision);
         assert.deepEqual(clone(focused.revisions), broadcast.revisions);
-        assert.equal(storage.has(manualOwnerStorageKey), false);
         assert.equal(restarted.nativeMessages.length, 0);
     }
 });
@@ -1987,7 +1977,7 @@ test("rejects stale account-bound operations when native has no matching attempt
 
 test("forwards an account-bound operation with current stored authorization", async () => {
     const address = "0x0000000000000000000000000000000000000001";
-    const storage = new Map([["wallet.example", {
+    const storage = new Map([["https://wallet.example", {
         latestConfigurations: [{
             provider: "ethereum",
             chainId: "0x1",
@@ -3589,7 +3579,6 @@ test("the finalization ceiling releases a switch lineage for another attempt", a
         workflowVersion: 3,
     });
 
-    assert.equal(storage.has(manualOwnerStorageKey), false);
     const repeated = await harness.dispatch(manualSwitchIntent(), contentSender());
     assert.equal(repeated.id, acknowledged.id);
     assert.equal(disconnected.result, null);
@@ -3706,57 +3695,141 @@ test("localizes private browsing rejection without forwarding the request", asyn
     assert.equal(harness.nativeMessages.length, 0);
 });
 
-test("reads v2 wrappers without writes and migrates during the next queued operation", async () => {
-    const storage = new Map([["wallet.example", {
-        latestConfigurations: [{
-            provider: "solana",
-            publicKey: firstSolanaPublicKey,
-        }],
-        bridgeState: {
-            version: 2,
-            revision: 4,
-            solanaAuthorizationEpoch: 6,
-            admittedAttempts: {obsolete: true},
-            appliedResponses: {obsolete: true},
-        },
-    }]]);
-    const harness = makeHarness({storage});
-    const response = await harness.dispatch({
-        subject: "getLatestConfiguration",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.equal(response.latestConfigurations[0].publicKey, firstSolanaPublicKey);
-    assert.deepEqual(clone(response.revisions), {ethereum: 4, solana: 6});
-    assert.equal(storage.has("wallet.example"), true);
-    assert.equal(storage.has("https://wallet.example"), false);
-    assert.deepEqual(harness.storageWrites, []);
-    assert.deepEqual(harness.storageRemovals, [manualOwnerStorageKey]);
-
-    const disconnected = await harness.dispatch({
-        subject: "disconnect",
-        id: 94,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.equal(disconnected.result, null);
-    assert.equal(storage.has("wallet.example"), false);
-    assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [{
+test("reads main host configurations without writes and migrates on the next operation", async () => {
+    const configuration = {
         provider: "solana",
         publicKey: firstSolanaPublicKey,
-    }]);
-    assert.deepEqual(storage.get("https://wallet.example").revisions,
-        {ethereum: 5, solana: 6});
-    assert.equal(storage.get("https://wallet.example").bridgeState, undefined);
-    assert.equal(storage.get("https://wallet.example").workflowVersion, 3);
-    assert.equal(harness.storageWrites.length, 1);
-    assert.deepEqual(harness.storageRemovals, [manualOwnerStorageKey, "wallet.example"]);
+    };
+    for (const value of [configuration, [configuration], {latestConfigurations: [configuration]}]) {
+        const storage = new Map([["wallet.example", value]]);
+        const harness = makeHarness({storage});
+        const response = await harness.dispatch({
+            subject: "getLatestConfiguration",
+            host: "wallet.example",
+            configurationKey: "https://wallet.example",
+            workflowVersion: 3,
+        });
+        assert.equal(response.latestConfigurations[0].publicKey, firstSolanaPublicKey);
+        assert.deepEqual(clone(response.revisions), {ethereum: 0, solana: 0});
+        assert.deepEqual(storage.get("wallet.example"), value);
+        assert.equal(storage.has("https://wallet.example"), false);
+        assert.deepEqual(harness.storageWrites, []);
+        assert.deepEqual(harness.storageRemovals, []);
+
+        const disconnected = await harness.dispatch({
+            subject: "disconnect",
+            id: 94,
+            provider: "ethereum",
+            host: "wallet.example",
+            configurationKey: "https://wallet.example",
+            workflowVersion: 3,
+        });
+        assert.equal(disconnected.result, null);
+        assert.equal(storage.has("wallet.example"), false);
+        assert.deepEqual(storage.get("https://wallet.example"), {
+            latestConfigurations: [configuration],
+            revisions: {ethereum: 1, solana: 0},
+            workflowVersion: 3,
+        });
+        assert.equal(harness.storageWrites.length, 1);
+        assert.deepEqual(harness.storageRemovals, ["wallet.example"]);
+    }
 });
 
-test("canonicalizes positive legacy Ethereum quantities across storage shapes", async () => {
+test("main host migration removes the source only after successful persistence", async () => {
+    for (const succeeds of [true, false]) {
+        const value = [{provider: "solana", publicKey: firstSolanaPublicKey}];
+        const storage = new Map([["wallet.example", value]]);
+        const write = deferred();
+        const harness = makeHarness({storage, storageSet: () => write.promise});
+        const operation = harness.dispatch({
+            subject: "disconnect",
+            id: 94,
+            provider: "ethereum",
+            host: "wallet.example",
+            configurationKey: "https://wallet.example",
+            workflowVersion: 3,
+        });
+        await settle();
+        assert.equal(harness.storageWrites.length, 1);
+        assert.deepEqual(storage.get("wallet.example"), value);
+        assert.deepEqual(harness.storageRemovals, []);
+        if (succeeds) {
+            write.resolve();
+        } else {
+            write.reject(new Error("Storage unavailable"));
+        }
+        const response = await operation;
+        assert.equal(storage.has("wallet.example"), !succeeds);
+        assert.equal(response.errorCode, succeeds ? undefined : -32603);
+    }
+});
+
+test("unpublished stored wrappers fail closed at host and origin keys", async () => {
+    const latestConfigurations = [{provider: "solana", publicKey: firstSolanaPublicKey}];
+    const values = [
+        ...[1, 2, 4].map(workflowVersion => ({
+            latestConfigurations,
+            revisions: {ethereum: 4, solana: 6},
+            workflowVersion,
+        })),
+        {
+            latestConfigurations,
+            bridgeState: {version: 2, revision: 4, solanaAuthorizationEpoch: 6},
+        },
+        {
+            latestConfigurations,
+            bridgeState: {},
+            revisions: {ethereum: 4, solana: 6},
+            workflowVersion: 3,
+        },
+    ];
+    for (const key of ["wallet.example", "https://wallet.example"]) {
+        for (const value of values) {
+            const storage = new Map([[key, value]]);
+            const harness = makeHarness({storage});
+            const response = await harness.dispatch({
+                subject: "getLatestConfiguration",
+                host: "wallet.example",
+                configurationKey: "https://wallet.example",
+                workflowVersion: 3,
+            });
+            assert.equal(response.configurationReadFailed, true);
+            assert.deepEqual(storage.get(key), value);
+            assert.deepEqual(harness.storageWrites, []);
+            assert.deepEqual(harness.storageRemovals, []);
+        }
+    }
+});
+
+test("invalid origin state never falls back to main host authorization", async () => {
+    const configuration = {provider: "solana", publicKey: firstSolanaPublicKey};
+    for (const value of [
+        configuration,
+        [configuration],
+        {latestConfigurations: [configuration]},
+        {latestConfigurations: [configuration], revisions: {}, workflowVersion: 3},
+    ]) {
+        const storage = new Map([
+            ["wallet.example", [configuration]],
+            ["https://wallet.example", value],
+        ]);
+        const harness = makeHarness({storage});
+        const response = await harness.dispatch({
+            subject: "getLatestConfiguration",
+            host: "wallet.example",
+            configurationKey: "https://wallet.example",
+            workflowVersion: 3,
+        });
+        assert.equal(response.configurationReadFailed, true);
+        assert.deepEqual(storage.get("wallet.example"), [configuration]);
+        assert.deepEqual(storage.get("https://wallet.example"), value);
+        assert.deepEqual(harness.storageWrites, []);
+        assert.deepEqual(harness.storageRemovals, []);
+    }
+});
+
+test("canonicalizes positive main Ethereum quantities across host storage shapes", async () => {
     const cases = [
         {
             expected: "0xa",
@@ -3774,13 +3847,12 @@ test("canonicalizes positive legacy Ethereum quantities across storage shapes", 
                     chainId: "0X000C",
                     results: [],
                 }],
-                bridgeState: {revision: 4, solanaAuthorizationEpoch: 6},
             },
         },
     ];
 
     for (const item of cases) {
-        const storage = new Map([["https://wallet.example", item.value]]);
+        const storage = new Map([["wallet.example", item.value]]);
         const harness = makeHarness({storage});
         const response = await harness.dispatch({
             subject: "getLatestConfiguration",
@@ -3790,9 +3862,9 @@ test("canonicalizes positive legacy Ethereum quantities across storage shapes", 
         });
 
         assert.equal(response.latestConfigurations[0].chainId, item.expected);
-        assert.deepEqual(storage.get("https://wallet.example"), item.value);
+        assert.deepEqual(storage.get("wallet.example"), item.value);
         assert.deepEqual(harness.storageWrites, []);
-        assert.deepEqual(harness.storageRemovals, [manualOwnerStorageKey]);
+        assert.deepEqual(harness.storageRemovals, []);
 
         const disconnected = await harness.dispatch({
             subject: "disconnect",
@@ -3812,7 +3884,7 @@ test("canonicalizes positive legacy Ethereum quantities across storage shapes", 
     }
 });
 
-test("legacy zero malformed and over-native-max chains fail closed", async () => {
+test("main zero malformed and over-native-max chains fail closed", async () => {
     const values = [
         [{provider: "ethereum", chainId: "0x0", results: []}],
         {provider: "ethereum", chainId: "invalid", results: []},
@@ -3826,7 +3898,7 @@ test("legacy zero malformed and over-native-max chains fail closed", async () =>
     ];
 
     for (const value of values) {
-        const storage = new Map([["https://wallet.example", value]]);
+        const storage = new Map([["wallet.example", value]]);
         const harness = makeHarness({storage});
         const response = await harness.dispatch({
             subject: "getLatestConfiguration",
@@ -3837,7 +3909,7 @@ test("legacy zero malformed and over-native-max chains fail closed", async () =>
 
         assert.equal(response.configurationReadFailed, true);
         assert.deepEqual(harness.storageWrites, []);
-        assert.deepEqual(storage.get("https://wallet.example"), value);
+        assert.deepEqual(storage.get("wallet.example"), value);
     }
 });
 

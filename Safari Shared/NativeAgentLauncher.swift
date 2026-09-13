@@ -1209,7 +1209,7 @@ actor NativeAgentLauncher {
         helpers: () -> [RuntimeHelper],
         identity: (Int32) -> AmbientRuntimeIdentity?
     ) -> ReceiptOwnerObservation {
-        guard receipt.owner?.isValid ?? true else { return .indeterminate }
+        guard receipt.owner.isValid else { return .indeterminate }
         var hasPossibleUnidentifiedOwner = false
         var owner: ObservedRuntime?
         for runtime in observedRuntimes(helpers(), identity: identity) {
@@ -1218,7 +1218,7 @@ actor NativeAgentLauncher {
                 continue
             }
             guard let identity = runtime.identity else {
-                if receipt.owner == nil || receipt.owner?.bundleURL == runtimeURL {
+                if receipt.owner.bundleURL == runtimeURL {
                     hasPossibleUnidentifiedOwner = true
                 }
                 continue
@@ -1227,7 +1227,7 @@ actor NativeAgentLauncher {
                 continue
             }
             guard owner == nil,
-                  receipt.owner.map(identity.matches) ?? true else {
+                  identity.matches(receipt.owner) else {
                 return .indeterminate
             }
             owner = runtime

@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -51,10 +50,6 @@ const solanaSDKSource = bundle("solana-sdk-harness.js", "cjs", `
 `);
 const stableFacadesSource = bundle("stable_facades.js");
 const inpageSource = bundle("index.js", "iife");
-const previousStableFacadesSource = readFileSync(
-    new URL("./fixtures/stable_facades_v2.cjs", import.meta.url),
-    "utf8"
-);
 
 class HarnessEvent {
     constructor(type, options = {}) {
@@ -6223,46 +6218,6 @@ test("exact reinjection preserves facades and rejects all old generation work", 
     assert.notEqual(firstGeneration, secondGeneration);
 });
 
-test("reinjection reuses a pre-change v2 facade and its consumed connect replay", async () => {
-    let previousRecord;
-    const harness = inpageHarness({beforeEvaluate(window, context) {
-        context.module = {exports: {}};
-        new vm.Script(previousStableFacadesSource).runInContext(context);
-        previousRecord = context.module.exports.createStableFacadeRecord({
-            uuid: "00000000-0000-4000-8000-000000000011",
-        });
-        delete context.module;
-        Object.defineProperty(window, "bigWalletInpageStableFacadeAnchorV1", {
-            value: Object.freeze({
-                initialSnapshots: Object.freeze({ethereum: null, solana: null}),
-                record: previousRecord,
-                version: 2,
-            }),
-        });
-    }});
-    const connects = [];
-    const ethereum = harness.window.ethereum;
-    const solana = harness.window.solana;
-    const wallet = previousRecord.wallet;
-    ethereum.on("connect", value => connects.push(normalized(value)));
-    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    const account = wallet.accounts[0];
-    assert.deepEqual(connects, [{chainId: "0x1"}]);
-
-    harness.evaluate();
-    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    assert.equal(harness.window.bigWalletInpageStableFacadeRecord, previousRecord);
-    assert.equal(harness.window.ethereum, ethereum);
-    assert.equal(harness.window.solana, solana);
-    assert.equal(previousRecord.wallet, wallet);
-    assert.equal(wallet.accounts[0], account);
-    assert.deepEqual(connects, [{chainId: "0x1"}]);
-    assert.equal(harness.registeredWallets.length, 1);
-    assert.equal(harness.listenerCount("wallet-standard:app-ready"), 1);
-    assert.equal(harness.listenerCount("message"), 1);
-    assert.equal(await ethereum.request({method: "eth_chainId"}), "0x1");
-});
-
 test("Ethereum readiness preserves a callback installed during delivery", () => {
     const module = moduleHarness(ethereumSource);
     const Ethereum = module.exports.default;
@@ -6299,7 +6254,7 @@ test("Ethereum readiness preserves a callback installed during delivery", () => 
 });
 
 for (const consumedConnect of [false, true]) {
-    test(`preexisting frozen v2 facade adopts the new engine with connect consumed=${consumedConnect}`, async () => {
+    test(`current facade adopts a replacement engine with connect consumed=${consumedConnect}`, async () => {
         let record;
         let account;
         const connects = [];

@@ -249,7 +249,6 @@ test("parses plain and wrapped configuration arrays without workflow metadata", 
     );
     assert.equal(wire.parseLatestConfigurations({
         latestConfigurations: configurations,
-        bridgeState: {admittedAttempts: {}},
     }).valid, true);
     assert.equal(wire.parseLatestConfigurations([
         ...configurations,

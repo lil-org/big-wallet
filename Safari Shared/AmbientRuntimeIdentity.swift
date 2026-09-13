@@ -10,7 +10,6 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
 
     typealias AtomicWrite = (Data, URL) throws -> Void
     typealias RemoveItem = (URL) throws -> Void
-    typealias ReadLegacyData = (Int32) -> Data?
 
     private enum FileStatus {
         case missing, regular, directory, unavailable
@@ -146,8 +145,7 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
 
     static func load(
         processIdentifier: Int32,
-        directoryURL: URL? = AmbientRuntimeIdentity.defaultDirectoryURL,
-        legacyData: ReadLegacyData = AmbientRuntimeIdentity.legacyIdentityData
+        directoryURL: URL? = AmbientRuntimeIdentity.defaultDirectoryURL
     ) -> AmbientRuntimeIdentity? {
         guard processIdentifier > 0,
               let directoryURL, directoryURL.isFileURL else { return nil }
@@ -156,26 +154,18 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
             directoryURL: directoryURL
         )
         let data: Data
-        let isLegacy: Bool
         switch fileStatus(at: url) {
         case .regular:
             guard let stored = readData(at: url) else { return nil }
             data = stored
-            isLegacy = false
         case .missing:
-            guard let stored = legacyData(processIdentifier),
-                  !stored.isEmpty,
-                  stored.count <= maximumEncodedBytes else { return nil }
-            data = stored
-            isLegacy = true
+            return nil
         case .directory, .unavailable:
             return nil
         }
         guard let identity = try? JSONDecoder().decode(Self.self, from: data),
               identity.isValid,
-              identity.processIdentifier == processIdentifier,
-              !isLegacy || identity.runtimeProtocolVersion <
-                currentRuntimeProtocolVersion else {
+              identity.processIdentifier == processIdentifier else {
             return nil
         }
         return identity
@@ -216,12 +206,6 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
     }
 
     private static let maximumEncodedBytes = 4 * 1024
-
-    private static func legacyIdentityData(processIdentifier: Int32) -> Data? {
-        SharedDefaults.defaults?.data(
-            forKey: "ambientRuntimeIdentity.v2.\(processIdentifier)"
-        )
-    }
 
     private static var defaultDirectoryURL: URL? {
         FileManager.default.containerURL(

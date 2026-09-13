@@ -1305,7 +1305,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 deadline: clock.now.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: runtime
+                    runtimeInstanceIdentifier: runtime,
+                    owner: self.nativeOwner
                 )
             )
             return .persisted
@@ -1622,7 +1623,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: self.nativeOwner
             )
         )
         let staged = expectation(description: "reconciled staged decision")
@@ -1635,7 +1637,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 deadline: clock.now.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: runtime
+                    runtimeInstanceIdentifier: runtime,
+                    owner: self.nativeOwner
                 ),
                 nativeDecisionStaged: true
             )
@@ -1677,7 +1680,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: self.nativeOwner
             ),
             nativeDecisionStaged: true
         )
@@ -1741,7 +1745,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: self.nativeOwner
             )
         )
         let staged = expectation(description: "decision staged")
@@ -1794,7 +1799,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: self.nativeOwner
             )
         )
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
@@ -1853,7 +1859,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: self.nativeOwner
             )
         )
         let rejected = expectation(description: "rejected")
@@ -1898,7 +1905,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: self.nativeOwner
             )
         )
         var rejectionCount = 0
@@ -1913,7 +1921,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 deadline: clock.now.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: UUID()
+                    runtimeInstanceIdentifier: UUID(),
+                    owner: self.nativeOwner
                 )
             )
             return .ownershipLost
@@ -2151,13 +2160,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             request: request,
             nativeDecisionStaged: nativeDecisionStaged,
             nativeDeliveryNonce: nonce,
-            nativeDeliveryReceipt: receipt.map {
-                ExtensionBridge.NativeDeliveryReceipt(
-                    nativeDeliveryNonce: $0.nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: $0.runtimeInstanceIdentifier,
-                    owner: $0.owner ?? nativeOwner
-                )
-            },
+            nativeDeliveryReceipt: receipt,
             host: request.host,
             configurationKey: request.configurationKey,
             revisions: ExtensionBridge.ProviderRevisions(rawValue: [

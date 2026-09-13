@@ -46,6 +46,11 @@ final class ExtensionRequestFileStore {
         }
     }
 
+    private struct ReceiptIdentity {
+        let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
+        let runtimeInstanceIdentifier: UUID
+    }
+
     private struct ProfileState: Codable {
         let schemaVersion: Int
         let workflowVersion: Int
@@ -718,7 +723,7 @@ final class ExtensionRequestFileStore {
 
     private func stageNativeDecision(
         handle: ExtensionBridge.Handle,
-        expectedReceipt: ExtensionBridge.NativeDeliveryReceipt?,
+        expectedReceipt: ReceiptIdentity?,
         decision: NativeApprovalDecision
     ) -> ExtensionBridge.StoreMutationResult {
         guard let decisionData = decision.boundedData else {
@@ -764,7 +769,7 @@ final class ExtensionRequestFileStore {
 
     private func verifyNativeDecisionLocked(
         handle: ExtensionBridge.Handle,
-        expectedReceipt: ExtensionBridge.NativeDeliveryReceipt?,
+        expectedReceipt: ReceiptIdentity?,
         expectedDecision: Data
     ) -> Bool {
         guard let record = persistedRecordLocked(handle: handle),
@@ -782,35 +787,8 @@ final class ExtensionRequestFileStore {
     func recordNativeDeliveryReceipt(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID
-    ) -> ExtensionBridge.StoreMutationResult {
-        recordNativeDeliveryReceipt(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            owner: nil
-        )
-    }
-
-    func recordNativeDeliveryReceipt(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
         owner: ExtensionBridge.NativeDeliveryOwner
-    ) -> ExtensionBridge.StoreMutationResult {
-        recordNativeDeliveryReceipt(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            owner: Optional(owner)
-        )
-    }
-
-    private func recordNativeDeliveryReceipt(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        owner: ExtensionBridge.NativeDeliveryOwner?
     ) -> ExtensionBridge.StoreMutationResult {
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nativeDeliveryNonce,
@@ -1202,7 +1180,7 @@ final class ExtensionRequestFileStore {
 
     private func reject(
         handle: ExtensionBridge.Handle,
-        expectedReceipt: ExtensionBridge.NativeDeliveryReceipt?
+        expectedReceipt: ReceiptIdentity?
     ) -> ExtensionBridge.StoreMutationResult {
         withLock(or: .retryablePersistenceFailure) {
             let now = clock()
@@ -1481,7 +1459,7 @@ final class ExtensionRequestFileStore {
 
     private func finish(
         handle: ExtensionBridge.Handle,
-        expectedReceipt: ExtensionBridge.NativeDeliveryReceipt?,
+        expectedReceipt: ReceiptIdentity?,
         response: ResponseToExtension
     ) -> ExtensionBridge.StoreMutationResult {
         withLock(or: .retryablePersistenceFailure) {
@@ -1845,7 +1823,7 @@ final class ExtensionRequestFileStore {
                   }) ?? true,
                   record.nativeDeliveryReceipt.map({
                       $0.nativeDeliveryNonce == record.nativeDeliveryNonce &&
-                        ($0.owner?.isValid ?? true)
+                        $0.owner.isValid
                   }) ?? true else {
                 return false
             }
@@ -2176,7 +2154,7 @@ final class ExtensionRequestFileStore {
 
     private func receiptMatches(
         _ receipt: ExtensionBridge.NativeDeliveryReceipt?,
-        expected: ExtensionBridge.NativeDeliveryReceipt?
+        expected: ReceiptIdentity?
     ) -> Bool {
         guard let expected else { return receipt == nil }
         return receipt?.matches(

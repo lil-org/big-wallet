@@ -4,6 +4,12 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
+private let popupNativeDeliveryOwner = ExtensionBridge.NativeDeliveryOwner(
+    bundleURL: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
+    marketingVersion: "1.0.99",
+    buildVersion: "148"
+)!
+
 private let popupRequestAdmissionDeadline = 2_000_000_900_000
 
 private enum PopupRequestSessionsTestError: Error {
@@ -568,7 +574,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         )
         var snapshot = try popupSnapshot(id: 403, nativeDeliveryReceipt: receipt)
         var runtimeChecks = 0
@@ -621,7 +628,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         )
         let snapshot = try popupSnapshot(
             id: 402, phase: .approving,
@@ -658,7 +666,8 @@ final class PopupRequestSessionsTests: XCTestCase {
             id: 404,
             nativeDeliveryReceipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: UUID()
+                runtimeInstanceIdentifier: UUID(),
+                owner: popupNativeDeliveryOwner
             )
         )
         let liveDependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
@@ -701,7 +710,8 @@ final class PopupRequestSessionsTests: XCTestCase {
             let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
             let receipt = ExtensionBridge.NativeDeliveryReceipt(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: UUID()
+                runtimeInstanceIdentifier: UUID(),
+                owner: popupNativeDeliveryOwner
             )
             let snapshot = try popupSnapshot(
                 id: phase == .queued ? 406 : 407,
@@ -767,7 +777,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         )
         let snapshot = try popupSnapshot(
             id: 409,
@@ -799,7 +810,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         )
         let snapshot = try popupSnapshot(
             id: 410,
@@ -1333,7 +1345,8 @@ extension PopupRequestSessionsTests {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         )
         let store = CompactPopupStore()
         let snapshot = try popupSnapshot(
@@ -1447,7 +1460,8 @@ extension PopupRequestSessionsTests {
         await store.insert(snapshot)
         await store.forceNextCompletionOwnershipLoss(receipt: .init(
             nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         ))
         var preparations = 0
         let controller = PopupRequestSessions(
@@ -1623,7 +1637,8 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(preparationCount, 1)
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID()
+            runtimeInstanceIdentifier: UUID(),
+            owner: popupNativeDeliveryOwner
         )
         await store.setNativeDeliveryReceipt(receipt, handle: snapshot.handle)
 
@@ -4291,7 +4306,8 @@ extension PopupRequestSessionsTests {
             revisions: popupRevisions(ethereum: 4, solana: 2),
             nativeDeliveryReceipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime
+                runtimeInstanceIdentifier: runtime,
+                owner: popupNativeDeliveryOwner
             )
         )
         await store.insert(snapshot)
