@@ -943,6 +943,60 @@ test("horizon cleanup releases all per-host request slots", async () => {
     ), true);
 });
 
+test("persistent failed response reads release acknowledged request slots", async () => {
+    let resolveRead;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {
+                id: message.message.id,
+                requestToken,
+                approvalRequired: true,
+                revisions: {ethereum: 0, solana: 0},
+            };
+        }
+        if (message.subject === "getResponse") {
+            if (message.id === 41) { return {}; }
+            if (message.id === 42) { throw new Error("unavailable"); }
+            if (message.id === 43) {
+                return new Promise(resolve => { resolveRead = resolve; });
+            }
+        }
+        return undefined;
+    }});
+    await settle();
+    harness.context.document.visibilityState = "hidden";
+    for (let id = 40; id < 44; id += 1) {
+        harness.dispatchPage("request", dappRequest(id));
+    }
+    await settle();
+
+    const startedAt = harness.now();
+    while (harness.context.bigWalletRequests.size > 0) {
+        assert.equal(await harness.runTimer(), true);
+        assert.ok(harness.now() - startedAt <= 61 * 60 * 1000);
+    }
+    assert.ok(harness.now() - startedAt >= 60 * 60 * 1000);
+    resolveRead({id: 43, name: "requestAccounts", provider: "ethereum", results: []});
+    await settle();
+
+    for (let id = 40; id < 44; id += 1) {
+        const responses = harness.postedMessages.filter(value => {
+            return value.message.response?.id === id;
+        });
+        assert.equal(responses.length, 1);
+        assert.equal(responses[0].message.response.errorCode, -32603);
+    }
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
+
+    harness.dispatchPage("request", dappRequest(44));
+    await settle();
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+    assert.equal(harness.runtimeMessages.some(message =>
+        message.subject === "message-to-wallet" && message.message.id === 44
+    ), true);
+});
+
 test("new content attempts fail without allocation at the per-host limit", async () => {
     const harness = makeHarness({sendMessage: () => undefined});
     await settle();
@@ -1135,7 +1189,7 @@ test("response-ready hints rerun an active response read", async () => {
     assert.equal(await harness.runTimer(), false);
 });
 
-test("late enqueue acknowledgement transfers ownership past the recovery horizon", async () => {
+test("late enqueue acknowledgement preserves native-owned work past the recovery horizon", async () => {
     let ready = false;
     let enqueueCalls = 0;
     const harness = makeHarness({sendMessage: message => {
@@ -1149,8 +1203,10 @@ test("late enqueue acknowledgement transfers ownership past the recovery horizon
                 revisions: {ethereum: 0, solana: 0},
             };
         }
-        if (message.subject === "getResponse" && ready) {
-            return {id: 15, name: "requestAccounts", provider: "ethereum", results: []};
+        if (message.subject === "getResponse") {
+            return ready
+                ? {id: 15, name: "requestAccounts", provider: "ethereum", results: []}
+                : {id: 15, pending: true};
         }
         return undefined;
     }});
@@ -1171,6 +1227,87 @@ test("late enqueue acknowledgement transfers ownership past the recovery horizon
     ready = true;
     await harness.runTimer();
     assert.equal(harness.postedMessages.at(-1).message.response.id, 15);
+    assert.equal(harness.postedMessages.at(-1).message.response.errorCode, undefined);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+});
+
+test("native results survive suspension past the recovery horizon", async () => {
+    for (const delivery of ["ready", "inFlight", "timeoutFirst"]) {
+        let resolveRead;
+        let reads = 0;
+        const response = {
+            id: 17, name: "signTransaction", provider: "ethereum",
+            results: ["0xtransactionHash"],
+        };
+        const harness = makeHarness({sendMessage: message => {
+            if (message.subject === "message-to-wallet") {
+                return {
+                    id: 17, requestToken, approvalRequired: true,
+                    revisions: {ethereum: 0, solana: 0},
+                };
+            }
+            reads += 1;
+            return delivery !== "ready" && reads === 1
+                ? new Promise(resolve => { resolveRead = resolve; })
+                : response;
+        }});
+        await settle();
+        harness.dispatchPage("request", {...dappRequest(17), name: "signTransaction"});
+        await settle();
+        if (delivery !== "ready") { await harness.runTimer(); }
+        harness.advance(76 * 60 * 1000);
+        if (delivery === "timeoutFirst") {
+            await harness.runTimer();
+            assert.equal(harness.context.bigWalletRequests.size, 1);
+        }
+        if (delivery !== "ready") {
+            resolveRead(response);
+            await settle();
+        } else {
+            await harness.runTimer();
+        }
+        if (delivery === "timeoutFirst") { await harness.runTimer(); }
+        assert.deepEqual(harness.postedMessages.at(-1).message.response, response);
+        assert.equal(harness.context.bigWalletRequests.size, 0);
+        assert.equal(harness.pendingTimers(), 0);
+    }
+});
+
+test("native pending replies reset the communication failure budget", async () => {
+    let pending = false;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {
+                id: 18, requestToken, approvalRequired: true,
+                revisions: {ethereum: 0, solana: 0},
+            };
+        }
+        return pending ? {id: 18, pending: true} : undefined;
+    }});
+    await settle();
+    harness.context.document.visibilityState = "hidden";
+    harness.dispatchPage("request", dappRequest(18));
+    await settle();
+
+    async function pollFor(milliseconds) {
+        const until = harness.now() + milliseconds;
+        while (harness.now() < until && harness.context.bigWalletRequests.size > 0) {
+            assert.equal(await harness.runTimer(), true);
+        }
+    }
+
+    await pollFor(59 * 60 * 1000);
+    pending = true;
+    await harness.runTimer();
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+
+    pending = false;
+    await pollFor(59 * 60 * 1000);
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+    await pollFor(2 * 60 * 1000);
+    assert.equal(harness.postedMessages.at(-1).message.response.errorCode, -32603);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
 });
 
 test("an unresolved response read cannot end a native-owned request", async () => {

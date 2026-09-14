@@ -881,9 +881,9 @@ async function readAndApplyDappResponse(
     const promise = (async () => {
         const response = await readStoredResponse(context);
         if (isMissingStoredResponse(response, id)) { return {response}; }
-        if (quiet && WIRE.hasExactKeys(response, ["id", "pending"]) &&
+        if (WIRE.hasExactKeys(response, ["id", "pending"]) &&
             response.id === id && response.pending === true) {
-            return {pending: true};
+            return {pending: true, response};
         }
         return completeResponse(context, response);
     })();

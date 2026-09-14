@@ -3003,6 +3003,21 @@ test("response reads require the originating tab identity", async () => {
     assert.equal(harness.nativeMessages.length, 0);
 });
 
+test("page response reads relay native pending without committing or acknowledging it", async () => {
+    const harness = makeHarness({native: message => ({id: message.id, pending: true})});
+    const response = await harness.dispatch({
+        subject: "getResponse",
+        id: 10,
+        configurationKey: "https://wallet.example",
+        requestToken,
+        revisions: {ethereum: 0, solana: 0},
+        workflowVersion: 3,
+    });
+    assert.deepEqual(clone(response), {id: 10, pending: true});
+    assert.equal(providerStateWrites(harness).length, 0);
+    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject), ["getResponse"]);
+});
+
 test("disconnect revisions fence a stale authorization response", async () => {
     const native = message => isResponseRead(message) ? {
         id: 11,

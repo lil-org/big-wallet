@@ -7,7 +7,6 @@ let SFExtensionMessageKey = "message"
 private enum HandlerError: LocalizedError {
     case invalidMessage
     case unsupportedOperation
-    case requestPending
     case bridgeUnavailable
 
     var errorDescription: String? {
@@ -16,8 +15,6 @@ private enum HandlerError: LocalizedError {
             return "Invalid extension message"
         case .unsupportedOperation:
             return "Unsupported extension operation"
-        case .requestPending:
-            return "Extension request is pending"
         case .bridgeUnavailable:
             return "Big Wallet extension bridge is unavailable"
         }
@@ -574,12 +571,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         id: Int,
         mode: ResponseReadMode,
         context: NSExtensionContext,
-        error: HandlerError = .requestPending
+        error: HandlerError? = nil
     ) {
-        if mode == .manualRecovery {
-            respond(with: ["id": id, "pending": true], context: context)
-        } else {
+        if let error, mode == .page {
             context.cancelRequest(withError: error)
+        } else {
+            respond(with: ["id": id, "pending": true], context: context)
         }
     }
 

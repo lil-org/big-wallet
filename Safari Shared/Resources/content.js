@@ -259,6 +259,8 @@ function bigWalletEnqueue(message, generation) {
         requestToken: null,
         recoveryDeadline: admissionDeadline +
             bigWalletWire.WORKFLOW_POLICY.responseExpiryMilliseconds,
+        responseFailureMilliseconds: 0,
+        lastResponseFailureAt: null,
         resolveInitial,
         revisions: null,
         rerunRequested: false,
@@ -341,6 +343,7 @@ async function bigWalletSendEnqueue(state) {
 }
 
 async function bigWalletReadResponse(state) {
+    const readStartedAt = Date.now();
     let response;
     try {
         response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
@@ -362,7 +365,25 @@ async function bigWalletReadResponse(state) {
         bigWalletDeliver(state, response);
         return;
     }
-    bigWalletSchedule(state, document.visibilityState === "visible" ? 1000 : 5000);
+    const retryDelay = document.visibilityState === "visible" ? 1000 : 5000;
+    if (bigWalletWire.hasExactKeys(response, ["id", "pending"]) &&
+        response.id === state.message.id && response.pending === true) {
+        state.responseFailureMilliseconds = 0;
+        state.lastResponseFailureAt = null;
+    } else {
+        const now = Date.now();
+        state.responseFailureMilliseconds += Math.min(
+            Math.max(0, now - (state.lastResponseFailureAt ?? readStartedAt)),
+            bigWalletTransportTimeout + retryDelay
+        );
+        state.lastResponseFailureAt = now;
+        if (state.responseFailureMilliseconds >=
+            bigWalletWire.WORKFLOW_POLICY.responseExpiryMilliseconds) {
+            bigWalletFail(state);
+            return;
+        }
+    }
+    bigWalletSchedule(state, retryDelay);
 }
 
 function bigWalletSchedule(state, delay) {
