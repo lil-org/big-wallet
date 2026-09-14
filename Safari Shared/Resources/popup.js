@@ -113,386 +113,39 @@ class PopupCommandLane {
     }
 }
 
-class PopupReadCoordinator {
-    constructor(commands, scope) {
-        this.commands = commands;
-        this.scope = scope;
-        this.flight = null;
-        this.scheduled = null;
-        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
-    }
-
-    resetBackoff() {
-        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
-    }
-
-    didPresent(state, refresh, unchanged) {
-        this.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
-            ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
-            : TRANSACTION_REFRESH_INTERVAL;
-        this.schedule();
-    }
-
-    followUpMode() {
-        const {commands, scope} = this;
-        if (!commands.isActive(scope) || scope.transportError ||
-            scope.phase === "submitting" || this.flight) { return null; }
-        if (scope.phase === "following" || shouldPollApprovalState(scope.nativeState)) {
-            return "poll";
-        }
-        return scope.nativeState?.state === "review" &&
-            scope.nativeState.review?.kind === "sendTransaction" ? "refresh" : null;
-    }
-
-    schedule() {
-        const mode = this.followUpMode();
-        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : this.refreshDelay;
-        const current = this.scheduled;
-        if (current && current.mode === mode && current.delay === delay &&
-            current.revision === this.scope.revision) { return; }
-        if (current) {
-            clearTimeout(current.timer);
-            this.scheduled = null;
-        }
-        if (mode === null) { return; }
-        const scheduled = {mode, delay, revision: this.scope.revision, timer: null};
-        scheduled.timer = setTimeout(() => {
-            if (this.scheduled !== scheduled) { return; }
-            this.scheduled = null;
-            if (!this.commands.isCurrent(this.scope, scheduled.revision) || this.followUpMode() !== mode) {
-                this.schedule();
-                return;
-            }
-            void this.read({refresh: mode === "refresh"});
-        }, delay);
-        this.scheduled = scheduled;
-    }
-
-    async read({refresh = false} = {}) {
-        const {commands, scope} = this;
-        if (!commands.isActive(scope) || scope.phase === "submitting") { return; }
-        const revision = scope.revision;
-        if (this.flight) {
-            const flight = this.flight;
-            if (flight.revision === revision) {
-                if (!refresh) { flight.refresh = false; }
-                return flight.result;
-            }
-            await flight.result;
-            if (!commands.isCurrent(scope, revision)) { return; }
-            return this.read({refresh});
-        }
-        const flight = {revision, refresh, result: null};
-        this.flight = flight;
-        this.schedule();
-        flight.result = (async () => {
-            try {
-                const outcome = await commands.send({
-                    scope, lane: "read", subject: "getApprovalState",
-                    isValid: () => commands.isCurrent(scope, revision) && scope.phase !== "submitting",
-                });
-                const state = commands.accept({scope, outcome, revision});
-                if (state) { commands.adopt({scope, state, refresh: flight.refresh}); }
-                return state;
-            } finally {
-                if (this.flight === flight) { this.flight = null; }
-                this.schedule();
-            }
-        })();
-        return flight.result;
-    }
-}
-
-class PopupCommandCoordinator {
+class PopupTransport {
     constructor() {
         this.lanes = {read: new PopupCommandLane(), action: new PopupCommandLane()};
-        this.activeScope = null;
     }
 
-    attach(controller) {
-        const scope = {
-            controller,
-            request: controller.request,
-            nativeState: null,
-            transportError: false,
-            phase: "loading",
-            revision: 0,
-            mutation: null,
-            speedCommand: null,
-            completion: null,
-        };
-        scope.reads = new PopupReadCoordinator(this, scope);
-        this.activeScope = scope;
-        return scope;
-    }
-
-    isActive(scope) {
-        return this.activeScope === scope && scope.phase !== "disposed" &&
-            scope.phase !== "reconciling" &&
-            sameRequest(scope.request, queueTab.items[queueTab.index]);
-    }
-
-    isCurrent(scope, revision = scope.revision) {
-        return this.isActive(scope) && scope.revision === revision;
-    }
-
-    allows(scope, action) {
-        return this.isActive(scope) && !scope.transportError &&
-            hasApprovalAction(scope.nativeState, action);
-    }
-
-    schedule({lane, owner, subject, id, payload, requestToken, reviewToken, approvalRequest, isValid}) {
+    enqueue({lane, owner, isValid, command}) {
         return this.lanes[lane].enqueue({
             owner,
             isValid,
-            dispatch: () => settleNativeMessage(Promise.resolve(nativeMessage(
-                subject, id, payload, requestToken,
-                typeof reviewToken === "function" ? reviewToken() : reviewToken,
-                approvalRequest
-            )), subject === "approveRequest"),
+            dispatch: () => {
+                const message = typeof command === "function" ? command() : command;
+                return settleNativeMessage(Promise.resolve(nativeMessage(
+                    message.subject, message.id, message.payload, message.requestToken,
+                    message.reviewToken, message.approvalRequest
+                )), message.subject === "approveRequest");
+            },
         });
     }
 
-    async send({scope, subject, payload, lane = "action", reviewToken, isValid, speedCommand}) {
-        if (!this.isActive(scope)) { return {status: "cancelled"}; }
-        const queued = this.schedule({
-            lane, owner: scope, subject, payload, reviewToken,
-            id: scope.request.id,
-            requestToken: scope.request.requestToken,
-            approvalRequest: scope.request,
-            isValid: () => this.isActive(scope) && (!isValid || isValid()),
-        });
-        if (speedCommand) { speedCommand.cancelQueued = queued.cancelQueued; }
-        return queued.result;
+    cancelQueued(owner) {
+        this.lanes.read.cancelOwner(owner);
+        this.lanes.action.cancelOwner(owner);
     }
 
     readQueue() {
-        return this.schedule({lane: "read", subject: "getPendingRequests", id: genId()}).result;
-    }
-
-    invalidate(scope) {
-        scope.revision += 1;
-        this.reconcileScheduling(scope);
-        this.lanes.read.cancelOwner(scope);
-        this.lanes.action.cancelOwner(scope);
-        this.discardSpeed({scope});
-    }
-
-    dispose({scope}) {
-        if (scope.phase === "disposed") { return; }
-        scope.phase = "disposed";
-        this.invalidate(scope);
-        if (this.activeScope === scope) { this.activeScope = null; }
-    }
-
-    reconcile({scope}) {
-        if (scope.completion) { return scope.completion; }
-        if (!this.isActive(scope)) { return Promise.resolve(); }
-        scope.phase = "reconciling";
-        this.invalidate(scope);
-        scope.controller.closeAlert(false);
-        scope.completion = closeIfNothingIsLeft();
-        return scope.completion;
-    }
-
-    reconcileScheduling(scope) {
-        scope.reads.schedule();
-    }
-
-    accept({scope, outcome, revision, allowsIgnored = false}) {
-        if (!this.isCurrent(scope, revision) || outcome.status === "cancelled") { return null; }
-        const state = outcome.status === "response"
-            ? normalizeApprovalImages(outcome.response) : null;
-        if (allowsIgnored && isRecord(state) && state.status === "ignored" &&
-            Object.keys(state).length === 1) { return null; }
-        if (!isRenderableApprovalState(state, scope.request)) {
-            this.fail(scope);
-            return null;
-        }
-        if (state.state === "missing") {
-            void this.reconcile({scope});
-            return null;
-        }
-        return state;
-    }
-
-    fail(scope) {
-        if (!this.isActive(scope)) { return; }
-        scope.transportError = true;
-        scope.phase = "displaying";
-        scope.reads.resetBackoff();
-        this.invalidate(scope);
-        scope.controller.renderTransportFailure();
-    }
-
-    adopt({scope, state, refresh = false}) {
-        if (!this.isActive(scope) || !state?.state) { return; }
-        const hadState = scope.nativeState !== null;
-        scope.nativeState = state;
-        scope.transportError = false;
-        scope.phase = shouldPollApprovalState(state) ? "following" : "displaying";
-        const unchanged = scope.controller.presentState(state, refresh && hadState);
-        scope.reads.didPresent(state, refresh, unchanged);
-    }
-
-    read({scope, refresh = false}) {
-        return scope.reads.read({refresh});
-    }
-
-    async retry({scope}) {
-        if (!this.isActive(scope) || scope.phase === "submitting" ||
-            !scope.transportError && !this.allows(scope, "retry")) { return; }
-        const revision = ++scope.revision;
-        scope.phase = "submitting";
-        this.reconcileScheduling(scope);
-        scope.controller.showSubmitting();
-        const outcome = await this.send({
-            scope, subject: "retryApproval",
-            isValid: () => this.isCurrent(scope, revision) &&
-                (scope.transportError || this.allows(scope, "retry")),
-        });
-        const state = this.accept({scope, outcome, revision});
-        if (state) { this.adopt({scope, state}); }
-    }
-
-    approve({scope, payload}) {
-        return this.decide({scope, subject: "approveRequest", payload});
-    }
-
-    reject({scope}) {
-        return this.decide({scope, subject: "rejectRequest"});
-    }
-
-    async decide({scope, subject, payload}) {
-        const canSubmit = () => this.isActive(scope) && !scope.transportError &&
-            canSubmitDecision(subject, scope.nativeState);
-        if (scope.phase === "submitting" || !canSubmit()) { return; }
-        if (subject === "approveRequest") {
-            scope.controller.finishSliderDragForDecision(scope.request);
-            if (!await this.waitForSpeed({scope})) { return; }
-        } else {
-            this.discardSpeed({scope});
-        }
-        if (!canSubmit() || scope.phase === "submitting") { return; }
-        const reviewToken = subject === "approveRequest" ? scope.nativeState.review?.reviewToken : undefined;
-        const revision = ++scope.revision;
-        scope.phase = "submitting";
-        this.reconcileScheduling(scope);
-        scope.controller.showSubmitting();
-        let decisionPayload = payload;
-        if (subject === "approveRequest") {
-            decisionPayload = {...(isRecord(payload) ? payload : {})};
-            delete decisionPayload.revisions;
-            delete decisionPayload.password;
-        }
-        const outcome = await this.send({
-            scope, subject, payload: decisionPayload, reviewToken,
-            isValid: () => canSubmit() && (subject !== "approveRequest" ||
-                scope.nativeState?.review?.reviewToken === reviewToken),
-        });
-        if (!this.isCurrent(scope, revision)) { return; }
-        if (outcome.status === "cancelled") {
-            scope.phase = "displaying";
-            scope.controller.renderState(scope.nativeState);
-        } else if (outcome.status !== "response" || !isRecord(outcome.response)) {
-            this.fail(scope);
-            return;
-        } else {
-            scope.phase = "following";
-        }
-        this.reconcileScheduling(scope);
-    }
-
-    edit({scope, payload}) {
-        return this.mutate({scope, subject: "applyTransactionEdits", payload});
-    }
-
-    async resolveAlert({scope, payload, reviewToken}) {
-        const state = await this.mutate({scope, subject: "resolveApprovalAlert", payload, reviewToken});
-        if (scope.nativeState?.review?.reviewToken === reviewToken) {
-            this.adopt({scope, state});
-        }
-    }
-
-    async mutate({scope, subject, payload, reviewToken, speedCommand}) {
-        const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
-        if (scope.phase === "submitting" || !this.allows(scope, action)) { return null; }
-        const isSpeed = subject === "setTransactionSpeed";
-        if (!isSpeed && scope.mutation) { return null; }
-        const mutation = {};
-        if (!isSpeed) { scope.mutation = mutation; }
-        try {
-            if (!isSpeed && !await this.waitForSpeed({scope})) { return null; }
-            if (scope.phase === "submitting" || !this.allows(scope, action) ||
-                !isSpeed && scope.mutation !== mutation) { return null; }
-            const revision = ++scope.revision;
-            scope.reads.resetBackoff();
-            const outcome = await this.send({
-                scope, subject, payload, speedCommand,
-                reviewToken: subject === "applyTransactionEdits"
-                    ? () => scope.nativeState?.review?.reviewToken : reviewToken,
-                isValid: () => this.isCurrent(scope, revision) && this.allows(scope, action) &&
-                    (typeof reviewToken === "undefined" || scope.nativeState?.review?.reviewToken === reviewToken),
-            });
-            return this.accept({scope, outcome, revision, allowsIgnored: subject !== "applyTransactionEdits"});
-        } finally {
-            if (scope.mutation === mutation) { scope.mutation = null; }
-        }
-    }
-
-    setSpeed({scope, payload, reviewToken}) {
-        if (!this.isActive(scope) || scope.speedCommand ||
-            !isRequestToken(reviewToken)) { return null; }
-        let resolveCompletion;
-        const command = {
-            cancelled: false,
-            result: new Promise(resolve => { resolveCompletion = resolve; }),
-            finish: succeeded => resolveCompletion(succeeded),
-        };
-        scope.speedCommand = command;
-        void (async () => {
-            let succeeded = false;
-            try {
-                let state = null;
-                if (scope.nativeState?.review?.reviewToken === reviewToken) {
-                    state = await this.mutate({scope, subject: "setTransactionSpeed", payload, reviewToken, speedCommand: command});
-                }
-                if (!this.isActive(scope) || command.cancelled) { return; }
-                if (state) {
-                    this.adopt({scope, state});
-                    succeeded = true;
-                } else {
-                    await this.read({scope});
-                }
-            } finally {
-                if (scope.speedCommand === command) { scope.speedCommand = null; }
-                command.finish(succeeded);
-            }
-        })();
-        return command.result;
-    }
-
-    async waitForSpeed({scope}) {
-        if (scope.controller.transaction.sliderDragging) { return false; }
-        const command = scope.speedCommand;
-        if (!command) { return this.isActive(scope); }
-        const succeeded = await command.result;
-        return succeeded === true && !command.cancelled && this.isActive(scope);
-    }
-
-    discardSpeed({scope}) {
-        const command = scope.speedCommand;
-        if (command) {
-            command.cancelled = true;
-            command.cancelQueued?.();
-            command.finish(false);
-            scope.speedCommand = null;
-        }
-        scope.controller.discardSliderGesture();
+        return this.enqueue({
+            lane: "read",
+            command: {subject: "getPendingRequests", id: genId()},
+        }).result;
     }
 }
 
-const popupCommands = new PopupCommandCoordinator();
+const popupTransport = new PopupTransport();
 
 class PopupRequestController {
     constructor(request) {
@@ -513,15 +166,339 @@ class PopupRequestController {
             lastEditorRequestKey: null,
             editorDirty: false,
         };
-        this.scope = popupCommands.attach(this);
+        this.nativeState = null;
+        this.transportError = false;
+        this.phase = "loading";
+        this.revision = 0;
+        this.mutation = null;
+        this.speedCommand = null;
+        this.completion = null;
+        this.readFlight = null;
+        this.scheduledRead = null;
+        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
     }
 
     get isActive() {
-        return popupCommands.isActive(this.scope);
+        return currentRequestController === this && this.phase !== "disposed" &&
+            this.phase !== "reconciling" &&
+            sameRequest(this.request, queueTab.items[queueTab.index]);
     }
 
     get state() {
-        return this.scope.nativeState;
+        return this.nativeState;
+    }
+
+    resetReadBackoff() {
+        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+    }
+
+    didPresentRead(state, refresh, unchanged) {
+        this.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
+            ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
+            : TRANSACTION_REFRESH_INTERVAL;
+        this.scheduleRead();
+    }
+
+    followUpMode() {
+        if (!this.isActive || this.transportError ||
+            this.phase === "submitting" || this.readFlight) { return null; }
+        if (this.phase === "following" || shouldPollApprovalState(this.nativeState)) {
+            return "poll";
+        }
+        return this.nativeState?.state === "review" &&
+            this.nativeState.review?.kind === "sendTransaction" ? "refresh" : null;
+    }
+
+    scheduleRead() {
+        const mode = this.followUpMode();
+        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : this.refreshDelay;
+        const current = this.scheduledRead;
+        if (current && current.mode === mode && current.delay === delay &&
+            current.revision === this.revision) { return; }
+        if (current) {
+            clearTimeout(current.timer);
+            this.scheduledRead = null;
+        }
+        if (mode === null) { return; }
+        const scheduled = {mode, delay, revision: this.revision, timer: null};
+        scheduled.timer = setTimeout(() => {
+            if (this.scheduledRead !== scheduled) { return; }
+            this.scheduledRead = null;
+            if (!this.isCurrent(scheduled.revision) || this.followUpMode() !== mode) {
+                this.scheduleRead();
+                return;
+            }
+            void this.readState({refresh: mode === "refresh"});
+        }, delay);
+        this.scheduledRead = scheduled;
+    }
+
+    async readState({refresh = false} = {}) {
+        if (!this.isActive || this.phase === "submitting") { return; }
+        const revision = this.revision;
+        if (this.readFlight) {
+            const flight = this.readFlight;
+            if (flight.revision === revision) {
+                if (!refresh) { flight.refresh = false; }
+                return flight.result;
+            }
+            await flight.result;
+            if (!this.isCurrent(revision)) { return; }
+            return this.readState({refresh});
+        }
+        const flight = {revision, refresh, result: null};
+        this.readFlight = flight;
+        this.scheduleRead();
+        flight.result = (async () => {
+            try {
+                const outcome = await this.sendCommand({
+                    lane: "read", subject: "getApprovalState",
+                    isValid: () => this.isCurrent(revision) && this.phase !== "submitting",
+                });
+                const state = this.acceptOutcome({outcome, revision});
+                if (state) { this.adoptState(state, {refresh: flight.refresh}); }
+                return state;
+            } finally {
+                if (this.readFlight === flight) { this.readFlight = null; }
+                this.scheduleRead();
+            }
+        })();
+        return flight.result;
+    }
+
+    isCurrent(revision = this.revision) {
+        return this.isActive && this.revision === revision;
+    }
+
+    allows(action) {
+        return this.isActive && !this.transportError &&
+            hasApprovalAction(this.nativeState, action);
+    }
+
+    async sendCommand({subject, payload, lane = "action", reviewToken, isValid, speedCommand}) {
+        if (!this.isActive) { return {status: "cancelled"}; }
+        const request = this.request;
+        const {id, requestToken} = request;
+        const queued = popupTransport.enqueue({
+            lane,
+            owner: this,
+            isValid: () => this.isActive && (!isValid || isValid()),
+            command: () => ({
+                subject,
+                payload,
+                reviewToken: typeof reviewToken === "function" ? reviewToken() : reviewToken,
+                id,
+                requestToken,
+                approvalRequest: request,
+            }),
+        });
+        if (speedCommand) { speedCommand.cancelQueued = queued.cancelQueued; }
+        return queued.result;
+    }
+
+    invalidate() {
+        this.revision += 1;
+        this.scheduleRead();
+        popupTransport.cancelQueued(this);
+        this.discardSpeed();
+    }
+
+    reconcile() {
+        if (this.completion) { return this.completion; }
+        if (!this.isActive) { return Promise.resolve(); }
+        this.phase = "reconciling";
+        this.invalidate();
+        this.closeAlert(false);
+        this.completion = closeIfNothingIsLeft();
+        return this.completion;
+    }
+
+    acceptOutcome({outcome, revision, allowsIgnored = false}) {
+        if (!this.isCurrent(revision) || outcome.status === "cancelled") { return null; }
+        const state = outcome.status === "response"
+            ? normalizeApprovalImages(outcome.response) : null;
+        if (allowsIgnored && isRecord(state) && state.status === "ignored" &&
+            Object.keys(state).length === 1) { return null; }
+        if (!isRenderableApprovalState(state, this.request)) {
+            this.fail();
+            return null;
+        }
+        if (state.state === "missing") {
+            void this.reconcile();
+            return null;
+        }
+        return state;
+    }
+
+    fail() {
+        if (!this.isActive) { return; }
+        this.transportError = true;
+        this.phase = "displaying";
+        this.resetReadBackoff();
+        this.invalidate();
+        this.renderTransportFailure();
+    }
+
+    adoptState(state, {refresh = false} = {}) {
+        if (!this.isActive || !state?.state) { return; }
+        const hadState = this.nativeState !== null;
+        this.nativeState = state;
+        this.transportError = false;
+        this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
+        const unchanged = this.presentState(state, refresh && hadState);
+        this.didPresentRead(state, refresh, unchanged);
+    }
+
+    async retry() {
+        if (!this.isActive || this.phase === "submitting" ||
+            !this.transportError && !this.allows("retry")) { return; }
+        const revision = ++this.revision;
+        this.phase = "submitting";
+        this.scheduleRead();
+        this.showSubmitting();
+        const outcome = await this.sendCommand({
+            subject: "retryApproval",
+            isValid: () => this.isCurrent(revision) &&
+                (this.transportError || this.allows("retry")),
+        });
+        const state = this.acceptOutcome({outcome, revision});
+        if (state) { this.adoptState(state); }
+    }
+
+    approve(payload) {
+        return this.decide({subject: "approveRequest", payload});
+    }
+
+    reject() {
+        return this.decide({subject: "rejectRequest"});
+    }
+
+    async decide({subject, payload}) {
+        const canSubmit = () => this.isActive && !this.transportError &&
+            canSubmitDecision(subject, this.nativeState);
+        if (this.phase === "submitting" || !canSubmit()) { return; }
+        if (subject === "approveRequest") {
+            this.finishSliderDragForDecision(this.request);
+            if (!await this.waitForSpeed()) { return; }
+        } else {
+            this.discardSpeed();
+        }
+        if (!canSubmit() || this.phase === "submitting") { return; }
+        const reviewToken = subject === "approveRequest" ? this.nativeState.review?.reviewToken : undefined;
+        const revision = ++this.revision;
+        this.phase = "submitting";
+        this.scheduleRead();
+        this.showSubmitting();
+        let decisionPayload = payload;
+        if (subject === "approveRequest") {
+            decisionPayload = {...(isRecord(payload) ? payload : {})};
+            delete decisionPayload.revisions;
+            delete decisionPayload.password;
+        }
+        const outcome = await this.sendCommand({
+            subject, payload: decisionPayload, reviewToken,
+            isValid: () => canSubmit() && (subject !== "approveRequest" ||
+                this.nativeState?.review?.reviewToken === reviewToken),
+        });
+        if (!this.isCurrent(revision)) { return; }
+        if (outcome.status === "cancelled") {
+            this.phase = "displaying";
+            this.renderState(this.nativeState);
+        } else if (outcome.status !== "response" || !isRecord(outcome.response)) {
+            this.fail();
+            return;
+        } else {
+            this.phase = "following";
+        }
+        this.scheduleRead();
+    }
+
+    submitEdits(payload) {
+        return this.mutate({subject: "applyTransactionEdits", payload});
+    }
+
+    async resolveAlert(payload, reviewToken) {
+        const state = await this.mutate({subject: "resolveApprovalAlert", payload, reviewToken});
+        if (this.nativeState?.review?.reviewToken === reviewToken) {
+            this.adoptState(state);
+        }
+    }
+
+    async mutate({subject, payload, reviewToken, speedCommand}) {
+        const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
+        if (this.phase === "submitting" || !this.allows(action)) { return null; }
+        const isSpeed = subject === "setTransactionSpeed";
+        if (!isSpeed && this.mutation) { return null; }
+        const mutation = {};
+        if (!isSpeed) { this.mutation = mutation; }
+        try {
+            if (!isSpeed && !await this.waitForSpeed()) { return null; }
+            if (this.phase === "submitting" || !this.allows(action) ||
+                !isSpeed && this.mutation !== mutation) { return null; }
+            const revision = ++this.revision;
+            this.resetReadBackoff();
+            const outcome = await this.sendCommand({
+                subject, payload, speedCommand,
+                reviewToken: subject === "applyTransactionEdits"
+                    ? () => this.nativeState?.review?.reviewToken : reviewToken,
+                isValid: () => this.isCurrent(revision) && this.allows(action) &&
+                    (typeof reviewToken === "undefined" || this.nativeState?.review?.reviewToken === reviewToken),
+            });
+            return this.acceptOutcome({outcome, revision, allowsIgnored: subject !== "applyTransactionEdits"});
+        } finally {
+            if (this.mutation === mutation) { this.mutation = null; }
+        }
+    }
+
+    setSpeed(payload, reviewToken) {
+        if (!this.isActive || this.speedCommand ||
+            !isRequestToken(reviewToken)) { return null; }
+        let resolveCompletion;
+        const command = {
+            cancelled: false,
+            result: new Promise(resolve => { resolveCompletion = resolve; }),
+            finish: succeeded => resolveCompletion(succeeded),
+        };
+        this.speedCommand = command;
+        void (async () => {
+            let succeeded = false;
+            try {
+                let state = null;
+                if (this.nativeState?.review?.reviewToken === reviewToken) {
+                    state = await this.mutate({subject: "setTransactionSpeed", payload, reviewToken, speedCommand: command});
+                }
+                if (!this.isActive || command.cancelled) { return; }
+                if (state) {
+                    this.adoptState(state);
+                    succeeded = true;
+                } else {
+                    await this.readState();
+                }
+            } finally {
+                if (this.speedCommand === command) { this.speedCommand = null; }
+                command.finish(succeeded);
+            }
+        })();
+        return command.result;
+    }
+
+    async waitForSpeed() {
+        if (this.transaction.sliderDragging) { return false; }
+        const command = this.speedCommand;
+        if (!command) { return this.isActive; }
+        const succeeded = await command.result;
+        return succeeded === true && !command.cancelled && this.isActive;
+    }
+
+    discardSpeed() {
+        const command = this.speedCommand;
+        if (command) {
+            command.cancelled = true;
+            command.cancelQueued?.();
+            command.finish(false);
+            this.speedCommand = null;
+        }
+        this.discardSliderGesture();
     }
 
     requestFor(value) {
@@ -545,11 +522,14 @@ class PopupRequestController {
             hide("section-" + section);
         }
         document.getElementById("tx-editor").open = false;
-        return popupCommands.read({scope: this.scope});
+        return this.readState();
     }
 
     dispose() {
-        popupCommands.dispose({scope: this.scope});
+        if (this.phase !== "disposed") {
+            this.phase = "disposed";
+            this.invalidate();
+        }
         this.closeAlert(false);
     }
 
@@ -585,7 +565,7 @@ class PopupRequestController {
         setHidden("working-overlay", !isBusy);
         if (!state.review) {
             this.closeAlert(false);
-            popupCommands.discardSpeed({scope: this.scope});
+            this.discardSpeed();
             document.getElementById("tx-slider").disabled = true;
             document.getElementById("editor-apply").disabled = true;
             document.getElementById("editor-suggested").disabled = true;
@@ -713,7 +693,7 @@ class PopupRequestController {
             check.setAttribute("aria-hidden", "true");
             row.appendChild(check);
             row.addEventListener("click", () => {
-                if (!this.isActive || this.scope.transportError) { return; }
+                if (!this.isActive || this.transportError) { return; }
                 select(item);
                 this.renderState(this.state);
                 const replacement = document.getElementById(containerId).children[index];
@@ -877,19 +857,19 @@ class PopupRequestController {
     }
 
     async approveCurrent() {
-        if (!this.isActive || this.scope.phase === "submitting") { return; }
-        if (this.scope.transportError) {
-            await popupCommands.retry({scope: this.scope});
+        if (!this.isActive || this.phase === "submitting") { return; }
+        if (this.transportError) {
+            await this.retry();
             return;
         }
         if (!this.state) { return; }
         if (hasApprovalAction(this.state, "retry")) {
-            await popupCommands.retry({scope: this.scope});
+            await this.retry();
             return;
         }
         if (shouldRefreshAccountSelection(this.state)) {
             document.getElementById("button-approve").disabled = true;
-            await popupCommands.read({scope: this.scope});
+            await this.readState();
             return;
         }
         const payload = {};
@@ -903,11 +883,11 @@ class PopupRequestController {
         } else if (this.state.review?.kind === "signMessage" && this.presentation.cluster) {
             payload.cluster = this.presentation.cluster;
         }
-        await popupCommands.approve({scope: this.scope, payload});
+        await this.approve(payload);
     }
 
     async rejectCurrent() {
-        await popupCommands.reject({scope: this.scope});
+        await this.reject();
     }
 
     beginSliderInteraction(
@@ -915,8 +895,8 @@ class PopupRequestController {
         reviewToken = this.state?.review?.reviewToken
     ) {
         const capturedRequest = this.requestFor(request);
-        if (!popupCommands.allows(this.scope, "setTransactionSpeed") ||
-            this.scope.phase === "submitting" || this.scope.speedCommand ||
+        if (!this.allows("setTransactionSpeed") ||
+            this.phase === "submitting" || this.speedCommand ||
             this.transaction.sliderDragging ||
             !capturedRequest || !this.isCurrentRequest(capturedRequest) ||
             !isRequestToken(reviewToken)) {
@@ -942,7 +922,7 @@ class PopupRequestController {
         this.transaction.sliderReviewToken = null;
         if (!this.isCurrentRequest(capturedRequest)) { return null; }
         document.getElementById("tx-slider").disabled = true;
-        return popupCommands.setSpeed({scope: this.scope, payload: {interaction, value}, reviewToken});
+        return this.setSpeed({interaction, value}, reviewToken);
     }
 
     finishSliderDragForDecision(request) {
@@ -966,13 +946,13 @@ class PopupRequestController {
         } else {
             payload.gasPriceGwei = document.getElementById("edit-gas-price").value;
         }
-        this.handleTransactionEditResult(await popupCommands.edit({scope: this.scope, payload}));
+        this.handleTransactionEditResult(await this.submitEdits(payload));
     }
 
     async applySuggested() {
         if (!this.isActive) { return; }
         if (!hasApprovalAction(this.state, "editTransaction")) { return; }
-        this.handleTransactionEditResult(await popupCommands.edit({scope: this.scope, payload: {mode: "suggested"}}));
+        this.handleTransactionEditResult(await this.submitEdits({mode: "suggested"}));
     }
 
     handleTransactionEditResult(state) {
@@ -982,7 +962,7 @@ class PopupRequestController {
         } else {
             this.closeEditorAndAdopt(state);
         }
-        popupCommands.reconcileScheduling(this.scope);
+        this.scheduleRead();
     }
 
     closeEditorAndAdopt(state) {
@@ -991,7 +971,7 @@ class PopupRequestController {
         this.transaction.editorDirty = false;
         hide("edits-error");
         document.getElementById("tx-editor").open = false;
-        popupCommands.adopt({scope: this.scope, state});
+        this.adoptState(state);
     }
 
     renderAlertIfNeeded(state) {
@@ -1040,9 +1020,7 @@ class PopupRequestController {
                     )) {
                     return;
                 }
-                await popupCommands.resolveAlert({
-                    scope: this.scope, payload: {action: action.action}, reviewToken,
-                });
+                await this.resolveAlert({action: action.action}, reviewToken);
             });
             buttons.appendChild(button);
         }
@@ -1055,7 +1033,7 @@ class PopupRequestController {
     presentState(state, refresh) {
         const unchanged = JSON.stringify(state) === this.presentation.lastStateJSON;
         if (!refresh || !state.review ||
-            !this.transaction.sliderDragging && !this.scope.speedCommand) {
+            !this.transaction.sliderDragging && !this.speedCommand) {
             if (!refresh || !unchanged) {
                 this.renderState(state);
             } else if (state.review?.slider?.visible) {
@@ -1287,7 +1265,7 @@ function requestPendingQueueRefresh() {
 
 function shouldDeferQueueRefreshForCurrentRequest() {
     const currentRequest = queueTab.items[queueTab.index];
-    if (!currentRequest || currentRequestController?.scope.phase === "reconciling") {
+    if (!currentRequest || currentRequestController?.phase === "reconciling") {
         return false;
     }
     return !document.getElementById("screen-request").classList.contains("hidden") ||
@@ -1491,7 +1469,7 @@ function setPendingRequestBadge(count) {
 // popup cannot open itself — exactly as it was.
 async function fetchPendingResponse() {
     while (true) {
-        const outcome = await popupCommands.readQueue();
+        const outcome = await popupTransport.readQueue();
         if (outcome.status !== "response") { return null; }
         const response = parsePendingResponse(outcome.response);
         if (!response) { return null; }

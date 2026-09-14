@@ -18,6 +18,7 @@ export const stableFacadeVersion = 2;
 const applyFunction = Reflect.apply;
 const emitEvent = EventEmitter.prototype.emit;
 const forEachSet = Set.prototype.forEach;
+const setTimeoutNormally = setTimeout;
 
 const ethereumEvents = [
     "accountsChanged",
@@ -126,6 +127,9 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     let accountEntry = null;
     let disposeAccountChanges = null;
     let deliveredConnect = false;
+    let observedReadyFlush = false;
+    let connectReplayToken = null;
+    let disposeReadiness = null;
     let registration = null;
     const subscriptions = new Set;
     const ethereum = new EventEmitter;
@@ -193,21 +197,19 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
                 }
                 const result = original.apply(ethereum, arguments_);
                 if (arguments_[0] === "connect" && listenerMethods.has(name)) {
-                    replayConnect();
+                    scheduleConnectReplay();
                 }
                 return result;
             },
         });
     }
 
-    function replayConnect() {
-        const current = ethereumTarget;
-        if (!current || deliveredConnect ||
-            ethereum.listenerCount("connect") === 0 ||
-            typeof current.requestConnectReplay !== "function") {
+    function replayConnect(current) {
+        if (!current || ethereumTarget !== current || deliveredConnect ||
+            typeof current.withReadyState !== "function") {
             return false;
         }
-        return current.requestConnectReplay(payload => {
+        return current.withReadyState(payload => {
             if (deliveredConnect || ethereumTarget !== current ||
                 ethereum.listenerCount("connect") === 0) {
                 return false;
@@ -218,7 +220,31 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         }) !== false;
     }
 
+    function scheduleConnectReplay({reserveTimer = false} = {}) {
+        const current = ethereumTarget;
+        if (!current || !reserveTimer && (deliveredConnect ||
+            ethereum.listenerCount("connect") === 0) ||
+            ethereumTarget !== current ||
+            connectReplayToken?.target === current) {
+            return;
+        }
+        const token = {target: current};
+        connectReplayToken = token;
+        try {
+            applyFunction(setTimeoutNormally, undefined, [() => {
+                if (connectReplayToken !== token) { return; }
+                connectReplayToken = null;
+                replayConnect(current);
+            }, 1]);
+        } catch {
+            if (connectReplayToken === token) { connectReplayToken = null; }
+        }
+    }
+
     function detachEthereum() {
+        disposeReadiness?.();
+        disposeReadiness = null;
+        connectReplayToken = null;
         for (const {provider, eventName, listener} of ethereumForwarding) {
             provider.removeListener?.(eventName, listener);
         }
@@ -228,12 +254,25 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     function attachEthereum(current) {
         detachEthereum();
         if (!current) { return; }
+        disposeReadiness = current.subscribeReadiness(({flushed}) => {
+            if (ethereumTarget !== current) { return; }
+            if (flushed === true && !observedReadyFlush) {
+                observedReadyFlush = true;
+                replayConnect(current);
+            }
+            if (ethereumTarget === current) {
+                scheduleConnectReplay({reserveTimer: true});
+            }
+        });
         for (const eventName of ethereumEvents) {
             const listener = (...arguments_) => {
                 if (ethereumTarget === current) {
                     if (eventName === "disconnect") {
                         deliveredConnect = false;
-                        replayConnect();
+                        if (current.snapshot?.()?.phase !== "retired") {
+                            observedReadyFlush = false;
+                        }
+                        scheduleConnectReplay();
                     }
                     applyFunction(
                         emitEvent,
@@ -438,7 +477,8 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     function prepareTargets(values = {}) {
         const nextEthereum = target(values.ethereumProvider, "Ethereum");
         const nextSolana = target(values.solanaProvider, "Solana");
-        if (typeof nextEthereum.requestConnectReplay !== "function") {
+        if (typeof nextEthereum.subscribeReadiness !== "function" ||
+            typeof nextEthereum.withReadyState !== "function") {
             throw new TypeError("Ethereum target is invalid");
         }
         if (typeof nextSolana.provider.accountState !== "function" ||
@@ -461,7 +501,7 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
                 attachSolana(nextSolana);
                 refreshAccounts();
                 bindAccountChanges();
-                replayConnect();
+                scheduleConnectReplay();
                 return previous;
             },
         });

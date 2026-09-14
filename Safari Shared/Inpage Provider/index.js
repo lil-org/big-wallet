@@ -13,7 +13,8 @@ import {
 } from "./intrinsics";
 
 import BigWalletEthereum, {
-    requestConnectReplay as ethereumRequestConnectReplay,
+    subscribeReadiness as ethereumSubscribeReadiness,
+    withReadyState as ethereumWithReadyState,
 } from "./ethereum";
 import BigWalletSolana from "./solana";
 import Base58 from "./base58";
@@ -913,7 +914,11 @@ solanaProvider = new BigWalletSolana(
 const facadeTransaction = stableFacades.prepareTargets({
     ethereumProvider: Object.freeze({
         provider: ethereumProvider,
-        requestConnectReplay: listener => ethereumRequestConnectReplay(
+        subscribeReadiness: listener => ethereumSubscribeReadiness(
+            ethereumProvider,
+            listener
+        ),
+        withReadyState: listener => ethereumWithReadyState(
             ethereumProvider,
             listener
         ),

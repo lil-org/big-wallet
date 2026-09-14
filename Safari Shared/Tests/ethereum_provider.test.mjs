@@ -37,7 +37,7 @@ const operationRuntimeSource = bundle("operation_runtime.js");
 const rpcSource = bundle("rpc.js");
 const rpcResponseSource = bundle("rpc_response.js");
 const ethereumSource = bundle("ethereum-harness.js", "cjs", `
-    export {default, requestConnectReplay} from "./ethereum";
+    export {default, subscribeReadiness, withReadyState} from "./ethereum";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const solanaSource = bundle("solana-harness.js", "cjs", `
@@ -88,6 +88,12 @@ function moduleHarness(source, extraGlobals = {}) {
     return {
         context,
         exports: context.module.exports,
+        runNextTimer() {
+            const callback = timers.shift();
+            if (!callback) { return false; }
+            callback();
+            return true;
+        },
         runTimers() {
             while (timers.length > 0) { timers.shift()(); }
         },
@@ -133,7 +139,11 @@ function ethereumHarness(initialState = null) {
     record.prepareTargets({
         ethereumProvider: {
             provider: engine,
-            requestConnectReplay: listener => module.exports.requestConnectReplay(
+            subscribeReadiness: listener => module.exports.subscribeReadiness(
+                engine,
+                listener
+            ),
+            withReadyState: listener => module.exports.withReadyState(
                 engine,
                 listener
             ),
@@ -189,7 +199,11 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
         uuid: "00000000-0000-4000-8000-000000000002",
     });
     record.prepareTargets({
-        ethereumProvider: {provider: {}, requestConnectReplay: () => false},
+        ethereumProvider: {
+            provider: {},
+            subscribeReadiness: () => () => {},
+            withReadyState: () => false,
+        },
         solanaProvider: {provider},
     }).commit();
     return {
@@ -1055,7 +1069,6 @@ test("Ethereum emits authoritative deltas from copied state", () => {
         accountRevocationTombstone: false,
         address: firstAddress,
         chainId: "0x1",
-        didEmitConnect: true,
     });
     const events = [];
     harness.provider.on("accountsChanged", accounts => {
@@ -1099,7 +1112,6 @@ test("Ethereum compares reentrant first-drain state to the copied baseline", asy
             accountRevocationTombstone: false,
             address: firstAddress,
             chainId: "0x1",
-            didEmitConnect: true,
         });
         const events = [];
         harness.provider.on("accountsChanged", accounts => {
@@ -1144,7 +1156,6 @@ test("Ethereum retains its copied baseline through malformed first-drain state",
         accountRevocationTombstone: false,
         address: firstAddress,
         chainId: "0x1",
-        didEmitConnect: true,
     });
     const events = [];
     harness.provider.on("accountsChanged", accounts => {
@@ -1868,6 +1879,41 @@ test("suppressed initial configuration neither drains nor emits connect", async 
     assert.equal(connects, 1);
 });
 
+test("Ethereum first connect follows current configuration events synchronously", () => {
+    for (const retireDuring of [null, "accountsChanged", "chainChanged", "networkChanged"]) {
+        const harness = ethereumHarness();
+        const events = [];
+        for (const name of ["accountsChanged", "chainChanged", "networkChanged", "connect"]) {
+            harness.provider.on(name, value => {
+                events.push(name);
+                if (name === "connect") {
+                    assert.equal(Object.isFrozen(value), true);
+                    assert.deepEqual(normalized(value), {chainId: "0x2"});
+                }
+                if (name === retireDuring) { harness.retire(); }
+            });
+        }
+        harness.applyEnvelope({
+            kind: "configuration",
+            switchAccount: true,
+            configuration: {
+                address: "0x0000000000000000000000000000000000000001",
+                chainId: "0x2",
+            },
+        });
+        if (retireDuring === null) {
+            assert.deepEqual(events, [
+                "accountsChanged", "chainChanged", "networkChanged", "connect",
+            ]);
+        } else {
+            assert.equal(events.includes("connect"), false);
+        }
+        harness.runTimers();
+        assert.equal(events.filter(name => name === "connect").length,
+            retireDuring === null ? 1 : 0);
+    }
+});
+
 test("Ethereum replays one authoritative connect to late public listeners", () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0x2");
@@ -1886,6 +1932,29 @@ test("Ethereum replays one authoritative connect to late public listeners", () =
     });
     harness.runTimers();
     assert.deepEqual(connects, [["late", {chainId: "0x2"}]]);
+});
+
+test("Ethereum configuration reserves connect replay before later page timers", () => {
+    for (const removeListener of [false, true]) {
+        const harness = ethereumHarness();
+        harness.runTimers();
+        const events = [];
+        const listener = value => {
+            assert.deepEqual(normalized(value), {chainId: "0x2"});
+            events.push("connect");
+        };
+        applyEthereumConfiguration(harness, "", "0x2");
+        harness.context.setTimeout(() => {
+            events.push("page timer");
+            if (removeListener) {
+                harness.provider.removeListener("connect", listener);
+            }
+        }, 1);
+        harness.provider.on("connect", listener);
+        assert.deepEqual(events, []);
+        harness.runTimers();
+        assert.deepEqual(events, ["connect", "page timer"]);
+    }
 });
 
 test("public connect emits do not consume the authoritative replay", () => {
@@ -1972,6 +2041,25 @@ test("Ethereum connect replay keeps EventEmitter snapshot ordering", () => {
     assert.equal(harness.provider.listenerCount("connect"), 1);
 });
 
+test("Ethereum connect replay retains its scheduler and contains listener inspection failures", () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness, "", "0x6");
+    const connects = [];
+    vm.runInContext("setTimeout = () => { throw new Error('replaced timer'); }", harness.context);
+    harness.provider.on("connect", value => connects.push(normalized(value)));
+    const events = Object.getOwnPropertyDescriptor(harness.provider, "_events");
+    Object.defineProperty(harness.provider, "_events", {
+        configurable: true,
+        get() { throw new Error("listener inspection failed"); },
+    });
+    assert.doesNotThrow(() => harness.runTimers());
+    Object.defineProperty(harness.provider, "_events", events);
+    assert.deepEqual(connects, []);
+    harness.provider.once("connect", value => connects.push(normalized(value)));
+    harness.runTimers();
+    assert.deepEqual(connects, [{chainId: "0x6"}, {chainId: "0x6"}]);
+});
+
 test("Ethereum connect snapshots survive reentrant configuration", () => {
     for (const lateSubscription of [false, true]) {
         const harness = ethereumHarness();
@@ -2010,16 +2098,14 @@ test("Ethereum tracks the exact once listener removed before connect replay", ()
 });
 
 test("Ethereum connect replay waits for copied state and fences retirement", () => {
-    const copied = ethereumHarness({
-        accountRevision: 0,
-        accountRevocationTombstone: false,
-        address: "",
-        chainId: "0x1",
-        didEmitConnect: true,
-    });
+    const copied = inpageHarness();
+    dispatchConfigurations(copied);
+    copied.evaluate();
     const connects = [];
-    copied.provider.on("connect", value => connects.push(normalized(value)));
-    applyEthereumConfiguration(copied, "", "0x4");
+    copied.window.ethereum.on("connect", value => connects.push(normalized(value)));
+    copied.runTimers();
+    assert.deepEqual(connects, []);
+    dispatchConfigurations(copied, {chainId: "0x4"});
     assert.deepEqual(connects, []);
     copied.runTimers();
     assert.deepEqual(connects, [{chainId: "0x4"}]);
@@ -2031,6 +2117,33 @@ test("Ethereum connect replay waits for copied state and fences retirement", () 
     retired.retire();
     retired.runTimers();
     assert.equal(retiredConnects, 0);
+});
+
+test("Ethereum retirement preserves connect replay history", async () => {
+    for (const wasReady of [false, true]) {
+        const harness = inpageHarness();
+        const provider = harness.window.ethereum;
+        const connects = [];
+        provider.on("connect", value => connects.push(["first", value.chainId]));
+        if (wasReady) {
+            dispatchConfigurations(harness);
+            harness.runTimers();
+            connects.length = 0;
+        }
+
+        harness.window.bigWalletInpageProviderGenerationToken = "stale";
+        await assert.rejects(provider.request({method: "eth_chainId"}), error => error.code === 4900);
+        harness.evaluate();
+        assert.equal(harness.window.ethereum, provider);
+        dispatchConfigurations(harness, {chainId: "0x2"});
+        assert.deepEqual(connects, wasReady ? [] : [["first", "0x2"]]);
+        provider.on("connect", value => connects.push(["late", value.chainId]));
+        dispatchConfigurations(harness, {chainId: "0x3"});
+        harness.runTimers();
+        assert.deepEqual(connects, wasReady
+            ? [["first", "0x3"], ["late", "0x3"]]
+            : [["first", "0x2"]]);
+    }
 });
 
 test("Ethereum connect replay waits for configuration recovery", () => {
@@ -4009,9 +4122,26 @@ function ethereumFacadeTarget(name) {
     provider.isConnected = () => true;
     provider.isUnlocked = () => Promise.resolve(true);
     let retired = 0;
+    let ready = false;
+    let readinessObserver = null;
     return {
         provider,
-        requestConnectReplay() { return false; },
+        subscribeReadiness(listener) {
+            readinessObserver = listener;
+            return () => {
+                if (readinessObserver === listener) { readinessObserver = null; }
+            };
+        },
+        withReadyState(listener) {
+            return ready && retired === 0
+                ? listener(Object.freeze({chainId: provider.chainId})) === true
+                : false;
+        },
+        publishReadiness(flushed = true) {
+            ready = true;
+            readinessObserver?.(Object.freeze({flushed}));
+        },
+        readinessListenerCount() { return readinessObserver ? 1 : 0; },
         retire() { retired += 1; },
         retired() { return retired; },
         snapshot() {
@@ -4383,9 +4513,6 @@ test("stable facade connect snapshots survive reentrant retargeting", async () =
     const secondEthereum = ethereumFacadeTarget("second");
     const firstSolana = solanaFacadeTarget("first");
     const secondSolana = solanaFacadeTarget("second");
-    firstEthereum.requestConnectReplay = listener => listener({
-        chainId: "0x1",
-    });
     const connects = [];
     record.eip6963.provider.on("connect", () => {
         connects.push("first");
@@ -4400,6 +4527,7 @@ test("stable facade connect snapshots survive reentrant retargeting", async () =
         ethereumProvider: firstEthereum,
         solanaProvider: firstSolana,
     }).commit();
+    firstEthereum.publishReadiness();
 
     assert.deepEqual(connects, ["first", "second"]);
     assert.equal(
@@ -4414,11 +4542,6 @@ test("stable facade preserves queued connect replay without listeners", () => {
         uuid: "00000000-0000-4000-8000-000000000009",
     });
     const ethereum = ethereumFacadeTarget("current");
-    const callbacks = [];
-    ethereum.requestConnectReplay = callback => {
-        callbacks.push(callback);
-        return true;
-    };
     record.prepareTargets({
         ethereumProvider: ethereum,
         solanaProvider: solanaFacadeTarget("current"),
@@ -4428,12 +4551,86 @@ test("stable facade preserves queued connect replay without listeners", () => {
     record.ethereum.on("connect", removed);
     record.ethereum.removeListener("connect", removed);
 
-    assert.equal(callbacks.shift()({chainId: "0x2"}), false);
+    ethereum.provider.chainId = "0x2";
+    ethereum.publishReadiness();
+    harness.runTimers();
+    assert.deepEqual(connects, []);
     record.ethereum.once("connect", value => {
         connects.push(["late", normalized(value)]);
     });
-    assert.equal(callbacks.shift()({chainId: "0x2"}), true);
+    assert.deepEqual(connects, []);
+    harness.runTimers();
     assert.deepEqual(connects, [["late", {chainId: "0x2"}]]);
+});
+
+test("stable facade stale timers and readiness observers cannot suppress a replacement replay", () => {
+    const harness = facadeHarness();
+    const record = harness.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000010",
+    });
+    const first = ethereumFacadeTarget("first");
+    const second = ethereumFacadeTarget("second");
+    let staleReadiness;
+    const subscribeFirst = first.subscribeReadiness;
+    first.subscribeReadiness = listener => {
+        staleReadiness = listener;
+        return subscribeFirst(listener);
+    };
+    record.prepareTargets({
+        ethereumProvider: first,
+        solanaProvider: solanaFacadeTarget("first"),
+    }).commit();
+    first.publishReadiness();
+    const connects = [];
+    record.ethereum.on("connect", value => connects.push(normalized(value)));
+
+    second.provider.chainId = "0x2";
+    second.publishReadiness();
+    record.prepareTargets({
+        ethereumProvider: second,
+        solanaProvider: solanaFacadeTarget("second"),
+    }).commit();
+    assert.equal(first.readinessListenerCount(), 0);
+    assert.equal(second.readinessListenerCount(), 1);
+    staleReadiness({flushed: true});
+    first.provider.emit("disconnect", new Error("stale disconnect"));
+    assert.deepEqual(connects, []);
+
+    assert.equal(harness.runNextTimer(), true);
+    assert.deepEqual(connects, []);
+    assert.equal(harness.runNextTimer(), true);
+    assert.deepEqual(connects, [{chainId: "0x2"}]);
+    assert.equal(harness.runNextTimer(), false);
+});
+
+test("listener inspection cannot overwrite a replacement connect replay", () => {
+    const harness = inpageHarness();
+    dispatchConfigurations(harness);
+    harness.runTimers();
+    const provider = harness.window.ethereum;
+    const connects = [];
+    const listener = value => connects.push(value.chainId);
+    let events = Object.getOwnPropertyDescriptor(provider, "_events").value;
+    let replaced = false;
+    Object.defineProperty(provider, "_events", {
+        configurable: true,
+        get() {
+            if (!replaced && events.connect === listener) {
+                replaced = true;
+                harness.evaluate();
+                dispatchConfigurations(harness, {chainId: "0x3"});
+            }
+            return events;
+        },
+        set(value) { events = value; },
+    });
+
+    provider.on("connect", listener);
+    harness.runTimers();
+
+    assert.equal(replaced, true);
+    assert.equal(provider, harness.window.ethereum);
+    assert.deepEqual(connects, ["0x3"]);
 });
 
 test("stable facade preparation keeps old targets until a single commit", async () => {
@@ -4460,7 +4657,7 @@ test("stable facade preparation keeps old targets until a single commit", async 
         solanaProvider: {provider: {}},
     }));
     const hooklessEthereum = ethereumFacadeTarget("hookless");
-    delete hooklessEthereum.requestConnectReplay;
+    delete hooklessEthereum.subscribeReadiness;
     assert.throws(() => record.prepareTargets({
         ethereumProvider: hooklessEthereum,
         solanaProvider: stagedSolana,
@@ -6789,7 +6986,7 @@ test("exact reinjection preserves facades and rejects all old generation work", 
     assert.notEqual(firstGeneration, secondGeneration);
 });
 
-test("Ethereum readiness preserves a callback installed during delivery", () => {
+test("Ethereum readiness preserves a replacement observer and reads state without scheduling", () => {
     const module = moduleHarness(ethereumSource);
     const Ethereum = module.exports.default;
     const engine = new Ethereum("readiness-generation", {
@@ -6799,26 +6996,42 @@ test("Ethereum readiness preserves a callback installed during delivery", () => 
         postRPC: () => true,
     });
     const deliveries = [];
-    const second = payload => {
-        deliveries.push(["second", payload.chainId]);
-        return true;
+    const readReadyState = label => {
+        return module.exports.withReadyState(engine, payload => {
+            assert.equal(Object.isFrozen(payload), true);
+            deliveries.push([label, payload.chainId]);
+            return true;
+        });
     };
-    module.exports.requestConnectReplay(engine, payload => {
-        deliveries.push(["first", payload.chainId]);
-        module.exports.requestConnectReplay(engine, second);
-        return true;
+    assert.equal(readReadyState("loading"), false);
+    let disposeSecond;
+    const disposeFirst = module.exports.subscribeReadiness(engine, notification => {
+        assert.equal(Object.isFrozen(notification), true);
+        assert.equal(notification.flushed, true);
+        assert.equal(readReadyState("first"), true);
+        disposeSecond = module.exports.subscribeReadiness(engine, next => {
+            assert.equal(next.flushed, true);
+            assert.equal(readReadyState("second"), true);
+        });
     });
     Ethereum.applyEnvelope(engine, {
         kind: "configuration",
         configuration: {address: "", chainId: "0x2"},
     });
     assert.deepEqual(deliveries, [["first", "0x2"]]);
-
+    disposeFirst();
     module.runTimers();
-    assert.deepEqual(deliveries, [["first", "0x2"], ["second", "0x2"]]);
+    assert.deepEqual(deliveries, [["first", "0x2"]]);
     Ethereum.applyEnvelope(engine, {
         kind: "configuration",
         configuration: {address: "", chainId: "0x3"},
+    });
+    module.runTimers();
+    assert.deepEqual(deliveries, [["first", "0x2"], ["second", "0x3"]]);
+    disposeSecond();
+    Ethereum.applyEnvelope(engine, {
+        kind: "configuration",
+        configuration: {address: "", chainId: "0x4"},
     });
     module.runTimers();
     assert.equal(deliveries.length, 2);
@@ -6832,11 +7045,6 @@ for (const consumedConnect of [false, true]) {
         const chains = [];
         const oldEthereum = ethereumFacadeTarget("old");
         const oldSolana = solanaFacadeTarget("old");
-        const oldSnapshot = oldEthereum.snapshot;
-        oldEthereum.snapshot = () => ({...oldSnapshot(), didEmitConnect: true});
-        oldEthereum.requestConnectReplay = listener => consumedConnect
-            ? listener(Object.freeze({chainId: "0x1"}))
-            : false;
         const harness = inpageHarness({
             beforeEvaluate(window, context) {
                 const originalFacade = new vm.Script(`(() => {
@@ -6853,7 +7061,9 @@ for (const consumedConnect of [false, true]) {
                     solanaProvider: oldSolana,
                 }).commit();
                 account = record.wallet.accounts[0];
+                if (!consumedConnect) { oldEthereum.publishReadiness(); }
                 record.ethereum.on("connect", payload => connects.push(payload.chainId));
+                if (consumedConnect) { oldEthereum.publishReadiness(); }
                 record.ethereum.on("chainChanged", chainId => chains.push(chainId));
                 record.ensureWalletRegistration();
                 record.announceEthereum();
@@ -6876,6 +7086,7 @@ for (const consumedConnect of [false, true]) {
         assert.equal(oldSolana.retired(), 1);
 
         dispatchConfigurations(harness, {chainId: "0x2", publicKey: firstSolanaKey});
+        assert.deepEqual(connects, consumedConnect ? ["0x1"] : []);
         harness.runTimers();
         assert.deepEqual(connects, [consumedConnect ? "0x1" : "0x2"]);
         assert.deepEqual(chains, ["0x2"]);

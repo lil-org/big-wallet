@@ -105,58 +105,48 @@ function emitSafely(provider, eventName, values, isCurrent = null) {
     return true;
 }
 
-function deliverPendingConnect(state, payload, isCurrent) {
-    const listener = state.pendingConnect;
-    if (typeof listener !== "function" || !isCurrent()) { return false; }
-    let delivered = false;
-    try {
-        delivered = applyFunction(listener, undefined, [payload]) === true;
-    } catch (error) {
-        reportListenerError(error);
-    }
-    if (delivered && state.pendingConnect === listener) {
-        state.pendingConnect = null;
-    }
-    return delivered;
-}
-
-function emitSubscriptionConnect(provider) {
+function withReadyState(provider, listener) {
     const state = stateFor(provider);
-    if (!state || !isReady(provider) || !transportIsCurrent(state)) {
+    if (!state || typeof listener !== "function" ||
+        !isReady(provider) || !transportIsCurrent(state)) {
         return false;
     }
     const epoch = state.stateEpoch;
-    return deliverPendingConnect(
-        state,
-        freezeObjectNormally({chainId: state.chainId}),
-        () => stateFor(provider) === state && !state.retired &&
-            state.stateEpoch === epoch && transportIsCurrent(state)
-    );
-}
-
-function scheduleSubscriptionConnect(provider) {
-    const state = stateFor(provider);
-    if (!state || state.retired || state.connectReplayScheduled) { return; }
-    state.connectReplayScheduled = true;
-    try {
-        applyFunction(setTimeoutNormally, undefined, [() => {
-            if (stateFor(provider) !== state) { return; }
-            state.connectReplayScheduled = false;
-            emitSubscriptionConnect(provider);
-        }, 1]);
-    } catch {
-        state.connectReplayScheduled = false;
-    }
-}
-
-function requestConnectReplay(provider, listener) {
-    const state = stateFor(provider);
-    if (!state || state.retired || typeof listener !== "function") {
+    const payload = freezeObjectNormally({chainId: state.chainId});
+    if (stateFor(provider) !== state || state.retired ||
+        state.stateEpoch !== epoch || !transportIsCurrent(state)) {
         return false;
     }
-    state.pendingConnect = listener;
-    scheduleSubscriptionConnect(provider);
-    return true;
+    try {
+        return applyFunction(listener, undefined, [payload]) === true;
+    } catch (error) {
+        reportListenerError(error);
+        return false;
+    }
+}
+
+function subscribeReadiness(provider, listener) {
+    const state = stateFor(provider);
+    if (!state || state.retired || typeof listener !== "function") {
+        return () => {};
+    }
+    state.readinessObserver = listener;
+    return () => {
+        if (state.readinessObserver === listener) {
+            state.readinessObserver = null;
+        }
+    };
+}
+
+function notifyReadiness(provider, flushed) {
+    const state = stateFor(provider);
+    const listener = state?.readinessObserver;
+    if (!state || state.retired || typeof listener !== "function") { return; }
+    try {
+        applyFunction(listener, undefined, [freezeObjectNormally({flushed})]);
+    } catch (error) {
+        reportListenerError(error);
+    }
 }
 
 function authorizationSnapshot(state) {
@@ -617,7 +607,7 @@ function flushConfigurationEvents(provider) {
     const pending = state?.pendingConfigurationEvent;
     if (!state || !pending || state.runtime.phase !== "ready" ||
         state.retired || pending.epoch !== state.stateEpoch) {
-        return;
+        return false;
     }
     state.pendingConfigurationEvent = null;
     state.copiedStateBaseline = null;
@@ -640,15 +630,7 @@ function flushConfigurationEvents(provider) {
             );
         }
     }
-    if (pending.connect && current()) {
-        state.didEmitConnect = true;
-        const payload = freezeObjectNormally({chainId: state.chainId});
-        deliverPendingConnect(
-            state,
-            payload,
-            () => current() && transportIsCurrent(state)
-        );
-    }
+    return current();
 }
 
 function applyConfiguration(provider, envelope) {
@@ -712,7 +694,6 @@ function applyConfiguration(provider, envelope) {
     );
     chainChanged = commitChain(state, chainId);
     state.configurationError = false;
-    const connect = !state.didEmitConnect;
     state.pendingConfigurationEvent = {
         accountsChanged: copiedStateBaseline
             ? state.address !== copiedStateBaseline.address
@@ -720,12 +701,10 @@ function applyConfiguration(provider, envelope) {
         chainChanged: copiedStateBaseline
             ? state.chainId !== copiedStateBaseline.chainId
             : (wasReady || switchAccount) && chainChanged,
-        connect,
         epoch,
     };
     state.runtime.drain(record => dispatchOperation(provider, record));
-    flushConfigurationEvents(provider);
-    scheduleSubscriptionConnect(provider);
+    notifyReadiness(provider, flushConfigurationEvents(provider));
     return true;
 }
 
@@ -930,7 +909,6 @@ function applyEnvelope(provider, envelope) {
         if (!state.runtime.failLoading(error)) { return false; }
         state.stateEpoch += 1;
         state.pendingConfigurationEvent = null;
-        state.didEmitConnect = false;
         emitSafely(provider, "disconnect", [error]);
         return true;
     }
@@ -953,7 +931,7 @@ function retire(provider, error = providerReplacementError()) {
     state.address = "";
     state.accountRevision += 1;
     state.runtime.retire(error);
-    state.pendingConnect = null;
+    state.readinessObserver = null;
     emitSafely(provider, "disconnect", [error]);
     if (hadAccount) { emitSafely(provider, "accountsChanged", [[]]); }
     return true;
@@ -968,7 +946,6 @@ function snapshot(provider) {
         reauthorizationRevision: state.reauthorizationRevision,
         address: state.address,
         chainId: state.chainId,
-        didEmitConnect: state.didEmitConnect,
         generation: state.runtime.generation,
         isConnected: !state.retired && state.runtime.phase !== "failed",
         phase: state.runtime.phase,
@@ -1000,8 +977,7 @@ class BigWalletEthereum {
             validChainId(initial.chainId) &&
             isSafeIntegerNormally(initial.accountRevision) &&
             initial.accountRevision >= 0 &&
-            typeof initial.accountRevocationTombstone === "boolean" &&
-            typeof initial.didEmitConnect === "boolean";
+            typeof initial.accountRevocationTombstone === "boolean";
         const chainId = validChainId(initial?.chainId)
             ? initial.chainId
             : "0x1";
@@ -1021,11 +997,9 @@ class BigWalletEthereum {
             address: normalizedAddress(initial?.address),
             chainId,
             configurationError: false,
-            connectReplayScheduled: false,
             copiedStateBaseline: null,
-            didEmitConnect: initial?.didEmitConnect === true,
             eventForwarders: createObjectNormally(null),
-            pendingConnect: null,
+            readinessObserver: null,
             initialized: true,
             networkVersion: normalizedNetworkVersion(chainId),
             pendingConfigurationEvent: null,
@@ -1158,7 +1132,8 @@ BigWalletEthereum.snapshot = snapshot;
 export {
     applyEnvelope,
     isReady,
-    requestConnectReplay,
+    subscribeReadiness,
+    withReadyState,
     retire,
     snapshot,
 };
