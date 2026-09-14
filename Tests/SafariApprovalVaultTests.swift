@@ -2291,7 +2291,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
     }
 
-    func testFailedSourceMutationPreservesSourceErrorWhenMetadataSynchronizationFails()
+    func testFailedSourceMutationReconcilesAndPreservesErrorWhenMetadataSynchronizationFails()
         throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -2335,27 +2335,26 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertThrowsError(try host.performSourceMutation {
             mutations += 1
+            XCTAssertEqual(stores, 1)
+            XCTAssertNil(vault.catalogAccess())
             throw CocoaError(.fileWriteNoPermission)
         }) { error in
             XCTAssertEqual((error as? CocoaError)?.code, .fileWriteNoPermission)
         }
 
         XCTAssertEqual(mutations, 1)
-        XCTAssertEqual(stores, 1)
-        XCTAssertNil(vault.catalogAccess())
         XCTAssertEqual(source.password, try fixture().source.password)
         XCTAssertEqual(
             source.wallets.map(\.storedKeyJSON),
             try fixture().source.wallets.map(\.storedKeyJSON)
         )
 
-        rejectMetadataUpdates = false
-        host.reconcile()
         reconciliationQueue.sync {}
 
         let recovered = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertEqual(stores, 2)
         XCTAssertNotEqual(recovered.generation, first.generation)
+        XCTAssertEqual(recovered.catalogData, first.catalogData)
     }
 
     func testSourceMutationRemainsAvailableDuringPersistentMetadataSynchronizationFailure()
@@ -2585,6 +2584,11 @@ final class SafariApprovalVaultTests: XCTestCase {
         let unlocked = await vault.unlock(reason: "Before mutation")
         let priorAccess = try XCTUnwrap(unlocked)
         let attemptsBeforeRevocation = synchronizationAttempts
+        reconciliationQueue.suspend()
+        defer {
+            reconciliationQueue.resume()
+            reconciliationQueue.sync {}
+        }
 
         keys.removeError = SafariApprovalVault.Error.keychainFailure(errSecIO)
         XCTAssertThrowsError(try host.performSourceMutation {

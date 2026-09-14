@@ -1301,10 +1301,11 @@ final class SafariApprovalVaultHost {
         try willMutateSourceLocked(
             coordinationLease: coordinationLease
         )
-        let result = try operation()
-        cancelReconciliationRetryLocked()
-        reconcile()
-        return result
+        defer {
+            cancelReconciliationRetryLocked()
+            reconcile()
+        }
+        return try operation()
     }
 
     private func reconcileLocked(
