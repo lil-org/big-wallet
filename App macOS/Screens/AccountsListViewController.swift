@@ -457,10 +457,14 @@ class AccountsListViewController: NSViewController {
     
     private func createNewAccountAndShowSecretWords() {
         guard acceptsUserActions else { return }
-        guard let wallet = try? walletsManager.createWallet() else { return }
-        newWalletId = wallet.id
-        blinkNewWalletCellIfNeeded()
-        showKey(wallet: wallet, specificAccount: nil)
+        Task {
+            guard acceptsUserActions,
+                  let wallet = try? await walletsManager.createWallet(),
+                  acceptsUserActions else { return }
+            newWalletId = wallet.id
+            blinkNewWalletCellIfNeeded()
+            showKey(wallet: wallet, specificAccount: nil)
+        }
     }
     
     private func getBackToRectIfNeeded() {
@@ -619,10 +623,14 @@ class AccountsListViewController: NSViewController {
             return
         }
         
-        do {
-            try walletsManager.update(wallet: wallet, removeAccounts: [account])
-        } catch {
-            presentMessageAlert(Strings.somethingWentWrong, style: .informational)
+        Task {
+            guard acceptsUserActions else { return }
+            do {
+                try await walletsManager.update(wallet: wallet, removeAccounts: [account])
+            } catch {
+                guard acceptsUserActions else { return }
+                presentMessageAlert(Strings.somethingWentWrong, style: .informational)
+            }
         }
     }
     
@@ -672,7 +680,10 @@ class AccountsListViewController: NSViewController {
     }
     
     private func removeWallet(_ wallet: WalletContainer) {
-        try? walletsManager.delete(wallet: wallet)
+        Task {
+            guard acceptsUserActions else { return }
+            try? await walletsManager.delete(wallet: wallet)
+        }
     }
     
     @objc private func walletsChanged() {

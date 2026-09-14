@@ -17,6 +17,7 @@ class EditAccountsViewController: UIViewController {
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
+    private var isSaving = false
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
@@ -86,21 +87,36 @@ class EditAccountsViewController: UIViewController {
     private func updateOkButtonState() {
         let hasVisibleEnabledAccount = cellModels.contains(where: { $0.isEnabled })
         let hasHiddenEnabledAccount = !enabledUndiscoveredAccountKeys.isEmpty
-        okButton.isEnabled = hasVisibleEnabledAccount || hasHiddenEnabledAccount
+        okButton.isEnabled = !isSaving && (hasVisibleEnabledAccount || hasHiddenEnabledAccount)
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
+        guard !isSaving, let wallet else { return }
         guard !toggledIndexes.isEmpty else {
             dismissAnimated()
             return
         }
         let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
         let newAccounts: [WalletAccount] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
-        do {
-            try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
-            dismissAnimated()
-        } catch {
-            showMessageAlert(text: Strings.somethingWentWrong)
+        isSaving = true
+        updateOkButtonState()
+        view.isUserInteractionEnabled = false
+        isModalInPresentation = true
+        navigationItem.leftBarButtonItem?.isEnabled = false
+        Task {
+            defer {
+                isSaving = false
+                updateOkButtonState()
+                view.isUserInteractionEnabled = true
+                isModalInPresentation = false
+                navigationItem.leftBarButtonItem?.isEnabled = true
+            }
+            do {
+                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+                dismissAnimated()
+            } catch {
+                showMessageAlert(text: Strings.somethingWentWrong)
+            }
         }
     }
 

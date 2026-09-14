@@ -67,11 +67,12 @@ struct Keychain {
     }
 
     @discardableResult
-    func save(password: String) -> Bool {
+    @MainActor
+    func save(password: String) async -> Bool {
         guard let data = password.data(using: .utf8) else { return false }
 #if os(iOS) || os(visionOS)
         do {
-            try SafariApprovalVaultHost.shared.performSourceMutation {
+            try await SafariApprovalVaultHost.shared.performSourceMutation(preparing: { data }) { data in
                 try save(data: data, key: .password)
             }
             return true
@@ -88,16 +89,12 @@ struct Keychain {
 #endif
     }
 
+#if os(macOS)
     func createPasswordIfMissing(_ password: String) -> Bool {
         guard let data = password.data(using: .utf8) else { return false }
-#if os(iOS) || os(visionOS)
-        return (try? SafariApprovalVaultHost.shared.performSourceMutation {
-            saveIfMissing(data: data, key: .password)
-        }) ?? false
-#else
         return saveIfMissing(data: data, key: .password)
-#endif
     }
+#endif
 
     func readAllWalletIDs() throws -> [String] {
         let items = try allStoredItemAttributes()

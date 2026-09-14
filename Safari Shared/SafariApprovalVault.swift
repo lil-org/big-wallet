@@ -1285,27 +1285,71 @@ final class SafariApprovalVaultHost {
         reconciliationRetry = nil
     }
 
-    func performSourceMutation<Result>(
-        _ operation: () throws -> Result
-    ) throws -> Result {
-        lock.lock()
+    private enum MutationAttempt<Result> {
+        case publishing
+        case executionBusy
+        case completed(Result)
+    }
+
+    @MainActor
+    func performSourceMutation<Preparation, Result>(
+        preparing prepare: () throws -> Preparation,
+        _ operation: (Preparation) throws -> Result
+    ) async throws -> Result {
+        var remainingExecutionWait = Duration.nanoseconds(
+            Int64(SafariApprovalVault.coordinationLockTimeoutNanoseconds)
+        )
+        var executionWaitStarted: ContinuousClock.Instant?
+        while true {
+            try Task.checkCancellation()
+            let attempt = try tryPerformSourceMutation(preparing: prepare, operation)
+            let now = ContinuousClock.now
+            if let executionWaitStarted {
+                remainingExecutionWait -= executionWaitStarted.duration(to: now)
+            }
+            executionWaitStarted = nil
+            switch attempt {
+            case .completed(let result):
+                return result
+            case .publishing:
+                break
+            case .executionBusy:
+                guard remainingExecutionWait > .zero else {
+                    throw SafariApprovalVault.Error.unavailable
+                }
+                executionWaitStarted = now
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    @MainActor
+    private func tryPerformSourceMutation<Preparation, Result>(
+        preparing prepare: () throws -> Preparation,
+        _ operation: (Preparation) throws -> Result
+    ) throws -> MutationAttempt<Result> {
+        guard lock.try() else { return .publishing }
         defer { lock.unlock() }
         let coordinationLease: SafariApprovalVault.CoordinationLease
         do {
-            coordinationLease = try vault.acquireCoordinationLease()
+            guard let acquired = try vault.tryAcquireCoordinationLease() else {
+                return .executionBusy
+            }
+            coordinationLease = acquired
         } catch {
             SafariApprovalDiagnostics.record("coordinate source mutation", error: error)
             throw SafariApprovalVault.Error.unavailable
         }
         defer { coordinationLease.release() }
-        try willMutateSourceLocked(
-            coordinationLease: coordinationLease
-        )
+        let prepared = try prepare()
         defer {
             cancelReconciliationRetryLocked()
             reconcile()
         }
-        return try operation()
+        try willMutateSourceLocked(
+            coordinationLease: coordinationLease
+        )
+        return .completed(try operation(prepared))
     }
 
     private func reconcileLocked(

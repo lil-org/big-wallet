@@ -215,9 +215,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func createNewWalletAndShowSecretWords() {
-        guard let wallet = try? walletsManager.createWallet() else { return }
-        reloadData()
-        showKey(wallet: wallet, specificAccount: nil)
+        performWalletMutation {
+            let wallet = try await self.walletsManager.createWallet()
+            self.reloadData()
+            self.showKey(wallet: wallet, specificAccount: nil)
+        }
     }
     
     private func showKey(wallet: WalletContainer, specificAccount: WalletAccount?) {
@@ -369,10 +371,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             return
         }
         
-        do {
-            try walletsManager.update(wallet: wallet, removeAccounts: [account])
-        } catch {
-            showMessageAlert(text: Strings.somethingWentWrong)
+        performWalletMutation {
+            try await self.walletsManager.update(wallet: wallet, removeAccounts: [account])
         }
     }
     
@@ -406,8 +406,29 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func removeWallet(_ wallet: WalletContainer) {
-        try? walletsManager.delete(wallet: wallet)
-        reloadData()
+        performWalletMutation {
+            try await self.walletsManager.delete(wallet: wallet)
+            self.reloadData()
+        }
+    }
+
+    private func performWalletMutation(_ operation: @escaping @MainActor () async throws -> Void) {
+        guard view.isUserInteractionEnabled else { return }
+        view.isUserInteractionEnabled = false
+        addWalletItem?.isEnabled = false
+        preferencesItem?.isEnabled = false
+        Task {
+            defer {
+                view.isUserInteractionEnabled = true
+                addWalletItem?.isEnabled = true
+                preferencesItem?.isEnabled = true
+            }
+            do {
+                try await operation()
+            } catch {
+                showMessageAlert(text: Strings.somethingWentWrong)
+            }
+        }
     }
     
     private func didTapExportWallet(_ wallet: WalletContainer, specificAccount: WalletAccount?) {

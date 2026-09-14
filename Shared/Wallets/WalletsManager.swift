@@ -154,23 +154,29 @@ final class WalletsManager: NSObject {
         }
     }
 
-    func createWallet() throws -> WalletContainer {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        return try createWallet(name: defaultWalletName, password: password)
+    @MainActor
+    func createWallet() async throws -> WalletContainer {
+        return try await save(isUpdate: false) {
+            guard let password = keychain.password else { throw Error.keychainAccessFailure }
+            return try createWallet(name: defaultWalletName, password: password)
+        }
     }
 
-    func addWallet(input: String, inputPassword: String?) throws -> WalletContainer {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        let name = defaultWalletName
-        let trimmedInput = input.singleSpaced
-        if WalletCrypto.isValidMnemonic(mnemonic: trimmedInput) {
-            return try importMnemonic(trimmedInput, name: name, encryptPassword: password)
-        } else if let privateKeyImport = Self.privateKeyImport(from: trimmedInput) {
-            return try importPrivateKey(privateKeyImport.privateKey, name: name, password: password, coin: privateKeyImport.coin, onlyToKeychain: false)
-        } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
-            return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: defaultCoin, onlyToKeychain: false)
-        } else {
-            throw Error.invalidInput
+    @MainActor
+    func addWallet(input: String, inputPassword: String?) async throws -> WalletContainer {
+        return try await save(isUpdate: false) {
+            guard let password = keychain.password else { throw Error.keychainAccessFailure }
+            let name = defaultWalletName
+            let trimmedInput = input.singleSpaced
+            if WalletCrypto.isValidMnemonic(mnemonic: trimmedInput) {
+                return try importMnemonic(trimmedInput, name: name, encryptPassword: password)
+            } else if let privateKeyImport = Self.privateKeyImport(from: trimmedInput) {
+                return try importPrivateKey(privateKeyImport.privateKey, name: name, password: password, coin: privateKeyImport.coin)
+            } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
+                return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: defaultCoin)
+            } else {
+                throw Error.invalidInput
+            }
         }
     }
 
@@ -394,17 +400,16 @@ final class WalletsManager: NSObject {
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
         try addDefaultMnemonicAccounts(to: wallet, password: password)
-        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
-    private func importJSON(_ json: Data, name: String, password: String, newPassword: String, coin: WalletCoin, onlyToKeychain: Bool) throws -> WalletContainer {
+    private func importJSON(_ json: Data, name: String, password: String, newPassword: String, coin: WalletCoin) throws -> WalletContainer {
         guard let key = WalletStoredKey.importJSON(json: json) else { throw WalletKeyStoreError.invalidKey }
         guard var data = key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidPassword }
         defer { data.resetBytes(in: 0..<data.count) }
         if let mnemonic = checkMnemonic(data) { return try self.importMnemonic(mnemonic, name: name, encryptPassword: newPassword) }
         guard let privateKey = WalletPrivateKey(data: data) else { throw WalletKeyStoreError.invalidKey }
-        return try self.importPrivateKey(privateKey, name: name, password: newPassword, coin: coin, onlyToKeychain: onlyToKeychain)
+        return try self.importPrivateKey(privateKey, name: name, password: newPassword, coin: coin)
     }
 
     private func checkMnemonic(_ data: Data) -> String? {
@@ -412,7 +417,7 @@ final class WalletsManager: NSObject {
         return mnemonic
     }
 
-    private func importPrivateKey(_ privateKey: WalletPrivateKey, name: String, password: String, coin: WalletCoin, onlyToKeychain: Bool) throws -> WalletContainer {
+    private func importPrivateKey(_ privateKey: WalletPrivateKey, name: String, password: String, coin: WalletCoin) throws -> WalletContainer {
         let passwordData = Data(password.utf8)
         guard let newKey = privateKey.withData({
             WalletStoredKey.importPrivateKey(privateKey: $0, name: name, password: passwordData, coin: coin)
@@ -420,11 +425,6 @@ final class WalletsManager: NSObject {
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: newKey)
         _ = try wallet.getAccount(password: password, coin: coin)
-        try save(
-            wallet: wallet,
-            isUpdate: false,
-            includeInMemory: !onlyToKeychain
-        )
         return wallet
     }
 
@@ -433,7 +433,6 @@ final class WalletsManager: NSObject {
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
         try addDefaultMnemonicAccounts(to: wallet, password: encryptPassword)
-        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
@@ -560,12 +559,15 @@ final class WalletsManager: NSObject {
         return mnemonic
     }
 
-    func delete(wallet: WalletContainer) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        guard let index = wallets.firstIndex(of: wallet) else { throw WalletKeyStoreError.accountNotFound }
-        guard var privateKey = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidKey }
-        defer { privateKey.resetBytes(in: 0..<privateKey.count) }
-        try performSafariApprovalSourceMutation {
+    @MainActor
+    func delete(wallet: WalletContainer) async throws {
+        try await performSafariApprovalSourceMutation(preparing: {
+            guard let password = self.keychain.password else { throw Error.keychainAccessFailure }
+            guard let index = self.wallets.firstIndex(of: wallet) else { throw WalletKeyStoreError.accountNotFound }
+            guard var privateKey = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidKey }
+            defer { privateKey.resetBytes(in: 0..<privateKey.count) }
+            return index
+        }) { index in
             try keychain.removeWallet(id: wallet.id)
             wallets.remove(at: index)
             WalletsMetadataService.removeMetadataForWallet(
@@ -612,29 +614,37 @@ final class WalletsManager: NSObject {
             coin.normalizedAddress(account.address) == normalizedAddress
     }
 
-    func update(wallet: WalletContainer, enabledAccounts: [WalletAccount]) throws {
-        guard let currentWallet = currentWallet(id: wallet.id) else { throw WalletKeyStoreError.accountNotFound }
+    @MainActor
+    func update(wallet: WalletContainer, enabledAccounts: [WalletAccount]) async throws {
+        _ = try await save(isUpdate: true) {
+            guard let currentWallet = currentWallet(id: wallet.id) else { throw WalletKeyStoreError.accountNotFound }
 
-        let originalKeys = Set(wallet.accounts.map { $0.previewAccountKey })
-        let enabledKeys = Set(enabledAccounts.map { $0.previewAccountKey })
-        let disabledByThisEdit = originalKeys.subtracting(enabledKeys)
+            let originalKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+            let enabledKeys = Set(enabledAccounts.map { $0.previewAccountKey })
+            let disabledByThisEdit = originalKeys.subtracting(enabledKeys)
 
-        var mergedAccounts = currentWallet.accounts.filter { !disabledByThisEdit.contains($0.previewAccountKey) }
-        var mergedKeys = Set(mergedAccounts.map { $0.previewAccountKey })
-        for account in enabledAccounts where !originalKeys.contains(account.previewAccountKey) && !mergedKeys.contains(account.previewAccountKey) {
-            mergedAccounts.append(account)
-            mergedKeys.insert(account.previewAccountKey)
+            var mergedAccounts = currentWallet.accounts.filter { !disabledByThisEdit.contains($0.previewAccountKey) }
+            var mergedKeys = Set(mergedAccounts.map { $0.previewAccountKey })
+            for account in enabledAccounts where !originalKeys.contains(account.previewAccountKey) && !mergedKeys.contains(account.previewAccountKey) {
+                mergedAccounts.append(account)
+                mergedKeys.insert(account.previewAccountKey)
+            }
+
+            try replaceAccounts(in: currentWallet, with: mergedAccounts)
+            return currentWallet
         }
-
-        try replaceAccounts(in: currentWallet, with: mergedAccounts)
     }
 
-    func update(wallet: WalletContainer, removeAccounts toRemove: [WalletAccount]) throws {
-        guard let currentWallet = currentWallet(id: wallet.id) else { throw WalletKeyStoreError.accountNotFound }
+    @MainActor
+    func update(wallet: WalletContainer, removeAccounts toRemove: [WalletAccount]) async throws {
+        _ = try await save(isUpdate: true) {
+            guard let currentWallet = currentWallet(id: wallet.id) else { throw WalletKeyStoreError.accountNotFound }
 
-        let keysToRemove = Set(toRemove.map { $0.previewAccountKey })
-        let remainingAccounts = currentWallet.accounts.filter { !keysToRemove.contains($0.previewAccountKey) }
-        try replaceAccounts(in: currentWallet, with: remainingAccounts)
+            let keysToRemove = Set(toRemove.map { $0.previewAccountKey })
+            let remainingAccounts = currentWallet.accounts.filter { !keysToRemove.contains($0.previewAccountKey) }
+            try replaceAccounts(in: currentWallet, with: remainingAccounts)
+            return currentWallet
+        }
     }
 
     private func replaceAccounts(in wallet: WalletContainer, with accounts: [WalletAccount]) throws {
@@ -651,39 +661,46 @@ final class WalletsManager: NSObject {
                                             publicKey: account.publicKey,
                                             extendedPublicKey: account.extendedPublicKey)
         }
-        try save(wallet: wallet, isUpdate: true)
     }
 
+    @MainActor
     private func save(
-        wallet: WalletContainer,
         isUpdate: Bool,
-        includeInMemory: Bool = true
-    ) throws {
-        guard let data = wallet.key.exportJSON() else { throw WalletKeyStoreError.invalidPassword }
-        try performSafariApprovalSourceMutation {
+        preparing prepare: () throws -> WalletContainer
+    ) async throws -> WalletContainer {
+        return try await performSafariApprovalSourceMutation(preparing: {
+            let wallet = try prepare()
+            guard let data = wallet.key.exportJSON() else { throw WalletKeyStoreError.invalidPassword }
+            return (wallet: wallet, data: data)
+        }) { prepared in
+            let wallet = prepared.wallet
             if isUpdate {
-                try keychain.updateWallet(id: wallet.id, data: data)
+                try keychain.updateWallet(id: wallet.id, data: prepared.data)
             } else {
-                try keychain.saveWallet(id: wallet.id, data: data)
+                try keychain.saveWallet(id: wallet.id, data: prepared.data)
             }
             if let index = wallets.firstIndex(of: wallet) {
                 wallets[index] = wallet
-            } else if includeInMemory {
+            } else {
                 wallets.append(wallet)
             }
             postWalletsChangedNotification()
+            return wallet
         }
     }
 
-    private func performSafariApprovalSourceMutation<Result>(
-        _ operation: () throws -> Result
-    ) throws -> Result {
+    @MainActor
+    private func performSafariApprovalSourceMutation<Preparation, Result>(
+        preparing prepare: () throws -> Preparation,
+        _ operation: (Preparation) throws -> Result
+    ) async throws -> Result {
 #if os(iOS) || os(visionOS)
-        return try SafariApprovalVaultHost.shared.performSourceMutation(
+        return try await SafariApprovalVaultHost.shared.performSourceMutation(
+            preparing: prepare,
             operation
         )
 #else
-        return try operation()
+        return try operation(prepare())
 #endif
     }
 

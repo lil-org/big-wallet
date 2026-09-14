@@ -1781,6 +1781,168 @@ final class SafariApprovalVaultTests: XCTestCase {
     }
 
     @MainActor
+    func testSourceMutationWaitsForPublicationWithoutBlockingMainActor() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: MemoryApprovalKeyStore())
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        let workerStarted = expectation(description: "Publication started")
+        let mutationStarted = expectation(description: "Mutation waiting")
+        let releaseWorker = DispatchSemaphore(value: 0)
+        defer { releaseWorker.signal() }
+        var sourceReads = 0
+        var mutations = 0
+        let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            reconciliationQueue: reconciliationQueue,
+            sourceSnapshot: {
+                sourceReads += 1
+                if sourceReads == 1 {
+                    workerStarted.fulfill()
+                    XCTAssertEqual(releaseWorker.wait(timeout: .now() + 8), .success)
+                }
+                return source
+            }
+        )
+        host.start(backgroundTask: { _ in {} })
+        await fulfillment(of: [workerStarted], timeout: 2)
+
+        let startedAt = ContinuousClock.now
+        let mutation = Task {
+            mutationStarted.fulfill()
+            return try await host.performSourceMutation(preparing: {}) { _ in
+                XCTAssertTrue(Thread.isMainThread)
+                XCTAssertNil(vault.catalogAccess())
+                mutations += 1
+                return "saved"
+            }
+        }
+        await fulfillment(of: [mutationStarted], timeout: 1)
+        XCTAssertLessThan(startedAt.duration(to: .now), .seconds(1))
+        XCTAssertEqual(mutations, 0)
+        try await Task.sleep(nanoseconds: SafariApprovalVault.coordinationLockTimeoutNanoseconds + 100_000_000)
+        XCTAssertEqual(mutations, 0)
+        releaseWorker.signal()
+
+        let result = try await mutation.value
+        XCTAssertEqual(result, "saved")
+        XCTAssertEqual(mutations, 1)
+        reconciliationQueue.sync {}
+        XCTAssertNotNil(vault.catalogAccess())
+    }
+
+    @MainActor
+    func testCanceledSourceMutationDoesNotWriteAfterExecutionLeaseIsReleased() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: MemoryApprovalKeyStore())
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let host = SafariApprovalVaultHost(vault: vault, defaults: defaults)
+        let lease = try vault.acquireCoordinationLease()
+        defer { lease.release() }
+        let waiting = expectation(description: "Mutation waiting for execution lease")
+        let mutation = Task {
+            waiting.fulfill()
+            try await host.performSourceMutation(preparing: {}) { _ in
+                XCTFail("Canceled mutation must not execute")
+            }
+        }
+        await fulfillment(of: [waiting], timeout: 1)
+        mutation.cancel()
+        lease.release()
+        do {
+            try await mutation.value
+            XCTFail("Mutation must be canceled")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @MainActor
+    func testSourceMutationStillTimesOutOnExecutionLease() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: MemoryApprovalKeyStore())
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            reconciliationQueue: reconciliationQueue,
+            sourceSnapshot: { nil }
+        )
+        let lease = try vault.acquireCoordinationLease()
+        defer { lease.release() }
+        host.start(backgroundTask: { _ in {} })
+        reconciliationQueue.sync {}
+        let startedAt = ContinuousClock.now
+        do {
+            try await host.performSourceMutation(preparing: {
+                XCTFail("Preparation must wait for the execution lease")
+            }) { _ in
+                XCTFail("Mutation must not execute without the lease")
+            }
+            XCTFail("Mutation must time out")
+        } catch {
+            XCTAssertEqual(error as? SafariApprovalVault.Error, .unavailable)
+        }
+        XCTAssertLessThan(startedAt.duration(to: .now), .seconds(7))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @MainActor
+    func testRejectedPreparationPreservesPublishedVault() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            reconciliationQueue: reconciliationQueue,
+            sourceSnapshot: { source }
+        )
+        host.start(backgroundTask: { _ in {} })
+        reconciliationQueue.sync {}
+        let original = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let envelope = try Data(contentsOf: url)
+        do {
+            try await host.performSourceMutation(preparing: { () throws -> Void in
+                XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, original)
+                throw WalletKeyStoreError.invalidPassword
+            }) { _ in
+                XCTFail("Rejected preparation must not execute")
+            }
+            XCTFail("Preparation must fail")
+        } catch {
+            guard case WalletKeyStoreError.invalidPassword = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        reconciliationQueue.sync {}
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, original)
+        XCTAssertEqual(try Data(contentsOf: url), envelope)
+        XCTAssertNotNil(keys.keys[try XCTUnwrap(original.generation)])
+    }
+
+    @MainActor
     func testHostStartDefersContendedReconciliationAndCoalescesRetries() throws {
         let url = temporaryURL()
         defer {
@@ -1901,7 +2063,7 @@ final class SafariApprovalVaultTests: XCTestCase {
     }
 
     @MainActor
-    func testSuccessfulHostWorkCancelsDeferredReconciliation() throws {
+    func testSuccessfulHostWorkCancelsDeferredReconciliation() async throws {
         for mutate in [false, true] {
             let url = temporaryURL()
             defer {
@@ -1938,7 +2100,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             lease.release()
 
             if mutate {
-                try host.performSourceMutation {
+                try await host.performSourceMutation(preparing: {}) { _ in
                     XCTAssertNil(vault.catalogAccess())
                 }
             } else {
@@ -1955,7 +2117,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
     @MainActor
     func testSourceMutationsRevokeImmediatelyAndCoalesceBackgroundPublication()
-        throws {
+        async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -1998,7 +2160,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         do {
             defer { reconciliationQueue.resume() }
             for index in 0..<2 {
-                let result = try host.performSourceMutation {
+                let result = try await host.performSourceMutation(preparing: {}) { _ in
                     XCTAssertNil(vault.catalogAccess())
                     XCTAssertTrue(keys.keys.isEmpty)
                     source = index == 0 ? nil : replacement
@@ -2017,8 +2179,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(second.catalogData, try SourceWalletAccess.encodeCatalog(replacement.catalog))
     }
 
+    @MainActor
     func testHostAbortsSourceMutationWhenUnavailableTombstoneWriteFails()
-        throws {
+        async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -2056,12 +2219,61 @@ final class SafariApprovalVaultTests: XCTestCase {
         rejectTombstone = true
         var didMutate = false
 
-        XCTAssertThrowsError(try host.performSourceMutation {
-            didMutate = true
-        })
+        do {
+            try await host.performSourceMutation(preparing: {}) { _ in didMutate = true }
+            XCTFail("Invalidation must fail")
+        } catch {
+            XCTAssertEqual(error as? SafariApprovalVault.Error, .unavailable)
+        }
 
         XCTAssertFalse(didMutate)
         XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, initial)
+    }
+
+    @MainActor
+    func testFailedInvalidationRepublishesUnchangedSourceWithoutAnotherMutation() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            reconciliationQueue: reconciliationQueue,
+            sourceSnapshot: { source }
+        )
+        host.start(backgroundTask: { _ in {} })
+        reconciliationQueue.sync {}
+        let original = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+
+        reconciliationQueue.suspend()
+        do {
+            defer { reconciliationQueue.resume() }
+            keys.removeError = SafariApprovalVault.Error.keychainFailure(errSecIO)
+            do {
+                try await host.performSourceMutation(preparing: {}) { _ in
+                    XCTFail("Source mutation must not run if revocation fails")
+                }
+                XCTFail("Invalidation must fail")
+            } catch {
+                XCTAssertEqual(error as? SafariApprovalVault.Error, .unavailable)
+            }
+            XCTAssertNil(vault.catalogAccess())
+            XCTAssertEqual(try Data(contentsOf: url), Data())
+            keys.removeError = nil
+        }
+        reconciliationQueue.sync {}
+
+        let recovered = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        XCTAssertNotEqual(recovered.generation, original.generation)
+        XCTAssertEqual(recovered.catalogData, original.catalogData)
+        XCTAssertEqual(keys.keys.count, 1)
     }
 
     func testHostRepublishesSameCatalogWhenEnvelopeDigestChanges() throws {
@@ -2291,8 +2503,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
     }
 
+    @MainActor
     func testFailedSourceMutationReconcilesAndPreservesErrorWhenMetadataSynchronizationFails()
-        throws {
+        async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -2333,12 +2546,15 @@ final class SafariApprovalVaultTests: XCTestCase {
         rejectMetadataUpdates = true
         var mutations = 0
 
-        XCTAssertThrowsError(try host.performSourceMutation {
-            mutations += 1
-            XCTAssertEqual(stores, 1)
-            XCTAssertNil(vault.catalogAccess())
-            throw CocoaError(.fileWriteNoPermission)
-        }) { error in
+        do {
+            try await host.performSourceMutation(preparing: {}) { _ in
+                mutations += 1
+                XCTAssertEqual(stores, 1)
+                XCTAssertNil(vault.catalogAccess())
+                throw CocoaError(.fileWriteNoPermission)
+            }
+            XCTFail("Source mutation must fail")
+        } catch {
             XCTAssertEqual((error as? CocoaError)?.code, .fileWriteNoPermission)
         }
 
@@ -2357,6 +2573,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(recovered.catalogData, first.catalogData)
     }
 
+    @MainActor
     func testSourceMutationRemainsAvailableDuringPersistentMetadataSynchronizationFailure()
         async throws {
         let url = temporaryURL()
@@ -2407,7 +2624,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         rejectSynchronization = true
         var mutations = 0
 
-        let result = try host.performSourceMutation {
+        let result = try await host.performSourceMutation(preparing: {}) { _ in
             mutations += 1
             XCTAssertTrue(keys.keys.isEmpty)
             XCTAssertEqual(try Data(contentsOf: url), Data())
@@ -2479,6 +2696,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(replayedLease)
     }
 
+    @MainActor
     func testSourceMutationImmediatelyRecoversAfterTransientMetadataSynchronizationFailure()
         async throws {
         let url = temporaryURL()
@@ -2524,7 +2742,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         failNextSynchronization = true
         var mutations = 0
 
-        let result = try host.performSourceMutation {
+        let result = try await host.performSourceMutation(preparing: {}) { _ in
             mutations += 1
             XCTAssertTrue(keys.keys.isEmpty)
             XCTAssertEqual(try Data(contentsOf: url), Data())
@@ -2550,6 +2768,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotNil(access.privateKey(walletID: "mnemonic-wallet", account: replacement.account))
     }
 
+    @MainActor
     func testSourceMutationRevokesCachedVaultEvenWithoutReconciliation()
         async throws {
         let url = temporaryURL()
@@ -2591,19 +2810,29 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
 
         keys.removeError = SafariApprovalVault.Error.keychainFailure(errSecIO)
-        XCTAssertThrowsError(try host.performSourceMutation {
-            XCTFail("Source mutation must not run if key revocation fails")
-            source = nil
-        })
+        do {
+            try await host.performSourceMutation(preparing: {}) { _ in
+                XCTFail("Source mutation must not run if key revocation fails")
+                source = nil
+            }
+            XCTFail("Invalidation must fail")
+        } catch {
+            XCTAssertEqual(error as? SafariApprovalVault.Error, .unavailable)
+        }
         XCTAssertNotNil(source)
         XCTAssertEqual(synchronizationAttempts, attemptsBeforeRevocation)
 
         keys.removeError = nil
-        XCTAssertThrowsError(try host.performSourceMutation {
-            XCTAssertTrue(keys.keys.isEmpty)
-            source = nil
-            throw SafariApprovalVault.Error.unavailable
-        })
+        do {
+            try await host.performSourceMutation(preparing: {}) { _ in
+                XCTAssertTrue(keys.keys.isEmpty)
+                source = nil
+                throw SafariApprovalVault.Error.unavailable
+            }
+            XCTFail("Source mutation must fail")
+        } catch {
+            XCTAssertEqual(error as? SafariApprovalVault.Error, .unavailable)
+        }
         XCTAssertNil(source)
         try cachedEnvelope.write(to: url, options: .atomic)
 
@@ -2615,8 +2844,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(priorLease)
     }
 
+    @MainActor
     func testPublicationRevokesOldKeysBeforeSourceMutation()
-        throws {
+        async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -2656,7 +2886,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         reconciliationQueue.sync {}
         events.removeAll()
 
-        try host.performSourceMutation {
+        try await host.performSourceMutation(preparing: {}) { _ in
             events.append("source")
             XCTAssertNil(vault.catalogAccess())
         }

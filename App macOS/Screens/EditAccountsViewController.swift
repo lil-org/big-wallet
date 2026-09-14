@@ -20,6 +20,8 @@ class EditAccountsViewController: NSViewController {
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
+    private var isSaving = false
+    private var isNativeApprovalReviewInvalidated = false
     private var previewCoin: WalletCoin? { accountSelection?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
@@ -80,6 +82,7 @@ class EditAccountsViewController: NSViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
+        guard !isSaving, !isNativeApprovalReviewInvalidated, let wallet else { return }
         guard !toggledIndexes.isEmpty else {
             showAccountsList()
             return
@@ -87,11 +90,24 @@ class EditAccountsViewController: NSViewController {
         
         let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
         let newAccounts: [WalletAccount] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
-        do {
-            try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
-            showAccountsList()
-        } catch {
-            presentMessageAlert(Strings.somethingWentWrong, style: .informational)
+        isSaving = true
+        updateOkButtonState()
+        cancelButton.isEnabled = false
+        Task {
+            defer {
+                isSaving = false
+                updateOkButtonState()
+                cancelButton.isEnabled = true
+            }
+            guard !isNativeApprovalReviewInvalidated else { return }
+            do {
+                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+                guard !isNativeApprovalReviewInvalidated else { return }
+                showAccountsList()
+            } catch {
+                guard !isNativeApprovalReviewInvalidated else { return }
+                presentMessageAlert(Strings.somethingWentWrong, style: .informational)
+            }
         }
     }
     
@@ -117,7 +133,7 @@ class EditAccountsViewController: NSViewController {
     private func updateOkButtonState() {
         let hasVisibleEnabledAccount = cellModels.contains(where: { $0.isEnabled })
         let hasHiddenEnabledAccount = !enabledUndiscoveredAccountKeys.isEmpty
-        okButton.isEnabled = hasVisibleEnabledAccount || hasHiddenEnabledAccount
+        okButton.isEnabled = !isSaving && (hasVisibleEnabledAccount || hasHiddenEnabledAccount)
     }
 
     private func resetPreviewAccounts() {
@@ -239,6 +255,7 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
 extension EditAccountsViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
+        isNativeApprovalReviewInvalidated = true
         invalidatePreviewAccounts()
         accountSelection?.invalidate()
         NotificationCenter.default.removeObserver(

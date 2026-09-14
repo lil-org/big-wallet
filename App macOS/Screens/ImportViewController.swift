@@ -9,6 +9,7 @@ class ImportViewController: NSViewController {
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     private var presentedPasswordAlert: (alert: NSAlert, token: UUID)?
     private var isNativeApprovalReviewInvalidated = false
+    private var isImporting = false
     
     @IBOutlet weak var titleTextField: NSTextField!
     @IBOutlet weak var textField: NSTextField! {
@@ -29,6 +30,7 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
+        guard !isImporting else { return }
         if inputValidationResult == .requiresPassword {
             showPasswordAlert()
         } else {
@@ -103,11 +105,25 @@ class ImportViewController: NSViewController {
     }
     
     private func importWith(input: String, password: String?) {
-        do {
-            let wallet = try walletsManager.addWallet(input: input, inputPassword: password)
-            showAccountsList(newWalletId: wallet.id)
-        } catch {
-            presentMessageAlert(Strings.failedToImportWallet, style: .critical)
+        guard !isImporting, !isNativeApprovalReviewInvalidated else { return }
+        isImporting = true
+        okButton.isEnabled = false
+        cancelButton.isEnabled = false
+        Task {
+            defer {
+                isImporting = false
+                okButton.isEnabled = inputValidationResult != .invalid
+                cancelButton.isEnabled = true
+            }
+            guard !isNativeApprovalReviewInvalidated else { return }
+            do {
+                let wallet = try await walletsManager.addWallet(input: input, inputPassword: password)
+                guard !isNativeApprovalReviewInvalidated else { return }
+                showAccountsList(newWalletId: wallet.id)
+            } catch {
+                guard !isNativeApprovalReviewInvalidated else { return }
+                presentMessageAlert(Strings.failedToImportWallet, style: .critical)
+            }
         }
     }
     
@@ -139,7 +155,7 @@ extension ImportViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
         inputValidationResult = walletsManager.validateWalletInput(textField.stringValue)
-        okButton.isEnabled = inputValidationResult != .invalid
+        okButton.isEnabled = !isImporting && inputValidationResult != .invalid
     }
     
 }

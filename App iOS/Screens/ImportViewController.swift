@@ -68,6 +68,7 @@ class ImportViewController: UIViewController {
     }
     
     private func attemptImportWithCurrentInput() {
+        guard !isWaiting else { return }
         if inputValidationResult == .requiresPassword {
             askPassword()
         } else {
@@ -86,13 +87,16 @@ class ImportViewController: UIViewController {
     }
     
     private func importWith(input: String, password: String?) {
-        do {
-            _ = try walletsManager.addWallet(input: input, inputPassword: password)
-            completion?(true)
-            dismissAnimated()
-        } catch {
-            setWaiting(false)
-            showMessageAlert(text: Strings.failedToImportWallet)
+        setWaiting(true)
+        Task {
+            defer { setWaiting(false) }
+            do {
+                _ = try await walletsManager.addWallet(input: input, inputPassword: password)
+                completion?(true)
+                dismissAnimated()
+            } catch {
+                showMessageAlert(text: Strings.failedToImportWallet)
+            }
         }
     }
     

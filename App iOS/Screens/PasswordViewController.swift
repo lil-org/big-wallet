@@ -12,6 +12,7 @@ class PasswordViewController: UIViewController {
     
     private let keychain = Keychain.shared
     private var mode = Mode.create
+    private var isSaving = false
     var passwordToRepeat: String?
     
     @IBOutlet weak var passwordTextField: UITextField! {
@@ -122,6 +123,7 @@ class PasswordViewController: UIViewController {
     }
     
     private func proceedIfPossible() {
+        guard !isSaving else { return }
         switch mode {
         case .create:
             if passwordTextField.text?.isOkAsPassword == true {
@@ -134,10 +136,20 @@ class PasswordViewController: UIViewController {
             }
         case .repeatAfterCreate:
             if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
-                if keychain.save(password: password) {
-                    showAccountsList()
-                } else {
-                    showMessageAlert(text: Strings.somethingWentWrong)
+                isSaving = true
+                okButton.isEnabled = false
+                navigationController?.view.isUserInteractionEnabled = false
+                Task {
+                    defer {
+                        isSaving = false
+                        okButton.isEnabled = true
+                        navigationController?.view.isUserInteractionEnabled = true
+                    }
+                    if await keychain.save(password: password) {
+                        showAccountsList()
+                    } else {
+                        showMessageAlert(text: Strings.somethingWentWrong)
+                    }
                 }
             } else {
                 showMessageAlert(text: Strings.passwordDoesNotMatch)
