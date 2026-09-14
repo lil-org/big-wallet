@@ -79,7 +79,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     ) {
         guard let request = try? JSONDecoder().decode(InternalSafariRequest.self, from: data),
               ExtensionBridge.isInternalPayloadAllowed(
-                  subject: request.subject,
+                  command: request.command,
                   byteCount: data.count
               ) else {
             context.cancelRequest(withError: HandlerError.invalidMessage)

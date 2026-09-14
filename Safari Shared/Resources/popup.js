@@ -78,9 +78,134 @@ let currentRequestController = null;
 let popupStrings = {};
 let ignoreSliderUntilRelease = false;
 
+class PopupCommandLane {
+    constructor() {
+        this.waiting = new Set();
+        this.tail = Promise.resolve();
+    }
+
+    enqueue({owner, isValid, dispatch}) {
+        let resolve;
+        const result = new Promise(completion => { resolve = completion; });
+        const entry = {owner, resolve};
+        this.waiting.add(entry);
+        const operation = this.tail.then(async () => {
+            if (!this.waiting.delete(entry) || isValid && !isValid()) {
+                return {status: "cancelled"};
+            }
+            return {status: "response", response: await dispatch()};
+        });
+        this.tail = operation.then(() => {}, () => {});
+        operation.then(resolve, () => resolve({status: "failure"}));
+        return {result, cancelQueued: () => this.cancelQueued(entry)};
+    }
+
+    cancelQueued(entry) {
+        if (!this.waiting.delete(entry)) { return false; }
+        entry.resolve({status: "cancelled"});
+        return true;
+    }
+
+    cancelOwner(owner) {
+        for (const entry of this.waiting) {
+            if (entry.owner === owner) { this.cancelQueued(entry); }
+        }
+    }
+}
+
+class PopupReadCoordinator {
+    constructor(commands, scope) {
+        this.commands = commands;
+        this.scope = scope;
+        this.flight = null;
+        this.scheduled = null;
+        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+    }
+
+    resetBackoff() {
+        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+    }
+
+    didPresent(state, refresh, unchanged) {
+        this.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
+            ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
+            : TRANSACTION_REFRESH_INTERVAL;
+        this.schedule();
+    }
+
+    followUpMode() {
+        const {commands, scope} = this;
+        if (!commands.isActive(scope) || scope.transportError ||
+            scope.phase === "submitting" || this.flight) { return null; }
+        if (scope.phase === "following" || shouldPollApprovalState(scope.nativeState)) {
+            return "poll";
+        }
+        return scope.nativeState?.state === "review" &&
+            scope.nativeState.review?.kind === "sendTransaction" ? "refresh" : null;
+    }
+
+    schedule() {
+        const mode = this.followUpMode();
+        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : this.refreshDelay;
+        const current = this.scheduled;
+        if (current && current.mode === mode && current.delay === delay &&
+            current.revision === this.scope.revision) { return; }
+        if (current) {
+            clearTimeout(current.timer);
+            this.scheduled = null;
+        }
+        if (mode === null) { return; }
+        const scheduled = {mode, delay, revision: this.scope.revision, timer: null};
+        scheduled.timer = setTimeout(() => {
+            if (this.scheduled !== scheduled) { return; }
+            this.scheduled = null;
+            if (!this.commands.isCurrent(this.scope, scheduled.revision) || this.followUpMode() !== mode) {
+                this.schedule();
+                return;
+            }
+            void this.read({refresh: mode === "refresh"});
+        }, delay);
+        this.scheduled = scheduled;
+    }
+
+    async read({refresh = false} = {}) {
+        const {commands, scope} = this;
+        if (!commands.isActive(scope) || scope.phase === "submitting") { return; }
+        const revision = scope.revision;
+        if (this.flight) {
+            const flight = this.flight;
+            if (flight.revision === revision) {
+                if (!refresh) { flight.refresh = false; }
+                return flight.result;
+            }
+            await flight.result;
+            if (!commands.isCurrent(scope, revision)) { return; }
+            return this.read({refresh});
+        }
+        const flight = {revision, refresh, result: null};
+        this.flight = flight;
+        this.schedule();
+        flight.result = (async () => {
+            try {
+                const outcome = await commands.send({
+                    scope, lane: "read", subject: "getApprovalState",
+                    isValid: () => commands.isCurrent(scope, revision) && scope.phase !== "submitting",
+                });
+                const state = commands.accept({scope, outcome, revision});
+                if (state) { commands.adopt({scope, state, refresh: flight.refresh}); }
+                return state;
+            } finally {
+                if (this.flight === flight) { this.flight = null; }
+                this.schedule();
+            }
+        })();
+        return flight.result;
+    }
+}
+
 class PopupCommandCoordinator {
     constructor() {
-        this.channels = {read: Promise.resolve(), action: Promise.resolve()};
+        this.lanes = {read: new PopupCommandLane(), action: new PopupCommandLane()};
         this.activeScope = null;
     }
 
@@ -92,14 +217,11 @@ class PopupCommandCoordinator {
             transportError: false,
             phase: "loading",
             revision: 0,
-            readFlight: null,
             mutation: null,
             speedCommand: null,
-            scheduledRead: null,
-            refreshDelay: TRANSACTION_REFRESH_INTERVAL,
-            tickets: new Set(),
             completion: null,
         };
+        scope.reads = new PopupReadCoordinator(this, scope);
         this.activeScope = scope;
         return scope;
     }
@@ -119,58 +241,29 @@ class PopupCommandCoordinator {
             hasApprovalAction(scope.nativeState, action);
     }
 
-    schedule({lane, subject, id, payload, requestToken, reviewToken, approvalRequest, isValid}) {
-        let resolveResult;
-        const ticket = {
-            state: "waiting",
-            result: new Promise(resolve => { resolveResult = resolve; }),
-            cancel() {
-                if (ticket.state !== "waiting") { return false; }
-                ticket.state = "cancelled";
-                resolveResult({status: "cancelled"});
-                return true;
-            },
-        };
-        const operation = this.channels[lane].then(async () => {
-            if (ticket.state === "cancelled" || isValid && !isValid()) {
-                ticket.state = "cancelled";
-                return {status: "cancelled"};
-            }
-            ticket.state = "dispatched";
-            try {
-                const response = await settleNativeMessage(Promise.resolve(nativeMessage(
-                    subject, id, payload, requestToken,
-                    typeof reviewToken === "function" ? reviewToken() : reviewToken,
-                    approvalRequest
-                )), subject === "approveRequest");
-                return {status: "response", response};
-            } catch {
-                return {status: "failure"};
-            } finally {
-                ticket.state = "settled";
-            }
+    schedule({lane, owner, subject, id, payload, requestToken, reviewToken, approvalRequest, isValid}) {
+        return this.lanes[lane].enqueue({
+            owner,
+            isValid,
+            dispatch: () => settleNativeMessage(Promise.resolve(nativeMessage(
+                subject, id, payload, requestToken,
+                typeof reviewToken === "function" ? reviewToken() : reviewToken,
+                approvalRequest
+            )), subject === "approveRequest"),
         });
-        this.channels[lane] = operation.then(() => {}, () => {});
-        operation.then(resolveResult, () => resolveResult({status: "failure"}));
-        return ticket;
     }
 
-    async send({scope, subject, payload, lane = "action", reviewToken, isValid, owner}) {
+    async send({scope, subject, payload, lane = "action", reviewToken, isValid, speedCommand}) {
         if (!this.isActive(scope)) { return {status: "cancelled"}; }
-        const ticket = this.schedule({
-            lane, subject, payload, reviewToken,
+        const queued = this.schedule({
+            lane, owner: scope, subject, payload, reviewToken,
             id: scope.request.id,
             requestToken: scope.request.requestToken,
             approvalRequest: scope.request,
             isValid: () => this.isActive(scope) && (!isValid || isValid()),
         });
-        scope.tickets.add(ticket);
-        if (owner) { owner.ticket = ticket; }
-        try {
-            return await ticket.result;
-        } finally {
-            scope.tickets.delete(ticket);
-        }
+        if (speedCommand) { speedCommand.cancelQueued = queued.cancelQueued; }
+        return queued.result;
     }
 
     readQueue() {
@@ -180,7 +273,8 @@ class PopupCommandCoordinator {
     invalidate(scope) {
         scope.revision += 1;
         this.reconcileScheduling(scope);
-        for (const ticket of scope.tickets) { ticket.cancel(); }
+        this.lanes.read.cancelOwner(scope);
+        this.lanes.action.cancelOwner(scope);
         this.discardSpeed({scope});
     }
 
@@ -201,38 +295,8 @@ class PopupCommandCoordinator {
         return scope.completion;
     }
 
-    followUpMode(scope) {
-        if (!this.isActive(scope) || scope.transportError ||
-            scope.phase === "submitting" || scope.readFlight) { return null; }
-        if (scope.phase === "following" || shouldPollApprovalState(scope.nativeState)) {
-            return "poll";
-        }
-        return scope.nativeState?.state === "review" &&
-            scope.nativeState.review?.kind === "sendTransaction" ? "refresh" : null;
-    }
-
     reconcileScheduling(scope) {
-        const mode = this.followUpMode(scope);
-        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : scope.refreshDelay;
-        const current = scope.scheduledRead;
-        if (current && current.mode === mode && current.delay === delay &&
-            current.revision === scope.revision) { return; }
-        if (current) {
-            clearTimeout(current.timer);
-            scope.scheduledRead = null;
-        }
-        if (mode === null) { return; }
-        const scheduled = {mode, delay, revision: scope.revision, timer: null};
-        scheduled.timer = setTimeout(() => {
-            if (scope.scheduledRead !== scheduled) { return; }
-            scope.scheduledRead = null;
-            if (!this.isCurrent(scope, scheduled.revision) || this.followUpMode(scope) !== mode) {
-                this.reconcileScheduling(scope);
-                return;
-            }
-            void this.read({scope, refresh: mode === "refresh"});
-        }, delay);
-        scope.scheduledRead = scheduled;
+        scope.reads.schedule();
     }
 
     accept({scope, outcome, revision, allowsIgnored = false}) {
@@ -256,7 +320,7 @@ class PopupCommandCoordinator {
         if (!this.isActive(scope)) { return; }
         scope.transportError = true;
         scope.phase = "displaying";
-        scope.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+        scope.reads.resetBackoff();
         this.invalidate(scope);
         scope.controller.renderTransportFailure();
     }
@@ -268,43 +332,11 @@ class PopupCommandCoordinator {
         scope.transportError = false;
         scope.phase = shouldPollApprovalState(state) ? "following" : "displaying";
         const unchanged = scope.controller.presentState(state, refresh && hadState);
-        scope.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
-            ? Math.min(scope.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
-            : TRANSACTION_REFRESH_INTERVAL;
-        this.reconcileScheduling(scope);
+        scope.reads.didPresent(state, refresh, unchanged);
     }
 
-    async read({scope, refresh = false}) {
-        if (!this.isActive(scope) || scope.phase === "submitting") { return; }
-        const revision = scope.revision;
-        if (scope.readFlight) {
-            const flight = scope.readFlight;
-            if (flight.revision === revision) {
-                if (!refresh) { flight.refresh = false; }
-                return flight.result;
-            }
-            await flight.result;
-            if (!this.isCurrent(scope, revision)) { return; }
-            return this.read({scope, refresh});
-        }
-        const flight = {revision, refresh, result: null};
-        scope.readFlight = flight;
-        this.reconcileScheduling(scope);
-        flight.result = (async () => {
-            try {
-                const outcome = await this.send({
-                    scope, lane: "read", subject: "getApprovalState",
-                    isValid: () => this.isCurrent(scope, revision) && scope.phase !== "submitting",
-                });
-                const state = this.accept({scope, outcome, revision});
-                if (state) { this.adopt({scope, state, refresh: flight.refresh}); }
-                return state;
-            } finally {
-                if (scope.readFlight === flight) { scope.readFlight = null; }
-                this.reconcileScheduling(scope);
-            }
-        })();
-        return flight.result;
+    read({scope, refresh = false}) {
+        return scope.reads.read({refresh});
     }
 
     async retry({scope}) {
@@ -382,7 +414,7 @@ class PopupCommandCoordinator {
         }
     }
 
-    async mutate({scope, subject, payload, reviewToken, owner}) {
+    async mutate({scope, subject, payload, reviewToken, speedCommand}) {
         const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
         if (scope.phase === "submitting" || !this.allows(scope, action)) { return null; }
         const isSpeed = subject === "setTransactionSpeed";
@@ -394,9 +426,9 @@ class PopupCommandCoordinator {
             if (scope.phase === "submitting" || !this.allows(scope, action) ||
                 !isSpeed && scope.mutation !== mutation) { return null; }
             const revision = ++scope.revision;
-            scope.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+            scope.reads.resetBackoff();
             const outcome = await this.send({
-                scope, subject, payload, owner: owner || mutation,
+                scope, subject, payload, speedCommand,
                 reviewToken: subject === "applyTransactionEdits"
                     ? () => scope.nativeState?.review?.reviewToken : reviewToken,
                 isValid: () => this.isCurrent(scope, revision) && this.allows(scope, action) &&
@@ -423,7 +455,7 @@ class PopupCommandCoordinator {
             try {
                 let state = null;
                 if (scope.nativeState?.review?.reviewToken === reviewToken) {
-                    state = await this.mutate({scope, subject: "setTransactionSpeed", payload, reviewToken, owner: command});
+                    state = await this.mutate({scope, subject: "setTransactionSpeed", payload, reviewToken, speedCommand: command});
                 }
                 if (!this.isActive(scope) || command.cancelled) { return; }
                 if (state) {
@@ -452,7 +484,7 @@ class PopupCommandCoordinator {
         const command = scope.speedCommand;
         if (command) {
             command.cancelled = true;
-            command.ticket?.cancel();
+            command.cancelQueued?.();
             command.finish(false);
             scope.speedCommand = null;
         }

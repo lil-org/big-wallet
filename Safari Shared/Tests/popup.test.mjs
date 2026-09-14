@@ -949,6 +949,14 @@ function popupHarness(options = {}) {
             await flushPopup();
             return this.controller;
         },
+        followUpTimerId(excludedIds = []) {
+            const delays = [400, 600, 1200, 2400, 4800, 9600, 10000];
+            const matches = [...timers.values()].filter(timer =>
+                delays.includes(timer.delay) && !excludedIds.includes(timer.id)
+            );
+            assert.ok(matches.length <= 1, "Expected at most one follow-up timer");
+            return matches[0]?.id ?? null;
+        },
         async fire(id) {
             const timer = timers.get(id);
             assert.ok(timer, `Expected live timer ${id}`);
@@ -1088,7 +1096,7 @@ test("poll and transaction edit responses use the same nonfatal image normalizat
     harness.commands.adopt({scope: controller.scope, state: {id: controller.request.id, state: "working", actions: []}});
     harness.commands.reconcileScheduling(controller.scope);
 
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
+    await harness.fire(harness.followUpTimerId());
 
     assert.equal(controller.state.state, "review");
     assert.equal(controller.state.review.reviewToken, requestToken(102));
@@ -1190,8 +1198,7 @@ test("controller approval strips caller revisions and passwords at the actual wo
             privateBrowsing: false,
             workflowVersion: 3,
         }]);
-        assert.equal(harness.commands.followUpMode(harness.controller.scope), "poll");
-        assert.equal(harness.timers.get((harness.controller.scope.scheduledRead?.timer ?? null)).delay, 400);
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
     }
 });
 
@@ -1202,7 +1209,7 @@ test("controller errors explicitly retry the visible request without entering th
     assert.equal(harness.get("button-approve").disabled, false);
     assert.equal(harness.get("button-approve").textContent, "Refresh");
     assert.equal(harness.get("button-reject").disabled, true);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
 
     await harness.get("button-approve").emit("click");
 
@@ -1229,7 +1236,7 @@ test("rejectable errors submit tokenless Reject without a refresh", async () => 
     }});
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.get("button-reject").disabled, false);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
 
     await harness.get("button-reject").emit("click");
 
@@ -1241,7 +1248,7 @@ test("rejectable errors submit tokenless Reject without a refresh", async () => 
         requestToken: controller.request.requestToken,
         __bwPrivateBrowsing: false,
     }]);
-    assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
 });
 
 test("approval polling adopts an error and stops its only follow-up timer", async () => {
@@ -1251,13 +1258,13 @@ test("approval polling adopts an error and stops its only follow-up timer", asyn
     harness.commands.adopt({scope: controller.scope, state: {id: controller.request.id, state: "working", actions: []}});
     harness.commands.reconcileScheduling(controller.scope);
 
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
+    await harness.fire(harness.followUpTimerId());
 
     assert.equal(controller.state.state, "error");
     assert.equal(controller.scope.transportError, false);
     assert.equal(harness.get("request-error").textContent, "Failed");
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
     assert.equal(harness.timers.size, 0);
 });
 
@@ -1303,7 +1310,7 @@ test("timed-out native actions release their real lane before raw settlement", a
     await flushPopup();
     assert.deepEqual(harness.visibleSnapshot(), beforeLateReply);
     assert.equal(harness.timers.size, 1);
-    assert.equal(harness.commands.followUpMode(harness.controller.scope), "poll");
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
 });
 
 test("queued edits select the dispatch-time review token", async () => {
@@ -1347,14 +1354,14 @@ test("queued approval cancels on review rotation while tokenless rejection remai
         if (subject === "approveRequest") {
             assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["rejectRequest"]);
             assert.equal(controller.scope.phase, "displaying");
-            assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+            assert.equal(harness.followUpTimerId(), null);
         } else {
             assert.equal(harness.nativeMessages.at(-1).subject, "rejectRequest");
             assert.deepEqual(harness.nativeMessages.map(message => message.requestToken), [
                 queuedRejectionHandle.requestToken, controller.request.requestToken,
             ]);
             assert.equal(harness.nativeMessages.at(-1).reviewToken, undefined);
-            assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+            assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
         }
         assert.equal(controller.state.review.reviewToken, requestToken(102));
     }
@@ -1378,7 +1385,7 @@ test("terminal decisions fence an older read and poll only after their native re
         const decision = harness.commands[subject === "approveRequest" ? "approve" : "reject"]({scope: controller.scope, payload: subject === "approveRequest" ? {} : undefined});
         await flushPopup();
         assert.equal(controller.scope.phase, "submitting");
-        assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+        assert.equal(harness.followUpTimerId(), null);
         assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
 
         readGate.resolve(messageState(controller.request, {reviewToken: requestToken(999), title: "Stale"}));
@@ -1387,10 +1394,10 @@ test("terminal decisions fence an older read and poll only after their native re
         assert.equal(controller.state.review.reviewToken, requestToken(101));
         assert.equal(harness.get("request-title").textContent, "Sign message");
         assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
-        assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+        assert.equal(harness.followUpTimerId(), null);
         actionGate.resolve({status: "ok"});
         await decision;
-        assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
     }
 });
 
@@ -1398,6 +1405,7 @@ test("replacement with the same numeric id disposes old reads actions and mutati
     for (const operation of ["read", "approval", "mutation"]) {
         const harness = await reviewedPopup(transactionState);
         const first = harness.controller;
+        const originalTimer = harness.followUpTimerId();
         const replacement = pendingRequest(first.request.id, 2);
         const gate = deferred();
         harness.handlers.native = (message, fallback) => {
@@ -1433,7 +1441,7 @@ test("replacement with the same numeric id disposes old reads actions and mutati
 
         assert.equal(first.scope.phase, "disposed");
         assert.equal(first.isActive, false);
-        assert.equal((first.scope.scheduledRead?.timer ?? null), null);
+        assert.equal(harness.timers.has(originalTimer), false);
 
         assert.equal(harness.controller, second);
         assert.equal(second.request.requestToken, replacement.requestToken);
@@ -1443,7 +1451,7 @@ test("replacement with the same numeric id disposes old reads actions and mutati
         assert.ok(!harness.textWrites.slice(writeCount).some(write => write.text === "Late A"));
         if (operation !== "read") { assert.deepEqual(harness.visibleSnapshot(), before); }
         assert.equal(harness.timers.size, 1);
-        assert.ok(harness.timers.has((second.scope.scheduledRead?.timer ?? null)));
+        assert.ok(harness.timers.has(harness.followUpTimerId()));
     }
 });
 
@@ -1478,8 +1486,8 @@ test("disposing a queued approval prevents its native dispatch and preserves the
     assert.deepEqual(harness.workerMessages.filter(message => message.subject === "approveRequestWithCurrentRevisions")
         .map(message => message.requestToken), [replacement.requestToken]);
     assert.equal(first.scope.phase, "disposed");
-    assert.equal((first.scope.scheduledRead?.timer ?? null), null);
-    assert.equal(harness.commands.followUpMode(second.scope), "poll");
+    assert.equal(first.isActive, false);
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
     assert.equal(harness.get("request-title").textContent, "Replacement B");
 });
 
@@ -1517,28 +1525,28 @@ test("disposing a dispatched approval keeps its lane occupied until reply or tim
             first.request.requestToken, replacement.requestToken,
         ]);
         assert.equal(first.scope.phase, "disposed");
-        assert.equal((first.scope.scheduledRead?.timer ?? null), null);
-        assert.equal(harness.commands.followUpMode(second.scope), "poll");
+        assert.equal(first.isActive, false);
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
         const beforeLateReply = harness.visibleSnapshot();
-        const followUp = (second.scope.scheduledRead?.timer ?? null);
+        const followUp = harness.followUpTimerId();
         gate.resolve({status: "ok"});
         await flushPopup();
         assert.deepEqual(harness.visibleSnapshot(), beforeLateReply);
-        assert.equal((second.scope.scheduledRead?.timer ?? null), followUp);
+        assert.equal(harness.followUpTimerId(), followUp);
     }
 });
 
 test("state transitions own one follow-up timer and ignore stale callbacks", async () => {
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
-    const initial = (controller.scope.scheduledRead?.timer ?? null);
+    const initial = harness.followUpTimerId();
     const old = harness.timers.get(initial);
     harness.commands.reconcileScheduling(controller.scope);
     harness.commands.reconcileScheduling(controller.scope);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), initial);
+    assert.equal(harness.followUpTimerId(), initial);
     assert.equal(old.delay, 600);
     harness.commands.adopt({scope: controller.scope, state: {id: controller.request.id, state: "working", actions: []}});
-    const current = (controller.scope.scheduledRead?.timer ?? null);
+    const current = harness.followUpTimerId();
     assert.equal(harness.timers.size, 1);
     assert.equal(harness.timers.get(current).delay, 400);
 
@@ -1546,21 +1554,20 @@ test("state transitions own one follow-up timer and ignore stale callbacks", asy
     harness.commands.reconcileScheduling(controller.scope);
     await flushPopup();
 
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), current);
+    assert.equal(harness.followUpTimerId(), current);
     assert.equal(harness.nativeMessages.length, 0);
     harness.setState(controller.request, {id: controller.request.id, state: "working", actions: []});
     await harness.fire(current);
     assert.equal(harness.timers.size, 1);
-    assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
     harness.setState(controller.request, transactionState(controller.request));
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
+    await harness.fire(harness.followUpTimerId());
     assert.equal(harness.timers.size, 1);
-    assert.equal(harness.commands.followUpMode(controller.scope), "refresh");
-    assert.equal(harness.timers.get((controller.scope.scheduledRead?.timer ?? null)).delay, 600);
-    const last = harness.timers.get((controller.scope.scheduledRead?.timer ?? null));
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+    const last = harness.timers.get(harness.followUpTimerId());
     controller.dispose();
     last.callback();
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
     assert.equal(harness.timers.size, 0);
 });
 
@@ -1609,7 +1616,7 @@ test("reconciliation during the slider-await microtask prevents approval and ric
 
         assert.equal(controller.scope.phase, "reconciling");
         assert.equal(controller.isActive, false);
-        assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+        assert.equal(harness.followUpTimerId(), null);
 
         assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests"]);
         assert.deepEqual(harness.workerMessages, []);
@@ -1649,7 +1656,7 @@ test("queued and dispatched decisions cannot leave reconciliation after their la
 
         assert.equal(controller.scope.phase, "reconciling");
         assert.equal(controller.isActive, false);
-        assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+        assert.equal(harness.followUpTimerId(), null);
         assert.deepEqual(harness.visibleSnapshot(), before);
         assert.equal(harness.focusCalls.length, focusCount);
         assert.equal(harness.workerMessages.filter(message =>
@@ -1726,7 +1733,7 @@ test("keyboard slider input stays local and one terminal command adopts its rota
     assert.equal(await completion, true);
     assert.equal(controller.scope.speedCommand, null);
     assert.equal(controller.state.review.reviewToken, requestToken(102));
-    assert.equal(harness.commands.followUpMode(controller.scope), "refresh");
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     assert.equal(Number(slider.value), 145);
 });
 
@@ -1750,7 +1757,7 @@ test("approval waits for the drag result and ignores the old gesture's late term
 
     assert.equal(harness.workerMessages[0].subject, "approveRequestWithCurrentRevisions");
     assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
-    assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
     slider.emit("pointerup");
     slider.emit("change");
     await flushPopup();
@@ -1778,7 +1785,7 @@ test("stale or ignored terminal slider commands refresh and do not approve", asy
         assert.deepEqual(harness.workerMessages, []);
         assert.equal(controller.state.review.reviewToken, requestToken(102));
         assert.equal(controller.scope.speedCommand, null);
-        assert.equal(harness.commands.followUpMode(controller.scope), "refresh");
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     }
 });
 
@@ -1950,7 +1957,7 @@ test("an edit error preserves the open editor and typed values", async () => {
     assert.equal(harness.get("edit-nonce").value, "invalid");
     assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
     assert.equal(controller.transaction.editorDirty, true);
-    assert.equal(harness.commands.followUpMode(controller.scope), "refresh");
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
 });
 
 test("alert clicks send the click-time review token and ignore a superseded response", async () => {
@@ -2004,7 +2011,7 @@ test("disposed alert callbacks cannot close or focus the replacement request", a
     await harness.show([replacement]);
     const before = harness.visibleSnapshot();
     const focusCount = harness.focusCalls.length;
-    const timer = (harness.controller.scope.scheduledRead?.timer ?? null);
+    const timer = harness.followUpTimerId();
 
     gate.resolve(transactionState(first.request));
     await clicked;
@@ -2013,7 +2020,7 @@ test("disposed alert callbacks cannot close or focus the replacement request", a
 
     assert.deepEqual(harness.visibleSnapshot(), before);
     assert.equal(harness.focusCalls.length, focusCount);
-    assert.equal((harness.controller.scope.scheduledRead?.timer ?? null), timer);
+    assert.equal(harness.followUpTimerId(), timer);
     assert.equal(harness.get("screen-request").inert, true);
     assert.equal(harness.get("alert-title").textContent, "Replacement alert");
     assert.equal(harness.nativeMessages.filter(message => message.subject === "resolveApprovalAlert").length, 1);
@@ -2119,7 +2126,7 @@ test("busy polling removes capabilities while preserving the rendered review", a
         assert.equal(harness.get("editor-apply").disabled, true);
         assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
         assert.equal(harness.get("screen-request").inert, true);
-        assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
         harness.clearMessages();
         await controller.approveCurrent();
         await controller.rejectCurrent();
@@ -2230,7 +2237,7 @@ test("retry fences an older read and adopts its returned review without another 
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getApprovalState", "retryApproval"]);
     assert.equal(Object.hasOwn(harness.nativeMessages[1], "reviewToken"), false);
     assert.equal(Object.hasOwn(harness.nativeMessages[1], "payload"), false);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
 });
 
 test("queued and dispatched retries cannot affect a replacement request", async () => {
@@ -2275,11 +2282,11 @@ test("retry follows busy states and reconciles missing requests", async () => {
         await flushPopup();
         if (state === "working") {
             assert.equal(controller.state.state, "working");
-            assert.equal(harness.commands.followUpMode(controller.scope), "poll");
+            assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
             assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
         } else {
             assert.equal(controller.scope.phase, "disposed");
-            assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+            assert.equal(harness.followUpTimerId(), null);
             assert.equal(harness.model.closed, 1);
         }
     }
@@ -2307,6 +2314,8 @@ test("late idle switch replies preserve preparing and working requests", async (
             await harness.boot();
             const switching = harness.call("switchAccountFromIdle");
             await flushPopup();
+            const switchTimeout = [...harness.timers.values()].find(timer => timer.delay === 10_000);
+            assert.ok(switchTimeout);
             const request = pendingRequest();
             harness.model.requests = [request];
             harness.setState(request, busy
@@ -2315,7 +2324,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             harness.notify();
             await harness.fire(harness.queue.refreshTimer);
             const controller = harness.controller;
-            const timer = (controller.scope.scheduledRead?.timer ?? null);
+            const timer = harness.followUpTimerId([switchTimeout.id]);
             const title = harness.get("request-title").textContent;
             const connection = harness.get("idle-connection").textContent;
             if (succeeds) {
@@ -2334,7 +2343,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             await switching;
             await flushPopup();
             assert.equal(harness.controller, controller);
-            assert.equal((controller.scope.scheduledRead?.timer ?? null), timer);
+            assert.equal(harness.followUpTimerId(), timer);
             assert.equal(harness.get("request-title").textContent, title);
             assert.equal(harness.get("idle-connection").textContent, connection);
             assert.equal(harness.get("screen-loading").classList.contains("hidden"), true);
@@ -2347,7 +2356,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             harness.model.requests = succeeds ? [next] : [];
             harness.setState(next, selectionState(next));
             harness.setState(request, {id: request.id, state: "missing", actions: []});
-            await harness.fire((controller.scope.scheduledRead?.timer ?? null));
+            await harness.fire(harness.followUpTimerId());
             assert.equal(controller.scope.phase, "disposed");
             if (succeeds) {
                 assert.equal(harness.controller.request.requestToken, next.requestToken);
@@ -2364,35 +2373,35 @@ test("state reads coalesce and transaction polling preserves its backoff", async
     const gate = deferred();
     harness.handlers.native = (message, fallback) =>
         message.subject === "getApprovalState" ? gate.promise : fallback(message);
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
+    await harness.fire(harness.followUpTimerId());
     const duplicate = harness.commands.read({scope: controller.scope, refresh: true});
     harness.commands.reconcileScheduling(controller.scope);
     harness.commands.reconcileScheduling(controller.scope);
     await flushPopup();
     assert.equal(harness.nativeMessages.length, 1);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
     gate.resolve(transactionState(controller.request));
     await duplicate;
     harness.handlers.native = undefined;
     for (const delay of [1200, 2400, 4800, 9600, 10000, 10000]) {
-        const timer = (controller.scope.scheduledRead?.timer ?? null);
+        const timer = harness.followUpTimerId();
         assert.equal(harness.timers.get(timer).delay, delay);
         harness.commands.reconcileScheduling(controller.scope);
-        assert.equal((controller.scope.scheduledRead?.timer ?? null), timer);
+        assert.equal(harness.followUpTimerId(), timer);
         await harness.fire(timer);
     }
     harness.setState(controller.request, transactionState(controller.request, {valueLine: "Changed value"}));
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
-    assert.equal(harness.timers.get((controller.scope.scheduledRead?.timer ?? null)).delay, 600);
+    await harness.fire(harness.followUpTimerId());
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     harness.setState(controller.request, transactionState(controller.request, {phase: "preparing"}, {actions: ["reject"]}));
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
-    assert.equal(harness.timers.get((controller.scope.scheduledRead?.timer ?? null)).delay, 600);
+    await harness.fire(harness.followUpTimerId());
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     harness.setState(controller.request, {id: controller.request.id, state: "authenticating", actions: []});
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
-    assert.equal(harness.timers.get((controller.scope.scheduledRead?.timer ?? null)).delay, 400);
+    await harness.fire(harness.followUpTimerId());
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
     harness.setState(controller.request, transactionState(controller.request));
-    await harness.fire((controller.scope.scheduledRead?.timer ?? null));
-    assert.equal(harness.timers.get((controller.scope.scheduledRead?.timer ?? null)).delay, 600);
+    await harness.fire(harness.followUpTimerId());
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
 });
 
 test("late idle status lookups probes and reloads cannot replace an active request", async () => {
@@ -2427,7 +2436,7 @@ test("late idle status lookups probes and reloads cannot replace an active reque
             harness.notify();
             await harness.fire(harness.queue.refreshTimer);
             const controller = harness.controller;
-            const timer = (controller.scope.scheduledRead?.timer ?? null);
+            const timer = harness.followUpTimerId();
             if (stage === "query") {
                 gate.resolve([{...harness.tab, id: 99, incognito: changed}]);
             } else if (stage === "probe") {
@@ -2448,7 +2457,7 @@ test("late idle status lookups probes and reloads cannot replace an active reque
             assert.equal(harness.queue.activeTab, originalTab);
             assert.equal(harness.queue.updateRecoveryTab, recoveryTab);
             assert.equal(harness.controller, controller);
-            assert.equal((controller.scope.scheduledRead?.timer ?? null), timer);
+            assert.equal(harness.followUpTimerId(), timer);
             assert.equal(harness.get("screen-loading").classList.contains("hidden"), true);
             harness.setState(request, transactionState(request));
             await harness.fire(timer);
@@ -2473,7 +2482,7 @@ test("authoritative slider recovery upgrades a coalesced refresh before approval
         const command = controller.finishSliderInteraction("ended", controller.request);
         await flushPopup();
         harness.commands.reconcileScheduling(controller.scope);
-        await harness.fire((controller.scope.scheduledRead?.timer ?? null));
+        await harness.fire(harness.followUpTimerId());
         sliderGate.resolve({status: "ignored"});
         if (!sameTurn) { await flushPopup(); }
         const fresh = transactionState(controller.request, {
@@ -2581,7 +2590,7 @@ test("a superseded recovery waiting for an old read cannot clear a newer error",
     assert.equal(controller.state, nativeSnapshot);
     assert.equal(JSON.stringify(controller.state), nativeSnapshotJSON);
     assert.equal(harness.get("request-error").classList.contains("hidden"), false);
-    assert.equal((controller.scope.scheduledRead?.timer ?? null), null);
+    assert.equal(harness.followUpTimerId(), null);
     assert.equal(reads, 1);
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
         "getApprovalState", "setTransactionSpeed", "rejectRequest",

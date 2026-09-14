@@ -204,33 +204,11 @@ struct InternalSafariRequest: Decodable {
         case getResponse(ResponseIdentity)
         case acknowledgeResponse(ResponseAcknowledgmentIdentity)
         case showApproval(ResponseAcknowledgmentIdentity)
-
-        var subject: Subject.Page {
-            switch self {
-            case .rpc:
-                return .rpc
-            case .getResponse:
-                return .getResponse
-            case .acknowledgeResponse:
-                return .acknowledgeResponse
-            case .showApproval:
-                return .showApproval
-            }
-        }
     }
 
     enum WorkerCommand {
         case getManualSwitchRequests(cursor: String?)
         case getManualSwitchResponse(ResponseIdentity)
-
-        var subject: Subject.Worker {
-            switch self {
-            case .getManualSwitchRequests:
-                return .getManualSwitchRequests
-            case .getManualSwitchResponse:
-                return .getManualSwitchResponse
-            }
-        }
     }
 
     enum PopupCommand {
@@ -242,27 +220,6 @@ struct InternalSafariRequest: Decodable {
         case setTransactionSpeed(PopupIdentity, TransactionSpeedPayload)
         case applyTransactionEdits(PopupIdentity, TransactionEditsPayload)
         case resolveApprovalAlert(PopupIdentity, ApprovalAlertPayload)
-
-        var subject: Subject.Popup {
-            switch self {
-            case .getPendingRequests:
-                return .getPendingRequests
-            case .getApprovalState:
-                return .getApprovalState
-            case .retryApproval:
-                return .retryApproval
-            case .approveRequest:
-                return .approveRequest
-            case .rejectRequest:
-                return .rejectRequest
-            case .setTransactionSpeed:
-                return .setTransactionSpeed
-            case .applyTransactionEdits:
-                return .applyTransactionEdits
-            case .resolveApprovalAlert:
-                return .resolveApprovalAlert
-            }
-        }
 
         var identity: PopupIdentity? {
             switch self {
@@ -291,19 +248,6 @@ struct InternalSafariRequest: Decodable {
     let id: Int
     let workflowVersion: Int
     let command: Command
-    
-    var subject: Subject {
-        switch command {
-        case .page(let command):
-            return .page(command.subject)
-        case .worker(let command):
-            return .worker(command.subject)
-        case .popup(let command):
-            return .popup(command.subject)
-        case .openApp:
-            return .openApp
-        }
-    }
 
     var requestToken: String? {
         guard case .popup(let command) = command else { return nil }

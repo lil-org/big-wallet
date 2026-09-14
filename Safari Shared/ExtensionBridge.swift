@@ -581,11 +581,11 @@ actor ExtensionBridge {
     }
 
     static func isInternalPayloadAllowed(
-        subject: InternalSafariRequest.Subject,
+        command: InternalSafariRequest.Command,
         byteCount: Int
     ) -> Bool {
         guard byteCount >= 0 else { return false }
-        if case .page(.rpc) = subject { return true }
+        if case .page(.rpc) = command { return true }
         return byteCount <= maximumPayloadBytes
     }
 
