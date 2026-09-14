@@ -131,7 +131,7 @@ actor NativeAgentLauncher {
     }
 
     struct ExactReceiptOwner {
-        let requestQuit: (_ isPending: () -> Bool) -> Bool
+        let requestQuit: @MainActor (_ isPending: () -> Bool) async -> Bool
         let isRunning: () -> Bool
     }
 
@@ -145,7 +145,7 @@ actor NativeAgentLauncher {
             ExtensionBridge.SnapshotResult
         let receiptRuntimeStatus: @MainActor (
             ExtensionBridge.NativeDeliveryReceipt
-        ) -> ReceiptRuntimeStatus
+        ) async -> ReceiptRuntimeStatus
         let clearReceipt: (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryReceipt
@@ -157,7 +157,7 @@ actor NativeAgentLauncher {
                 ExtensionBridge.SnapshotResult,
             receiptRuntimeStatus: @escaping @MainActor (
                 ExtensionBridge.NativeDeliveryReceipt
-            ) -> ReceiptRuntimeStatus,
+            ) async -> ReceiptRuntimeStatus,
             clearReceipt: @escaping (
                 ExtensionBridge.Handle,
                 ExtensionBridge.NativeDeliveryReceipt
@@ -174,7 +174,7 @@ actor NativeAgentLauncher {
             load: { await ExtensionBridge.shared.load(handle: $0) },
             receiptRuntimeStatus: { receipt in
 #if os(macOS)
-                NativeAgentLauncher.runtimeStatus(
+                await NativeAgentLauncher.runtimeStatus(
                     receipt: receipt
                 )
 #else
@@ -252,7 +252,7 @@ actor NativeAgentLauncher {
     )
 
     private let helperURL: () -> URL?
-    private let validate: (URL) -> Bool
+    private let validate: (URL) async -> Bool
     private let resolveHelper: HelperResolution
     private let confirm: Confirm
     private let existingDelivery: ExistingDelivery
@@ -263,7 +263,7 @@ actor NativeAgentLauncher {
     private var deliveryTailIdentifier: UUID?
     init(
         helperURL: @escaping () -> URL?,
-        validate: @escaping (URL) -> Bool,
+        validate: @escaping (URL) async -> Bool,
         resolveHelper: @escaping HelperResolution = { url, _, _ in
             .launch(url: url, createsNewApplicationInstance: false)
         },
@@ -451,11 +451,11 @@ actor NativeAgentLauncher {
         route: NativeAgentRoute,
         to selectedTarget: HelperTarget,
         deadline: UInt64,
-        validate: @escaping (URL) -> Bool,
+        validate: @escaping (URL) async -> Bool,
         launch: @escaping Launch
     ) async -> Bool {
         let isPending = { Self.isPending(deadline: deadline) }
-        guard isPending(), validate(selectedTarget.url), isPending() else {
+        guard isPending(), await validate(selectedTarget.url), isPending() else {
             return false
         }
         return await withCheckedContinuation { continuation in
@@ -493,9 +493,23 @@ actor NativeAgentLauncher {
             .appendingPathComponent("Big Wallet.app", isDirectory: true)
     }
 
-    private static func validateEmbeddedHelper(_ url: URL) -> Bool {
+    private static func validateEmbeddedHelper(_ url: URL) async -> Bool {
 #if os(macOS)
-        let extensionURL = Bundle.main.bundleURL
+        return await codeValidator.validate(
+            helperURL: url,
+            extensionURL: Bundle.main.bundleURL
+        )
+#else
+        return false
+#endif
+    }
+
+#if os(macOS)
+    private static let codeValidator = CodeValidator(
+        validate: { checkEmbeddedHelper($0, extensionURL: $1) }
+    )
+
+    private static func checkEmbeddedHelper(_ url: URL, extensionURL: URL) -> Bool {
         guard let bundle = Bundle(url: url),
               bundle.bundleIdentifier == "org.lil.wallet.ambient" else {
             logger.error("Helper bundle is unavailable")
@@ -534,10 +548,8 @@ actor NativeAgentLauncher {
 #else
         return helperTeam != nil && helperTeam == containingTeam
 #endif
-#else
-        return false
-#endif
     }
+#endif
 
     @MainActor
     private static func launchApplication(
@@ -797,7 +809,7 @@ actor NativeAgentLauncher {
         isPending: @escaping () -> Bool,
         helpers: @escaping () -> [RuntimeHelper],
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
-        validate: @escaping (URL) -> Bool,
+        validate: @escaping (URL) async -> Bool,
         uptime: @escaping () -> UInt64 = {
             DispatchTime.now().uptimeNanoseconds
         },
@@ -847,10 +859,10 @@ actor NativeAgentLauncher {
             }
             var mustWait = false
             var verifiedCurrentBundle = false
-            func verifyBeforeQuit() -> Bool {
+            func verifyBeforeQuit() async -> Bool {
                 guard isPending() else { return false }
                 if !verifiedCurrentBundle {
-                    guard validate(currentURL) else { return false }
+                    guard await validate(currentURL) else { return false }
                     verifiedCurrentBundle = true
                 }
                 return isPending() && expected.installedVersionMatches
@@ -864,7 +876,7 @@ actor NativeAgentLauncher {
                     monotonicNow - firstObservedAt >=
                         identityStartupGraceNanoseconds
                 if graceElapsed, !requestedQuit.contains(key) {
-                    guard verifyBeforeQuit() else { return nil }
+                    guard await verifyBeforeQuit() else { return nil }
                     let refreshedIdentity = verifiedRuntimeIdentity(
                         processIdentifier:
                             runtime.helper.processIdentifier,
@@ -901,7 +913,7 @@ actor NativeAgentLauncher {
             for runtime in incompatibleRuntimes {
                 let key = RuntimeProcessKey(runtime.helper)
                 if !requestedQuit.contains(key) {
-                    guard verifyBeforeQuit() else { return nil }
+                    guard await verifyBeforeQuit() else { return nil }
                     if let refreshedIdentity = verifiedRuntimeIdentity(
                         processIdentifier: runtime.helper.processIdentifier,
                         bundleURL: currentURL,
@@ -1052,7 +1064,7 @@ actor NativeAgentLauncher {
                 return .unavailable
             }
 
-            switch dependencies.receiptRuntimeStatus(receipt) {
+            switch await dependencies.receiptRuntimeStatus(receipt) {
             case .compatible:
                 return isPending() ? .delivered : .unavailable
             case .incompatible(let helper):
@@ -1070,7 +1082,7 @@ actor NativeAgentLauncher {
                 case .unavailable:
                     return .unavailable
                 }
-                guard isPending(), helper.requestQuit(isPending) else {
+                guard isPending(), await helper.requestQuit(isPending) else {
                     return .unavailable
                 }
                 while helper.isRunning() {
@@ -1112,7 +1124,7 @@ actor NativeAgentLauncher {
               let receipt = snapshot.nativeDeliveryReceipt,
               receipt.nativeDeliveryNonce == nativeDeliveryNonce,
               case .compatible(.running(_, _, let runtimeInstanceIdentifier)) =
-                dependencies.receiptRuntimeStatus(receipt) else { return false }
+                await dependencies.receiptRuntimeStatus(receipt) else { return false }
         return runtimeInstanceIdentifier == receipt.runtimeInstanceIdentifier
     }
 
@@ -1136,12 +1148,12 @@ actor NativeAgentLauncher {
     @MainActor
     private static func runtimeStatus(
         receipt: ExtensionBridge.NativeDeliveryReceipt
-    ) -> ReceiptRuntimeStatus {
+    ) async -> ReceiptRuntimeStatus {
         guard let expectedURL = embeddedHelperURL(),
               let expected = ExpectedRuntime(url: expectedURL) else {
             return .indeterminate
         }
-        return runtimeStatus(
+        return await runtimeStatus(
             receipt: receipt,
             expected: expected,
             helpers: runningHelpers,
@@ -1157,13 +1169,13 @@ actor NativeAgentLauncher {
         expectedVersion: AmbientRuntimeIdentity.Version,
         helpers: @escaping () -> [RuntimeHelper],
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
-        validate: @escaping (URL) -> Bool
-    ) -> ReceiptRuntimeStatus {
+        validate: @escaping (URL) async -> Bool
+    ) async -> ReceiptRuntimeStatus {
         let expected = ExpectedRuntime(
             url: expectedURL,
             version: expectedVersion
         )
-        return runtimeStatus(
+        return await runtimeStatus(
             receipt: receipt,
             expected: expected,
             helpers: helpers,
@@ -1178,8 +1190,8 @@ actor NativeAgentLauncher {
         expected: ExpectedRuntime,
         helpers: @escaping () -> [RuntimeHelper],
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
-        validate: @escaping (URL) -> Bool
-    ) -> ReceiptRuntimeStatus {
+        validate: @escaping (URL) async -> Bool
+    ) async -> ReceiptRuntimeStatus {
         switch observeReceiptOwner(receipt, helpers: helpers, identity: identity) {
         case .absent:
             return .absent
@@ -1192,7 +1204,7 @@ actor NativeAgentLauncher {
                 runtimeIdentity,
                 runtimeURL: runtimeURL
             ) {
-                guard verifyRuntime(
+                guard await verifyRuntime(
                     runtime,
                     expected: expected,
                     identity: identity,
@@ -1210,7 +1222,7 @@ actor NativeAgentLauncher {
                         receipt, helpers: helpers, identity: identity
                     ), current.helper.processIdentifier == runtime.helper.processIdentifier,
                        current.identity == runtimeIdentity,
-                       verifyRuntime(
+                       await verifyRuntime(
                         current,
                         expected: expected,
                         identity: identity,
@@ -1255,17 +1267,20 @@ actor NativeAgentLauncher {
         return hasPossibleUnidentifiedOwner ? .indeterminate : .absent
     }
 
+    @MainActor
     private static func verifyRuntime(
         _ runtime: ObservedRuntime,
         expected: ExpectedRuntime,
         identity: (Int32) -> AmbientRuntimeIdentity?,
-        validate: (URL) -> Bool
-    ) -> Bool {
+        validate: (URL) async -> Bool
+    ) async -> Bool {
         guard let runtimeURL = runtime.bundleURL,
               let observedIdentity = runtime.identity,
-              validate(expected.url),
-              runtimeURL == expected.url || validate(runtimeURL),
-              expected.installedVersionMatches,
+              await validate(expected.url) else { return false }
+        if runtimeURL != expected.url {
+            guard await validate(runtimeURL) else { return false }
+        }
+        guard expected.installedVersionMatches,
               runtime.helper.isRunning(),
               verifiedRuntimeIdentity(
                   processIdentifier: runtime.helper.processIdentifier,
@@ -1288,7 +1303,7 @@ actor NativeAgentLauncher {
         guard let expected = ExpectedRuntime(url: helperURL) else { return false }
         repeat {
             for helper in runningHelpers() {
-                if isConfirmedRuntimeHelper(
+                if await isConfirmedRuntimeHelper(
                     helper,
                     expected: expected,
                     identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) },
@@ -1347,13 +1362,14 @@ actor NativeAgentLauncher {
         return result.overflow ? UInt64.max : result.partialValue
     }
 
+    @MainActor
     static func isConfirmedRuntimeHelper(
         _ helper: RuntimeHelper,
         expectedURL: URL,
         expectedVersion: AmbientRuntimeIdentity.Version? = nil,
         identity: (Int32) -> AmbientRuntimeIdentity?,
-        validate: (URL) -> Bool
-    ) -> Bool {
+        validate: (URL) async -> Bool
+    ) async -> Bool {
         guard let version = expectedVersion ?? AmbientRuntimeIdentity.bundleVersion(
             at: expectedURL.standardizedFileURL
         ) else { return false }
@@ -1361,7 +1377,7 @@ actor NativeAgentLauncher {
             url: expectedURL,
             version: version
         )
-        return isConfirmedRuntimeHelper(
+        return await isConfirmedRuntimeHelper(
             helper,
             expected: expected,
             identity: identity,
@@ -1369,12 +1385,13 @@ actor NativeAgentLauncher {
         )
     }
 
+    @MainActor
     private static func isConfirmedRuntimeHelper(
         _ helper: RuntimeHelper,
         expected: ExpectedRuntime,
         identity: (Int32) -> AmbientRuntimeIdentity?,
-        validate: (URL) -> Bool
-    ) -> Bool {
+        validate: (URL) async -> Bool
+    ) async -> Bool {
         guard let runtime = observedRuntimes(
                   [helper],
                   identity: identity
@@ -1385,7 +1402,7 @@ actor NativeAgentLauncher {
                   runtimeURL: runtime.bundleURL
               ) else { return false }
 #if os(macOS)
-        return verifyRuntime(
+        return await verifyRuntime(
             runtime,
             expected: expected,
             identity: identity,
@@ -1416,6 +1433,18 @@ actor NativeAgentLauncher {
     }
 
 #if os(macOS)
+    actor CodeValidator {
+        private let check: @Sendable (URL, URL) -> Bool
+
+        init(validate: @escaping @Sendable (URL, URL) -> Bool) {
+            check = validate
+        }
+
+        func validate(helperURL: URL, extensionURL: URL) -> Bool {
+            check(helperURL.standardizedFileURL, extensionURL.standardizedFileURL)
+        }
+    }
+
     private static func staticCode(at url: URL) -> SecStaticCode? {
         var code: SecStaticCode?
         let status = SecStaticCodeCreateWithPath(

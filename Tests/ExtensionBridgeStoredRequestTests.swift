@@ -2,6 +2,9 @@
 
 import Foundation
 import XCTest
+#if os(macOS)
+import Darwin
+#endif
 @testable import Big_Wallet
 
 private let storedRequestNativeOwner = ExtensionBridge.NativeDeliveryOwner(
@@ -97,6 +100,41 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(NativeAgentLauncher.embeddedHelperURL(
             in: URL(string: "https://example.com/Safari.appex")!
         ))
+    }
+
+    @MainActor
+    func testNativeCodeValidationRechecksMappedResourcesOffMainActor() async throws {
+        let helperURL = try makeAmbientBundle(name: "Mapped Helper", build: "149")
+        let resourceURL = helperURL.appendingPathComponent("Contents/resource")
+        try Data([1]).write(to: resourceURL)
+        let descriptor = open(resourceURL.path, O_RDWR)
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        guard descriptor >= 0 else { return }
+        defer { close(descriptor) }
+        let mapping = try XCTUnwrap(mmap(nil, 1, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0))
+        guard mapping != MAP_FAILED else { return XCTFail("Failed to map resource") }
+        defer { munmap(mapping, 1) }
+        mapping.storeBytes(of: UInt8(1), as: UInt8.self)
+
+        let checks = expectation(description: "Validate every request")
+        checks.expectedFulfillmentCount = 4
+        checks.assertForOverFulfill = true
+        let validator = NativeAgentLauncher.CodeValidator(validate: { _, _ in
+            XCTAssertFalse(Thread.isMainThread)
+            checks.fulfill()
+            return (try? Data(contentsOf: resourceURL)) == Data([1])
+        })
+        let original = await validator.validate(helperURL: helperURL, extensionURL: helperURL)
+        let repeated = await validator.validate(helperURL: helperURL, extensionURL: helperURL)
+        XCTAssertTrue(original)
+        XCTAssertTrue(repeated)
+        mapping.storeBytes(of: UInt8(2), as: UInt8.self)
+        let changed = await validator.validate(helperURL: helperURL, extensionURL: helperURL)
+        XCTAssertFalse(changed)
+        mapping.storeBytes(of: UInt8(1), as: UInt8.self)
+        let restored = await validator.validate(helperURL: helperURL, extensionURL: helperURL)
+        XCTAssertTrue(restored)
+        await fulfillment(of: [checks], timeout: 1)
     }
     #endif
 
@@ -5327,7 +5365,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testReceiptObservationSkipsVerificationWithoutAnIdentifiedOwner() throws {
+    func testReceiptObservationSkipsVerificationWithoutAnIdentifiedOwner() async throws {
         let expectedURL = try makeAmbientBundle(name: "No Owner", build: "149")
         let version = try XCTUnwrap(AmbientRuntimeIdentity.bundleVersion(at: expectedURL))
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
@@ -5336,7 +5374,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(bundleURL: expectedURL)
         )
         for unidentifiedRuntime in [false, true] {
-            let status = NativeAgentLauncher.runtimeStatus(
+            let status = await NativeAgentLauncher.runtimeStatus(
                 receipt: receipt,
                 expectedURL: expectedURL,
                 expectedVersion: version,
@@ -5365,7 +5403,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testRuntimeConfirmationRechecksIdentityAfterCodeVerification() throws {
+    func testRuntimeConfirmationRechecksIdentityAfterCodeVerification() async throws {
         let bundleURL = try makeAmbientBundle(name: "Replaced During Verification", build: "149")
         let launchDate = Date(timeIntervalSince1970: 14_100)
         let original = try runtimeIdentity(
@@ -5385,12 +5423,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         var identity = original
         var verifications = 0
-        let confirmed = NativeAgentLauncher.isConfirmedRuntimeHelper(
+        let confirmed = await NativeAgentLauncher.isConfirmedRuntimeHelper(
             helper,
             expectedURL: bundleURL,
             identity: { _ in identity },
             validate: { _ in
                 verifications += 1
+                await Task.yield()
                 identity = replacement
                 return true
             }
@@ -5401,7 +5440,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testRuntimeVerificationRejectsAnInstalledVersionDifferentFromCapturedVersion() throws {
+    func testRuntimeVerificationRejectsAnInstalledVersionDifferentFromCapturedVersion() async throws {
         let bundleURL = try makeAmbientBundle(name: "Updated Since Capture", build: "149")
         let launchDate = Date(timeIntervalSince1970: 14_150)
         let identity = AmbientRuntimeIdentity(
@@ -5419,21 +5458,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             launchDate: launchDate
         )
         var verifications = 0
-        let validate: (URL) -> Bool = { url in
+        let validate: (URL) async -> Bool = { url in
             XCTAssertEqual(url, bundleURL)
             verifications += 1
             return true
         }
-        XCTAssertFalse(NativeAgentLauncher.isConfirmedRuntimeHelper(
+        let confirmed = await NativeAgentLauncher.isConfirmedRuntimeHelper(
             helper,
             expectedURL: bundleURL,
             expectedVersion: identity.version,
             identity: { _ in identity },
             validate: validate
-        ))
+        )
+        XCTAssertFalse(confirmed)
         XCTAssertEqual(verifications, 1)
 
-        let status = NativeAgentLauncher.runtimeStatus(
+        let status = await NativeAgentLauncher.runtimeStatus(
             receipt: .init(
                 nativeDeliveryNonce: .init(value: UUID()),
                 runtimeInstanceIdentifier: identity.instanceIdentifier,
@@ -5488,7 +5528,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         return await self.bridge.load(handle: handle)
                     },
                     receiptRuntimeStatus: { receipt in
-                        NativeAgentLauncher.runtimeStatus(
+                        await NativeAgentLauncher.runtimeStatus(
                             receipt: receipt,
                             expectedURL: helperURL,
                             expectedVersion: runtime.version,
@@ -5527,7 +5567,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testReceiptOwnerMetadataIgnoresUnidentifiedOtherPath() throws {
+    func testReceiptOwnerMetadataIgnoresUnidentifiedOtherPath() async throws {
         let expectedURL = try makeAmbientBundle(name: "Expected", build: "149")
         let otherURL = try makeAmbientBundle(name: "Other Legacy", build: "148")
         let version = try XCTUnwrap(
@@ -5539,7 +5579,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(bundleURL: expectedURL)
         )
 
-        let status = NativeAgentLauncher.runtimeStatus(
+        let status = await NativeAgentLauncher.runtimeStatus(
             receipt: receipt,
             expectedURL: expectedURL,
             expectedVersion: version,
@@ -5560,7 +5600,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testReceiptOwnerMetadataRetainsTrueUnknownOwnerAmbiguity() throws {
+    func testReceiptOwnerMetadataRetainsTrueUnknownOwnerAmbiguity() async throws {
         let expectedURL = try makeAmbientBundle(name: "Expected", build: "149")
         let version = try XCTUnwrap(
             AmbientRuntimeIdentity.bundleVersion(at: expectedURL)
@@ -5571,7 +5611,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(bundleURL: expectedURL)
         )
 
-        let status = NativeAgentLauncher.runtimeStatus(
+        let status = await NativeAgentLauncher.runtimeStatus(
             receipt: receipt,
             expectedURL: expectedURL,
             expectedVersion: version,
@@ -5866,7 +5906,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
             load: { await self.bridge.load(handle: $0) },
             receiptRuntimeStatus: { receipt in
-                NativeAgentLauncher.runtimeStatus(
+                await NativeAgentLauncher.runtimeStatus(
                     receipt: receipt,
                     expectedURL: helperURL,
                     expectedVersion: owner.version,

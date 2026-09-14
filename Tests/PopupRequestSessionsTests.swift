@@ -6125,7 +6125,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(confirmationCount, 0)
     }
 
-    func testNativeAgentConfirmationUsesProcessStartWhenLaunchDateIsNil() throws {
+    func testNativeAgentConfirmationUsesProcessStartWhenLaunchDateIsNil() async throws {
         let bundleURL = try makePopupLauncherBundle()
         defer { try? FileManager.default.removeItem(at: bundleURL) }
         let processIdentifier = Int32(8_108)
@@ -6148,13 +6148,14 @@ extension PopupRequestSessionsTests {
             isRunning: { true }
         )
 
-        XCTAssertTrue(NativeAgentLauncher.isConfirmedRuntimeHelper(
+        let confirmed = await NativeAgentLauncher.isConfirmedRuntimeHelper(
             validRuntime,
             expectedURL: bundleURL,
             identity: { _ in identity },
             validate: { $0 == bundleURL.standardizedFileURL }
-        ))
-        XCTAssertFalse(NativeAgentLauncher.isConfirmedRuntimeHelper(
+        )
+        XCTAssertTrue(confirmed)
+        let replaced = await NativeAgentLauncher.isConfirmedRuntimeHelper(
             reusedPIDRuntime,
             expectedURL: bundleURL,
             identity: { _ in identity },
@@ -6162,7 +6163,8 @@ extension PopupRequestSessionsTests {
                 XCTFail("A replaced process must not reach code verification")
                 return true
             }
-        ))
+        )
+        XCTAssertFalse(replaced)
     }
 
     func testNativeAgentQuitDoesNotTargetReusedProcessIdentifier() {
