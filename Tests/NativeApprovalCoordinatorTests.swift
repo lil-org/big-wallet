@@ -132,7 +132,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 )
             }
             guard case .found(let current) = await load(handle: handle),
-                  current.phase == .queued,
+                  case .queued(let request, let approval) = current.state,
                   current.nativeDeliveryNonce == nativeDeliveryNonce else {
                 return .ownershipLost
             }
@@ -145,13 +145,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 return existing == receipt ? .persisted : .ownershipLost
             }
             guard loadHandler == nil else { return .ownershipLost }
+            let updatedApproval: ExtensionBridge.Snapshot.QueuedApproval
+            if case .staged(let native) = approval {
+                updatedApproval = .staged(.init(
+                    receipt: receipt, executionContext: native.executionContext
+                ))
+            } else {
+                updatedApproval = .delivered(receipt)
+            }
             snapshot = ExtensionBridge.Snapshot(
                 handle: current.handle,
-                phase: current.phase,
-                request: current.request,
-                nativeDecisionStaged: current.nativeDecisionStaged,
+                state: .queued(request: request, approval: updatedApproval),
                 nativeDeliveryNonce: current.nativeDeliveryNonce,
-                nativeDeliveryReceipt: receipt,
                 host: current.host,
                 configurationKey: current.configurationKey,
                 revisions: current.revisions,
@@ -3012,13 +3017,26 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             "body": ["address": ""],
         ])
         let request = try XCTUnwrap(SafariRequest(data: data))
+        let native: ExtensionBridge.Snapshot.NativeApproval? =
+            nativeDecisionStaged || (phase == .approving && receipt != nil)
+                ? .init(receipt: receipt, executionContext: nil) : nil
+        let state: ExtensionBridge.Snapshot.State
+        switch phase {
+        case .queued:
+            state = .queued(
+                request: request,
+                approval: native.map { .staged($0) } ??
+                    receipt.map { .delivered($0) } ?? .unowned
+            )
+        case .approving:
+            state = .approving(request: request, nativeApproval: native)
+        case .responded:
+            state = .responded
+        }
         return ExtensionBridge.Snapshot(
             handle: handle,
-            phase: phase,
-            request: request,
-            nativeDecisionStaged: nativeDecisionStaged,
+            state: state,
             nativeDeliveryNonce: nonce,
-            nativeDeliveryReceipt: receipt,
             host: request.host,
             configurationKey: request.configurationKey,
             revisions: ExtensionBridge.ProviderRevisions(rawValue: [

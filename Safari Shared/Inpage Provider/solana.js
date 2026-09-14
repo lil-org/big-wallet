@@ -29,24 +29,12 @@ import ProviderRpcError, {
     providerReplacementError,
 } from "./error";
 import {
-    makeWalletStandardFeatures,
-    solanaChains,
     solanaDevnetChain,
     solanaMainnetChain,
     solanaTestnetChain,
-    walletName,
 } from "./wallet_standard";
 import { EventEmitter } from "events";
 
-const standardChangeEvent = "change";
-const solanaSignAndSendTransaction = "solana:signAndSendTransaction";
-const solanaSignTransaction = "solana:signTransaction";
-const solanaSignMessage = "solana:signMessage";
-const solanaAccountFeatures = Object.freeze([
-    solanaSignAndSendTransaction,
-    solanaSignTransaction,
-    solanaSignMessage,
-]);
 const invalidSolanaMessageRequest =
     "Big Wallet could not normalize this Solana message request";
 const invalidSolanaSignatureResponse =
@@ -73,7 +61,6 @@ const maximumCounter = Number.MAX_SAFE_INTEGER;
 const emitNormally = EventEmitter.prototype.emit;
 const addSetEntryNormally = Set.prototype.add;
 const deleteSetEntryNormally = Set.prototype.delete;
-const clearMapNormally = Map.prototype.clear;
 const clearSetNormally = Set.prototype.clear;
 const forEachSetNormally = Set.prototype.forEach;
 const arrayBufferByteLengthNormally = getOwnPropertyDescriptorNormally(
@@ -107,10 +94,6 @@ function addSetEntry(set, value) {
 
 function deleteSetEntry(set, value) {
     return applyFunction(deleteSetEntryNormally, set, [value]);
-}
-
-function clearMap(map) {
-    applyFunction(clearMapNormally, map, []);
 }
 
 function clearSet(set) {
@@ -209,15 +192,15 @@ function emitProvider(provider, name, ...values) {
     }
 }
 
-function emitStandardChange(provider, properties) {
+function notifyAccountChange(provider) {
     const state = getProviderState(provider);
     const listeners = [];
-    applyFunction(forEachSetNormally, state.standardChangeListeners, [listener => {
+    applyFunction(forEachSetNormally, state.accountChangeListeners, [listener => {
         listeners[listeners.length] = listener;
     }]);
     for (let index = 0; index < listeners.length; index += 1) {
         try {
-            listeners[index](properties);
+            listeners[index]();
         } catch {
         }
     }
@@ -308,11 +291,10 @@ function clearAuthorization(provider, tombstone, emitChanges = true) {
     state.publicKey = null;
     state.isConnected = false;
     state.accountRevocationTombstone = tombstone === true;
-    clearMap(state.standardAccountsByAddress);
     if (!emitChanges) { return; }
     if (previousPublicKey !== null) {
         emitProvider(provider, "accountChanged", null);
-        emitStandardChange(provider, {accounts: []});
+        notifyAccountChange(provider);
     }
     if (wasConnected || previousPublicKey !== null) {
         emitProvider(provider, "disconnect");
@@ -1119,9 +1101,8 @@ function applyConfiguration(provider, envelope) {
     const configuredConnected = state.isConnected;
     const nextPublicKey = state.publicKey?.toString() || null;
     if (previousPublicKey !== nextPublicKey) {
-        clearMap(state.standardAccountsByAddress);
         emitProvider(provider, "accountChanged", state.publicKey);
-        emitStandardChange(provider, {accounts: provider.standardAccounts()});
+        notifyAccountChange(provider);
     }
     if (!previousConnected && configuredConnected && state.publicKey) {
         emitProvider(provider, "connect", state.publicKey);
@@ -1288,7 +1269,6 @@ function applyEnvelope(provider, envelope) {
                 state.runtime.reject(record, error);
                 return false;
             }
-            clearMap(state.standardAccountsByAddress);
         }
         state.publicKey = resultPublicKey;
         state.isConnected = true;
@@ -1301,7 +1281,7 @@ function applyEnvelope(provider, envelope) {
         }
         if (previousPublicKey !== publicKeyValue) {
             emitProvider(provider, "accountChanged", state.publicKey);
-            emitStandardChange(provider, {accounts: provider.standardAccounts()});
+            notifyAccountChange(provider);
         }
         return settled;
     }
@@ -1333,7 +1313,7 @@ function retire(provider, error = providerReplacementError()) {
     const count = state.runtime.retire(error);
     state.activeDisconnect = null;
     clearAuthorization(provider, true);
-    clearSet(state.standardChangeListeners);
+    clearSet(state.accountChangeListeners);
     return count;
 }
 
@@ -1414,9 +1394,7 @@ class BigWalletSolana extends EventEmitter {
                 firstWireId: 2,
                 wireIdStep: 2,
             }),
-            standardAccountsByAddress: new MapConstructor,
-            standardChangeListeners: new SetConstructor,
-            standardFeatures: null,
+            accountChangeListeners: new SetConstructor,
             transport,
             ...authorization,
         });
@@ -1439,9 +1417,6 @@ class BigWalletSolana extends EventEmitter {
         this.signTransaction = this.signTransaction.bind(this);
         this.signAllTransactions = this.signAllTransactions.bind(this);
         this.signAndSendTransaction = this.signAndSendTransaction.bind(this);
-        this.standardConnect = this.standardConnect.bind(this);
-        this.standardDisconnect = this.standardDisconnect.bind(this);
-        this.standardOn = this.standardOn.bind(this);
         this.standardSignMessage = this.standardSignMessage.bind(this);
         this.standardSignTransaction = this.standardSignTransaction.bind(this);
         this.standardSignAndSendTransaction =
@@ -1618,70 +1593,26 @@ class BigWalletSolana extends EventEmitter {
         return this.request({method: "signAndSendTransaction", params});
     }
 
-    standardOn(event, listener) {
+    onAccountChange(listener) {
         const state = getProviderState(this);
-        if (state.runtime.phase === "retired" ||
-            event !== standardChangeEvent || typeof listener !== "function") {
+        if (state.runtime.phase === "retired" || typeof listener !== "function") {
             return () => {};
         }
-        addSetEntry(state.standardChangeListeners, listener);
-        return () => deleteSetEntry(state.standardChangeListeners, listener);
+        addSetEntry(state.accountChangeListeners, listener);
+        return () => deleteSetEntry(state.accountChangeListeners, listener);
     }
 
-    standardAccounts() {
+    accountState() {
         const state = getProviderState(this);
-        if (!state.publicKey) { return []; }
-        const address = state.publicKey.toString();
-        let account = getMapEntry(state.standardAccountsByAddress, address);
-        if (!account) {
-            const publicKeyBytes = new Uint8Array(state.publicKey.toBytes());
-            account = freezeObjectNormally({
-                address,
-                get publicKey() {
-                    return publicKeyBytes.slice();
-                },
-                chains: solanaChains,
-                features: solanaAccountFeatures,
-                label: walletName,
-            });
-            setMapEntry(state.standardAccountsByAddress, address, account);
+        const {publicKey, accountRevision, solanaAuthorizationEpoch} = state;
+        if (!publicKey) { return null; }
+        const address = publicKey.toString();
+        const bytes = new Uint8Array(Base58.decode(address));
+        if (state.publicKey !== publicKey || state.accountRevision !== accountRevision ||
+            state.solanaAuthorizationEpoch !== solanaAuthorizationEpoch) {
+            throw providerReplacementError();
         }
-        return [account];
-    }
-
-    standardFeatures() {
-        const state = getProviderState(this);
-        if (state.standardFeatures) { return state.standardFeatures; }
-        state.standardFeatures = makeWalletStandardFeatures({
-            connect: this.standardConnect,
-            disconnect: this.standardDisconnect,
-            on: this.standardOn,
-            signAndSendTransaction: this.standardSignAndSendTransaction,
-            signTransaction: this.standardSignTransaction,
-            signMessage: this.standardSignMessage,
-        });
-        return state.standardFeatures;
-    }
-
-    async standardConnect(input) {
-        if (input?.silent === true && isReady(this) && !this.publicKey) {
-            return {accounts: []};
-        }
-        try {
-            await this.connect(input?.silent === true
-                ? {onlyIfTrusted: true}
-                : undefined);
-        } catch (error) {
-            if (input?.silent === true && error?.code === 4100) {
-                return {accounts: []};
-            }
-            throw error;
-        }
-        return {accounts: this.standardAccounts()};
-    }
-
-    async standardDisconnect() {
-        await this.disconnect();
+        return {address, publicKey: bytes};
     }
 
     assertStandardAccount(account) {

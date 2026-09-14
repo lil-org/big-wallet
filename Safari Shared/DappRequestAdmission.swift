@@ -46,18 +46,17 @@ final class DappRequestAdmission {
         case .missing, .unavailable:
             return .unavailable
         }
-        switch snapshot.phase {
+        let request: SafariRequest
+        switch snapshot.state {
         case .responded:
             return .responseReady
         case .approving:
             return .approvalRequired
+        case .queued(let pendingRequest, .unowned):
+            request = pendingRequest
         case .queued:
-            if snapshot.nativeDecisionStaged ||
-                snapshot.nativeDeliveryReceipt != nil {
-                return .approvalRequired
-            }
+            return .approvalRequired
         }
-        guard let request = snapshot.request else { return .unavailable }
         let preparation: DappRequestPreparation
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent
@@ -105,12 +104,11 @@ final class DappRequestAdmission {
     ) async -> DappAdmissionDisposition {
         switch await store.load(handle: handle) {
         case .found(let snapshot):
-            switch snapshot.phase {
+            switch snapshot.state {
+            case .queued(_, .unowned):
+                return queued
             case .queued:
-                return snapshot.nativeDecisionStaged ||
-                    snapshot.nativeDeliveryReceipt != nil
-                    ? .approvalRequired
-                    : queued
+                return .approvalRequired
             case .approving:
                 return .approvalRequired
             case .responded:

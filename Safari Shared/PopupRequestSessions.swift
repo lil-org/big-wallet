@@ -403,9 +403,7 @@ final class PopupRequestSessions {
                       profileIdentifier: profileIdentifier
                   ) else { return missingState(id: request.id) }
             if case .retryApproval = command,
-               snapshot.phase == .queued,
-               snapshot.request != nil,
-               !isNativeOwned(snapshot) {
+               case .queued(_, .unowned) = snapshot.state {
                 if sessions[snapshot.handle]?.state == .error {
                     discardSession(handle: snapshot.handle)
                 }
@@ -543,14 +541,14 @@ final class PopupRequestSessions {
     private func ensureSession(
         snapshot: ExtensionBridge.Snapshot
     ) -> ActiveSessionResult {
-        guard !isNativeOwned(snapshot) else {
+        guard !snapshot.isQueuedForNativeApproval else {
             discardSession(handle: snapshot.handle)
             immediateResponses[snapshot.handle] = nil
             return .absent
         }
         if let session = sessions[snapshot.handle] {
             if snapshot.phase == .approving &&
-                (snapshot.request == nil || session.approvalClaim == nil) {
+                session.approvalClaim == nil {
                 return .absent
             }
             if snapshot.phase == .queued,
@@ -568,8 +566,7 @@ final class PopupRequestSessions {
             }
             return .available(session)
         }
-        guard snapshot.phase == .queued,
-              let request = snapshot.request else { return .absent }
+        guard case .queued(let request, .unowned) = snapshot.state else { return .absent }
         if let persistence = immediateResponses[snapshot.handle] {
             return .immediateResponse(persistence.state)
         }
@@ -631,12 +628,6 @@ final class PopupRequestSessions {
         return ensureSession(snapshot: snapshot)
     }
 
-    private func isNativeOwned(_ snapshot: ExtensionBridge.Snapshot) -> Bool {
-        snapshot.phase == .queued &&
-            (snapshot.nativeDeliveryReceipt != nil ||
-                snapshot.nativeDecisionStaged)
-    }
-
     private func discardSession(handle: ExtensionBridge.Handle) {
         sessions[handle]?.transaction?.invalidate()
         sessions[handle] = nil
@@ -664,7 +655,6 @@ final class PopupRequestSessions {
         session: PopupRequestSession
     ) -> Bool {
         return snapshot.phase == .queued &&
-            snapshot.request != nil &&
             session.handle == snapshot.handle &&
             session.state == .review &&
             session.canBeginApproval
@@ -680,7 +670,7 @@ final class PopupRequestSessions {
             immediateResponses[handle] = nil
             return missingState(id: handle.id)
         }
-        if isNativeOwned(snapshot) {
+        if snapshot.isQueuedForNativeApproval {
             discardSession(handle: handle)
             immediateResponses[handle] = nil
             return stateResponse(id: handle.id, state: .working, host: snapshot.host)
@@ -755,8 +745,7 @@ final class PopupRequestSessions {
                   for: request,
                   profileIdentifier: profileIdentifier
               ),
-              snapshot.phase == .queued ||
-                  (snapshot.phase == .approving && snapshot.request != nil),
+              snapshot.phase != .responded,
               case .available(let session) = activeSession(snapshot: snapshot),
               reviewToken(for: request) == session.reviewToken,
               session.canBeginApproval else {
@@ -1157,8 +1146,7 @@ final class PopupRequestSessions {
               case .found(let snapshot) = await store.load(
                   handle: session.handle
               ),
-              snapshot.phase == .approving,
-              snapshot.request != nil else {
+              snapshot.phase == .approving else {
             return false
         }
         return DurableApprovalExecutor.approvalRevisionsMatch(
@@ -1312,8 +1300,7 @@ final class PopupRequestSessions {
         guard let snapshot = await snapshot(
                   for: request,
                   profileIdentifier: profileIdentifier
-              ), snapshot.phase == .queued,
-              snapshot.request != nil else {
+              ), snapshot.phase == .queued else {
             return ignoredResponse()
         }
         switch await store.reject(handle: snapshot.handle) {

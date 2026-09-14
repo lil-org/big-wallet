@@ -462,8 +462,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             switch loaded {
             case .found(let snapshot):
                 let fenceToken = UUID()
-                if snapshot.nativeDecisionStaged ||
-                    snapshot.phase == .approving,
+                if snapshot.hasStagedOrActiveExecution,
                    let fence = await Self.bridge
                     .acquireNativeExecutionFence(
                         handle: handle,
@@ -524,7 +523,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         )
                         return
                     }
-                } else if !snapshot.nativeDecisionStaged,
+                } else if !snapshot.hasStagedOrActiveExecution,
                           snapshot.phase == .queued {
                     guard await ensureNativeApprovalDeliveryIfNeeded(
                         handle: handle,
@@ -716,9 +715,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         )
                         return false
                     }
-                    if snapshot.phase == .queued,
-                       snapshot.nativeDecisionStaged,
-                       snapshot.nativeDeliveryReceipt == nil {
+                    if case .queued(_, .staged(let approval)) = snapshot.state,
+                       approval.receipt == nil {
                         _ = await Self.bridge.clearNativeExecutionContext(
                             handle: handle,
                             expected: initialContext
@@ -726,8 +724,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         return false
                     }
                     let now = DispatchTime.now().uptimeNanoseconds
-                    if snapshot.phase == .queued,
-                       snapshot.nativeDecisionStaged,
+                    if case .queued(_, .staged) = snapshot.state,
                        now >= nextDeliveryCheck {
                         guard await ensureNativeApprovalDeliveryIfNeeded(
                             handle: handle,

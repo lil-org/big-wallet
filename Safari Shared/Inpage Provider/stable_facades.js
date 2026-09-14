@@ -8,6 +8,7 @@ import {
     dispatchWalletStandardRegistrationEvent,
     makeWalletStandardFeatures,
     makeWalletStandardRegistrationCallback,
+    solanaAccountFeatures,
     solanaChains,
     walletName,
 } from "./wallet_standard";
@@ -16,6 +17,7 @@ export const stableFacadeVersion = 2;
 
 const applyFunction = Reflect.apply;
 const emitEvent = EventEmitter.prototype.emit;
+const forEachSet = Set.prototype.forEach;
 
 const ethereumEvents = [
     "accountsChanged",
@@ -57,11 +59,6 @@ const solanaMethods = [
     "signTransaction",
     "signAllTransactions",
     "signAndSendTransaction",
-    "standardOn",
-    "standardAccounts",
-    "standardFeatures",
-    "standardConnect",
-    "standardDisconnect",
     "standardSignMessage",
     "standardSignTransaction",
     "standardSignAndSendTransaction",
@@ -94,15 +91,14 @@ function target(value, name) {
 
 function walletAccountData(source) {
     if (!source || typeof source.address !== "string" ||
-        !Array.isArray(source.chains) || !Array.isArray(source.features) ||
         !ArrayBuffer.isView(source.publicKey)) {
         throw new TypeError("Wallet account is invalid");
     }
     return {
         address: source.address,
-        chains: Object.freeze([...source.chains]),
-        features: Object.freeze([...source.features]),
-        label: typeof source.label === "string" ? source.label : walletName,
+        chains: solanaChains,
+        features: solanaAccountFeatures,
+        label: walletName,
         publicKey: new Uint8Array(source.publicKey),
     };
 }
@@ -127,7 +123,8 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     let ethereumForwarding = [];
     let solanaForwarding = [];
     let accounts = Object.freeze([]);
-    let accountCache = new Map;
+    let accountEntry = null;
+    let disposeAccountChanges = null;
     let deliveredConnect = false;
     let registration = null;
     const subscriptions = new Set;
@@ -254,77 +251,99 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         }
     }
 
-    function refreshAccounts(current = solanaTarget) {
-        if (!current ||
-            typeof current.provider.standardAccounts !== "function") {
-            return accounts;
-        }
-        const values = current.provider.standardAccounts();
-        if (!Array.isArray(values) || values.length > 64) {
-            throw new TypeError("Solana accounts are invalid");
-        }
-        const nextCache = new Map;
-        const nextAccounts = values.map(value => {
-            const data = walletAccountData(value);
-            if (nextCache.has(data.address)) {
-                throw new TypeError("Solana account addresses are duplicated");
-            }
-            const entry = accountCache.get(data.address) || {data, account: null};
-            entry.data = data;
-            entry.account ||= stableWalletAccount(entry);
-            nextCache.set(data.address, entry);
-            return entry.account;
-        });
-        if (current === solanaTarget) {
-            accountCache = nextCache;
-            accounts = Object.freeze(nextAccounts);
-        }
-        return Object.freeze(nextAccounts);
+    function readAccount(current) {
+        const value = current.provider.accountState();
+        return value == null ? null : walletAccountData(value);
     }
 
-    function bindSubscription(subscription) {
-        subscription.dispose?.();
-        subscription.dispose = null;
-        const provider = solanaProvider();
-        if (!provider || typeof provider.standardOn !== "function") {
-            throw unavailable();
-        }
-        subscription.dispose = provider.standardOn(
-            subscription.eventName,
-            (...arguments_) => {
-                if (!subscription.active || provider !== solanaProvider()) {
-                    return;
-                }
-                const values = subscription.eventName === "change"
-                    ? [{accounts: refreshAccounts()}]
-                    : arguments_;
-                subscription.listener(...values);
+    function refreshAccounts() {
+        const current = solanaTarget;
+        if (!current) { return accounts; }
+        const data = readAccount(current);
+        if (solanaTarget !== current) { return accounts; }
+        if (!data) {
+            accountEntry = null;
+            accounts = Object.freeze([]);
+        } else {
+            if (accountEntry?.data.address !== data.address) {
+                accountEntry = {data, account: null};
+                accountEntry.account = stableWalletAccount(accountEntry);
+            } else {
+                accountEntry.data = data;
             }
-        );
+            accounts = Object.freeze([accountEntry.account]);
+        }
+        return accounts;
+    }
+
+    function bindAccountChanges() {
+        disposeAccountChanges?.();
+        disposeAccountChanges = null;
+        const current = solanaTarget;
+        if (!current || subscriptions.size === 0) { return; }
+        disposeAccountChanges = current.provider.onAccountChange(() => {
+            if (solanaTarget !== current) { return; }
+            const pending = [];
+            applyFunction(forEachSet, subscriptions, [subscription => {
+                pending[pending.length] = subscription;
+            }]);
+            for (let index = 0; index < pending.length; index += 1) {
+                const subscription = pending[index];
+                if (solanaTarget !== current) { return; }
+                if (!subscription.active) { continue; }
+                try {
+                    const currentAccounts = refreshAccounts();
+                    if (solanaTarget !== current) { return; }
+                    subscription.listener({accounts: currentAccounts});
+                } catch {}
+            }
+        });
     }
 
     function standardOn(eventName, listener) {
         if (typeof eventName !== "string" || typeof listener !== "function") {
             throw unavailable();
         }
-        const subscription = {
-            active: true,
-            dispose: null,
-            eventName,
-            listener,
-        };
-        bindSubscription(subscription);
+        if (eventName !== "change") { return () => {}; }
+        const subscription = {active: true, listener};
         subscriptions.add(subscription);
+        if (subscriptions.size === 1) { bindAccountChanges(); }
         return () => {
-            if (!subscription.active) { return; }
             subscription.active = false;
-            subscription.dispose?.();
             subscriptions.delete(subscription);
+            if (subscriptions.size === 0) {
+                disposeAccountChanges?.();
+                disposeAccountChanges = null;
+            }
         };
     }
 
-    function callSolana(name, arguments_) {
+    async function standardConnect(input) {
+        const current = solanaTarget;
         const provider = solanaProvider();
+        const silent = input?.silent === true;
+        if (solanaTarget !== current) { throw unavailable(); }
+        if (silent && provider?.didGetLatestConfiguration &&
+            !provider.publicKey) {
+            return {accounts: []};
+        }
+        try {
+            await callSolana("connect", [silent
+                ? {onlyIfTrusted: true} : undefined], provider);
+        } catch (error) {
+            if (silent && error?.code === 4100) {
+                return {accounts: []};
+            }
+            throw error;
+        }
+        return {accounts: refreshAccounts()};
+    }
+
+    async function standardDisconnect() {
+        await callSolana("disconnect", []);
+    }
+
+    function callSolana(name, arguments_, provider = solanaProvider()) {
         const method = provider?.[name];
         return typeof method === "function"
             ? method.apply(provider, arguments_)
@@ -377,8 +396,8 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     }
 
     const features = makeWalletStandardFeatures({
-        connect: (...arguments_) => callSolana("standardConnect", arguments_),
-        disconnect: (...arguments_) => callSolana("standardDisconnect", arguments_),
+        connect: standardConnect,
+        disconnect: standardDisconnect,
         on: standardOn,
         signAndSendTransaction: (...arguments_) => callSolana(
             "standardSignAndSendTransaction",
@@ -389,6 +408,13 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
             arguments_
         ),
         signMessage: (...arguments_) => callSolana("standardSignMessage", arguments_),
+    });
+    Object.defineProperties(solana, {
+        standardOn: {value: standardOn},
+        standardAccounts: {value: refreshAccounts},
+        standardFeatures: {value: () => features},
+        standardConnect: {value: standardConnect},
+        standardDisconnect: {value: standardDisconnect},
     });
     const wallet = Object.freeze({
         get version() { return "1.0.0"; },
@@ -415,10 +441,11 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         if (typeof nextEthereum.requestConnectReplay !== "function") {
             throw new TypeError("Ethereum target is invalid");
         }
-        if (typeof nextSolana.provider.standardAccounts !== "function") {
-            throw new TypeError("Solana accounts are unavailable");
+        if (typeof nextSolana.provider.accountState !== "function" ||
+            typeof nextSolana.provider.onAccountChange !== "function") {
+            throw new TypeError("Solana account state is unavailable");
         }
-        nextSolana.provider.standardAccounts().map(walletAccountData);
+        readAccount(nextSolana);
         let finished = false;
         return Object.freeze({
             commit() {
@@ -433,9 +460,7 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
                 attachEthereum(nextEthereum);
                 attachSolana(nextSolana);
                 refreshAccounts();
-                for (const subscription of subscriptions) {
-                    bindSubscription(subscription);
-                }
+                bindAccountChanges();
                 replayConnect();
                 return previous;
             },

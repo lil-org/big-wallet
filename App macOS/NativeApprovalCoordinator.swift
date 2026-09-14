@@ -427,29 +427,26 @@ final class NativeApprovalCoordinator {
         switch loaded {
         case .found(let snapshot):
             guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
-                  snapshot.phase != .responded else {
+                  case .queued(let request, let approval) = snapshot.state else {
                 finish()
                 return
             }
-            recordDeadline(from: snapshot.request)
+            recordDeadline(from: request)
             if receiptOwned {
                 guard let runtime,
                       snapshot.nativeDeliveryReceipt?.matches(
                           nativeDeliveryNonce: nativeDeliveryNonce,
                           runtimeInstanceIdentifier: runtime.instanceIdentifier
-                      ) == true,
-                      snapshot.phase == .queued else {
+                      ) == true else {
                     finish()
                     return
                 }
-                if snapshot.nativeDecisionStaged {
+                if case .staged = approval {
                     restoreAuthenticationWaiting()
                     return
                 }
             } else {
-                guard snapshot.nativeDeliveryReceipt == nil,
-                      !snapshot.nativeDecisionStaged,
-                      snapshot.phase == .queued else {
+                guard case .unowned = approval else {
                     finish()
                     return
                 }
@@ -536,13 +533,22 @@ final class NativeApprovalCoordinator {
             guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce else {
                 return .superseded
             }
-            if snapshot.phase == .responded { return .responded }
-            if snapshot.nativeDecisionStaged || snapshot.phase == .approving {
+            let request: SafariRequest
+            let owner: ExtensionBridge.NativeDeliveryReceipt?
+            switch snapshot.state {
+            case .responded:
+                return .responded
+            case .approving, .queued(_, .staged):
                 return .staged
+            case .queued(let pendingRequest, .unowned):
+                request = pendingRequest
+                owner = nil
+            case .queued(let pendingRequest, .delivered(let receipt)):
+                request = pendingRequest
+                owner = receipt
             }
-            guard let request = snapshot.request else { return .responded }
             let receipt: ReceiptOwnership
-            if let owner = snapshot.nativeDeliveryReceipt {
+            if let owner {
                 receipt = owner.nativeDeliveryNonce == nativeDeliveryNonce &&
                     owner.runtimeInstanceIdentifier == runtime?.instanceIdentifier
                     ? .current : .foreign

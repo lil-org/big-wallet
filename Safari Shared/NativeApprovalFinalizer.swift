@@ -71,18 +71,18 @@ final class NativeApprovalFinalizer {
         case .unavailable:
             return .unavailable
         }
-        switch snapshot.phase {
+        switch snapshot.state {
         case .responded:
             return .responseReady
         case .approving:
             return .pending
-        case .queued:
-            guard snapshot.nativeDecisionStaged,
-                  let request = snapshot.request else { return .pending }
+        case .queued(let request, .staged):
             return await claimAndFinalize(
                 snapshot: snapshot,
                 request: request
             )
+        case .queued:
+            return .pending
         }
     }
 

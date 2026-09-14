@@ -15,6 +15,12 @@ export const solanaChains = freezeObjectNormally([
     solanaTestnetChain,
 ]);
 
+export const solanaAccountFeatures = freezeObjectNormally([
+    "solana:signAndSendTransaction",
+    "solana:signTransaction",
+    "solana:signMessage",
+]);
+
 const supportedTransactionVersions = freezeObjectNormally(["legacy", 0]);
 
 export function makeWalletStandardFeatures({

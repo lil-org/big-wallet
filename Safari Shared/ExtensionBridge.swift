@@ -145,13 +145,26 @@ actor ExtensionBridge {
     }
 
     struct Snapshot {
+        enum State {
+            case queued(request: SafariRequest, approval: QueuedApproval)
+            case approving(request: SafariRequest, nativeApproval: NativeApproval?)
+            case responded
+        }
+
+        enum QueuedApproval {
+            case unowned
+            case delivered(NativeDeliveryReceipt)
+            case staged(NativeApproval)
+        }
+
+        struct NativeApproval {
+            let receipt: NativeDeliveryReceipt?
+            let executionContext: NativeExecutionContext?
+        }
+
         let handle: Handle
-        let phase: Phase
-        let request: SafariRequest?
-        let nativeDecisionStaged: Bool
+        let state: State
         let nativeDeliveryNonce: NativeDeliveryNonce
-        let nativeDeliveryReceipt: NativeDeliveryReceipt?
-        let nativeExecutionContext: NativeExecutionContext?
         let host: String
         let configurationKey: String
         let revisions: ProviderRevisions
@@ -159,34 +172,50 @@ actor ExtensionBridge {
         let enqueueAttempt: String
         let sequence: Int
 
-        init(
-            handle: Handle,
-            phase: Phase,
-            request: SafariRequest?,
-            nativeDecisionStaged: Bool,
-            nativeDeliveryNonce: NativeDeliveryNonce,
-            nativeDeliveryReceipt: NativeDeliveryReceipt? = nil,
-            nativeExecutionContext: NativeExecutionContext? = nil,
-            host: String,
-            configurationKey: String,
-            revisions: ProviderRevisions,
-            createdAt: Date,
-            enqueueAttempt: String,
-            sequence: Int
-        ) {
-            self.handle = handle
-            self.phase = phase
-            self.request = request
-            self.nativeDecisionStaged = nativeDecisionStaged
-            self.nativeDeliveryNonce = nativeDeliveryNonce
-            self.nativeDeliveryReceipt = nativeDeliveryReceipt
-            self.nativeExecutionContext = nativeExecutionContext
-            self.host = host
-            self.configurationKey = configurationKey
-            self.revisions = revisions
-            self.createdAt = createdAt
-            self.enqueueAttempt = enqueueAttempt
-            self.sequence = sequence
+        var phase: Phase {
+            switch state {
+            case .queued: return .queued
+            case .approving: return .approving
+            case .responded: return .responded
+            }
+        }
+
+        var request: SafariRequest? {
+            switch state {
+            case .queued(let request, _), .approving(let request, _): return request
+            case .responded: return nil
+            }
+        }
+
+        var nativeApproval: NativeApproval? {
+            switch state {
+            case .queued(_, .staged(let approval)): return approval
+            case .approving(_, let approval): return approval
+            case .queued, .responded: return nil
+            }
+        }
+
+        var nativeDeliveryReceipt: NativeDeliveryReceipt? {
+            if case .queued(_, .delivered(let receipt)) = state { return receipt }
+            return nativeApproval?.receipt
+        }
+
+        var nativeExecutionContext: NativeExecutionContext? {
+            nativeApproval?.executionContext
+        }
+
+        var isQueuedForNativeApproval: Bool {
+            switch state {
+            case .queued(_, .delivered), .queued(_, .staged): return true
+            case .queued, .approving, .responded: return false
+            }
+        }
+
+        var hasStagedOrActiveExecution: Bool {
+            switch state {
+            case .queued(_, .staged), .approving: return true
+            case .queued, .responded: return false
+            }
         }
     }
     

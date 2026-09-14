@@ -4719,7 +4719,7 @@ extension PopupRequestSessionsTests {
 
         XCTAssertEqual(first, .pending)
         XCTAssertEqual(retained.phase, .queued)
-        XCTAssertTrue(retained.nativeDecisionStaged)
+        XCTAssertNotNil(retained.nativeApproval)
         XCTAssertNil(firstErrorCode)
         XCTAssertEqual(firstEvents, ["nativeClaim", "release"])
         XCTAssertEqual(starts, 1)
@@ -6333,6 +6333,9 @@ private actor CompactPopupStore: NativeApprovalStore {
         handle: ExtensionBridge.Handle
     ) {
         nativeExecutionContexts[handle] = context
+        if let snapshot = records[handle] {
+            records[handle] = replacing(snapshot, phase: snapshot.phase, request: snapshot.request)
+        }
     }
     func completedErrorCode(handle: ExtensionBridge.Handle) -> Int? {
         return completedErrorCodes[handle]
@@ -6407,7 +6410,7 @@ private actor CompactPopupStore: NativeApprovalStore {
             }
         }
         guard let snapshot = records[handle], snapshot.phase == .queued else { return .missing }
-        guard !snapshot.nativeDecisionStaged else { return .executing }
+        guard !snapshot.isQueuedForNativeApproval else { return .executing }
         eventValues.append("claim")
         let claim = ExtensionBridge.ApprovalClaim(handle: handle, value: UUID())
         claims[handle] = claim
@@ -6537,7 +6540,7 @@ private actor CompactPopupStore: NativeApprovalStore {
         claims[claim.handle] = nil
         permits[claim.handle] = permit
         permitRequests[claim.handle] = snapshot.request
-        records[claim.handle] = replacing(snapshot, phase: .approving, request: nil)
+        records[claim.handle] = replacing(snapshot, phase: .approving, request: snapshot.request)
         return .began(permit)
     }
 
@@ -6581,6 +6584,9 @@ private actor CompactPopupStore: NativeApprovalStore {
         }
         eventValues.append("checkpoint")
         nativeExecutionContexts[permit.handle] = nil
+        if let snapshot = records[permit.handle] {
+            records[permit.handle] = replacing(snapshot, phase: snapshot.phase, request: snapshot.request)
+        }
         return .persisted
     }
 
@@ -6660,16 +6666,25 @@ private actor CompactPopupStore: NativeApprovalStore {
         clearsNativeDeliveryReceipt: Bool = false,
         revisions: ExtensionBridge.ProviderRevisions? = nil
     ) -> ExtensionBridge.Snapshot {
-        ExtensionBridge.Snapshot(
+        let receipt = clearsNativeDeliveryReceipt ? nil : snapshot.nativeDeliveryReceipt
+        let native: ExtensionBridge.Snapshot.NativeApproval? =
+            (nativeDecisionStaged ?? (snapshot.nativeApproval != nil))
+                ? .init(receipt: receipt, executionContext: nativeExecutionContexts[snapshot.handle])
+                : nil
+        let state: ExtensionBridge.Snapshot.State
+        if phase == .responded {
+            state = .responded
+        } else {
+            guard let request else { preconditionFailure("Active fixture requires a request") }
+            state = phase == .queued
+                ? .queued(request: request, approval: native.map { .staged($0) } ??
+                    receipt.map { .delivered($0) } ?? .unowned)
+                : .approving(request: request, nativeApproval: native)
+        }
+        return ExtensionBridge.Snapshot(
             handle: snapshot.handle,
-            phase: phase,
-            request: request,
-            nativeDecisionStaged: nativeDecisionStaged ??
-                snapshot.nativeDecisionStaged,
+            state: state,
             nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            nativeDeliveryReceipt: clearsNativeDeliveryReceipt
-                ? nil
-                : snapshot.nativeDeliveryReceipt,
             host: snapshot.host,
             configurationKey: snapshot.configurationKey,
             revisions: revisions ?? snapshot.revisions,
@@ -6683,14 +6698,26 @@ private actor CompactPopupStore: NativeApprovalStore {
         _ snapshot: ExtensionBridge.Snapshot,
         receipt: ExtensionBridge.NativeDeliveryReceipt?
     ) -> ExtensionBridge.Snapshot {
-        ExtensionBridge.Snapshot(
+        let state: ExtensionBridge.Snapshot.State
+        switch snapshot.state {
+        case .queued(let request, .staged(let approval)):
+            state = .queued(request: request, approval: .staged(.init(
+                receipt: receipt, executionContext: approval.executionContext
+            )))
+        case .queued(let request, _):
+            state = .queued(request: request, approval: receipt.map { .delivered($0) } ?? .unowned)
+        case .approving(let request, let approval):
+            state = .approving(request: request, nativeApproval: approval.map {
+                .init(receipt: receipt, executionContext: $0.executionContext)
+            })
+        case .responded:
+            state = .responded
+        }
+        return ExtensionBridge.Snapshot(
             handle: snapshot.handle,
-            phase: snapshot.phase,
-            request: snapshot.request,
-            nativeDecisionStaged: snapshot.nativeDecisionStaged,
+            state: state,
             nativeDeliveryNonce: receipt?.nativeDeliveryNonce ??
                 snapshot.nativeDeliveryNonce,
-            nativeDeliveryReceipt: receipt,
             host: snapshot.host,
             configurationKey: snapshot.configurationKey,
             revisions: snapshot.revisions,
@@ -6810,9 +6837,7 @@ private func popupSwitchSnapshot(
     )
     return ExtensionBridge.Snapshot(
         handle: handle,
-        phase: .queued,
-        request: request,
-        nativeDecisionStaged: false,
+        state: .queued(request: request, approval: .unowned),
         nativeDeliveryNonce: .init(value: UUID()),
         host: request.host,
         configurationKey: request.configurationKey,
@@ -6879,14 +6904,23 @@ private func popupSnapshot(
         token: .init(value: UUID()),
         profileIdentifier: nil
     )
+    let native: ExtensionBridge.Snapshot.NativeApproval? = nativeDecisionStaged
+        ? .init(receipt: nativeDeliveryReceipt, executionContext: nil) : nil
+    let state: ExtensionBridge.Snapshot.State
+    switch phase {
+    case .queued:
+        state = .queued(request: request, approval: native.map { .staged($0) } ??
+            nativeDeliveryReceipt.map { .delivered($0) } ?? .unowned)
+    case .approving:
+        state = .approving(request: request, nativeApproval: native)
+    case .responded:
+        state = .responded
+    }
     return ExtensionBridge.Snapshot(
         handle: handle,
-        phase: phase,
-        request: phase == .responded ? nil : request,
-        nativeDecisionStaged: nativeDecisionStaged,
+        state: state,
         nativeDeliveryNonce: nativeDeliveryReceipt?.nativeDeliveryNonce ??
             .init(value: UUID()),
-        nativeDeliveryReceipt: nativeDeliveryReceipt,
         host: request.host,
         configurationKey: request.configurationKey,
         revisions: revisions,

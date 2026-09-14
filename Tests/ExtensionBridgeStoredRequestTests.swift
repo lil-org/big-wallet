@@ -195,7 +195,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             return XCTFail("Expected held claim after restart")
         }
         XCTAssertEqual(claimed.phase, .approving)
-        XCTAssertFalse(claimed.nativeDecisionStaged)
+        XCTAssertNil(claimed.nativeApproval)
         XCTAssertNil(claimed.nativeExecutionContext)
 
         let permit = try executionPermit(await bridge.begin(claim: claim))
@@ -241,7 +241,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertEqual(terminal.phase, .responded)
         XCTAssertNil(terminal.request)
-        XCTAssertFalse(terminal.nativeDecisionStaged)
+        XCTAssertNil(terminal.nativeApproval)
         XCTAssertNil(terminal.nativeDeliveryReceipt)
         XCTAssertNil(terminal.nativeExecutionContext)
     }
@@ -795,7 +795,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found(let stagedSnapshot) = await bridge.load(
             handle: admission.handle
         ) else { return XCTFail("Expected staged delivery after restart") }
-        XCTAssertTrue(stagedSnapshot.nativeDecisionStaged)
+        XCTAssertNotNil(stagedSnapshot.nativeApproval)
         XCTAssertEqual(
             stagedSnapshot.nativeDeliveryReceipt?.runtimeInstanceIdentifier,
             secondRuntime
@@ -1010,7 +1010,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found(let stagedSnapshot) = await bridge.load(
             handle: stageAdmission.handle
         ) else { return XCTFail("Expected staged delivery") }
-        XCTAssertTrue(stagedSnapshot.nativeDecisionStaged)
+        XCTAssertNotNil(stagedSnapshot.nativeApproval)
         XCTAssertEqual(
             stagedSnapshot.nativeDeliveryReceipt?.runtimeInstanceIdentifier,
             firstRuntime
@@ -2591,7 +2591,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found(let checkpoint) = await bridge.load(handle: admission.handle) else {
             return XCTFail("Expected prepared native broadcast")
         }
-        XCTAssertTrue(checkpoint.nativeDecisionStaged)
+        XCTAssertNotNil(checkpoint.nativeApproval)
         XCTAssertEqual(checkpoint.nativeDeliveryReceipt?.owner, owner)
         XCTAssertNil(checkpoint.nativeExecutionContext)
         let completion = await bridge.complete(
@@ -3736,7 +3736,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found(let snapshot) = await bridge.load(handle: handle) else {
             return XCTFail("Expected staged snapshot")
         }
-        XCTAssertTrue(snapshot.nativeDecisionStaged)
+        XCTAssertNotNil(snapshot.nativeApproval)
         guard case .executing = await bridge.claim(handle: handle) else {
             return XCTFail("Popup claim must not consume native decision")
         }
@@ -3769,7 +3769,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             return XCTFail("Expected released snapshot")
         }
         XCTAssertEqual(released.phase, .queued)
-        XCTAssertTrue(released.nativeDecisionStaged)
+        XCTAssertNotNil(released.nativeApproval)
         guard case .claimed(let reclaimed) = await bridge
                 .claimExecutableNativeDecision(handle: handle) else {
             return XCTFail("Expected reclaimed native decision")
@@ -3817,7 +3817,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found(let retained) = await bridge.load(handle: handle) else {
             return XCTFail("Expected retained staged decision")
         }
-        XCTAssertTrue(retained.nativeDecisionStaged)
+        XCTAssertNotNil(retained.nativeApproval)
         XCTAssertNil(retained.nativeExecutionContext)
     }
 
@@ -4170,7 +4170,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             return XCTFail("Expected recovered claim")
         }
         XCTAssertEqual(recovered.phase, .queued)
-        XCTAssertTrue(recovered.nativeDecisionStaged)
+        XCTAssertNotNil(recovered.nativeApproval)
         XCTAssertNil(recovered.nativeDeliveryReceipt)
         XCTAssertEqual(recovered.nativeExecutionContext, execution.context)
         let recoveredApproval = try firstStoredNativeApproval("pending")
@@ -4204,7 +4204,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: handle
         ) else { return XCTFail("Expected broadcast recovery") }
         XCTAssertEqual(completed.phase, .responded)
-        XCTAssertFalse(completed.nativeDecisionStaged)
+        XCTAssertNil(completed.nativeApproval)
         XCTAssertNil(completed.nativeExecutionContext)
         XCTAssertEqual(
             Set(try firstStoredState("completed").keys),
@@ -5630,11 +5630,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         let secondSnapshot = ExtensionBridge.Snapshot(
             handle: firstSnapshot.handle,
-            phase: firstSnapshot.phase,
-            request: firstSnapshot.request,
-            nativeDecisionStaged: firstSnapshot.nativeDecisionStaged,
+            state: .queued(
+                request: try XCTUnwrap(firstSnapshot.request),
+                approval: .delivered(secondReceipt)
+            ),
             nativeDeliveryNonce: firstSnapshot.nativeDeliveryNonce,
-            nativeDeliveryReceipt: secondReceipt,
             host: firstSnapshot.host,
             configurationKey: firstSnapshot.configurationKey,
             revisions: firstSnapshot.revisions,

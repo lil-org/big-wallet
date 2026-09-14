@@ -534,16 +534,16 @@ final class ExtensionRequestFileStore {
             let completedHandles = Set(profile.state.records.filter {
                 !$0.state.isActive && !$0.responseAcknowledged
             }.prefix(completedCount).map(\.handle))
-            let snapshots = profile.state.records.enumerated().reduce(
-                into: [ExtensionBridge.Handle: ExtensionBridge.Snapshot]()
-            ) { result, item in
+            var snapshots = [ExtensionBridge.Handle: ExtensionBridge.Snapshot]()
+            for item in profile.state.records.enumerated() {
                 guard item.element.state.isActive ||
-                    completedHandles.contains(item.element.handle) else { return }
-                result[item.element.handle] = snapshot(
+                    completedHandles.contains(item.element.handle) else { continue }
+                guard let snapshot = snapshot(
                     item.element,
                     request: profile.request(for: item.element),
                     sequence: item.offset
-                )
+                ) else { return .unavailable }
+                snapshots[item.element.handle] = snapshot
             }
             return .available(snapshots)
         }
@@ -561,11 +561,12 @@ final class ExtensionRequestFileStore {
             }) else {
                 return .missing
             }
-            return .found(snapshot(
+            guard let snapshot = snapshot(
                 profile.state.records[index],
                 request: profile.request(for: profile.state.records[index]),
                 sequence: index
-            ))
+            ) else { return .unavailable }
+            return .found(snapshot)
         }
     }
 
@@ -635,11 +636,12 @@ final class ExtensionRequestFileStore {
                 $0.handle == handle && $0.configurationKey == configurationKey &&
                     !$0.responseAcknowledged && isManualSwitch($0, in: profile)
             }) else { return .missing }
-            return .found(snapshot(
+            guard let snapshot = snapshot(
                 profile.state.records[index],
                 request: profile.request(for: profile.state.records[index]),
                 sequence: index
-            ))
+            ) else { return .unavailable }
+            return .found(snapshot)
         }
     }
 
@@ -1848,24 +1850,39 @@ final class ExtensionRequestFileStore {
         _ record: Record,
         request: SafariRequest?,
         sequence: Int
-    ) -> ExtensionBridge.Snapshot {
-        let phase: ExtensionBridge.Phase
+    ) -> ExtensionBridge.Snapshot? {
+        let state: ExtensionBridge.Snapshot.State
         switch record.state {
-        case .pending:
-            phase = .queued
+        case .pending(_, let approval):
+            guard let request else { return nil }
+            let queuedApproval: ExtensionBridge.Snapshot.QueuedApproval
+            switch approval {
+            case .unowned:
+                queuedApproval = .unowned
+            case .delivered(let receipt):
+                queuedApproval = .delivered(receipt)
+            case .staged(let staged, let context):
+                queuedApproval = .staged(.init(
+                    receipt: staged.receipt,
+                    executionContext: context
+                ))
+            }
+            state = .queued(request: request, approval: queuedApproval)
         case .claimed, .broadcastPrepared:
-            phase = .approving
+            guard let request else { return nil }
+            state = .approving(
+                request: request,
+                nativeApproval: record.stagedApproval.map {
+                    .init(receipt: $0.receipt, executionContext: record.nativeExecutionContext)
+                }
+            )
         case .completed:
-            phase = .responded
+            state = .responded
         }
         return ExtensionBridge.Snapshot(
             handle: record.handle,
-            phase: phase,
-            request: request,
-            nativeDecisionStaged: record.stagedApproval != nil,
+            state: state,
             nativeDeliveryNonce: record.nativeDeliveryNonce,
-            nativeDeliveryReceipt: record.nativeDeliveryReceipt,
-            nativeExecutionContext: record.nativeExecutionContext,
             host: record.host,
             configurationKey: record.configurationKey,
             revisions: record.revisions,

@@ -40,7 +40,10 @@ const ethereumSource = bundle("ethereum-harness.js", "cjs", `
     export {default, requestConnectReplay} from "./ethereum";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
-const solanaSource = bundle("solana.js");
+const solanaSource = bundle("solana-harness.js", "cjs", `
+    export {default} from "./solana";
+    export {createStableFacadeRecord} from "./stable_facades";
+`);
 const base58Source = bundle("base58.js");
 const solanaSDKSource = bundle("solana-sdk-harness.js", "cjs", `
     export {
@@ -137,7 +140,10 @@ function ethereumHarness(initialState = null) {
             retire: error => Ethereum.retire(engine, error),
             snapshot: () => Ethereum.snapshot(engine),
         },
-        solanaProvider: {provider: {standardAccounts: () => []}},
+        solanaProvider: {provider: {
+            accountState: () => null,
+            onAccountChange: () => () => {},
+        }},
     }).commit();
     return {
         ...module,
@@ -179,7 +185,16 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
     });
     const Solana = module.exports.default;
     const provider = new Solana("solana-generation", transport, initialState);
+    const record = module.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000002",
+    });
+    record.prepareTargets({
+        ethereumProvider: {provider: {}, requestConnectReplay: () => false},
+        solanaProvider: {provider},
+    }).commit();
     return {
+        standardProvider: record.solana,
+        wallet: record.wallet,
         ...module,
         disconnects,
         provider,
@@ -2044,7 +2059,7 @@ test("suppressed initial Solana configuration preserves the loading queue", asyn
     for (const eventName of ["accountChanged", "connect", "disconnect"]) {
         harness.provider.on(eventName, () => { events.push(eventName); });
     }
-    harness.provider.standardOn("change", () => { events.push("change"); });
+    harness.standardProvider.standardOn("change", () => { events.push("change"); });
     const connection = harness.provider.connect();
     let settled = false;
     connection.finally(() => { settled = true; });
@@ -2155,7 +2170,7 @@ test("Solana current connect baseline remains authoritative when suppressed", as
 
 test("Solana silent connect never posts without a trusted account", async () => {
     const harness = solanaHarness();
-    const connection = harness.provider.standardConnect({silent: true});
+    const connection = harness.standardProvider.standardConnect({silent: true});
     assert.equal(harness.requests.length, 0);
     applySolanaConfiguration(harness);
     assert.deepEqual(normalized(await connection), {accounts: []});
@@ -2777,7 +2792,7 @@ test("Wallet Standard rejects non-string encoder results before dispatch", async
         };
         const harness = solanaHarness(authorization);
         applySolanaConfiguration(harness, authorization);
-        const account = harness.provider.standardAccounts()[0];
+        const account = harness.standardProvider.standardAccounts()[0];
         harness.provider.preparedStandardTransaction = () => ({
             messageBytes: new Uint8Array([0]),
             signatureOffset: 1,
@@ -2889,7 +2904,7 @@ test("Wallet Standard settles committed single-item signing after authorization 
             publicKey: firstSolanaKey,
             solanaAuthorizationEpoch: 1,
         });
-        const account = harness.provider.standardAccounts()[0];
+        const account = harness.standardProvider.standardAccounts()[0];
         let signing;
         if (variant === "message") {
             signing = harness.provider.standardSignMessage({
@@ -2975,7 +2990,7 @@ test("Wallet Standard committed connect returns current authorization", async ()
     for (const currentPublicKey of [secondSolanaKey, null]) {
         const harness = solanaHarness();
         applySolanaConfiguration(harness);
-        const connecting = harness.provider.standardConnect();
+        const connecting = harness.standardProvider.standardConnect();
         const request = harness.requests.at(-1);
         if (currentPublicKey) {
             applySolanaConfiguration(harness, {
@@ -3687,7 +3702,7 @@ test("Wallet Standard signing preflights and caps every input", async () => {
         publicKey: firstSolanaKey,
         solanaAuthorizationEpoch: 1,
     });
-    const account = harness.provider.standardAccounts()[0];
+    const account = harness.standardProvider.standardAccounts()[0];
     let messageCalls = 0;
     harness.provider.signMessage = async () => {
         messageCalls += 1;
@@ -3745,7 +3760,7 @@ test("Wallet Standard signing rejects authorization drift between awaits", async
             publicKey: firstSolanaKey,
             solanaAuthorizationEpoch: 1,
         });
-        const account = harness.provider.standardAccounts()[0];
+        const account = harness.standardProvider.standardAccounts()[0];
         let calls = 0;
         const switchAccount = signature => {
             calls += 1;
@@ -4014,17 +4029,15 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
     const changeListeners = new Set;
     const account = {
         address,
-        chains: ["solana:mainnet"],
-        features: ["solana:signMessage"],
-        label: "Big Wallet",
         publicKey: new Uint8Array(32),
     };
+    const calls = [];
     const provider = Object.assign(new EventEmitter, {
-        standardAccounts() { return [account]; },
-        standardConnect: () => Promise.resolve(name),
-        standardDisconnect: () => Promise.resolve(name),
-        standardOn(event, listener) {
-            if (event === "change") { changeListeners.add(listener); }
+        accountState() { return account; },
+        connect() { calls.push("connect"); return Promise.resolve(); },
+        disconnect() { calls.push("disconnect"); return Promise.resolve(); },
+        onAccountChange(listener) {
+            changeListeners.add(listener);
             return () => changeListeners.delete(listener);
         },
         standardSignAndSendTransaction: () => Promise.resolve(name),
@@ -4033,6 +4046,7 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
     });
     let retired = 0;
     return {
+        calls,
         changeListeners,
         provider,
         retire() { retired += 1; },
@@ -4049,6 +4063,165 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
     };
 }
 
+test("Wallet Standard public entry points share accounts and features", async () => {
+    const harness = solanaHarness();
+    applySolanaConfiguration(harness);
+    const {wallet, standardProvider} = harness;
+    assert.equal(standardProvider.standardFeatures(), wallet.features);
+    const changes = [];
+    wallet.features["standard:events"].on("change", value => changes.push(value));
+    const connecting = wallet.features["standard:connect"].connect();
+    harness.Solana.applyEnvelope(harness.provider, {
+        id: harness.requests.at(-1).id,
+        kind: "result",
+        name: "connect",
+        result: {publicKey: firstSolanaKey},
+    });
+    const account = (await connecting).accounts[0];
+    assert.equal(wallet.accounts[0], account);
+    assert.equal(standardProvider.standardAccounts()[0], account);
+    assert.equal(changes.at(-1).accounts[0], account);
+    assert.equal(Object.isFrozen(account), true);
+    const bytes = account.publicKey;
+    bytes[0] = 255;
+    assert.equal(account.publicKey[0], 0);
+});
+
+test("Wallet Standard subscribers share one source subscription and isolate errors", () => {
+    const harness = solanaHarness();
+    let installed = 0;
+    let disposed = 0;
+    const onAccountChange = harness.provider.onAccountChange.bind(harness.provider);
+    harness.provider.onAccountChange = listener => {
+        installed += 1;
+        const dispose = onAccountChange(listener);
+        return () => { disposed += 1; dispose(); };
+    };
+    harness.standardProvider.on("accountChanged", () => { throw new Error("ordinary listener"); });
+    const unsubscribeFirst = harness.standardProvider.standardOn("change", value => {
+        value.accounts = [];
+        throw new Error("standard listener");
+    });
+    const changes = [];
+    const unsubscribeSecond = harness.wallet.features["standard:events"].on(
+        "change", value => changes.push(value)
+    );
+    assert.equal(installed, 1);
+    vm.runInContext(`Set.prototype[Symbol.iterator] = function() {
+        throw new Error("mutated iterator");
+    };`, harness.context);
+    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0].accounts[0], harness.wallet.accounts[0]);
+    unsubscribeFirst();
+    assert.equal(disposed, 0);
+    unsubscribeSecond();
+    assert.equal(disposed, 1);
+});
+
+test("Wallet Standard subscriber revocation cannot deliver stale accounts to later listeners", () => {
+    const harness = solanaHarness();
+    const on = harness.wallet.features["standard:events"].on;
+    on("change", value => {
+        if (value.accounts.length > 0) { void harness.provider.externalDisconnect(); }
+    });
+    const changes = [];
+    on("change", value => changes.push(value.accounts.map(account => account.address)));
+    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+    assert.deepEqual(normalized(harness.wallet.accounts), []);
+    assert.deepEqual(normalized(changes), [[], []]);
+});
+
+test("Wallet Standard reentrant account reads cannot overwrite replacement account identity", () => {
+    const harness = facadeHarness();
+    const record = harness.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000003",
+    });
+    const ethereum = ethereumFacadeTarget("ethereum");
+    const first = solanaFacadeTarget("first");
+    const second = solanaFacadeTarget("second", secondSolanaKey);
+    record.prepareTargets({ethereumProvider: ethereum, solanaProvider: first}).commit();
+    const firstRead = first.provider.accountState;
+    let replacementAccount;
+    first.provider.accountState = () => {
+        record.prepareTargets({ethereumProvider: ethereum, solanaProvider: second}).commit();
+        replacementAccount = record.wallet.accounts[0];
+        return firstRead();
+    };
+    const account = record.wallet.accounts[0];
+    assert.equal(account, replacementAccount);
+    assert.equal(record.solana.standardAccounts()[0], replacementAccount);
+    assert.equal(account.address, secondSolanaKey);
+});
+
+test("Wallet Standard connect cannot move to a replacement provider during options evaluation", async () => {
+    const first = solanaHarness();
+    const second = solanaHarness();
+    applySolanaConfiguration(first);
+    applySolanaConfiguration(second);
+    const harness = facadeHarness();
+    const record = harness.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000004",
+    });
+    const ethereum = ethereumFacadeTarget("ethereum");
+    record.prepareTargets({
+        ethereumProvider: ethereum,
+        solanaProvider: {provider: first.provider},
+    }).commit();
+    const connecting = record.wallet.features["standard:connect"].connect({
+        get silent() {
+            record.prepareTargets({
+                ethereumProvider: ethereum,
+                solanaProvider: {provider: second.provider},
+            }).commit();
+            first.Solana.retire(first.provider);
+            return false;
+        },
+    });
+    assert.equal(first.requests.length, 0);
+    assert.equal(second.requests.length, 0);
+    await assert.rejects(connecting, error => error.code === 4900);
+});
+
+test("Wallet Standard account reads do not invoke mutable public-key byte methods", () => {
+    for (const method of ["toBytes", "toBuffer"]) {
+        const harness = solanaHarness();
+        applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+        const account = harness.wallet.accounts[0];
+        const publicKey = harness.provider.publicKey;
+        const original = publicKey[method].bind(publicKey);
+        let calls = 0;
+        publicKey[method] = () => {
+            calls += 1;
+            void harness.provider.externalDisconnect();
+            return original();
+        };
+        assert.equal(harness.wallet.accounts[0], account);
+        assert.equal(harness.standardProvider.standardAccounts()[0], account);
+        assert.equal(calls, 0);
+        assert.equal(harness.provider.publicKey, publicKey);
+        assert.deepEqual(Array.from(account.publicKey), new Array(32).fill(0));
+    }
+});
+
+test("Wallet Standard account reads cannot restore authorization changed during serialization", () => {
+    const harness = solanaHarness();
+    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+    assert.equal(harness.wallet.accounts[0].address, firstSolanaKey);
+    const changes = [];
+    harness.wallet.features["standard:events"].on("change", value => changes.push(value));
+    const publicKey = harness.provider.publicKey;
+    const original = publicKey.toString.bind(publicKey);
+    publicKey.toString = () => {
+        publicKey.toString = original;
+        void harness.provider.externalDisconnect();
+        return original();
+    };
+    assert.deepEqual(normalized(harness.wallet.accounts), []);
+    assert.equal(harness.provider.publicKey, null);
+    assert.deepEqual(normalized(changes.at(-1).accounts), []);
+});
+
 test("Wallet Standard features remain cached and frozen after Object.freeze changes", () => {
     const engine = solanaHarness();
     const facade = facadeHarness();
@@ -4058,8 +4231,8 @@ test("Wallet Standard features remain cached and frozen after Object.freeze chan
     const wallet = facade.exports.createStableFacadeRecord({
         uuid: "00000000-0000-4000-8000-000000000009",
     }).wallet;
-    const engineFeatures = engine.provider.standardFeatures();
-    assert.equal(engine.provider.standardFeatures(), engineFeatures);
+    const engineFeatures = engine.standardProvider.standardFeatures();
+    assert.equal(engine.standardProvider.standardFeatures(), engineFeatures);
     for (const features of [engineFeatures, wallet.features]) {
         assert.equal(Object.isFrozen(features), true);
         assert.deepEqual(Object.keys(features).sort(), [
@@ -4119,9 +4292,15 @@ test("stable facades retarget atomically while preserving identities and listene
     const on = features["standard:events"].on;
     const unsubscribe = on("change", value => accountEvents.push(value));
     assert.equal(firstSolana.changeListeners.size, 1);
-    for (const {callback} of callbacks) {
-        assert.equal(await callback({}), "first");
+    for (const {name, callback} of callbacks) {
+        const result = await callback({});
+        if (name === "standard:connect") {
+            assert.equal(result.accounts[0], account);
+        } else {
+            assert.equal(result, name === "standard:disconnect" ? undefined : "first");
+        }
     }
+    assert.deepEqual(firstSolana.calls, ["connect", "disconnect"]);
     eipProvider.on("accountsChanged", value => events.push(value));
     record.solana.on("accountChanged", value => solanaEvents.push(value));
     firstEthereum.provider.emit("accountsChanged", ["first"]);
@@ -4148,8 +4327,14 @@ test("stable facades retarget atomically while preserving identities and listene
         "second:eth_chainId");
     for (const {name, method, callback} of callbacks) {
         assert.equal(wallet.features[name][method], callback);
-        assert.equal(await callback({}), "second");
+        const result = await callback({});
+        if (name === "standard:connect") {
+            assert.equal(result.accounts[0], account);
+        } else {
+            assert.equal(result, name === "standard:disconnect" ? undefined : "second");
+        }
     }
+    assert.deepEqual(secondSolana.calls, ["connect", "disconnect"]);
     assert.equal(firstSolana.changeListeners.size, 0);
     assert.equal(secondSolana.changeListeners.size, 1);
     for (const listener of secondSolana.changeListeners) { listener({}); }

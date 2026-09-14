@@ -315,9 +315,7 @@ actor NativeAgentLauncher {
         guard isPending(),
               case .found(let snapshot) = await dependencies.load(handle),
               snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
-              snapshot.phase == .queued,
-              !snapshot.nativeDecisionStaged,
-              let receipt = snapshot.nativeDeliveryReceipt,
+              case .queued(_, .delivered(let receipt)) = snapshot.state,
               receipt.nativeDeliveryNonce == nativeDeliveryNonce,
               case .compatible(let target) = await dependencies
                 .receiptRuntimeStatus(receipt),
@@ -1085,7 +1083,7 @@ actor NativeAgentLauncher {
         guard case .found(let snapshot) = await dependencies.load(handle),
               snapshot.nativeDeliveryNonce == nativeDeliveryNonce else { return false }
         if snapshot.phase == .responded { return true }
-        guard snapshot.nativeDecisionStaged || snapshot.phase == .approving,
+        guard snapshot.hasStagedOrActiveExecution,
               let receipt = snapshot.nativeDeliveryReceipt,
               receipt.nativeDeliveryNonce == nativeDeliveryNonce,
               case .compatible(.running(_, _, let runtimeInstanceIdentifier)) =
