@@ -14,7 +14,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         priceService.start()
         walletsManager.start()
-        SafariApprovalVaultHost.shared.start()
+        SafariApprovalVaultHost.shared.start(
+            backgroundTask: SafariApprovalVaultHost.backgroundTask(using: application)
+        )
         return true
     }
 

@@ -287,6 +287,110 @@ final class CatalogWalletAccess: WalletAccess {
     }
 }
 
+enum WalletSnapshotValidation {
+
+    static func wallets(
+        catalog: WalletAccountCatalog,
+        walletRecords: [(id: String, data: Data)]
+    ) -> [WalletContainer]? {
+        var wallets = [WalletContainer]()
+        wallets.reserveCapacity(walletRecords.count)
+        guard Set(walletRecords.map(\.id)).count == walletRecords.count
+        else { return nil }
+        for record in walletRecords {
+            guard let key = WalletStoredKey.importJSON(json: record.data)
+            else { return nil }
+            let wallet = WalletContainer(id: record.id, key: key)
+            guard wallet.accounts.count == wallet.key.accountCount else {
+                return nil
+            }
+            wallets.append(wallet)
+        }
+        guard SourceWalletAccess.descriptors(for: wallets) == catalog.accounts else {
+            return nil
+        }
+
+        return wallets
+    }
+
+    static func ownsStoredAccounts(
+        _ wallet: WalletContainer,
+        password: Data,
+        checkCancellation: () throws -> Void = {}
+    ) throws -> Bool {
+        try checkCancellation()
+        let accounts = wallet.accounts
+        guard accounts.count == wallet.key.accountCount,
+              var secret = wallet.key.decryptPrivateKey(password: password)
+        else { return false }
+        defer { secret.resetBytes(in: 0..<secret.count) }
+        try checkCancellation()
+
+        if wallet.isMnemonic {
+            return try mnemonicAccountsMatch(
+                accounts,
+                secret: secret,
+                checkCancellation: checkCancellation
+            )
+        }
+        return try privateKeyAccountsMatch(
+            accounts,
+            secret: secret,
+            checkCancellation: checkCancellation
+        )
+    }
+
+    private static func mnemonicAccountsMatch(
+        _ accounts: [WalletAccount],
+        secret: Data,
+        checkCancellation: () throws -> Void
+    ) throws -> Bool {
+        guard let mnemonic = String(data: secret, encoding: .utf8),
+              let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "")
+        else { return false }
+        return try accounts.allSatisfy { account in
+            try checkCancellation()
+            guard let privateKey = wallet.privateKey(
+                coin: account.coin,
+                derivationPath: account.derivationPath
+            ) else { return false }
+            return accountMatches(account, privateKey: privateKey)
+        }
+    }
+
+    private static func privateKeyAccountsMatch(
+        _ accounts: [WalletAccount],
+        secret: Data,
+        checkCancellation: () throws -> Void
+    ) throws -> Bool {
+        guard let privateKey = WalletPrivateKey(data: secret) else {
+            return false
+        }
+        return try accounts.allSatisfy { account in
+            try checkCancellation()
+            guard WalletCrypto.isValidPrivateKeyData(
+                secret,
+                coin: account.coin
+            ) else { return false }
+            return accountMatches(account, privateKey: privateKey)
+        }
+    }
+
+    static func accountMatches(
+        _ account: WalletAccount,
+        privateKey: WalletPrivateKey
+    ) -> Bool {
+        let publicKey = privateKey.publicKeyData(coin: account.coin)
+        let derivedAddress = WalletCrypto.addressFromPublicKeyData(
+            publicKey,
+            coin: account.coin
+        )
+        return !derivedAddress.isEmpty &&
+            account.coin.normalizedAddress(derivedAddress) ==
+            account.coin.normalizedAddress(account.address)
+    }
+}
+
 final class UnlockedWalletAccess: WalletAccess {
 
     let catalogIdentity: WalletCatalogIdentity
@@ -303,25 +407,11 @@ final class UnlockedWalletAccess: WalletAccess {
     ) {
         guard !password.isEmpty,
               catalog.isValid,
-              (try? SourceWalletAccess.encodeCatalog(catalog)) == catalogData
-        else { return nil }
-
-        var wallets = [WalletContainer]()
-        wallets.reserveCapacity(walletRecords.count)
-        guard Set(walletRecords.map(\.id)).count == walletRecords.count
-        else { return nil }
-        for record in walletRecords {
-            guard let key = WalletStoredKey.importJSON(json: record.data)
-            else { return nil }
-            let wallet = WalletContainer(id: record.id, key: key)
-            guard Self.ownsStoredAccounts(wallet, password: password) else {
-                return nil
-            }
-            wallets.append(wallet)
-        }
-        guard SourceWalletAccess.descriptors(for: wallets) == catalog.accounts else {
-            return nil
-        }
+              (try? SourceWalletAccess.encodeCatalog(catalog)) == catalogData,
+              let wallets = WalletSnapshotValidation.wallets(
+                  catalog: catalog,
+                  walletRecords: walletRecords
+              ) else { return nil }
 
         self.password = password
         walletsByID = Dictionary(
@@ -338,75 +428,21 @@ final class UnlockedWalletAccess: WalletAccess {
         )
     }
 
-    private static func ownsStoredAccounts(
-        _ wallet: WalletContainer,
-        password: Data
-    ) -> Bool {
-        let accounts = wallet.accounts
-        guard accounts.count == wallet.key.accountCount,
-              var secret = wallet.key.decryptPrivateKey(password: password)
-        else { return false }
-        defer { secret.resetBytes(in: 0..<secret.count) }
-
-        if wallet.isMnemonic {
-            return mnemonicAccountsMatch(accounts, secret: secret)
-        }
-        return privateKeyAccountsMatch(accounts, secret: secret)
-    }
-
-    private static func mnemonicAccountsMatch(
-        _ accounts: [WalletAccount],
-        secret: Data
-    ) -> Bool {
-        guard let mnemonic = String(data: secret, encoding: .utf8),
-              let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "")
-        else { return false }
-        return accounts.allSatisfy { account in
-            guard let privateKey = wallet.privateKey(
-                coin: account.coin,
-                derivationPath: account.derivationPath
-            ) else { return false }
-            return accountMatches(account, privateKey: privateKey)
-        }
-    }
-
-    private static func privateKeyAccountsMatch(
-        _ accounts: [WalletAccount],
-        secret: Data
-    ) -> Bool {
-        guard let privateKey = WalletPrivateKey(data: secret) else {
-            return false
-        }
-        return accounts.allSatisfy { account in
-            guard WalletCrypto.isValidPrivateKeyData(
-                secret,
-                coin: account.coin
-            ) else { return false }
-            return accountMatches(account, privateKey: privateKey)
-        }
-    }
-
-    private static func accountMatches(
-        _ account: WalletAccount,
-        privateKey: WalletPrivateKey
-    ) -> Bool {
-        let publicKey = privateKey.publicKeyData(coin: account.coin)
-        let derivedAddress = WalletCrypto.addressFromPublicKeyData(
-            publicKey,
-            coin: account.coin
-        )
-        return !derivedAddress.isEmpty &&
-            account.coin.normalizedAddress(derivedAddress) ==
-            account.coin.normalizedAddress(account.address)
-    }
-
     func privateKey(
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey? {
         guard let wallet = walletsByID[walletID],
-              wallet.hasAccountMatching(account) else { return nil }
-        return try? wallet.privateKey(passwordData: password, account: account)
+              wallet.hasAccountMatching(account),
+              let privateKey = try? wallet.privateKey(
+                  passwordData: password,
+                  account: account
+              ),
+              WalletSnapshotValidation.accountMatches(
+                  account,
+                  privateKey: privateKey
+              ) else { return nil }
+        return privateKey
     }
 
     func invalidate() {

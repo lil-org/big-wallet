@@ -12,7 +12,9 @@ struct Big_Wallet_visionOSApp: App {
 
     init() {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
-        SafariApprovalVaultHost.shared.start()
+        SafariApprovalVaultHost.shared.start(
+            backgroundTask: SafariApprovalVaultHost.backgroundTask(using: .shared)
+        )
     }
     
     var body: some Scene {
