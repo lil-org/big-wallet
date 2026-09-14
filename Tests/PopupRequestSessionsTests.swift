@@ -769,6 +769,248 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
     #endif
 
+    func testTransactionSessionTransfersAccessAfterSynchronousPreflight() async throws {
+        let access = RequestScopedWalletAccess(
+            CompactWalletAccess(account: popupTestAccount())
+        )
+        let session = makeTransactionApprovalSession { transaction, _, completion in
+            completion(.safe(transaction, popupTransactionEstimate()))
+            completion(.safe(transaction, popupTransactionEstimate()))
+            return EthereumRequestCancellation()
+        }
+
+        let result = await session.approve { access }
+        let approval = try XCTUnwrap(result)
+
+        XCTAssertEqual(approval.transaction.id, session.snapshot.transaction.id)
+        XCTAssertTrue(approval.walletAccess === access)
+        XCTAssertEqual(access.orderedAccounts.count, 1)
+        XCTAssertEqual(session.snapshot.phase, .finished)
+        XCTAssertNil(session.activeAlert)
+        approval.walletAccess.invalidate()
+        XCTAssertTrue(access.orderedAccounts.isEmpty)
+    }
+
+    func testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication()
+        async throws {
+        let access = RequestScopedWalletAccess(
+            CompactWalletAccess(account: popupTestAccount())
+        )
+        var preparationUpdate: ((Transaction) -> Void)?
+        var authentication: CheckedContinuation<RequestScopedWalletAccess?, Never>?
+        var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
+        var preflightTransaction: Transaction?
+        var approvalCompleted = false
+        let session = makeTransactionApprovalSession(
+            prepare: { transaction, _, _, onUpdate, _, completion in
+                preparationUpdate = onUpdate
+                completion(.success(transaction))
+                return EthereumRequestCancellation()
+            },
+            preflight: { transaction, _, completion in
+                preflightTransaction = transaction
+                preflightCompletion = completion
+                return EthereumRequestCancellation()
+            }
+        )
+        let reviewedTransaction = session.snapshot.transaction
+        let approvalTask = Task { @MainActor in
+            let result = await session.approve {
+                await withCheckedContinuation { authentication = $0 }
+            }
+            approvalCompleted = true
+            return result
+        }
+        try await waitForCondition { authentication != nil }
+        XCTAssertEqual(session.snapshot.phase, .authenticating)
+
+        var lateTransaction = reviewedTransaction
+        lateTransaction.interpretation = "Unreviewed preparation update"
+        preparationUpdate?(lateTransaction)
+        let duplicateDuringAuthentication = await session.approve {
+            XCTFail("Duplicate approval must not authenticate")
+            return nil
+        }
+        XCTAssertNil(duplicateDuringAuthentication)
+        XCTAssertEqual(
+            session.snapshot.transaction.interpretation,
+            reviewedTransaction.interpretation
+        )
+        XCTAssertNil(preflightCompletion)
+        XCTAssertFalse(approvalCompleted)
+
+        authentication?.resume(returning: access)
+        try await waitForCondition { preflightCompletion != nil }
+        let duplicateDuringPreflight = await session.approve {
+            XCTFail("Duplicate approval must not authenticate")
+            return nil
+        }
+        XCTAssertNil(duplicateDuringPreflight)
+        XCTAssertEqual(session.snapshot.phase, .preflighting)
+        XCTAssertFalse(approvalCompleted)
+        XCTAssertEqual(access.orderedAccounts.count, 1)
+        XCTAssertEqual(
+            preflightTransaction?.interpretation,
+            reviewedTransaction.interpretation
+        )
+
+        preflightCompletion?(.safe(reviewedTransaction, popupTransactionEstimate()))
+        let result = await approvalTask.value
+        let approval = try XCTUnwrap(result)
+        XCTAssertTrue(approvalCompleted)
+        XCTAssertTrue(approval.walletAccess === access)
+        approval.walletAccess.invalidate()
+    }
+
+    func testTransactionSessionAuthenticationRefusalAllowsFreshApproval() async throws {
+        var preflightCount = 0
+        let session = makeTransactionApprovalSession { transaction, _, completion in
+            preflightCount += 1
+            completion(.safe(transaction, popupTransactionEstimate()))
+            return EthereumRequestCancellation()
+        }
+
+        let refused = await session.approve { nil }
+
+        XCTAssertNil(refused)
+        XCTAssertEqual(preflightCount, 0)
+        XCTAssertEqual(session.snapshot.phase, .ready)
+        XCTAssertTrue(session.snapshot.canApprove)
+
+        let access = RequestScopedWalletAccess(
+            CompactWalletAccess(account: popupTestAccount())
+        )
+        let retried = await session.approve { access }
+        let approval = try XCTUnwrap(retried)
+        XCTAssertEqual(preflightCount, 1)
+        XCTAssertTrue(approval.walletAccess === access)
+        approval.walletAccess.invalidate()
+    }
+
+    func testTransactionSessionPreflightAlertsReleaseAccessAndRemainPresentable() async {
+        let cases: [(
+            TransactionApprovalAlertIntent.Kind,
+            (Transaction, GasService.Estimate) -> TransactionFeePreflightResult
+        )] = [
+            (.feesUpdated, { .walletManagedUpdated($0, $1) }),
+            (.unsafeFees, { .userControlledUnsafe($0, $1) }),
+            (.unavailableFees, { .unavailable($0, $1) }),
+        ]
+        for (kind, makeResult) in cases {
+            let access = RequestScopedWalletAccess(
+                CompactWalletAccess(account: popupTestAccount())
+            )
+            let session = makeTransactionApprovalSession { transaction, _, completion in
+                completion(makeResult(transaction, popupTransactionEstimate()))
+                completion(.safe(transaction, popupTransactionEstimate()))
+                return EthereumRequestCancellation()
+            }
+
+            let result = await session.approve { access }
+
+            XCTAssertNil(result)
+            XCTAssertTrue(access.orderedAccounts.isEmpty)
+            XCTAssertEqual(session.activeAlert?.kind, kind)
+            XCTAssertFalse(session.activeAlert?.presentation.actions.isEmpty ?? true)
+            XCTAssertNotEqual(session.snapshot.phase, .finished)
+        }
+    }
+
+    func testTransactionSessionInvalidationDiscardsLateAuthenticationAccess() async throws {
+        let access = RequestScopedWalletAccess(
+            CompactWalletAccess(account: popupTestAccount())
+        )
+        var authentication: CheckedContinuation<RequestScopedWalletAccess?, Never>?
+        var preflightCount = 0
+        let session = makeTransactionApprovalSession { _, _, _ in
+            preflightCount += 1
+            return EthereumRequestCancellation()
+        }
+        let approvalTask = Task { @MainActor in
+            await session.approve {
+                await withCheckedContinuation { authentication = $0 }
+            }
+        }
+        try await waitForCondition { authentication != nil }
+
+        session.invalidate()
+        session.invalidate()
+        authentication?.resume(returning: access)
+        let result = await approvalTask.value
+        let retry = await session.approve {
+            XCTFail("Invalidated session must not authenticate")
+            return nil
+        }
+
+        XCTAssertNil(result)
+        XCTAssertNil(retry)
+        XCTAssertTrue(access.orderedAccounts.isEmpty)
+        XCTAssertEqual(preflightCount, 0)
+        XCTAssertEqual(session.snapshot.phase, .finished)
+    }
+
+    func testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults()
+        async throws {
+        let access = RequestScopedWalletAccess(
+            CompactWalletAccess(account: popupTestAccount())
+        )
+        let cancellation = EthereumRequestCancellation()
+        var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
+        let session = makeTransactionApprovalSession { _, _, completion in
+            preflightCompletion = completion
+            return cancellation
+        }
+        let transaction = session.snapshot.transaction
+        var approvalCompleted = false
+        let approvalTask = Task { @MainActor in
+            let result = await session.approve { access }
+            approvalCompleted = true
+            return result
+        }
+        try await waitForCondition { preflightCompletion != nil }
+
+        session.invalidate()
+        session.invalidate()
+        try await waitForCondition { approvalCompleted }
+        let result = await approvalTask.value
+
+        XCTAssertNil(result)
+        XCTAssertTrue(cancellation.isCancelled)
+        XCTAssertTrue(access.orderedAccounts.isEmpty)
+        preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+        preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
+        XCTAssertEqual(session.snapshot.phase, .finished)
+        XCTAssertNil(session.activeAlert)
+        XCTAssertFalse(session.snapshot.canApprove)
+    }
+
+    private func makeTransactionApprovalSession(
+        prepare: @escaping TransactionApprovalOperations.Prepare = {
+            transaction, _, _, _, _, completion in
+            completion(.success(transaction))
+            return EthereumRequestCancellation()
+        },
+        preflight: @escaping TransactionApprovalOperations.Preflight
+    ) -> PopupTransactionSession {
+        let session = PopupTransactionSession(
+            action: SendTransactionAction(
+                transaction: popupReadyTransaction(),
+                resolvedNetwork: ResolvedEthereumNetwork(
+                    network: popupTransactionNetwork(),
+                    source: .custom
+                ),
+                walletId: "wallet",
+                account: popupTestAccount()
+            ),
+            operations: TransactionApprovalOperations(
+                prepare: prepare,
+                preflight: preflight
+            )
+        )
+        session.start()
+        return session
+    }
+
     func testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged() throws {
         let transaction = Transaction(
             from: "0x0000000000000000000000000000000000000001",
@@ -3914,6 +4156,85 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(authenticationCount, 0)
         XCTAssertEqual(preflightCount, 0)
         XCTAssertEqual(resolveCount, 0)
+    }
+
+    func testCompletedRequestPollingSettlesPendingTransactionPreflight() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 64, provider: .ethereum)
+        await store.insert(snapshot)
+        let transaction = popupReadyTransaction()
+        let catalog = CompactWalletAccess(account: popupTestAccount())
+        let access = RequestScopedWalletAccess(catalog)
+        let cancellation = EthereumRequestCancellation()
+        var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
+        var dispatchCompleted = false
+        var executionCount = 0
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor(execute: { request, _, _, _ in
+                executionCount += 1
+                return .response(request.response(error: .userRejected))
+            }) { _ in
+                .approval(.approveTransaction(SendTransactionAction(
+                    transaction: transaction,
+                    resolvedNetwork: ResolvedEthereumNetwork(
+                        network: popupTransactionNetwork(),
+                        source: .custom
+                    ),
+                    walletId: "wallet",
+                    account: popupTestAccount()
+                )))
+            },
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { catalog },
+                unlockWalletAccess: { _ in .unlocked(access) }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: TransactionApprovalOperations(
+                prepare: { transaction, _, _, _, _, completion in
+                    completion(.success(transaction))
+                    return EthereumRequestCancellation()
+                },
+                preflight: { _, _, completion in
+                    preflightCompletion = completion
+                    return cancellation
+                }
+            ),
+            signingNetworkResolver: popupSigningNetwork
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        let approve = try popupCommand(
+            subject: "approveRequest",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            reviewToken: token,
+            payload: ["revisions": snapshot.revisions.json]
+        )
+        let dispatch = Task { @MainActor in
+            let result = await controller.dispatch(request: approve, profileIdentifier: nil)
+            dispatchCompleted = true
+            return result
+        }
+        try await waitForCondition { preflightCompletion != nil }
+        let request = try XCTUnwrap(snapshot.request)
+        _ = await store.complete(
+            handle: snapshot.handle,
+            response: request.response(error: .userRejected)
+        )
+        await store.forceNextReleaseResult(.ownershipLost)
+        let pending = try popupCommand(subject: "getPendingRequests", id: 99)
+
+        _ = await controller.dispatch(request: pending, profileIdentifier: nil)
+        try await waitForCondition { dispatchCompleted }
+        let response = await dispatch.value
+
+        XCTAssertEqual(response["status"] as? String, "ok")
+        XCTAssertTrue(cancellation.isCancelled)
+        XCTAssertTrue(access.orderedAccounts.isEmpty)
+        preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+        XCTAssertEqual(executionCount, 0)
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "complete", "release"])
     }
 
     func testTransactionAlertReleasesClaimBeforeApprovalReturns() async throws {

@@ -122,7 +122,6 @@ test("approval envelope validates capabilities and requires canonical review con
     for (const invalid of [
         {...error, actions: undefined}, {...error, actions: ["approve"]},
         {...error, actions: ["retry", "reject"]}, {...error, review: messageState(request).review},
-        {...error, canReject: true}, {...error, extra: true},
         {...messageState(request), review: undefined},
         {...messageState(request), actions: ["reject", "reject"]},
         {...messageState(request), actions: ["editTransaction"]},
@@ -1026,6 +1025,64 @@ test("full popup boot renders FIFO requests through the production controller", 
         "getPendingRequests", "getApprovalState",
     ]);
     assert.ok(harness.nativeMessages.every(message => message.__bwPrivateBrowsing === false));
+});
+
+test("additional approval display fields leave rendering and approval payloads unchanged", async () => {
+    for (const stateFor of [messageState, transactionState, selectionState]) {
+        const request = pendingRequest();
+        const state = stateFor(request);
+        const baseline = popupHarness({requests: [request]});
+        const extended = popupHarness({requests: [request]});
+        baseline.setState(request, state);
+        extended.setState(request, {
+            ...state,
+            displayMetadata: {label: "Future display metadata"},
+            canApprove: false,
+            canReject: false,
+            payload: {password: "ignored", selectedAccounts: []},
+            revisions: {ethereum: 999, solana: 999},
+        });
+
+        await baseline.boot();
+        await extended.boot();
+
+        assert.equal(extended.controller.transportError, false);
+        assert.deepEqual(extended.visibleSnapshot(), baseline.visibleSnapshot());
+
+        await baseline.controller.approveCurrent();
+        await extended.controller.approveCurrent();
+
+        const approvals = harness => harness.workerMessages.filter(message =>
+            message.subject === "approveRequestWithCurrentRevisions"
+        );
+        assert.equal(approvals(baseline).length, 1);
+        assert.deepEqual(approvals(extended), approvals(baseline));
+    }
+});
+
+test("additional display fields cannot grant actions or repair invalid approval content", async () => {
+    const request = pendingRequest();
+    const extras = {canApprove: true, canReject: true, reviewToken: requestToken(102)};
+    const error = {id: request.id, state: "error", actions: ["reject"], error: "Failed"};
+    const harness = popupHarness({requests: [request]});
+    harness.setState(request, {...error, ...extras});
+
+    await harness.boot();
+    harness.clearMessages();
+    await harness.controller.approveCurrent();
+
+    assert.equal(harness.controller.transportError, false);
+    assert.equal(harness.get("button-approve").disabled, true);
+    assert.equal(harness.get("button-reject").disabled, false);
+    assert.deepEqual(harness.workerMessages, []);
+    for (const state of [
+        messageState(request, {}, {id: request.id + 1}),
+        messageState(request, {reviewToken: "invalid"}),
+        messageState(request, {meta: undefined}),
+        messageState(request, {}, {actions: ["unknown"]}),
+    ]) {
+        assert.equal(harness.call("isRenderableApprovalState", {...state, ...extras}, request), false);
+    }
 });
 
 test("approval reviews omit malformed images without changing approval content or source responses", async () => {

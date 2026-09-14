@@ -2396,6 +2396,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         coordinator.reject()
         gate.resume(.retryablePersistenceFailure)
         await fulfillment(of: [rejectionFinished], timeout: 1)
+        await waitForState(coordinator, .finished)
 
         XCTAssertEqual(coordinator.state, .finished)
         gate.resume(.persisted)

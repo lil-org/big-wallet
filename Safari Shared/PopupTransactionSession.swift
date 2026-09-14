@@ -23,10 +23,12 @@ final class PopupTransactionSession {
 
     private let coordinator: TransactionApprovalCoordinator
     private var gasSpeedConfiguration = GasSpeedConfiguration()
+    private var authenticationToken: TransactionApprovalRequestToken?
+    private var preflightContinuation: CheckedContinuation<Transaction?, Never>?
     private(set) var activeAlert: ActiveAlert?
     var editorRequestToken = 0
     var balance: String?
-    var onOutput: (TransactionApprovalOutput) -> Void = { _ in }
+    var onChange: () -> Void = {}
 
     init(
         action: SendTransactionAction,
@@ -61,19 +63,50 @@ final class PopupTransactionSession {
     }
 
     func invalidate() {
+        authenticationToken = nil
         coordinator.invalidate()
+        finishPreflight(with: nil)
     }
 
-    @discardableResult
-    func approve() -> Bool {
-        return coordinator.approve()
+    func approve(
+        authenticate: () async -> RequestScopedWalletAccess?
+    ) async -> (
+        transaction: Transaction,
+        walletAccess: RequestScopedWalletAccess
+    )? {
+        guard authenticationToken == nil,
+              preflightContinuation == nil,
+              coordinator.approve(),
+              let token = authenticationToken else { return nil }
+        defer {
+            if authenticationToken == token {
+                authenticationToken = nil
+            }
+        }
+        let walletAccess = await authenticate()
+        guard authenticationToken == token else {
+            walletAccess?.invalidate()
+            return nil
+        }
+        guard let walletAccess else {
+            coordinator.authenticationCompleted(token: token, succeeded: false)
+            return nil
+        }
+        let transaction = await withCheckedContinuation { continuation in
+            preflightContinuation = continuation
+            coordinator.authenticationCompleted(token: token, succeeded: true)
+        }
+        guard authenticationToken == token, let transaction else {
+            walletAccess.invalidate()
+            return nil
+        }
+        return (transaction, walletAccess)
     }
 
-    func authenticationCompleted(
-        token: TransactionApprovalRequestToken,
-        succeeded: Bool
-    ) {
-        coordinator.authenticationCompleted(token: token, succeeded: succeeded)
+    private func finishPreflight(with transaction: Transaction?) {
+        let continuation = preflightContinuation
+        preflightContinuation = nil
+        continuation?.resume(returning: transaction)
     }
 
     func setSpeed(
@@ -256,12 +289,19 @@ final class PopupTransactionSession {
             gasSpeedConfiguration.applyFetchedEstimate(estimate)
         case .alert(let intent):
             activeAlert = ActiveAlert(intent: intent)
+            finishPreflight(with: nil)
         case .editorRequest:
             editorRequestToken += 1
-        case .authenticationRequest, .completion:
-            break
+        case .authenticationRequest(let token):
+            if snapshot.phase == .authenticating {
+                authenticationToken = token
+            }
+            return
+        case .completion(let transaction):
+            finishPreflight(with: transaction)
+            return
         }
-        onOutput(output)
+        onChange()
     }
 
 }

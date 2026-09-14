@@ -4748,6 +4748,57 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 1)
     }
 
+    func testNativeAgentResolutionRevalidatesRetirementAfterSuspension() async throws {
+        let currentURL = try makeAmbientBundle(name: "Retirement Passes", build: "149")
+        let launchDate = Date(timeIntervalSince1970: 9_500)
+        let processIdentifiers: [Int32] = [861, 862, 863, 864]
+        let identities = try Dictionary(uniqueKeysWithValues: processIdentifiers.map {
+            ($0, try runtimeIdentity(
+                processIdentifier: $0,
+                bundleURL: currentURL,
+                launchDate: launchDate,
+                runtimeProtocolVersion: 2
+            ))
+        })
+        var pass = 0
+        var verifiedPasses = [Int]()
+        var retiredProcesses = [Int32]()
+        let selected = await NativeAgentLauncher.resolveTargetHelper(
+            currentURL: currentURL,
+            deadline: UInt64.max,
+            isPending: { true },
+            helpers: {
+                guard pass < 2 else { return [] }
+                return processIdentifiers[(pass * 2)..<(pass * 2 + 2)].map { processIdentifier in
+                    self.runtimeHelper(
+                        processIdentifier: processIdentifier,
+                        bundleURL: currentURL,
+                        launchDate: launchDate,
+                        requestQuit: {
+                            XCTAssertEqual(verifiedPasses, Array(0...pass))
+                            retiredProcesses.append(processIdentifier)
+                            return true
+                        }
+                    )
+                }
+            },
+            identity: { identities[$0] },
+            validate: { url in
+                XCTAssertEqual(url, currentURL)
+                verifiedPasses.append(pass)
+                return true
+            },
+            sleep: { _ in pass += 1 }
+        )
+
+        XCTAssertEqual(selected, .launch(
+            url: currentURL,
+            createsNewApplicationInstance: false
+        ))
+        XCTAssertEqual(verifiedPasses, [0, 1])
+        XCTAssertEqual(retiredProcesses, processIdentifiers)
+    }
+
     func testNativeAgentResolutionIgnoresOtherPaths() async throws {
         let currentURL = try makeAmbientBundle(name: "Current", build: "148")
         let otherURL = try makeAmbientBundle(name: "Other", build: "149")
@@ -5339,6 +5390,57 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         XCTAssertFalse(confirmed)
         XCTAssertEqual(verifications, 1)
+    }
+
+    @MainActor
+    func testRuntimeVerificationRejectsAnInstalledVersionDifferentFromCapturedVersion() throws {
+        let bundleURL = try makeAmbientBundle(name: "Updated Since Capture", build: "149")
+        let launchDate = Date(timeIntervalSince1970: 14_150)
+        let identity = AmbientRuntimeIdentity(
+            instanceIdentifier: UUID(),
+            processIdentifier: 848,
+            bundlePath: bundleURL.path,
+            version: .init(marketing: "1.0.99", build: "148"),
+            runtimeProtocolVersion: AmbientRuntimeIdentity.currentRuntimeProtocolVersion,
+            supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+            launchedAt: launchDate
+        )
+        let helper = runtimeHelper(
+            processIdentifier: identity.processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: launchDate
+        )
+        var verifications = 0
+        let validate: (URL) -> Bool = { url in
+            XCTAssertEqual(url, bundleURL)
+            verifications += 1
+            return true
+        }
+        XCTAssertFalse(NativeAgentLauncher.isConfirmedRuntimeHelper(
+            helper,
+            expectedURL: bundleURL,
+            expectedVersion: identity.version,
+            identity: { _ in identity },
+            validate: validate
+        ))
+        XCTAssertEqual(verifications, 1)
+
+        let status = NativeAgentLauncher.runtimeStatus(
+            receipt: .init(
+                nativeDeliveryNonce: .init(value: UUID()),
+                runtimeInstanceIdentifier: identity.instanceIdentifier,
+                owner: try XCTUnwrap(identity.nativeDeliveryOwner)
+            ),
+            expectedURL: bundleURL,
+            expectedVersion: identity.version,
+            helpers: { [helper] },
+            identity: { _ in identity },
+            validate: validate
+        )
+        guard case .indeterminate = status else {
+            return XCTFail("An updated installed bundle must invalidate captured compatibility")
+        }
+        XCTAssertEqual(verifications, 2)
     }
 
     @MainActor

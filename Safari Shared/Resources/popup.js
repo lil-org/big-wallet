@@ -1916,10 +1916,7 @@ function isRenderableApprovalState(state, request) {
         !hasValidOptionalApprovalFields(state) ||
         !Array.isArray(state.actions) ||
         !state.actions.every(action => APPROVAL_ACTIONS.has(action)) ||
-        !hasUniqueValues(state.actions, action => action) ||
-        !Object.keys(state).every(key => [
-            "id", "state", "actions", "host", "error", "review", "editsError",
-        ].includes(key))) {
+        !hasUniqueValues(state.actions, action => action)) {
         return false;
     }
     if (state.state !== "review") {

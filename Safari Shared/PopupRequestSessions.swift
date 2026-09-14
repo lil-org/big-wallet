@@ -238,51 +238,6 @@ final class PopupRequestSessions {
         var state: State = .working
     }
 
-    private enum TransactionApprovalDecision {
-        case refused
-        case alert
-        case transaction(Transaction, RequestScopedWalletAccess)
-    }
-
-    private final class TransactionApprovalResolution {
-        let token: UUID
-        private var continuation: CheckedContinuation<TransactionApprovalDecision, Never>?
-        private var walletAccess: RequestScopedWalletAccess?
-
-        init(
-            token: UUID,
-            continuation: CheckedContinuation<TransactionApprovalDecision, Never>
-        ) {
-            self.token = token
-            self.continuation = continuation
-        }
-
-        func install(walletAccess: RequestScopedWalletAccess) {
-            self.walletAccess?.invalidate()
-            self.walletAccess = walletAccess
-        }
-
-        func takeWalletAccess() -> RequestScopedWalletAccess? {
-            defer { walletAccess = nil }
-            return walletAccess
-        }
-
-        func finish(with decision: TransactionApprovalDecision) {
-            guard let continuation else { return }
-            self.continuation = nil
-            if case .transaction = decision {
-            } else {
-                walletAccess?.invalidate()
-                walletAccess = nil
-            }
-            continuation.resume(returning: decision)
-        }
-
-        deinit {
-            walletAccess?.invalidate()
-        }
-    }
-
 #if os(iOS) || os(visionOS)
     static let shared = PopupRequestSessions(
         store: ExtensionBridge.shared,
@@ -310,9 +265,6 @@ final class PopupRequestSessions {
     private let presenter: PopupApprovalStatePresenter
     private var sessions = [ExtensionBridge.Handle: PopupRequestSession]()
     private var immediateResponses = [ExtensionBridge.Handle: ImmediateResponsePersistence]()
-    private var transactionApprovalResolutions = [
-        ExtensionBridge.Handle: TransactionApprovalResolution
-    ]()
 
     init(
         store: PopupRequestStore,
@@ -514,7 +466,7 @@ final class PopupRequestSessions {
                   session.approvalClaim == nil else { return nil }
             return handle
         }
-        staleHandles.forEach { sessions[$0] = nil }
+        staleHandles.forEach { discardSession(handle: $0) }
         let staleImmediateResponses = immediateResponses.keys.filter {
             $0.profileIdentifier == profileIdentifier && !currentHandles.contains($0)
         }
@@ -527,7 +479,7 @@ final class PopupRequestSessions {
             case .queued, .approving:
                 requests.append(presenter.pendingRequest(snapshot))
             case .responded:
-                sessions[snapshot.handle] = nil
+                discardSession(handle: snapshot.handle)
                 immediateResponses[snapshot.handle] = nil
                 completedResponses.append(presenter.completedResponse(snapshot))
             }
@@ -629,8 +581,8 @@ final class PopupRequestSessions {
     }
 
     private func discardSession(handle: ExtensionBridge.Handle) {
-        sessions[handle]?.transaction?.invalidate()
-        sessions[handle] = nil
+        let session = sessions.removeValue(forKey: handle)
+        session?.transaction?.invalidate()
     }
 
     private func mutableSession(
@@ -666,7 +618,7 @@ final class PopupRequestSessions {
     ) async -> [String: Any] {
         let handle = snapshot.handle
         if snapshot.phase == .responded {
-            sessions[handle] = nil
+            discardSession(handle: handle)
             immediateResponses[handle] = nil
             return missingState(id: handle.id)
         }
@@ -699,7 +651,7 @@ final class PopupRequestSessions {
             }
             if case .found(let current) = await store.load(handle: handle),
                current.phase == .responded {
-                sessions[handle] = nil
+                discardSession(handle: handle)
                 immediateResponses[handle] = nil
                 return missingState(id: handle.id)
             }
@@ -798,12 +750,25 @@ final class PopupRequestSessions {
             guard let approval = await beginAndClaimApproval(for: session) else {
                 return ignoredResponse()
             }
-            switch await transactionApprovalDecision(
-                for: session,
-                transactionSession: transactionSession,
-                approval: approval
-            ) {
-            case .refused, .alert:
+            guard let approved = await transactionSession.approve(authenticate: {
+                guard session.beginAuthentication(
+                    claim: approval.claim,
+                    token: approval.token
+                ) else { return nil }
+                let walletAccess = await self.authenticate(
+                    session: session,
+                    reason: Strings.sendTransaction
+                )
+                guard self.isCurrent(session, token: approval.token),
+                      session.finishAuthentication(
+                          claim: approval.claim,
+                          token: approval.token
+                      ) else {
+                    walletAccess?.invalidate()
+                    return nil
+                }
+                return walletAccess
+            }) else {
                 await releaseApproval(
                     approval.claim,
                     for: session,
@@ -811,55 +776,53 @@ final class PopupRequestSessions {
                     rematerializeOnSuccess:
                         session.takeAuthenticationRematerializationRequirement()
                 )
-            case .transaction(let transaction, let walletAccess):
-                guard await validateSigningAccess(
-                    for: session,
-                    reviewedAction: action,
-                    approval: approval,
-                    walletAccess: walletAccess,
-                    expectedRevisions: payload.revisions,
-                    executionDeadline: executionDeadline
-                ) else {
-                    walletAccess.invalidate()
-                    return ["status": "ok"]
-                }
-                guard let execution = DappApprovalDecision
-                        .TransactionExecution(
-                            transaction,
-                            reviewedNetwork: reviewedAction.resolvedNetwork
-                        ),
-                      case .success = DappApprovalValidator.resolve(
-                          action: action,
-                          decision: .transaction(execution),
-                          accounts: nil,
-                          networkResolver: selectionNetworkResolver
-                      ) else {
-                    await releaseApproval(
-                        approval.claim,
-                        for: session,
-                        token: approval.token,
-                        rematerializeOnSuccess: true
-                    )
-                    walletAccess.invalidate()
-                    return ["status": "ok"]
-                }
-                await beginSigningExecution(
-                    claim: approval.claim,
+                return ["status": "ok"]
+            }
+            let walletAccess = approved.walletAccess
+            defer { walletAccess.invalidate() }
+            guard await validateSigningAccess(
+                for: session,
+                reviewedAction: action,
+                approval: approval,
+                walletAccess: walletAccess,
+                expectedRevisions: payload.revisions,
+                executionDeadline: executionDeadline
+            ) else {
+                return ["status": "ok"]
+            }
+            guard let execution = DappApprovalDecision.TransactionExecution(
+                      approved.transaction,
+                      reviewedNetwork: reviewedAction.resolvedNetwork
+                  ),
+                  case .success = DappApprovalValidator.resolve(
+                      action: action,
+                      decision: .transaction(execution),
+                      accounts: nil,
+                      networkResolver: selectionNetworkResolver
+                  ) else {
+                await releaseApproval(
+                    approval.claim,
                     for: session,
                     token: approval.token,
-                    deadline: executionDeadline,
-                    acquireWalletLease: {
-                        await walletAccess.takeExecutionLease()
-                    }
-                ) {
-                    await self.requestProcessor.execute(
-                        request: session.request,
-                        action: action,
-                        decision: .transaction(execution),
-                        walletAccess: walletAccess
-                    )
+                    rematerializeOnSuccess: true
+                )
+                return ["status": "ok"]
+            }
+            await beginSigningExecution(
+                claim: approval.claim,
+                for: session,
+                token: approval.token,
+                deadline: executionDeadline,
+                acquireWalletLease: {
+                    await walletAccess.takeExecutionLease()
                 }
-                walletAccess.invalidate()
+            ) {
+                await self.requestProcessor.execute(
+                    request: session.request,
+                    action: action,
+                    decision: .transaction(execution),
+                    walletAccess: walletAccess
+                )
             }
         case .addEthereumChain:
             guard let approval = await beginAndClaimApproval(for: session) else {
@@ -896,10 +859,10 @@ final class PopupRequestSessions {
         )
         switch await store.complete(handle: snapshot.handle, response: response) {
         case .persisted:
-            sessions[snapshot.handle] = nil
+            discardSession(handle: snapshot.handle)
             return ["status": "ok"]
         case .ownershipLost:
-            sessions[snapshot.handle] = nil
+            discardSession(handle: snapshot.handle)
             return ignoredResponse()
         case .retryablePersistenceFailure:
             session.fail(Strings.failedToLoad)
@@ -1252,7 +1215,7 @@ final class PopupRequestSessions {
             return claim
         case .executing, .responded, .missing:
             if sessions[session.handle] === session {
-                sessions[session.handle] = nil
+                discardSession(handle: session.handle)
             }
         case .unavailable:
             if isCurrent(session, token: token) {
@@ -1305,8 +1268,7 @@ final class PopupRequestSessions {
         }
         switch await store.reject(handle: snapshot.handle) {
         case .persisted:
-            sessions[snapshot.handle]?.transaction?.invalidate()
-            sessions[snapshot.handle] = nil
+            discardSession(handle: snapshot.handle)
             immediateResponses[snapshot.handle] = nil
             return ["status": "ok"]
         case .ownershipLost:
@@ -1314,40 +1276,6 @@ final class PopupRequestSessions {
         case .retryablePersistenceFailure:
             return ["status": "unavailable"]
         }
-    }
-
-    private func transactionApprovalDecision(
-        for session: PopupRequestSession,
-        transactionSession: PopupTransactionSession,
-        approval: ClaimedApproval
-    ) async -> TransactionApprovalDecision {
-        return await withCheckedContinuation { continuation in
-            let resolution = TransactionApprovalResolution(
-                token: approval.token,
-                continuation: continuation
-            )
-            transactionApprovalResolutions[session.handle] = resolution
-            guard transactionSession.approve() else {
-                finishTransactionApproval(
-                    resolution,
-                    for: session,
-                    with: .refused
-                )
-                return
-            }
-        }
-    }
-
-    private func finishTransactionApproval(
-        _ resolution: TransactionApprovalResolution,
-        for session: PopupRequestSession,
-        with decision: TransactionApprovalDecision
-    ) {
-        guard transactionApprovalResolutions[session.handle] === resolution else {
-            return
-        }
-        transactionApprovalResolutions[session.handle] = nil
-        resolution.finish(with: decision)
     }
 
     private func beginExecution(
@@ -1407,7 +1335,7 @@ final class PopupRequestSessions {
         switch result {
         case .persisted, .ownershipLost:
             if sessions[session.handle] === session {
-                sessions[session.handle] = nil
+                discardSession(handle: session.handle)
             }
         case .beginRetryablePersistenceFailure:
             await releaseApproval(
@@ -1421,9 +1349,8 @@ final class PopupRequestSessions {
                 session.fail(Strings.failedToLoad, token: token)
             }
         case .rolledBack:
-            session.transaction?.invalidate()
             if sessions[session.handle] === session {
-                sessions[session.handle] = nil
+                discardSession(handle: session.handle)
             }
         }
     }
@@ -1438,15 +1365,14 @@ final class PopupRequestSessions {
         case .persisted:
             if isCurrent(session, token: token) {
                 if rematerializeOnSuccess {
-                    session.transaction?.invalidate()
-                    sessions[session.handle] = nil
+                    discardSession(handle: session.handle)
                 } else {
                     _ = session.returnToReview(token: token)
                 }
             }
         case .ownershipLost:
             if sessions[session.handle] === session {
-                sessions[session.handle] = nil
+                discardSession(handle: session.handle)
             }
         case .retryablePersistenceFailure:
             if isCurrent(session, token: token) {
@@ -1471,11 +1397,11 @@ final class PopupRequestSessions {
             action: action,
             operations: transactionApprovalOperations
         )
-        transactionSession.onOutput = { [weak self, weak session] output in
+        transactionSession.onChange = { [weak self, weak session] in
             guard let self,
                   let session,
                   sessions[session.handle] === session else { return }
-            handleTransactionOutput(output, session: session)
+            session.rotateReviewToken()
         }
         session.transaction = transactionSession
         transactionSession.start()
@@ -1491,92 +1417,6 @@ final class PopupRequestSessions {
                         balance.eth(shortest: true) + " " + action.chain.symbol
                 }
             }
-        }
-    }
-
-    private func handleTransactionOutput(
-        _ output: TransactionApprovalOutput,
-        session: PopupRequestSession
-    ) {
-        guard let transactionSession = session.transaction else { return }
-        switch output {
-        case .snapshot, .verifiedFeeEstimate, .editorRequest:
-            session.rotateReviewToken()
-        case .authenticationRequest(let token):
-            guard let resolution = transactionApprovalResolutions[session.handle],
-                  resolution.token == session.reviewToken,
-                  let claim = session.approvalClaim,
-                  session.beginAuthentication(
-                      claim: claim,
-                      token: resolution.token
-                  ) else {
-                if let resolution = transactionApprovalResolutions[session.handle] {
-                    finishTransactionApproval(
-                        resolution,
-                        for: session,
-                        with: .refused
-                    )
-                }
-                return
-            }
-            Task { @MainActor in
-                let walletAccess = await authenticate(
-                    session: session,
-                    reason: Strings.sendTransaction
-                )
-                guard transactionApprovalResolutions[session.handle] === resolution else {
-                    return
-                }
-                let authenticationFinished = isCurrent(
-                    session,
-                    token: resolution.token
-                ) && session.finishAuthentication(
-                    claim: claim,
-                    token: resolution.token
-                )
-                if authenticationFinished, let walletAccess {
-                    resolution.install(walletAccess: walletAccess)
-                } else {
-                    walletAccess?.invalidate()
-                }
-                transactionSession.authenticationCompleted(
-                    token: token,
-                    succeeded: walletAccess != nil && authenticationFinished
-                )
-                if walletAccess == nil || !authenticationFinished {
-                    finishTransactionApproval(
-                        resolution,
-                        for: session,
-                        with: .refused
-                    )
-                }
-            }
-        case .alert:
-            if let resolution = transactionApprovalResolutions[session.handle] {
-                finishTransactionApproval(
-                    resolution,
-                    for: session,
-                    with: .alert
-                )
-            } else {
-                session.rotateReviewToken()
-            }
-        case .completion(let transaction):
-            guard let resolution = transactionApprovalResolutions[session.handle] else {
-                return
-            }
-            let decision: TransactionApprovalDecision
-            if let transaction,
-               let walletAccess = resolution.takeWalletAccess() {
-                decision = .transaction(transaction, walletAccess)
-            } else {
-                decision = .refused
-            }
-            finishTransactionApproval(
-                resolution,
-                for: session,
-                with: decision
-            )
         }
     }
 
