@@ -1951,9 +1951,12 @@ test("editor inputs survive refresh and custom or suggested edits use exact nati
             : {gasPriceGwei: "5"};
         if (usesEIP1559) {
             harness.get("edit-max-priority").value = custom.maxPriorityFeePerGasGwei;
+            harness.get("edit-max-priority").emit("input");
             harness.get("edit-max-fee").value = custom.maxFeePerGasGwei;
+            harness.get("edit-max-fee").emit("input");
         } else {
             harness.get("edit-gas-price").value = custom.gasPriceGwei;
+            harness.get("edit-gas-price").emit("input");
         }
         harness.setState(controller.request, transactionState(controller.request, {
             editor: {...editor, nonce: "2"}, reviewToken: requestToken(102),
@@ -1962,7 +1965,7 @@ test("editor inputs survive refresh and custom or suggested edits use exact nati
         await controller.readState({refresh: true});
 
         assert.equal(harness.get("edit-nonce").value, "9");
-        assert.equal(controller.transaction.editorDirty, true);
+        assert.ok(controller.transaction.dirtyEditorFields.size > 0);
         assert.equal(harness.get(usesEIP1559 ? "edit-max-priority" : "edit-gas-price").value, "5");
         const committed = transactionState(controller.request, {
             editor: {...editor, ...custom, nonce: "9"}, reviewToken: requestToken(103),
@@ -1983,7 +1986,7 @@ test("editor inputs survive refresh and custom or suggested edits use exact nati
             __bwPrivateBrowsing: false,
         }]);
         assert.equal(harness.get("tx-editor").open, false);
-        assert.equal(controller.transaction.editorDirty, false);
+        assert.equal(controller.transaction.dirtyEditorFields.size, 0);
         assert.equal(controller.state.review.reviewToken, requestToken(103));
         harness.clearMessages();
 
@@ -1992,6 +1995,252 @@ test("editor inputs survive refresh and custom or suggested edits use exact nati
         assert.equal(harness.nativeMessages[0].reviewToken, requestToken(103));
         assert.deepEqual(harness.nativeMessages[0].payload, {mode: "suggested"});
         assert.deepEqual(harness.workerMessages, []);
+    }
+});
+
+test("nonce-only edits preserve slider fees through preparation and Apply", async () => {
+    for (const usesEIP1559 of [false, true]) {
+        const editor = usesEIP1559
+            ? {usesEIP1559, nonce: "1", maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22"}
+            : {usesEIP1559, nonce: "1", gasPriceGwei: "22"};
+        const changedFees = usesEIP1559
+            ? {maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24"}
+            : {gasPriceGwei: "24"};
+        const harness = await reviewedPopup(request => transactionState(request, {editor}));
+        const controller = harness.controller;
+        const speedGate = deferred();
+        harness.get("tx-editor").open = true;
+        harness.get("edit-nonce").value = "9";
+        harness.get("edit-nonce").emit("input");
+        harness.handlers.native = (message, fallback) => {
+            if (message.subject === "setTransactionSpeed") { return speedGate.promise; }
+            if (message.subject === "applyTransactionEdits") {
+                return transactionState(controller.request, {
+                    editor: {...editor, ...changedFees, nonce: "9"},
+                    reviewToken: requestToken(104),
+                });
+            }
+            return fallback(message);
+        };
+        const slider = harness.get("tx-slider");
+        slider.emit("pointerdown");
+        slider.value = "150";
+        slider.emit("pointerup");
+        await flushPopup();
+        const prematureApply = harness.get("editor-apply").emit("click");
+        await flushPopup();
+        speedGate.resolve(transactionState(controller.request, {
+            editor: {...editor, ...changedFees},
+            phase: "preparing",
+            reviewToken: requestToken(102),
+        }, {actions: ["reject", "setTransactionSpeed"]}));
+        await prematureApply;
+        await flushPopup();
+
+        assert.equal(harness.get("editor-apply").disabled, true);
+        assert.equal(harness.get("edit-nonce").value, "9");
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["setTransactionSpeed"]);
+        harness.setState(controller.request, transactionState(controller.request, {
+            editor: {...editor, ...changedFees},
+            slider: {maximum: 200, position: 150, visible: true},
+            reviewToken: requestToken(103),
+        }));
+        await controller.readState({refresh: true});
+
+        assert.equal(harness.get("tx-editor").open, true);
+        assert.equal(harness.get("tx-slider-row").classList.contains("hidden"), false);
+        assert.equal(harness.get("editor-apply").disabled, false);
+        assert.equal(harness.get("edit-nonce").value, "9");
+        if (usesEIP1559) {
+            assert.equal(harness.get("edit-max-priority").value, "4");
+            assert.equal(harness.get("edit-max-fee").value, "24");
+        } else {
+            assert.equal(harness.get("edit-gas-price").value, "24");
+        }
+
+        await harness.get("editor-apply").emit("click");
+
+        const applied = harness.nativeMessages.at(-1);
+        assert.equal(applied.subject, "applyTransactionEdits");
+        assert.equal(applied.reviewToken, requestToken(103));
+        assert.deepEqual(applied.payload, {mode: "custom", nonce: "9", ...changedFees});
+    }
+});
+
+test("editing one EIP-1559 fee preserves only that field during refresh", async () => {
+    for (const [field, key, value] of [
+        ["edit-max-priority", "maxPriorityFeePerGasGwei", "7"],
+        ["edit-max-fee", "maxFeePerGasGwei", "40"],
+    ]) {
+        const editor = {
+            usesEIP1559: true, nonce: "1",
+            maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22",
+        };
+        const harness = await reviewedPopup(request => transactionState(request, {editor}));
+        const controller = harness.controller;
+        harness.get("tx-editor").open = true;
+        harness.get(field).value = value;
+        harness.get(field).emit("input");
+        const refreshedEditor = {
+            ...editor, nonce: "2",
+            maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24",
+        };
+        harness.setState(controller.request, transactionState(controller.request, {
+            editor: refreshedEditor, reviewToken: requestToken(102),
+        }));
+
+        await controller.readState({refresh: true});
+
+        assert.equal(harness.get("edit-nonce").value, "2");
+        assert.equal(harness.get("edit-max-priority").value, key === "maxPriorityFeePerGasGwei" ? value : "4");
+        assert.equal(harness.get("edit-max-fee").value, key === "maxFeePerGasGwei" ? value : "24");
+        harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
+            ? transactionState(controller.request, {editor: {...refreshedEditor, [key]: value}})
+            : fallback(message);
+
+        await harness.get("editor-apply").emit("click");
+
+        assert.deepEqual(harness.nativeMessages.at(-1).payload, {
+            mode: "custom", nonce: "2",
+            maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24", [key]: value,
+        });
+    }
+});
+
+test("queued Apply combines click-time edits with dispatch-time native fields and token", async () => {
+    const editor = {
+        usesEIP1559: true, nonce: "1",
+        maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22",
+    };
+    const harness = await reviewedPopup(request => transactionState(request, {editor}));
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) => {
+        if (message.requestToken === queuedRejectionHandle.requestToken) { return gate.promise; }
+        if (message.subject === "applyTransactionEdits") {
+            return transactionState(controller.request, {
+                editor: {...editor, nonce: "9", maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24"},
+                reviewToken: requestToken(103),
+            });
+        }
+        return fallback(message);
+    };
+    const predecessor = queueRejection(harness);
+    await flushPopup();
+    harness.get("tx-editor").open = true;
+    harness.get("edit-nonce").value = "9";
+    harness.get("edit-nonce").emit("input");
+    const queued = harness.get("editor-apply").emit("click");
+    await flushPopup();
+    harness.get("edit-nonce").value = "10";
+    harness.get("edit-nonce").emit("input");
+    harness.setState(controller.request, transactionState(controller.request, {
+        editor: {...editor, nonce: "2", maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24"},
+        reviewToken: requestToken(102),
+    }));
+    await controller.readState({refresh: true});
+
+    gate.resolve({status: "ok"});
+    await predecessor;
+    await queued;
+
+    const applied = harness.nativeMessages.at(-1);
+    assert.equal(applied.subject, "applyTransactionEdits");
+    assert.equal(applied.reviewToken, requestToken(102));
+    assert.deepEqual(applied.payload, {
+        mode: "custom", nonce: "9",
+        maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24",
+    });
+});
+
+test("a fee model change cancels queued edits but permits a fresh Apply", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.requestToken === queuedRejectionHandle.requestToken ? gate.promise : fallback(message);
+    const predecessor = queueRejection(harness);
+    await flushPopup();
+    harness.get("tx-editor").open = true;
+    harness.get("edit-gas-price").value = "5";
+    harness.get("edit-gas-price").emit("input");
+    const queued = harness.get("editor-apply").emit("click");
+    await flushPopup();
+    harness.setState(controller.request, transactionState(controller.request, {
+        editor: {usesEIP1559: true, nonce: "1", maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22"},
+        reviewToken: requestToken(102),
+    }));
+    await controller.readState({refresh: true});
+
+    gate.resolve({status: "ok"});
+    await predecessor;
+    await queued;
+
+    assert.equal(harness.nativeMessages.some(message => message.subject === "applyTransactionEdits"), false);
+    assert.equal(controller.transportError, false);
+    assert.equal(harness.get("tx-editor").open, true);
+    assert.equal(controller.state.review.reviewToken, requestToken(102));
+
+    harness.get("edit-max-priority").value = "3";
+    harness.get("edit-max-priority").emit("input");
+    harness.get("edit-max-fee").value = "25";
+    harness.get("edit-max-fee").emit("input");
+    harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
+        ? transactionState(controller.request, {
+            editor: {usesEIP1559: true, nonce: "1", maxPriorityFeePerGasGwei: "3", maxFeePerGasGwei: "25"},
+            reviewToken: requestToken(103),
+        })
+        : fallback(message);
+
+    await harness.get("editor-apply").emit("click");
+
+    const applied = harness.nativeMessages.at(-1);
+    assert.equal(applied.subject, "applyTransactionEdits");
+    assert.equal(applied.reviewToken, requestToken(102));
+    assert.deepEqual(applied.payload, {
+        mode: "custom", nonce: "1", maxPriorityFeePerGasGwei: "3", maxFeePerGasGwei: "25",
+    });
+    assert.equal(harness.get("tx-editor").open, false);
+    assert.equal(controller.transportError, false);
+});
+
+test("Apply and Reset clear drafts so subsequent native values populate every field", async () => {
+    for (const button of ["editor-apply", "editor-suggested"]) {
+        const editor = {
+            usesEIP1559: true, nonce: "1",
+            maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22",
+            suggestedMaxPriorityFeePerGasGwei: "3", suggestedMaxFeePerGasGwei: "23",
+        };
+        const harness = await reviewedPopup(request => transactionState(request, {editor}));
+        const controller = harness.controller;
+        harness.get("tx-editor").open = true;
+        harness.get("edit-nonce").value = "9";
+        harness.get("edit-nonce").emit("input");
+        harness.get("edit-max-priority").value = "5";
+        harness.get("edit-max-priority").emit("input");
+        harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
+            ? transactionState(controller.request, {editor, reviewToken: requestToken(102)})
+            : fallback(message);
+
+        await harness.get(button).emit("click");
+
+        assert.equal(harness.get("tx-editor").open, false);
+        assert.equal(controller.transaction.dirtyEditorFields.size, 0);
+        assert.equal(harness.get("edits-error").classList.contains("hidden"), true);
+        if (button === "editor-suggested") {
+            assert.deepEqual(harness.nativeMessages.at(-1).payload, {mode: "suggested"});
+        }
+        harness.get("tx-editor").open = true;
+        harness.setState(controller.request, transactionState(controller.request, {
+            editor: {...editor, nonce: "2", maxPriorityFeePerGasGwei: "4", maxFeePerGasGwei: "24"},
+            reviewToken: requestToken(103),
+        }));
+
+        await controller.readState({refresh: true});
+
+        assert.equal(harness.get("edit-nonce").value, "2");
+        assert.equal(harness.get("edit-max-priority").value, "4");
+        assert.equal(harness.get("edit-max-fee").value, "24");
     }
 });
 
@@ -2009,8 +2258,19 @@ test("an edit error preserves the open editor and typed values", async () => {
     assert.equal(harness.get("tx-editor").open, true);
     assert.equal(harness.get("edit-nonce").value, "invalid");
     assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
-    assert.equal(controller.transaction.editorDirty, true);
+    assert.ok(controller.transaction.dirtyEditorFields.size > 0);
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+
+    harness.setState(controller.request, transactionState(controller.request, {
+        editor: {...controller.state.review.editor, gasPriceGwei: "4", nonce: "2"},
+        reviewToken: requestToken(102),
+    }));
+    await controller.readState({refresh: true});
+
+    assert.equal(harness.get("tx-editor").open, true);
+    assert.equal(harness.get("edit-nonce").value, "invalid");
+    assert.equal(harness.get("edit-gas-price").value, "4");
+    assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
 });
 
 test("alert clicks send the click-time review token and ignore a superseded response", async () => {
@@ -2172,7 +2432,7 @@ test("busy polling removes capabilities while preserving the rendered review", a
         assert.deepEqual(harness.get("tx-fee-lines").children, feeRows);
         assert.equal(harness.get("tx-editor").open, true);
         assert.equal(harness.get("edit-nonce").value, "9");
-        assert.equal(controller.transaction.editorDirty, true);
+        assert.ok(controller.transaction.dirtyEditorFields.size > 0);
         assert.equal(harness.get("button-approve").disabled, true);
         assert.equal(harness.get("button-reject").disabled, true);
         assert.equal(harness.get("tx-slider").disabled, true);
@@ -2193,7 +2453,7 @@ test("busy polling removes capabilities while preserving the rendered review", a
         await controller.readState();
         assert.equal(harness.get("tx-editor").open, true);
         assert.equal(harness.get("edit-nonce").value, "9");
-        assert.equal(controller.transaction.editorDirty, true);
+        assert.ok(controller.transaction.dirtyEditorFields.size > 0);
         assert.equal(controller.state.review.reviewToken, requestToken(202));
         assert.equal(harness.get("button-approve").disabled, false);
         assert.equal(harness.get("screen-request").inert, false);
@@ -2248,7 +2508,7 @@ test("transaction permissions disable mutations while retaining a dirty review e
     await controller.readState({refresh: true});
     assert.equal(harness.get("tx-editor").open, true);
     assert.equal(harness.get("edit-nonce").value, "9");
-    assert.equal(controller.transaction.editorDirty, true);
+    assert.ok(controller.transaction.dirtyEditorFields.size > 0);
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.get("button-reject").disabled, false);
     assert.equal(harness.get("tx-slider").disabled, true);
@@ -2417,6 +2677,79 @@ test("late idle switch replies preserve preparing and working requests", async (
                 assert.equal(harness.model.closed, 1);
             }
         }
+    }
+});
+
+test("reordered approval object keys preserve DOM nodes and transaction backoff", async () => {
+    function reverseObjectKeys(value) {
+        if (Array.isArray(value)) { return value.map(reverseObjectKeys); }
+        if (value !== null && typeof value === "object") {
+            return Object.fromEntries(Object.entries(value).reverse().map(([key, item]) =>
+                [key, reverseObjectKeys(item)]
+            ));
+        }
+        return value;
+    }
+    const harness = await reviewedPopup(request => transactionState(request, {
+        phase: "reviewingFees",
+        alert: {
+            title: "Review fees",
+            message: "Updated estimate",
+            actions: [{title: "OK", action: "acknowledge"}],
+        },
+    }, {actions: ["reject", "resolveApprovalAlert"]}));
+    const controller = harness.controller;
+    const original = normalized(controller.state);
+    const reordered = reverseObjectKeys(original);
+    const originalJSON = JSON.stringify(original);
+    const reorderedJSON = JSON.stringify(reordered);
+    assert.notEqual(originalJSON, reorderedJSON);
+    assert.notDeepEqual(Object.keys(original.review.alert.actions[0]), Object.keys(reordered.review.alert.actions[0]));
+    const feeRow = harness.get("tx-fee-lines").children[0];
+    const accountName = harness.get("tx-account").children[0];
+    const alertButton = harness.get("alert-buttons").children[0];
+    const writes = harness.textWrites.length;
+
+    for (const [index, delay] of [1200, 2400, 4800, 9600, 10000, 10000].entries()) {
+        harness.setState(controller.request, index % 2 === 0 ? reordered : original);
+        await harness.fire(harness.followUpTimerId());
+
+        assert.equal(harness.get("tx-fee-lines").children[0], feeRow);
+        assert.equal(harness.get("tx-account").children[0], accountName);
+        assert.equal(harness.get("alert-buttons").children[0], alertButton);
+        assert.equal(harness.textWrites.length, writes);
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, delay);
+    }
+    assert.equal(JSON.stringify(original), originalJSON);
+    assert.equal(JSON.stringify(reordered), reorderedJSON);
+});
+
+test("meaningful approval changes still redraw and reset transaction backoff", async () => {
+    const changes = [
+        state => { state.review.valueLine = "Changed value"; },
+        state => { state.review.reviewToken = requestToken(102); },
+        state => { state.actions = state.actions.filter(action => action !== "setTransactionSpeed"); },
+        state => { state.review.phase = "preparing"; state.actions = ["reject"]; },
+        state => { state.review.feeLines.reverse(); },
+    ];
+    for (const change of changes) {
+        const harness = await reviewedPopup(request => transactionState(request, {
+            feeLines: ["Network fee: 0.001 ETH", "Maximum fee: 0.002 ETH"],
+        }));
+        const controller = harness.controller;
+        await harness.fire(harness.followUpTimerId());
+        await harness.fire(harness.followUpTimerId());
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 2400);
+        const previousFeeRow = harness.get("tx-fee-lines").children[0];
+        const changed = normalized(controller.state);
+        change(changed);
+        harness.setState(controller.request, changed);
+
+        await harness.fire(harness.followUpTimerId());
+
+        assert.notEqual(harness.get("tx-fee-lines").children[0], previousFeeRow);
+        assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+        assert.deepEqual(normalized(controller.state), changed);
     }
 });
 

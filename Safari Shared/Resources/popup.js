@@ -43,6 +43,12 @@ const STABLE_TRANSACTION_PHASES = new Set([
     "reviewingFees",
     "finished",
 ]);
+const TRANSACTION_EDITOR_FIELDS = {
+    nonce: "edit-nonce",
+    gasPriceGwei: "edit-gas-price",
+    maxPriorityFeePerGasGwei: "edit-max-priority",
+    maxFeePerGasGwei: "edit-max-fee",
+};
 const ALERT_ACTIONS = new Set(["acknowledge", "retry", "edit", "cancel"]);
 var configurationIdentityForURL = BigWalletBridgeWire.configurationIdentityForURL;
 var genId = BigWalletBridgeWire.genId;
@@ -57,6 +63,22 @@ var isProviderRevisions = BigWalletBridgeWire.isProviderRevisions;
 var isRecord = BigWalletBridgeWire.isRecord;
 var isValidRequestId = BigWalletBridgeWire.isValidRequestId;
 var withTimeout = BigWalletBridgeWire.withTimeout;
+
+function canonicalJSONString(value) {
+    return JSON.stringify(value, (_, item) => isRecord(item)
+        ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]))
+        : item);
+}
+
+function transactionEditorValues(editor) {
+    return {
+        nonce: editor.nonce ?? "",
+        ...(editor.usesEIP1559 ? {
+            maxPriorityFeePerGasGwei: editor.maxPriorityFeePerGasGwei ?? "",
+            maxFeePerGasGwei: editor.maxFeePerGasGwei ?? "",
+        } : {gasPriceGwei: editor.gasPriceGwei ?? ""}),
+    };
+}
 
 const queueTab = {
     activeTab: null,
@@ -164,7 +186,7 @@ class PopupRequestController {
             sliderRequest: null,
             sliderReviewToken: null,
             lastEditorRequestKey: null,
-            editorDirty: false,
+            dirtyEditorFields: new Set(),
         };
         this.nativeState = null;
         this.transportError = false;
@@ -285,7 +307,7 @@ class PopupRequestController {
             isValid: () => this.isActive && (!isValid || isValid()),
             command: () => ({
                 subject,
-                payload,
+                payload: typeof payload === "function" ? payload() : payload,
                 reviewToken: typeof reviewToken === "function" ? reviewToken() : reviewToken,
                 id,
                 requestToken,
@@ -413,8 +435,8 @@ class PopupRequestController {
         this.scheduleRead();
     }
 
-    submitEdits(payload) {
-        return this.mutate({subject: "applyTransactionEdits", payload});
+    submitEdits(payload, isValid) {
+        return this.mutate({subject: "applyTransactionEdits", payload, isValid});
     }
 
     async resolveAlert(payload, reviewToken) {
@@ -424,9 +446,9 @@ class PopupRequestController {
         }
     }
 
-    async mutate({subject, payload, reviewToken, speedCommand}) {
+    async mutate({subject, payload, reviewToken, speedCommand, isValid = () => true}) {
         const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
-        if (this.phase === "submitting" || !this.allows(action)) { return null; }
+        if (this.phase === "submitting" || !this.allows(action) || !isValid()) { return null; }
         const isSpeed = subject === "setTransactionSpeed";
         if (!isSpeed && this.mutation) { return null; }
         const mutation = {};
@@ -434,14 +456,14 @@ class PopupRequestController {
         try {
             if (!isSpeed && !await this.waitForSpeed()) { return null; }
             if (this.phase === "submitting" || !this.allows(action) ||
-                !isSpeed && this.mutation !== mutation) { return null; }
+                !isSpeed && this.mutation !== mutation || !isValid()) { return null; }
             const revision = ++this.revision;
             this.resetReadBackoff();
             const outcome = await this.sendCommand({
                 subject, payload, speedCommand,
                 reviewToken: subject === "applyTransactionEdits"
                     ? () => this.nativeState?.review?.reviewToken : reviewToken,
-                isValid: () => this.isCurrent(revision) && this.allows(action) &&
+                isValid: () => this.isCurrent(revision) && this.allows(action) && isValid() &&
                     (typeof reviewToken === "undefined" || this.nativeState?.review?.reviewToken === reviewToken),
             });
             return this.acceptOutcome({outcome, revision, allowsIgnored: subject !== "applyTransactionEdits"});
@@ -513,6 +535,7 @@ class PopupRequestController {
 
     start() {
         if (!this.isActive) { return; }
+        this.resetEditorDraft();
         show("working-overlay");
         setText("request-title", "");
         setText("request-host", this.request.host);
@@ -552,7 +575,7 @@ class PopupRequestController {
 
     renderState(state) {
         if (!this.isActive) { return; }
-        this.presentation.lastStateJSON = JSON.stringify(state);
+        this.presentation.lastStateJSON = canonicalJSONString(state);
         show("screen-request");
         hide("screen-idle");
         document.getElementById("button-approve").textContent =
@@ -573,10 +596,12 @@ class PopupRequestController {
                 document.getElementById("screen-request").inert = true;
                 return;
             }
-            this.transaction.editorDirty = false;
+            this.resetEditorDraft();
             document.getElementById("tx-editor").open = false;
             hide("tx-editor");
-            hide("edits-error");
+        } else if (state.review.kind === "sendTransaction" && state.review.phase === "finished") {
+            this.resetEditorDraft();
+            document.getElementById("tx-editor").open = false;
         }
 
         setText("request-title", state.review?.title || "");
@@ -815,11 +840,7 @@ class PopupRequestController {
         const editorDetails = document.getElementById("tx-editor");
         if (canApplyEdits || editorDetails.open) {
             show("tx-editor");
-            // An open editor keeps whatever the user typed, but until they type it follows the fee:
-            // applying fields left over from before a slider move would silently undo that move.
-            if (!this.transaction.editorDirty) {
-                this.populateEditor(state);
-            }
+            this.populateEditor(state);
             const request = this.request;
             const requestToken = request && request.id === state.id
                 ? request.requestToken || ""
@@ -838,21 +859,21 @@ class PopupRequestController {
 
     populateEditor(state) {
         const review = state.review;
-        this.transaction.editorDirty = false;
         const editor = review.editor || {};
-        if (editor.usesEIP1559) {
-            show("editor-eip1559");
-            hide("editor-legacy");
-            document.getElementById("edit-max-priority").value = editor.maxPriorityFeePerGasGwei ?? "";
-            document.getElementById("edit-max-fee").value = editor.maxFeePerGasGwei ?? "";
-        } else {
-            show("editor-legacy");
-            hide("editor-eip1559");
-            document.getElementById("edit-gas-price").value = editor.gasPriceGwei ?? "";
+        setHidden("editor-eip1559", !editor.usesEIP1559);
+        setHidden("editor-legacy", editor.usesEIP1559);
+        for (const [name, value] of Object.entries(transactionEditorValues(editor))) {
+            const fieldId = TRANSACTION_EDITOR_FIELDS[name];
+            if (!this.transaction.dirtyEditorFields.has(fieldId)) {
+                document.getElementById(fieldId).value = value;
+            }
         }
-        document.getElementById("edit-nonce").value = editor.nonce ?? "";
         const hasSuggested = editor.suggestedGasPriceGwei != null || editor.suggestedMaxFeePerGasGwei != null;
         setHidden("editor-suggested", !hasSuggested);
+    }
+
+    resetEditorDraft() {
+        this.transaction.dirtyEditorFields.clear();
         hide("edits-error");
     }
 
@@ -935,18 +956,22 @@ class PopupRequestController {
     async applyEdits() {
         if (!this.isActive) { return; }
         if (!hasApprovalAction(this.state, "editTransaction")) { return; }
-        const editor = (this.state.review?.editor || {});
-        const payload = {
+        const edits = Object.fromEntries(
+            Object.keys(transactionEditorValues(this.state.review.editor))
+                .filter(name => this.transaction.dirtyEditorFields.has(TRANSACTION_EDITOR_FIELDS[name]))
+                .map(name => [name, document.getElementById(TRANSACTION_EDITOR_FIELDS[name]).value])
+        );
+        const currentValues = () => transactionEditorValues(this.state.review?.editor || {});
+        const payload = () => ({
             mode: "custom",
-            nonce: document.getElementById("edit-nonce").value,
+            ...currentValues(),
+            ...edits,
+        });
+        const isValid = () => {
+            const values = currentValues();
+            return Object.keys(edits).every(name => Object.hasOwn(values, name));
         };
-        if (editor.usesEIP1559) {
-            payload.maxPriorityFeePerGasGwei = document.getElementById("edit-max-priority").value;
-            payload.maxFeePerGasGwei = document.getElementById("edit-max-fee").value;
-        } else {
-            payload.gasPriceGwei = document.getElementById("edit-gas-price").value;
-        }
-        this.handleTransactionEditResult(await this.submitEdits(payload));
+        this.handleTransactionEditResult(await this.submitEdits(payload, isValid));
     }
 
     async applySuggested() {
@@ -968,8 +993,7 @@ class PopupRequestController {
     closeEditorAndAdopt(state) {
         if (!this.isActive) { return; }
         if (!state || !state.state) { return; }
-        this.transaction.editorDirty = false;
-        hide("edits-error");
+        this.resetEditorDraft();
         document.getElementById("tx-editor").open = false;
         this.adoptState(state);
     }
@@ -1031,7 +1055,7 @@ class PopupRequestController {
     }
 
     presentState(state, refresh) {
-        const unchanged = JSON.stringify(state) === this.presentation.lastStateJSON;
+        const unchanged = canonicalJSONString(state) === this.presentation.lastStateJSON;
         if (!refresh || !state.review ||
             !this.transaction.sliderDragging && !this.speedCommand) {
             if (!refresh || !unchanged) {
@@ -1052,8 +1076,7 @@ class PopupRequestController {
         this.presentation.lastStateJSON = null;
         this.closeAlert(false);
         document.getElementById("tx-editor").open = false;
-        this.transaction.editorDirty = false;
-        hide("edits-error");
+        this.resetEditorDraft();
         this.renderState({
             id: this.request.id,
             state: "error",
@@ -2198,10 +2221,10 @@ document.addEventListener("DOMContentLoaded", () => {
             currentRequestController.presentation.chainId = document.getElementById("network-select").value;
         }
     });
-    for (const fieldId of ["edit-gas-price", "edit-max-priority", "edit-max-fee", "edit-nonce"]) {
+    for (const fieldId of Object.values(TRANSACTION_EDITOR_FIELDS)) {
         document.getElementById(fieldId).addEventListener("input", () => {
             if (currentRequestController?.isActive) {
-                currentRequestController.transaction.editorDirty = true;
+                currentRequestController.transaction.dirtyEditorFields.add(fieldId);
             }
         });
     }
