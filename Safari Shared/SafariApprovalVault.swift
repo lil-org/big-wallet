@@ -1302,8 +1302,8 @@ final class SafariApprovalVaultHost {
             coordinationLease: coordinationLease
         )
         let result = try operation()
-        reconcileLocked(coordinationLease: coordinationLease)
         cancelReconciliationRetryLocked()
+        reconcile()
         return result
     }
 

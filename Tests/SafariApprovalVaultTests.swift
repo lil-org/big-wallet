@@ -1943,8 +1943,8 @@ final class SafariApprovalVaultTests: XCTestCase {
                 }
             } else {
                 host.reconcile()
-                reconciliationQueue.sync {}
             }
+            reconciliationQueue.sync {}
             XCTAssertTrue(retry.isCancelled)
             XCTAssertEqual(sourceReads, 2)
             reconciliationQueue.sync { retry.perform() }
@@ -1953,7 +1953,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
     }
 
-    func testHostKeepsGenerationStableUntilSynchronousMutationBoundary()
+    @MainActor
+    func testSourceMutationsRevokeImmediatelyAndCoalesceBackgroundPublication()
         throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -1968,7 +1969,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let source = try fixture().source
+        var source: SafariApprovalSourceSnapshot? = try fixture().source
+        let replacement = try mnemonicFixture().source
+        var sourceReads = 0
         let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
         let host = SafariApprovalVaultHost(
             vault: vault,
@@ -1977,7 +1980,11 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             reconciliationQueue: reconciliationQueue,
-            sourceSnapshot: { source }
+            sourceSnapshot: {
+                XCTAssertFalse(Thread.isMainThread)
+                sourceReads += 1
+                return source
+            }
         )
 
         host.start(backgroundTask: { _ in {} })
@@ -1987,12 +1994,27 @@ final class SafariApprovalVaultTests: XCTestCase {
         reconciliationQueue.sync {}
         XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, first)
 
-        try host.performSourceMutation {
+        reconciliationQueue.suspend()
+        do {
+            defer { reconciliationQueue.resume() }
+            for index in 0..<2 {
+                let result = try host.performSourceMutation {
+                    XCTAssertNil(vault.catalogAccess())
+                    XCTAssertTrue(keys.keys.isEmpty)
+                    source = index == 0 ? nil : replacement
+                    return "saved"
+                }
+                XCTAssertEqual(result, "saved")
+            }
             XCTAssertNil(vault.catalogAccess())
             XCTAssertTrue(keys.keys.isEmpty)
+            XCTAssertEqual(sourceReads, 2)
         }
+        reconciliationQueue.sync {}
+        XCTAssertEqual(sourceReads, 3)
         let second = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
         XCTAssertNotEqual(second.generation, first.generation)
+        XCTAssertEqual(second.catalogData, try SourceWalletAccess.encodeCatalog(replacement.catalog))
     }
 
     func testHostAbortsSourceMutationWhenUnavailableTombstoneWriteFails()
@@ -2396,6 +2418,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertEqual(result, "saved")
         XCTAssertEqual(mutations, 1)
+        reconciliationQueue.sync {}
         XCTAssertEqual(stores, 2)
         XCTAssertGreaterThan(synchronizationFailures, 0)
         let current = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
@@ -2512,6 +2535,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertEqual(result, "saved")
         XCTAssertEqual(mutations, 1)
+        reconciliationQueue.sync {}
         XCTAssertEqual(synchronizationFailures, 1)
         XCTAssertEqual(stores, 2)
         let current = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
@@ -2632,6 +2656,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             events.append("source")
             XCTAssertNil(vault.catalogAccess())
         }
+        reconciliationQueue.sync {}
 
         let sourceIndex = try XCTUnwrap(events.firstIndex(of: "source"))
         let firstDeletionIndex = try XCTUnwrap(events.firstIndex(of: "delete"))
