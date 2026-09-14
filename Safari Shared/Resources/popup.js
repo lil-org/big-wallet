@@ -11,32 +11,6 @@ const MAX_RESPONSE_READY_IDS = BigWalletBridgeWire.MAX_RESPONSE_READY_IDS;
 const WORKFLOW_VERSION = BigWalletBridgeWire.WORKFLOW_VERSION;
 const BUILD_VERSION = BigWalletBridgeWire.BUILD_VERSION;
 const UPDATE_RECOVERY_STORAGE_KEY = "workflowUpdateRecoveryNeeded";
-const WORKFLOW_POLICY = BigWalletBridgeWire.WORKFLOW_POLICY;
-const APPROVAL_STATES = new Set(["missing", "review", "authenticating", "working", "error"]);
-const APPROVAL_ACTIONS = new Set([
-    "approve", "reject", "retry", "editTransaction",
-    "setTransactionSpeed", "resolveApprovalAlert",
-]);
-const APPROVAL_KINDS = new Set([
-    "selectAccount",
-    "switchAccount",
-    "signMessage",
-    "sendTransaction",
-    "addChain",
-]);
-const SELECTION_ACCOUNT_COINS = new Set(WORKFLOW_POLICY.selectionAccountCoins);
-const SOLANA_CLUSTER_VALUES = new Set(WORKFLOW_POLICY.solanaClusterValues);
-const TRANSACTION_PHASES = new Set([
-    "idle",
-    "preparing",
-    "ready",
-    "failed",
-    "editing",
-    "authenticating",
-    "preflighting",
-    "reviewingFees",
-    "finished",
-]);
 const STABLE_TRANSACTION_PHASES = new Set([
     "ready",
     "failed",
@@ -49,17 +23,13 @@ const TRANSACTION_EDITOR_FIELDS = {
     maxPriorityFeePerGasGwei: "edit-max-priority",
     maxFeePerGasGwei: "edit-max-fee",
 };
-const ALERT_ACTIONS = new Set(["acknowledge", "retry", "edit", "cancel"]);
 var configurationIdentityForURL = BigWalletBridgeWire.configurationIdentityForURL;
 var genId = BigWalletBridgeWire.genId;
 var genPrivateToken = BigWalletBridgeWire.genPrivateToken;
 var hasExactKeys = BigWalletBridgeWire.hasExactKeys;
-var isConfiguration = BigWalletBridgeWire.isConfiguration;
 var isCanonicalEthereumChainId = BigWalletBridgeWire.isCanonicalEthereumChainId;
 var isRequestToken = BigWalletBridgeWire.isRequestToken;
 var isPendingRequestAvailable = BigWalletBridgeWire.isPendingRequestAvailable;
-var isPrivateToken = BigWalletBridgeWire.isPrivateToken;
-var isProviderRevisions = BigWalletBridgeWire.isProviderRevisions;
 var isRecord = BigWalletBridgeWire.isRecord;
 var isValidRequestId = BigWalletBridgeWire.isValidRequestId;
 var withTimeout = BigWalletBridgeWire.withTimeout;
@@ -100,427 +70,269 @@ let currentRequestController = null;
 let popupStrings = {};
 let ignoreSliderUntilRelease = false;
 
-class PopupCommandLane {
-    constructor() {
-        this.waiting = new Set();
-        this.tail = Promise.resolve();
-    }
-
-    enqueue({owner, isValid, dispatch}) {
-        let resolve;
-        const result = new Promise(completion => { resolve = completion; });
-        const entry = {owner, resolve};
-        this.waiting.add(entry);
-        const operation = this.tail.then(async () => {
-            if (!this.waiting.delete(entry) || isValid && !isValid()) {
-                return {status: "cancelled"};
-            }
-            return {status: "response", response: await dispatch()};
-        });
-        this.tail = operation.then(() => {}, () => {});
-        operation.then(resolve, () => resolve({status: "failure"}));
-        return {result, cancelQueued: () => this.cancelQueued(entry)};
-    }
-
-    cancelQueued(entry) {
-        if (!this.waiting.delete(entry)) { return false; }
-        entry.resolve({status: "cancelled"});
-        return true;
-    }
-
-    cancelOwner(owner) {
-        for (const entry of this.waiting) {
-            if (entry.owner === owner) { this.cancelQueued(entry); }
-        }
-    }
-}
-
-class PopupTransport {
-    constructor() {
-        this.lanes = {read: new PopupCommandLane(), action: new PopupCommandLane()};
-    }
-
-    enqueue({lane, owner, isValid, command}) {
-        return this.lanes[lane].enqueue({
-            owner,
-            isValid,
-            dispatch: () => {
-                const message = typeof command === "function" ? command() : command;
-                return settleNativeMessage(Promise.resolve(nativeMessage(
-                    message.subject, message.id, message.payload, message.requestToken,
-                    message.reviewToken, message.approvalRequest
-                )), message.subject === "approveRequest");
-            },
-        });
-    }
-
-    cancelQueued(owner) {
-        this.lanes.read.cancelOwner(owner);
-        this.lanes.action.cancelOwner(owner);
-    }
-
-    readQueue() {
-        return this.enqueue({
-            lane: "read",
-            command: {subject: "getPendingRequests", id: genId()},
-        }).result;
-    }
-}
-
-const popupTransport = new PopupTransport();
-
 class PopupRequestController {
     constructor(request) {
         this.request = request;
         this.presentation = {
-            accounts: null,
-            chainId: null,
-            networksKey: null,
-            cluster: null,
-            lastStateJSON: null,
-            alertKey: null,
-            alertReturnFocus: null,
-        };
-        this.transaction = {
-            sliderDragging: false,
-            sliderRequest: null,
-            sliderReviewToken: null,
+            accounts: null, chainId: null, networksKey: null, cluster: null,
+            lastStateJSON: null, alertKey: null, alertReturnFocus: null,
             lastEditorRequestKey: null,
-            dirtyEditorFields: new Set(),
         };
         this.nativeState = null;
         this.transportError = false;
-        this.phase = "loading";
-        this.revision = 0;
-        this.mutation = null;
-        this.speedCommand = null;
+        this.lifecycle = "active";
+        this.action = null;
+        this.interaction = null;
         this.completion = null;
         this.readFlight = null;
-        this.scheduledRead = null;
+        this.readTimer = null;
         this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
     }
 
     get isActive() {
-        return currentRequestController === this && this.phase !== "disposed" &&
-            this.phase !== "reconciling" &&
+        return currentRequestController === this && this.lifecycle === "active" &&
             sameRequest(this.request, queueTab.items[queueTab.index]);
     }
 
-    get state() {
-        return this.nativeState;
+    get state() { return this.nativeState; }
+
+    allows(action) {
+        return this.isActive && !this.transportError && hasApprovalAction(this.state, action);
     }
 
-    resetReadBackoff() {
-        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+    resetReadBackoff() { this.refreshDelay = TRANSACTION_REFRESH_INTERVAL; }
+
+    stopRead() {
+        clearTimeout(this.readTimer);
+        this.readTimer = null;
+        this.readFlight = null;
     }
 
-    didPresentRead(state, refresh, unchanged) {
+    scheduleRead() {
+        clearTimeout(this.readTimer);
+        this.readTimer = null;
+        if (!this.isActive || this.transportError || this.action || this.interaction || this.readFlight) { return; }
+        const polling = shouldPollApprovalState(this.state);
+        if (!polling && !(this.state?.state === "review" && this.state.review.kind === "sendTransaction")) { return; }
+        const timer = setTimeout(() => {
+            if (this.readTimer !== timer) { return; }
+            this.readTimer = null;
+            void this.readState({refresh: !polling});
+        }, polling ? APPROVAL_POLL_INTERVAL : this.refreshDelay);
+        this.readTimer = timer;
+    }
+
+    async sendCommand({subject, payload, reviewToken}) {
+        if (!this.isActive) { return {status: "cancelled"}; }
+        try {
+            const response = await settleNativeMessage(Promise.resolve(nativeMessage(
+                subject, this.request.id, payload, this.request.requestToken,
+                reviewToken, this.request
+            )), subject === "approveRequest");
+            return {status: "response", response};
+        } catch {
+            return {status: "failure"};
+        }
+    }
+
+    async readState({refresh = false} = {}) {
+        if (!this.isActive || this.action || this.interaction) { return null; }
+        if (this.readFlight) { return this.readFlight.result; }
+        const flight = {};
+        this.readFlight = flight;
+        this.scheduleRead();
+        flight.result = (async () => {
+            const outcome = await this.sendCommand({subject: "getApprovalState"});
+            if (!this.isActive || this.readFlight !== flight) { return null; }
+            this.readFlight = null;
+            const state = this.acceptState(outcome);
+            if (state) { this.adoptState(state, {refresh}); }
+            this.scheduleRead();
+            return state;
+        })();
+        return flight.result;
+    }
+
+    acceptState(outcome) {
+        const state = outcome.status === "response"
+            ? BigWalletPopupWire.decodeApprovalState(outcome.response, this.request.id) : null;
+        if (!state) { this.fail(); return null; }
+        if (state.state === "missing") { void this.reconcile(); return null; }
+        return state;
+    }
+
+    reconcile() {
+        if (this.completion) { return this.completion; }
+        if (!this.isActive) { return Promise.resolve(); }
+        this.lifecycle = "reconciling";
+        this.stopRead();
+        this.action = null;
+        this.discardSliderGesture();
+        this.closeAlert(false);
+        this.completion = closeIfNothingIsLeft();
+        return this.completion;
+    }
+
+    fail() {
+        if (!this.isActive) { return; }
+        this.transportError = true;
+        this.stopRead();
+        this.action = null;
+        this.discardSliderGesture();
+        this.renderTransportFailure();
+    }
+
+    adoptState(state, {refresh = false} = {}) {
+        if (!this.isActive || !state) { return; }
+        if (this.interaction?.kind === "editor" &&
+            (state.review?.alert || !hasApprovalAction(state, "editTransaction"))) {
+            this.resetEditorDraft();
+            document.getElementById("tx-editor").open = false;
+        }
+        this.nativeState = state;
+        this.transportError = false;
+        const unchanged = canonicalJSONString(state) === this.presentation.lastStateJSON;
+        if (!refresh || !unchanged) { this.renderState(state); }
         this.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
             ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
             : TRANSACTION_REFRESH_INTERVAL;
         this.scheduleRead();
     }
 
-    followUpMode() {
-        if (!this.isActive || this.transportError ||
-            this.phase === "submitting" || this.readFlight) { return null; }
-        if (this.phase === "following" || shouldPollApprovalState(this.nativeState)) {
-            return "poll";
-        }
-        return this.nativeState?.state === "review" &&
-            this.nativeState.review?.kind === "sendTransaction" ? "refresh" : null;
+    beginAction(kind) {
+        this.stopRead();
+        const operation = {kind, result: null};
+        this.action = operation;
+        this.updateInteractionControls();
+        return operation;
     }
 
-    scheduleRead() {
-        const mode = this.followUpMode();
-        const delay = mode === "poll" ? APPROVAL_POLL_INTERVAL : this.refreshDelay;
-        const current = this.scheduledRead;
-        if (current && current.mode === mode && current.delay === delay &&
-            current.revision === this.revision) { return; }
-        if (current) {
-            clearTimeout(current.timer);
-            this.scheduledRead = null;
-        }
-        if (mode === null) { return; }
-        const scheduled = {mode, delay, revision: this.revision, timer: null};
-        scheduled.timer = setTimeout(() => {
-            if (this.scheduledRead !== scheduled) { return; }
-            this.scheduledRead = null;
-            if (!this.isCurrent(scheduled.revision) || this.followUpMode() !== mode) {
-                this.scheduleRead();
-                return;
-            }
-            void this.readState({refresh: mode === "refresh"});
-        }, delay);
-        this.scheduledRead = scheduled;
-    }
+    ownsAction(operation) { return this.isActive && this.action === operation; }
 
-    async readState({refresh = false} = {}) {
-        if (!this.isActive || this.phase === "submitting") { return; }
-        const revision = this.revision;
-        if (this.readFlight) {
-            const flight = this.readFlight;
-            if (flight.revision === revision) {
-                if (!refresh) { flight.refresh = false; }
-                return flight.result;
-            }
-            await flight.result;
-            if (!this.isCurrent(revision)) { return; }
-            return this.readState({refresh});
-        }
-        const flight = {revision, refresh, result: null};
-        this.readFlight = flight;
+    finishAction(operation) {
+        if (!this.ownsAction(operation)) { return; }
+        this.action = null;
+        this.openRequestedEditor();
+        this.updateInteractionControls();
         this.scheduleRead();
-        flight.result = (async () => {
-            try {
-                const outcome = await this.sendCommand({
-                    lane: "read", subject: "getApprovalState",
-                    isValid: () => this.isCurrent(revision) && this.phase !== "submitting",
-                });
-                const state = this.acceptOutcome({outcome, revision});
-                if (state) { this.adoptState(state, {refresh: flight.refresh}); }
-                return state;
-            } finally {
-                if (this.readFlight === flight) { this.readFlight = null; }
-                this.scheduleRead();
-            }
-        })();
-        return flight.result;
-    }
-
-    isCurrent(revision = this.revision) {
-        return this.isActive && this.revision === revision;
-    }
-
-    allows(action) {
-        return this.isActive && !this.transportError &&
-            hasApprovalAction(this.nativeState, action);
-    }
-
-    async sendCommand({subject, payload, lane = "action", reviewToken, isValid, speedCommand}) {
-        if (!this.isActive) { return {status: "cancelled"}; }
-        const request = this.request;
-        const {id, requestToken} = request;
-        const queued = popupTransport.enqueue({
-            lane,
-            owner: this,
-            isValid: () => this.isActive && (!isValid || isValid()),
-            command: () => ({
-                subject,
-                payload: typeof payload === "function" ? payload() : payload,
-                reviewToken: typeof reviewToken === "function" ? reviewToken() : reviewToken,
-                id,
-                requestToken,
-                approvalRequest: request,
-            }),
-        });
-        if (speedCommand) { speedCommand.cancelQueued = queued.cancelQueued; }
-        return queued.result;
-    }
-
-    invalidate() {
-        this.revision += 1;
-        this.scheduleRead();
-        popupTransport.cancelQueued(this);
-        this.discardSpeed();
-    }
-
-    reconcile() {
-        if (this.completion) { return this.completion; }
-        if (!this.isActive) { return Promise.resolve(); }
-        this.phase = "reconciling";
-        this.invalidate();
-        this.closeAlert(false);
-        this.completion = closeIfNothingIsLeft();
-        return this.completion;
-    }
-
-    acceptOutcome({outcome, revision, allowsIgnored = false}) {
-        if (!this.isCurrent(revision) || outcome.status === "cancelled") { return null; }
-        const state = outcome.status === "response"
-            ? normalizeApprovalImages(outcome.response) : null;
-        if (allowsIgnored && isRecord(state) && state.status === "ignored" &&
-            Object.keys(state).length === 1) { return null; }
-        if (!isRenderableApprovalState(state, this.request)) {
-            this.fail();
-            return null;
-        }
-        if (state.state === "missing") {
-            void this.reconcile();
-            return null;
-        }
-        return state;
-    }
-
-    fail() {
-        if (!this.isActive) { return; }
-        this.transportError = true;
-        this.phase = "displaying";
-        this.resetReadBackoff();
-        this.invalidate();
-        this.renderTransportFailure();
-    }
-
-    adoptState(state, {refresh = false} = {}) {
-        if (!this.isActive || !state?.state) { return; }
-        const hadState = this.nativeState !== null;
-        this.nativeState = state;
-        this.transportError = false;
-        this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
-        const unchanged = this.presentState(state, refresh && hadState);
-        this.didPresentRead(state, refresh, unchanged);
     }
 
     async retry() {
-        if (!this.isActive || this.phase === "submitting" ||
-            !this.transportError && !this.allows("retry")) { return; }
-        const revision = ++this.revision;
-        this.phase = "submitting";
-        this.scheduleRead();
+        if (!this.isActive || this.action || !this.transportError && !this.allows("retry")) { return; }
+        const operation = this.beginAction("retry");
         this.showSubmitting();
-        const outcome = await this.sendCommand({
-            subject: "retryApproval",
-            isValid: () => this.isCurrent(revision) &&
-                (this.transportError || this.allows("retry")),
-        });
-        const state = this.acceptOutcome({outcome, revision});
+        const outcome = await this.sendCommand({subject: "retryApproval"});
+        if (!this.ownsAction(operation)) { return; }
+        const state = this.acceptState(outcome);
         if (state) { this.adoptState(state); }
+        this.finishAction(operation);
     }
 
-    approve(payload) {
-        return this.decide({subject: "approveRequest", payload});
-    }
+    approve(payload) { return this.decide("approveRequest", payload); }
+    reject() { return this.decide("rejectRequest"); }
 
-    reject() {
-        return this.decide({subject: "rejectRequest"});
-    }
-
-    async decide({subject, payload}) {
-        const canSubmit = () => this.isActive && !this.transportError &&
-            canSubmitDecision(subject, this.nativeState);
-        if (this.phase === "submitting" || !canSubmit()) { return; }
+    async decide(subject, payload) {
+        if (!this.isActive || !canSubmitDecision(subject, this.state)) { return; }
         if (subject === "approveRequest") {
-            this.finishSliderDragForDecision(this.request);
-            if (!await this.waitForSpeed()) { return; }
+            if (this.transportError || this.interaction?.kind === "editor" || document.getElementById("tx-editor").open) { return; }
+            if (this.interaction?.kind === "slider") {
+                ignoreSliderUntilRelease = true;
+                if (!await this.finishSliderInteraction("ended")) { return; }
+            }
+            if (this.action?.kind === "speed") {
+                const speed = this.action;
+                if (speed.approveWaiting) { return; }
+                speed.approveWaiting = true;
+                if (await speed.result) { await this.approve(payload); }
+                return;
+            }
+            if (this.action) { return; }
         } else {
-            this.discardSpeed();
+            if (this.action?.kind === "rejectRequest") { return; }
+            this.discardSliderGesture();
+            this.resetEditorDraft();
+            this.closeAlert(false);
+            document.getElementById("tx-editor").open = false;
         }
-        if (!canSubmit() || this.phase === "submitting") { return; }
-        const reviewToken = subject === "approveRequest" ? this.nativeState.review?.reviewToken : undefined;
-        const revision = ++this.revision;
-        this.phase = "submitting";
-        this.scheduleRead();
+        if (!this.isActive || !canSubmitDecision(subject, this.state)) { return; }
+        const reviewToken = subject === "approveRequest" ? this.state.review.reviewToken : undefined;
+        const operation = this.beginAction(subject);
         this.showSubmitting();
-        let decisionPayload = payload;
-        if (subject === "approveRequest") {
-            decisionPayload = {...(isRecord(payload) ? payload : {})};
-            delete decisionPayload.revisions;
-            delete decisionPayload.password;
-        }
-        const outcome = await this.sendCommand({
-            subject, payload: decisionPayload, reviewToken,
-            isValid: () => canSubmit() && (subject !== "approveRequest" ||
-                this.nativeState?.review?.reviewToken === reviewToken),
-        });
-        if (!this.isCurrent(revision)) { return; }
-        if (outcome.status === "cancelled") {
-            this.phase = "displaying";
-            this.renderState(this.nativeState);
-        } else if (outcome.status !== "response" || !isRecord(outcome.response)) {
+        const decisionPayload = subject === "approveRequest" ? {...(isRecord(payload) ? payload : {})} : undefined;
+        if (decisionPayload) { delete decisionPayload.revisions; delete decisionPayload.password; }
+        const outcome = await this.sendCommand({subject, payload: decisionPayload, reviewToken});
+        if (!this.ownsAction(operation)) { return; }
+        if (outcome.status !== "response" || !BigWalletPopupWire.decodeCommandResult(outcome.response)) {
             this.fail();
             return;
-        } else {
-            this.phase = "following";
         }
-        this.scheduleRead();
-    }
-
-    submitEdits(payload, isValid) {
-        return this.mutate({subject: "applyTransactionEdits", payload, isValid});
+        const timer = setTimeout(() => {
+            if (this.readTimer !== timer || !this.ownsAction(operation)) { return; }
+            this.readTimer = null;
+            this.action = null;
+            void this.readState();
+        }, APPROVAL_POLL_INTERVAL);
+        this.readTimer = timer;
     }
 
     async resolveAlert(payload, reviewToken) {
-        const state = await this.mutate({subject: "resolveApprovalAlert", payload, reviewToken});
-        if (this.nativeState?.review?.reviewToken === reviewToken) {
-            this.adoptState(state);
+        if (this.action || !this.allows("resolveApprovalAlert") || this.state.review.reviewToken !== reviewToken) { return; }
+        const operation = this.beginAction("alert");
+        const outcome = await this.sendCommand({subject: "resolveApprovalAlert", payload, reviewToken});
+        if (!this.ownsAction(operation)) { return; }
+        if (outcome.status === "response" && BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored") {
+            this.finishAction(operation);
+            await this.readState();
+            return;
         }
-    }
-
-    async mutate({subject, payload, reviewToken, speedCommand, isValid = () => true}) {
-        const action = subject === "applyTransactionEdits" ? "editTransaction" : subject;
-        if (this.phase === "submitting" || !this.allows(action) || !isValid()) { return null; }
-        const isSpeed = subject === "setTransactionSpeed";
-        if (!isSpeed && this.mutation) { return null; }
-        const mutation = {};
-        if (!isSpeed) { this.mutation = mutation; }
-        try {
-            if (!isSpeed && !await this.waitForSpeed()) { return null; }
-            if (this.phase === "submitting" || !this.allows(action) ||
-                !isSpeed && this.mutation !== mutation || !isValid()) { return null; }
-            const revision = ++this.revision;
-            this.resetReadBackoff();
-            const outcome = await this.sendCommand({
-                subject, payload, speedCommand,
-                reviewToken: subject === "applyTransactionEdits"
-                    ? () => this.nativeState?.review?.reviewToken : reviewToken,
-                isValid: () => this.isCurrent(revision) && this.allows(action) && isValid() &&
-                    (typeof reviewToken === "undefined" || this.nativeState?.review?.reviewToken === reviewToken),
-            });
-            return this.acceptOutcome({outcome, revision, allowsIgnored: subject !== "applyTransactionEdits"});
-        } finally {
-            if (this.mutation === mutation) { this.mutation = null; }
+        if (this.state?.review?.reviewToken !== reviewToken) {
+            this.finishAction(operation);
+            return;
         }
+        const state = this.acceptState(outcome);
+        if (state) { this.adoptState(state); }
+        this.finishAction(operation);
     }
 
     setSpeed(payload, reviewToken) {
-        if (!this.isActive || this.speedCommand ||
-            !isRequestToken(reviewToken)) { return null; }
-        let resolveCompletion;
-        const command = {
-            cancelled: false,
-            result: new Promise(resolve => { resolveCompletion = resolve; }),
-            finish: succeeded => resolveCompletion(succeeded),
-        };
-        this.speedCommand = command;
-        void (async () => {
-            let succeeded = false;
-            try {
-                let state = null;
-                if (this.nativeState?.review?.reviewToken === reviewToken) {
-                    state = await this.mutate({subject: "setTransactionSpeed", payload, reviewToken, speedCommand: command});
-                }
-                if (!this.isActive || command.cancelled) { return; }
-                if (state) {
-                    this.adoptState(state);
-                    succeeded = true;
-                } else {
-                    await this.readState();
-                }
-            } finally {
-                if (this.speedCommand === command) { this.speedCommand = null; }
-                command.finish(succeeded);
+        if (this.action || !this.allows("setTransactionSpeed") || this.interaction || !isRequestToken(reviewToken)) { return null; }
+        const operation = this.beginAction("speed");
+        operation.result = (async () => {
+            if (this.state?.review?.reviewToken !== reviewToken) {
+                this.finishAction(operation);
+                await this.readState();
+                return false;
             }
+            const outcome = await this.sendCommand({subject: "setTransactionSpeed", payload, reviewToken});
+            if (!this.ownsAction(operation)) { return false; }
+            if (outcome.status === "response" && BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored") {
+                this.finishAction(operation);
+                await this.readState();
+                return false;
+            }
+            const state = this.acceptState(outcome);
+            if (state) { this.adoptState(state); }
+            this.finishAction(operation);
+            return state !== null && this.isActive;
         })();
-        return command.result;
+        return operation.result;
     }
 
-    async waitForSpeed() {
-        if (this.transaction.sliderDragging) { return false; }
-        const command = this.speedCommand;
-        if (!command) { return this.isActive; }
-        const succeeded = await command.result;
-        return succeeded === true && !command.cancelled && this.isActive;
-    }
-
-    discardSpeed() {
-        const command = this.speedCommand;
-        if (command) {
-            command.cancelled = true;
-            command.cancelQueued?.();
-            command.finish(false);
-            this.speedCommand = null;
+    updateInteractionControls() {
+        if (!this.isActive) { return; }
+        const editing = this.interaction?.kind === "editor";
+        const busy = this.action !== null;
+        document.getElementById("tx-slider").disabled = busy || editing || !this.allows("setTransactionSpeed");
+        document.getElementById("editor-apply").disabled = busy || !this.allows("editTransaction");
+        document.getElementById("editor-suggested").disabled = busy || !this.allows("editTransaction");
+        for (const field of Object.values(TRANSACTION_EDITOR_FIELDS)) {
+            document.getElementById(field).disabled = busy;
         }
-        this.discardSliderGesture();
+        document.getElementById("network-select").disabled = busy;
+        for (const id of ["accounts-list", "clusters"]) {
+            for (const row of document.getElementById(id).children) { row.disabled = busy; }
+        }
+        this.updateApproveEnabled(this.state);
     }
 
     requestFor(value) {
@@ -549,9 +361,11 @@ class PopupRequestController {
     }
 
     dispose() {
-        if (this.phase !== "disposed") {
-            this.phase = "disposed";
-            this.invalidate();
+        if (this.lifecycle !== "disposed") {
+            this.lifecycle = "disposed";
+            this.stopRead();
+            this.action = null;
+            this.discardSliderGesture();
         }
         this.closeAlert(false);
     }
@@ -588,7 +402,7 @@ class PopupRequestController {
         setHidden("working-overlay", !isBusy);
         if (!state.review) {
             this.closeAlert(false);
-            this.discardSpeed();
+            this.discardSliderGesture();
             document.getElementById("tx-slider").disabled = true;
             document.getElementById("editor-apply").disabled = true;
             document.getElementById("editor-suggested").disabled = true;
@@ -634,6 +448,7 @@ class PopupRequestController {
         }
         this.updateApproveEnabled(state);
         this.renderAlertIfNeeded(state);
+        this.updateInteractionControls();
     }
 
     renderAccountSelection(state) {
@@ -718,7 +533,7 @@ class PopupRequestController {
             check.setAttribute("aria-hidden", "true");
             row.appendChild(check);
             row.addEventListener("click", () => {
-                if (!this.isActive || this.transportError) { return; }
+                if (!this.isActive || this.transportError || this.action) { return; }
                 select(item);
                 this.renderState(this.state);
                 const replacement = document.getElementById(containerId).children[index];
@@ -757,7 +572,11 @@ class PopupRequestController {
 
     updateApproveEnabled(state) {
         const approve = document.getElementById("button-approve");
-        if (hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)) {
+        if (this.transportError) {
+            approve.disabled = this.action !== null;
+        } else if (this.action && this.action.kind !== "speed" || this.interaction?.kind === "editor") {
+            approve.disabled = true;
+        } else if (hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)) {
             approve.disabled = false;
         } else if (!hasApprovalAction(state, "approve")) {
             approve.disabled = true;
@@ -825,7 +644,7 @@ class PopupRequestController {
             const firstFeeLine = feeLines.children[0]?.textContent ||
                 localized("calculating", "Calculating...");
             slider.max = sliderState.maximum || 200;
-            if (!this.transaction.sliderDragging) {
+            if (!(this.interaction?.kind === "slider")) {
                 slider.value = sliderState.position ?? 100;
             }
             slider.disabled = !hasApprovalAction(state, "setTransactionSpeed");
@@ -840,21 +659,22 @@ class PopupRequestController {
         const editorDetails = document.getElementById("tx-editor");
         if (canApplyEdits || editorDetails.open) {
             show("tx-editor");
-            this.populateEditor(state);
-            const request = this.request;
-            const requestToken = request && request.id === state.id
-                ? request.requestToken || ""
-                : "";
-            const editorRequestKey = typeof review.editorRequestToken === "number"
-                ? requestToken + ":" + state.id + ":" + review.editorRequestToken
-                : null;
-            if (editorRequestKey !== null && editorRequestKey !== this.transaction.lastEditorRequestKey) {
-                this.transaction.lastEditorRequestKey = editorRequestKey;
-                editorDetails.open = true;
-            }
+            if (this.interaction?.kind !== "editor") { this.populateEditor(state); }
+            this.openRequestedEditor();
         } else {
             hide("tx-editor");
         }
+    }
+
+    openRequestedEditor() {
+        const token = this.state?.review?.editorRequestToken;
+        if (this.action || !this.allows("editTransaction") || typeof token !== "number") { return; }
+        const key = this.request.requestToken + ":" + token;
+        if (this.presentation.lastEditorRequestKey === key) { return; }
+        this.presentation.lastEditorRequestKey = key;
+        if (this.state.review.alert) { return; }
+        document.getElementById("tx-editor").open = true;
+        this.editorToggled();
     }
 
     populateEditor(state) {
@@ -864,21 +684,19 @@ class PopupRequestController {
         setHidden("editor-legacy", editor.usesEIP1559);
         for (const [name, value] of Object.entries(transactionEditorValues(editor))) {
             const fieldId = TRANSACTION_EDITOR_FIELDS[name];
-            if (!this.transaction.dirtyEditorFields.has(fieldId)) {
-                document.getElementById(fieldId).value = value;
-            }
+            document.getElementById(fieldId).value = value;
         }
         const hasSuggested = editor.suggestedGasPriceGwei != null || editor.suggestedMaxFeePerGasGwei != null;
         setHidden("editor-suggested", !hasSuggested);
     }
 
     resetEditorDraft() {
-        this.transaction.dirtyEditorFields.clear();
+        if (this.interaction?.kind === "editor") { this.interaction = null; }
         hide("edits-error");
     }
 
     async approveCurrent() {
-        if (!this.isActive || this.phase === "submitting") { return; }
+        if (!this.isActive || this.action && this.action.kind !== "speed") { return; }
         if (this.transportError) {
             await this.retry();
             return;
@@ -911,91 +729,103 @@ class PopupRequestController {
         await this.reject();
     }
 
-    beginSliderInteraction(
-        request,
-        reviewToken = this.state?.review?.reviewToken
-    ) {
-        const capturedRequest = this.requestFor(request);
-        if (!this.allows("setTransactionSpeed") ||
-            this.phase === "submitting" || this.speedCommand ||
-            this.transaction.sliderDragging ||
-            !capturedRequest || !this.isCurrentRequest(capturedRequest) ||
-            !isRequestToken(reviewToken)) {
-            return false;
+    editorToggled() {
+        const details = document.getElementById("tx-editor");
+        if (!this.isActive) { return; }
+        if (this.action) {
+            details.open = this.interaction?.kind === "editor";
+            return;
         }
+        if (details.open) {
+            if (this.interaction?.kind === "editor") { return; }
+            if (!this.allows("editTransaction") || this.interaction || this.state.review?.alert) {
+                details.open = false;
+                return;
+            }
+            this.stopRead();
+            this.interaction = {
+                kind: "editor",
+                reviewToken: this.state.review.reviewToken,
+                usesEIP1559: this.state.review.editor.usesEIP1559,
+            };
+            this.populateEditor(this.state);
+        } else {
+            this.resetEditorDraft();
+            this.scheduleRead();
+        }
+        this.updateInteractionControls();
+    }
+
+    beginSliderInteraction(request, reviewToken = this.state?.review?.reviewToken) {
+        const capturedRequest = this.requestFor(request);
+        if (!this.allows("setTransactionSpeed") || this.action || this.interaction ||
+            document.getElementById("tx-editor").open ||
+            !capturedRequest || !isRequestToken(reviewToken)) { return false; }
+        this.stopRead();
         ignoreSliderUntilRelease = false;
-        this.transaction.sliderDragging = true;
-        this.transaction.sliderRequest = capturedRequest;
-        this.transaction.sliderReviewToken = reviewToken;
+        this.interaction = {kind: "slider", reviewToken};
         return true;
     }
 
     finishSliderInteraction(interaction, request) {
-        if (!this.transaction.sliderDragging ||
-            (request && !sameRequest(this.transaction.sliderRequest, request))) {
-            return null;
-        }
-        const capturedRequest = this.transaction.sliderRequest;
-        const value = Number(document.getElementById("tx-slider").value);
-        const reviewToken = this.transaction.sliderReviewToken;
-        this.transaction.sliderDragging = false;
-        this.transaction.sliderRequest = null;
-        this.transaction.sliderReviewToken = null;
-        if (!this.isCurrentRequest(capturedRequest)) { return null; }
-        document.getElementById("tx-slider").disabled = true;
-        return this.setSpeed({interaction, value}, reviewToken);
-    }
-
-    finishSliderDragForDecision(request) {
-        if (!this.transaction.sliderDragging ||
-            !sameRequest(this.transaction.sliderRequest, request)) { return; }
-        ignoreSliderUntilRelease = true;
-        this.finishSliderInteraction("ended", request);
+        const gesture = this.interaction;
+        if (gesture?.kind !== "slider" || !this.requestFor(request)) { return null; }
+        this.interaction = null;
+        return this.setSpeed({interaction, value: Number(document.getElementById("tx-slider").value)}, gesture.reviewToken);
     }
 
     async applyEdits() {
-        if (!this.isActive) { return; }
-        if (!hasApprovalAction(this.state, "editTransaction")) { return; }
-        const edits = Object.fromEntries(
-            Object.keys(transactionEditorValues(this.state.review.editor))
-                .filter(name => this.transaction.dirtyEditorFields.has(TRANSACTION_EDITOR_FIELDS[name]))
-                .map(name => [name, document.getElementById(TRANSACTION_EDITOR_FIELDS[name]).value])
-        );
-        const currentValues = () => transactionEditorValues(this.state.review?.editor || {});
-        const payload = () => ({
-            mode: "custom",
-            ...currentValues(),
-            ...edits,
-        });
-        const isValid = () => {
-            const values = currentValues();
-            return Object.keys(edits).every(name => Object.hasOwn(values, name));
-        };
-        this.handleTransactionEditResult(await this.submitEdits(payload, isValid));
+        await this.applyEditor(false);
     }
 
     async applySuggested() {
-        if (!this.isActive) { return; }
-        if (!hasApprovalAction(this.state, "editTransaction")) { return; }
-        this.handleTransactionEditResult(await this.submitEdits({mode: "suggested"}));
+        await this.applyEditor(true);
     }
 
-    handleTransactionEditResult(state) {
-        if (!this.isActive) { return; }
-        if (state && state.editsError) {
-            show("edits-error");
+    async applyEditor(suggested) {
+        if (this.action || !this.allows("editTransaction")) { return; }
+        const draft = this.interaction;
+        if (draft?.kind !== "editor") { return; }
+        const values = Object.fromEntries(Object.keys(transactionEditorValues(this.state.review.editor))
+            .map(name => [name, document.getElementById(TRANSACTION_EDITOR_FIELDS[name]).value]));
+        const payload = suggested ? {mode: "suggested"} : {mode: "custom", ...values};
+        const operation = this.beginAction("edits");
+        const outcome = await this.sendCommand({subject: "applyTransactionEdits", payload, reviewToken: draft.reviewToken});
+        if (!this.ownsAction(operation)) { return; }
+        if (outcome.status === "response" && BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored") {
+            const recovered = await this.sendCommand({subject: "getApprovalState"});
+            if (!this.ownsAction(operation)) { return; }
+            const state = this.acceptState(recovered);
+            if (state) {
+                const preservesDraft = state.review?.kind === "sendTransaction" &&
+                    !state.review.alert &&
+                    hasApprovalAction(state, "editTransaction") &&
+                    state.review.editor.usesEIP1559 === draft.usesEIP1559;
+                if (preservesDraft) {
+                    this.adoptState(state);
+                    draft.reviewToken = state.review.reviewToken;
+                    setText("edits-error", localized("reviewChanged", "Review changed. Check the values and apply again."));
+                    show("edits-error");
+                } else {
+                    this.resetEditorDraft();
+                    document.getElementById("tx-editor").open = false;
+                    this.adoptState(state);
+                }
+            }
         } else {
-            this.closeEditorAndAdopt(state);
+            const state = this.acceptState(outcome);
+            if (state?.editsError) {
+                this.adoptState(state);
+                draft.reviewToken = state.review?.reviewToken ?? draft.reviewToken;
+                setText("edits-error", localized("invalidValues", "Invalid values"));
+                show("edits-error");
+            } else if (state) {
+                this.resetEditorDraft();
+                document.getElementById("tx-editor").open = false;
+                this.adoptState(state);
+            }
         }
-        this.scheduleRead();
-    }
-
-    closeEditorAndAdopt(state) {
-        if (!this.isActive) { return; }
-        if (!state || !state.state) { return; }
-        this.resetEditorDraft();
-        document.getElementById("tx-editor").open = false;
-        this.adoptState(state);
+        this.finishAction(operation);
     }
 
     renderAlertIfNeeded(state) {
@@ -1044,7 +874,11 @@ class PopupRequestController {
                     )) {
                     return;
                 }
-                await this.resolveAlert({action: action.action}, reviewToken);
+                if (this.action && action.action === "cancel" && this.allows("reject")) {
+                    await this.reject();
+                } else {
+                    await this.resolveAlert({action: action.action}, reviewToken);
+                }
             });
             buttons.appendChild(button);
         }
@@ -1054,22 +888,9 @@ class PopupRequestController {
         focusTarget.focus();
     }
 
-    presentState(state, refresh) {
-        const unchanged = canonicalJSONString(state) === this.presentation.lastStateJSON;
-        if (!refresh || !state.review ||
-            !this.transaction.sliderDragging && !this.speedCommand) {
-            if (!refresh || !unchanged) {
-                this.renderState(state);
-            } else if (state.review?.slider?.visible) {
-                document.getElementById("tx-slider").value = state.review.slider.position;
-            }
-        }
-        return unchanged;
-    }
-
     showSubmitting() {
         document.getElementById("button-approve").disabled = true;
-        show("working-overlay");
+        hide("working-overlay");
     }
 
     renderTransportFailure() {
@@ -1087,11 +908,10 @@ class PopupRequestController {
     }
 
     discardSliderGesture() {
-        if (!this.transaction.sliderDragging) { return; }
-        ignoreSliderUntilRelease = true;
-        this.transaction.sliderDragging = false;
-        this.transaction.sliderRequest = null;
-        this.transaction.sliderReviewToken = null;
+        if (this.interaction?.kind === "slider") {
+            ignoreSliderUntilRelease = true;
+            this.interaction = null;
+        }
     }
 }
 
@@ -1288,7 +1108,7 @@ function requestPendingQueueRefresh() {
 
 function shouldDeferQueueRefreshForCurrentRequest() {
     const currentRequest = queueTab.items[queueTab.index];
-    if (!currentRequest || currentRequestController?.phase === "reconciling") {
+    if (!currentRequest || currentRequestController?.lifecycle === "reconciling") {
         return false;
     }
     return !document.getElementById("screen-request").classList.contains("hidden") ||
@@ -1466,14 +1286,9 @@ async function readLatestConfiguration(tab) {
         return null;
     }
     const outcome = await settleExtensionMessage(pending);
-    const configuration = outcome.status === "response" ? outcome.response : null;
-    if (!configuration || configuration.configurationReadFailed === true ||
-        !Array.isArray(configuration.latestConfigurations) ||
-        !configuration.latestConfigurations.every(isConfiguration) ||
-        !isProviderRevisions(configuration.revisions)) {
-        return null;
-    }
-    return configuration;
+    const response = outcome.status === "response"
+        ? BigWalletBridgeWire.decodePageResponse(outcome.response) : null;
+    return response?.kind === "configuration" ? response.state : null;
 }
 
 function setPendingRequestBadge(count) {
@@ -1492,9 +1307,9 @@ function setPendingRequestBadge(count) {
 // popup cannot open itself — exactly as it was.
 async function fetchPendingResponse() {
     while (true) {
-        const outcome = await popupTransport.readQueue();
+        const outcome = await settleExtensionMessage(Promise.resolve().then(() => nativeMessage("getPendingRequests", genId())));
         if (outcome.status !== "response") { return null; }
-        const response = parsePendingResponse(outcome.response);
+        const response = BigWalletPopupWire.decodeQueue(outcome.response);
         if (!response) { return null; }
         applyStrings(response.strings);
         applyLayoutDirection(response.layoutDirection);
@@ -1645,15 +1460,9 @@ async function showIdle(queueFetchFailed = false) {
     const configuration = await readLatestConfiguration(queueTab.activeTab);
     if (generation !== queueTab.idleGeneration) { return; }
     if (configuration) {
-        const latest = configuration.latestConfigurations;
         const lines = [];
-        for (const item of latest) {
-            if (item.provider === "ethereum" && item.results && item.results[0]) {
-                lines.push(item.results[0]);
-            } else if (item.provider === "solana" && item.publicKey) {
-                lines.push(item.publicKey);
-            }
-        }
+        if (configuration.ethereum?.address) { lines.push(configuration.ethereum.address); }
+        if (configuration.solana?.isConnected) { lines.push(configuration.solana.publicKey); }
         if (lines.length > 0) {
             connectionText = lines.join("\n");
         }
@@ -1701,282 +1510,6 @@ function sameRequest(left, right) {
         left.requestToken === right.requestToken;
 }
 
-function isApprovalStateEnvelope(state, request) {
-    return isRecord(state) &&
-        isValidRequestId(state.id) && state.id === request.id &&
-        APPROVAL_STATES.has(state.state);
-}
-
-function isOptionalString(value) {
-    return typeof value === "undefined" || typeof value === "string";
-}
-
-function isOptionalBoolean(value) {
-    return typeof value === "undefined" || typeof value === "boolean";
-}
-
-function isPendingRequest(request) {
-    return isRecord(request) &&
-        isValidRequestId(request.id) &&
-        isRequestToken(request.requestToken) &&
-        (typeof request.enqueueAttempt === "undefined" ||
-            isPrivateToken(request.enqueueAttempt)) &&
-        Number.isSafeInteger(request.sequence) && request.sequence >= 0 &&
-        typeof request.host === "string" && request.host.length > 0 &&
-        typeof request.configurationKey === "string" &&
-        request.configurationKey.length > 0 &&
-        (request.provider === "ethereum" || request.provider === "solana" ||
-            request.provider === "unknown") &&
-        isProviderRevisions(request.revisions) &&
-        typeof request.receivedAt === "number" && Number.isFinite(request.receivedAt);
-}
-
-function isCompletedResponse(response) {
-    return hasExactKeys(response, [
-            "configurationKey", "host", "id", "requestToken", "revisions",
-        ]) &&
-        isValidRequestId(response.id) &&
-        typeof response.host === "string" && response.host.length > 0 &&
-        typeof response.configurationKey === "string" &&
-        response.configurationKey.length > 0 &&
-        isRequestToken(response.requestToken) &&
-        isProviderRevisions(response.revisions);
-}
-
-function parsePendingResponse(response) {
-    if (!isRecord(response) ||
-        !Array.isArray(response.requests) ||
-        !response.requests.every(isPendingRequest) ||
-        !Array.isArray(response.completedResponses) ||
-        !response.completedResponses.every(isCompletedResponse) ||
-        (typeof response.strings !== "undefined" &&
-            (!isRecord(response.strings) ||
-                !Object.values(response.strings).every(value => typeof value === "string"))) ||
-        (typeof response.layoutDirection !== "undefined" &&
-            response.layoutDirection !== "ltr" && response.layoutDirection !== "rtl")) {
-        return null;
-    }
-    return {
-        layoutDirection: response.layoutDirection,
-        requests: response.requests.slice(),
-        completedResponses: response.completedResponses.slice(),
-        strings: response.strings,
-    };
-}
-
-function normalizeApprovalImages(state) {
-    if (!isRecord(state?.review) || !APPROVAL_KINDS.has(state.review.kind)) { return state; }
-
-    function withoutInvalidImage(record, key) {
-        if (!isRecord(record) || isOptionalString(record[key])) { return record; }
-        const copy = {...record};
-        delete copy[key];
-        return copy;
-    }
-
-    let review = withoutInvalidImage(state.review, "iconURL");
-    const account = withoutInvalidImage(review.account, "icon");
-    if (account !== review.account) {
-        review = {...review, account};
-    }
-    if (Array.isArray(review.accounts)) {
-        const accounts = review.accounts.map(account => withoutInvalidImage(account, "icon"));
-        if (accounts.some((account, index) => account !== review.accounts[index])) {
-            review = {...review, accounts};
-        }
-    }
-    return review === state.review ? state : {...state, review};
-}
-
-function isDisplayAccount(account) {
-    return isRecord(account) &&
-        typeof account.name === "string" &&
-        typeof account.croppedAddress === "string" &&
-        isOptionalString(account.icon);
-}
-
-function isAlert(alert) {
-    return typeof alert === "undefined" ||
-        isRecord(alert) &&
-        typeof alert.title === "string" &&
-        typeof alert.message === "string" &&
-        Array.isArray(alert.actions) &&
-        alert.actions.length > 0 &&
-        alert.actions.every(action =>
-            isRecord(action) &&
-            typeof action.title === "string" &&
-            ALERT_ACTIONS.has(action.action)
-        );
-}
-
-function hasValidOptionalApprovalFields(state) {
-    return (typeof state.host === "undefined" ||
-            typeof state.host === "string" && state.host.length > 0) &&
-        isOptionalString(state.error) &&
-        isOptionalBoolean(state.editsError);
-}
-
-function hasUniqueValues(items, valueFor) {
-    return new Set(items.map(valueFor)).size === items.length;
-}
-
-function normalizedAccountAddress(account) {
-    return account.coin === "ethereum" ? account.address.toLowerCase() : account.address;
-}
-
-function accountIdentityKey(account) {
-    return JSON.stringify([
-        account.walletId,
-        account.coin,
-        normalizedAccountAddress(account),
-        account.derivationPath,
-    ]);
-}
-
-function isSelectionState(review) {
-    if (!Array.isArray(review.accounts) || !review.accounts.every(account =>
-        isDisplayAccount(account) &&
-        typeof account.walletId === "string" &&
-            SELECTION_ACCOUNT_COINS.has(account.coin) &&
-            typeof account.address === "string" &&
-            typeof account.derivationPath === "string" &&
-            account.derivationPath.length > 0 &&
-            typeof account.isSelected === "boolean"
-    )) {
-        return false;
-    }
-    if (!hasUniqueValues(review.accounts, accountIdentityKey) ||
-        !hasUniqueValues(review.accounts.filter(account => account.isSelected), account => account.coin)) {
-        return false;
-    }
-    if (typeof review.networks !== "undefined" &&
-        (!Array.isArray(review.networks) || !review.networks.every(network =>
-            isRecord(network) &&
-            isCanonicalEthereumChainId(network.chainId) &&
-            typeof network.name === "string" &&
-            typeof network.isSelected === "boolean" &&
-            isOptionalBoolean(network.isCustom)
-        ) ||
-        !hasUniqueValues(review.networks, network => network.chainId) ||
-        review.networks.filter(network => network.isSelected).length > 1)) {
-        return false;
-    }
-    return typeof review.canSelectNetwork === "boolean" &&
-        typeof review.allowsEmptySelection === "boolean" &&
-        isOptionalString(review.emptyMessage) &&
-        (!review.accounts.some(account => account.coin === "ethereum") ||
-            review.canSelectNetwork) &&
-        (!review.canSelectNetwork || Array.isArray(review.networks));
-}
-
-function isSignMessageState(review) {
-    if (!isDisplayAccount(review.account) || typeof review.meta !== "string") {
-        return false;
-    }
-    const hasClusters = typeof review.clusters !== "undefined";
-    const hasRequirement = typeof review.requiresClusterSelection !== "undefined";
-    if (hasClusters !== hasRequirement) {
-        return false;
-    }
-    if (!hasClusters) {
-        return true;
-    }
-    if (typeof review.requiresClusterSelection !== "boolean" ||
-        !Array.isArray(review.clusters) || review.clusters.length === 0 ||
-        !review.clusters.every(cluster =>
-            isRecord(cluster) &&
-            SOLANA_CLUSTER_VALUES.has(cluster.value) &&
-            typeof cluster.label === "string" &&
-            typeof cluster.isSelected === "boolean"
-        ) ||
-        !hasUniqueValues(review.clusters, cluster => cluster.value)) {
-        return false;
-    }
-    const selectedCount = review.clusters.filter(cluster => cluster.isSelected).length;
-    return review.requiresClusterSelection ? selectedCount === 0 : selectedCount === 1;
-}
-
-function isTransactionEditor(editor) {
-    if (!isRecord(editor) ||
-        typeof editor.usesEIP1559 !== "boolean" ||
-        typeof editor.nonce !== "string" ||
-        !isOptionalString(editor.gasPriceGwei) ||
-        !isOptionalString(editor.maxPriorityFeePerGasGwei) ||
-        !isOptionalString(editor.maxFeePerGasGwei) ||
-        !isOptionalString(editor.suggestedGasPriceGwei) ||
-        !isOptionalString(editor.suggestedMaxPriorityFeePerGasGwei) ||
-        !isOptionalString(editor.suggestedMaxFeePerGasGwei)) {
-        return false;
-    }
-    return editor.usesEIP1559
-        ? typeof editor.maxPriorityFeePerGasGwei === "string" &&
-            typeof editor.maxFeePerGasGwei === "string"
-        : typeof editor.gasPriceGwei === "string";
-}
-
-function isTransactionState(review) {
-    return isDisplayAccount(review.account) &&
-        typeof review.networkName === "string" &&
-        Array.isArray(review.feeLines) &&
-        review.feeLines.every(line => typeof line === "string") &&
-        TRANSACTION_PHASES.has(review.phase) &&
-        isOptionalString(review.balance) &&
-        isOptionalString(review.valueLine) &&
-        isOptionalString(review.dataInterpretation) &&
-        (typeof review.editorRequestToken === "undefined" ||
-            Number.isSafeInteger(review.editorRequestToken)) &&
-        isRecord(review.slider) &&
-        typeof review.slider.visible === "boolean" &&
-        typeof review.slider.position === "number" &&
-        Number.isFinite(review.slider.position) &&
-        typeof review.slider.maximum === "number" &&
-        Number.isFinite(review.slider.maximum) &&
-        isTransactionEditor(review.editor);
-}
-
-function isRenderableApprovalState(state, request) {
-    if (!isApprovalStateEnvelope(state, request) ||
-        !hasValidOptionalApprovalFields(state) ||
-        !Array.isArray(state.actions) ||
-        !state.actions.every(action => APPROVAL_ACTIONS.has(action)) ||
-        !hasUniqueValues(state.actions, action => action)) {
-        return false;
-    }
-    if (state.state !== "review") {
-        return typeof state.review === "undefined" &&
-            (state.state === "error"
-                ? typeof state.error === "string" && state.actions.length === 1 &&
-                    (hasApprovalAction(state, "retry") || hasApprovalAction(state, "reject"))
-                : state.actions.length === 0);
-    }
-    const review = state.review;
-    if (!isRecord(review) || !APPROVAL_KINDS.has(review.kind) ||
-        !isRequestToken(review.reviewToken) ||
-        typeof review.title !== "string" ||
-        typeof state.host !== "string" || state.host.length === 0 ||
-        !isOptionalString(review.iconURL) ||
-        !isOptionalString(review.primaryTitle) || !isAlert(review.alert) ||
-        hasApprovalAction(state, "retry") ||
-        (review.kind !== "sendTransaction" && state.actions.some(action =>
-            action !== "approve" && action !== "reject"))) {
-        return false;
-    }
-    switch (review.kind) {
-        case "selectAccount":
-        case "switchAccount":
-            return typeof review.alert === "undefined" && isSelectionState(review);
-        case "signMessage":
-            return typeof review.alert === "undefined" && isSignMessageState(review);
-        case "sendTransaction":
-            return isTransactionState(review);
-        case "addChain":
-            return typeof review.alert === "undefined" &&
-                typeof review.chainName === "string" &&
-                typeof review.rpcURL === "string";
-    }
-    return false;
-}
-
 function hasApprovalAction(state, action) {
     return state?.actions?.includes(action) === true;
 }
@@ -1999,7 +1532,7 @@ function accountIdentity(account) {
 }
 
 function sameAccount(left, right) {
-    return accountIdentityKey(left) === accountIdentityKey(right);
+    return BigWalletPopupWire.accountIdentityKey(left) === BigWalletPopupWire.accountIdentityKey(right);
 }
 
 function shouldRefreshAccountSelection(state) {
@@ -2217,17 +1750,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("editor-apply").addEventListener("click", () => currentRequestController?.applyEdits());
     document.getElementById("editor-suggested").addEventListener("click", () => currentRequestController?.applySuggested());
     document.getElementById("network-select").addEventListener("change", () => {
-        if (currentRequestController?.isActive) {
+        if (currentRequestController?.isActive && !currentRequestController.action) {
             currentRequestController.presentation.chainId = document.getElementById("network-select").value;
         }
     });
-    for (const fieldId of Object.values(TRANSACTION_EDITOR_FIELDS)) {
-        document.getElementById(fieldId).addEventListener("input", () => {
-            if (currentRequestController?.isActive) {
-                currentRequestController.transaction.dirtyEditorFields.add(fieldId);
-            }
-        });
-    }
+    document.getElementById("tx-editor").addEventListener("toggle", () => currentRequestController?.editorToggled());
 
     const slider = document.getElementById("tx-slider");
     slider.addEventListener("pointerdown", () => {
@@ -2235,7 +1762,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     slider.addEventListener("input", () => {
         if (ignoreSliderUntilRelease) { return; }
-        if (!currentRequestController?.transaction.sliderDragging) {
+        if (currentRequestController?.interaction?.kind !== "slider") {
             currentRequestController?.beginSliderInteraction();
         }
     });

@@ -69,41 +69,26 @@ function bigWalletConfigurationDelivery(
     providerGeneration,
     terminal
 ) {
-    const hasConfigurations = bigWalletWire.isRecord(response) &&
-        Object.prototype.hasOwnProperty.call(response, "latestConfigurations");
-    if (!hasConfigurations) {
-        if (!terminal) { return null; }
-        return {response: {...response}, suppressProviderUpdate: false};
+    const decoded = bigWalletWire.decodePageResponse(response);
+    if (!decoded || (terminal
+        ? decoded.kind !== "result" && decoded.kind !== "error"
+        : decoded.kind !== "configuration")) {
+        return null;
     }
-    const parsed = bigWalletWire.parseLatestConfigurations(response);
-    const revisions = response.revisions;
-    const valid = parsed.valid && bigWalletWire.isProviderRevisions(revisions);
+    if (!decoded.state) {
+        return {response: decoded, suppressProviderUpdate: false};
+    }
+    const revisions = decoded.state.revisions;
     const current = bigWalletConfigurationState?.configurationKey === configurationKey &&
         bigWalletConfigurationState.providerGeneration === providerGeneration
         ? bigWalletConfigurationState.revisions
         : null;
-    const stale = valid && current && (
-        revisions.ethereum < current.ethereum || revisions.solana < current.solana
-    );
-    if (!valid) {
-        if (!terminal) { return null; }
-        return {
-            response: {
-                id: response.id,
-                name: response.name,
-                provider: response.provider,
-                error: "Failed to process provider response",
-                errorCode: -32603,
-            },
-            suppressProviderUpdate: false,
-        };
-    }
-    if (stale) {
+    if (current && (revisions.ethereum < current.ethereum || revisions.solana < current.solana)) {
         if (!terminal) { return {ignored: true}; }
-        const prepared = {...response};
-        delete prepared.latestConfigurations;
-        delete prepared.revisions;
-        return {response: prepared, suppressProviderUpdate: true};
+        return {
+            response: {...decoded, state: null, configurationMatch: null},
+            suppressProviderUpdate: true,
+        };
     }
     bigWalletConfigurationState = {
         configurationKey,
@@ -111,19 +96,27 @@ function bigWalletConfigurationDelivery(
         revisions: {...revisions},
     };
     bigWalletFailedConfigurationGeneration = undefined;
+    return {response: decoded, suppressProviderUpdate: false};
+}
+
+function bigWalletErrorResponse(id, provider, name, message = "Failed to communicate with Big Wallet") {
     return {
-        response: terminal
-            ? {
-                ...response,
-                latestConfigurations: parsed.latestConfigurations,
-                revisions: {...revisions},
-            }
-            : {
-                latestConfigurations: parsed.latestConfigurations,
-                revisions: {...revisions},
-            },
-        suppressProviderUpdate: false,
+        kind: "error", id, provider, name, state: null, configurationMatch: null,
+        error: {code: -32603, message}, authorizationFailure: false,
     };
+}
+
+function bigWalletTerminal(response, id) {
+    const decoded = bigWalletWire.decodePageResponse(response, id);
+    if (decoded?.kind === "result" || decoded?.kind === "error") { return decoded; }
+    if (bigWalletWire.isRecord(response) && response.id === id &&
+        (response.kind === "result" || response.kind === "error")) {
+        return bigWalletErrorResponse(id,
+            response.provider === "solana" ? "solana" : "ethereum",
+            typeof response.name === "string" ? response.name : null,
+            "Failed to process provider response");
+    }
+    return null;
 }
 
 function bigWalletShouldInjectProvider() {
@@ -177,7 +170,7 @@ function bigWalletRPC(message, generation) {
         return;
     }
     if (!bigWalletMatchesGeneration(generation)) {
-        bigWalletPostRPC(message.id, bigWalletWire.rpcFailureResponse(message.id), generation);
+        bigWalletPostRPC(message.id, bigWalletErrorResponse(message.id, "ethereum", null), generation);
         return;
     }
     let pending;
@@ -206,9 +199,7 @@ function bigWalletPostRPC(id, response, generation) {
     window.postMessage({
         direction: bigWalletContentDirection,
         kind: "rpc",
-        response: bigWalletWire.isCorrelatedRPCResponse(response, id)
-            ? response
-            : bigWalletWire.rpcFailureResponse(id),
+        response: bigWalletTerminal(response, id) || bigWalletErrorResponse(id, "ethereum", null),
         id,
         providerGeneration: generation,
     }, "*");
@@ -333,9 +324,10 @@ async function bigWalletSendEnqueue(state) {
         bigWalletSchedule(state, response.approvalRequired ? 1000 : 0);
         return;
     }
-    if (bigWalletWire.isCorrelatedDappResponse(response, state.message.id)) {
-        state.resolveInitial(response);
-        bigWalletDeliver(state, response);
+    const terminal = bigWalletTerminal(response, state.message.id);
+    if (terminal) {
+        state.resolveInitial(terminal);
+        bigWalletDeliver(state, terminal);
         return;
     }
     bigWalletSchedule(state, state.retryDelay);
@@ -361,8 +353,9 @@ async function bigWalletReadResponse(state) {
         bigWalletFail(state);
         return;
     }
-    if (bigWalletWire.isCorrelatedDappResponse(response, state.message.id)) {
-        bigWalletDeliver(state, response);
+    const terminal = bigWalletTerminal(response, state.message.id);
+    if (terminal) {
+        bigWalletDeliver(state, terminal);
         return;
     }
     const retryDelay = document.visibilityState === "visible" ? 1000 : 5000;
@@ -418,12 +411,11 @@ function bigWalletDeliver(state, response) {
     clearTimeout(state.timer);
     const generationMismatch = state.generation !== bigWalletProviderGeneration;
     let delivery;
-    if (generationMismatch &&
-        Object.prototype.hasOwnProperty.call(response, "latestConfigurations")) {
-        const prepared = {...response};
-        delete prepared.latestConfigurations;
-        delete prepared.revisions;
-        delivery = {response: prepared, suppressProviderUpdate: true};
+    if (generationMismatch) {
+        delivery = {
+            response: {...response, state: null, configurationMatch: null},
+            suppressProviderUpdate: true,
+        };
     } else {
         delivery = bigWalletConfigurationDelivery(
             response,
@@ -432,8 +424,10 @@ function bigWalletDeliver(state, response) {
             true
         );
     }
-    const prepared = delivery.response;
-    const suppress = generationMismatch || delivery.suppressProviderUpdate;
+    const prepared = delivery?.response || bigWalletErrorResponse(
+        state.message.id, state.message.provider, state.message.name
+    );
+    const suppress = generationMismatch || delivery?.suppressProviderUpdate === true;
     const envelope = {
         direction: bigWalletContentDirection,
         kind: "response",
@@ -458,13 +452,7 @@ function bigWalletFail(state) {
 }
 
 function bigWalletDeliverFailure(message, generation) {
-    const response = {
-        id: message.id,
-        name: message.name,
-        provider: message.provider,
-        error: "Failed to communicate with Big Wallet",
-        errorCode: -32603,
-    };
+    const response = bigWalletErrorResponse(message.id, message.provider, message.name);
     window.postMessage({
         direction: bigWalletContentDirection,
         kind: "response",
@@ -502,16 +490,11 @@ function bigWalletPostDisconnect(message, response, generation, configurationKey
         bigWalletLoadConfiguration(bigWalletProviderGeneration, 0);
         return;
     }
-    const valid = bigWalletWire.isCorrelatedDappResponse(response, message.id) &&
-        response.name === "revokePermissions" &&
-        response.provider === message.provider;
-    const prepared = valid ? response : {
-        id: message.id,
-        name: "revokePermissions",
-        provider: message.provider,
-        error: "Failed to revoke permissions",
-        errorCode: -32603,
-    };
+    const terminal = bigWalletTerminal(response, message.id);
+    const valid = terminal?.name === "revokePermissions" && terminal.provider === message.provider;
+    const prepared = valid ? terminal : bigWalletErrorResponse(
+        message.id, message.provider, "revokePermissions", "Failed to revoke permissions"
+    );
     const delivery = generation !== bigWalletProviderGeneration
         ? {response: prepared, suppressProviderUpdate: true}
         : bigWalletConfigurationDelivery(
@@ -547,8 +530,7 @@ async function bigWalletLoadConfiguration(generation, attempt) {
         }), bigWalletTransportTimeout);
     } catch {}
     if (!bigWalletMatchesGeneration(generation)) { return; }
-    const delivery = typeof response !== "undefined" &&
-        !response?.configurationReadFailed && identity
+    const delivery = identity
         ? bigWalletConfigurationDelivery(
             response,
             identity.configurationKey,
@@ -576,7 +558,10 @@ async function bigWalletLoadConfiguration(generation, attempt) {
         bigWalletFailedConfigurationGeneration = generation;
         window.postMessage({
             direction: bigWalletContentDirection,
-            kind: "configurationError",
+            kind: "response",
+            response: {kind: "configurationError", error: {
+                code: 4900, message: "Failed to communicate with Big Wallet",
+            }},
             providerGeneration: generation,
         }, "*");
     }
@@ -609,7 +594,7 @@ function bigWalletRuntimeMessage(
         if (identity?.configurationKey === request.configurationKey &&
             typeof bigWalletProviderGeneration === "string") {
             const delivery = bigWalletConfigurationDelivery(
-                request,
+                {kind: "configuration", state: request.state},
                 identity.configurationKey,
                 bigWalletProviderGeneration,
                 false

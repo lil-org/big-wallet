@@ -27,6 +27,106 @@ const attempt = "00000001000000020000000300000004";
 const solanaPublicKey = "11111111111111111111111111111111";
 const execFileAsync = promisify(execFile);
 
+const pageState = {
+    revisions: {ethereum: 2, solana: 3},
+    ethereum: {
+        address: "0x0000000000000000000000000000000000000001",
+        chainId: "0x1",
+        reauthorizationRevision: 0,
+    },
+    solana: {publicKey: solanaPublicKey, isConnected: true, reauthorizationRevision: 3},
+};
+
+test("decodes one canonical page contract without native response aliases", () => {
+    const terminal = {
+        id: 7, provider: "ethereum", name: "requestAccounts",
+        state: pageState, configurationMatch: true,
+    };
+    const responses = [
+        {kind: "configuration", state: pageState},
+        {kind: "configurationError", error: {code: 4900, message: "Unavailable"}},
+        {...terminal, kind: "result", result: [pageState.ethereum.address], approvalCommitted: true},
+        {...terminal, kind: "error", error: {code: 4100, message: "Changed", data: {reason: [1, null]}}, authorizationFailure: false},
+        {...terminal, id: 8, provider: "solana", name: "signAllTransactions", state: null,
+            configurationMatch: null, kind: "result", result: ["signature"], approvalCommitted: false},
+        {...terminal, name: null, state: null, configurationMatch: null,
+            kind: "result", result: {blocks: [1, 2]}, approvalCommitted: false},
+    ];
+    for (const response of responses) {
+        const decoded = wire.decodePageResponse(response);
+        assert.deepEqual(JSON.parse(JSON.stringify(decoded)), response);
+        assert.notEqual(decoded, response);
+        assert.equal(Object.isFrozen(decoded), true);
+    }
+    for (const response of [
+        {id: 7, name: "requestAccounts", provider: "ethereum", results: []},
+        {kind: "batchResult", ...terminal, results: []},
+        {...responses[2], results: []},
+        {...responses[2], approvalCommitted: undefined},
+        {...responses[2], configurationMatch: null},
+        {...responses[2], state: null},
+        {...responses[3], error: {code: 4100, message: "Changed", errorCode: 4100}},
+        {kind: "configuration", state: {...pageState, revisions: {ethereum: -1, solana: 3}}},
+    ]) {
+        assert.equal(wire.decodePageResponse(response), null);
+    }
+    assert.equal(wire.decodePageResponse(responses[2], 9), null);
+    assert.ok(wire.decodePageResponse(responses[2], 7));
+});
+
+test("page decoding snapshots data and rejects accessors without invoking them", () => {
+    const raw = {
+        id: 7, provider: "ethereum", name: null, state: null, configurationMatch: null,
+        kind: "result", result: {items: [1, 2]}, approvalCommitted: false,
+    };
+    const decoded = wire.decodePageResponse(raw);
+    raw.result.items[0] = 99;
+    assert.equal(decoded.result.items[0], 1);
+    let calls = 0;
+    Object.defineProperty(raw.result, "items", {get() { calls += 1; return []; }});
+    assert.equal(wire.decodePageResponse(raw), null);
+    assert.equal(calls, 0);
+    const cyclic = {};
+    cyclic.self = cyclic;
+    assert.equal(wire.decodePageResponse({...raw, result: cyclic}), null);
+    assert.equal(wire.decodeConfigurationSnapshot({...pageState, ethereum: {...pageState.ethereum, results: []}}), null);
+    assert.ok(wire.decodeConfigurationSnapshot(pageState));
+});
+
+test("page decoding retains captured reflection and avoids mutable array helpers", () => {
+    const local = vm.createContext({URL, clearTimeout, crypto: webcrypto, setTimeout});
+    new vm.Script(source).runInContext(local);
+    local.input = {
+        kind: "result", id: 7, provider: "ethereum", name: null, state: null,
+        configurationMatch: null, result: {values: [1, 2]}, approvalCommitted: false,
+    };
+    const decoded = vm.runInContext(`
+        const fail = () => { throw new Error("mutated intrinsic"); };
+        Object.keys = Object.getOwnPropertyDescriptor = Object.freeze = fail;
+        Array.isArray = Array.from = Number.isSafeInteger = fail;
+        Array.prototype.some = Array.prototype.includes = fail;
+        Array.prototype[Symbol.iterator] = fail;
+        BigWalletBridgeWire.decodePageResponse(input);
+    `, local);
+    assert.deepEqual(JSON.parse(JSON.stringify(decoded)), local.input);
+});
+
+test("combined page snapshots survive later Solana validator builtin changes", () => {
+    for (const method of ["Array.prototype.push", "String.prototype.indexOf"]) {
+        const local = vm.createContext({URL, clearTimeout, crypto: webcrypto, setTimeout});
+        new vm.Script(source).runInContext(local);
+        local.input = {kind: "configuration", state: {
+            ...pageState,
+            solana: {...pageState.solana, publicKey: "So11111111111111111111111111111111111111112"},
+        }};
+        const decoded = vm.runInContext(`
+            ${method} = () => { throw new Error("mutated intrinsic"); };
+            BigWalletBridgeWire.decodePageResponse(input);
+        `, local);
+        assert.deepEqual(JSON.parse(JSON.stringify(decoded)), local.input, method);
+    }
+});
+
 const manifestPathForTarget = (project, targetName) => {
     const objects = project.objects;
     const targets = Object.values(objects).filter(object =>
@@ -316,28 +416,14 @@ test("normalizes bounded response-ready wake hints", () => {
 
 test("validates exact passive configuration notifications", () => {
     const notification = {
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [],
-        }],
-        revisions: {ethereum: 1, solana: 0},
-        workflowVersion: 3,
+        subject: "configurationChanged", configurationKey: "https://wallet.example",
+        state: pageState, workflowVersion: 3,
     };
     assert.equal(wire.isConfigurationChanged(notification), true);
     assert.equal(wire.isConfigurationChanged({...notification, extra: true}), false);
+    assert.equal(wire.isConfigurationChanged({...notification, state: undefined}), false);
     assert.equal(wire.isConfigurationChanged({
-        ...notification,
-        latestConfigurations: undefined,
-    }), false);
-    assert.equal(wire.isConfigurationChanged({
-        ...notification,
-        latestConfigurations: [
-            ...notification.latestConfigurations,
-            {...notification.latestConfigurations[0]},
-        ],
+        ...notification, state: {...pageState, revisions: {ethereum: -1, solana: 0}},
     }), false);
 });
 

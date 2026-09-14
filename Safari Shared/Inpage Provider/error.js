@@ -77,17 +77,6 @@ function normalizeProviderError(error, code, data, policy) {
     return new Error(error);
 }
 
-function decodeProviderErrorData(encodedData) {
-    if (typeof encodedData !== "string") {
-        return undefined;
-    }
-
-    try {
-        return JSON.parse(encodedData);
-    } catch {
-        return undefined;
-    }
-}
 
 function normalizeEthereumProviderError(error, code, data) {
     return normalizeProviderError(error, code, data, ethereumPolicy);
@@ -105,7 +94,6 @@ function providerReplacementError() {
 }
 
 export {
-    decodeProviderErrorData,
     normalizeEthereumProviderError,
     normalizeSolanaProviderError,
     providerReplacementError,

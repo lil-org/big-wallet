@@ -691,7 +691,116 @@ function applyResponseToState(
     return {changed, committedDrift, replay, stale: false};
 }
 
-function responseForPage(response, configurationState, stale) {
+function pageConfigurationState(configurationState) {
+    const configuration = provider => configurationState.latestConfigurations.find(item => item.provider === provider);
+    const ethereum = configuration("ethereum");
+    const solana = configuration("solana");
+    const reauthorizationRevision = value => Number.isSafeInteger(value?.reauthorizationRevision) &&
+        value.reauthorizationRevision >= 0 ? value.reauthorizationRevision : 0;
+    return WIRE.decodeConfigurationSnapshot({
+        revisions: {...configurationState.revisions},
+        ethereum: ethereum ? {
+            address: ethereum.results[0] || "",
+            chainId: ethereum.chainId,
+            reauthorizationRevision: reauthorizationRevision(ethereum),
+        } : null,
+        solana: solana ? {
+            publicKey: solana.publicKey,
+            isConnected: typeof solana.isConnected === "undefined" ? true : solana.isConnected,
+            reauthorizationRevision: reauthorizationRevision(solana),
+        } : null,
+    });
+}
+
+function pageFailure(id, provider, name, message = "Failed to communicate with Big Wallet", code = -32603) {
+    return {
+        kind: "error", id, provider, name, state: null, configurationMatch: null,
+        error: {code, message}, authorizationFailure: false,
+    };
+}
+
+function pageConfigurationFailure() {
+    return {kind: "configurationError", error: {
+        code: 4900, message: "Failed to communicate with Big Wallet",
+    }};
+}
+
+function nativePageError(response, rpc) {
+    const raw = response.error;
+    const own = key => raw && typeof raw === "object" && Object.prototype.hasOwnProperty.call(raw, key);
+    const code = own("code") && Number.isFinite(raw.code) ? raw.code
+        : Number.isFinite(response.errorCode) ? response.errorCode : -32603;
+    const message = own("message") && typeof raw.message === "string" ? raw.message
+        : typeof raw === "string" ? raw
+        : rpc ? "Failed to process RPC response" : "Failed to process provider response";
+    let data = own("data") ? raw.data : undefined;
+    if (!rpc && typeof data === "undefined") {
+        try { data = JSON.parse(response.errorDataJSON); } catch {}
+    }
+    if (!rpc && typeof data === "undefined" && typeof response.errorSignature === "string") {
+        data = {signature: response.errorSignature};
+    }
+    return {code, message, ...(typeof data === "undefined" ? {} : {data})};
+}
+
+function pageResponse(response, id = response?.id, rpc = false) {
+    const provider = rpc ? "ethereum" : response?.provider;
+    const name = rpc ? null : response?.name;
+    const malformed = () => pageFailure(id, provider, name,
+        rpc ? "Failed to process RPC response" : "Failed to process provider response");
+    if (!WIRE.isRecord(response) || response.id !== id) { return malformed(); }
+    const has = key => Object.prototype.hasOwnProperty.call(response, key);
+    const hasConfiguration = !rpc && has("latestConfigurations");
+    const state = hasConfiguration ? pageConfigurationState(response) : null;
+    if (hasConfiguration && !state) { return malformed(); }
+    let configurationMatch = state ? false : null;
+    const base = {id, provider, name, state, configurationMatch};
+    const hasError = has("error");
+    if (!rpc && name === "switchAccount" && (provider === "multiple" || provider === "unknown")) {
+        return WIRE.decodePageResponse(hasError
+            ? {kind: "configurationError", error: nativePageError(response, false)}
+            : {kind: "configuration", state}) || pageConfigurationFailure();
+    }
+    const resultFields = ["result", ...(rpc ? [] : ["results"]),
+        ...(provider === "solana" ? ["publicKey"] : [])].filter(has);
+    if (hasError) {
+        if (resultFields.length) { return malformed(); }
+        const error = nativePageError(response, rpc);
+        return WIRE.decodePageResponse({
+            ...base, kind: "error", error,
+            authorizationFailure: !rpc && (
+                provider === "ethereum" && response[WIRE.ETHEREUM_AUTHORIZATION_FAILURE_KEY] ===
+                    WIRE.ETHEREUM_AUTHORIZATION_FAILURE_VERSION ||
+                provider === "solana" && error.code === 4100 && typeof response.errorPublicKey === "string"
+            ),
+        }, id) || malformed();
+    }
+    if (resultFields.length !== 1) { return malformed(); }
+    let result = response[resultFields[0]];
+    if (provider === "solana") {
+        if (name === "connect") {
+            const publicKey = typeof result === "string" ? result : result?.publicKey;
+            result = {publicKey};
+            if (state) { configurationMatch = state.solana?.publicKey === publicKey; }
+        } else if (name !== "signAllTransactions" && typeof result?.signature === "string") {
+            result = result.signature;
+        }
+    } else if (state) {
+        if (name === "requestAccounts") {
+            configurationMatch = !!state.ethereum && Array.isArray(result) &&
+                (typeof result[0] === "string" ? result[0].toLowerCase() : "") ===
+                    state.ethereum.address.toLowerCase();
+        } else if (name === "switchEthereumChain" || name === "addEthereumChain") {
+            configurationMatch = state.ethereum?.chainId === response.chainId;
+        }
+    }
+    return WIRE.decodePageResponse({
+        ...base, configurationMatch, kind: "result", result,
+        approvalCommitted: !rpc && response[WIRE.APPROVAL_COMMITTED_KEY] === true,
+    }, id) || malformed();
+}
+
+function appliedNativeResponse(response, configurationState, stale) {
     const clean = stale ? {
         id: response.id,
         name: response.name,
@@ -781,7 +890,7 @@ function applyDappResponseToState(state, response, revisions) {
     return {
         changed: applied.changed,
         broadcastConfiguration: manualSwitch,
-        value: responseForPage(
+        value: appliedNativeResponse(
             response,
             manualSwitch || applied.changed || applied.replay || applied.stale ||
                 applied.committedDrift
@@ -1227,13 +1336,8 @@ async function handleManualSwitchIntent(request, sender) {
 
 async function handleDappRequest(request, sender) {
     if (privateBrowsing(sender)) {
-        return {
-            id: request?.message?.id,
-            name: request?.message?.name || "request",
-            provider: request?.message?.provider || "unknown",
-            error: privateBrowsingUnsupportedMessage(),
-            errorCode: 4200,
-        };
+        return pageFailure(request?.message?.id, request?.message?.provider,
+            request?.message?.name || "request", privateBrowsingUnsupportedMessage(), 4200);
     }
     const identity = trustedIdentity(request, sender);
     if (!identity) { return undefined; }
@@ -1262,7 +1366,7 @@ async function handleDappRequest(request, sender) {
     }
     if (WIRE.isCorrelatedDappResponse(response, message.id)) {
         if (!authorized) {
-            return {
+            return pageResponse({
                 id: message.id,
                 name: message.name,
                 provider: message.provider,
@@ -1270,13 +1374,13 @@ async function handleDappRequest(request, sender) {
                 errorCode: 4100,
                 latestConfigurations: publicConfigurations(state),
                 revisions: {...state.revisions},
-            };
+            });
         }
-        return applyDappResponse(
+        return pageResponse(await applyDappResponse(
             message.configurationKey,
             response,
             directResponseRevisions
-        );
+        ));
     }
     return undefined;
 }
@@ -1301,7 +1405,9 @@ async function handleGetResponse(request, sender) {
         request.revisions,
         identity.legacyConfigurationKey
     );
-    return completed?.response;
+    const response = completed?.response;
+    return WIRE.isCorrelatedDappResponse(response, request.id)
+        ? pageResponse(response, request.id) : response;
 }
 
 async function handleRPC(request, sender) {
@@ -1310,19 +1416,19 @@ async function handleRPC(request, sender) {
         ]) || request.workflowVersion !== WORKFLOW_VERSION ||
         !WIRE.isValidRequestId(request.id) || typeof request.body !== "string" ||
         typeof request.chainId !== "string") {
-        return WIRE.rpcFailureResponse(request?.id);
+        return pageFailure(request?.id, "ethereum", null);
     }
-    if (privateBrowsing(sender)) { return WIRE.rpcFailureResponse(request.id); }
+    if (privateBrowsing(sender)) { return pageFailure(request.id, "ethereum", null); }
     try {
         const response = await WIRE.withTimeout(
             sendNativeMessage(request, false),
             NATIVE_OPERATION_TIMEOUT
         );
         return WIRE.isCorrelatedRPCResponse(response, request.id)
-            ? response
-            : WIRE.rpcFailureResponse(request.id);
+            ? pageResponse(response, request.id, true)
+            : pageFailure(request.id, "ethereum", null);
     } catch {
-        return WIRE.rpcFailureResponse(request.id);
+        return pageFailure(request.id, "ethereum", null);
     }
 }
 
@@ -1391,15 +1497,14 @@ async function applyCompletedResponse(request, sender) {
 
 async function latestConfiguration(request, sender) {
     if (privateBrowsing(sender)) {
-        return {
-            latestConfigurations: [],
-            revisions: {ethereum: 0, solana: 0},
-        };
+        return {kind: "configuration", state: {
+            ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0},
+        }};
     }
     const identity = trustedIdentity(request, sender) ||
         trustedPopupIdentity(request, sender);
     if (!identity) {
-        return {configurationReadFailed: true};
+        return pageConfigurationFailure();
     }
     void recoverManualSwitches().catch(() => {});
     try {
@@ -1407,20 +1512,14 @@ async function latestConfiguration(request, sender) {
             identity.configurationKey,
             identity.legacyConfigurationKey
         );
-        return publicConfigurationState(state);
+        return {kind: "configuration", state: pageConfigurationState(publicConfigurationState(state))};
     } catch {
-        return {configurationReadFailed: true};
+        return pageConfigurationFailure();
     }
 }
 
 function disconnectFailure(request) {
-    return {
-        id: request?.id,
-        name: "revokePermissions",
-        provider: request?.provider,
-        error: "Failed to revoke permissions",
-        errorCode: -32603,
-    };
+    return pageFailure(request?.id, request?.provider, "revokePermissions", "Failed to revoke permissions");
 }
 
 async function disconnect(request, sender) {
@@ -1440,13 +1539,13 @@ async function disconnect(request, sender) {
             return item.provider !== request.provider;
         });
         state.revisions[request.provider] += 1;
-        return {changed: true, value: {
+        return {changed: true, value: pageResponse({
             id: request.id,
             name: "revokePermissions",
             provider: request.provider,
             result: null,
             ...publicConfigurationState(state),
-        }};
+        })};
     }, identity.legacyConfigurationKey).catch(() => disconnectFailure(request));
 }
 
@@ -1636,8 +1735,7 @@ async function broadcastConfigurationChanged(configurationKey, configurationStat
     const message = {
         subject: "configurationChanged",
         configurationKey,
-        latestConfigurations: configurationState.latestConfigurations,
-        revisions: configurationState.revisions,
+        state: pageConfigurationState(configurationState),
         workflowVersion: WORKFLOW_VERSION,
     };
     for (const tab of tabs || []) {

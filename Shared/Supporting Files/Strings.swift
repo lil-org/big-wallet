@@ -124,6 +124,7 @@ struct Strings {
     static let balance = loc("Balance")
     static let advanced = loc("Advanced")
     static let invalidValues = loc("Invalid values")
+    static let reviewChanged = loc("Review changed. Check the values and apply again.")
     static let noActivePage = loc("No active page")
     static let notConnected = loc("Not connected")
     static let connectWallet = loc("Connect Wallet")
@@ -150,6 +151,7 @@ struct Strings {
             "maxFee": maxFee + " (" + gwei + ")",
             "nonce": nonce,
             "invalidValues": invalidValues,
+            "reviewChanged": reviewChanged,
             "reset": reset,
             "apply": apply,
             "rpc": rpc,

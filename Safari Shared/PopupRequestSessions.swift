@@ -5,10 +5,6 @@ import Foundation
 @MainActor
 final class PopupRequestSession {
 
-    enum Kind: String {
-        case selectAccount, switchAccount, signMessage, sendTransaction, addChain
-    }
-
     enum State: String {
         case review, authenticating, working, error
     }
@@ -307,7 +303,7 @@ final class PopupRequestSessions {
     static func dispatch(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         return await shared.dispatch(
             request: request,
             profileIdentifier: profileIdentifier
@@ -316,7 +312,7 @@ final class PopupRequestSessions {
 
     static func dispatchPrivateBrowsing(
         request: InternalSafariRequest
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         return shared.privateBrowsingResponse(for: request)
     }
 
@@ -324,7 +320,7 @@ final class PopupRequestSessions {
 
     func privateBrowsingResponse(
         for request: InternalSafariRequest
-    ) -> [String: Any] {
+    ) -> PopupResponse {
         guard case .popup(let command) = request.command else {
             return ignoredResponse()
         }
@@ -342,7 +338,7 @@ final class PopupRequestSessions {
     func dispatch(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         guard case .popup(let command) = request.command else {
             return ignoredResponse()
         }
@@ -425,11 +421,11 @@ final class PopupRequestSessions {
         return command.identity?.reviewToken
     }
 
-    private func ignoredResponse() -> [String: Any] {
-        return ["status": "ignored"]
+    private func ignoredResponse() -> PopupResponse {
+        return .status(.ignored)
     }
 
-    private func missingState(id: Int) -> [String: Any] {
+    private func missingState(id: Int) -> PopupResponse {
         return presenter.missingState(id: id)
     }
 
@@ -437,7 +433,7 @@ final class PopupRequestSessions {
         id: Int,
         state: PopupRequestSession.State,
         host: String? = nil
-    ) -> [String: Any] {
+    ) -> PopupResponse {
         return presenter.state(id: id, state: state, host: host)
     }
 
@@ -448,11 +444,11 @@ final class PopupRequestSessions {
 
     private func pendingRequestsResponse(
         profileIdentifier: UUID?
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         guard case .available(let availableSnapshots) = await store.list(
             profileIdentifier: profileIdentifier
         ) else {
-            return ["status": "unavailable"]
+            return .status(.unavailable)
         }
         let snapshots = availableSnapshots.values.sorted {
             $0.createdAt == $1.createdAt
@@ -472,8 +468,8 @@ final class PopupRequestSessions {
         }
         staleImmediateResponses.forEach { immediateResponses[$0] = nil }
 
-        var requests = [[String: Any]]()
-        var completedResponses = [[String: Any]]()
+        var requests = [PopupPendingRequest]()
+        var completedResponses = [PopupCompletedResponse]()
         for snapshot in snapshots {
             switch snapshot.phase {
             case .queued, .approving:
@@ -615,7 +611,7 @@ final class PopupRequestSessions {
     private func approvalState(
         snapshot: ExtensionBridge.Snapshot,
         editsError: Bool? = nil
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         let handle = snapshot.handle
         if snapshot.phase == .responded {
             discardSession(handle: handle)
@@ -692,7 +688,7 @@ final class PopupRequestSessions {
         request: InternalSafariRequest,
         profileIdentifier: UUID?,
         payload: InternalSafariRequest.ApprovalPayload
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         guard let snapshot = await snapshot(
                   for: request,
                   profileIdentifier: profileIdentifier
@@ -731,7 +727,7 @@ final class PopupRequestSessions {
                 action: selectAction,
                 selectedAccounts: selectedAccounts,
                 chainId: payload.chainId
-            ) ? ["status": "ok"] : ignoredResponse()
+            ) ? .status(.ok) : ignoredResponse()
         case .approveMessage(let signAction):
             guard let executionDeadline = payload.executionDeadline,
                   await approveMessageSigning(
@@ -776,7 +772,7 @@ final class PopupRequestSessions {
                     rematerializeOnSuccess:
                         session.takeAuthenticationRematerializationRequirement()
                 )
-                return ["status": "ok"]
+                return .status(.ok)
             }
             let walletAccess = approved.walletAccess
             defer { walletAccess.invalidate() }
@@ -788,7 +784,7 @@ final class PopupRequestSessions {
                 expectedRevisions: payload.revisions,
                 executionDeadline: executionDeadline
             ) else {
-                return ["status": "ok"]
+                return .status(.ok)
             }
             guard let execution = DappApprovalDecision.TransactionExecution(
                       approved.transaction,
@@ -806,7 +802,7 @@ final class PopupRequestSessions {
                     token: approval.token,
                     rematerializeOnSuccess: true
                 )
-                return ["status": "ok"]
+                return .status(.ok)
             }
             await beginSigningExecution(
                 claim: approval.claim,
@@ -841,13 +837,13 @@ final class PopupRequestSessions {
                 )
             }
         }
-        return ["status": "ok"]
+        return .status(.ok)
     }
 
     private func completeStaleApproval(
         snapshot: ExtensionBridge.Snapshot,
         session: PopupRequestSession
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         guard snapshot.phase == .queued else { return ignoredResponse() }
         session.transaction?.invalidate()
         let response = ResponseToExtension(
@@ -860,13 +856,13 @@ final class PopupRequestSessions {
         switch await store.complete(handle: snapshot.handle, response: response) {
         case .persisted:
             discardSession(handle: snapshot.handle)
-            return ["status": "ok"]
+            return .status(.ok)
         case .ownershipLost:
             discardSession(handle: snapshot.handle)
             return ignoredResponse()
         case .retryablePersistenceFailure:
             session.fail(Strings.failedToLoad)
-            return ["status": "unavailable"]
+            return .status(.unavailable)
         }
     }
 
@@ -1259,7 +1255,7 @@ final class PopupRequestSessions {
     private func reject(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         guard let snapshot = await snapshot(
                   for: request,
                   profileIdentifier: profileIdentifier
@@ -1270,11 +1266,11 @@ final class PopupRequestSessions {
         case .persisted:
             discardSession(handle: snapshot.handle)
             immediateResponses[snapshot.handle] = nil
-            return ["status": "ok"]
+            return .status(.ok)
         case .ownershipLost:
             return ignoredResponse()
         case .retryablePersistenceFailure:
-            return ["status": "unavailable"]
+            return .status(.unavailable)
         }
     }
 
@@ -1423,7 +1419,7 @@ final class PopupRequestSessions {
     private func setTransactionSpeed(
         context: MutableSessionContext,
         payload: InternalSafariRequest.TransactionSpeedPayload
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         let snapshot = context.snapshot
         let session = context.session
         guard let transactionSession = session.transaction else {
@@ -1436,7 +1432,7 @@ final class PopupRequestSessions {
     private func applyTransactionEdits(
         context: MutableSessionContext,
         payload: InternalSafariRequest.TransactionEditsPayload
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         let snapshot = context.snapshot
         let session = context.session
         guard let transactionSession = session.transaction,
@@ -1452,7 +1448,7 @@ final class PopupRequestSessions {
     private func resolveApprovalAlert(
         context: MutableSessionContext,
         payload: InternalSafariRequest.ApprovalAlertPayload
-    ) async -> [String: Any] {
+    ) async -> PopupResponse {
         let snapshot = context.snapshot
         let session = context.session
         guard let transactionSession = session.transaction,

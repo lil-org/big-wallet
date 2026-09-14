@@ -478,6 +478,7 @@
 		3AED825DAAAD493D9417B990 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		521739D67137E0C51C520435 /* EthereumAccessListEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA700012FBD000000000001 /* EthereumAccessListEntry.swift */; };
 		524B29428DE7AE12532F2955 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		3959793FB450525721F4A4F2 /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		534E85F01D5C14194B602B89 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		56637A5578AEC821BCBCF285 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		5756048BE887B5571DDD3DB2 /* PreviewAccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A8282598C5005E8D4D /* PreviewAccountCellView.swift */; };
@@ -662,7 +663,9 @@
 		BF3C00422FB2000000000000 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00412FB2000000000000 /* popup.css */; };
 		BF3C00432FB2000000000000 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00412FB2000000000000 /* popup.css */; };
 		BF3C00522FB2000000000000 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00512FB2000000000000 /* popup.js */; };
+		66D83B0B279452F8C1E2110A /* popup_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = 2349A8C968D4114A5BD0347D /* popup_wire.js */; };
 		BF3C00532FB2000000000000 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00512FB2000000000000 /* popup.js */; };
+		E6526C16486B712854E78DDF /* popup_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = 2349A8C968D4114A5BD0347D /* popup_wire.js */; };
 		BF3C00622FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
 		BF3C00632FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
 		BF3C00642FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
@@ -716,6 +719,7 @@
 		BF3D002E2FB3000000000000 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00312FB2000000000000 /* popup.html */; };
 		BF3D002F2FB3000000000000 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00412FB2000000000000 /* popup.css */; };
 		BF3D00302FB3000000000000 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00512FB2000000000000 /* popup.js */; };
+		4A23B8E6C42EE18866BF11CA /* popup_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = 2349A8C968D4114A5BD0347D /* popup_wire.js */; };
 		BF3D00312FB3000000000000 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		BF3E00012FB4000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3E00022FB4000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
@@ -748,11 +752,17 @@
 		C0D400012FC0000000000001 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = C0D400022FC0000000000001 /* manifest.json */; };
 		C18A5A8722057E1454F97B76 /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
 		C1D002012FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		F4B5860A3C6B9AF84505C6C1 /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C1D002022FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		69CD548DA4CA16FC8D7A67B5 /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C1D002032FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		97E6BB9BC2FF8F43DFBE2061 /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C1D002042FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		A4FA81F361D1A35626B1E777 /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C1D002052FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		5640E2132A220518578EF607 /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C1D002062FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		429165182739973D447D737D /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
 		C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
 		C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
@@ -1101,6 +1111,7 @@
 		BF3C00312FB2000000000000 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
 		BF3C00412FB2000000000000 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
 		BF3C00512FB2000000000000 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
+		2349A8C968D4114A5BD0347D /* popup_wire.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup_wire.js; sourceTree = "<group>"; };
 		BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridgeStoredRequestTests.swift; sourceTree = "<group>"; };
 		BF4000012FB6000000000000 /* PopupStringsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupStringsTests.swift; sourceTree = "<group>"; };
 		BF4100012FB7000000000000 /* bridge_wire.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = bridge_wire.js; sourceTree = "<group>"; };
@@ -1108,6 +1119,7 @@
 		C0D400022FC0000000000001 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		C17BC1A0EB4948D11C9B1226 /* EditTransactionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditTransactionView.swift; sourceTree = "<group>"; };
 		C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupApprovalStatePresenter.swift; sourceTree = "<group>"; };
+		604D89B5F048A38733D60AEF /* PopupResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupResponse.swift; sourceTree = "<group>"; };
 		C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossProcessLockTestFixture.swift; sourceTree = "<group>"; };
 		C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DappApprovalDecision.swift; sourceTree = "<group>"; };
@@ -1520,6 +1532,7 @@
 				BF3C00312FB2000000000000 /* popup.html */,
 				BF3C00412FB2000000000000 /* popup.css */,
 				BF3C00512FB2000000000000 /* popup.js */,
+				2349A8C968D4114A5BD0347D /* popup_wire.js */,
 				BF4100012FB7000000000000 /* bridge_wire.js */,
 			);
 			path = Resources;
@@ -1574,6 +1587,7 @@
 				7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */,
 				A2F100022FC1000000000001 /* PopupTransactionSession.swift */,
 				C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */,
+				604D89B5F048A38733D60AEF /* PopupResponse.swift */,
 				2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */,
 				2FA100000000000000000001 /* SafariRPCClient.swift */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
@@ -2060,6 +2074,7 @@
 				BF3D002E2FB3000000000000 /* popup.html in Resources */,
 				BF3D002F2FB3000000000000 /* popup.css in Resources */,
 				BF3D00302FB3000000000000 /* popup.js in Resources */,
+				4A23B8E6C42EE18866BF11CA /* popup_wire.js in Resources */,
 				BF4100022FB7000000000000 /* bridge_wire.js in Resources */,
 				BF3D00312FB3000000000000 /* SharedAssets.xcassets in Resources */,
 				EB54D0F9473D4FE08E967FC6 /* NetworkCatalog.json in Resources */,
@@ -2123,6 +2138,7 @@
 				BF3C00332FB2000000000000 /* popup.html in Resources */,
 				BF3C00432FB2000000000000 /* popup.css in Resources */,
 				BF3C00532FB2000000000000 /* popup.js in Resources */,
+				E6526C16486B712854E78DDF /* popup_wire.js in Resources */,
 				BF4100042FB7000000000000 /* bridge_wire.js in Resources */,
 				BF3C00222FB2000000000000 /* SharedAssets.xcassets in Resources */,
 				3E84305CA4F4418E8CF7C815 /* NetworkCatalog.json in Resources */,
@@ -2165,6 +2181,7 @@
 				BF3C00322FB2000000000000 /* popup.html in Resources */,
 				BF3C00422FB2000000000000 /* popup.css in Resources */,
 				BF3C00522FB2000000000000 /* popup.js in Resources */,
+				66D83B0B279452F8C1E2110A /* popup_wire.js in Resources */,
 				BF4100032FB7000000000000 /* bridge_wire.js in Resources */,
 				BF3C00212FB2000000000000 /* SharedAssets.xcassets in Resources */,
 				8347CF35D24745D7913450D7 /* NetworkCatalog.json in Resources */,
@@ -2670,6 +2687,7 @@
 				A2F101012FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102012FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002012FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
+				F4B5860A3C6B9AF84505C6C1 /* PopupResponse.swift in Sources */,
 				A2F103012FC1000000000001 /* EthereumDappRequestProcessor.swift in Sources */,
 				A2F104012FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF3D00022FB3000000000000 /* DeviceAuthentication.swift in Sources */,
@@ -2758,6 +2776,7 @@
 				A2F101062FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102062FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002062FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
+				429165182739973D447D737D /* PopupResponse.swift in Sources */,
 				A2F103062FC1000000000001 /* EthereumDappRequestProcessor.swift in Sources */,
 				A2F104062FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF5C00062FB5000000000000 /* InternalSafariRequest.swift in Sources */,
@@ -2859,6 +2878,7 @@
 				A2F101042FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102042FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002042FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
+				A4FA81F361D1A35626B1E777 /* PopupResponse.swift in Sources */,
 				A2F103042FC1000000000001 /* EthereumDappRequestProcessor.swift in Sources */,
 				A2F104042FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF5C00042FB5000000000000 /* InternalSafariRequest.swift in Sources */,
@@ -2979,6 +2999,7 @@
 				A2F101052FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102052FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002052FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
+				5640E2132A220518578EF607 /* PopupResponse.swift in Sources */,
 				A2F103052FC1000000000001 /* EthereumDappRequestProcessor.swift in Sources */,
 				A2F104052FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF5C00052FB5000000000000 /* InternalSafariRequest.swift in Sources */,
@@ -3082,6 +3103,7 @@
 				A2F101032FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102032FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002032FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
+				97E6BB9BC2FF8F43DFBE2061 /* PopupResponse.swift in Sources */,
 				A2F103032FC1000000000001 /* EthereumDappRequestProcessor.swift in Sources */,
 				A2F104032FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF3C00032FB2000000000000 /* DeviceAuthentication.swift in Sources */,
@@ -3200,6 +3222,7 @@
 				9537DFE804784E44D508C1C3 /* ExtensionRequestFileStore.swift in Sources */,
 				119114F00C583856DF846F3E /* PopupTransactionSession.swift in Sources */,
 				524B29428DE7AE12532F2955 /* PopupApprovalStatePresenter.swift in Sources */,
+				3959793FB450525721F4A4F2 /* PopupResponse.swift in Sources */,
 				6E96E01A3A3B69B72570CF2E /* EthereumDappRequestProcessor.swift in Sources */,
 				077DB2CBB740B186C83CAD6B /* SolanaDappRequestProcessor.swift in Sources */,
 				3353DB2C803596E5F2F920DE /* InternalSafariRequest.swift in Sources */,
@@ -3318,6 +3341,7 @@
 				A2F101022FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102022FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002022FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
+				69CD548DA4CA16FC8D7A67B5 /* PopupResponse.swift in Sources */,
 				A2F103022FC1000000000001 /* EthereumDappRequestProcessor.swift in Sources */,
 				A2F104022FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF3C00022FB2000000000000 /* DeviceAuthentication.swift in Sources */,

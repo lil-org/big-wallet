@@ -42,6 +42,193 @@
         "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     const hasOwn = (value, key) =>
         Object.prototype.hasOwnProperty.call(value, key);
+    const ownDescriptor = Object.getOwnPropertyDescriptor;
+    const ownKeys = Object.keys;
+    const createObject = Object.create;
+    const defineProperty = Object.defineProperty;
+    const freeze = Object.freeze;
+    const isArray = Array.isArray;
+    const isSafeInteger = Number.isSafeInteger;
+    const isFiniteNumber = Number.isFinite;
+    const stringIndexOf = Function.prototype.call.bind(String.prototype.indexOf);
+
+    function pageValue(value, key) {
+        const descriptor = ownDescriptor(value, key);
+        if (!descriptor || !("value" in descriptor)) {
+            throw new Error("Invalid page response");
+        }
+        return descriptor.value;
+    }
+
+    function pageRecord(value, keys, optional = []) {
+        if (!value || typeof value !== "object" || isArray(value)) {
+            throw new Error("Invalid page response");
+        }
+        const names = ownKeys(value);
+        if (names.length < keys.length || names.length > keys.length + optional.length) {
+            throw new Error("Invalid page response");
+        }
+        for (let index = 0; index < names.length; index += 1) {
+            let allowed = false;
+            for (let key = 0; key < keys.length; key += 1) {
+                if (names[index] === keys[key]) { allowed = true; }
+            }
+            for (let key = 0; key < optional.length; key += 1) {
+                if (names[index] === optional[key]) { allowed = true; }
+            }
+            if (!allowed) { throw new Error("Invalid page response"); }
+        }
+        for (let index = 0; index < keys.length; index += 1) { pageValue(value, keys[index]); }
+        return value;
+    }
+
+    function pageJSON(value, ancestors = []) {
+        if (value === null || typeof value === "string" || typeof value === "boolean" ||
+            typeof value === "number" && isFiniteNumber(value)) {
+            return value;
+        }
+        if (!value || typeof value !== "object") { throw new Error("Invalid page JSON"); }
+        for (let index = 0; index < ancestors.length; index += 1) {
+            if (ancestors[index] === value) { throw new Error("Invalid page JSON"); }
+        }
+        const path = createObject(null);
+        for (let index = 0; index < ancestors.length; index += 1) { path[index] = ancestors[index]; }
+        path[ancestors.length] = value;
+        path.length = ancestors.length + 1;
+        const array = isArray(value);
+        const result = array ? [] : createObject(null);
+        const keys = array ? null : ownKeys(value);
+        const length = array ? pageValue(value, "length") : keys.length;
+        for (let index = 0; index < length; index += 1) {
+            const key = array ? `${index}` : keys[index];
+            defineProperty(result, key, {
+                __proto__: null,
+                enumerable: true,
+                value: pageJSON(pageValue(value, key), path),
+            });
+        }
+        if (array) {
+            defineProperty(result, "toJSON", {__proto__: null, value: undefined});
+        }
+        return freeze(result);
+    }
+
+    function pageError(value) {
+        pageRecord(value, ["code", "message"], ["data"]);
+        const code = pageValue(value, "code");
+        const message = pageValue(value, "message");
+        if (!isFiniteNumber(code) || typeof message !== "string") {
+            throw new Error("Invalid page error");
+        }
+        const error = {code, message};
+        if (ownDescriptor(value, "data")) {
+            defineProperty(error, "data", {
+                __proto__: null,
+                enumerable: true,
+                value: pageJSON(pageValue(value, "data")),
+            });
+        }
+        return freeze(error);
+    }
+
+    function configurationSnapshot(value) {
+        pageRecord(value, ["revisions", "ethereum", "solana"]);
+        const rawRevisions = pageRecord(pageValue(value, "revisions"), ["ethereum", "solana"]);
+        const revisions = {
+            ethereum: pageValue(rawRevisions, "ethereum"),
+            solana: pageValue(rawRevisions, "solana"),
+        };
+        if (!isSafeInteger(revisions.ethereum) || revisions.ethereum < 0 ||
+            !isSafeInteger(revisions.solana) || revisions.solana < 0) {
+            throw new Error("Invalid page revisions");
+        }
+        let ethereum = pageValue(value, "ethereum");
+        if (ethereum !== null) {
+            pageRecord(ethereum, ["address", "chainId", "reauthorizationRevision"]);
+            ethereum = {
+                address: pageValue(ethereum, "address"),
+                chainId: pageValue(ethereum, "chainId"),
+                reauthorizationRevision: pageValue(ethereum, "reauthorizationRevision"),
+            };
+            if (typeof ethereum.address !== "string" ||
+                !isCanonicalEthereumChainId(ethereum.chainId) ||
+                !isSafeInteger(ethereum.reauthorizationRevision) ||
+                ethereum.reauthorizationRevision < 0) {
+                throw new Error("Invalid Ethereum page configuration");
+            }
+            freeze(ethereum);
+        }
+        let solana = pageValue(value, "solana");
+        if (solana !== null) {
+            pageRecord(solana, ["publicKey", "isConnected", "reauthorizationRevision"]);
+            solana = {
+                publicKey: pageValue(solana, "publicKey"),
+                isConnected: pageValue(solana, "isConnected"),
+                reauthorizationRevision: pageValue(solana, "reauthorizationRevision"),
+            };
+            if (!isSolanaPublicKey(solana.publicKey) ||
+                typeof solana.isConnected !== "boolean" ||
+                !isSafeInteger(solana.reauthorizationRevision) ||
+                solana.reauthorizationRevision < 0) {
+                throw new Error("Invalid Solana page configuration");
+            }
+            freeze(solana);
+        }
+        return freeze({revisions: freeze(revisions), ethereum, solana});
+    }
+
+    function decodeConfigurationSnapshot(value) {
+        try { return configurationSnapshot(value); } catch { return null; }
+    }
+
+    function decodePageResponse(value, correlationId) {
+        try {
+            if (!value || typeof value !== "object") { return null; }
+            const kind = pageValue(value, "kind");
+            if (kind === "configuration") {
+                pageRecord(value, ["kind", "state"]);
+                return freeze({kind, state: configurationSnapshot(pageValue(value, "state"))});
+            }
+            if (kind === "configurationError") {
+                pageRecord(value, ["kind", "error"]);
+                return freeze({kind, error: pageError(pageValue(value, "error"))});
+            }
+            if (kind !== "result" && kind !== "error") { return null; }
+            pageRecord(value, kind === "result" ? [
+                "kind", "id", "provider", "name", "state", "configurationMatch",
+                "result", "approvalCommitted",
+            ] : [
+                "kind", "id", "provider", "name", "state", "configurationMatch",
+                "error", "authorizationFailure",
+            ]);
+            const id = pageValue(value, "id");
+            const provider = pageValue(value, "provider");
+            const name = pageValue(value, "name");
+            const rawState = pageValue(value, "state");
+            const configurationMatch = pageValue(value, "configurationMatch");
+            if (!isSafeInteger(id) || typeof correlationId !== "undefined" && id !== correlationId ||
+                (provider !== "ethereum" && provider !== "solana") ||
+                (name !== null && typeof name !== "string") ||
+                (rawState === null ? configurationMatch !== null : typeof configurationMatch !== "boolean")) {
+                return null;
+            }
+            const terminal = {
+                kind, id, provider, name,
+                state: rawState === null ? null : configurationSnapshot(rawState),
+                configurationMatch,
+            };
+            if (kind === "result") {
+                const approvalCommitted = pageValue(value, "approvalCommitted");
+                if (typeof approvalCommitted !== "boolean") { return null; }
+                return freeze({...terminal, result: pageJSON(pageValue(value, "result")), approvalCommitted});
+            }
+            const authorizationFailure = pageValue(value, "authorizationFailure");
+            if (typeof authorizationFailure !== "boolean") { return null; }
+            return freeze({...terminal, error: pageError(pageValue(value, "error")), authorizationFailure});
+        } catch {
+            return null;
+        }
+    }
 
     function isRecord(value) {
         return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -114,7 +301,7 @@
         }
         const bytes = [0];
         for (let index = 0; index < value.length; index += 1) {
-            const digit = BASE58_ALPHABET.indexOf(value[index]);
+            const digit = stringIndexOf(BASE58_ALPHABET, value[index]);
             if (digit < 0) { return false; }
             let carry = digit;
             for (let byte = 0; byte < bytes.length; byte += 1) {
@@ -123,7 +310,7 @@
                 carry >>= 8;
             }
             while (carry > 0) {
-                bytes.push(carry & 0xff);
+                bytes[bytes.length] = carry & 0xff;
                 carry >>= 8;
             }
         }
@@ -366,15 +553,11 @@
 
     function isConfigurationChanged(request) {
         return hasExactKeys(request, [
-                "configurationKey", "latestConfigurations", "revisions",
-                "subject", "workflowVersion",
-            ]) &&
-            request.subject === "configurationChanged" &&
+                "configurationKey", "state", "subject", "workflowVersion",
+            ]) && request.subject === "configurationChanged" &&
             request.workflowVersion === WORKFLOW_VERSION &&
             isConfigurationKey(request.configurationKey) &&
-            Array.isArray(request.latestConfigurations) &&
-            parseLatestConfigurations(request.latestConfigurations).valid &&
-            isProviderRevisions(request.revisions);
+            decodeConfigurationSnapshot(request.state) !== null;
     }
 
     function genId() {
@@ -440,6 +623,8 @@
         WORKFLOW_POLICY,
         WORKFLOW_VERSION,
         configurationIdentityForURL,
+        decodeConfigurationSnapshot,
+        decodePageResponse,
         createTrustedNativeMessageSender,
         genId,
         genPrivateToken,

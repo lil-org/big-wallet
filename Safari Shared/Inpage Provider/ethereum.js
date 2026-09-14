@@ -775,7 +775,7 @@ function applyResultEnvelope(provider, state, envelope) {
         return settleError(state, record, authorizationChangedError());
     }
     if (name === "requestAccounts" &&
-        dataProperty(envelope, "configurationApplied") === false) {
+        dataProperty(envelope, "configurationMatch") === false) {
         return settleResult(
             state,
             record,
@@ -799,7 +799,7 @@ function applyResultEnvelope(provider, state, envelope) {
                 record.metadata.authorization
             );
             const appliedConfigurationMatches =
-                dataProperty(envelope, "configurationApplied") === true &&
+                dataProperty(envelope, "configurationMatch") === true &&
                 normalizedAddress(state.address) === normalizedAddress(address);
             if (currentAuthorization || appliedConfigurationMatches) {
                 if (address) {
@@ -816,7 +816,7 @@ function applyResultEnvelope(provider, state, envelope) {
         } else if (name === "switchEthereumChain" ||
             name === "addEthereumChain") {
             const shouldApplyChain = envelope.approvalCommitted !== true ||
-                dataProperty(envelope, "configurationApplied") === true;
+                dataProperty(envelope, "configurationMatch") === true;
             if (shouldApplyChain &&
                 validChainId(record.metadata.requestedChainId)) {
                 deltas.chainChanged = commitChain(

@@ -21,6 +21,9 @@ final class PopupStringsTests: XCTestCase {
             "subject": subject.rawValue,
             "requestToken": "00000000-0000-4000-8000-000000000091",
         ]
+        if subject == .getPendingRequests {
+            message["requestToken"] = nil
+        }
         message["payload"] = payload
         if subject != .getApprovalState && subject != .retryApproval &&
             subject != .getPendingRequests && subject != .rejectRequest {
@@ -37,29 +40,66 @@ final class PopupStringsTests: XCTestCase {
         )
     }
 
-    private func oversizedResponse(
-        state: String,
-        actions: [String]? = nil,
-        reviewToken: String? = "00000000-0000-4000-8000-000000000092"
-    ) -> [String: Any] {
-        var response: [String: Any] = [
-            "id": 91,
-            "state": state,
-            "actions": actions ?? (state == "review" ? ["approve", "reject"] : []),
-            "host": "wallet.example",
-        ]
-        let largeText = String(
-            repeating: "x",
-            count: PopupApprovalStatePresenter.maximumResponseBytes
-        )
-        if state == "review" {
-            var review: [String: Any] = ["kind": "signMessage", "meta": largeText]
-            review["reviewToken"] = reviewToken
-            response["review"] = review
-        } else {
-            response["error"] = largeText
-        }
-        return response
+    private func reviewResponse(
+        _ content: PopupReview.Content,
+        title: String = "Review",
+        iconURL: String? = nil,
+        actions: [PopupApprovalState.Action] = [.approve, .reject]
+    ) -> PopupResponse {
+        .approval(PopupApprovalState(
+            id: 91,
+            host: "wallet.example",
+            content: .review(PopupReview(
+                reviewToken: UUID(uuidString: reviewToken)!,
+                title: title,
+                iconURL: iconURL,
+                content: content
+            ), actions: actions, feedback: nil)
+        ))
+    }
+
+    private func oversizedResponse() -> PopupResponse {
+        reviewResponse(.signMessage(PopupMessageReview(
+            meta: String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes),
+            account: .init(name: "Primary", croppedAddress: "1111...1111"),
+            clusterSelection: nil
+        )))
+    }
+
+    private func selectionResponse(
+        count: Int,
+        name: (Int) -> String,
+        icon: String? = nil
+    ) -> PopupResponse {
+        reviewResponse(.selectAccount(PopupSelectionReview(
+            accounts: (0..<count).map { index in
+                .init(
+                    display: .init(name: name(index), croppedAddress: "0000...0000", icon: icon),
+                    walletId: "wallet-\(index)",
+                    address: "0x" + String(format: "%040x", index),
+                    coin: .ethereum,
+                    derivationPath: "m/44'/60'/0'/0/\(index)",
+                    isSelected: false
+                )
+            },
+            networks: (0..<count).map { index in
+                .init(chainId: "0x" + String(index + 1, radix: 16), name: name(index),
+                      isCustom: true, isSelected: index == count - 1)
+            },
+            canSelectNetwork: true,
+            allowsEmptySelection: false,
+            emptyMessage: nil,
+            primaryTitle: nil
+        )), iconURL: icon)
+    }
+
+    private func boundedResponse(
+        _ response: PopupResponse,
+        for request: InternalSafariRequest
+    ) throws -> [String: Any] {
+        let data = try PopupResponseEncoder.encode(response, for: request)
+        XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func resource(_ name: String) throws -> String {
@@ -157,11 +197,11 @@ final class PopupStringsTests: XCTestCase {
     }
 
     func testApprovalErrorHasExactRefreshOnlyEnvelope() {
-        let error = PopupApprovalStatePresenter.errorState(
+        let error = popupResponseJSON(PopupApprovalStatePresenter.errorState(
             id: 91,
             host: "wallet.example",
             error: Strings.failedToLoad
-        )
+        ))
 
         XCTAssertEqual(Set(error.keys), ["id", "state", "actions", "host", "error"])
         XCTAssertEqual(error["state"] as? String, "error")
@@ -172,8 +212,8 @@ final class PopupStringsTests: XCTestCase {
 
     @MainActor
     func testSecureSetupRequiredStateIsDistinctAndRefreshOnly() {
-        let state = PopupApprovalStatePresenter()
-            .secureSetupRequiredState(id: 91, host: "wallet.example")
+        let state = popupResponseJSON(PopupApprovalStatePresenter()
+            .secureSetupRequiredState(id: 91, host: "wallet.example"))
 
         XCTAssertEqual(
             Set(state.keys),
@@ -218,11 +258,11 @@ final class PopupStringsTests: XCTestCase {
             action: action
         )
         let presenter = PopupApprovalStatePresenter()
-        let review = presenter.approvalState(
+        let review = popupResponseJSON(presenter.approvalState(
             for: session,
             action: action,
             transactionMutationAllowed: false
-        )
+        ))
         XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
         XCTAssertNotNil((review["review"] as? [String: Any])?["reviewToken"])
         XCTAssertNil(review["reviewToken"])
@@ -234,11 +274,11 @@ final class PopupStringsTests: XCTestCase {
                 XCTAssertTrue(session.acceptClaim(claim, token: token))
                 XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
             }
-            let busy = presenter.approvalState(
+            let busy = popupResponseJSON(presenter.approvalState(
                 for: session,
                 action: action,
                 transactionMutationAllowed: true
-            )
+            ))
             XCTAssertEqual(busy["state"] as? String, expectedState)
             XCTAssertEqual(busy["actions"] as? [String], [])
             XCTAssertNil(busy["review"])
@@ -247,12 +287,12 @@ final class PopupStringsTests: XCTestCase {
     }
 
     func testRejectableErrorHasExactRejectOnlyEnvelope() {
-        let error = PopupApprovalStatePresenter.errorState(
+        let error = popupResponseJSON(PopupApprovalStatePresenter.errorState(
             id: 91,
-            actions: [.reject],
+            action: .reject,
             host: "wallet.example",
             error: Strings.failedToLoad
-        )
+        ))
 
         XCTAssertEqual(
             Set(error.keys),
@@ -275,375 +315,264 @@ final class PopupStringsTests: XCTestCase {
         }
     }
 
-    @MainActor
     func testMoreThan256AccountAndNetworkChoicesRemainExactWhenTheyFit() throws {
-        let choiceCount = 300
-        let accounts = (0..<choiceCount).map { index in
-            return [
-                "walletId": "00000000-0000-4000-8000-000000000000-\(index)",
-                "address": "0x" + String(format: "%040x", index),
-                "coin": "ethereum",
-                "name": "Account \(index)",
-                "croppedAddress": "0000...0000",
-                "isSelected": false,
-            ] as [String: Any]
-        }
-        let networks = (0..<choiceCount).map { index in
-            return [
-                "chainId": "0x" + String(index + 1, radix: 16),
-                "name": "Network \(index)",
-                "isCustom": true,
-                "isSelected": index == choiceCount - 1,
-            ] as [String: Any]
-        }
-        let response: [String: Any] = [
-            "id": 91,
-            "state": "review",
-            "host": "wallet.example",
-            "actions": ["approve", "reject"],
-            "review": [
-                "kind": "selectAccount",
-                "reviewToken": reviewToken,
-                "accounts": accounts,
-                "networks": networks,
-            ],
-        ]
-
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
+        let bounded = try boundedResponse(
+            selectionResponse(count: 300, name: { "Choice \($0)" }),
+            for: approvalStateRequest()
         )
-
-        XCTAssertEqual(((bounded["review"] as? [String: Any])?["accounts"] as? [[String: Any]])?.count, choiceCount)
-        XCTAssertEqual(((bounded["review"] as? [String: Any])?["networks"] as? [[String: Any]])?.count, choiceCount)
-        XCTAssertEqual(
-            ((bounded["review"] as? [String: Any])?["accounts"] as? [[String: Any]])?.last?["name"] as? String,
-            "Account 299"
-        )
-        XCTAssertEqual(
-            ((bounded["review"] as? [String: Any])?["networks"] as? [[String: Any]])?.last?["name"] as? String,
-            "Network 299"
-        )
-        XCTAssertLessThanOrEqual(
-            try JSONSerialization.data(withJSONObject: bounded).count,
-            PopupApprovalStatePresenter.maximumResponseBytes
-        )
+        let review = try XCTUnwrap(bounded["review"] as? [String: Any])
+        let accounts = try XCTUnwrap(review["accounts"] as? [[String: Any]])
+        let networks = try XCTUnwrap(review["networks"] as? [[String: Any]])
+        XCTAssertEqual(accounts.count, 300)
+        XCTAssertEqual(networks.count, 300)
+        XCTAssertEqual(accounts.last?["name"] as? String, "Choice 299")
+        XCTAssertEqual(networks.last?["name"] as? String, "Choice 299")
     }
 
-    @MainActor
     func testControlHeavySelectionBecomesAtomicFallbackWithoutShorteningLabels() throws {
-        let displayName = String(repeating: "\u{0000}", count: 256)
-        let accounts = (0..<256).map { index in
-            return [
-                "walletId": "00000000-0000-4000-8000-000000000000-\(index)",
-                "address": "0x" + String(format: "%040x", index),
-                "coin": "ethereum",
-                "name": displayName,
-                "croppedAddress": "0000...0000",
-                "isSelected": false,
-            ] as [String: Any]
-        }
-        let networks = (0..<256).map { index in
-            return [
-                "chainId": "0x" + String(index + 1, radix: 16),
-                "name": displayName,
-                "isCustom": true,
-                "isSelected": false,
-            ] as [String: Any]
-        }
-        let response: [String: Any] = [
-            "id": 91,
-            "state": "review",
-            "host": "wallet.example",
-            "actions": ["approve", "reject"],
-            "review": [
-                "kind": "selectAccount",
-                "reviewToken": reviewToken,
-                "accounts": accounts,
-                "networks": networks,
-            ],
-        ]
-
-        XCTAssertEqual(((response["review"] as? [String: Any])?["accounts"] as? [[String: Any]])?.first?["name"] as? String, displayName)
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
-        )
-
+        let response = selectionResponse(count: 256, name: { _ in String(repeating: "\u{0000}", count: 256) })
+        let bounded = try boundedResponse(response, for: approvalStateRequest())
         XCTAssertEqual(bounded["state"] as? String, "error")
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
         XCTAssertNil(bounded["review"])
-        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["kind"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["accounts"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["networks"])
-        XCTAssertLessThanOrEqual(
-            try JSONSerialization.data(withJSONObject: bounded).count,
-            PopupApprovalStatePresenter.maximumResponseBytes
-        )
     }
 
-    @MainActor
     func testOversizedSelectionReturnsAtomicRejectOnlyFallback() throws {
-        let accounts = (0..<4_000).map { index in
-            return [
-                "walletId": "00000000-0000-4000-8000-000000000000-\(index)",
-                "address": "0x" + String(format: "%040x", index),
-                "coin": "ethereum",
-                "name": "Account \(index)",
-                "croppedAddress": "0000...0000",
-                "isSelected": false,
-            ] as [String: Any]
-        }
-        let response: [String: Any] = [
-            "id": 91,
-            "state": "review",
-            "host": "wallet.example",
-            "actions": ["approve", "reject"],
-            "review": [
-                "kind": "selectAccount",
-                "reviewToken": reviewToken,
-                "accounts": accounts,
-                "networks": [[String: Any]](),
-            ],
-        ]
-
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
+        let bounded = try boundedResponse(
+            selectionResponse(count: 4_000, name: { "Account \($0)" }),
+            for: approvalStateRequest()
         )
-
         XCTAssertEqual(bounded["state"] as? String, "error")
-        XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertNil(bounded["review"])
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["kind"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["accounts"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["networks"])
+        XCTAssertNil(bounded["review"])
     }
 
-    @MainActor
-    func testInvalidSelectionJSONUsesGenericFallback() throws {
-        let response: [String: Any] = [
-            "id": 91,
-            "state": "review",
-            "host": "wallet.example",
-            "actions": ["approve", "reject"],
-            "review": [
-                "kind": "selectAccount",
-                "accounts": [["invalid": Date()]],
-            ],
-        ]
-
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
-        )
-
+    func testNonFiniteTransactionJSONUsesGenericFallback() throws {
+        let response = reviewResponse(.sendTransaction(transactionReview(position: .nan)))
+        let bounded = try boundedResponse(response, for: approvalStateRequest())
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
+        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
+        XCTAssertNil(bounded["review"])
     }
 
-    @MainActor
     func testLongAddChainNameRemainsExactWhenResponseFits() throws {
-        let chainName = String(repeating: "Network ", count: 100) + "exact suffix"
-        let response: [String: Any] = [
-            "id": 91,
-            "state": "review",
-            "host": "wallet.example",
-            "actions": ["approve", "reject"],
-            "review": [
-                "kind": "addChain",
-                "chainName": chainName,
-                "rpcURL": "https://rpc.example",
-            ],
-        ]
-
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
+        let name = String(repeating: "Network ", count: 100) + "exact suffix"
+        let bounded = try boundedResponse(
+            reviewResponse(.addChain(.init(chainName: name, rpcURL: "https://rpc.example"))),
+            for: approvalStateRequest()
         )
-
-        XCTAssertEqual((bounded["review"] as? [String: Any])?["chainName"] as? String, chainName)
-        XCTAssertEqual((bounded["review"] as? [String: Any])?["kind"] as? String, "addChain")
+        let review = try XCTUnwrap(bounded["review"] as? [String: Any])
+        XCTAssertEqual(review["chainName"] as? String, name)
+        XCTAssertEqual(review["kind"] as? String, "addChain")
     }
 
-    @MainActor
     func testPopupResponseDropsDecorativeImagesBeforeFailingClosed() throws {
-        let icon = "data:image/png;base64," + String(
-            repeating: "A",
-            count: PopupApprovalStatePresenter.maximumResponseBytes
-        )
-        let response: [String: Any] = [
-            "id": 91,
-            "state": "review",
-            "host": "wallet.example",
-            "actions": ["approve", "reject"],
-            "review": [
-                "kind": "selectAccount",
-                "iconURL": icon,
-                "accounts": [[
-                    "name": "Account",
-                    "croppedAddress": "0000...0000",
-                    "icon": icon,
-                ]],
-            ],
-        ]
-
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
-        )
-        let accounts = try XCTUnwrap((bounded["review"] as? [String: Any])?["accounts"] as? [[String: Any]])
-
-        XCTAssertNil((bounded["review"] as? [String: Any])?["iconURL"])
-        XCTAssertNil(accounts.first?["icon"])
-        XCTAssertEqual((bounded["review"] as? [String: Any])?["kind"] as? String, "selectAccount")
-        let data = try JSONSerialization.data(withJSONObject: bounded)
-        XCTAssertLessThanOrEqual(
-            data.count,
-            PopupApprovalStatePresenter.maximumResponseBytes
-        )
+        let icon = "data:image/png;base64," + String(repeating: "A", count: PopupResponseEncoder.maximumResponseBytes)
+        var transaction = transactionReview()
+        transaction.account.icon = icon
+        for response in [
+            selectionResponse(count: 1, name: { _ in "Account" }, icon: icon),
+            reviewResponse(.signMessage(.init(
+                meta: "Preserve this message", account: .init(name: "Account", croppedAddress: "1111", icon: icon),
+                clusterSelection: nil
+            )), iconURL: icon),
+            reviewResponse(.sendTransaction(transaction), iconURL: icon),
+        ] {
+            let bounded = try boundedResponse(response, for: approvalStateRequest())
+            let review = try XCTUnwrap(bounded["review"] as? [String: Any])
+            XCTAssertEqual(bounded["state"] as? String, "review")
+            XCTAssertNil(review["iconURL"])
+            XCTAssertNil((review["account"] as? [String: Any])?["icon"])
+            XCTAssertNil((review["accounts"] as? [[String: Any]])?.first?["icon"])
+            XCTAssertEqual(review["reviewToken"] as? String, reviewToken)
+            XCTAssertEqual((popupResponseJSON(response)["review"] as? [String: Any])?["iconURL"] as? String, icon)
+        }
     }
 
-    @MainActor
     func testOversizedPopupResponseBecomesRejectOnlyErrorWithoutTruncation() throws {
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            oversizedResponse(state: "review"),
-            for: try approvalStateRequest()
-        )
-
+        let bounded = try boundedResponse(oversizedResponse(), for: approvalStateRequest())
         XCTAssertEqual(bounded["id"] as? Int, 91)
         XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["host"] as? String, "wallet.example")
-        XCTAssertNil(bounded["review"])
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
         XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertNil((bounded["review"] as? [String: Any])?["meta"])
-    }
-
-    @MainActor
-    func testOversizedNonReviewResponseBecomesNonRejectableError() throws {
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            oversizedResponse(state: "authenticating"),
-            for: try approvalStateRequest()
-        )
-
-        XCTAssertEqual(bounded["id"] as? Int, 91)
-        XCTAssertEqual(bounded["state"] as? String, "error")
-        XCTAssertEqual(bounded["host"] as? String, "wallet.example")
-        XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
-        XCTAssertEqual(bounded["actions"] as? [String], ["retry"])
         XCTAssertNil(bounded["review"])
-        XCTAssertNil((bounded["review"] as? [String: Any])?["meta"])
+        XCTAssertNil(bounded["reviewToken"])
     }
 
-    @MainActor
-    func testOversizedResponsePreservesExistingRejectionCapability() throws {
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            oversizedResponse(state: "error", actions: ["reject"]),
-            for: try approvalStateRequest()
-        )
-
-        XCTAssertEqual(bounded["state"] as? String, "error")
-        XCTAssertNil(bounded["review"])
-        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
+    func testOversizedResponsePreservesExistingRecoveryCapability() throws {
+        for action in [PopupApprovalState.RecoveryAction.retry, .reject] {
+            let response = PopupResponse.approval(.init(
+                id: 91, host: "wallet.example",
+                content: .error(message: String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes), action: action)
+            ))
+            let bounded = try boundedResponse(response, for: approvalStateRequest())
+            XCTAssertEqual(bounded["state"] as? String, "error")
+            XCTAssertEqual(bounded["host"] as? String, "wallet.example")
+            XCTAssertEqual(bounded["actions"] as? [String], [action.rawValue])
+            XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
+            XCTAssertNil(bounded["review"])
+        }
     }
 
-    @MainActor
     func testOversizedHostCannotOverflowErrorEnvelope() throws {
-        var response = oversizedResponse(state: "review")
-        response["host"] = String(
-            repeating: "h",
-            count: PopupApprovalStatePresenter.maximumResponseBytes
-        )
-
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            response,
-            for: try approvalStateRequest()
-        )
-
+        guard case .approval(var state) = oversizedResponse() else { return XCTFail() }
+        state.host = String(repeating: "h", count: PopupResponseEncoder.maximumResponseBytes)
+        let bounded = try boundedResponse(.approval(state), for: approvalStateRequest())
         XCTAssertNil(bounded["host"])
         XCTAssertEqual(bounded["state"] as? String, "error")
-        XCTAssertNil(bounded["review"])
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
-        let data = try JSONSerialization.data(withJSONObject: bounded)
-        XCTAssertLessThanOrEqual(
-            data.count,
-            PopupApprovalStatePresenter.maximumResponseBytes
-        )
+        XCTAssertNil(bounded["review"])
     }
 
-    @MainActor
     func testOversizedMutationResponsesUseApprovalErrorEnvelope() throws {
         let requests = try [
             popupRequest(subject: .retryApproval),
-            popupRequest(
-                subject: .setTransactionSpeed,
-                payload: ["interaction": "ended", "value": 0.5]
-            ),
-            popupRequest(
-                subject: .applyTransactionEdits,
-                payload: ["mode": "suggested"]
-            ),
-            popupRequest(
-                subject: .resolveApprovalAlert,
-                payload: ["action": "cancel"]
-            ),
+            popupRequest(subject: .setTransactionSpeed, payload: ["interaction": "ended", "value": 0.5]),
+            popupRequest(subject: .applyTransactionEdits, payload: ["mode": "suggested"]),
+            popupRequest(subject: .resolveApprovalAlert, payload: ["action": "cancel"]),
         ]
-
         for request in requests {
-            let bounded = PopupApprovalStatePresenter.boundedResponse(
-                oversizedResponse(state: "review"),
-                for: request
-            )
+            let bounded = try boundedResponse(oversizedResponse(), for: request)
             XCTAssertEqual(bounded["id"] as? Int, 91)
             XCTAssertEqual(bounded["state"] as? String, "error")
             XCTAssertEqual(bounded["host"] as? String, "wallet.example")
-            XCTAssertNil(bounded["review"])
             XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
             XCTAssertEqual(bounded["error"] as? String, Strings.somethingWentWrong)
+            XCTAssertNil(bounded["review"])
             XCTAssertNil(bounded["status"])
-            XCTAssertNil((bounded["review"] as? [String: Any])?["meta"])
         }
     }
 
-    @MainActor
+    func testOversizedQueueUsesUnavailableStatus() throws {
+        let response = PopupResponse.queue(.init(
+            requests: [], completedResponses: [],
+            strings: ["ok": String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes)],
+            layoutDirection: .ltr
+        ))
+        let bounded = try boundedResponse(response, for: popupRequest(subject: .getPendingRequests))
+        XCTAssertEqual(bounded["status"] as? String, "unavailable")
+        XCTAssertEqual(Set(bounded.keys), ["status"])
+    }
+
     func testStatusOnlySliderMutationIsRejectedByExactDecoder() {
         XCTAssertThrowsError(try popupRequest(
             subject: .setTransactionSpeed,
-            payload: [
-                "interaction": "moved",
-                "value": 0.5,
-                "responseMode": "status",
-            ]
+            payload: ["interaction": "moved", "value": 0.5, "responseMode": "status"]
         ))
     }
 
-    @MainActor
-    func testOversizedReviewWithoutAuthoritativeTokenRemainsRejectable() throws {
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            oversizedResponse(state: "review", reviewToken: nil),
-            for: try approvalStateRequest()
-        )
-
-        XCTAssertEqual(bounded["state"] as? String, "error")
-        XCTAssertNil(bounded["review"])
-        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
+    func testReviewTokenIsLowercaseAndAbsentOptionalsAreOmitted() throws {
+        let token = try XCTUnwrap(UUID(uuidString: "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF"))
+        let response = PopupResponse.approval(.init(
+            id: 91,
+            host: "wallet.example",
+            content: .review(.init(
+                reviewToken: token,
+                title: "Add Network",
+                content: .addChain(.init(chainName: "Custom", rpcURL: "https://rpc.example"))
+            ), actions: [.approve, .reject], feedback: nil)
+        ))
+        let json = popupResponseJSON(response)
+        let review = try XCTUnwrap(json["review"] as? [String: Any])
+        XCTAssertEqual(review["reviewToken"] as? String, token.uuidString.lowercased())
+        XCTAssertNil(review["iconURL"])
+        XCTAssertNil(json["error"])
+        XCTAssertNil(json["editsError"])
     }
 
-    @MainActor
-    func testOversizedReviewDoesNotExposeAuthoritativeToken() throws {
-        let bounded = PopupApprovalStatePresenter.boundedResponse(
-            oversizedResponse(
-                state: "review",
-                reviewToken: reviewToken.uppercased()
-            ),
-            for: try approvalStateRequest()
+    private func transactionReview(position: Double = 100, type2: Bool = false) -> PopupTransactionReview {
+        .init(
+            account: .init(name: "Primary", croppedAddress: "0x1111…1111"),
+            networkName: "Ethereum",
+            balance: type2 ? nil : "1 ETH",
+            valueLine: type2 ? nil : "0.1 ETH",
+            feeLines: ["Fee: 0.001 ETH"],
+            dataInterpretation: type2 ? nil : "Transfer",
+            phase: type2 ? .reviewingFees : .ready,
+            slider: .init(visible: true, position: position, maximum: 200),
+            editor: .init(nonce: "2", fee: type2
+                ? .eip1559(maxPriorityFeePerGasGwei: "1", maxFeePerGasGwei: "20")
+                : .legacy(gasPriceGwei: "10"), suggestedFee: type2
+                ? .eip1559(maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22")
+                : .legacy(gasPriceGwei: "11")),
+            alert: type2 ? .init(title: "Fees updated", message: "Review the fees", actions: [
+                .init(title: "OK", action: .acknowledge), .init(title: "Edit", action: .edit),
+            ]) : nil,
+            editorRequestToken: type2 ? 1 : nil
         )
-
-        XCTAssertEqual(bounded["state"] as? String, "error")
-        XCTAssertNil(bounded["review"])
-        XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
     }
 
+    func testTypedResponsesMatchSharedPopupContract() throws {
+        let revisions = try XCTUnwrap(ExtensionBridge.ProviderRevisions(rawValue: ["ethereum": 2, "solana": 3]))
+        let responses: [String: PopupResponse] = [
+            "queue": .queue(.init(
+                requests: [.init(
+                    id: 91, host: "wallet.example", receivedAt: 1_700_000_000.25, sequence: 1,
+                    requestToken: "00000000-0000-4000-8000-000000000091",
+                    enqueueAttempt: String(repeating: "01", count: 16),
+                    configurationKey: "https://wallet.example", provider: .ethereum, revisions: revisions
+                )],
+                completedResponses: [.init(
+                    id: 92, host: "wallet.example", configurationKey: "https://wallet.example",
+                    requestToken: reviewToken, revisions: revisions
+                )], strings: ["ok": "OK"], layoutDirection: .ltr
+            )),
+            "missing": .approval(.init(id: 91, content: .missing)),
+            "working": .approval(.init(id: 91, host: "wallet.example", content: .working)),
+            "authenticating": .approval(.init(id: 91, host: "wallet.example", content: .authenticating)),
+            "retryError": .approval(.init(id: 91, host: "wallet.example", content: .error(message: "Failed to load", action: .retry))),
+            "rejectError": .approval(.init(id: 91, content: .error(message: "Review unavailable", action: .reject))),
+            "selectAccount": reviewResponse(.selectAccount(.init(
+                accounts: [.init(
+                    display: .init(name: "Primary", croppedAddress: "0x1111…1111"),
+                    walletId: "wallet-1", address: "0x" + String(repeating: "1", count: 40), coin: .ethereum,
+                    derivationPath: "m/44'/60'/0'/0/0", isSelected: true
+                )],
+                networks: [.init(chainId: "0x1", name: "Ethereum", isCustom: false, isSelected: true)],
+                canSelectNetwork: true, allowsEmptySelection: false, emptyMessage: nil, primaryTitle: "Connect"
+            )), title: "Connect Wallet"),
+            "switchAccount": reviewResponse(.switchAccount(.init(
+                accounts: [], networks: nil, canSelectNetwork: false,
+                allowsEmptySelection: true, emptyMessage: "No accounts", primaryTitle: nil
+            )), title: "Switch Account"),
+            "signMessage": reviewResponse(.signMessage(.init(
+                meta: "Hello", account: .init(name: "Primary", croppedAddress: "0x1111…1111", icon: "data:image/png;base64,AA=="),
+                clusterSelection: nil
+            )), title: "Sign Message", iconURL: "https://wallet.example/icon.png"),
+            "solanaSignMessage": reviewResponse(.signMessage(.init(
+                meta: "Transaction", account: .init(name: "Solana", croppedAddress: "1111…1111"),
+                clusterSelection: .init(clusters: [
+                    .init(value: .mainnetBeta, label: "Mainnet", isSelected: false),
+                    .init(value: .devnet, label: "Devnet", isSelected: false),
+                    .init(value: .testnet, label: "Testnet", isSelected: false),
+                ], requiresSelection: true)
+            )), title: "Sign Message"),
+            "addChain": reviewResponse(.addChain(.init(chainName: "Custom", rpcURL: "https://rpc.example")), title: "Add Network"),
+            "legacyTransaction": reviewResponse(.sendTransaction(transactionReview()), title: "Send Transaction",
+                                                actions: [.approve, .reject, .editTransaction, .setTransactionSpeed]),
+            "type2Transaction": reviewResponse(.sendTransaction(transactionReview(type2: true)), title: "Send Transaction",
+                                               actions: [.reject, .resolveApprovalAlert]),
+            "ok": .status(.ok), "ignored": .status(.ignored), "unavailable": .status(.unavailable),
+        ]
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Safari Shared/Tests/fixtures/popup_contract.json")
+        let expected = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        XCTAssertEqual(Set(responses.keys), Set(expected.keys))
+        for (name, response) in responses {
+            let encoded = try JSONEncoder().encode(response)
+            let actual = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? NSDictionary)
+            XCTAssertEqual(actual, expected[name] as? NSDictionary, name)
+        }
+    }
+}
+
+func popupResponseJSON(_ response: PopupResponse) -> [String: Any] {
+    do {
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(response)) as? [String: Any])
+    } catch {
+        XCTFail("Failed to encode popup response: \(error)")
+        return [:]
+    }
 }

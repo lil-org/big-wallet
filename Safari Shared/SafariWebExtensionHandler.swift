@@ -110,7 +110,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             context.cancelRequest(withError: HandlerError.unsupportedOperation)
 #else
             Task { @MainActor in
-                let response: [String: Any]
+                let response: PopupResponse
                 if privateBrowsing {
                     response = await PopupRequestSessions.dispatchPrivateBrowsing(
                         request: request
@@ -121,13 +121,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         profileIdentifier: profileIdentifier
                     )
                 }
-                Self.respond(
-                    with: PopupApprovalStatePresenter.boundedResponse(
-                        response,
-                        for: request
-                    ),
-                    context: context
-                )
+                guard let data = try? PopupResponseEncoder.encode(response, for: request),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    context.cancelRequest(withError: HandlerError.invalidMessage)
+                    return
+                }
+                Self.respond(with: json, context: context)
             }
 #endif
         }

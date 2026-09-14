@@ -1127,12 +1127,6 @@ function applyConfiguration(provider, envelope) {
     return true;
 }
 
-function resultValue(envelope) {
-    return envelope?.result && typeof envelope.result === "object" &&
-        typeof envelope.result.signature === "string"
-        ? envelope.result.signature
-        : envelope.result;
-}
 
 function applyEnvelope(provider, envelope) {
     const state = providerState(provider);
@@ -1204,11 +1198,10 @@ function applyEnvelope(provider, envelope) {
         }
         return state.runtime.resolve(record, true);
     }
-    if (envelope.kind === "batchResult") {
-        if (record.metadata.method !== "signAllTransactions" ||
-            !isArrayNormally(envelope.results) ||
-            envelope.results.length === 0 ||
-            envelope.results.length > maximumTransactionBatchSize) {
+    if (envelope.kind === "result" && record.metadata.method === "signAllTransactions") {
+        if (!isArrayNormally(envelope.result) ||
+            envelope.result.length === 0 ||
+            envelope.result.length > maximumTransactionBatchSize) {
             rejectOperation(
                 provider,
                 record,
@@ -1219,7 +1212,7 @@ function applyEnvelope(provider, envelope) {
         return signedResult(
             provider,
             record,
-            envelope.results,
+            envelope.result,
             envelope.approvalCommitted === true
         );
     }
@@ -1230,7 +1223,7 @@ function applyEnvelope(provider, envelope) {
         );
     }
     if (record.metadata.method === "connect") {
-        const publicKeyValue = envelope.result?.publicKey || envelope.result;
+        const publicKeyValue = envelope.result?.publicKey;
         if (!validPublicKeyString(publicKeyValue)) {
             return state.runtime.reject(
                 record,
@@ -1238,7 +1231,7 @@ function applyEnvelope(provider, envelope) {
             );
         }
         const resultPublicKey = new PublicKey(publicKeyValue);
-        if (envelope.configurationApplied === false) {
+        if (envelope.configurationMatch === false) {
             if (envelope.approvalCommitted === true) {
                 return state.runtime.resolve(record, {
                     publicKey: resultPublicKey,
@@ -1252,7 +1245,7 @@ function applyEnvelope(provider, envelope) {
         }
         const previousPublicKey = state.publicKey?.toString() || null;
         const appliedConfigurationMatches =
-            envelope.configurationApplied === true &&
+            envelope.configurationMatch === true &&
             state.accountRevocationTombstone !== true &&
             state.isConnected === true &&
             previousPublicKey === publicKeyValue;
@@ -1301,7 +1294,7 @@ function applyEnvelope(provider, envelope) {
         }
         return settled;
     }
-    const value = resultValue(envelope);
+    const value = envelope.result;
     if (record.metadata.method === "signMessage" ||
         record.metadata.method === "signTransaction" ||
         record.metadata.method === "signAndSendTransaction") {

@@ -7,7 +7,6 @@ import {
     definePropertyNormally,
     freezeObjectNormally,
     getOwnPropertyDescriptorNormally,
-    isArrayNormally,
     isSafeIntegerNormally,
     hasOwnProperty as hasOwn,
 } from "./intrinsics";
@@ -17,12 +16,7 @@ import BigWalletEthereum, {
     withReadyState as ethereumWithReadyState,
 } from "./ethereum";
 import BigWalletSolana from "./solana";
-import Base58 from "./base58";
-import {
-    decodeProviderErrorData,
-    providerReplacementError,
-} from "./error";
-import {normalizedRPCResponse} from "./rpc_response";
+import {providerReplacementError} from "./error";
 import {
     createStableFacadeRecord,
     reusableStableFacadeRecord,
@@ -31,19 +25,13 @@ import {
 import BigWalletBridgeWire from "../Resources/bridge_wire";
 
 const {
-    APPROVAL_COMMITTED_KEY,
     CONTENT_TO_PAGE_DIRECTION,
-    ETHEREUM_AUTHORIZATION_FAILURE_KEY,
-    ETHEREUM_AUTHORIZATION_FAILURE_VERSION,
     PAGE_TO_CONTENT_DIRECTION,
-    hasExactKeys,
 } = BigWalletBridgeWire;
 
 const isFrozenNormally = Object.isFrozen;
 const postWindowMessageNormally = window.postMessage;
 const addWindowEventListenerNormally = window.addEventListener;
-const maximumEnvelopeItems = 64;
-const malformedConfigurationDelivery = freezeObjectNormally({});
 const stableFacadeAnchorProperty = "bigWalletInpageStableFacadeAnchorV1";
 const stableFacadeProperty = "bigWalletInpageStableFacadeRecord";
 const contentHandlerProperty = "bigWalletInpageContentBridgeHandler";
@@ -127,52 +115,6 @@ function ensureStableFacadeAnchor(record, initialSnapshots) {
     return record;
 }
 
-function boundedArrayLength(value) {
-    if (!isArrayNormally(value)) { return null; }
-    const length = ownValue(value, "length");
-    return isSafeIntegerNormally(length) && length >= 0 &&
-        length <= maximumEnvelopeItems
-        ? length
-        : null;
-}
-
-function validEthereumConfiguration(value) {
-    const chainId = ownValue(value, "chainId");
-    const results = ownValue(value, "results");
-    const count = boundedArrayLength(results);
-    if (!BigWalletBridgeWire.isCanonicalEthereumChainId(chainId) ||
-        count === null) {
-        return false;
-    }
-    for (let index = 0; index < count; index += 1) {
-        if (!hasOwn(results, index) || typeof results[index] !== "string") {
-            return false;
-        }
-    }
-    return true;
-}
-
-function validSolanaPublicKey(value) {
-    if (typeof value !== "string" || value.length === 0) { return false; }
-    try {
-        return Base58.decode(value).length === 32;
-    } catch {
-        return false;
-    }
-}
-
-function validSolanaConfiguration(value) {
-    const publicKey = ownValue(value, "publicKey");
-    if (!validSolanaPublicKey(publicKey)) { return false; }
-    const revision = ownValue(value, "accountRevision");
-    const epoch = ownValue(value, "solanaAuthorizationEpoch");
-    const connected = ownValue(value, "isConnected");
-    return (typeof revision === "undefined" ||
-            isSafeIntegerNormally(revision) && revision >= 0) &&
-        (typeof epoch === "undefined" ||
-            isSafeIntegerNormally(epoch) && epoch >= 0) &&
-        (typeof connected === "undefined" || typeof connected === "boolean");
-}
 
 function sessionUUID() {
     try {
@@ -306,36 +248,6 @@ function malformedError() {
     return {code: -32603, message: "Failed to process provider response"};
 }
 
-function canonicalError(response) {
-    const rawError = ownValue(response, "error");
-    let code;
-    let data;
-    let message;
-    if (rawError && typeof rawError === "object") {
-        code = ownValue(rawError, "code");
-        message = ownValue(rawError, "message");
-        data = ownValue(rawError, "data");
-    } else if (typeof rawError === "string") {
-        message = rawError;
-    }
-    const topCode = ownValue(response, "errorCode");
-    if (!Number.isFinite(code) && Number.isFinite(topCode)) { code = topCode; }
-    if (typeof data === "undefined") {
-        data = decodeProviderErrorData(ownValue(response, "errorDataJSON"));
-    }
-    if (typeof data === "undefined") {
-        const signature = ownValue(response, "errorSignature");
-        if (typeof signature === "string") { data = {signature}; }
-    }
-    const error = {
-        code: Number.isFinite(code) ? code : -32603,
-        message: typeof message === "string"
-            ? message
-            : "Failed to process provider response",
-    };
-    if (typeof data !== "undefined") { error.data = data; }
-    return error;
-}
 
 function applyCanonical(providerName, envelope) {
     try {
@@ -362,11 +274,8 @@ function configurationFor(providerName, value, switchAccount = false) {
         switchAccount = reauthorizationRevision > (current.reauthorizationRevision || 0);
     }
     if (providerName === "ethereum") {
-        const results = ownValue(value, "results");
         const configuredAddress = ownValue(value, "address");
-        const address = isArrayNormally(results) && typeof results[0] === "string"
-            ? results[0]
-            : typeof configuredAddress === "string" ? configuredAddress : "";
+        const address = typeof configuredAddress === "string" ? configuredAddress : "";
         const configuredChainId = ownValue(value, "chainId");
         return {
             ...reauthorization,
@@ -474,169 +383,28 @@ function deliverConfiguration(
     };
 }
 
-function configurationMap(values) {
-    const length = boundedArrayLength(values);
-    if (length === null) { return null; }
-    const result = {ethereum: null, solana: null};
-    for (let index = 0; index < length; index += 1) {
-        if (!hasOwn(values, index)) { return null; }
-        const value = values[index];
-        if (!value || typeof value !== "object") { return null; }
-        const provider = ownValue(value, "provider");
-        if ((provider !== "ethereum" && provider !== "solana") ||
-            result[provider] !== null) {
-            return null;
-        }
-        if (provider === "ethereum"
-            ? !validEthereumConfiguration(value)
-            : !validSolanaConfiguration(value)) {
-            return null;
-        }
-        result[provider] = value;
-    }
-    return result;
-}
-
-function terminalMatchesConfiguration(providerName, response, configuration) {
-    if (!configuration || ownValue(response, "provider") !== providerName) {
-        return false;
-    }
-    const name = ownValue(response, "name");
-    if (providerName === "ethereum") {
-        if (name === "requestAccounts") {
-            const results = ownValue(response, "results");
-            const configured = ownValue(configuration, "results");
-            if (!isArrayNormally(results) || !isArrayNormally(configured)) {
-                return false;
-            }
-            const result = typeof results[0] === "string"
-                ? results[0].toLowerCase()
-                : "";
-            const address = typeof configured[0] === "string"
-                ? configured[0].toLowerCase()
-                : "";
-            return result === address;
-        }
-        return (name === "switchEthereumChain" ||
-                name === "addEthereumChain") &&
-            ownValue(response, "chainId") ===
-                ownValue(configuration, "chainId");
-    }
-    if (name !== "connect") { return false; }
-    let result = ownValue(response, "publicKey");
-    if (typeof result !== "string") {
-        const value = ownValue(response, "result");
-        result = typeof value === "string"
-            ? value
-            : ownValue(value, "publicKey");
-    }
-    return typeof result === "string" &&
-        result === ownValue(configuration, "publicKey");
-}
-
 function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
-    const valuesDescriptor = descriptor(response, "latestConfigurations");
-    if (!valuesDescriptor) { return undefined; }
-    if (!("value" in valuesDescriptor)) {
-        return malformedConfigurationDelivery;
-    }
-    const configurations = configurationMap(valuesDescriptor.value);
-    if (!configurations) { return malformedConfigurationDelivery; }
-    const delivery = {
-        applied: {ethereum: false, solana: false},
-        delivered: false,
-    };
-    if (!ingressIsCurrent(ingressEpoch)) { return delivery; }
-    const switchAccount = ownValue(response, "name") === "switchAccount" &&
-        ownValue(response, "provider") === "multiple";
-    const solanaRevision = ownValue(ownValue(response, "revisions"), "solana");
-    if (!ingressIsCurrent(ingressEpoch)) {
-        delivery.delivered = true;
-        return delivery;
-    }
-    if (configurations.solana === null && suppressUpdate !== true) {
+    const state = response.state;
+    if (!state) { return false; }
+    if (!ingressIsCurrent(ingressEpoch)) { return false; }
+    if (state.solana === null && suppressUpdate !== true) {
         BigWalletSolana.observeDisconnectedConfigurationRevision(
-            solanaProvider,
-            solanaRevision
+            solanaProvider, state.revisions.solana
         );
     }
-    let providerDelivery = deliverConfiguration(
-        "ethereum",
-        configurations.ethereum,
-        switchAccount,
-        suppressUpdate,
-        ingressEpoch
-    );
-    delivery.applied.ethereum = terminalMatchesConfiguration(
-        "ethereum",
-        response,
-        configurations.ethereum
-    );
-    delivery.delivered = providerDelivery.delivered;
-    if (!ingressIsCurrent(ingressEpoch)) { return delivery; }
-    providerDelivery = deliverConfiguration(
-        "solana",
-        configurations.solana,
-        switchAccount,
-        suppressUpdate,
-        ingressEpoch
-    );
-    delivery.applied.solana = terminalMatchesConfiguration(
-        "solana",
-        response,
-        configurations.solana
-    );
-    delivery.delivered = providerDelivery.delivered || delivery.delivered;
-    return delivery;
-}
-
-function canonicalSuccess(
-    providerName,
-    id,
-    name,
-    response,
-    suppressUpdate,
-    configurationApplied,
-    approvalCommitted
-) {
-    const hasResult = hasOwn(response, "result");
-    const hasResults = hasOwn(response, "results");
-    const hasPublicKey = providerName === "solana" && hasOwn(response, "publicKey");
-    if (Number(hasResult) + Number(hasResults) + Number(hasPublicKey) !== 1) {
-        return {error: malformedError(), id, kind: "error", name, suppressUpdate};
-    }
-    if (hasResults) {
-        return providerName === "solana"
-            ? {
-                id,
-                kind: "batchResult",
-                name,
-                results: ownValue(response, "results"),
-                suppressUpdate,
-                configurationApplied,
-                approvalCommitted,
-            }
-            : {
-                id,
-                kind: "result",
-                name,
-                result: ownValue(response, "results"),
-                suppressUpdate,
-                configurationApplied,
-                approvalCommitted,
-            };
-    }
-    return {
-        id,
-        kind: "result",
-        name,
-        result: hasPublicKey
-            ? {publicKey: ownValue(response, "publicKey")}
-            : ownValue(response, "result"),
-        suppressUpdate,
-        configurationApplied,
-        approvalCommitted,
-    };
+    let delivered = deliverConfiguration(
+        "ethereum", state.ethereum, false, suppressUpdate, ingressEpoch
+    ).delivered;
+    if (!ingressIsCurrent(ingressEpoch)) { return delivered; }
+    const solana = state.solana ? {
+        ...state.solana,
+        accountRevision: state.revisions.solana,
+        solanaAuthorizationEpoch: state.revisions.solana,
+    } : null;
+    delivered = deliverConfiguration(
+        "solana", solana, false, suppressUpdate, ingressEpoch
+    ).delivered || delivered;
+    return delivered;
 }
 
 function providerForWireId(id) {
@@ -656,85 +424,6 @@ function rejectMalformedCorrelation(id, name, suppressUpdate, ingressEpoch) {
     });
 }
 
-function deliverDirect(
-    response,
-    inheritedId,
-    suppressUpdate,
-    appliedConfigurations,
-    ingressEpoch
-) {
-    if (!response || typeof response !== "object") { return false; }
-    const claimedProvider = ownValue(response, "provider");
-    const hasOwnId = hasOwn(response, "id");
-    const ownId = ownValue(response, "id");
-    if (hasOwnId &&
-        (!isSafeIntegerNormally(ownId) ||
-            (isSafeIntegerNormally(inheritedId) && ownId !== inheritedId))) {
-        return isSafeIntegerNormally(inheritedId)
-            ? rejectMalformedCorrelation(
-                inheritedId,
-                ownValue(response, "name"),
-                suppressUpdate,
-                ingressEpoch
-            )
-            : false;
-    }
-    const id = hasOwnId ? ownId : inheritedId;
-    const name = ownValue(response, "name");
-    if (!isSafeIntegerNormally(id)) { return false; }
-    const providerName = providerForWireId(id);
-    if (!providerName || claimedProvider !== providerName) {
-        return rejectMalformedCorrelation(
-            id,
-            name,
-            suppressUpdate,
-            ingressEpoch
-        );
-    }
-    let canonical;
-    if (hasOwn(response, "error")) {
-        if (hasOwn(response, "result") || hasOwn(response, "results") ||
-            hasOwn(response, "publicKey")) {
-            canonical = {
-                error: malformedError(),
-                id,
-                kind: "error",
-                name,
-                suppressUpdate,
-            };
-        } else {
-            const error = canonicalError(response);
-            canonical = {
-                authorizationFailure:
-                    ownValue(response, ETHEREUM_AUTHORIZATION_FAILURE_KEY) ===
-                        ETHEREUM_AUTHORIZATION_FAILURE_VERSION ||
-                    (providerName === "solana" && error.code === 4100 &&
-                        typeof ownValue(response, "errorPublicKey") === "string"),
-                error,
-                id,
-                kind: "error",
-                name,
-                suppressUpdate,
-            };
-        }
-    } else {
-        const appliedConfiguration = appliedConfigurations?.[providerName];
-        canonical = canonicalSuccess(
-            providerName,
-            id,
-            name,
-            response,
-            suppressUpdate,
-            appliedConfiguration,
-            ownValue(response, APPROVAL_COMMITTED_KEY) === true
-        );
-    }
-    if (!ingressIsCurrent(ingressEpoch)) {
-        canonical.suppressUpdate = true;
-    }
-    return applyCanonical(providerName, canonical);
-}
-
 function handleContentBridgeMessage(event) {
     const previousIngressEpoch = responseIngressEpoch;
     let data;
@@ -752,31 +441,12 @@ function handleContentBridgeMessage(event) {
         return;
     }
     const kind = ownValue(data, "kind");
-    if (kind === "configurationError") {
-        if (hasExactKeys(data, [
-                "direction", "kind", "providerGeneration",
-            ])) {
-            const error = {
-                code: 4900,
-                message: "Failed to communicate with Big Wallet",
-            };
-            applyCanonical("ethereum", {kind, error});
-            applyCanonical("solana", {kind, error});
-        }
-        return;
-    }
-    const response = ownValue(data, "response");
+    if (kind !== "response" && kind !== "rpc") { return; }
+    const raw = ownValue(data, "response");
     const id = ownValue(data, "id");
+    const response = BigWalletBridgeWire.decodePageResponse(raw, id);
     const suppressUpdate = ownValue(data, "suppressProviderUpdate") === true;
-    let normalizedRPC = null;
-    if (kind === "rpc") {
-        normalizedRPC = normalizedRPCResponse(response, id);
-        if (!normalizedRPC) { return; }
-    } else if (kind !== "response" || !response ||
-        typeof response !== "object" ||
-        ownValue(response, "configurationReadFailed") === true) {
-        return;
-    }
+    if (!response && !isSafeIntegerNormally(id)) { return; }
     let ingressEpoch = previousIngressEpoch;
     let reservedIngress = false;
     if (responseIngressEpoch === previousIngressEpoch) {
@@ -785,92 +455,52 @@ function handleContentBridgeMessage(event) {
         responseIngressEpoch = ingressEpoch;
         reservedIngress = true;
     }
-    const finishIngress = delivered => {
-        if (reservedIngress && !delivered &&
-            responseIngressEpoch === ingressEpoch) {
-            responseIngressEpoch = previousIngressEpoch;
-        }
-    };
     let delivered = false;
     try {
+        if (!response) {
+            delivered = rejectMalformedCorrelation(
+                id, raw && typeof raw === "object" ? ownValue(raw, "name") : null,
+                suppressUpdate, ingressEpoch
+            );
+            return;
+        }
         if (kind === "rpc") {
-            if (providerForWireId(normalizedRPC.id) !== "ethereum") {
-                delivered = rejectMalformedCorrelation(
-                    normalizedRPC.id,
-                    null,
-                    suppressUpdate,
-                    ingressEpoch
-                );
+            if ((response.kind !== "result" && response.kind !== "error") ||
+                response.provider !== "ethereum" || response.name !== null ||
+                providerForWireId(response.id) !== "ethereum" ||
+                response.state !== null || response.configurationMatch !== null) {
+                delivered = rejectMalformedCorrelation(id, null, true, ingressEpoch);
             } else {
-                delivered = applyCanonical(
-                    "ethereum",
-                    hasOwn(normalizedRPC, "result")
-                        ? {
-                            id: normalizedRPC.id,
-                            kind: "result",
-                            name: null,
-                            result: normalizedRPC.result,
-                            suppressUpdate: !ingressIsCurrent(ingressEpoch),
-                        }
-                        : {
-                            error: normalizedRPC.error,
-                            id: normalizedRPC.id,
-                            kind: "error",
-                            name: null,
-                            suppressUpdate: !ingressIsCurrent(ingressEpoch),
-                        }
-                );
+                delivered = applyCanonical("ethereum", {
+                    ...response,
+                    suppressUpdate: true,
+                    authorizationFailure: false,
+                    approvalCommitted: false,
+                });
             }
             return;
         }
-        const configurationDelivery = deliverConfigurations(
-            response,
-            suppressUpdate,
-            ingressEpoch
-        );
-        if (configurationDelivery === malformedConfigurationDelivery) {
-            const responseId = ownValue(response, "id");
-            const correlationId = isSafeIntegerNormally(id)
-                ? id
-                : isSafeIntegerNormally(responseId) ? responseId : null;
-            delivered = correlationId === null
-                ? false
-                : rejectMalformedCorrelation(
-                    correlationId,
-                    ownValue(response, "name"),
-                    suppressUpdate,
-                    ingressEpoch
-                );
-        } else if (typeof configurationDelivery !== "undefined") {
-            delivered = configurationDelivery.delivered;
-            const responseName = ownValue(response, "name");
-            const responseProvider = ownValue(response, "provider");
-            const appliedManualSwitch = responseName === "switchAccount" &&
-                responseProvider === "multiple";
-            if (typeof responseName === "string" &&
-                !appliedManualSwitch &&
-                (isSafeIntegerNormally(id) ||
-                    isSafeIntegerNormally(ownValue(response, "id")))) {
-                const terminalDelivered = deliverDirect(
-                    response,
-                    id,
-                    suppressUpdate,
-                    configurationDelivery.applied,
-                    ingressEpoch
-                );
-                delivered = terminalDelivered || delivered;
-            }
-        } else {
-            delivered = deliverDirect(
-                response,
-                id,
-                suppressUpdate,
-                null,
-                ingressEpoch
-            );
+        if (response.kind === "configurationError") {
+            delivered = applyCanonical("ethereum", response);
+            delivered = applyCanonical("solana", response) || delivered;
+            return;
         }
+        delivered = deliverConfigurations(response, suppressUpdate, ingressEpoch);
+        if (response.kind === "configuration") { return; }
+        if (providerForWireId(response.id) !== response.provider) {
+            delivered = rejectMalformedCorrelation(
+                response.id, response.name, suppressUpdate, ingressEpoch
+            ) || delivered;
+            return;
+        }
+        delivered = applyCanonical(response.provider, {
+            ...response,
+            suppressUpdate: suppressUpdate || !ingressIsCurrent(ingressEpoch),
+        }) || delivered;
     } finally {
-        finishIngress(delivered);
+        if (reservedIngress && !delivered && responseIngressEpoch === ingressEpoch) {
+            responseIngressEpoch = previousIngressEpoch;
+        }
     }
 }
 

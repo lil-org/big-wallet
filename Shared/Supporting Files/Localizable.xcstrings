@@ -24720,6 +24720,286 @@
         }
       }
     },
+    "Review changed. Check the values and apply again." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغيّرت بيانات المراجعة. تحقّق من القيم ثم طبّقها مرة أخرى."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পর্যালোচনার তথ্য পরিবর্তিত হয়েছে। মানগুলি পরীক্ষা করে আবার প্রয়োগ করুন।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les dades de revisió han canviat. Comproveu els valors i torneu-los a aplicar."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Údaje ke kontrole se změnily. Zkontrolujte hodnoty a znovu je použijte."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oplysningerne er ændret. Kontrollér værdierne, og anvend dem igen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Prüfdaten haben sich geändert. Prüfen Sie die Werte und wenden Sie sie erneut an."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Τα στοιχεία ελέγχου άλλαξαν. Ελέγξτε τις τιμές και εφαρμόστε τις ξανά."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review changed. Check the values and apply again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de revisión cambiaron. Compruebe los valores y aplíquelos de nuevo."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de revisión cambiaron. Revise los valores y aplíquelos nuevamente."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tarkistettavat tiedot muuttuivat. Tarkista arvot ja ota ne uudelleen käyttöön."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données à vérifier ont changé. Vérifiez les valeurs et appliquez-les à nouveau."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "સમીક્ષાની વિગતો બદલાઈ છે. મૂલ્યો તપાસો અને ફરી લાગુ કરો."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פרטי הבדיקה השתנו. בדוק את הערכים והחל אותם שוב."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "समीक्षा की जानकारी बदल गई है। मान जाँचें और फिर से लागू करें।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podaci za pregled su promijenjeni. Provjerite vrijednosti i ponovno ih primijenite."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Az ellenőrizendő adatok megváltoztak. Ellenőrizze az értékeket, és alkalmazza őket újra."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detail tinjauan berubah. Periksa nilainya dan terapkan kembali."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dati da verificare sono cambiati. Controlla i valori e applicali di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認内容が変更されました。値を確認して、もう一度適用してください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಪರಿಶೀಲನೆಯ ವಿವರಗಳು ಬದಲಾಗಿವೆ. ಮೌಲ್ಯಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಅನ್ವಯಿಸಿ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "검토 내용이 변경되었습니다. 값을 확인하고 다시 적용하세요."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "അവലോകന വിവരങ്ങൾ മാറി. മൂല്യങ്ങൾ പരിശോധിച്ച് വീണ്ടും പ്രയോഗിക്കുക."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पुनरावलोकनाचे तपशील बदलले आहेत. मूल्ये तपासा आणि पुन्हा लागू करा."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Butiran semakan berubah. Semak nilai dan gunakannya semula."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opplysningene er endret. Kontroller verdiene og bruk dem på nytt."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De te controleren gegevens zijn gewijzigd. Controleer de waarden en pas ze opnieuw toe."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ସମୀକ୍ଷାର ବିବରଣୀ ବଦଳିଛି। ମୂଲ୍ୟଗୁଡ଼ିକ ଯାଞ୍ଚ କରି ପୁଣି ପ୍ରୟୋଗ କରନ୍ତୁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਸਮੀਖਿਆ ਦੇ ਵੇਰਵੇ ਬਦਲ ਗਏ ਹਨ। ਮੁੱਲਾਂ ਦੀ ਜਾਂਚ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਲਾਗੂ ਕਰੋ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dane do sprawdzenia uległy zmianie. Sprawdź wartości i zastosuj je ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dados da revisão mudaram. Confira os valores e aplique-os novamente."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dados da revisão mudaram. Verifique os valores e aplique-os novamente."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datele de verificat s-au schimbat. Verificați valorile și aplicați-le din nou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные изменились. Проверьте значения и примените их снова."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Údaje na kontrolu sa zmenili. Skontrolujte hodnoty a znova ich použite."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podatki za pregled so se spremenili. Preverite vrednosti in jih znova uporabite."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uppgifterna har ändrats. Kontrollera värdena och tillämpa dem igen."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மதிப்பாய்வு விவரங்கள் மாறிவிட்டன. மதிப்புகளைச் சரிபார்த்து மீண்டும் பயன்படுத்தவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "సమీక్ష వివరాలు మారాయి. విలువలను తనిఖీ చేసి మళ్లీ వర్తింపజేయండి."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อมูลที่ต้องตรวจสอบเปลี่ยนไป ตรวจสอบค่าแล้วนำไปใช้อีกครั้ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İnceleme bilgileri değişti. Değerleri kontrol edip yeniden uygulayın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дані змінилися. Перевірте значення та застосуйте їх знову."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جائزے کی تفصیلات بدل گئی ہیں۔ اقدار کی جانچ کریں اور دوبارہ لاگو کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thông tin cần xem lại đã thay đổi. Kiểm tra các giá trị rồi áp dụng lại."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审核内容已更改。请检查数值并再次应用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "審核內容已變更。請檢查數值並再次套用。"
+          }
+        }
+      }
+    },
     "Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry." : {
       "localizations" : {
         "ar" : {

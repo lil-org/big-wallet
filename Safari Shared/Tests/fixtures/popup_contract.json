@@ -1,0 +1,297 @@
+{
+  "queue": {
+    "requests": [
+      {
+        "id": 91,
+        "requestToken": "00000000-0000-4000-8000-000000000091",
+        "enqueueAttempt": "01010101010101010101010101010101",
+        "sequence": 1,
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example",
+        "provider": "ethereum",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "receivedAt": 1700000000.25
+      }
+    ],
+    "completedResponses": [
+      {
+        "id": 92,
+        "requestToken": "00000000-0000-4000-8000-000000000092",
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    ],
+    "strings": {
+      "ok": "OK"
+    },
+    "layoutDirection": "ltr"
+  },
+  "missing": {
+    "id": 91,
+    "state": "missing",
+    "actions": []
+  },
+  "working": {
+    "id": 91,
+    "state": "working",
+    "host": "wallet.example",
+    "actions": []
+  },
+  "authenticating": {
+    "id": 91,
+    "state": "authenticating",
+    "host": "wallet.example",
+    "actions": []
+  },
+  "retryError": {
+    "id": 91,
+    "state": "error",
+    "host": "wallet.example",
+    "error": "Failed to load",
+    "actions": [
+      "retry"
+    ]
+  },
+  "rejectError": {
+    "id": 91,
+    "state": "error",
+    "error": "Review unavailable",
+    "actions": [
+      "reject"
+    ]
+  },
+  "selectAccount": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "approve",
+      "reject"
+    ],
+    "review": {
+      "kind": "selectAccount",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Connect Wallet",
+      "accounts": [
+        {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111",
+          "walletId": "wallet-1",
+          "coin": "ethereum",
+          "address": "0x1111111111111111111111111111111111111111",
+          "derivationPath": "m/44'/60'/0'/0/0",
+          "isSelected": true
+        }
+      ],
+      "canSelectNetwork": true,
+      "allowsEmptySelection": false,
+      "networks": [
+        {
+          "chainId": "0x1",
+          "name": "Ethereum",
+          "isSelected": true,
+          "isCustom": false
+        }
+      ],
+      "primaryTitle": "Connect"
+    }
+  },
+  "switchAccount": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "approve",
+      "reject"
+    ],
+    "review": {
+      "kind": "switchAccount",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Switch Account",
+      "accounts": [],
+      "canSelectNetwork": false,
+      "allowsEmptySelection": true,
+      "emptyMessage": "No accounts"
+    }
+  },
+  "signMessage": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "approve",
+      "reject"
+    ],
+    "review": {
+      "kind": "signMessage",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Sign Message",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111",
+        "icon": "data:image/png;base64,AA=="
+      },
+      "meta": "Hello",
+      "iconURL": "https://wallet.example/icon.png"
+    }
+  },
+  "solanaSignMessage": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "approve",
+      "reject"
+    ],
+    "review": {
+      "kind": "signMessage",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Sign Message",
+      "account": {
+        "name": "Solana",
+        "croppedAddress": "1111…1111"
+      },
+      "meta": "Transaction",
+      "clusters": [
+        {
+          "value": "mainnetBeta",
+          "label": "Mainnet",
+          "isSelected": false
+        },
+        {
+          "value": "devnet",
+          "label": "Devnet",
+          "isSelected": false
+        },
+        {
+          "value": "testnet",
+          "label": "Testnet",
+          "isSelected": false
+        }
+      ],
+      "requiresClusterSelection": true
+    }
+  },
+  "addChain": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "approve",
+      "reject"
+    ],
+    "review": {
+      "kind": "addChain",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Add Network",
+      "chainName": "Custom",
+      "rpcURL": "https://rpc.example"
+    }
+  },
+  "ok": {
+    "status": "ok"
+  },
+  "ignored": {
+    "status": "ignored"
+  },
+  "unavailable": {
+    "status": "unavailable"
+  },
+  "legacyTransaction": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "approve",
+      "reject",
+      "editTransaction",
+      "setTransactionSpeed"
+    ],
+    "review": {
+      "kind": "sendTransaction",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Send Transaction",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111"
+      },
+      "networkName": "Ethereum",
+      "feeLines": [
+        "Fee: 0.001 ETH"
+      ],
+      "phase": "ready",
+      "slider": {
+        "visible": true,
+        "position": 100,
+        "maximum": 200
+      },
+      "balance": "1 ETH",
+      "valueLine": "0.1 ETH",
+      "dataInterpretation": "Transfer",
+      "editor": {
+        "usesEIP1559": false,
+        "nonce": "2",
+        "gasPriceGwei": "10",
+        "suggestedGasPriceGwei": "11"
+      }
+    }
+  },
+  "type2Transaction": {
+    "id": 91,
+    "state": "review",
+    "host": "wallet.example",
+    "actions": [
+      "reject",
+      "resolveApprovalAlert"
+    ],
+    "review": {
+      "kind": "sendTransaction",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Send Transaction",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111"
+      },
+      "networkName": "Ethereum",
+      "feeLines": [
+        "Fee: 0.001 ETH"
+      ],
+      "phase": "reviewingFees",
+      "slider": {
+        "visible": true,
+        "position": 100,
+        "maximum": 200
+      },
+      "editorRequestToken": 1,
+      "editor": {
+        "usesEIP1559": true,
+        "nonce": "2",
+        "maxPriorityFeePerGasGwei": "1",
+        "maxFeePerGasGwei": "20",
+        "suggestedMaxPriorityFeePerGasGwei": "2",
+        "suggestedMaxFeePerGasGwei": "22"
+      },
+      "alert": {
+        "title": "Fees updated",
+        "message": "Review the fees",
+        "actions": [
+          {
+            "title": "OK",
+            "action": "acknowledge"
+          },
+          {
+            "title": "Edit",
+            "action": "edit"
+          }
+        ]
+      }
+    }
+  }
+}
