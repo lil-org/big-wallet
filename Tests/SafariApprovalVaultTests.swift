@@ -1194,6 +1194,156 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testHostStartDefersContendedReconciliationAndCoalescesRetries() throws {
+        let url = temporaryURL()
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock"))
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: MemoryApprovalKeyStore())
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        var retries = [DispatchWorkItem]()
+        var sourceReads = 0
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            scheduleReconciliationRetry: { retries.append($0) },
+            sourceSnapshot: {
+                sourceReads += 1
+                return source
+            }
+        )
+        let lease = try vault.acquireCoordinationLease()
+        defer { lease.release() }
+
+        let startedAt = ContinuousClock.now
+        host.start()
+        host.start()
+        host.reconcile()
+        host.reconcile()
+        XCTAssertLessThan(startedAt.duration(to: .now), .seconds(1))
+        XCTAssertEqual(sourceReads, 0)
+        XCTAssertEqual(retries.count, 1)
+        XCTAssertNil(vault.catalogAccess())
+
+        retries[0].perform()
+        XCTAssertEqual(sourceReads, 0)
+        XCTAssertEqual(retries.count, 2)
+        retries[0].perform()
+        XCTAssertEqual(retries.count, 2)
+
+        lease.release()
+        retries[1].perform()
+        XCTAssertEqual(sourceReads, 1)
+        XCTAssertNotNil(vault.catalogAccess())
+        host.start()
+        XCTAssertEqual(sourceReads, 1)
+    }
+
+    @MainActor
+    func testForegroundReconciliationRetriesAfterMainActorReleasesExecutionLease()
+        async throws {
+        let url = temporaryURL()
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock"))
+        }
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: MemoryApprovalKeyStore(),
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        let reconciled = expectation(description: "Reconciled after execution lease release")
+        var sourceReads = 0
+        let host = SafariApprovalVaultHost(
+            vault: vault,
+            defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            sourceSnapshot: {
+                XCTAssertTrue(Thread.isMainThread)
+                sourceReads += 1
+                if sourceReads == 2 { reconciled.fulfill() }
+                return source
+            }
+        )
+        host.start()
+        let original = try XCTUnwrap(vault.catalogAccess()?.catalogIdentity)
+        let accessValue = await vault.unlock(reason: "Approve")
+        let access = try XCTUnwrap(accessValue)
+        let leaseValue = await access.takeExecutionLease()
+        let lease = try XCTUnwrap(leaseValue)
+        defer { lease.release() }
+
+        let startedAt = ContinuousClock.now
+        host.reconcile()
+        XCTAssertLessThan(startedAt.duration(to: .now), .seconds(1))
+        XCTAssertEqual(sourceReads, 1)
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, original)
+
+        await Task { @MainActor in lease.release() }.value
+        await fulfillment(of: [reconciled], timeout: 2)
+        XCTAssertEqual(sourceReads, 2)
+        XCTAssertEqual(vault.catalogAccess()?.catalogIdentity, original)
+    }
+
+    @MainActor
+    func testSuccessfulHostWorkCancelsDeferredReconciliation() throws {
+        for mutate in [false, true] {
+            let url = temporaryURL()
+            defer {
+                try? FileManager.default.removeItem(at: url)
+                try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock"))
+            }
+            let vault = SafariApprovalVault(fileURL: url, keyStore: MemoryApprovalKeyStore())
+            let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let source = try fixture().source
+            var retries = [DispatchWorkItem]()
+            var sourceReads = 0
+            let host = SafariApprovalVaultHost(
+                vault: vault,
+                defaults: defaults,
+                integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+                scheduleReconciliationRetry: { retries.append($0) },
+                sourceSnapshot: {
+                    sourceReads += 1
+                    return source
+                }
+            )
+            host.start()
+            let lease = try vault.acquireCoordinationLease()
+            defer { lease.release() }
+            host.reconcile()
+            let retry = try XCTUnwrap(retries.first)
+            XCTAssertEqual(retries.count, 1)
+            lease.release()
+
+            if mutate {
+                try host.performSourceMutation {
+                    XCTAssertNil(vault.catalogAccess())
+                }
+            } else {
+                host.reconcile()
+            }
+            XCTAssertTrue(retry.isCancelled)
+            XCTAssertEqual(sourceReads, 2)
+            retry.perform()
+            XCTAssertEqual(sourceReads, 2)
+            XCTAssertNotNil(vault.catalogAccess())
+        }
+    }
+
     func testHostKeepsGenerationStableUntilSynchronousMutationBoundary()
         throws {
         let url = temporaryURL()

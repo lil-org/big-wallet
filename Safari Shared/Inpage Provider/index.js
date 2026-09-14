@@ -548,9 +548,16 @@ function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
     if (!ingressIsCurrent(ingressEpoch)) { return delivery; }
     const switchAccount = ownValue(response, "name") === "switchAccount" &&
         ownValue(response, "provider") === "multiple";
+    const solanaRevision = ownValue(ownValue(response, "revisions"), "solana");
     if (!ingressIsCurrent(ingressEpoch)) {
         delivery.delivered = true;
         return delivery;
+    }
+    if (configurations.solana === null && suppressUpdate !== true) {
+        BigWalletSolana.observeDisconnectedConfigurationRevision(
+            solanaProvider,
+            solanaRevision
+        );
     }
     let providerDelivery = deliverConfiguration(
         "ethereum",

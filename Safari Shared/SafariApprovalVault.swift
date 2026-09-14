@@ -758,6 +758,17 @@ final class SafariApprovalVault {
         )
     }
 
+    func tryAcquireCoordinationLease() throws -> CoordinationLease? {
+        let coordinationLock = CrossProcessFileLock(
+            fileURL: coordinationLockURL
+        )
+        guard try coordinationLock.tryAcquire() else { return nil }
+        return CoordinationLease(
+            owner: ObjectIdentifier(self),
+            lock: coordinationLock
+        )
+    }
+
     private func writeTombstoneLocked() throws {
         guard let fileURL else { throw Error.unavailable }
         do {
@@ -1033,6 +1044,7 @@ final class SafariApprovalVaultHost {
     }
 
     typealias SynchronizeDefaults = (UserDefaults) -> Bool
+    typealias ScheduleReconciliationRetry = (DispatchWorkItem) -> Void
 
     static let shared = SafariApprovalVaultHost()
 
@@ -1041,8 +1053,10 @@ final class SafariApprovalVaultHost {
     private let integrityKeyStore: SafariApprovalIntegrityKeyStoring
     private let synchronizeDefaults: SynchronizeDefaults
     private let sourceSnapshot: () throws -> SafariApprovalSourceSnapshot?
+    private let scheduleReconciliationRetry: ScheduleReconciliationRetry
     private let lock = NSRecursiveLock()
     private var isStarted = false
+    private var reconciliationRetry: (id: UUID, work: DispatchWorkItem)?
 
     init(
         vault: SafariApprovalVault = .shared,
@@ -1053,12 +1067,16 @@ final class SafariApprovalVaultHost {
         synchronizeDefaults: @escaping SynchronizeDefaults = {
             $0.synchronize()
         },
+        scheduleReconciliationRetry: @escaping ScheduleReconciliationRetry = {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100), execute: $0)
+        },
         sourceSnapshot: (() throws -> SafariApprovalSourceSnapshot?)? = nil
     ) {
         self.vault = vault
         self.defaults = defaults
         self.integrityKeyStore = integrityKeyStore
         self.synchronizeDefaults = synchronizeDefaults
+        self.scheduleReconciliationRetry = scheduleReconciliationRetry
         self.sourceSnapshot = sourceSnapshot ?? {
             try walletsManager.safariApprovalSourceSnapshot()
         }
@@ -1069,28 +1087,51 @@ final class SafariApprovalVaultHost {
         defer { lock.unlock() }
         guard !isStarted else { return }
         isStarted = true
-        guard let coordinationLease = acquireCoordinationLease()
-        else { return }
-        defer { coordinationLease.release() }
-        reconcileLocked(coordinationLease: coordinationLease)
+        reconcileIfAvailableLocked()
     }
 
     func reconcile() {
         lock.lock()
         defer { lock.unlock() }
-        guard let coordinationLease = acquireCoordinationLease()
-        else { return }
-        defer { coordinationLease.release() }
-        reconcileLocked(coordinationLease: coordinationLease)
+        reconcileIfAvailableLocked()
     }
 
-    private func acquireCoordinationLease() -> SafariApprovalVault.CoordinationLease? {
+    private func reconcileIfAvailableLocked() {
         do {
-            return try vault.acquireCoordinationLease()
+            guard let coordinationLease = try vault.tryAcquireCoordinationLease() else {
+                scheduleReconciliationRetryLocked()
+                return
+            }
+            defer { coordinationLease.release() }
+            cancelReconciliationRetryLocked()
+            reconcileLocked(coordinationLease: coordinationLease)
         } catch {
+            cancelReconciliationRetryLocked()
             SafariApprovalDiagnostics.record("acquire coordination lock", error: error)
-            return nil
         }
+    }
+
+    private func scheduleReconciliationRetryLocked() {
+        guard reconciliationRetry == nil else { return }
+        let id = UUID()
+        let work = DispatchWorkItem { [weak self] in
+            self?.retryReconciliation(id: id)
+        }
+        reconciliationRetry = (id, work)
+        scheduleReconciliationRetry(work)
+    }
+
+    private func retryReconciliation(id: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard reconciliationRetry?.id == id else { return }
+        reconciliationRetry = nil
+        reconcileIfAvailableLocked()
+    }
+
+    private func cancelReconciliationRetryLocked() {
+        reconciliationRetry?.work.cancel()
+        reconciliationRetry = nil
     }
 
     func performSourceMutation<Result>(
@@ -1111,6 +1152,7 @@ final class SafariApprovalVaultHost {
         )
         let result = try operation()
         reconcileLocked(coordinationLease: coordinationLease)
+        cancelReconciliationRetryLocked()
         return result
     }
 

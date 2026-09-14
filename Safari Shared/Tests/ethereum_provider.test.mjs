@@ -5211,6 +5211,323 @@ test("late combined Solana connect never undoes a newer disconnect", async () =>
     }
 });
 
+test("Solana disconnect records revocation despite its own configuration revision", async () => {
+    for (const broadcastFirst of [false, true]) {
+        const harness = inpageHarness();
+        dispatchConfigurations(harness);
+        const disconnecting = harness.window.solana.disconnect();
+        const request = pageMessages(harness, "disconnect", "solana").at(-1);
+        const configuration = {
+            latestConfigurations: [],
+            revisions: {ethereum: 0, solana: 1},
+        };
+        if (broadcastFirst) {
+            harness.dispatch({kind: "response", response: configuration});
+        }
+        dispatchProviderResponse(harness, {
+            ...configuration,
+            id: request.message.id,
+            name: "revokePermissions",
+            provider: "solana",
+            result: null,
+        });
+
+        assert.equal(await disconnecting, true);
+        assert.equal(harness.window.solana.accountRevocationTombstone, true);
+        dispatchConfigurations(harness, {
+            publicKey: firstSolanaKey,
+            accountRevision: 2,
+            solanaAuthorizationEpoch: 2,
+        });
+        assert.equal(harness.window.solana.publicKey, null);
+        assert.equal(harness.window.solana.isConnected, false);
+        assert.deepEqual(normalized(harness.registeredWallets[0].accounts), []);
+    }
+});
+
+test("newer disconnected Solana revisions fence stale committed connects", async () => {
+    for (const initiallyConnected of [false, true]) {
+        for (const standard of [false, true]) {
+            const harness = inpageHarness();
+            dispatchConfigurations(harness, initiallyConnected ? {
+                accountRevision: 1,
+                publicKey: firstSolanaKey,
+                solanaAuthorizationEpoch: 1,
+            } : {});
+            const dispatchDisconnected = solana => harness.dispatch({
+                kind: "response",
+                response: {
+                    latestConfigurations: [],
+                    revisions: {ethereum: 0, solana},
+                },
+            });
+            dispatchDisconnected(3);
+            const wallet = harness.registeredWallets[0];
+            const changes = [];
+            const accountChanges = [];
+            let connects = 0;
+            wallet.features["standard:events"].on("change", change => {
+                changes.push(change);
+            });
+            harness.window.solana.on("accountChanged", key => {
+                accountChanges.push(key);
+            });
+            harness.window.solana.on("connect", () => { connects += 1; });
+            const connecting = standard
+                ? wallet.features["standard:connect"].connect()
+                : harness.window.solana.connect();
+            const request = pageMessages(harness, "request", "solana").at(-1);
+            const before = harness.window.bigWalletInpageStableFacadeRecord
+                .snapshots().solana;
+
+            dispatchDisconnected(6);
+            const disconnected = harness.window.bigWalletInpageStableFacadeRecord
+                .snapshots().solana;
+            harness.dispatch({
+                id: request.message.id,
+                kind: "response",
+                suppressProviderUpdate: true,
+                response: {
+                    __bwApprovalCommitted: true,
+                    name: "connect",
+                    provider: "solana",
+                    publicKey: firstSolanaKey,
+                },
+            });
+
+            const result = await connecting;
+            if (standard) {
+                assert.deepEqual(normalized(result), {accounts: []});
+            } else {
+                assert.equal(result.publicKey.toString(), firstSolanaKey);
+            }
+            assert.deepEqual(
+                harness.window.bigWalletInpageStableFacadeRecord.snapshots().solana,
+                disconnected
+            );
+            assert.equal(disconnected.accountRevision, before.accountRevision);
+            assert.equal(
+                disconnected.solanaAuthorizationEpoch,
+                before.solanaAuthorizationEpoch
+            );
+            assert.equal(disconnected.accountRevocationTombstone, initiallyConnected);
+            assert.equal(harness.window.solana.publicKey, null);
+            assert.equal(harness.window.solana.isConnected, false);
+            assert.deepEqual(normalized(wallet.accounts), []);
+            assert.equal(connects, 0);
+            assert.deepEqual(accountChanges, []);
+            assert.deepEqual(changes, []);
+        }
+    }
+});
+
+test("Solana disconnect callbacks can start an authoritative reconnect", async () => {
+    for (const event of ["accountChanged", "disconnect", "standard:change"]) {
+        const harness = inpageHarness();
+        dispatchConfigurations(harness, {
+            accountRevision: 1,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        });
+        const wallet = harness.registeredWallets[0];
+        const standard = event === "standard:change";
+        const changes = [];
+        const accountChanges = [];
+        let connects = 0;
+        let disconnects = 0;
+        let connecting = null;
+        const reconnect = () => {
+            if (connecting !== null) { return; }
+            connecting = standard
+                ? wallet.features["standard:connect"].connect()
+                : harness.window.solana.connect();
+        };
+        wallet.features["standard:events"].on("change", change => {
+            changes.push(change.accounts.map(account => account.address));
+            if (standard && change.accounts.length === 0) { reconnect(); }
+        });
+        harness.window.solana.on("accountChanged", key => {
+            accountChanges.push(key?.toString() || null);
+            if (event === "accountChanged" && key === null) { reconnect(); }
+        });
+        harness.window.solana.on("disconnect", () => {
+            disconnects += 1;
+            if (event === "disconnect") { reconnect(); }
+        });
+        harness.window.solana.on("connect", () => { connects += 1; });
+        harness.dispatch({
+            kind: "response",
+            response: {
+                latestConfigurations: [],
+                revisions: {ethereum: 0, solana: 6},
+            },
+        });
+        const request = pageMessages(harness, "request", "solana").at(-1);
+        assert.ok(request);
+        dispatchProviderResponse(harness, {
+            __bwApprovalCommitted: true,
+            id: request.message.id,
+            latestConfigurations: [{
+                accountRevision: 7,
+                provider: "solana",
+                publicKey: firstSolanaKey,
+                solanaAuthorizationEpoch: 7,
+            }],
+            revisions: {ethereum: 0, solana: 7},
+            name: "connect",
+            provider: "solana",
+            publicKey: firstSolanaKey,
+        });
+
+        const result = await connecting;
+        if (standard) {
+            assert.deepEqual(
+                normalized(result.accounts.map(account => account.address)),
+                [firstSolanaKey]
+            );
+        } else {
+            assert.equal(result.publicKey.toString(), firstSolanaKey);
+        }
+        assert.equal(harness.window.solana.publicKey?.toString(), firstSolanaKey);
+        assert.equal(harness.window.solana.isConnected, true);
+        assert.equal(harness.window.solana.accountRevocationTombstone, false);
+        assert.deepEqual(
+            normalized(wallet.accounts.map(account => account.address)),
+            [firstSolanaKey]
+        );
+        assert.equal(connects, 1);
+        assert.equal(disconnects, 1);
+        assert.deepEqual(accountChanges, [null, firstSolanaKey]);
+        assert.deepEqual(normalized(changes), [[], [firstSolanaKey]]);
+    }
+});
+
+test("Ethereum account callbacks can reconnect Solana during a combined disconnected snapshot", async () => {
+    for (const disconnectInCallback of [false, true]) {
+        for (const standard of [false, true]) {
+            const harness = inpageHarness();
+            dispatchConfigurations(harness, {
+                accountRevision: 1,
+                publicKey: firstSolanaKey,
+                solanaAuthorizationEpoch: 1,
+            });
+            if (!disconnectInCallback) {
+                harness.dispatch({
+                    kind: "response",
+                    response: {
+                        latestConfigurations: [],
+                        revisions: {ethereum: 0, solana: 3},
+                    },
+                });
+            }
+            const wallet = harness.registeredWallets[0];
+            const changes = [];
+            const accountChanges = [];
+            let connects = 0;
+            let disconnects = 0;
+            let connecting = null;
+            wallet.features["standard:events"].on("change", change => {
+                changes.push(change.accounts.map(account => account.address));
+            });
+            harness.window.solana.on("accountChanged", key => {
+                accountChanges.push(key?.toString() || null);
+            });
+            harness.window.solana.on("connect", () => { connects += 1; });
+            harness.window.solana.on("disconnect", () => { disconnects += 1; });
+            harness.window.ethereum.on("accountsChanged", accounts => {
+                if (connecting !== null || accounts.length === 0) { return; }
+                if (disconnectInCallback) {
+                    harness.window.solana.externalDisconnect();
+                }
+                connecting = standard
+                    ? wallet.features["standard:connect"].connect()
+                    : harness.window.solana.connect();
+            });
+            const ethereumConfiguration = {
+                chainId: "0x1",
+                provider: "ethereum",
+                results: ["0x1111111111111111111111111111111111111111"],
+            };
+            harness.dispatch({
+                kind: "response",
+                response: {
+                    latestConfigurations: [ethereumConfiguration],
+                    revisions: {ethereum: 1, solana: 6},
+                },
+            });
+            const request = pageMessages(harness, "request", "solana").at(-1);
+            assert.ok(request);
+            dispatchProviderResponse(harness, {
+                __bwApprovalCommitted: true,
+                id: request.message.id,
+                latestConfigurations: [ethereumConfiguration, {
+                    accountRevision: 7,
+                    provider: "solana",
+                    publicKey: firstSolanaKey,
+                    solanaAuthorizationEpoch: 7,
+                }],
+                revisions: {ethereum: 1, solana: 7},
+                name: "connect",
+                provider: "solana",
+                publicKey: firstSolanaKey,
+            });
+
+            const result = await connecting;
+            if (standard) {
+                assert.deepEqual(
+                    normalized(result.accounts.map(account => account.address)),
+                    [firstSolanaKey]
+                );
+            } else {
+                assert.equal(result.publicKey.toString(), firstSolanaKey);
+            }
+            assert.equal(harness.window.solana.publicKey?.toString(), firstSolanaKey);
+            assert.equal(harness.window.solana.isConnected, true);
+            assert.equal(harness.window.solana.accountRevocationTombstone, false);
+            assert.deepEqual(
+                normalized(wallet.accounts.map(account => account.address)),
+                [firstSolanaKey]
+            );
+            assert.equal(connects, 1);
+            assert.equal(disconnects, disconnectInCallback ? 1 : 0);
+            assert.deepEqual(accountChanges, disconnectInCallback
+                ? [null, firstSolanaKey] : [firstSolanaKey]);
+            assert.deepEqual(normalized(changes), disconnectInCallback
+                ? [[], [firstSolanaKey]] : [[firstSolanaKey]]);
+        }
+    }
+});
+
+test("Ethereum revision drift leaves a current suppressed Solana connect authoritative", async () => {
+    const harness = inpageHarness();
+    const dispatchDisconnected = ethereum => harness.dispatch({
+        kind: "response",
+        response: {
+            latestConfigurations: [],
+            revisions: {ethereum, solana: 3},
+        },
+    });
+    dispatchDisconnected(0);
+    const connecting = harness.window.solana.connect();
+    const request = pageMessages(harness, "request", "solana").at(-1);
+    dispatchDisconnected(2);
+    harness.dispatch({
+        id: request.message.id,
+        kind: "response",
+        suppressProviderUpdate: true,
+        response: {
+            __bwApprovalCommitted: true,
+            name: "connect",
+            provider: "solana",
+            publicKey: firstSolanaKey,
+        },
+    });
+
+    assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
+    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
+    assert.equal(harness.window.solana.isConnected, true);
+});
+
 test("committed combined Solana connect preserves a reentrant disconnect", async () => {
     const harness = inpageHarness();
     dispatchConfigurations(harness);

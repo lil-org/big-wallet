@@ -9,6 +9,7 @@ import {
     freezeObjectNormally,
     getOwnPropertyDescriptorNormally,
     isArrayNormally,
+    isSafeIntegerNormally,
     MapConstructor,
     getWeakMapValue,
     setWeakMapValue,
@@ -243,6 +244,7 @@ class PublicKey {
 function authorizationSnapshot(state) {
     return {
         accountRevision: state.accountRevision,
+        disconnectedConfigurationRevision: state.disconnectedConfigurationRevision,
         publicKey: state.publicKey?.toString() || null,
         solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
     };
@@ -253,6 +255,18 @@ function authorizationMatches(state, authorization) {
         authorization.accountRevision === state.accountRevision &&
         authorization.publicKey === (state.publicKey?.toString() || null) &&
         authorization.solanaAuthorizationEpoch === state.solanaAuthorizationEpoch;
+}
+
+function observeDisconnectedConfigurationRevision(provider, revision) {
+    const state = providerState(provider);
+    if (!state || state.runtime.phase === "retired" ||
+        !isSafeIntegerNormally(revision) || revision < 0) {
+        return false;
+    }
+    if (revision > state.disconnectedConfigurationRevision) {
+        state.disconnectedConfigurationRevision = revision;
+    }
+    return true;
 }
 
 function incrementRevision(state) {
@@ -1247,7 +1261,9 @@ function applyEnvelope(provider, envelope) {
                 publicKey: state.publicKey,
             });
         }
-        if (!authorizationMatches(state, record.metadata.authorization)) {
+        if (!authorizationMatches(state, record.metadata.authorization) ||
+            record.metadata.authorization.disconnectedConfigurationRevision !==
+                state.disconnectedConfigurationRevision) {
             if (envelope.approvalCommitted === true) {
                 return state.runtime.resolve(record, {
                     publicKey: resultPublicKey,
@@ -1389,6 +1405,7 @@ class BigWalletSolana extends EventEmitter {
         const authorization = initialAuthorization(initialState);
         setProviderState(this, {
             activeDisconnect: null,
+            disconnectedConfigurationRevision: 0,
             generation: providerGeneration,
             runtime: new OperationRuntime(providerGeneration, {
                 firstWireId: 2,
@@ -1846,6 +1863,8 @@ class BigWalletSolana extends EventEmitter {
 
 BigWalletSolana.applyEnvelope = applyEnvelope;
 BigWalletSolana.retire = retire;
+BigWalletSolana.observeDisconnectedConfigurationRevision =
+    observeDisconnectedConfigurationRevision;
 BigWalletSolana.snapshot = snapshot;
 BigWalletSolana.isReady = isReady;
 
