@@ -547,6 +547,39 @@ function openRecoveryPopup(worker, native) {
     };
 }
 
+test("released content polls receive reload errors for both providers", async () => {
+    const harness = makeHarness();
+    assert.equal(await harness.dispatch({
+        subject: "message-to-wallet",
+        message: {
+            id: 7, name: "requestAccounts", provider: "ethereum",
+            body: {address: "", chainId: "0x1"},
+            host: "wallet.example", favicon: "",
+        },
+        host: "wallet.example", navigate: true, confirm: false,
+    }), undefined);
+    for (const id of [7, 7.5, Number.MAX_SAFE_INTEGER + 1]) {
+        const response = await harness.dispatch({
+            id, subject: "getResponse", host: "wallet.example",
+            navigate: false, confirm: false,
+        });
+        assert.equal(response.id, id);
+        assert.equal(response.provider, "multiple");
+        assert.deepEqual(clone(response.providersToDisconnect), []);
+        assert.deepEqual(clone(response.bodies).map(body => body.provider),
+            ["ethereum", "solana"]);
+        for (const body of response.bodies) {
+            assert.equal(body.errorCode, -32603);
+            assert.match(body.error, /Reload this page/);
+        }
+    }
+    for (const id of [undefined, null, "7", true, NaN, Infinity]) {
+        assert.equal(await harness.dispatch({subject: "getResponse", id}), undefined);
+    }
+    assert.equal(harness.nativeMessages.length, 0);
+    assert.equal(harness.storageWrites.length, 0);
+});
+
 test("registers one production listener and ignores malformed envelopes", async () => {
     const harness = makeHarness();
     assert.equal(await harness.dispatch(null), undefined);

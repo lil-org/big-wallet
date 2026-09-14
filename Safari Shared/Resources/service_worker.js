@@ -1667,6 +1667,19 @@ async function broadcastConfigurationChanged(configurationKey, configurationStat
 
 async function handleMessage(request, sender) {
     if (!WIRE.isRecord(request)) { return undefined; }
+    if (request.subject === "getResponse" && request.workflowVersion === undefined) {
+        if (!Number.isFinite(request.id)) { return undefined; }
+        return {
+            id: request.id,
+            provider: "multiple",
+            bodies: ["ethereum", "solana"].map(provider => ({
+                provider,
+                error: "Big Wallet was updated. Reload this page to continue.",
+                errorCode: -32603,
+            })),
+            providersToDisconnect: [],
+        };
+    }
     switch (request.subject) {
     case "rpc":
         return handleRPC(request, sender);
