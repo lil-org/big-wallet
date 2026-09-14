@@ -693,55 +693,45 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
         while !Task.isCancelled,
               DispatchTime.now().uptimeNanoseconds < deadline {
-            switch await Self.bridge.readResponse(
-                id: handle.id,
-                configurationKey: configurationKey,
-                requestToken: handle.requestToken,
-                profileIdentifier: handle.profileIdentifier
-            ) {
-            case .response, .missing:
-                return true
-            case .pending:
-                switch await Self.bridge.load(handle: handle) {
-                case .found(let snapshot):
-                    if snapshot.phase == .queued,
-                       Date() >= initialContext.executionDeadline {
-                        _ = await Self.bridge.clearNativeExecutionContext(
-                            handle: handle,
-                            expected: initialContext
-                        )
-                        return false
-                    }
-                    if case .queued(_, .staged(let approval)) = snapshot.state,
-                       approval.receipt == nil {
-                        _ = await Self.bridge.clearNativeExecutionContext(
-                            handle: handle,
-                            expected: initialContext
-                        )
-                        return false
-                    }
-                    let now = DispatchTime.now().uptimeNanoseconds
-                    if case .queued(_, .staged) = snapshot.state,
-                       now >= nextDeliveryCheck {
-                        guard await ensureNativeApprovalDeliveryIfNeeded(
-                            handle: handle,
-                            mode: mode
-                        ) else {
-                            _ = await Self.bridge.clearNativeExecutionContext(
-                                handle: handle,
-                                expected: initialContext
-                            )
-                            return false
-                        }
-                        nextDeliveryCheck = now.addingReportingOverflow(
-                            1_000_000_000
-                        ).partialValue
-                    }
-                case .missing:
-                    return true
-                case .unavailable:
-                    break
+            switch await Self.bridge.load(handle: handle) {
+            case .found(let snapshot):
+                guard snapshot.configurationKey == configurationKey,
+                      snapshot.phase != .responded else { return true }
+                if snapshot.phase == .queued,
+                   Date() >= initialContext.executionDeadline {
+                    _ = await Self.bridge.clearNativeExecutionContext(
+                        handle: handle,
+                        expected: initialContext
+                    )
+                    return false
                 }
+                if case .queued(_, .staged(let approval)) = snapshot.state,
+                   approval.receipt == nil {
+                    _ = await Self.bridge.clearNativeExecutionContext(
+                        handle: handle,
+                        expected: initialContext
+                    )
+                    return false
+                }
+                let now = DispatchTime.now().uptimeNanoseconds
+                if case .queued(_, .staged) = snapshot.state,
+                   now >= nextDeliveryCheck {
+                    guard await ensureNativeApprovalDeliveryIfNeeded(
+                        handle: handle,
+                        mode: mode
+                    ) else {
+                        _ = await Self.bridge.clearNativeExecutionContext(
+                            handle: handle,
+                            expected: initialContext
+                        )
+                        return false
+                    }
+                    nextDeliveryCheck = now.addingReportingOverflow(
+                        1_000_000_000
+                    ).partialValue
+                }
+            case .missing:
+                return true
             case .unavailable:
                 break
             }
