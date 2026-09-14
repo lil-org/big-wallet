@@ -38,7 +38,8 @@ extension WalletAccount {
         case .ethereum:
             return Blockies(seed: address.lowercased()).createImage()
         case .solana:
-            return SolanaAccountIcon.image(seed: address, logo: Images.solana)
+            guard let logo = PlatformSpecificImage(named: "solana") else { return nil }
+            return SolanaAccountIcon.image(seed: address, logo: logo)
         }
     }
     
@@ -90,20 +91,37 @@ private enum SolanaAccountIcon {
             whiteLogo.draw(in: logoRect(for: logo.size), blendMode: .normal, alpha: logoAlpha)
         }
         #elseif os(macOS)
-        let image = NSImage(size: canvasSize)
-        image.lockFocus()
+        // Drawn into a backing store rather than lockFocus so it also works in the Safari
+        // extension, which has no window to inherit a scale from.
+        let scale = 2
+        guard let context = CGContext(data: nil,
+                                      width: Int(canvasSize.width) * scale,
+                                      height: Int(canvasSize.height) * scale,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return NSImage(size: canvasSize)
+        }
+        context.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
 
-        backgroundColor(seed: seed).setFill()
-        NSBezierPath(rect: NSRect(origin: .zero, size: canvasSize)).fill()
+        context.setFillColor(backgroundColor(seed: seed).cgColor)
+        context.fill(CGRect(origin: .zero, size: canvasSize))
 
-        let whiteLogo = whiteLogoImage(from: logo)
-        whiteLogo.draw(in: logoRect(for: logo.size),
-                       from: .zero,
-                       operation: .sourceOver,
-                       fraction: logoAlpha)
+        if let logoImage = logo.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let rect = logoRect(for: logo.size)
+            context.saveGState()
+            context.setAlpha(logoAlpha)
+            context.clip(to: rect, mask: logoImage)
+            context.setFillColor(CGColor(gray: 1, alpha: 1))
+            context.fill(rect)
+            context.restoreGState()
+        }
 
-        image.unlockFocus()
-        return image
+        guard let cgImage = context.makeImage() else {
+            return NSImage(size: canvasSize)
+        }
+        return NSImage(cgImage: cgImage, size: canvasSize)
         #endif
     }
 
@@ -135,21 +153,6 @@ private enum SolanaAccountIcon {
         let blue = CGFloat(hex & 0xFF) / 255
         return PlatformSpecificColor(red: red, green: green, blue: blue, alpha: 1)
     }
-
-    #if os(macOS)
-    private static func whiteLogoImage(from logo: NSImage) -> NSImage {
-        let image = NSImage(size: logo.size)
-        image.lockFocus()
-
-        let rect = NSRect(origin: .zero, size: logo.size)
-        logo.draw(in: rect)
-        NSColor.white.setFill()
-        rect.fill(using: .sourceAtop)
-
-        image.unlockFocus()
-        return image
-    }
-    #endif
 
 }
 

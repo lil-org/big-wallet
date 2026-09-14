@@ -404,7 +404,7 @@
         <!--Window Controller-->
         <scene sceneID="R2V-B0-nI4">
             <objects>
-                <windowController storyboardIdentifier="initial" showSeguePresentationStyle="single" id="B8D-0N-5wS" sceneMemberID="viewController">
+                <windowController storyboardIdentifier="initial" showSeguePresentationStyle="single" id="B8D-0N-5wS" customClass="WalletWindowController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <window key="window" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" animationBehavior="default" tabbingMode="disallowed" titlebarAppearsTransparent="YES" titleVisibility="hidden" id="IQv-IB-iLA">
                         <windowStyleMask key="styleMask" titled="YES" closable="YES"/>
                         <rect key="contentRect" x="561" y="342" width="250" height="350"/>
@@ -446,7 +446,7 @@
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" id="bI7-hT-bS8">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
-                                    <string key="title">import 
+                                    <string key="title">import
 wallet</string>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1459,7 +1459,7 @@ DQ
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" id="PuW-b2-Okp">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
-                                    <string key="title">edit 
+                                    <string key="title">edit
 accounts</string>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>

@@ -8,19 +8,16 @@ protocol SafariRequestBody {
 
 struct SafariRequest {
 
-    private static let appRequestURLPrefix = "bigwallet://safari?request="
-    private static let webRequestURLPrefix = "https://lil.org/extension?query="
-    private static let requestURLPrefixes = [appRequestURLPrefix, webRequestURLPrefix]
-
     let id: Int
     let name: String
     let provider: InpageProvider
     let body: Body
     let host: String
+    let configurationKey: String
     let favicon: String?
-#if os(macOS)
-    let ambientAgent: [String: String]?
-#endif
+    let enqueueAttempt: String
+    let admissionDeadline: Date
+    let workflowVersion: Int
     
     enum Body {
         case unknown(Unknown)
@@ -39,38 +36,40 @@ struct SafariRequest {
         }
     }
     
-    static func appRequestURL(query: String) -> URL? {
-        return URL(string: appRequestURLPrefix + query)
+    init?(data: Data) {
+        guard let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+            return nil
+        }
+        self.init(json: json)
     }
 
-    init?(appRequestURLString: String) {
-        guard appRequestURLString.hasPrefix(Self.appRequestURLPrefix) else { return nil }
-        self.init(query: String(appRequestURLString.dropFirst(Self.appRequestURLPrefix.count)))
-    }
-
-    init?(urlString: String) {
-        guard let prefix = Self.requestURLPrefixes.first(where: { urlString.hasPrefix($0) }) else { return nil }
-        self.init(query: String(urlString.dropFirst(prefix.count)))
-    }
-
-    init?(query: String) {
-        guard let parametersString = query.removingPercentEncoding,
-              let data = parametersString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
-        else { return nil }
-        
+    init?(json: [String: Any]) {
         guard let id = json["id"] as? Int,
               let name = json["name"] as? String,
               let jsonBody = json["body"] as? [String: Any],
-              let host = json["host"] as? String
+              let providerValue = json["provider"] as? String,
+              let provider = InpageProvider(rawValue: providerValue),
+              provider != .multiple,
+              let host = json["host"] as? String,
+              let configurationKey = json["configurationKey"] as? String,
+              let enqueueAttempt = json["enqueueAttempt"] as? String,
+              let admissionDeadlineValue = json["admissionDeadline"],
+              CFGetTypeID(admissionDeadlineValue as CFTypeRef) != CFBooleanGetTypeID(),
+              let admissionDeadlineMilliseconds = admissionDeadlineValue as? Int,
+              admissionDeadlineMilliseconds > 0,
+              admissionDeadlineMilliseconds <= 9_007_199_254_740_991,
+              let workflowVersion = json["workflowVersion"] as? Int
         else { return nil }
         
         self.id = id
         self.name = name
         self.host = host
-#if os(macOS)
-        self.ambientAgent = AmbientAgentTerminationRequest.userInfo(in: json)
-#endif
+        self.configurationKey = configurationKey
+        self.enqueueAttempt = enqueueAttempt
+        self.admissionDeadline = Date(
+            timeIntervalSince1970: TimeInterval(admissionDeadlineMilliseconds) / 1_000
+        )
+        self.workflowVersion = workflowVersion
         
         if let favicon = json["favicon"] as? String, !favicon.isEmpty {
             if favicon.hasPrefix("//") {
@@ -88,7 +87,6 @@ struct SafariRequest {
             self.favicon = nil
         }
         
-        let provider = InpageProvider(rawValue: json["provider"] as? String ?? "") ?? .unknown
         self.provider = provider
         
         var body: Body?

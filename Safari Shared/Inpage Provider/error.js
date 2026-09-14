@@ -2,6 +2,13 @@
 
 "use strict";
 
+import BigWalletBridgeWire from "../Resources/bridge_wire";
+
+const {
+    PROVIDER_REPLACED_ERROR_CODE,
+    PROVIDER_REPLACED_MESSAGE,
+} = BigWalletBridgeWire;
+
 class ProviderRpcError extends Error {
     constructor(code, message, data) {
         super();
@@ -90,9 +97,17 @@ function normalizeSolanaProviderError(error, code, data) {
     return normalizeProviderError(error, code, data, solanaPolicy);
 }
 
+function providerReplacementError() {
+    return new ProviderRpcError(
+        PROVIDER_REPLACED_ERROR_CODE,
+        PROVIDER_REPLACED_MESSAGE
+    );
+}
+
 export {
     decodeProviderErrorData,
     normalizeEthereumProviderError,
     normalizeSolanaProviderError,
+    providerReplacementError,
 };
 export default ProviderRpcError;

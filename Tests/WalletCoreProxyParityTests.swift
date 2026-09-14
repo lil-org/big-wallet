@@ -122,7 +122,6 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
             "App iOS",
             "App macOS",
             "App visionOS",
-            "Big Wallet Ambient",
             "Safari iOS",
             "Safari macOS",
             "Safari Shared",
@@ -669,7 +668,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.hexString(rawSignature), Vectors.ethereumHelloRawWalletCoreSignature)
         XCTAssertEqual(batchSignatures, [rawSignature])
         XCTAssertEqual(try XCTUnwrap(privateKey.sign(digests: [Data](), coin: .ethereum)), [])
-        XCTAssertEqual(try Ethereum.shared.sign(data: Vectors.ethereumHelloRawSignDigest, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(data: Vectors.ethereumHelloRawSignDigest, privateKey: privateKey),
                        Vectors.ethereumHelloRawSignature)
         XCTAssertNil(privateKey.sign(digest: Data([1, 2, 3]), coin: .ethereum))
     }
@@ -732,7 +731,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
 
         let batchSignatures = try XCTUnwrap(privateKey.sign(digests: messages, coin: .solana))
         let directBatchSignatures = try XCTUnwrap(Ed25519.sign(messages: messages, seed: Vectors.solanaSigningPrivateKey))
-        let encodedBatchSignatures = try XCTUnwrap(Solana.shared.sign(messageDataList: messages, privateKey: privateKey))
+        let encodedBatchSignatures = try XCTUnwrap(Solana.sign(messageDataList: messages, privateKey: privateKey))
         let singleSignatures = try messages.map { message in
             try XCTUnwrap(privateKey.sign(digest: message, coin: .solana))
         }
@@ -742,7 +741,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(encodedBatchSignatures.count, messages.count)
         XCTAssertEqual(singleSignatures.count, messages.count)
         XCTAssertEqual(try XCTUnwrap(privateKey.sign(digests: [Data](), coin: .solana)), [])
-        XCTAssertEqual(try XCTUnwrap(Solana.shared.sign(messageDataList: [], privateKey: privateKey)), [])
+        XCTAssertEqual(try XCTUnwrap(Solana.sign(messageDataList: [], privateKey: privateKey)), [])
         XCTAssertNil(Ed25519.sign(messages: messages, seed: Data()))
 
         for signatures in [batchSignatures, directBatchSignatures, singleSignatures] {
@@ -761,20 +760,20 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         let signature = try XCTUnwrap(privateKey.sign(digest: Vectors.solanaMessage, coin: .solana))
 
         try assertValidSolanaSignature(signature, message: Vectors.solanaMessage, publicKeyHex: Vectors.upstreamSolanaPublicKey)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
                                        message: Vectors.solanaMessage,
                                        publicKeyHex: Vectors.upstreamSolanaPublicKey)
     }
 
     func testEthereumPersonalSigningAndRecoveryMatchWalletCoreVector() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
-        let signatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumPersonalMessage, privateKey: privateKey)
-        let emptySignatureHex = try Ethereum.shared.signPersonalMessage(data: Data(), privateKey: privateKey)
-        let binarySignatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumBinaryPersonalMessage, privateKey: privateKey)
-        let newlineSignatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumNewlinePersonalMessage, privateKey: privateKey)
-        let tenByteSignatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumTenBytePersonalMessage, privateKey: privateKey)
-        let hundredByteSignatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumHundredBytePersonalMessage, privateKey: privateKey)
-        let longSignatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumLongPersonalMessage, privateKey: privateKey)
+        let signatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumPersonalMessage, privateKey: privateKey)
+        let emptySignatureHex = try Ethereum.signPersonalMessage(data: Data(), privateKey: privateKey)
+        let binarySignatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumBinaryPersonalMessage, privateKey: privateKey)
+        let newlineSignatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumNewlinePersonalMessage, privateKey: privateKey)
+        let tenByteSignatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumTenBytePersonalMessage, privateKey: privateKey)
+        let hundredByteSignatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumHundredBytePersonalMessage, privateKey: privateKey)
+        let longSignatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumLongPersonalMessage, privateKey: privateKey)
         let signature = try XCTUnwrap(WalletCrypto.hexData(String(signatureHex.dropFirst(2))))
         let emptySignature = try XCTUnwrap(WalletCrypto.hexData(String(emptySignatureHex.dropFirst(2))))
         let binarySignature = try XCTUnwrap(WalletCrypto.hexData(String(binarySignatureHex.dropFirst(2))))
@@ -809,40 +808,40 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
     func testEthereumRawAndTypedSigningMatchMigrationVectors() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
 
-        XCTAssertEqual(try Ethereum.shared.sign(data: Vectors.ethereumRawSignDigest, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(data: Vectors.ethereumRawSignDigest, privateKey: privateKey),
                        Vectors.ethereumRawSignature)
-        XCTAssertEqual(try Ethereum.shared.sign(data: Vectors.ethereumMaxRawSignDigest, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(data: Vectors.ethereumMaxRawSignDigest, privateKey: privateKey),
                        Vectors.ethereumMaxRawSignature)
         XCTAssertNil(privateKey.sign(digest: Vectors.ethereumZeroRawSignDigest, coin: .ethereum))
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.typedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.typedDataJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.typedDataMinifiedJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.typedDataMinifiedJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.typedDataReorderedJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.typedDataReorderedJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.permitTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.permitTypedDataJSON, privateKey: privateKey),
                        Vectors.permitTypedDataSignature)
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.complexTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.complexTypedDataJSON, privateKey: privateKey),
                        Vectors.complexTypedDataSignature)
-        XCTAssertThrowsError(try Ethereum.shared.sign(data: Data([1, 2, 3]), privateKey: privateKey)) {
+        XCTAssertThrowsError(try Ethereum.sign(data: Data([1, 2, 3]), privateKey: privateKey)) {
             guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for short raw signing input, got \($0)")
                 return
             }
         }
-        XCTAssertThrowsError(try Ethereum.shared.sign(data: Vectors.ethereumZeroRawSignDigest, privateKey: privateKey)) {
+        XCTAssertThrowsError(try Ethereum.sign(data: Vectors.ethereumZeroRawSignDigest, privateKey: privateKey)) {
             guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for zero raw signing input, got \($0)")
                 return
             }
         }
-        XCTAssertThrowsError(try Ethereum.shared.sign(data: Vectors.ethereumOverlongRawSignDigest, privateKey: privateKey)) {
+        XCTAssertThrowsError(try Ethereum.sign(data: Vectors.ethereumOverlongRawSignDigest, privateKey: privateKey)) {
             guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for overlong raw signing input, got \($0)")
                 return
             }
         }
-        XCTAssertThrowsError(try Ethereum.shared.sign(typedData: Vectors.malformedTypedDataJSON, privateKey: privateKey)) {
+        XCTAssertThrowsError(try Ethereum.sign(typedData: Vectors.malformedTypedDataJSON, privateKey: privateKey)) {
             guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for malformed typed data, got \($0)")
                 return
@@ -1575,8 +1574,8 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
         XCTAssertNil(invalidEthereumKey.sign(digests: [Vectors.ethereumRawSignDigest], coin: .ethereum))
         XCTAssertNil(invalidSolanaKey.sign(digest: Vectors.solanaMessage, coin: .solana))
         XCTAssertNil(invalidSolanaKey.sign(digests: [Vectors.solanaMessage], coin: .solana))
-        XCTAssertNil(Solana.shared.sign(messageDataList: [], privateKey: invalidSolanaKey))
-        XCTAssertNil(Solana.shared.sign(messageDataList: [Vectors.solanaMessage], privateKey: invalidSolanaKey))
+        XCTAssertNil(Solana.sign(messageDataList: [], privateKey: invalidSolanaKey))
+        XCTAssertNil(Solana.sign(messageDataList: [Vectors.solanaMessage], privateKey: invalidSolanaKey))
         XCTAssertEqual(WalletCrypto.previewDerivationIndex(derivationPath: "m/44'/60'/0'/0/2147483648",
                                                            coin: .ethereum),
                        0)
@@ -2826,15 +2825,15 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
     func testTypedDataSigningRejectsMalformedShapesAndOutOfRangeIntegersAndAcceptsStringChainIDs() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
 
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.decimalStringChainIDTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.decimalStringChainIDTypedDataJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.hexStringChainIDTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try Ethereum.sign(typedData: Vectors.hexStringChainIDTypedDataJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertNoThrow(try Ethereum.shared.sign(typedData: Vectors.negativeZeroTypedDataJSON, privateKey: privateKey))
-        XCTAssertNoThrow(try Ethereum.shared.sign(typedData: Vectors.shortFixedBytesTypedDataJSON, privateKey: privateKey),
+        XCTAssertNoThrow(try Ethereum.sign(typedData: Vectors.negativeZeroTypedDataJSON, privateKey: privateKey))
+        XCTAssertNoThrow(try Ethereum.sign(typedData: Vectors.shortFixedBytesTypedDataJSON, privateKey: privateKey),
                          "WalletCore accepts undersized odd-length EIP-712 bytesN values")
         for fixture in Vectors.invalidTypedDataJSONFixtures {
-            XCTAssertThrowsError(try Ethereum.shared.sign(typedData: fixture.json, privateKey: privateKey), fixture.name) {
+            XCTAssertThrowsError(try Ethereum.sign(typedData: fixture.json, privateKey: privateKey), fixture.name) {
                 guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                     XCTFail("Expected failedToSign for \(fixture.name), got \($0)")
                     return
@@ -2845,7 +2844,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
             ("uint8 overflow", Vectors.uint8OverflowTypedDataJSON),
             ("int8 underflow", Vectors.int8UnderflowTypedDataJSON),
         ] {
-            XCTAssertThrowsError(try Ethereum.shared.sign(typedData: fixture.1, privateKey: privateKey), fixture.0) {
+            XCTAssertThrowsError(try Ethereum.sign(typedData: fixture.1, privateKey: privateKey), fixture.0) {
                 guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                     XCTFail("Expected failedToSign for \(fixture.0), got \($0)")
                     return
@@ -3280,7 +3279,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
 
     func testRecoverEthereumAddressRejectsMalformedInputs() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
-        var signatureHex = try Ethereum.shared.signPersonalMessage(data: Vectors.ethereumPersonalMessage, privateKey: privateKey)
+        var signatureHex = try Ethereum.signPersonalMessage(data: Vectors.ethereumPersonalMessage, privateKey: privateKey)
         signatureHex.removeFirst(2)
         let signature = try XCTUnwrap(WalletCrypto.hexData(signatureHex))
         let hash = WalletCrypto.keccak256(data: Data("\u{19}Ethereum Signed Message:\n3Foo".utf8))
@@ -3317,7 +3316,7 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         XCTAssertEqual(Solana.shared.decodeMessage(binaryBase58, asHex: false), Vectors.solanaBinaryMessage)
         XCTAssertEqual(Solana.shared.decodeTransactionMessage(binaryBase58), Vectors.solanaBinaryMessage)
         XCTAssertEqual(Solana.shared.decodeMessage(binaryHex, asHex: true), Vectors.solanaBinaryMessage)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
                                        message: Vectors.solanaBinaryMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         try assertValidSolanaSignature(Solana.shared.sign(message: binaryBase58, asHex: false, privateKey: privateKey),
@@ -3326,7 +3325,7 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         try assertValidSolanaSignature(Solana.shared.sign(message: binaryHex, asHex: true, privateKey: privateKey),
                                        message: Vectors.solanaBinaryMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
-        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaLongMessage, privateKey: privateKey),
+        try assertValidSolanaSignature(Solana.sign(messageData: Vectors.solanaLongMessage, privateKey: privateKey),
                                        message: Vectors.solanaLongMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         try assertValidSolanaSignature(Solana.shared.sign(message: longBase58, asHex: false, privateKey: privateKey),

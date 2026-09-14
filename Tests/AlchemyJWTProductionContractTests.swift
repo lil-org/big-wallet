@@ -477,6 +477,55 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
         )
     }
 
+    func testAmbientHelperBuildPhasesAreAssignedToExpectedTargets() throws {
+        let project = try Self.repositoryText(
+            at: "Wallet.xcodeproj/project.pbxproj"
+        )
+        let phase = try Self.projectObject(
+            commented: "Copy Embedded Ambient Agent",
+            in: project
+        )
+        let nativeTargets = try Self.projectSection(
+            named: "PBXNativeTarget",
+            in: project
+        )
+        let extensionTarget = try Self.projectObject(
+            commented: "Safari macOS",
+            in: nativeTargets
+        )
+        let appTarget = try Self.projectObject(
+            commented: "Big Wallet",
+            in: nativeTargets
+        )
+        XCTAssertEqual(
+            Self.objectReferenceIDs(
+                commented: "Copy Embedded Ambient Agent",
+                in: extensionTarget
+            ).count,
+            1
+        )
+        XCTAssertTrue(Self.objectReferenceIDs(
+            commented: "Copy Embedded Ambient Agent",
+            in: appTarget
+        ).isEmpty)
+        let cleanupPhase = try Self.projectObject(
+            commented: "Clean Legacy Ambient Helpers",
+            in: project
+        )
+        XCTAssertTrue(cleanupPhase.contains("cleanup-legacy"))
+        XCTAssertEqual(Self.objectReferenceIDs(
+            commented: "Clean Legacy Ambient Helpers",
+            in: appTarget
+        ).count, 1)
+        XCTAssertEqual(
+            Self.occurrenceCount(
+                of: "/bin/sh \\\"$PROJECT_DIR/Scripts/embed_ambient_helper.sh\\\"\\n",
+                in: phase
+            ),
+            1
+        )
+    }
+
     func testCommittedProofKeyFingerprintIsCanonical() throws {
         let fingerprintURL = Self.repositoryRoot.appendingPathComponent(
             "Scripts/alchemy_jwt_request_proof_key.sha256"

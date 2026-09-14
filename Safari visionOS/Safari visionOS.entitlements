@@ -8,6 +8,7 @@
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
+		<string>$(AppIdentifierPrefix)org.lil.wallet.safari-approval</string>
 		<string>$(AppIdentifierPrefix)org.lil.wallet.rpc-auth</string>
 	</array>
 </dict>

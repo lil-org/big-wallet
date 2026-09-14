@@ -1,9 +1,8 @@
 // ∅ 2026 lil org
 
+import Foundation
+
 enum DappRequestAction {
-    case none
-    case justShowApp
-    case showMessage(message: String, subtitle: String, completion: (() -> Void)?)
     case switchAccount(SelectAccountAction)
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)
@@ -11,22 +10,28 @@ enum DappRequestAction {
     case addEthereumChain(AddEthereumChainAction)
 }
 
+enum DappRequestPreparation {
+    case response(ResponseToExtension)
+    case approval(DappRequestAction)
+}
+
+struct PreparedBroadcast {
+    let recoveryResponse: ResponseToExtension
+    let send: () async -> ResponseToExtension
+}
+
+enum DappExecutionResult {
+    case response(ResponseToExtension)
+    case broadcast(PreparedBroadcast)
+}
+
 struct SelectAccountAction {
-    let peer: PeerMeta?
     let coinType: WalletCoin?
-    var selectedAccounts: Set<SpecificWalletAccount>
+    let selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
-    var network: EthereumNetwork?
-    let source: Source
-    let completion: (EthereumNetwork?, [SpecificWalletAccount]?) -> Void
-    
-    enum Source {
-        case walletConnect, safariExtension
-    }
+    let network: EthereumNetwork?
 
     var canSelectEthereumNetwork: Bool {
-        guard source != .walletConnect else { return false }
-
         if let coinType {
             return coinType == .ethereum
         }
@@ -34,33 +39,47 @@ struct SelectAccountAction {
         return initiallyConnectedProviders.contains(.ethereum) ||
             selectedAccounts.contains { $0.account.coin == .ethereum }
     }
-
-    func canSubmitSelection(network: EthereumNetwork?) -> Bool {
-        guard !selectedAccounts.isEmpty else { return false }
-        let needsEthereumNetwork = selectedAccounts.contains { $0.account.coin == .ethereum }
-        return !needsEthereumNetwork || network != nil
-    }
 }
 
 struct SignMessageAction {
+    enum Payload {
+        case ethereumMessage(Data)
+        case ethereumPersonalMessage(Data)
+        case ethereumTypedData(String)
+        case solanaMessage(Data)
+        case solanaTransaction(SolanaPreparedTransactionMessage)
+        case solanaTransactions([SolanaPreparedTransactionMessage])
+        case solanaLegacyBroadcast(
+            Solana.PreparedLegacySignAndSendTransaction,
+            Solana.PreparedSendOptions
+        )
+        case solanaSerializedBroadcast(
+            Solana.PreparedSerializedTransaction,
+            Solana.PreparedSendOptions
+        )
+    }
+
     let subject: ApprovalSubject
     let walletId: String
     let account: WalletAccount
     let meta: String
-    let peerMeta: PeerMeta
-    private(set) var solanaClusterSelection: SolanaClusterSelection? = nil
-    let completion: (Bool) -> Void
+    let payload: Payload
+
+    var solanaClusterOptions: SolanaClusterOptions? {
+        switch payload {
+        case .solanaLegacyBroadcast(_, let options),
+             .solanaSerializedBroadcast(_, let options):
+            return SolanaClusterOptions(suggestedCluster: options.clusterHint)
+        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData,
+             .solanaMessage, .solanaTransaction, .solanaTransactions:
+            return nil
+        }
+    }
 }
 
-final class SolanaClusterSelection {
-    var selectedCluster: Solana.Cluster?
+struct SolanaClusterOptions {
     let suggestedCluster: Solana.Cluster?
-    let clusters = Solana.Cluster.allCases
-
-    var selectedClusterDescription: String? {
-        guard let selectedCluster else { return nil }
-        return description(for: selectedCluster)
-    }
+    var clusters: [Solana.Cluster] { Solana.Cluster.allCases }
 
     func description(for cluster: Solana.Cluster) -> String {
         var components = [
@@ -72,23 +91,23 @@ final class SolanaClusterSelection {
         }
         return components.joined(separator: " - ")
     }
-
-    init(selectedCluster: Solana.Cluster? = nil, suggestedCluster: Solana.Cluster? = nil) {
-        self.selectedCluster = selectedCluster
-        self.suggestedCluster = suggestedCluster
-    }
 }
 
 struct SendTransactionAction {
     let transaction: Transaction
-    let chain: EthereumNetwork
+    let resolvedNetwork: ResolvedEthereumNetwork
     let walletId: String
     let account: WalletAccount
-    let peerMeta: PeerMeta
-    let completion: (Transaction?) -> Void
+
+    var chain: EthereumNetwork {
+        return resolvedNetwork.network
+    }
+
+    var rpcSource: RPCSource {
+        return resolvedNetwork.source
+    }
 }
 
 struct AddEthereumChainAction {
     let chainToAdd: EthereumNetworkFromDapp
-    let completion: (Bool) -> Void
 }

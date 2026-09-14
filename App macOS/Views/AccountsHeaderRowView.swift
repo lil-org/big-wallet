@@ -71,6 +71,10 @@ class AccountsHeaderRowView: NSTableRowView {
         }
     }
     
+    func cancelMenuTracking() {
+        titleButton.menu?.cancelTrackingWithoutAnimation()
+    }
+
     @objc private func didClickEditName() {
         headerDelegate?.didClickEditName(sender: self)
     }

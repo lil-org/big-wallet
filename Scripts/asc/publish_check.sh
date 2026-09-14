@@ -11,6 +11,10 @@ case "$_asc_entrypoint_source" in
 esac
 source "$_asc_entrypoint_directory/common.sh"
 unset _asc_entrypoint_source _asc_entrypoint_directory
+
+platform="${1:-${PLATFORM:-IOS}}"
+validate_macos_app_sandbox_information_confirmation "$platform"
+
 . "$REPO_ROOT/Scripts/inpage_provider_toolchain.sh"
 
 require_cmd xcodebuild

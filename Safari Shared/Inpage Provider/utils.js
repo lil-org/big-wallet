@@ -5,10 +5,6 @@
 import { Buffer } from "buffer";
 
 class Utils {
-    static genId() {
-        return new Date().getTime() + Math.floor(Math.random() * 1000);
-    }
-    
     static messageToBuffer(message) {
         var buffer = Buffer.from([]);
         try {

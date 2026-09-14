@@ -76,20 +76,31 @@ struct NetworksListView: View {
     private func networkSection(networks: [EthereumNetwork], title: String? = nil) -> some View {
         Section(header: title.map { Text($0) }) {
             ForEach(networks, id: \.self) { network in
-                HStack {
-                    Text(network.name)
-                    Spacer()
+                Button {
                     if selectedNetwork?.chainId == network.chainId {
-                        Image.checkmark.foregroundStyle(.tint)
+                        selectedNetwork = nil
+                    } else {
+                        selectedNetwork = network
                     }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
-                    .onTapGesture {
+                } label: {
+                    HStack {
+                        Text(network.name)
+                        Spacer()
                         if selectedNetwork?.chainId == network.chainId {
-                            selectedNetwork = nil
-                        } else {
-                            selectedNetwork = network
+                            Image.checkmark
+                                .foregroundStyle(.tint)
+                                .accessibilityHidden(true)
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(
+                    selectedNetwork?.chainId == network.chainId
+                        ? .isSelected
+                        : []
+                )
             }
         }
     }

@@ -11,7 +11,6 @@ protocol AccountTableViewCellDelegate: AnyObject {
 class AccountTableViewCell: UITableViewCell {
 
     private weak var cellDelegate: AccountTableViewCellDelegate?
-    private let disabledAlpha: CGFloat = 0.35
 
     let moreButton: UIButton = ButtonWithExtendedArea(type: .system)
     let avatarImageView = UIImageView()
@@ -27,28 +26,13 @@ class AccountTableViewCell: UITableViewCell {
         configureView()
     }
     
-    func setup(title: String, image: UIImage?, isDisabled: Bool, customSelectionStyle: Bool, isSelected: Bool, delegate: AccountTableViewCellDelegate) {
-        selectionStyle = customSelectionStyle ? .none : .blue
-        
+    func setup(title: String, image: UIImage?, delegate: AccountTableViewCellDelegate) {
         cellDelegate = delegate
         avatarImageView.image = image
         titleLabel.text = title
-        setDisabled(isDisabled)
-        
-        if isDisabled {
-            backgroundColor = .secondarySystemGroupedBackground.withAlphaComponent(disabledAlpha)
-        } else if isSelected {
-            backgroundColor = .tintColor
-        } else {
-            backgroundColor = .secondarySystemGroupedBackground
-        }
-        
-        titleLabel.textColor = isSelected ? .white : .label
-        moreButton.tintColor = isSelected ? .white : .tintColor
-    }
-    
-    private func setDisabled(_ disabled: Bool) {
-        contentView.alpha = disabled ? disabledAlpha : 1
+        backgroundColor = .secondarySystemGroupedBackground
+        titleLabel.textColor = .label
+        moreButton.tintColor = .tintColor
     }
     
     @IBAction func moreButtonTapped(_ sender: Any) {

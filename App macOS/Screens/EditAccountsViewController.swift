@@ -11,7 +11,7 @@ class EditAccountsViewController: NSViewController {
     
     var wallet: WalletContainer!
     var getBackToRect: CGRect?
-    var selectAccountAction: SelectAccountAction?
+    var accountSelection: NativeAccountSelectionSession?
 
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
@@ -20,7 +20,7 @@ class EditAccountsViewController: NSViewController {
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
-    private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
+    private var previewCoin: WalletCoin? { accountSelection?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -54,12 +54,25 @@ class EditAccountsViewController: NSViewController {
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
-        let newCellModels = previewAccounts.map { account in
+        let applicableAccounts = previewAccounts.filter { account in
+            previewCoin == nil || account.coin == previewCoin
+        }
+        let newCellModels = applicableAccounts.map { account in
             let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
         cellModels.append(contentsOf: newCellModels)
         updateOkButtonState()
+    }
+
+    static func insertionRange(
+        previousCount: Int,
+        currentCount: Int
+    ) -> Range<Int>? {
+        guard previousCount >= 0, currentCount > previousCount else {
+            return nil
+        }
+        return previousCount..<currentCount
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
@@ -78,7 +91,7 @@ class EditAccountsViewController: NSViewController {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             showAccountsList()
         } catch {
-            Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
+            presentMessageAlert(Strings.somethingWentWrong, style: .informational)
         }
     }
     
@@ -86,7 +99,7 @@ class EditAccountsViewController: NSViewController {
         invalidatePreviewAccounts()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.selectAccountAction = selectAccountAction
+        accountsListViewController.accountSelection = accountSelection
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }
@@ -109,7 +122,7 @@ class EditAccountsViewController: NSViewController {
 
     private func resetPreviewAccounts() {
         previewPager?.invalidate()
-        let previewPager = walletsManager.previewAccountsPager(wallet: wallet, coin: previewCoin)
+        let previewPager = walletsManager.previewAccountsPager(wallet: wallet)
         self.previewPager = previewPager
         toggledIndexes.removeAll()
         cellModels.removeAll()
@@ -194,14 +207,18 @@ class EditAccountsViewController: NSViewController {
     
     private func previewMoreAccountsIfNeeded() {
         guard let previewPager else { return }
-        previewPager.previewMoreIfNeeded { [weak self, weak previewPager] previewAccounts, range in
+        previewPager.previewMoreIfNeeded { [weak self, weak previewPager] previewAccounts, _ in
             guard let self,
                   let previewPager,
                   self.previewPager === previewPager
             else { return }
 
+            let previousCount = self.cellModels.count
             self.appendPreviewAccounts(previewAccounts)
-            if !previewAccounts.isEmpty {
+            if let range = Self.insertionRange(
+                previousCount: previousCount,
+                currentCount: self.cellModels.count
+            ) {
                 self.tableView.insertRows(at: IndexSet(integersIn: range))
             }
         }
@@ -217,6 +234,21 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
         toggleAccount(at: row)
     }
     
+}
+
+extension EditAccountsViewController: NativeApprovalReviewTeardown {
+
+    func invalidateNativeApprovalReview() {
+        invalidatePreviewAccounts()
+        accountSelection?.invalidate()
+        NotificationCenter.default.removeObserver(
+            self,
+            name: .walletsChanged,
+            object: nil
+        )
+        endAllSheets()
+    }
+
 }
 
 extension EditAccountsViewController: NSTableViewDelegate {

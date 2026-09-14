@@ -10,7 +10,7 @@ enum TransactionPreparationFailure: Swift.Error, Equatable {
     case unsafeFees
 }
 
-enum EthereumSendFailure: Swift.Error, Equatable {
+enum EthereumSendFailure: Swift.Error, Equatable, Sendable {
     case invalidTransaction
     case failedToSign
     case rpc(EthereumRPCError)
@@ -82,27 +82,30 @@ struct Ethereum {
         request()
     }
     
-    func sign(data: Data, privateKey: WalletPrivateKey) throws -> String {
+    static func sign(data: Data, privateKey: WalletPrivateKey) throws -> String {
         return try sign(digest: data, privateKey: privateKey)
     }
     
-    func signPersonalMessage(data: Data, privateKey: WalletPrivateKey) throws -> String {
+    static func signPersonalMessage(
+        data: Data,
+        privateKey: WalletPrivateKey
+    ) throws -> String {
         guard let digest = prefixedDataHash(data: data) else { throw Error.failedToSign }
         return try sign(digest: digest, privateKey: privateKey)
     }
     
     func recover(signature: Data, message: Data) -> String? {
-        guard let hash = prefixedDataHash(data: message) else { return nil }
+        guard let hash = Self.prefixedDataHash(data: message) else { return nil }
         return WalletCrypto.recoverEthereumAddress(signature: signature, messageHash: hash)
     }
     
-    private func prefixedDataHash(data: Data) -> Data? {
+    private static func prefixedDataHash(data: Data) -> Data? {
         let prefixString = "\u{19}Ethereum Signed Message:\n" + String(data.count)
         guard let prefixData = prefixString.data(using: .utf8) else { return nil }
         return WalletCrypto.keccak256(parts: [prefixData, data])
     }
     
-    private func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
+    private static func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
         guard var signed = privateKey.sign(digest: digest, coin: .ethereum),
               signed.count == 65,
               signed[64] <= 1 else { throw Error.failedToSign }
@@ -110,7 +113,7 @@ struct Ethereum {
         return WalletCrypto.hexString(data: signed).withHexPrefix
     }
     
-    func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {
+    static func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {
         let digest = WalletCrypto.ethereumTypedDataDigest(messageJson: typedData)
         return try sign(digest: digest, privateKey: privateKey)
     }
@@ -297,6 +300,27 @@ struct Ethereum {
         network: EthereumNetwork,
         completion: @escaping (Result<String, EthereumSendFailure>) -> Void
     ) {
+        switch Self.signedTransaction(
+            transaction: transaction,
+            privateKey: privateKey,
+            network: network
+        ) {
+        case .success(let signedTransaction):
+            sendSignedTransaction(
+                signedTransaction,
+                network: network,
+                completion: completion
+            )
+        case .failure(let failure):
+            completion(.failure(failure))
+        }
+    }
+
+    static func signedTransaction(
+        transaction: Transaction,
+        privateKey: WalletPrivateKey,
+        network: EthereumNetwork
+    ) -> Result<String, EthereumSendFailure> {
         let parsedAmount: BigUInt?
         if transaction.value == nil || transaction.value == String.hexPrefix {
             parsedAmount = BigUInt()
@@ -327,8 +351,7 @@ struct Ethereum {
               ),
               let preparedFee = transaction.preparedFee,
               Transaction.isValidUInt256(amount) else {
-            completion(.failure(.invalidTransaction))
-            return
+            return .failure(.invalidTransaction)
         }
 
         let chainID = BigUInt(UInt64(network.chainId)).toData()
@@ -361,12 +384,30 @@ struct Ethereum {
         }
 
         guard let signedTransaction else {
-            completion(.failure(.failedToSign))
-            return
+            return .failure(.failedToSign)
         }
+        return .success(
+            WalletCrypto.hexString(data: signedTransaction).withHexPrefix
+        )
+    }
+
+    static func transactionHash(signedTransaction: String) -> String? {
+        guard let data = WalletCrypto.hexData(signedTransaction), !data.isEmpty else {
+            return nil
+        }
+        return WalletCrypto.hexString(
+            data: WalletCrypto.keccak256(data: data)
+        ).withHexPrefix
+    }
+
+    func sendSignedTransaction(
+        _ signedTransaction: String,
+        network: EthereumNetwork,
+        completion: @escaping (Result<String, EthereumSendFailure>) -> Void
+    ) {
         rpc.sendRawTransaction(
             endpoint: network.rpcEndpoint,
-            signedTxData: WalletCrypto.hexString(data: signedTransaction).withHexPrefix
+            signedTxData: signedTransaction
         ) { result in
             DispatchQueue.main.async {
                 switch result {

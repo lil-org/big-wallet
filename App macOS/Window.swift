@@ -2,16 +2,24 @@
 
 import Cocoa
 
+final class WalletWindowController: NSWindowController {
+    var approvalPeer: PeerMeta?
+}
+
 struct Window {
     
     private static var isClosingAllWindows = false
     
-    static func showNew(closeOthers: Bool) -> NSWindowController {
+    static func showNew(
+        closeOthers: Bool,
+        approvalPeer: PeerMeta? = nil
+    ) -> WalletWindowController {
         if closeOthers {
             closeAll()
         }
         
         let windowController = new
+        windowController.approvalPeer = approvalPeer
         activate(windowController)
         
         if !closeOthers {
@@ -23,7 +31,9 @@ struct Window {
                 var validCascadeIndexes = [Int]()
                 
                 let validateActiveSpace = windowController.window?.isOnActiveSpace == true
-                for otherWindow in NSApplication.shared.windows where otherWindow !== windowController.window {
+                for otherWindow in NSApplication.shared.windows where
+                    otherWindow !== windowController.window &&
+                    isVisibleContentWindow(otherWindow) {
                     if validateActiveSpace, !otherWindow.isOnActiveSpace { continue }
                     let otherTopLeft = CGPoint(x: otherWindow.frame.minX, y: otherWindow.frame.maxY)
                     
@@ -60,6 +70,17 @@ struct Window {
         window?.makeKeyAndOrderFront(nil)
     }
     
+    static func reactivateWindow(_ windowController: NSWindowController) {
+        windowController.showWindow(nil)
+        windowController.window?.deminiaturize(nil)
+        activateWindow(windowController.window)
+    }
+
+    static func isVisibleContentWindow(_ window: NSWindow) -> Bool {
+        window.contentViewController != nil &&
+            (window.isVisible || window.isMiniaturized)
+    }
+
     static func closeWindow(idToClose: Int?) {
         guard !isClosingAllWindows else { return }
         if let id = idToClose, let windowToClose = NSApplication.shared.windows.first(where: { $0.windowNumber == id }) {
@@ -71,7 +92,11 @@ struct Window {
         guard !isClosingAllWindows else { return }
         closeWindow(idToClose: idToClose)
         
-        if let window = NSApplication.shared.windows.last(where: { $0.windowNumber != idToClose && $0.isOnActiveSpace && $0.contentViewController != nil }) {
+        if let window = NSApplication.shared.windows.last(where: {
+            $0.windowNumber != idToClose &&
+                $0.isOnActiveSpace &&
+                isVisibleContentWindow($0)
+        }) {
             activateWindow(window)
         } else {
             activateBrowser(specific: specificBrowser)
@@ -80,7 +105,7 @@ struct Window {
     
     private static func closeAll() {
         isClosingAllWindows = true
-        NSApplication.shared.windows.forEach { window in
+        NSApplication.shared.windows.filter(isVisibleContentWindow).forEach { window in
             window.close()
         }
         isClosingAllWindows = false
@@ -117,8 +142,10 @@ struct Window {
         NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == browser.rawValue })?.activate()
     }
     
-    private static var new: NSWindowController {
-        return NSStoryboard.main.instantiateController(withIdentifier: "initial") as! NSWindowController
+    private static var new: WalletWindowController {
+        return NSStoryboard.main.instantiateController(
+            withIdentifier: "initial"
+        ) as! WalletWindowController
     }
     
 }

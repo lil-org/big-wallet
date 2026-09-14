@@ -134,8 +134,11 @@ class PasswordViewController: UIViewController {
             }
         case .repeatAfterCreate:
             if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
-                keychain.save(password: password)
-                showAccountsList()
+                if keychain.save(password: password) {
+                    showAccountsList()
+                } else {
+                    showMessageAlert(text: Strings.somethingWentWrong)
+                }
             } else {
                 showMessageAlert(text: Strings.passwordDoesNotMatch)
             }

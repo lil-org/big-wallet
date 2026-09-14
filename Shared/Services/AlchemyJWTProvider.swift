@@ -741,7 +741,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
         )
         let tokenStore = AlchemyJWTKeychainStore()
-        let refreshLock = AlchemyJWTFileLock(
+        let refreshLock = CrossProcessFileLock(
             fileURL: containerURL?.appendingPathComponent(
                 ".alchemy-jwt-refresh.lock",
                 isDirectory: false
@@ -2428,7 +2428,7 @@ private final class AlchemyJWTKeychainStore:
 
 }
 
-final class AlchemyJWTFileLock:
+final class CrossProcessFileLock:
     @unchecked Sendable,
     AlchemyJWTRefreshLocking {
 
@@ -2476,6 +2476,14 @@ final class AlchemyJWTFileLock:
     }
 
     func tryAcquire() throws -> Bool {
+        return try tryAcquire(createIfMissing: true)
+    }
+
+    func tryAcquireExisting() throws -> Bool {
+        return try tryAcquire(createIfMissing: false)
+    }
+
+    private func tryAcquire(createIfMissing: Bool) throws -> Bool {
         guard let fileURL else { throw FileLockError.missingFileURL }
 
         descriptorLock.lock()
@@ -2486,9 +2494,13 @@ final class AlchemyJWTFileLock:
         acquisitionInProgress = true
         descriptorLock.unlock()
 
+        var flags = O_RDWR | O_CLOEXEC
+        if createIfMissing {
+            flags |= O_CREAT
+        }
         let openedDescriptor = Darwin.open(
             fileURL.path,
-            O_CREAT | O_RDWR | O_CLOEXEC,
+            flags,
             S_IRUSR | S_IWUSR
         )
         guard openedDescriptor >= 0 else {

@@ -2745,7 +2745,15 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let pendingAfterRecovery = await cooldownSleeper.pendingCount()
         XCTAssertEqual(pendingAfterRecovery, 0)
 
-        XCTAssertTrue(try contendedLock.tryAcquire())
+        var acquiredLock = false
+        await waitUntil {
+            guard (try? contendedLock.tryAcquire()) == true else {
+                return false
+            }
+            acquiredLock = true
+            return true
+        }
+        XCTAssertTrue(acquiredLock)
         await provider.invalidateAuthorization(
             afterUnauthorized: try XCTUnwrap(recovered),
             for: alchemyURL
@@ -3425,8 +3433,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 isDirectory: false
             )
         defer { try? FileManager.default.removeItem(at: fileURL) }
-        let first = AlchemyJWTFileLock(fileURL: fileURL)
-        let second = AlchemyJWTFileLock(fileURL: fileURL)
+        let first = CrossProcessFileLock(fileURL: fileURL)
+        let second = CrossProcessFileLock(fileURL: fileURL)
 
         XCTAssertTrue(try first.tryAcquire())
         XCTAssertFalse(try first.tryAcquire())
@@ -3457,13 +3465,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let first = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: AlchemyJWTFileLock(fileURL: fileURL),
+            refreshLock: CrossProcessFileLock(fileURL: fileURL),
             now: now
         )
         let second = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: AlchemyJWTFileLock(fileURL: fileURL),
+            refreshLock: CrossProcessFileLock(fileURL: fileURL),
             now: now
         )
 
@@ -3495,7 +3503,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 isDirectory: false
             )
         defer { try? FileManager.default.removeItem(at: fileURL) }
-        let lock = AlchemyJWTFileLock(fileURL: fileURL)
+        let lock = CrossProcessFileLock(fileURL: fileURL)
         XCTAssertTrue(try lock.tryAcquire())
 
         func runLockf() throws -> Int32 {

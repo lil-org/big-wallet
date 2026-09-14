@@ -2,7 +2,7 @@
 
 import Foundation
 
-enum EthereumFeeMarketSupport: String, Codable, Equatable, Hashable {
+enum EthereumFeeMarketSupport: String, Codable, Equatable, Hashable, Sendable {
 
     case eip1559
     case legacy
@@ -10,7 +10,7 @@ enum EthereumFeeMarketSupport: String, Codable, Equatable, Hashable {
 
 }
 
-struct EthereumFeeMarketHint: Codable, Equatable, Hashable {
+struct EthereumFeeMarketHint: Codable, Equatable, Hashable, Sendable {
 
     private static let checkedAtFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -42,9 +42,9 @@ struct EthereumFeeMarketHint: Codable, Equatable, Hashable {
 
 }
 
-struct EthereumRPCEndpoint: Equatable, Hashable {
+struct EthereumRPCEndpoint: Equatable, Hashable, Sendable {
 
-    private enum Trust: Equatable, Hashable {
+    private enum Trust: Equatable, Hashable, Sendable {
         case unauthenticated
         case alchemy
     }
@@ -119,7 +119,7 @@ struct EthereumRPCEndpoint: Equatable, Hashable {
 
 }
 
-struct EthereumNetwork: Codable, Equatable, Hashable {
+struct EthereumNetwork: Codable, Equatable, Hashable, Sendable {
     
     let chainId: Int
     let name: String
@@ -205,14 +205,14 @@ struct EthereumNetwork: Codable, Equatable, Hashable {
     
 }
 
-struct EthereumNetworkFromDapp: Codable {
+struct EthereumNetworkFromDapp: Codable, Sendable {
     var chainId: String
     var rpcUrls: [String]
     var blockExplorerUrls: [String]
     var nativeCurrency: Currency
     var chainName: String
     
-    struct Currency: Codable {
+    struct Currency: Codable, Sendable {
         var decimals: Int
         var name: String
         var symbol: String

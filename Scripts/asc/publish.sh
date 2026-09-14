@@ -11,6 +11,10 @@ case "$_asc_entrypoint_source" in
 esac
 source "$_asc_entrypoint_directory/common.sh"
 unset _asc_entrypoint_source _asc_entrypoint_directory
+
+platform="${1:-${PLATFORM:-IOS}}"
+validate_macos_app_sandbox_information_confirmation "$platform"
+
 . "$REPO_ROOT/Scripts/inpage_provider_toolchain.sh"
 
 require_cmd asc
@@ -24,7 +28,6 @@ validate_alchemy_release_inputs
 
 validate_export_options "$ASC_EXPORT_OPTIONS"
 
-platform="${1:-${PLATFORM:-IOS}}"
 local_version="$(current_local_version)"
 local_build_number="$(current_local_build_number)"
 version="${VERSION:-$local_version}"

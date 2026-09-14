@@ -113,7 +113,10 @@ class PasswordViewController: NSViewController {
                     if keychain.password != nil {
                         leaveCreateFlowForExistingPassword()
                     } else {
-                        Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
+                        presentMessageAlert(
+                            Strings.somethingWentWrong,
+                            style: .informational
+                        )
                     }
                     return
                 }

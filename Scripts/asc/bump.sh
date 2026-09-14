@@ -25,17 +25,27 @@ xcode_version_files=(
 old_version="$(current_local_version)"
 old_build="$(current_local_build_number)"
 validate_local_version_sources "$old_version" "$old_build"
+validate_generated_web_extension_build_version "$old_version" "$old_build"
 
 case "$mode" in
   version)
     new_version="${VERSION:-$(patch_bump_version "$old_version")}"
     commit_message_prefix="bump version to $new_version"
-    version_files=("${xcode_version_files[@]}" "${WEB_EXTENSION_MANIFESTS[@]}")
+    version_files=(
+      "${xcode_version_files[@]}"
+      "${WEB_EXTENSION_MANIFESTS[@]}"
+      "$WEB_EXTENSION_BUILD_VERSION_FILE"
+      "$WEB_EXTENSION_GENERATED_FILE"
+    )
     ;;
   build)
     new_version="$old_version"
     commit_message_prefix="bump build number"
-    version_files=("${xcode_version_files[@]}")
+    version_files=(
+      "${xcode_version_files[@]}"
+      "$WEB_EXTENSION_BUILD_VERSION_FILE"
+      "$WEB_EXTENSION_GENERATED_FILE"
+    )
     ;;
   *)
     die "usage: $0 <version|build>"
@@ -44,6 +54,14 @@ esac
 
 if ! git diff --quiet -- "${version_files[@]}" || ! git diff --cached --quiet -- "${version_files[@]}"; then
   die "version files have existing changes; commit or stash them before bumping"
+fi
+
+PROJECT_DIR="$REPO_ROOT" \
+  /bin/sh "$REPO_ROOT/Scripts/build_inpage_provider.sh" >&2
+validate_generated_web_extension_build_version "$old_version" "$old_build"
+if ! git diff --quiet -- "$WEB_EXTENSION_GENERATED_FILE" ||
+   ! git diff --cached --quiet -- "$WEB_EXTENSION_GENERATED_FILE"; then
+  die "the generated inpage bundle was out of date; review and commit it before bumping"
 fi
 
 [[ "$old_build" =~ ^[0-9]+$ ]] || die "current build number is not numeric: $old_build"
@@ -91,7 +109,10 @@ asc xcode version edit \
   --output json >/dev/null
 
 sync_local_version_sources "$new_version" "$next_build" "$mode"
+PROJECT_DIR="$REPO_ROOT" \
+  /bin/sh "$REPO_ROOT/Scripts/build_inpage_provider.sh" >&2
 validate_local_version_sources "$new_version" "$next_build"
+validate_generated_web_extension_build_version "$new_version" "$next_build"
 
 git add "${version_files[@]}"
 

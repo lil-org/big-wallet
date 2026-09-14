@@ -99,16 +99,12 @@ final class SafariRPCClient {
         request.httpBody = body
         authorization?.apply(to: &request)
 
-        let redirectDelegate = SafariRPCRedirectDelegate(
-            allowsRedirect: Self.allowsRedirect(
-                for: body,
-                isAuthorized: authorization != nil
-            )
-        )
+        let redirectDelegate = NoRedirectSessionDelegate()
         let (data, response) = try await urlSession.data(
             for: request,
             delegate: redirectDelegate
         )
+        guard !redirectDelegate.didRejectRedirect else { return nil }
         if let httpResponse = response as? HTTPURLResponse,
            httpResponse.statusCode == 401,
            let authorization {
@@ -144,13 +140,6 @@ final class SafariRPCClient {
             from: data,
             expectedResponseID: expectedResponseID
         )
-    }
-
-    static func allowsRedirect(
-        for body: Data,
-        isAuthorized: Bool
-    ) -> Bool {
-        !isAuthorized && allowsUnauthorizedReplay(for: body)
     }
 
     private static func responseDictionary(
@@ -237,26 +226,6 @@ final class SafariRPCClient {
             || Self.replaySafeMethodPrefixes.contains {
                 method.hasPrefix($0)
             }
-    }
-
-}
-
-final class SafariRPCRedirectDelegate: NSObject, URLSessionTaskDelegate {
-
-    private let allowsRedirect: Bool
-
-    init(allowsRedirect: Bool) {
-        self.allowsRedirect = allowsRedirect
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        completionHandler(allowsRedirect ? request : nil)
     }
 
 }

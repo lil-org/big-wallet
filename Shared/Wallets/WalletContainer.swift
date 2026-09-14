@@ -27,7 +27,10 @@ final class WalletContainer: Hashable, Equatable {
     }
 
     func privateKey(password: String, account: WalletAccount) throws -> WalletPrivateKey {
-        let passwordData = Data(password.utf8)
+        return try privateKey(passwordData: Data(password.utf8), account: account)
+    }
+
+    func privateKey(passwordData: Data, account: WalletAccount) throws -> WalletPrivateKey {
         if isMnemonic {
             let wallet = key.wallet(password: passwordData)
             guard let privateKey = wallet?.privateKey(coin: account.coin, derivationPath: account.derivationPath) else { throw WalletKeyStoreError.invalidPassword }

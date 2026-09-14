@@ -90,6 +90,16 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(gate.consume())
     }
 
+    func testApproveReturnsWhetherApprovalFlowStarted() {
+        let stub = ApprovalOperationsStub()
+        let coordinator = makeCoordinator(stub: stub)
+
+        XCTAssertFalse(coordinator.approve())
+        prepareToReady(coordinator, stub: stub)
+        XCTAssertTrue(coordinator.approve())
+        XCTAssertFalse(coordinator.approve())
+    }
+
     func testPreparationTokenIncludesAttemptTransactionAndKind() {
         let transaction = Self.makeReadyTransaction()
         var reducer = TransactionApprovalReducer(

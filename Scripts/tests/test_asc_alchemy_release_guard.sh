@@ -9,6 +9,7 @@ publish_check_script="$repository_directory/Scripts/asc/publish_check.sh"
 submit_script="$repository_directory/Scripts/asc/submit_review.sh"
 toolchain_script="$repository_directory/Scripts/inpage_provider_toolchain.sh"
 workflow_file="$repository_directory/.asc/workflow.json"
+feedback_id_file="$repository_directory/app-store-connect/macos-app-sandbox-feedback-id.txt"
 
 test_root="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/asc-alchemy-release-guard.XXXXXX")"
 test_root="$(cd "$test_root" && pwd -P)"
@@ -39,126 +40,110 @@ expect_failure() {
 
 source "$common_script"
 
-asc_entrypoint_count=0
-for asc_entrypoint in "$repository_directory"/Scripts/asc/*.sh; do
-  [[ "${asc_entrypoint##*/}" != "common.sh" ]] || continue
-  asc_entrypoint_count=$((asc_entrypoint_count + 1))
-  awk '
-    index($0, "set +x") && xtrace_line == 0 {
-      xtrace_line = NR
-    }
-    index($0, "set +a") && allexport_line == 0 {
-      allexport_line = NR
-    }
-    index($0, "source \"$" "_asc_entrypoint_directory/common.sh\"") {
-      source_line = NR
-    }
-    index($0, "$(") && source_line == 0 {
-      early_subprocess = 1
-    }
-    (index($0, "`") ||
-     index($0, "<(") ||
-     index($0, ">(")) && source_line == 0 {
-      early_subprocess = 1
-    }
-    END {
-      if (xtrace_line == 0 ||
-          allexport_line == 0 ||
-          source_line == 0 ||
-          xtrace_line >= source_line ||
-          allexport_line >= source_line ||
-          early_subprocess) {
-        exit 1
-      }
-    }
-  ' "$asc_entrypoint" \
-    || fail "${asc_entrypoint##*/} does not use the child-free credential bootstrap"
-done
-[[ "$asc_entrypoint_count" -eq 13 ]] \
-  || fail "expected exactly 13 ASC entrypoints to use the credential bootstrap"
-unset asc_entrypoint_count
+bootstrap_fixture="$test_root/bootstrap fixture"
+mkdir -p "$bootstrap_fixture/Scripts/asc"
+cp -p "$repository_directory"/Scripts/asc/*.sh "$bootstrap_fixture/Scripts/asc/"
+cp -p "$repository_directory/Scripts/alchemy_jwt_request_proof_key_common.sh" \
+  "$bootstrap_fixture/Scripts/"
+printf '\nexit 0\n' >>"$bootstrap_fixture/Scripts/asc/common.sh"
 
 bootstrap_mock_bin="$test_root/bootstrap mock bin"
-bootstrap_environment_log="$logs_directory/bootstrap-child.env"
-bootstrap_trace_log="$logs_directory/bootstrap-xtrace.stderr"
 bootstrap_proof_secret=ASC_BOOTSTRAP_PROOF_SECRET_MUST_NOT_LEAK
 bootstrap_cloudflare_secret=ASC_BOOTSTRAP_CLOUDFLARE_SECRET_MUST_NOT_LEAK
 mkdir -p "$bootstrap_mock_bin"
 printf '%s\n' \
   '#!/bin/sh' \
-  '/usr/bin/env > "$ASC_BOOTSTRAP_ENVIRONMENT_LOG"' \
+  '/usr/bin/env >> "$ASC_BOOTSTRAP_ENVIRONMENT_LOG"' \
   'exec /usr/bin/dirname "$@"' \
   >"$bootstrap_mock_bin/dirname"
 chmod 700 "$bootstrap_mock_bin/dirname"
 
-set +e
-/usr/bin/env \
-  PATH="$bootstrap_mock_bin:$PATH" \
-  ASC_BOOTSTRAP_ENVIRONMENT_LOG="$bootstrap_environment_log" \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY="$bootstrap_proof_secret" \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY_VALUE="$bootstrap_proof_secret" \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY_FINGERPRINT="$bootstrap_proof_secret" \
-  _alchemy_jwt_request_proof_key_captured_environment_value="$bootstrap_proof_secret" \
-  _alchemy_jwt_request_proof_key_cache_valid="$bootstrap_proof_secret" \
-  LOGIN_KEYCHAIN_SECRET_VALUE="$bootstrap_proof_secret" \
-  login_keychain_output_with_sentinel="$bootstrap_proof_secret" \
-  login_keychain_output="$bootstrap_proof_secret" \
-  alchemy_key_snapshot="$bootstrap_proof_secret" \
-  CLOUDFLARE_API_TOKEN="$bootstrap_cloudflare_secret" \
-  CLOUDFLARE_API_TOKEN_VALUE="$bootstrap_cloudflare_secret" \
-  _cloudflare_api_token_captured_environment_value="$bootstrap_cloudflare_secret" \
-  _asc_cloudflare_api_token_snapshot="$bootstrap_cloudflare_secret" \
-  _asc_cloudflare_api_token_selection="$bootstrap_cloudflare_secret" \
-  _asc_cloudflare_api_token_cache_valid="$bootstrap_cloudflare_secret" \
-  snapshot="$bootstrap_cloudflare_secret" \
-  public_assignment_present="$bootstrap_cloudflare_secret" \
-  SHELLOPTS=allexport:xtrace \
-  /bin/bash -c "source '$common_script'" \
-  >"$logs_directory/bootstrap-xtrace.stdout" \
-  2>"$bootstrap_trace_log"
-bootstrap_status=$?
-set -e
-[[ "$bootstrap_status" -eq 0 ]] \
-  || fail "the ASC child-free credential bootstrap failed"
-[[ -s "$bootstrap_environment_log" ]] \
-  || fail "the earliest ASC dirname child was not intercepted"
-for bootstrap_secret in \
-  "$bootstrap_proof_secret" \
-  "$bootstrap_cloudflare_secret"
-do
-  if grep -F "$bootstrap_secret" \
-    "$bootstrap_environment_log" "$bootstrap_trace_log" >/dev/null
-  then
-    fail "the ASC credential bootstrap exposed a release credential"
+for bootstrap_entrypoint in "$bootstrap_fixture"/Scripts/asc/*.sh; do
+  [[ -f "$bootstrap_entrypoint" ]] || fail "no ASC entrypoints found"
+  if [[ "${bootstrap_entrypoint##*/}" != common.sh ]]; then
+    awk '
+      /^[[:space:]]*#/ { next }
+      index($0, "$(") || index($0, "`") ||
+      index($0, "<(") || index($0, ">(") { early_child = 1 }
+      /^[[:space:]]*(source|\.)[[:space:]]+.*\/common\.sh/ {
+        bootstrapped = 1
+        exit
+      }
+      END { exit (early_child || !bootstrapped) }
+    ' "$bootstrap_entrypoint" \
+      || fail "${bootstrap_entrypoint##*/} can start a subprocess before credential bootstrap"
   fi
+  bootstrap_environment_log="$logs_directory/${bootstrap_entrypoint##*/}-bootstrap.env"
+  bootstrap_trace_log="$logs_directory/${bootstrap_entrypoint##*/}-bootstrap.stderr"
+  set +e
+  /usr/bin/env \
+    PATH="$bootstrap_mock_bin:$PATH" \
+    ASC_BOOTSTRAP_ENVIRONMENT_LOG="$bootstrap_environment_log" \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY="$bootstrap_proof_secret" \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY_VALUE="$bootstrap_proof_secret" \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY_FINGERPRINT="$bootstrap_proof_secret" \
+    _alchemy_jwt_request_proof_key_captured_environment_value="$bootstrap_proof_secret" \
+    _alchemy_jwt_request_proof_key_cache_valid="$bootstrap_proof_secret" \
+    LOGIN_KEYCHAIN_SECRET_VALUE="$bootstrap_proof_secret" \
+    login_keychain_output_with_sentinel="$bootstrap_proof_secret" \
+    login_keychain_output="$bootstrap_proof_secret" \
+    alchemy_key_snapshot="$bootstrap_proof_secret" \
+    CLOUDFLARE_API_TOKEN="$bootstrap_cloudflare_secret" \
+    CLOUDFLARE_API_TOKEN_VALUE="$bootstrap_cloudflare_secret" \
+    _cloudflare_api_token_captured_environment_value="$bootstrap_cloudflare_secret" \
+    _asc_cloudflare_api_token_snapshot="$bootstrap_cloudflare_secret" \
+    _asc_cloudflare_api_token_selection="$bootstrap_cloudflare_secret" \
+    _asc_cloudflare_api_token_cache_valid="$bootstrap_cloudflare_secret" \
+    snapshot="$bootstrap_cloudflare_secret" \
+    public_assignment_present="$bootstrap_cloudflare_secret" \
+    SHELLOPTS=allexport:xtrace \
+    /bin/bash "$bootstrap_entrypoint" \
+    >>"$logs_directory/bootstrap-xtrace.stdout" \
+    2>>"$bootstrap_trace_log"
+  bootstrap_status=$?
+  set -e
+  [[ "$bootstrap_status" -eq 0 ]] \
+    || fail "${bootstrap_entrypoint##*/} credential bootstrap failed"
+  [[ -s "$bootstrap_environment_log" ]] \
+    || fail "the earliest ASC dirname child was not intercepted"
+  for bootstrap_secret in \
+    "$bootstrap_proof_secret" \
+    "$bootstrap_cloudflare_secret"
+  do
+    if grep -F "$bootstrap_secret" \
+      "$bootstrap_environment_log" "$bootstrap_trace_log" >/dev/null
+    then
+      fail "the ASC credential bootstrap exposed a release credential"
+    fi
+  done
+  unset bootstrap_secret bootstrap_status
+  for bootstrap_private_name in \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY_VALUE \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY_FINGERPRINT \
+    _alchemy_jwt_request_proof_key_captured_environment_value \
+    _alchemy_jwt_request_proof_key_cache_valid \
+    LOGIN_KEYCHAIN_SECRET_VALUE \
+    login_keychain_output_with_sentinel \
+    login_keychain_output \
+    alchemy_key_snapshot \
+    CLOUDFLARE_API_TOKEN \
+    CLOUDFLARE_API_TOKEN_VALUE \
+    _cloudflare_api_token_captured_environment_value \
+    _asc_cloudflare_api_token_snapshot \
+    _asc_cloudflare_api_token_selection \
+    _asc_cloudflare_api_token_cache_valid \
+    snapshot \
+    public_assignment_present
+  do
+    if grep -E "^${bootstrap_private_name}=" \
+      "$bootstrap_environment_log" >/dev/null
+    then
+      fail "$bootstrap_private_name reached the earliest ASC child"
+    fi
+  done
+  unset bootstrap_private_name
 done
-unset bootstrap_secret bootstrap_status
-for bootstrap_private_name in \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY_VALUE \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY_FINGERPRINT \
-  _alchemy_jwt_request_proof_key_captured_environment_value \
-  _alchemy_jwt_request_proof_key_cache_valid \
-  LOGIN_KEYCHAIN_SECRET_VALUE \
-  login_keychain_output_with_sentinel \
-  login_keychain_output \
-  alchemy_key_snapshot \
-  CLOUDFLARE_API_TOKEN \
-  CLOUDFLARE_API_TOKEN_VALUE \
-  _cloudflare_api_token_captured_environment_value \
-  _asc_cloudflare_api_token_snapshot \
-  _asc_cloudflare_api_token_selection \
-  _asc_cloudflare_api_token_cache_valid \
-  snapshot \
-  public_assignment_present
-do
-  if grep -E "^${bootstrap_private_name}=" \
-    "$bootstrap_environment_log" >/dev/null
-  then
-    fail "$bootstrap_private_name reached the earliest ASC child"
-  fi
-done
-unset bootstrap_private_name
 
 preferred_tool_directory="$test_root/preferred tools"
 preferred_tool_repository="$test_root/preferred tool repository"
@@ -531,108 +516,194 @@ if grep -F "$(printf '%040d' 3)" "$hostile_cloudflare_export_probe" >/dev/null; 
   fail "the loaded Cloudflare token was exported through hostile scratch state"
 fi
 
-awk '
-  index($0, "Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh") {
-    artifact_validator_line = NR
-  }
-  index($0, "run_alchemy_worker_release_verification") {
-    verifier_line = NR
-  }
-  index($0, "upload_attempted=true") {
-    upload_attempted_line = NR
-  }
-  index($0, "upload_json=\"$(asc builds upload") {
-    upload_line = NR
-  }
-  index($0, "write_alchemy_release_receipt") {
-    receipt_line = NR
-  }
-  index($0, "emit_publish_result") && NR > receipt_line {
-    result_line = NR
-  }
-  END {
-    if (artifact_validator_line == 0 ||
-        artifact_validator_line <= verifier_line ||
-        upload_attempted_line <= artifact_validator_line ||
-        upload_line <= upload_attempted_line ||
-        receipt_line <= upload_line ||
-        result_line <= receipt_line) {
-      exit 1
-    }
-  }
-' "$publish_script" \
-  || fail "publish does not verify the exact artifact and Worker before upload and receipt emission"
-
-awk '
-  index($0, "load_and_validate_alchemy_release_receipt") {
-    receipt_line = NR
-  }
-  index($0, "Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh") {
-    artifact_validator_line = NR
-  }
-  index($0, "run_alchemy_worker_release_verification") {
-    verifier_line = NR
-  }
-  index($0, "version_id=\"$(Scripts/asc/ensure_version.sh") {
-    mutation_boundary_line = NR
-  }
-  END {
-    if (receipt_line == 0 ||
-        artifact_validator_line <= receipt_line ||
-        verifier_line <= artifact_validator_line ||
-        mutation_boundary_line <= verifier_line) {
-      exit 1
-    }
-  }
-' "$submit_script" \
-  || fail "review submission is not fully gated before its mutation boundary"
-
-grep -F "validate_alchemy_release_inputs" "$publish_check_script" >/dev/null \
-  || fail "publish preflight does not validate the local Alchemy release inputs"
-
-verifier_wrapper="$test_root/verifier-wrapper.sh"
-awk '
-  /^run_alchemy_worker_release_verification\(\) \{/ {
-    active = 1
-  }
-  active {
-    print
-  }
-  active && /^}/ {
-    exit
-  }
-' "$common_script" >"$verifier_wrapper"
-grep -F "run_alchemy_release_npm run verify:release --" "$verifier_wrapper" >/dev/null \
-  || fail "the ASC gate does not use the narrow Worker release verifier"
-for legacy_auth_variable in \
-  CLOUDFLARE_API_KEY \
-  CLOUDFLARE_EMAIL \
-  CLOUDFLARE_API_USER_SERVICE_KEY
+for sandbox_environment_name in \
+  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
+  ASC_MACOS_APP_SANDBOX_FEEDBACK_ID
 do
-  grep -F "$legacy_auth_variable" "$verifier_wrapper" >/dev/null \
-    || fail "the ASC verifier does not clear legacy auth variable $legacy_auth_variable"
-done
-for required_option in \
-  '--expected-kid' \
-  '--expected-version'
-do
-  [[ "$(grep -F -c -- "$required_option" "$verifier_wrapper")" -eq 1 ]] \
-    || fail "the ASC verifier wrapper does not pass exactly one $required_option"
-done
-for forbidden_term in \
-  'rollout' \
-  'upload:validated' \
-  'wrangler deploy' \
-  'wrangler secret' \
-  '--version-override' \
-  '--worker'
-do
-  if grep -F -- "$forbidden_term" "$verifier_wrapper" >/dev/null; then
-    fail "the ASC verifier wrapper exposes a Worker mutation or override: $forbidden_term"
+  if jq -e \
+    --arg key "$sandbox_environment_name" \
+    '[.. | objects | has($key)] | any' \
+    "$workflow_file" >/dev/null
+  then
+    fail "the tracked workflow persists $sandbox_environment_name"
+  fi
+  if grep -F "$sandbox_environment_name=" "$workflow_file" >/dev/null; then
+    fail "the tracked workflow hardcodes $sandbox_environment_name"
   fi
 done
-grep -F ") >&2" "$verifier_wrapper" >/dev/null \
-  || fail "the ASC verifier wrapper can contaminate command-result stdout"
+
+tracked_sandbox_feedback_id="$(/bin/cat "$feedback_id_file")"
+if [[ "$tracked_sandbox_feedback_id" != "PENDING" &&
+      ! "$tracked_sandbox_feedback_id" =~ ^FB[0-9]+$ ]]; then
+  fail "the production Feedback Assistant configuration is neither PENDING nor a reviewed FB number"
+fi
+
+if [[ "$tracked_sandbox_feedback_id" == "PENDING" ]]; then
+  pending_feedback_stdout="$logs_directory/pending-production-sandbox-feedback.stdout"
+  pending_feedback_stderr="$logs_directory/pending-production-sandbox-feedback.stderr"
+  set +e
+  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+    ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
+    ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
+    "$publish_script" MAC_OS \
+    >"$pending_feedback_stdout" \
+    2>"$pending_feedback_stderr"
+  pending_feedback_status=$?
+  set -e
+  [[ "$pending_feedback_status" -ne 0 ]] \
+    || fail "the PENDING production Feedback Assistant configuration permitted direct publish"
+  [[ ! -s "$pending_feedback_stdout" ]] \
+    || fail "the PENDING production Feedback Assistant configuration wrote to stdout"
+  grep -F "replaces PENDING" "$pending_feedback_stderr" >/dev/null \
+    || fail "the PENDING production Feedback Assistant configuration did not explain the release block"
+fi
+
+sandbox_gate_fixture="$test_root/sandbox gate fixture"
+mkdir -p \
+  "$sandbox_gate_fixture/Scripts/asc" \
+  "$sandbox_gate_fixture/Scripts" \
+  "$sandbox_gate_fixture/app-store-connect"
+for relative_file in \
+  Scripts/asc/common.sh \
+  Scripts/asc/publish.sh \
+  Scripts/asc/publish_check.sh \
+  Scripts/alchemy_jwt_request_proof_key_common.sh
+do
+  cp -p \
+    "$repository_directory/$relative_file" \
+    "$sandbox_gate_fixture/$relative_file"
+done
+printf '%s\n' FB00000000 \
+  >"$sandbox_gate_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
+
+for gated_script in \
+  "$sandbox_gate_fixture/Scripts/asc/publish_check.sh" \
+  "$sandbox_gate_fixture/Scripts/asc/publish.sh"
+do
+  gated_script_name="${gated_script##*/}"
+  for sandbox_confirmation_case in missing wrong; do
+    sandbox_confirmation_stdout="$logs_directory/$sandbox_confirmation_case-$gated_script_name-sandbox-confirmation.stdout"
+    sandbox_confirmation_stderr="$logs_directory/$sandbox_confirmation_case-$gated_script_name-sandbox-confirmation.stderr"
+    set +e
+    if [[ "$sandbox_confirmation_case" == "missing" ]]; then
+      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
+        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
+        /usr/bin/env -u ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
+        "$gated_script" MAC_OS \
+        >"$sandbox_confirmation_stdout" \
+        2>"$sandbox_confirmation_stderr"
+    else
+      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=yes \
+        ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
+        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
+        "$gated_script" MAC_OS \
+        >"$sandbox_confirmation_stdout" \
+        2>"$sandbox_confirmation_stderr"
+    fi
+    sandbox_confirmation_status=$?
+    set -e
+
+    [[ "$sandbox_confirmation_status" -ne 0 ]] \
+      || fail "$sandbox_confirmation_case macOS $gated_script_name confirmation unexpectedly succeeded"
+    [[ ! -s "$sandbox_confirmation_stdout" ]] \
+      || fail "$sandbox_confirmation_case macOS $gated_script_name confirmation wrote to stdout"
+    grep -F "App Store Connect App Sandbox Information" \
+      "$sandbox_confirmation_stderr" >/dev/null \
+      || fail "$sandbox_confirmation_case macOS $gated_script_name confirmation did not explain the manual gate"
+  done
+
+  for sandbox_feedback_case in missing wrong; do
+    sandbox_feedback_stdout="$logs_directory/$sandbox_feedback_case-$gated_script_name-sandbox-feedback.stdout"
+    sandbox_feedback_stderr="$logs_directory/$sandbox_feedback_case-$gated_script_name-sandbox-feedback.stderr"
+    set +e
+    if [[ "$sandbox_feedback_case" == "missing" ]]; then
+      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
+        /usr/bin/env -u ASC_MACOS_APP_SANDBOX_FEEDBACK_ID \
+        "$gated_script" MAC_OS \
+        >"$sandbox_feedback_stdout" \
+        2>"$sandbox_feedback_stderr"
+    else
+      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+        ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB11111111 \
+        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
+        "$gated_script" MAC_OS \
+        >"$sandbox_feedback_stdout" \
+        2>"$sandbox_feedback_stderr"
+    fi
+    sandbox_feedback_status=$?
+    set -e
+
+    [[ "$sandbox_feedback_status" -ne 0 ]] \
+      || fail "$sandbox_feedback_case macOS $gated_script_name feedback ID unexpectedly succeeded"
+    [[ ! -s "$sandbox_feedback_stdout" ]] \
+      || fail "$sandbox_feedback_case macOS $gated_script_name feedback ID wrote to stdout"
+    grep -F "ASC_MACOS_APP_SANDBOX_FEEDBACK_ID" \
+      "$sandbox_feedback_stderr" >/dev/null \
+      || fail "$sandbox_feedback_case macOS $gated_script_name did not report the Feedback Assistant contract"
+  done
+done
+
+/bin/bash -c '
+  set -euo pipefail
+  . "$1/Scripts/asc/common.sh"
+  unset ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
+    ASC_MACOS_APP_SANDBOX_FEEDBACK_ID
+  validate_macos_app_sandbox_information_confirmation IOS
+  validate_macos_app_sandbox_information_confirmation VISION_OS
+  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient
+  ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000
+  validate_macos_app_sandbox_information_confirmation MAC_OS
+' sandbox-gate-test "$sandbox_gate_fixture" \
+  || fail "the sandbox-information gate changed iOS or visionOS behavior or rejected the exact tracked confirmation"
+
+for verifier_outcome in success failure; do
+  verifier_stdout="$logs_directory/verifier-$verifier_outcome.stdout"
+  verifier_stderr="$logs_directory/verifier-$verifier_outcome.stderr"
+  verifier_arguments="$logs_directory/verifier-$verifier_outcome.arguments"
+  set +e
+  (
+    source "$common_script"
+    load_alchemy_release_proof_key() { ALCHEMY_JWT_REQUEST_PROOF_KEY_VALUE=fixture-proof; }
+    load_alchemy_release_pins() {
+      ALCHEMY_JWT_EXPECTED_KID=fixture-kid
+      ALCHEMY_JWT_EXPECTED_WORKER_VERSION=fixture-version
+    }
+    require_alchemy_release_toolchain() { :; }
+    load_cloudflare_api_token() {
+      CLOUDFLARE_API_TOKEN_VALUE=fixture-token
+      _asc_cloudflare_api_token_cache_valid=1
+    }
+    run_alchemy_release_npm() {
+      printf '%s\n' "$@" >"$verifier_arguments"
+      [[ -z "${CLOUDFLARE_API_KEY+x}${CLOUDFLARE_EMAIL+x}${CLOUDFLARE_API_USER_SERVICE_KEY+x}" ]] \
+        || exit 90
+      [[ "$CLOUDFLARE_API_TOKEN" == fixture-token &&
+         "$ALCHEMY_JWT_REQUEST_PROOF_KEY" == fixture-proof ]] || exit 91
+      printf '%s\n' fixture-verifier-output
+      [[ "$verifier_outcome" == success ]]
+    }
+    export CLOUDFLARE_API_KEY=legacy CLOUDFLARE_EMAIL=legacy \
+      CLOUDFLARE_API_USER_SERVICE_KEY=legacy
+    run_alchemy_worker_release_verification
+    [[ -z "${CLOUDFLARE_API_TOKEN_VALUE+x}${_asc_cloudflare_api_token_cache_valid+x}" ]] \
+      || exit 92
+  ) >"$verifier_stdout" 2>"$verifier_stderr"
+  verifier_status=$?
+  set -e
+  if [[ "$verifier_outcome" == success ]]; then
+    [[ "$verifier_status" -eq 0 ]] || fail "Worker verification rejected success"
+  else
+    [[ "$verifier_status" -ne 0 ]] || fail "Worker verification ignored failure"
+  fi
+  [[ ! -s "$verifier_stdout" ]] || fail "Worker verification wrote to stdout"
+  grep -F fixture-verifier-output "$verifier_stderr" >/dev/null \
+    || fail "Worker verifier output was not forwarded to stderr"
+  printf '%s\n' run verify:release -- --expected-kid fixture-kid \
+    --expected-version fixture-version >"$logs_directory/expected-verifier.arguments"
+  cmp "$verifier_arguments" "$logs_directory/expected-verifier.arguments" \
+    || fail "Worker verifier arguments changed"
+done
 
 submit_fixture="$test_root/submit fixture"
 mkdir -p \
@@ -643,8 +714,9 @@ mkdir -p \
   "$submit_fixture/App iOS" \
   "$submit_fixture/App macOS" \
   "$submit_fixture/Big Wallet Ambient" \
-  "$submit_fixture/Safari iOS/Resources" \
-  "$submit_fixture/Safari macOS/Resources"
+  "$submit_fixture/Safari Shared/Resources" \
+  "$submit_fixture/Safari macOS/Resources" \
+  "$submit_fixture/app-store-connect"
 for relative_file in \
   Scripts/asc/common.sh \
   Scripts/asc/ensure_version.sh \
@@ -659,11 +731,20 @@ for relative_file in \
   "App iOS/Info.plist" \
   "App macOS/Info.plist" \
   "Big Wallet Ambient/Info.plist" \
-  "Safari iOS/Resources/manifest.json" \
-  "Safari macOS/Resources/manifest.json"
+  "Safari Shared/Resources/manifest.json" \
+  "Safari macOS/Resources/manifest.json" \
+  "Safari Shared/Resources/bridge_wire.js" \
+  "app-store-connect/macos-app-sandbox-feedback-id.txt"
 do
   cp -p "$repository_directory/$relative_file" "$submit_fixture/$relative_file"
 done
+# Signature and entitlement checks have dedicated packaging tests.
+/usr/bin/perl -0pi -e '
+  s/(validate_mobile_entitlements\(\) \{\n)/$1    return 0\n/
+    or die "missing mobile signature validation fixture hook\n";
+' "$submit_fixture/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh"
+printf '%s\n' FB00000000 \
+  >"$submit_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
 
 fixture_key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 fixture_key_directory="$test_root/fixture keys"
@@ -697,6 +778,107 @@ printf '%s\n' \
   'exit 70' \
   >"$mock_bin/asc"
 chmod 700 "$mock_bin/asc"
+
+for sandbox_confirmation_case in missing wrong; do
+  sandbox_confirmation_stdout="$logs_directory/$sandbox_confirmation_case-sandbox-confirmation.stdout"
+  sandbox_confirmation_stderr="$logs_directory/$sandbox_confirmation_case-sandbox-confirmation.stderr"
+  sandbox_confirmation_asc_log="$logs_directory/$sandbox_confirmation_case-sandbox-confirmation.asc"
+  set +e
+  if [[ "$sandbox_confirmation_case" == "missing" ]]; then
+    PATH="$mock_bin:$PATH" \
+      MOCK_ASC_LOG="$sandbox_confirmation_asc_log" \
+      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
+      /usr/bin/env -u ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
+      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
+      >"$sandbox_confirmation_stdout" \
+      2>"$sandbox_confirmation_stderr"
+  else
+    PATH="$mock_bin:$PATH" \
+      MOCK_ASC_LOG="$sandbox_confirmation_asc_log" \
+      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=yes \
+      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
+      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
+      >"$sandbox_confirmation_stdout" \
+      2>"$sandbox_confirmation_stderr"
+  fi
+  sandbox_confirmation_status=$?
+  set -e
+
+  [[ "$sandbox_confirmation_status" -ne 0 ]] \
+    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation unexpectedly succeeded"
+  [[ ! -s "$sandbox_confirmation_stdout" ]] \
+    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation wrote to stdout"
+  grep -F "App Store Connect App Sandbox Information" \
+    "$sandbox_confirmation_stderr" >/dev/null \
+    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation did not explain the manual gate"
+  grep -F "ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient" \
+    "$sandbox_confirmation_stderr" >/dev/null \
+    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation did not report the exact contract"
+  [[ ! -e "$sandbox_confirmation_asc_log" ]] \
+    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation invoked asc"
+done
+
+for sandbox_feedback_case in missing wrong; do
+  sandbox_feedback_stdout="$logs_directory/$sandbox_feedback_case-sandbox-feedback.stdout"
+  sandbox_feedback_stderr="$logs_directory/$sandbox_feedback_case-sandbox-feedback.stderr"
+  sandbox_feedback_asc_log="$logs_directory/$sandbox_feedback_case-sandbox-feedback.asc"
+  set +e
+  if [[ "$sandbox_feedback_case" == "missing" ]]; then
+    PATH="$mock_bin:$PATH" \
+      MOCK_ASC_LOG="$sandbox_feedback_asc_log" \
+      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+      /usr/bin/env -u ASC_MACOS_APP_SANDBOX_FEEDBACK_ID \
+      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
+      >"$sandbox_feedback_stdout" \
+      2>"$sandbox_feedback_stderr"
+  else
+    PATH="$mock_bin:$PATH" \
+      MOCK_ASC_LOG="$sandbox_feedback_asc_log" \
+      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB11111111 \
+      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
+      >"$sandbox_feedback_stdout" \
+      2>"$sandbox_feedback_stderr"
+  fi
+  sandbox_feedback_status=$?
+  set -e
+
+  [[ "$sandbox_feedback_status" -ne 0 ]] \
+    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID unexpectedly succeeded"
+  [[ ! -s "$sandbox_feedback_stdout" ]] \
+    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID wrote to stdout"
+  grep -F "ASC_MACOS_APP_SANDBOX_FEEDBACK_ID" \
+    "$sandbox_feedback_stderr" >/dev/null \
+    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID did not report the exact contract"
+  [[ ! -e "$sandbox_feedback_asc_log" ]] \
+    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID invoked asc"
+done
+
+confirmed_sandbox_stdout="$logs_directory/confirmed-sandbox-information.stdout"
+confirmed_sandbox_stderr="$logs_directory/confirmed-sandbox-information.stderr"
+confirmed_sandbox_asc_log="$logs_directory/confirmed-sandbox-information.asc"
+set +e
+PATH="$mock_bin:$PATH" \
+  MOCK_ASC_LOG="$confirmed_sandbox_asc_log" \
+  ASC_RUNTIME_ROOT="$test_root/confirmed sandbox runtime" \
+  ALCHEMY_JWT_REQUEST_PROOF_KEY="$fixture_key" \
+  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+  ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
+  "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
+  >"$confirmed_sandbox_stdout" \
+  2>"$confirmed_sandbox_stderr"
+confirmed_sandbox_status=$?
+set -e
+
+[[ "$confirmed_sandbox_status" -ne 0 ]] \
+  || fail "confirmed macOS sandbox information bypassed the next release guard"
+[[ ! -s "$confirmed_sandbox_stdout" ]] \
+  || fail "confirmed macOS sandbox information wrote to stdout"
+grep -F "missing validated Alchemy release receipt" \
+  "$confirmed_sandbox_stderr" >/dev/null \
+  || fail "the exact macOS sandbox-information confirmation did not reach the next release guard"
+[[ ! -e "$confirmed_sandbox_asc_log" ]] \
+  || fail "confirmed macOS sandbox information invoked asc before the release receipt guard"
 
 missing_receipt_stdout="$logs_directory/missing-receipt-submit.stdout"
 missing_receipt_stderr="$logs_directory/missing-receipt-submit.stderr"
@@ -803,6 +985,234 @@ grep -F "deployed Alchemy HMAC Worker failed release verification" \
   || fail "review submission did not report the failed Worker gate"
 [[ ! -e "$worker_failure_asc_log" ]] \
   || fail "review submission invoked asc after its Worker verifier failed"
+
+orchestration_fixture="$test_root/release orchestration"
+mkdir -p "$orchestration_fixture/Scripts/asc" "$orchestration_fixture/app-store-connect"
+for relative_file in Scripts/asc/common.sh Scripts/asc/publish.sh \
+  Scripts/asc/publish_check.sh Scripts/asc/submit_review.sh \
+  Scripts/alchemy_jwt_request_proof_key_common.sh; do
+  cp -p "$repository_directory/$relative_file" "$orchestration_fixture/$relative_file"
+done
+cat >>"$orchestration_fixture/Scripts/asc/common.sh" <<'FIXTURE'
+record_event() {
+  printf '%s|%s\n' "$1" "${2:-}" >>"$ASC_TEST_EVENTS"
+  if [[ "${ASC_TEST_FAILURE:-}" == "$1" ]]; then
+    printf 'fixture failure: %s\n' "$1" >&2
+    return 1
+  fi
+}
+require_cmd() { :; }
+validate_macos_app_sandbox_information_confirmation() { record_event sandbox "$1"; }
+validate_alchemy_release_inputs() { record_event inputs; }
+validate_export_options() { :; }
+validate_local_version_sources() { :; }
+current_local_version() { printf '%s\n' 1.2.3; }
+current_local_build_number() { printf '%s\n' 45; }
+load_alchemy_release_proof_key() { :; }
+alchemy_request_proof_fingerprint() { printf '%s\n' fixture-proof-digest; }
+run_with_alchemy_release_proof_key() { "$@"; }
+run_alchemy_worker_release_verification() { record_event worker; }
+write_alchemy_release_receipt() { record_event receipt "$4|$5|$7"; }
+load_and_validate_alchemy_release_receipt() {
+  record_event receipt
+  ALCHEMY_RELEASE_RECEIPT_BUILD_ID=fixture-build
+  ALCHEMY_RELEASE_RECEIPT_ARTIFACT_PATH="$ASC_TEST_ARTIFACT"
+}
+asc() {
+  local category="$1" operation="$2" path=""
+  shift 2
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --archive-path|--ipa-path|--ipa) path="$2"; shift ;;
+    esac
+    shift
+  done
+  case "$category/$operation" in
+    builds/info) record_event lookup; return 1 ;;
+    xcode/archive)
+      record_event archive "$path"
+      mkdir -p "$path"
+      jq -n --arg path "$path" '{archive_path:$path}' ;;
+    xcode/export)
+      record_event export "$path"
+      printf '%s\n' fixture-artifact >"$path"
+      jq -n --arg path "$path" '{ipa_path:$path}' ;;
+    builds/upload)
+      record_event upload "$path" || return
+      printf '%s\n' '{"data":{"id":"fixture-build"}}' ;;
+    *) printf 'unexpected asc command: %s/%s\n' "$category" "$operation" >&2; return 99 ;;
+  esac
+}
+export -f record_event
+FIXTURE
+cat >"$orchestration_fixture/Scripts/inpage_provider_toolchain.sh" <<'FIXTURE'
+inpage_provider_prepare_tool_path() { :; }
+require_inpage_provider_toolchain() { :; }
+FIXTURE
+cat >"$orchestration_fixture/Scripts/assert_no_bundled_alchemy_key.sh" <<'FIXTURE'
+#!/bin/bash
+set -euo pipefail
+record_event inspect "$1"
+FIXTURE
+cat >"$orchestration_fixture/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh" <<'FIXTURE'
+#!/bin/bash
+set -euo pipefail
+case "$2" in
+  *.xcarchive) record_event archive-validation "$2" ;;
+  *) record_event artifact-validation "$2" ;;
+esac
+FIXTURE
+cat >"$orchestration_fixture/Scripts/asc/ensure_version.sh" <<'FIXTURE'
+#!/bin/bash
+set -euo pipefail
+record_event mutation
+exit 77
+FIXTURE
+chmod 700 "$orchestration_fixture"/Scripts/*.sh \
+  "$orchestration_fixture/Scripts/asc/ensure_version.sh"
+
+assert_event_before() {
+  awk -F '|' -v first="$1" -v second="$2" '
+    $1 == first && !a { a = NR }
+    $1 == second && !b { b = NR }
+    END { exit !(a && b && a < b) }
+  ' "$orchestration_events" || fail "$orchestration_case: $1 must precede $2"
+}
+assert_no_event() {
+  if grep -q "^$1|" "$orchestration_events"; then
+    fail "$orchestration_case unexpectedly reached $1"
+  fi
+}
+run_orchestration() {
+  orchestration_case="$1"
+  local script="$2" failure="${3:-}"
+  orchestration_events="$logs_directory/$orchestration_case.events"
+  orchestration_stdout="$logs_directory/$orchestration_case.stdout"
+  : >"$orchestration_events"
+  set +e
+  ASC_TEST_EVENTS="$orchestration_events" \
+    ASC_TEST_FAILURE="$failure" \
+    ASC_TEST_ARTIFACT="$submit_artifact" \
+    ASC_ARTIFACTS_DIR="$test_root/$orchestration_case-artifacts" \
+    "$orchestration_fixture/Scripts/asc/$script.sh" IOS \
+    >"$orchestration_stdout" 2>"$logs_directory/$orchestration_case.stderr"
+  orchestration_status=$?
+  set -e
+}
+
+for failed_gate in sandbox inputs worker artifact-validation upload receipt none; do
+  run_orchestration "publish-$failed_gate" publish "$failed_gate"
+  if [[ "$failed_gate" == none ]]; then
+    [[ "$orchestration_status" -eq 0 ]] || fail "publish fixture failed"
+    assert_event_before sandbox inputs
+    assert_event_before inputs lookup
+    assert_event_before worker artifact-validation
+    assert_event_before artifact-validation upload
+    assert_event_before upload receipt
+    uploaded_artifact="$(awk -F '|' '$1 == "upload" { print $2 }' "$orchestration_events")"
+    expected_digest="$(release_artifact_sha256 "$uploaded_artifact")"
+    grep -F -x "artifact-validation|$uploaded_artifact" "$orchestration_events" >/dev/null \
+      || fail "publish validated a different artifact"
+    grep -F -x "receipt|fixture-build|$uploaded_artifact|$expected_digest" "$orchestration_events" >/dev/null \
+      || fail "publish receipt does not describe the uploaded artifact"
+    jq -e --arg path "$uploaded_artifact" \
+      '.buildId == "fixture-build" and .artifactPath == $path' \
+      "$orchestration_stdout" >/dev/null || fail "publish result is invalid"
+  else
+    [[ "$orchestration_status" -ne 0 && ! -s "$orchestration_stdout" ]] \
+      || fail "$orchestration_case produced a successful result"
+    case "$failed_gate" in
+      sandbox) assert_no_event inputs; assert_no_event lookup ;;
+      inputs) assert_no_event lookup ;;
+      worker|artifact-validation) assert_no_event upload; assert_no_event receipt ;;
+      upload) assert_no_event receipt ;;
+    esac
+    exported_artifact="$(awk -F '|' '$1 == "export" { print $2 }' "$orchestration_events")"
+    if [[ -n "$exported_artifact" ]]; then
+      case "$failed_gate" in
+        upload|receipt) [[ -f "$exported_artifact" ]] || fail "$orchestration_case lost the attempted upload artifact" ;;
+        *) [[ ! -e "$exported_artifact" ]] || fail "$orchestration_case retained an incomplete artifact" ;;
+      esac
+    fi
+  fi
+done
+for failed_gate in sandbox receipt artifact-validation worker none; do
+  run_orchestration "submit-$failed_gate" submit_review "$failed_gate"
+  [[ "$orchestration_status" -ne 0 && ! -s "$orchestration_stdout" ]] \
+    || fail "$orchestration_case escaped the mocked submission boundary"
+  if [[ "$failed_gate" == none ]]; then
+    [[ "$orchestration_status" -eq 77 ]] || fail "submission did not reach its mutation boundary"
+    assert_event_before sandbox receipt
+    assert_event_before receipt artifact-validation
+    assert_event_before artifact-validation worker
+    assert_event_before worker mutation
+    grep -F -x "artifact-validation|$submit_artifact" "$orchestration_events" >/dev/null \
+      || fail "submission validated a different receipt artifact"
+  else
+    assert_no_event mutation
+  fi
+done
+for failed_gate in sandbox inputs none; do
+  run_orchestration "preflight-$failed_gate" publish_check "$failed_gate"
+  if [[ "$failed_gate" == none ]]; then
+    [[ "$orchestration_status" -eq 0 ]] || fail "valid preflight failed"
+    assert_event_before sandbox inputs
+  else
+    [[ "$orchestration_status" -ne 0 ]] || fail "preflight ignored $failed_gate failure"
+    [[ "$failed_gate" != sandbox ]] || assert_no_event inputs
+  fi
+done
+
+workflow_fixture="$test_root/workflow fixture"
+mkdir -p "$workflow_fixture/Scripts/asc" "$workflow_fixture/app-store-connect"
+cp -p "$common_script" "$workflow_fixture/Scripts/asc/"
+cp -p "$repository_directory/Scripts/alchemy_jwt_request_proof_key_common.sh" \
+  "$workflow_fixture/Scripts/"
+printf '%s\n' FB00000000 >"$workflow_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
+cat >"$workflow_fixture/Scripts/asc/publish_check.sh" <<'FIXTURE'
+#!/bin/bash
+printf '%s\n' "$1" >"$ASC_TEST_PLATFORM_LOG"
+FIXTURE
+chmod 700 "$workflow_fixture/Scripts/asc/publish_check.sh"
+while read -r workflow_name platform_name; do
+  workflow_command="$(jq -r --arg workflow "$workflow_name" \
+    '.workflows[$workflow].steps[] | select((.name // "") | startswith("publish_preflight_")) | .run' \
+    "$workflow_file")"
+  platform_log="$logs_directory/$workflow_name.platform"
+  (cd "$workflow_fixture"; ASC_TEST_PLATFORM_LOG="$platform_log" /bin/bash -e -c "$workflow_command")
+  [[ "$(cat "$platform_log")" == "$platform_name" ]] || fail "$workflow_name passed the wrong platform"
+done <<'WORKFLOWS'
+release_ios IOS
+release_macos MAC_OS
+release_visionos VISION_OS
+WORKFLOWS
+for confirmation in missing confirmed; do
+  aggregate_boundary="$logs_directory/aggregate-$confirmation.boundary"
+  set +e
+  (
+    cd "$workflow_fixture"
+    unset ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED ASC_MACOS_APP_SANDBOX_FEEDBACK_ID
+    if [[ "$confirmation" == confirmed ]]; then
+      export ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
+        ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000
+    fi
+    while IFS= read -r step; do
+      if jq -e 'has("workflow")' <<<"$step" >/dev/null; then
+        printf '%s\n' reached >"$aggregate_boundary"
+        break
+      fi
+      /bin/bash -e -c "$(jq -r '.run' <<<"$step")" || exit "$?"
+    done < <(jq -c '.workflows.release.steps[]' "$workflow_file")
+  ) >"$logs_directory/aggregate-$confirmation.stdout" \
+    2>"$logs_directory/aggregate-$confirmation.stderr"
+  aggregate_status=$?
+  set -e
+  if [[ "$confirmation" == confirmed ]]; then
+    [[ "$aggregate_status" -eq 0 && -s "$aggregate_boundary" ]] || fail "confirmed aggregate release was blocked"
+  else
+    [[ "$aggregate_status" -ne 0 && ! -e "$aggregate_boundary" ]] || fail "aggregate release bypassed macOS confirmation"
+  fi
+done
 
 if grep -F "$fixture_key" "$logs_directory"/*.stdout "$logs_directory"/*.stderr >/dev/null 2>&1; then
   fail "a synthetic release secret leaked into test output"

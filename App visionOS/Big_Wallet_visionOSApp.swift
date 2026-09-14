@@ -3,7 +3,6 @@
 import SwiftUI
 
 let screenshotMode = false
-var launchURL: URL?
 
 @main
 struct Big_Wallet_visionOSApp: App {
@@ -13,6 +12,9 @@ struct Big_Wallet_visionOSApp: App {
 
     init() {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        SafariApprovalVaultHost.shared.start(
+            backgroundTask: SafariApprovalVaultHost.backgroundTask(using: .shared)
+        )
     }
     
     var body: some Scene {
@@ -27,17 +29,19 @@ struct Big_Wallet_visionOSApp: App {
                         }
                     })
                 }
-            }.onOpenURL { url in
-                DispatchQueue.main.async {
-                    launchURL = url
-                    NotificationCenter.default.post(name: .receievedWalletRequest, object: nil)
-                }
             }
         }
         .defaultSize(CGSize(width: 420, height: 555))
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
+            switch newPhase {
+            case .active:
                 AlchemyJWTProvider.prewarmForApplicationLifecycle()
+                WalletsManager.shared.handleExternalWalletStoreChange()
+                SafariApprovalVaultHost.shared.reconcile()
+            case .background, .inactive:
+                break
+            @unknown default:
+                break
             }
         }
     }
