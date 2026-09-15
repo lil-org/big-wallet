@@ -1590,6 +1590,69 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = nil
     }
 
+    func testCancellationBeforeStageDispatchRejectsWithoutStaging() async throws {
+        let fixture = try makeFixture()
+        var stages = 0
+        var rejections = 0
+        fixture.store.stageHandler = { _, _, _, _ in
+            stages += 1
+            return .persisted
+        }
+        fixture.store.rejectHandler = { handle, nonce, runtime in
+            XCTAssertEqual(handle, fixture.key.handle)
+            XCTAssertEqual(nonce, fixture.key.nativeDeliveryNonce)
+            XCTAssertEqual(runtime, fixture.runtime)
+            rejections += 1
+            return .persisted
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(stages, 0)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        fixture.store.rejectHandler = { _, _, _ in .ownershipLost }
+    }
+
+    func testExpiryBeforeStageDispatchReconcilesWithoutWriting() async throws {
+        let fixture = try makeFixture()
+        var stages = 0
+        var rejections = 0
+        fixture.store.stageHandler = { _, _, _, _ in
+            stages += 1
+            return .persisted
+        }
+        fixture.store.rejectHandler = { _, _, _ in
+            rejections += 1
+            return .persisted
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        let deadline = try XCTUnwrap(fixture.store.snapshot?.request?.admissionDeadline)
+        var reconciliationReads = 0
+        fixture.store.loadHandler = { _ in
+            reconciliationReads += 1
+            return .found(fixture.store.snapshot!)
+        }
+
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.clock.now = deadline
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(stages, 0)
+        XCTAssertEqual(rejections, 0)
+        XCTAssertEqual(reconciliationReads, 1)
+        fixture.store.loadHandler = nil
+    }
+
     func testSuccessfulInFlightStageWinsOverCancellation() async throws {
         let fixture = try makeFixture()
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()

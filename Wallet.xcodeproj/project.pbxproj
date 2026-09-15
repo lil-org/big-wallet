@@ -767,8 +767,14 @@
 		C1D002062FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
 		429165182739973D447D737D /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
+		C2D200012FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */; };
+		C2D300012FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */; };
 		C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
+		C2D200022FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */; };
+		C2D300022FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */; };
 		C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
+		C2D200032FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */; };
+		C2D300032FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */; };
 		C2E85F200AE9A68DAAA48CAA /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		C3D101012FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
 		C3D101022FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
@@ -1125,6 +1131,8 @@
 		C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupApprovalStatePresenter.swift; sourceTree = "<group>"; };
 		604D89B5F048A38733D60AEF /* PopupResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupResponse.swift; sourceTree = "<group>"; };
 		C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossProcessLockTestFixture.swift; sourceTree = "<group>"; };
+		C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentLauncherTestFixture.swift; sourceTree = "<group>"; };
+		C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentLauncherTests.swift; sourceTree = "<group>"; };
 		C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DappApprovalDecision.swift; sourceTree = "<group>"; };
 		CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeApprovalFinalizer.swift; sourceTree = "<group>"; };
@@ -1223,6 +1231,8 @@
 			children = (
 				D0A300012FD1000000000001 /* SafariApprovalVaultTests.swift */,
 				C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */,
+				C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */,
+				C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */,
 				2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */,
 				2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */,
 				019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */,
@@ -3200,6 +3210,8 @@
 				2FA802012FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */,
 				C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
+				C2D200012FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */,
+				C2D300012FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */,
 				2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000A /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
 				2F2A0000000000000000000E /* SolanaPreparedTransactionTests.swift in Sources */,
@@ -3438,6 +3450,8 @@
 				2FA802022FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000003 /* SolanaTestFixtures.swift in Sources */,
 				C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
+				C2D200022FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */,
+				C2D300022FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */,
 				2F2A00000000000000000007 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000B /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
 				2F2A0000000000000000000F /* SolanaPreparedTransactionTests.swift in Sources */,
@@ -3474,6 +3488,8 @@
 				2FA802032FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */,
 				C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
+				C2D200032FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */,
+				C2D300032FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */,
 				2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000C /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
 				2F2A00000000000000000010 /* SolanaPreparedTransactionTests.swift in Sources */,

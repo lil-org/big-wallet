@@ -431,7 +431,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 case .found(let snapshot):
                     if snapshot.phase != .responded {
 #if os(macOS)
-                        guard await NativeAgentLauncher.hasCompatibleApprovalDelivery(
+                        guard await Self.nativeAgentLauncher.hasCompatibleApprovalDelivery(
                             handle: handle,
                             nativeDeliveryNonce: snapshot.nativeDeliveryNonce
                         ) else {
@@ -642,7 +642,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 return
             }
             guard Self.nativeLaunchWasDelivered(
-                      await NativeAgentLauncher.currentApprovalDeliveryStatus(
+                      await Self.nativeAgentLauncher.currentApprovalDeliveryStatus(
                           handle: handle,
                           nativeDeliveryNonce: nativeDeliveryNonce
                       )

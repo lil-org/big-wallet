@@ -4678,18 +4678,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: { [] },
-            identity: { _ in nil },
-            validate: { _ in
-                XCTFail("Selecting a candidate must leave verification to launch")
-                return false
-            }
+            dependencies: launcherTestDependencies(
+                validate: { _ in
+                    XCTFail("Selecting a candidate must leave verification to launch")
+                    return false
+                },
+                helpers: { [] },
+                identity: { _ in nil }
+            )
         )
 
-        XCTAssertEqual(selected, .launch(
-            url: currentURL,
-            createsNewApplicationInstance: false
-        ))
+        XCTAssertEqual(
+            selected,
+            .launch(
+                url: currentURL,
+                createsNewApplicationInstance: false
+            ))
     }
 
     func testNativeAgentUnknownRuntimePollsVerifyOnlyBeforeQuit() async throws {
@@ -4702,34 +4706,41 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                isRunning ? [self.runtimeHelper(
-                    processIdentifier: 798,
-                    bundleURL: currentURL,
-                    launchDate: Date(timeIntervalSince1970: 9_000),
-                    isRunning: { isRunning },
-                    requestQuit: {
-                        XCTAssertEqual(verifications, 1)
-                        quitCount += 1
-                        isRunning = false
-                        return true
-                    }
-                )] : []
-            },
-            identity: { _ in nil },
-            validate: { _ in
-                XCTAssertGreaterThanOrEqual(uptime, 1_000_000_000)
-                verifications += 1
-                return true
-            },
-            uptime: { uptime },
-            sleep: { uptime += $0 }
+            dependencies: launcherTestDependencies(
+                validate: { _ in
+                    XCTAssertGreaterThanOrEqual(uptime, 1_000_000_000)
+                    verifications += 1
+                    return true
+                },
+                helpers: {
+                    isRunning
+                        ? [
+                            self.runtimeHelper(
+                                processIdentifier: 798,
+                                bundleURL: currentURL,
+                                launchDate: Date(timeIntervalSince1970: 9_000),
+                                isRunning: { isRunning },
+                                requestQuit: {
+                                    XCTAssertEqual(verifications, 1)
+                                    quitCount += 1
+                                    isRunning = false
+                                    return true
+                                }
+                            )
+                        ] : []
+                },
+                identity: { _ in nil },
+                uptime: { uptime },
+                sleepUntil: { deadline in uptime = max(uptime, deadline) }
+            )
         )
 
-        XCTAssertEqual(selected, .launch(
-            url: currentURL,
-            createsNewApplicationInstance: false
-        ))
+        XCTAssertEqual(
+            selected,
+            .launch(
+                url: currentURL,
+                createsNewApplicationInstance: false
+            ))
         XCTAssertEqual(verifications, 1)
         XCTAssertEqual(quitCount, 1)
     }
@@ -4738,14 +4749,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let currentURL = try makeAmbientBundle(name: "Retirement Passes", build: "149")
         let launchDate = Date(timeIntervalSince1970: 9_500)
         let processIdentifiers: [Int32] = [861, 862, 863, 864]
-        let identities = try Dictionary(uniqueKeysWithValues: processIdentifiers.map {
-            ($0, try runtimeIdentity(
-                processIdentifier: $0,
-                bundleURL: currentURL,
-                launchDate: launchDate,
-                runtimeProtocolVersion: 2
-            ))
-        })
+        let identities = try Dictionary(
+            uniqueKeysWithValues: processIdentifiers.map {
+                (
+                    $0,
+                    try runtimeIdentity(
+                        processIdentifier: $0,
+                        bundleURL: currentURL,
+                        launchDate: launchDate,
+                        runtimeProtocolVersion: 2
+                    )
+                )
+            })
         var pass = 0
         var verifiedPasses = [Int]()
         var retiredProcesses = [Int32]()
@@ -4753,34 +4768,38 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                guard pass < 2 else { return [] }
-                return processIdentifiers[(pass * 2)..<(pass * 2 + 2)].map { processIdentifier in
-                    self.runtimeHelper(
-                        processIdentifier: processIdentifier,
-                        bundleURL: currentURL,
-                        launchDate: launchDate,
-                        requestQuit: {
-                            XCTAssertEqual(verifiedPasses, Array(0...pass))
-                            retiredProcesses.append(processIdentifier)
-                            return true
-                        }
-                    )
-                }
-            },
-            identity: { identities[$0] },
-            validate: { url in
-                XCTAssertEqual(url, currentURL)
-                verifiedPasses.append(pass)
-                return true
-            },
-            sleep: { _ in pass += 1 }
+            dependencies: launcherTestDependencies(
+                validate: { url in
+                    XCTAssertEqual(url, currentURL)
+                    verifiedPasses.append(pass)
+                    return true
+                },
+                helpers: {
+                    guard pass < 2 else { return [] }
+                    return processIdentifiers[(pass * 2)..<(pass * 2 + 2)].map { processIdentifier in
+                        self.runtimeHelper(
+                            processIdentifier: processIdentifier,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            requestQuit: {
+                                XCTAssertEqual(verifiedPasses, Array(0...pass))
+                                retiredProcesses.append(processIdentifier)
+                                return true
+                            }
+                        )
+                    }
+                },
+                identity: { identities[$0] },
+                sleepUntil: { _ in pass += 1 }
+            )
         )
 
-        XCTAssertEqual(selected, .launch(
-            url: currentURL,
-            createsNewApplicationInstance: false
-        ))
+        XCTAssertEqual(
+            selected,
+            .launch(
+                url: currentURL,
+                createsNewApplicationInstance: false
+            ))
         XCTAssertEqual(verifiedPasses, [0, 1])
         XCTAssertEqual(retiredProcesses, processIdentifiers)
     }
@@ -4805,29 +4824,33 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                [
-                    self.runtimeHelper(
-                        processIdentifier: 801,
-                        bundleURL: currentURL,
-                        launchDate: launchDate
-                    ),
-                    self.runtimeHelper(
-                        processIdentifier: 802,
-                        bundleURL: otherURL,
-                        launchDate: launchDate
-                    ),
-                ]
-            },
-            identity: { identities[$0] },
-            validate: { $0 == currentURL }
+            dependencies: launcherTestDependencies(
+                validate: { $0 == currentURL },
+                helpers: {
+                    [
+                        self.runtimeHelper(
+                            processIdentifier: 801,
+                            bundleURL: currentURL,
+                            launchDate: launchDate
+                        ),
+                        self.runtimeHelper(
+                            processIdentifier: 802,
+                            bundleURL: otherURL,
+                            launchDate: launchDate
+                        ),
+                    ]
+                },
+                identity: { identities[$0] }
+            )
         )
 
-        guard let selected, case .running(
-                  let selectedURL,
-                  let processIdentifier,
-                  let runtimeInstanceIdentifier
-              ) = selected else { return XCTFail("Expected running target") }
+        guard let selected,
+            case .running(
+                let selectedURL,
+                let processIdentifier,
+                let runtimeInstanceIdentifier
+            ) = selected
+        else { return XCTFail("Expected running target") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertEqual(processIdentifier, 801)
         XCTAssertEqual(
@@ -4837,7 +4860,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     func testNativeAgentResolutionFailsClosedWhenUnknownRetirementIsRefused()
-        async throws {
+        async throws
+    {
         let currentURL = try makeAmbientBundle(name: "Unknown", build: "148")
         var uptime: UInt64 = 0
         var quitCount = 0
@@ -4845,21 +4869,25 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                [self.runtimeHelper(
-                    processIdentifier: 811,
-                    bundleURL: currentURL,
-                    launchDate: Date(timeIntervalSince1970: 11_000),
-                    requestQuit: {
-                        quitCount += 1
-                        return false
-                    }
-                )]
-            },
-            identity: { _ in nil },
-            validate: { _ in true },
-            uptime: { uptime },
-            sleep: { uptime += $0 }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    [
+                        self.runtimeHelper(
+                            processIdentifier: 811,
+                            bundleURL: currentURL,
+                            launchDate: Date(timeIntervalSince1970: 11_000),
+                            requestQuit: {
+                                quitCount += 1
+                                return false
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in nil },
+                uptime: { uptime },
+                sleepUntil: { deadline in uptime = max(uptime, deadline) }
+            )
         )
 
         XCTAssertNil(selected)
@@ -4876,28 +4904,32 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                guard isLegacyRunning else { return [] }
-                return [self.runtimeHelper(
-                    processIdentifier: 812,
-                    bundleURL: currentURL,
-                    launchDate: launchDate,
-                    isRunning: { isLegacyRunning },
-                    requestQuit: {
-                        requestCount += 1
-                        isLegacyRunning = false
-                        return true
-                    }
-                )]
-            },
-            identity: { _ in nil },
-            validate: { _ in true },
-            uptime: { uptime },
-            sleep: { uptime += $0 }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    guard isLegacyRunning else { return [] }
+                    return [
+                        self.runtimeHelper(
+                            processIdentifier: 812,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            isRunning: { isLegacyRunning },
+                            requestQuit: {
+                                requestCount += 1
+                                isLegacyRunning = false
+                                return true
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in nil },
+                uptime: { uptime },
+                sleepUntil: { deadline in uptime = max(uptime, deadline) }
+            )
         )
 
         guard let selected,
-              case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL, let createsNewInstance) = selected
         else { return XCTFail("Expected fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertFalse(createsNewInstance)
@@ -4921,37 +4953,41 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                guard isRunning else { return [] }
-                return [self.runtimeHelper(
-                    processIdentifier: 813,
-                    bundleURL: currentURL,
-                    launchDate: launchDate,
-                    requestQuit: {
-                        quitCount += 1
-                        isRunning = false
-                        return true
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    guard isRunning else { return [] }
+                    return [
+                        self.runtimeHelper(
+                            processIdentifier: 813,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            requestQuit: {
+                                quitCount += 1
+                                isRunning = false
+                                return true
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in
+                    identityReadCount += 1
+                    if uptime >= 350_000_000 {
+                        publishedIdentity = identity
                     }
-                )]
-            },
-            identity: { _ in
-                identityReadCount += 1
-                if uptime >= 350_000_000 {
-                    publishedIdentity = identity
-                }
-                return publishedIdentity
-            },
-            validate: { _ in true },
-            uptime: { uptime },
-            sleep: { uptime += $0 }
+                    return publishedIdentity
+                },
+                uptime: { uptime },
+                sleepUntil: { deadline in uptime = max(uptime, deadline) }
+            )
         )
 
         guard let selected,
-              case .running(
-                  let selectedURL,
-                  let processIdentifier,
-                  let instanceIdentifier
-              ) = selected
+            case .running(
+                let selectedURL,
+                let processIdentifier,
+                let instanceIdentifier
+            ) = selected
         else { return XCTFail("Expected running helper target") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertEqual(processIdentifier, identity.processIdentifier)
@@ -4961,7 +4997,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     func testNativeAgentResolutionRechecksIdentityBeforeUnknownRetirement()
-        async throws {
+        async throws
+    {
         let currentURL = try makeAmbientBundle(name: "Boundary", build: "149")
         let launchDate = Date(timeIntervalSince1970: 11_650)
         let identity = try runtimeIdentity(
@@ -4976,33 +5013,37 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                [self.runtimeHelper(
-                    processIdentifier: 817,
-                    bundleURL: currentURL,
-                    launchDate: launchDate,
-                    requestQuit: {
-                        quitCount += 1
-                        return true
-                    }
-                )]
-            },
-            identity: { _ in
-                guard uptime >= 1_000_000_000 else { return nil }
-                boundaryReadCount += 1
-                return boundaryReadCount > 1 ? identity : nil
-            },
-            validate: { _ in true },
-            uptime: { uptime },
-            sleep: { uptime += $0 }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    [
+                        self.runtimeHelper(
+                            processIdentifier: 817,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            requestQuit: {
+                                quitCount += 1
+                                return true
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in
+                    guard uptime >= 1_000_000_000 else { return nil }
+                    boundaryReadCount += 1
+                    return boundaryReadCount > 1 ? identity : nil
+                },
+                uptime: { uptime },
+                sleepUntil: { deadline in uptime = max(uptime, deadline) }
+            )
         )
 
         guard let selected,
-              case .running(
-                  _,
-                  let processIdentifier,
-                  let instanceIdentifier
-              ) = selected
+            case .running(
+                _,
+                let processIdentifier,
+                let instanceIdentifier
+            ) = selected
         else { return XCTFail("Expected running helper target") }
         XCTAssertEqual(processIdentifier, identity.processIdentifier)
         XCTAssertEqual(instanceIdentifier, identity.instanceIdentifier)
@@ -5018,23 +5059,27 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                [self.runtimeHelper(
-                    processIdentifier: 814,
-                    bundleURL: otherURL,
-                    launchDate: Date(timeIntervalSince1970: 11_700),
-                    requestQuit: {
-                        quitCount += 1
-                        return true
-                    }
-                )]
-            },
-            identity: { _ in nil },
-            validate: { _ in true }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    [
+                        self.runtimeHelper(
+                            processIdentifier: 814,
+                            bundleURL: otherURL,
+                            launchDate: Date(timeIntervalSince1970: 11_700),
+                            requestQuit: {
+                                quitCount += 1
+                                return true
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in nil }
+            )
         )
 
         guard let selected,
-              case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL, let createsNewInstance) = selected
         else { return XCTFail("Expected fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertFalse(createsNewInstance)
@@ -5042,7 +5087,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     func testUnknownSamePathRetirementPreservesUnknownOtherPath()
-        async throws {
+        async throws
+    {
         let currentURL = try makeAmbientBundle(name: "Current", build: "149")
         let otherURL = try makeAmbientBundle(name: "Other Legacy", build: "148")
         let launchDate = Date(timeIntervalSince1970: 11_800)
@@ -5054,39 +5100,44 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                var result = [self.runtimeHelper(
-                    processIdentifier: 815,
-                    bundleURL: otherURL,
-                    launchDate: launchDate,
-                    requestQuit: {
-                        otherPathQuitCount += 1
-                        return true
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    var result = [
+                        self.runtimeHelper(
+                            processIdentifier: 815,
+                            bundleURL: otherURL,
+                            launchDate: launchDate,
+                            requestQuit: {
+                                otherPathQuitCount += 1
+                                return true
+                            }
+                        )
+                    ]
+                    if samePathIsRunning {
+                        result.append(
+                            self.runtimeHelper(
+                                processIdentifier: 816,
+                                bundleURL: currentURL,
+                                launchDate: launchDate,
+                                isRunning: { samePathIsRunning },
+                                requestQuit: {
+                                    samePathQuitCount += 1
+                                    samePathIsRunning = false
+                                    return true
+                                }
+                            ))
                     }
-                )]
-                if samePathIsRunning {
-                    result.append(self.runtimeHelper(
-                        processIdentifier: 816,
-                        bundleURL: currentURL,
-                        launchDate: launchDate,
-                        isRunning: { samePathIsRunning },
-                        requestQuit: {
-                            samePathQuitCount += 1
-                            samePathIsRunning = false
-                            return true
-                        }
-                    ))
-                }
-                return result
-            },
-            identity: { _ in nil },
-            validate: { _ in true },
-            uptime: { uptime },
-            sleep: { uptime += $0 }
+                    return result
+                },
+                identity: { _ in nil },
+                uptime: { uptime },
+                sleepUntil: { deadline in uptime = max(uptime, deadline) }
+            )
         )
 
         guard let selected,
-              case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL, let createsNewInstance) = selected
         else { return XCTFail("Expected fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertFalse(createsNewInstance)
@@ -5109,26 +5160,30 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                guard isRunning else { return [] }
-                return [self.runtimeHelper(
-                    processIdentifier: 821,
-                    bundleURL: currentURL,
-                    launchDate: launchDate,
-                    isRunning: { isRunning },
-                    requestQuit: {
-                        quitCount += 1
-                        return true
-                    }
-                )]
-            },
-            identity: { _ in identity },
-            validate: { _ in true },
-            sleep: { _ in isRunning = false }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    guard isRunning else { return [] }
+                    return [
+                        self.runtimeHelper(
+                            processIdentifier: 821,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            isRunning: { isRunning },
+                            requestQuit: {
+                                quitCount += 1
+                                return true
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in identity },
+                sleepUntil: { _ in isRunning = false }
+            )
         )
 
         guard let selected,
-              case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL, let createsNewInstance) = selected
         else { return XCTFail("Expected launch target") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertFalse(createsNewInstance)
@@ -5155,40 +5210,45 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                var result = [
-                    self.runtimeHelper(
-                        processIdentifier: 831,
-                        bundleURL: currentURL,
-                        launchDate: launchDate
-                    ),
-                ]
-                if incompatibleIsRunning {
-                    result.append(self.runtimeHelper(
-                        processIdentifier: 832,
-                        bundleURL: currentURL,
-                        launchDate: launchDate,
-                        isRunning: { incompatibleIsRunning },
-                        requestQuit: {
-                            quitCount += 1
-                            return true
-                        }
-                    ))
-                }
-                return result
-            },
-            identity: { processIdentifier in
-                processIdentifier == 831 ? compatible : incompatible
-            },
-            validate: { _ in true },
-            sleep: { _ in incompatibleIsRunning = false }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    var result = [
+                        self.runtimeHelper(
+                            processIdentifier: 831,
+                            bundleURL: currentURL,
+                            launchDate: launchDate
+                        )
+                    ]
+                    if incompatibleIsRunning {
+                        result.append(
+                            self.runtimeHelper(
+                                processIdentifier: 832,
+                                bundleURL: currentURL,
+                                launchDate: launchDate,
+                                isRunning: { incompatibleIsRunning },
+                                requestQuit: {
+                                    quitCount += 1
+                                    return true
+                                }
+                            ))
+                    }
+                    return result
+                },
+                identity: { processIdentifier in
+                    processIdentifier == 831 ? compatible : incompatible
+                },
+                sleepUntil: { _ in incompatibleIsRunning = false }
+            )
         )
 
-        guard let selected, case .running(
-                  let selectedURL,
-                  let processIdentifier,
-                  let runtimeInstanceIdentifier
-              ) = selected else { return XCTFail("Expected running target") }
+        guard let selected,
+            case .running(
+                let selectedURL,
+                let processIdentifier,
+                let runtimeInstanceIdentifier
+            ) = selected
+        else { return XCTFail("Expected running target") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertEqual(processIdentifier, 831)
         XCTAssertEqual(
@@ -5221,26 +5281,30 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                guard isRunning else { return [] }
-                return [self.runtimeHelper(
-                    processIdentifier: 833,
-                    bundleURL: currentURL,
-                    launchDate: launchDate,
-                    isRunning: { isRunning },
-                    requestQuit: {
-                        quitCount += 1
-                        return true
-                    }
-                )]
-            },
-            identity: { _ in identity },
-            validate: { _ in true },
-            sleep: { _ in isRunning = false }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    guard isRunning else { return [] }
+                    return [
+                        self.runtimeHelper(
+                            processIdentifier: 833,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            isRunning: { isRunning },
+                            requestQuit: {
+                                quitCount += 1
+                                return true
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in identity },
+                sleepUntil: { _ in isRunning = false }
+            )
         )
 
         guard let selected,
-              case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL, let createsNewInstance) = selected
         else { return XCTFail("Expected a fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
         XCTAssertFalse(createsNewInstance)
@@ -5248,7 +5312,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     func testNativeAgentResolutionFailsClosedWhenRetirementIsRefused()
-        async throws {
+        async throws
+    {
         let currentURL = try makeAmbientBundle(name: "Refuses Quit", build: "149")
         let launchDate = Date(timeIntervalSince1970: 13_550)
         let identity = try runtimeIdentity(
@@ -5263,19 +5328,23 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: currentURL,
             deadline: UInt64.max,
             isPending: { true },
-            helpers: {
-                [self.runtimeHelper(
-                    processIdentifier: 835,
-                    bundleURL: currentURL,
-                    launchDate: launchDate,
-                    requestQuit: {
-                        quitCount += 1
-                        return false
-                    }
-                )]
-            },
-            identity: { _ in identity },
-            validate: { _ in true }
+            dependencies: launcherTestDependencies(
+                validate: { _ in true },
+                helpers: {
+                    [
+                        self.runtimeHelper(
+                            processIdentifier: 835,
+                            bundleURL: currentURL,
+                            launchDate: launchDate,
+                            requestQuit: {
+                                quitCount += 1
+                                return false
+                            }
+                        )
+                    ]
+                },
+                identity: { _ in identity }
+            )
         )
 
         XCTAssertNil(selected)
@@ -5469,80 +5538,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testNativeAgentRevalidatesReceiptOwnerAndDeadlineAfterStoreReloadBeforeQuit()
-        async throws {
-        for expiresDuringVerification in [false, true] {
-            let fixture = try makeFixture(id: expiresDuringVerification ? 847 : 846)
-            let helperURL = try makeAmbientBundle(name: "Receipt Revalidation", build: "149")
-            let launchDate = Date(timeIntervalSince1970: 14_200)
-            let runtime = try runtimeIdentity(
-                processIdentifier: 846,
-                bundleURL: helperURL,
-                launchDate: launchDate,
-                runtimeProtocolVersion: 2
-            )
-            let admission = try accepted(await bridge.enqueue(
-                ingress: fixture.ingress,
-                profileIdentifier: nil
-            ))
-            let recorded = await bridge.recordNativeDeliveryReceipt(
-                handle: admission.handle,
-                nativeDeliveryNonce: admission.nativeDeliveryNonce,
-                owner: try XCTUnwrap(runtime.nativeDeliveryOwner)
-            )
-            XCTAssertEqual(recorded, .persisted)
-            var loads = 0
-            var verifications = 0
-            var pending = true
-            let status = await NativeAgentLauncher.approvalDeliveryStatus(
-                handle: admission.handle,
-                nativeDeliveryNonce: admission.nativeDeliveryNonce,
-                isPending: { pending },
-                dependencies: .init(
-                    load: { handle in
-                        loads += 1
-                        return await self.bridge.load(handle: handle)
-                    },
-                    receiptRuntimeStatus: { receipt in
-                        await NativeAgentLauncher.runtimeStatus(
-                            receipt: receipt,
-                            expectedURL: helperURL,
-                            expectedVersion: runtime.version,
-                            helper: { pid in
-                                ([self.runtimeHelper(
-                                    processIdentifier: 846,
-                                    bundleURL: helperURL,
-                                    launchDate: launchDate,
-                                    requestQuit: {
-                                        XCTFail("Failed verification or an expired deadline must prevent quitting")
-                                        return true
-                                    }
-                                )]).first { $0.processIdentifier == pid }
-                            },
-                            identity: { _ in runtime },
-                            validate: { _ in
-                                verifications += 1
-                                XCTAssertEqual(loads, 2)
-                                pending = !expiresDuringVerification
-                                return expiresDuringVerification
-                            }
-                        )
-                    },
-                    clearReceipt: { _, _ in
-                        XCTFail("The live owner must retain its receipt")
-                        return .persisted
-                    },
-                    wait: { _ in }
-                )
-            )
-
-            XCTAssertEqual(status, .unavailable)
-            XCTAssertEqual(loads, 2)
-            XCTAssertEqual(verifications, 1)
-        }
-    }
-
-    @MainActor
     func testReceiptOwnerMetadataIgnoresUnidentifiedOtherPath() async throws {
         let expectedURL = try makeAmbientBundle(name: "Expected", build: "149")
         let otherURL = try makeAmbientBundle(name: "Other Legacy", build: "148")
@@ -5606,625 +5601,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testNativeAgentClearsReceiptWhoseRuntimeIsAbsent() async throws {
-        let fixture = try makeFixture(id: 824)
-        let helperURL = try makeAmbientBundle(name: "Receipt Owner", build: "149")
-        let owner = try nativeDeliveryOwner(bundleURL: helperURL)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let runtimeInstanceIdentifier = owner.runtimeInstanceIdentifier
-        let recorded = await bridge.recordNativeDeliveryReceipt(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: owner
-        )
-        XCTAssertEqual(recorded, .persisted)
-        var clearCount = 0
-        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
-            load: { handle in await self.bridge.load(handle: handle) },
-            receiptRuntimeStatus: { receipt in
-                XCTAssertEqual(
-                    receipt.owner.runtimeInstanceIdentifier,
-                    runtimeInstanceIdentifier
-                )
-                XCTAssertEqual(receipt.owner, owner)
-                return .absent
-            },
-            clearReceipt: { handle, receipt in
-                clearCount += 1
-                return await self.bridge.clearNativeDeliveryReceipt(
-                    handle: handle,
-                    nativeDeliveryNonce: receipt.nativeDeliveryNonce,
-                    runtimeInstanceIdentifier:
-                        receipt.owner.runtimeInstanceIdentifier
-                )
-            },
-            wait: { _ in }
-        )
-
-        let status = await NativeAgentLauncher.approvalDeliveryStatus(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            isPending: { true },
-            dependencies: dependencies
-        )
-
-        XCTAssertEqual(status, .needsDelivery)
-        XCTAssertEqual(clearCount, 1)
-        guard case .found(let snapshot) = await bridge.load(
-            handle: admission.handle
-        ) else { return XCTFail("Expected retained request") }
-        XCTAssertNil(snapshot.nativeDeliveryReceipt)
-    }
-
-    @MainActor
-    func testNativeAgentQuitsIncompatibleReceiptOwnerBeforeClearing()
-        async throws {
-        let fixture = try makeFixture(id: 825)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let runtimeInstanceIdentifier = UUID()
-        let recorded = await bridge.recordNativeDeliveryReceipt(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: storedRequestNativeOwner(runtime: runtimeInstanceIdentifier)
-        )
-        XCTAssertEqual(recorded, .persisted)
-        var events = [String]()
-        var loadCount = 0
-        var isRunning = true
-        let owner = NativeAgentLauncher.ExactReceiptOwner(
-            requestQuit: { _ in
-                events.append("quit")
-                return true
-            },
-            isRunning: {
-                events.append("running")
-                return isRunning
-            }
-        )
-        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
-            load: { handle in
-                loadCount += 1
-                return await self.bridge.load(handle: handle)
-            },
-            receiptRuntimeStatus: { receipt in
-                XCTAssertEqual(
-                    receipt.owner.runtimeInstanceIdentifier,
-                    runtimeInstanceIdentifier
-                )
-                return .incompatible(owner)
-            },
-            clearReceipt: { handle, receipt in
-                events.append("clear")
-                return await self.bridge.clearNativeDeliveryReceipt(
-                    handle: handle,
-                    nativeDeliveryNonce: receipt.nativeDeliveryNonce,
-                    runtimeInstanceIdentifier:
-                        receipt.owner.runtimeInstanceIdentifier
-                )
-            },
-            wait: { _ in
-                events.append("wait")
-                isRunning = false
-            }
-        )
-
-        let status = await NativeAgentLauncher.approvalDeliveryStatus(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            isPending: { true },
-            dependencies: dependencies
-        )
-
-        XCTAssertEqual(status, .needsDelivery)
-        XCTAssertEqual(loadCount, 2)
-        XCTAssertEqual(events, ["quit", "running", "wait", "running", "clear"])
-    }
-
-    @MainActor
-    func testNativeAgentRechecksChangedReceiptBeforeQuitting() async throws {
-        let fixture = try makeFixture(id: 826)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let firstRuntime = UUID()
-        let recorded = await bridge.recordNativeDeliveryReceipt(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: storedRequestNativeOwner(runtime: firstRuntime)
-        )
-        XCTAssertEqual(recorded, .persisted)
-        guard case .found(let firstSnapshot) = await bridge.load(
-            handle: admission.handle
-        ) else { return XCTFail("Expected native receipt") }
-        let secondRuntime = UUID()
-        let secondReceipt = ExtensionBridge.NativeDeliveryReceipt(
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: storedRequestNativeOwner(runtime: secondRuntime)
-        )
-        let secondSnapshot = ExtensionBridge.Snapshot(
-            handle: firstSnapshot.handle,
-            state: .queued(
-                request: try XCTUnwrap(firstSnapshot.request),
-                approval: .delivered(secondReceipt)
-            ),
-            nativeDeliveryNonce: firstSnapshot.nativeDeliveryNonce,
-            host: firstSnapshot.host,
-            configurationKey: firstSnapshot.configurationKey,
-            revisions: firstSnapshot.revisions,
-            createdAt: firstSnapshot.createdAt,
-            enqueueAttempt: firstSnapshot.enqueueAttempt,
-            sequence: firstSnapshot.sequence
-        )
-        var loadCount = 0
-        var quitCount = 0
-        var clearCount = 0
-        let owner = NativeAgentLauncher.ExactReceiptOwner(
-            requestQuit: { _ in
-                quitCount += 1
-                return true
-            },
-            isRunning: { false }
-        )
-        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
-            load: { _ in
-                loadCount += 1
-                return .found(loadCount == 1 ? firstSnapshot : secondSnapshot)
-            },
-            receiptRuntimeStatus: { receipt in
-                receipt.owner.runtimeInstanceIdentifier == firstRuntime
-                    ? .incompatible(owner)
-                    : .compatible(.running(
-                        url: self.rootURL.appendingPathComponent("Owner.app"),
-                        processIdentifier: 840,
-                        runtimeInstanceIdentifier: secondRuntime
-                    ))
-            },
-            clearReceipt: { _, _ in
-                clearCount += 1
-                return .persisted
-            },
-            wait: { _ in }
-        )
-
-        let status = await NativeAgentLauncher.approvalDeliveryStatus(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            isPending: { true },
-            dependencies: dependencies
-        )
-
-        XCTAssertEqual(status, .delivered)
-        XCTAssertEqual(loadCount, 3)
-        XCTAssertEqual(quitCount, 0)
-        XCTAssertEqual(clearCount, 0)
-    }
-
-    @MainActor
-    func testNativeAgentRetainsReceiptForUnidentifiedRuntime() async throws {
-        let fixture = try makeFixture(id: 827)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let recorded = await bridge.recordNativeDeliveryReceipt(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: storedRequestNativeOwner(runtime: UUID())
-        )
-        XCTAssertEqual(recorded, .persisted)
-        var clearCount = 0
-        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
-            load: { handle in await self.bridge.load(handle: handle) },
-            receiptRuntimeStatus: { _ in .indeterminate },
-            clearReceipt: { _, _ in
-                clearCount += 1
-                return .persisted
-            },
-            wait: { _ in }
-        )
-
-        let status = await NativeAgentLauncher.approvalDeliveryStatus(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            isPending: { true },
-            dependencies: dependencies
-        )
-
-        XCTAssertEqual(status, .unavailable)
-        XCTAssertEqual(clearCount, 0)
-        guard case .found(let snapshot) = await bridge.load(
-            handle: admission.handle
-        ) else { return XCTFail("Expected retained request") }
-        XCTAssertNotNil(snapshot.nativeDeliveryReceipt)
-    }
-
-    @MainActor
-    func testNativeAgentReactivationTargetsReceiptOwnerAndKeepsPollingSilent()
-        async throws {
-        let fixture = try makeFixture(id: 839)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let helperURL = try makeAmbientBundle(name: "Reactivation", build: "149")
-        let launchDate = Date(timeIntervalSince1970: 14_000)
-        let unrelated = try runtimeIdentity(
-            processIdentifier: 839,
-            bundleURL: helperURL,
-            launchDate: launchDate
-        )
-        let owner = try runtimeIdentity(
-            processIdentifier: 840,
-            bundleURL: helperURL,
-            launchDate: launchDate
-        )
-        let recorded = await bridge.recordNativeDeliveryReceipt(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: try XCTUnwrap(owner.nativeDeliveryOwner)
-        )
-        XCTAssertEqual(recorded, .persisted)
-        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
-            load: { await self.bridge.load(handle: $0) },
-            receiptRuntimeStatus: { receipt in
-                await NativeAgentLauncher.runtimeStatus(
-                    receipt: receipt,
-                    expectedURL: helperURL,
-                    expectedVersion: owner.version,
-                    helper: { pid in
-                        ([unrelated, owner].map { runtime in
-                            self.runtimeHelper(
-                                processIdentifier: runtime.processIdentifier,
-                                bundleURL: helperURL,
-                                launchDate: launchDate
-                            )
-                        }).first { $0.processIdentifier == pid }
-                    },
-                    identity: { $0 == owner.processIdentifier ? owner : unrelated },
-                    validate: { $0 == helperURL }
-                )
-            },
-            clearReceipt: { _, _ in
-                XCTFail("Compatible owner must retain its receipt")
-                return .ownershipLost
-            },
-            wait: { _ in }
-        )
-        let route = NativeAgentRoute.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce
-        )
-        var targets = [NativeAgentLauncher.HelperTarget]()
-        var deliveredRoutes = [URL]()
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            resolveHelper: { _, _, _ in
-                XCTFail("Existing approval must target its receipt owner")
-                return nil
-            },
-            existingDelivery: { _, isPending in
-                await NativeAgentLauncher.approvalDeliveryStatus(
-                    handle: admission.handle,
-                    nativeDeliveryNonce: admission.nativeDeliveryNonce,
-                    isPending: isPending,
-                    dependencies: dependencies
-                )
-            },
-            launch: { target, url, completion in
-                targets.append(target)
-                deliveredRoutes.append(url)
-                completion(true)
-            }
-        )
-
-        let delivered = await launcher.open(route)
-        XCTAssertTrue(delivered)
-        XCTAssertTrue(targets.isEmpty)
-        let reactivated = await launcher.reactivate(route, dependencies: dependencies)
-        XCTAssertTrue(reactivated)
-        XCTAssertEqual(targets, [.running(
-            url: helperURL,
-            processIdentifier: owner.processIdentifier,
-            runtimeInstanceIdentifier: owner.instanceIdentifier
-        )])
-        XCTAssertEqual(deliveredRoutes, [route.url])
-
-        let wrongNonce = await launcher.reactivate(.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: .init(value: UUID())
-        ), dependencies: dependencies)
-        XCTAssertFalse(wrongNonce)
-        let rejected = await bridge.rejectNativeDelivery(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: owner.instanceIdentifier
-        )
-        XCTAssertEqual(rejected, .persisted)
-        let completed = await launcher.reactivate(route, dependencies: dependencies)
-        XCTAssertFalse(completed)
-        XCTAssertEqual(deliveredRoutes, [route.url])
-    }
-
-    @MainActor
-    func testNativeAgentReactivationDeliversApprovalWithoutReceipt() async throws {
-        let fixture = try makeFixture(id: 840)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let helperURL = try makeAmbientBundle(name: "Undelivered", build: "149")
-        let route = NativeAgentRoute.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce
-        )
-        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
-            load: { await self.bridge.load(handle: $0) },
-            receiptRuntimeStatus: { _ in
-                XCTFail("Undelivered request has no owner to resolve")
-                return .absent
-            },
-            clearReceipt: { _, _ in
-                XCTFail("Undelivered request has no receipt to clear")
-                return .ownershipLost
-            },
-            wait: { _ in }
-        )
-        var deliveredRoutes = [URL]()
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            launch: { target, url, completion in
-                XCTAssertEqual(target, .launch(
-                    url: helperURL,
-                    createsNewApplicationInstance: false
-                ))
-                deliveredRoutes.append(url)
-                completion(true)
-            }
-        )
-
-        let reactivated = await launcher.reactivate(route, dependencies: dependencies)
-        XCTAssertTrue(reactivated)
-        XCTAssertEqual(deliveredRoutes, [route.url])
-    }
-
-    func testNativeAgentLaunchTimesOutDuringResolution() async throws {
-        let helperURL = try makeAmbientBundle(name: "Timeout", build: "148")
-        var launchCount = 0
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { _ in true },
-            resolveHelper: { url, _, _ in
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                return .launch(
-                    url: url,
-                    createsNewApplicationInstance: false
-                )
-            },
-            launchTimeoutNanoseconds: 1_000_000,
-            launch: { _, _, _ in launchCount += 1 }
-        )
-
-        let opened = await launcher.open(.showWallet(
-            workflowVersion: ExtensionBridge.workflowVersion
-        ))
-        try await Task.sleep(nanoseconds: 60_000_000)
-
-        XCTAssertFalse(opened)
-        XCTAssertEqual(launchCount, 0)
-    }
-
-    func testNativeAgentLaunchTimesOutWhenLaunchServicesNeverCompletes() async throws {
-        let helperURL = try makeAmbientBundle(name: "Launch", build: "148")
-        var launchCompletion: ((Bool) -> Void)?
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { _ in true },
-            resolveHelper: { url, _, _ in
-                .launch(url: url, createsNewApplicationInstance: false)
-            },
-            launchTimeoutNanoseconds: 1_000_000,
-            launch: { _, _, completion in
-                launchCompletion = completion
-            }
-        )
-
-        let opened = await launcher.open(.showWallet(
-            workflowVersion: ExtensionBridge.workflowVersion
-        ))
-        launchCompletion?(true)
-
-        XCTAssertFalse(opened)
-    }
-
-    func testNativeAgentLaunchRequiresCompatibleRuntimeConfirmation() async throws {
-        let helperURL = try makeAmbientBundle(name: "Confirm", build: "148")
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { _ in true },
-            resolveHelper: { url, _, _ in
-                .launch(url: url, createsNewApplicationInstance: false)
-            },
-            confirm: { _, _, _, _ in false },
-            launchTimeoutNanoseconds: 50_000_000,
-            launch: { _, _, completion in completion(true) }
-        )
-
-        let opened = await launcher.open(.showWallet(
-            workflowVersion: ExtensionBridge.workflowVersion
-        ))
-
-        XCTAssertFalse(opened)
-    }
-
-    @MainActor
-    func testNativeDeliveryDriverProbesShowWalletOnceAfterInitialConfirmationWindow() async throws {
-        let helperURL = try makeAmbientBundle(name: "Delayed Wallet Confirmation", build: "148")
-        let launchDate = Date(timeIntervalSince1970: 14_200)
-        let identity = try runtimeIdentity(
-            processIdentifier: 849,
-            bundleURL: helperURL,
-            launchDate: launchDate
-        )
-        let helper = runtimeHelper(
-            processIdentifier: identity.processIdentifier,
-            bundleURL: helperURL,
-            launchDate: launchDate
-        )
-        let startedAt = DispatchTime.now().uptimeNanoseconds
-        var uptime = startedAt
-        var clockReadsAfterLaunch = 0
-        var advancedPastConfirmationWindow = false
-        var launches = 0
-        var observedRuntimeTimes = [UInt64]()
-        let route = NativeAgentRoute.showWallet(workflowVersion: ExtensionBridge.workflowVersion)
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            resolveHelper: nil,
-            confirm: nil,
-            existingDelivery: nil,
-            environment: .init(
-                helpers: {
-                    guard launches > 0 else { return [] }
-                    observedRuntimeTimes.append(uptime - startedAt)
-                    return [helper]
-                },
-                identity: { $0 == identity.processIdentifier ? identity : nil },
-                uptime: {
-                    if launches == 1, !advancedPastConfirmationWindow {
-                        clockReadsAfterLaunch += 1
-                        if clockReadsAfterLaunch == 2 {
-                            let confirmationStartedAt = uptime
-                            uptime += 300_000_000
-                            advancedPastConfirmationWindow = true
-                            return confirmationStartedAt
-                        }
-                    }
-                    return uptime
-                },
-                wait: { delay in
-                    XCTFail("An already compatible helper should confirm without polling")
-                    uptime += delay
-                }
-            ),
-            launch: { _, url, completion in
-                XCTAssertEqual(url, route.url)
-                launches += 1
-                completion(true)
-            }
-        )
-
-        let opened = await launcher.open(route)
-
-        XCTAssertTrue(opened)
-        XCTAssertTrue(advancedPastConfirmationWindow)
-        XCTAssertEqual(uptime - startedAt, 300_000_000)
-        XCTAssertEqual(observedRuntimeTimes, [300_000_000])
-        XCTAssertEqual(launches, 1)
-    }
-
-    @MainActor
-    func testNativeDeliveryDriverPreservesThreeConfirmationWindows() async throws {
-        let fixture = try makeFixture(id: 845)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress, profileIdentifier: nil
-        ))
-        let helperURL = try makeAmbientBundle(name: "Delivery Windows", build: "148")
-        let startedAt = DispatchTime.now().uptimeNanoseconds
-        var uptime = startedAt
-        var launches = [UInt64]()
-        var waits = [UInt64]()
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            resolveHelper: nil,
-            confirm: nil,
-            existingDelivery: nil,
-            environment: .init(
-                approvals: .init(
-                    load: { await self.bridge.load(handle: $0) },
-                    receiptRuntimeStatus: { _ in XCTFail("No receipt was delivered"); return .absent },
-                    clearReceipt: { _, _ in XCTFail("No receipt needs clearing"); return .ownershipLost },
-                    wait: { _ in XCTFail("Only the delivery session may schedule retries") }
-                ),
-                helpers: { [] },
-                identity: { _ in nil },
-                uptime: { uptime },
-                wait: { delay in waits.append(delay); uptime += delay }
-            ),
-            launch: { _, _, completion in
-                launches.append(uptime - startedAt)
-                completion(true)
-            }
-        )
-        let opened = await launcher.open(.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce
-        ))
-        XCTAssertFalse(opened)
-        XCTAssertEqual(launches, [0, 250_000_000, 500_000_000])
-        XCTAssertEqual(waits, Array(repeating: 50_000_000, count: 100))
-        XCTAssertEqual(uptime - startedAt, 5_000_000_000)
-    }
-
-    @MainActor
-    func testNativeDeliveryDriverPollsUnavailableConfirmationButStopsUnavailablePreflight() async throws {
-        let fixture = try makeFixture(id: 846)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress, profileIdentifier: nil
-        ))
-        let helperURL = try makeAmbientBundle(name: "Unavailable Confirmation", build: "148")
-        let startedAt = DispatchTime.now().uptimeNanoseconds
-        var uptime = startedAt
-        var launches = 0
-        var waits = [UInt64]()
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            resolveHelper: nil,
-            confirm: nil,
-            existingDelivery: nil,
-            environment: .init(
-                approvals: .init(
-                    load: { handle in
-                        launches == 0 ? await self.bridge.load(handle: handle) : .unavailable
-                    },
-                    receiptRuntimeStatus: { _ in .indeterminate },
-                    clearReceipt: { _, _ in .ownershipLost },
-                    wait: { _ in XCTFail("Only the delivery session may schedule retries") }
-                ),
-                helpers: { [] },
-                identity: { _ in nil },
-                uptime: { uptime },
-                wait: { delay in waits.append(delay); uptime += delay }
-            ),
-            launch: { _, _, completion in launches += 1; completion(true) }
-        )
-        let opened = await launcher.open(.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce
-        ))
-        XCTAssertFalse(opened)
-        XCTAssertEqual(launches, 1)
-        XCTAssertEqual(waits, Array(repeating: 50_000_000, count: 5))
-        XCTAssertEqual(uptime - startedAt, 250_000_000)
-    }
-
-    @MainActor
     func testNativeAgentResolutionStopsWhenClockReachesDeadlineBetweenChecks() async throws {
         let helperURL = try makeAmbientBundle(name: "Resolution Deadline Boundary", build: "148")
         var clockReads = 0
@@ -6233,245 +5609,25 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             currentURL: helperURL,
             deadline: 50_000_000,
             isPending: { true },
-            helpers: { helperReads += 1; return [] },
-            identity: { _ in nil },
-            validate: { _ in XCTFail("An expired resolution must not validate a helper"); return false },
-            uptime: {
-                clockReads += 1
-                return clockReads <= 2 ? 0 : 50_000_000
-            },
-            sleep: { _ in XCTFail("An expired resolution must not sleep") }
+            dependencies: launcherTestDependencies(
+                validate: { _ in
+                    XCTFail("An expired resolution must not validate a helper")
+                    return false
+                },
+                helpers: {
+                    helperReads += 1
+                    return []
+                },
+                identity: { _ in nil },
+                uptime: {
+                    clockReads += 1
+                    return clockReads <= 2 ? 0 : 50_000_000
+                },
+                sleepUntil: { _ in XCTFail("An expired resolution must not sleep") }
+            )
         )
         XCTAssertNil(target)
         XCTAssertEqual(helperReads, 0)
-    }
-
-    @MainActor
-    func testNativeDeliveryDriverFinishesReceiptRepairBeyondConfirmationWindow() async throws {
-        let fixture = try makeFixture(id: 847)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress, profileIdentifier: nil
-        ))
-        guard case .found(let snapshot) = await bridge.load(handle: admission.handle),
-              case .queued(let request, _) = snapshot.state else {
-            return XCTFail("Expected queued request")
-        }
-        let helperURL = try makeAmbientBundle(name: "Receipt Repair Window", build: "148")
-        let receipt = ExtensionBridge.NativeDeliveryReceipt(
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: try nativeDeliveryOwner(bundleURL: helperURL)
-        )
-        let delivered = ExtensionBridge.Snapshot(
-            handle: snapshot.handle,
-            state: .queued(request: request, approval: .delivered(receipt)),
-            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            host: snapshot.host,
-            configurationKey: snapshot.configurationKey,
-            revisions: snapshot.revisions,
-            createdAt: snapshot.createdAt,
-            enqueueAttempt: snapshot.enqueueAttempt,
-            sequence: snapshot.sequence
-        )
-        let startedAt = DispatchTime.now().uptimeNanoseconds
-        var uptime = startedAt
-        var receiptPresent = false
-        var launches = [UInt64]()
-        var quits = 0
-        var clears = 0
-        var waits = [UInt64]()
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            resolveHelper: nil,
-            confirm: nil,
-            existingDelivery: nil,
-            environment: .init(
-                approvals: .init(
-                    load: { _ in .found(receiptPresent ? delivered : snapshot) },
-                    receiptRuntimeStatus: { _ in
-                        if launches.count > 1 {
-                            return .compatible(.running(
-                                url: helperURL,
-                                processIdentifier: receipt.owner.processIdentifier,
-                                runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier
-                            ))
-                        }
-                        return .incompatible(.init(
-                            requestQuit: { _ in quits += 1; return true },
-                            isRunning: { uptime - startedAt < 300_000_000 }
-                        ))
-                    },
-                    clearReceipt: { _, checked in
-                        XCTAssertEqual(checked, receipt)
-                        XCTAssertEqual(uptime - startedAt, 300_000_000)
-                        clears += 1
-                        receiptPresent = false
-                        return .persisted
-                    },
-                    wait: { _ in XCTFail("Receipt repair must use the session driver") }
-                ),
-                helpers: { [] },
-                identity: { _ in nil },
-                uptime: { uptime },
-                wait: { delay in waits.append(delay); uptime += delay }
-            ),
-            launch: { _, _, completion in
-                launches.append(uptime - startedAt)
-                receiptPresent = true
-                completion(true)
-            }
-        )
-        let opened = await launcher.open(.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce
-        ))
-        XCTAssertTrue(opened)
-        XCTAssertEqual(launches, [0, 300_000_000])
-        XCTAssertEqual(waits, Array(repeating: 50_000_000, count: 6))
-        XCTAssertEqual(quits, 1)
-        XCTAssertEqual(clears, 1)
-    }
-
-    @MainActor
-    func testNativeDeliveryDriverStopsAfterNonceReplacement() async throws {
-        let fixture = try makeFixture(id: 848)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress, profileIdentifier: nil
-        ))
-        guard case .found(let snapshot) = await bridge.load(handle: admission.handle) else {
-            return XCTFail("Expected queued request")
-        }
-        let replacement = ExtensionBridge.Snapshot(
-            handle: snapshot.handle,
-            state: snapshot.state,
-            nativeDeliveryNonce: .init(value: UUID()),
-            host: snapshot.host,
-            configurationKey: snapshot.configurationKey,
-            revisions: snapshot.revisions,
-            createdAt: snapshot.createdAt,
-            enqueueAttempt: snapshot.enqueueAttempt,
-            sequence: snapshot.sequence
-        )
-        let helperURL = try makeAmbientBundle(name: "Replaced Delivery Nonce", build: "148")
-        var launches = 0
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { $0 == helperURL },
-            resolveHelper: nil,
-            confirm: nil,
-            existingDelivery: nil,
-            environment: .init(
-                approvals: .init(
-                    load: { _ in .found(launches == 0 ? snapshot : replacement) },
-                    receiptRuntimeStatus: { _ in XCTFail("Replaced nonce must stop before inspection"); return .indeterminate },
-                    clearReceipt: { _, _ in XCTFail("Replaced nonce must not clear ownership"); return .ownershipLost },
-                    wait: { _ in }
-                ),
-                helpers: { [] },
-                identity: { _ in nil },
-                wait: { _ in XCTFail("A replaced delivery must stop without another retry") }
-            ),
-            launch: { _, _, completion in launches += 1; completion(true) }
-        )
-        let opened = await launcher.open(.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce
-        ))
-        XCTAssertFalse(opened)
-        XCTAssertEqual(launches, 1)
-    }
-
-    func testNativeAgentLaunchRetriesTheIdenticalApprovalDelivery() async throws {
-        let helperURL = try makeAmbientBundle(name: "Retry", build: "148")
-        let handle = ExtensionBridge.Handle(
-            id: 823,
-            token: .init(value: UUID()),
-            profileIdentifier: nil
-        )
-        let route = NativeAgentRoute.approval(
-            workflowVersion: ExtensionBridge.workflowVersion,
-            handle: handle,
-            nativeDeliveryNonce: .init(value: UUID())
-        )
-        var confirmations = 0
-        var resolutions = 0
-        var preflights = 0
-        var delivered = [URL]()
-        var events = [String]()
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { _ in true },
-            resolveHelper: { url, _, _ in
-                events.append("resolve")
-                resolutions += 1
-                return .launch(
-                    url: url,
-                    createsNewApplicationInstance: false
-                )
-            },
-            confirm: { _, confirmedRoute, _, _ in
-                XCTAssertEqual(confirmedRoute, route)
-                events.append("confirm")
-                confirmations += 1
-                return confirmations == 2
-            },
-            existingDelivery: { checkedRoute, _ in
-                XCTAssertEqual(checkedRoute, route)
-                events.append("preflight")
-                preflights += 1
-                return .needsDelivery
-            },
-            launchTimeoutNanoseconds: 50_000_000,
-            launch: { _, deliveredRoute, completion in
-                events.append("send")
-                delivered.append(deliveredRoute)
-                completion(true)
-            }
-        )
-
-        let opened = await launcher.open(route)
-        XCTAssertTrue(opened)
-        XCTAssertEqual(preflights, 2)
-        XCTAssertEqual(resolutions, 2)
-        XCTAssertEqual(confirmations, 2)
-        XCTAssertEqual(delivered, [route.url, route.url])
-        XCTAssertEqual(events, [
-            "preflight", "resolve", "send", "confirm",
-            "preflight", "resolve", "send", "confirm",
-        ])
-    }
-
-    func testNativeAgentConfirmationStopsAtOuterDeadline() async throws {
-        let helperURL = try makeAmbientBundle(name: "ConfirmTimeout", build: "148")
-        let confirmationStopped = expectation(
-            description: "confirmation stopped at the outer deadline"
-        )
-        let launcher = NativeAgentLauncher(
-            helperURL: { helperURL },
-            validate: { _ in true },
-            resolveHelper: { url, _, _ in
-                .launch(url: url, createsNewApplicationInstance: false)
-            },
-            confirm: { _, _, deadline, isPending in
-                while isPending(),
-                      DispatchTime.now().uptimeNanoseconds < deadline {
-                    await Task.yield()
-                }
-                confirmationStopped.fulfill()
-                return false
-            },
-            launchTimeoutNanoseconds: 50_000_000,
-            launch: { _, _, completion in completion(true) }
-        )
-
-        let opened = await launcher.open(.showWallet(
-            workflowVersion: ExtensionBridge.workflowVersion
-        ))
-        await fulfillment(of: [confirmationStopped], timeout: 1)
-
-        XCTAssertFalse(opened)
     }
 
     func testSeparateProcessStoreLockFencesAccess() async throws {
