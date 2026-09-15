@@ -210,26 +210,25 @@ function bigWalletEnqueue(message, generation) {
         !bigWalletWire.isValidRequestId(message.id) ||
         typeof message.name !== "string" ||
         !["ethereum", "solana"].includes(message.provider)) {
-        return Promise.resolve();
+        return;
     }
     if (!bigWalletMatchesGeneration(generation)) {
         bigWalletDeliverFailure(message, generation);
-        return Promise.resolve();
+        return;
     }
     const identity = bigWalletCurrentIdentity();
     if (!identity) {
         bigWalletDeliverFailure(message, generation);
-        return Promise.resolve();
+        return;
     }
     const key = `${generation}:${message.provider}:${message.id}`;
     const existing = bigWalletRequests.get(key);
-    if (existing) { return existing.initialResponse; }
+    if (existing) { return; }
     if (bigWalletRequests.size >=
         bigWalletWire.WORKFLOW_POLICY.maximumRequestsPerHost) {
         bigWalletDeliverFailure(message, generation);
-        return Promise.resolve();
+        return;
     }
-    let resolveInitial;
     const admissionDeadline = Date.now() +
         bigWalletWire.WORKFLOW_POLICY.requestTTLMilliseconds;
     const state = {
@@ -238,7 +237,6 @@ function bigWalletEnqueue(message, generation) {
         delivered: false,
         generation,
         host: identity.host,
-        initialResponse: new Promise(resolve => { resolveInitial = resolve; }),
         key,
         message: {
             body: {...message.body},
@@ -252,7 +250,6 @@ function bigWalletEnqueue(message, generation) {
             bigWalletWire.WORKFLOW_POLICY.responseExpiryMilliseconds,
         responseFailureMilliseconds: 0,
         lastResponseFailureAt: null,
-        resolveInitial,
         revisions: null,
         rerunRequested: false,
         retryDelay: 500,
@@ -262,7 +259,6 @@ function bigWalletEnqueue(message, generation) {
     state.enqueueAttempt = bigWalletWire.genPrivateToken();
     bigWalletRequests.set(key, state);
     bigWalletRun(state);
-    return state.initialResponse;
 }
 
 function bigWalletRun(state) {
@@ -320,13 +316,11 @@ async function bigWalletSendEnqueue(state) {
         state.requestToken = response.requestToken;
         state.revisions = response.revisions;
         state.phase = "waiting";
-        state.resolveInitial(response);
         bigWalletSchedule(state, response.approvalRequired ? 1000 : 0);
         return;
     }
     const terminal = bigWalletTerminal(response, state.message.id);
     if (terminal) {
-        state.resolveInitial(terminal);
         bigWalletDeliver(state, terminal);
         return;
     }
@@ -447,7 +441,6 @@ function bigWalletFail(state) {
     clearTimeout(state.timer);
     state.timer = null;
     bigWalletRequests.delete(state.key);
-    state.resolveInitial();
     bigWalletDeliverFailure(state.message, state.generation);
 }
 

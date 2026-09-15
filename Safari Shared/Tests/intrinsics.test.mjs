@@ -112,7 +112,7 @@ for (const family of ["reflection", "collections"]) {
                 i.freezeObjectNormally(value);
                 const record = runtime.register({payload: {value: 7}});
                 runtime.enqueue(record);
-                runtime.drain(operation => operation.resolve(operation.payload.value));
+                runtime.drain(operation => runtime.resolve(operation, operation.payload.value));
                 const snapshot = outboundDataSnapshot({items: [1, 2]});
                 return {
                     settled: await record.promise,

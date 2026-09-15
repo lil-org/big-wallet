@@ -94,53 +94,46 @@ class OperationRuntime {
             resolvePromise = resolve;
             rejectPromise = reject;
         });
-        let record;
-        record = freezeObjectNormally({
+        const record = freezeObjectNormally({
             generation: this.#generation,
             metadata,
             originalId,
             payload,
             promise,
-            reject: error => this.reject(record, error),
-            resolve: value => this.resolve(record, value),
             wireId,
         });
-        setMapEntry(this.#operations, wireId, record);
-        setWeakMapValue(recordStates, record, {
+        const entry = {
+            record,
             dispatching: false,
-            owned: true,
             queued: false,
             rejectPromise,
             resolvePromise,
-            runtime: this,
-            wireId,
-        });
+        };
+        setMapEntry(this.#operations, wireId, entry);
+        setWeakMapValue(recordStates, record, entry);
         return record;
     }
 
     owns(record) {
-        const state = getWeakMapValue(recordStates, record);
-        return !!state && state.runtime === this && state.owned &&
-            getMapEntry(this.#operations, state.wireId) === record;
+        return this.#entry(record) !== null;
     }
 
     operation(wireId) {
-        return getMapEntry(this.#operations, wireId);
+        return getMapEntry(this.#operations, wireId)?.record;
     }
 
     enqueue(record) {
         if (this.#phase === "ready" || this.#phase === "retired" ||
-            this.#phase === "failed" ||
-            !this.owns(record)) {
+            this.#phase === "failed") {
             return false;
         }
-        const state = getWeakMapValue(recordStates, record);
-        if (state.queued || state.dispatching) { return false; }
+        const entry = this.#entry(record);
+        if (!entry || entry.queued || entry.dispatching) { return false; }
         if (this.#loadingAdmissionCount >= this.#maximumLoadingOperations) {
             return false;
         }
         this.#loadingAdmissionCount += 1;
-        state.queued = true;
+        entry.queued = true;
         applyFunction(pushArrayNormally, this.#queue, [record]);
         return true;
     }
@@ -168,20 +161,17 @@ class OperationRuntime {
                 const record = drainingQueue[queueIndex];
                 drainingQueue[queueIndex] = null;
                 queueIndex += 1;
-                const state = getWeakMapValue(recordStates, record);
-                if (!state || state.runtime !== this || !state.owned ||
-                    !state.queued || !this.owns(record)) {
-                    continue;
-                }
-                state.queued = false;
-                state.dispatching = true;
+                const entry = this.#entry(record);
+                if (!entry || !entry.queued) { continue; }
+                entry.queued = false;
+                entry.dispatching = true;
                 try {
                     dispatch(record);
                     dispatched += 1;
                 } catch (error) {
                     this.reject(record, error);
                 } finally {
-                    state.dispatching = false;
+                    entry.dispatching = false;
                 }
             }
         } finally {
@@ -209,27 +199,21 @@ class OperationRuntime {
     }
 
     rejectAll(error) {
-        const records = operationQueue();
-        applyFunction(forEachMapNormally, this.#operations, [record => {
-            applyFunction(pushArrayNormally, records, [record]);
+        const entries = operationQueue();
+        applyFunction(forEachMapNormally, this.#operations, [entry => {
+            applyFunction(pushArrayNormally, entries, [entry]);
         }]);
         this.#operations = new MapConstructor;
         this.#queue = operationQueue();
         this.#loadingAdmissionCount = 0;
-        const settlements = operationQueue();
-        for (let index = 0; index < records.length; index += 1) {
-            const record = records[index];
-            const state = getWeakMapValue(recordStates, record);
-            if (!state || state.runtime !== this || !state.owned) { continue; }
-            state.dispatching = false;
-            state.owned = false;
-            state.queued = false;
-            applyFunction(pushArrayNormally, settlements, [state.rejectPromise]);
+        for (let index = 0; index < entries.length; index += 1) {
+            entries[index].dispatching = false;
+            entries[index].queued = false;
         }
-        for (let index = 0; index < settlements.length; index += 1) {
-            settlements[index](error);
+        for (let index = 0; index < entries.length; index += 1) {
+            entries[index].rejectPromise(error);
         }
-        return settlements.length;
+        return entries.length;
     }
 
     failLoading(error) {
@@ -247,17 +231,21 @@ class OperationRuntime {
         return this.rejectAll(error);
     }
 
-    #take(record) {
-        const state = getWeakMapValue(recordStates, record);
-        if (!state || state.runtime !== this || !state.owned ||
-            getMapEntry(this.#operations, state.wireId) !== record) {
+    #entry(record) {
+        const entry = getWeakMapValue(recordStates, record);
+        if (!entry || getMapEntry(this.#operations, entry.record.wireId) !== entry) {
             return null;
         }
-        deleteMapEntry(this.#operations, state.wireId);
-        state.dispatching = false;
-        state.owned = false;
-        state.queued = false;
-        return state;
+        return entry;
+    }
+
+    #take(record) {
+        const entry = this.#entry(record);
+        if (!entry) { return null; }
+        deleteMapEntry(this.#operations, entry.record.wireId);
+        entry.dispatching = false;
+        entry.queued = false;
+        return entry;
     }
 }
 

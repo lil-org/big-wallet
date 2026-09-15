@@ -4639,9 +4639,7 @@ extension PopupRequestSessionsTests {
             let finalizer = NativeApprovalFinalizer(
                 store: store,
                 requestProcessor: processor,
-                walletManagerStart: { true },
-                walletManagerReload: { true },
-                accountsProvider: { scenario.accounts },
+                refreshWalletAccess: { CompactWalletAccess(accounts: scenario.accounts) },
                 networkResolver: { _ in scenario.network }
             )
 
@@ -4665,6 +4663,9 @@ extension PopupRequestSessionsTests {
         )
         await store.insert(snapshot)
         let account = popupTestAccount()
+        let access = CompactWalletAccess(account: account)
+        var refreshes = 0
+        var preparations = 0
         let network = popupTransactionNetwork()
         let decision = DappApprovalDecision.accountSelection(.init(
             accounts: [.init(
@@ -4680,9 +4681,9 @@ extension PopupRequestSessionsTests {
             decision: decision
         )
         XCTAssertEqual(staged, .persisted)
-        let processor = CompactPopupProcessor(execute: { request, action, executedDecision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, action, executedDecision, walletAccess in
             XCTAssertEqual(executedDecision, decision)
-            XCTAssertNotNil(walletAccess)
+            XCTAssertTrue(walletAccess === access)
             guard case .accountSelection(let selection) = executedDecision else {
                 XCTFail("Expected account selection")
                 return .response(request.response(error: .internalError))
@@ -4695,8 +4696,10 @@ extension PopupRequestSessionsTests {
                     chainId: network.chainIdHexString
                 )))
             ))
-        }) { request in
-            .approval(.selectAccount(SelectAccountAction(
+        }) { request, walletAccess in
+            preparations += 1
+            XCTAssertTrue(walletAccess === access)
+            return .approval(.selectAccount(SelectAccountAction(
                 coinType: .ethereum,
                 selectedAccounts: [],
                 initiallyConnectedProviders: [],
@@ -4706,9 +4709,10 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: { true },
-            walletManagerReload: { true },
-            accountsProvider: { [SpecificWalletAccount(walletId: "wallet", account: account)] },
+            refreshWalletAccess: {
+                refreshes += 1
+                return access
+            },
             networkResolver: { chainID in
                 chainID == network.chainIdHexString ? network : nil
             }
@@ -4731,6 +4735,8 @@ extension PopupRequestSessionsTests {
 
         XCTAssertEqual(result, .responseReady)
         XCTAssertEqual(second, .responseReady)
+        XCTAssertEqual(refreshes, 1)
+        XCTAssertEqual(preparations, 1)
         XCTAssertEqual(events, ["nativeClaim", "begin", "resolve", "complete"])
         XCTAssertTrue(committed)
     }
@@ -4758,13 +4764,9 @@ extension PopupRequestSessionsTests {
             ) { _ in
                 .response(request.response(error: .userRejected))
             },
-            walletManagerStart: {
-                XCTFail("Wallet secrets must not be read before an executable claim")
-                return false
-            },
-            walletManagerReload: {
-                XCTFail("Wallet secrets must not be read before an executable claim")
-                return false
+            refreshWalletAccess: {
+                XCTFail("Wallet-independent requests must not refresh wallet access")
+                return nil
             },
             clock: { now }
         )
@@ -4831,6 +4833,7 @@ extension PopupRequestSessionsTests {
                 walletIndependent: true
             ,
             execute: { request, action, decision, walletAccess in
+                XCTAssertNil(walletAccess)
                 await store.installNativeExecutionContext(
                     .init(
                         revisions: snapshot.revisions,
@@ -4850,8 +4853,10 @@ extension PopupRequestSessionsTests {
                     payload: .ethereumPersonalMessage(Data())
                 )))
             },
-            walletManagerStart: { true },
-            walletManagerReload: { true },
+            refreshWalletAccess: {
+                XCTFail("Wallet-independent requests must not refresh wallet access")
+                return nil
+            },
             clock: { now }
         )
 
@@ -4932,8 +4937,7 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: { true },
-            walletManagerReload: { true }
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) }
         )
 
         let result = await finalizeNativeDecision(
@@ -4958,7 +4962,7 @@ extension PopupRequestSessionsTests {
         XCTAssertFalse(committed)
     }
 
-    func testNativeFinalizerRetriesStagedDecisionAfterWalletStartFailure() async throws {
+    func testNativeFinalizerRetriesStagedDecisionAfterWalletRefreshFailure() async throws {
         let store = CompactPopupStore()
         let snapshot = try popupSnapshot(
             id: 136,
@@ -4981,8 +4985,7 @@ extension PopupRequestSessionsTests {
             ))
         )
         XCTAssertEqual(staged, .persisted)
-        var starts = 0
-        var reloads = 0
+        var refreshes = 0
         var preparations = 0
         var resolves = 0
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
@@ -5011,15 +5014,10 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: {
-                starts += 1
-                return false
+            refreshWalletAccess: {
+                refreshes += 1
+                return refreshes == 1 ? nil : CompactWalletAccess(account: account)
             },
-            walletManagerReload: {
-                reloads += 1
-                return true
-            },
-            accountsProvider: { [SpecificWalletAccount(walletId: "wallet", account: account)] },
             networkResolver: { chainID in
                 chainID == network.chainIdHexString ? network : nil
             }
@@ -5043,8 +5041,7 @@ extension PopupRequestSessionsTests {
         XCTAssertNotNil(retained.nativeApproval)
         XCTAssertNil(firstErrorCode)
         XCTAssertEqual(firstEvents, ["nativeClaim", "release"])
-        XCTAssertEqual(starts, 1)
-        XCTAssertEqual(reloads, 0)
+        XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(preparations, 0)
         XCTAssertEqual(resolves, 0)
 
@@ -5059,8 +5056,7 @@ extension PopupRequestSessionsTests {
         )
 
         XCTAssertEqual(second, .responseReady)
-        XCTAssertEqual(starts, 1)
-        XCTAssertEqual(reloads, 1)
+        XCTAssertEqual(refreshes, 2)
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(resolves, 1)
         XCTAssertEqual(finalEvents, [
@@ -5097,7 +5093,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(staged, .persisted)
         let request = try XCTUnwrap(snapshot.request)
         var preparations = 0
-        var reloads = 0
+        var refreshes = 0
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: CompactPopupProcessor { _ in
@@ -5105,10 +5101,9 @@ extension PopupRequestSessionsTests {
                 XCTFail("Expired retry must not rematerialize")
                 return .response(request.response(error: .internalError))
             },
-            walletManagerStart: { false },
-            walletManagerReload: {
-                reloads += 1
-                return true
+            refreshWalletAccess: {
+                refreshes += 1
+                return refreshes == 1 ? nil : CompactWalletAccess(account: popupTestAccount())
             },
             clock: { now }
         )
@@ -5137,7 +5132,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(first, .pending)
         XCTAssertEqual(second, .responseReady)
         XCTAssertEqual(preparations, 0)
-        XCTAssertEqual(reloads, 0)
+        XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(errorCode, 4100)
         XCTAssertFalse(committed)
         XCTAssertEqual(events, [
@@ -5169,7 +5164,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(staged, .persisted)
         let request = try XCTUnwrap(snapshot.request)
         var preparations = 0
-        var reloads = 0
+        var refreshes = 0
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: CompactPopupProcessor { _ in
@@ -5177,10 +5172,9 @@ extension PopupRequestSessionsTests {
                 XCTFail("Revision-drifted retry must not rematerialize")
                 return .response(request.response(error: .internalError))
             },
-            walletManagerStart: { false },
-            walletManagerReload: {
-                reloads += 1
-                return true
+            refreshWalletAccess: {
+                refreshes += 1
+                return refreshes == 1 ? nil : CompactWalletAccess(account: popupTestAccount())
             }
         )
 
@@ -5204,7 +5198,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(first, .pending)
         XCTAssertEqual(second, .responseReady)
         XCTAssertEqual(preparations, 0)
-        XCTAssertEqual(reloads, 0)
+        XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(errorCode, 4100)
         XCTAssertFalse(committed)
         XCTAssertEqual(events, [
@@ -5236,8 +5230,7 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: { true },
-            walletManagerReload: { true }
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) }
         )
 
         let result = await finalizeNativeDecision(
@@ -5297,8 +5290,7 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: { true },
-            walletManagerReload: { true },
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
             clock: { now }
         )
 
@@ -5352,8 +5344,7 @@ extension PopupRequestSessionsTests {
                 XCTFail("Future transaction decision must not be prepared")
                 return .response(request.response(error: .internalError))
             },
-            walletManagerStart: { true },
-            walletManagerReload: { true },
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
             clock: { now }
         )
 
@@ -5406,8 +5397,7 @@ extension PopupRequestSessionsTests {
                     XCTFail("Expired \(method) decision must not be prepared")
                     return .response(request.response(error: .internalError))
                 },
-                walletManagerStart: { true },
-                walletManagerReload: { true },
+                refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
                 clock: { now }
             )
 
@@ -5458,8 +5448,7 @@ extension PopupRequestSessionsTests {
                     XCTFail("Future \(method) decision must not be prepared")
                     return .response(request.response(error: .internalError))
                 },
-                walletManagerStart: { true },
-                walletManagerReload: { true },
+                refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
                 clock: { now }
             )
 
@@ -5510,8 +5499,7 @@ extension PopupRequestSessionsTests {
                     payload: .solanaMessage(Data())
                 )))
             },
-            walletManagerStart: { true },
-            walletManagerReload: { true },
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
             clock: { now }
         )
 
@@ -5574,8 +5562,7 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: { true },
-            walletManagerReload: { true },
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
             clock: { now }
         )
 
@@ -5645,8 +5632,7 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: processor,
-            walletManagerStart: { true },
-            walletManagerReload: { true },
+            refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
             clock: { now }
         )
 
@@ -5714,8 +5700,7 @@ extension PopupRequestSessionsTests {
             let finalizer = NativeApprovalFinalizer(
                 store: store,
                 requestProcessor: processor,
-                walletManagerStart: { true },
-                walletManagerReload: { true },
+                refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
                 clock: { now }
             )
 

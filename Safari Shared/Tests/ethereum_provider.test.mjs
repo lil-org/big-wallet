@@ -392,12 +392,12 @@ test("OperationRuntime owns exact records and never reuses wire IDs", async () =
             return undefined;
         },
     });
-    assert.equal(first.resolve(thenable), true);
+    assert.equal(runtime.resolve(first, thenable), true);
     assert.equal((await first.promise), thenable);
     assert.equal(replacement.wireId, 3);
     assert.equal(runtime.owns(replacement), true);
-    second.resolve("second");
-    replacement.resolve("replacement");
+    runtime.resolve(second, "second");
+    runtime.resolve(replacement, "replacement");
     assert.equal(await second.promise, "second");
     assert.equal(await replacement.promise, "replacement");
 });
@@ -412,9 +412,55 @@ test("OperationRuntime supports provider-distinct monotonic wire IDs", async () 
     const first = runtime.register({payload: {}});
     const second = runtime.register({payload: {}});
     assert.deepEqual([first.wireId, second.wireId], [2, 4]);
-    first.resolve(true);
-    second.resolve(true);
+    runtime.resolve(first, true);
+    runtime.resolve(second, true);
     await Promise.all([first.promise, second.promise]);
+});
+
+test("OperationRuntime rejects forged and foreign handles without invoking getters", async () => {
+    const {exports} = moduleHarness(operationRuntimeSource);
+    const Runtime = exports.default;
+    const runtime = new Runtime("local");
+    const otherRuntime = new Runtime("other");
+    const local = runtime.register({payload: {}});
+    const foreign = otherRuntime.register({payload: {}});
+    assert.equal(local.wireId, foreign.wireId);
+    const forged = {
+        get wireId() { throw new Error("Forged wire ID getter invoked"); },
+    };
+    const proxy = new Proxy(local, {
+        get() { throw new Error("Proxy getter invoked"); },
+    });
+
+    for (const handle of [forged, proxy, foreign]) {
+        assert.equal(runtime.owns(handle), false);
+        assert.equal(runtime.enqueue(handle), false);
+        assert.equal(runtime.resolve(handle, "forged"), false);
+        assert.equal(runtime.reject(handle, new Error("forged")), false);
+        assert.equal(runtime.operation(local.wireId), local);
+    }
+    assert.equal(runtime.resolve(local, "local"), true);
+    assert.equal(otherRuntime.resolve(foreign, "foreign"), true);
+    assert.equal(await local.promise, "local");
+    assert.equal(await foreign.promise, "foreign");
+});
+
+test("OperationRuntime dispatches and settles each queued operation once", async () => {
+    const {exports} = moduleHarness(operationRuntimeSource);
+    const runtime = new exports.default("runtime-generation");
+    const record = runtime.register({payload: {}});
+    assert.equal(runtime.enqueue(record), true);
+    assert.equal(runtime.enqueue(record), false);
+    assert.equal(runtime.drain(current => {
+        assert.equal(current, record);
+        assert.equal(runtime.enqueue(current), false);
+        assert.equal(runtime.resolve(current, "done"), true);
+        assert.equal(runtime.owns(current), false);
+        assert.equal(runtime.operation(current.wireId), undefined);
+        assert.equal(runtime.resolve(current, "duplicate"), false);
+        assert.equal(runtime.reject(current, new Error("duplicate")), false);
+    }), 1);
+    assert.equal(await record.promise, "done");
 });
 
 test("OperationRuntime bounds loading admissions and resets after draining", async () => {
@@ -436,12 +482,12 @@ test("OperationRuntime bounds loading admissions and resets after draining", asy
     assert.equal(runtime.enqueue(first), true);
     assert.equal(runtime.enqueue(second), true);
     assert.equal(runtime.enqueue(overflow), false);
-    overflow.reject(new Error("loading limit"));
+    runtime.reject(overflow, new Error("loading limit"));
 
     const order = [];
     runtime.drain(record => {
         order.push(record.payload.name);
-        record.resolve(true);
+        runtime.resolve(record, true);
     });
     assert.deepEqual(order, ["first", "second"]);
     assert.equal(await overflowFailure, "loading limit");
@@ -450,7 +496,7 @@ test("OperationRuntime bounds loading admissions and resets after draining", asy
 
     const ready = runtime.register({payload: {name: "ready"}});
     assert.equal(runtime.enqueue(ready), false);
-    ready.resolve(true);
+    runtime.resolve(ready, true);
     assert.equal(await ready.promise, true);
 });
 
@@ -475,9 +521,9 @@ test("OperationRuntime counts reentrant loading admissions in one FIFO", async (
             overflow = runtime.register({payload: {name: "overflow"}});
             overflowFailure = overflow.promise.catch(error => error.message);
             assert.equal(runtime.enqueue(overflow), false);
-            overflow.reject(new Error("loading limit"));
+            runtime.reject(overflow, new Error("loading limit"));
         }
-        record.resolve(true);
+        runtime.resolve(record, true);
     });
 
     assert.deepEqual(order, ["first", "reentrant"]);
@@ -506,7 +552,7 @@ test("OperationRuntime drains work admitted after a reentrant reset", async () =
             reentrant = runtime.register({payload: {name: "reentrant"}});
             assert.equal(runtime.enqueue(reentrant), true);
         } else {
-            record.resolve(true);
+            runtime.resolve(record, true);
         }
     });
 
@@ -543,11 +589,11 @@ test("OperationRuntime handles getter reentry and drains a reentrant FIFO", asyn
                 payload: {name: "reentrant"},
             });
             assert.equal(runtime.enqueue(reentrant), true);
-            record.resolve(true);
+            runtime.resolve(record, true);
         } else if (record === outer) {
             throw new Error("dispatch failed");
         } else {
-            record.resolve(true);
+            runtime.resolve(record, true);
         }
     });
 
@@ -565,11 +611,17 @@ test("OperationRuntime rejects all, retires, and keeps IDs monotonic", async () 
     const first = runtime.register({payload: {}});
     const firstRejected = first.promise.catch(error => error.message);
     assert.equal(runtime.rejectAll(new Error("reset")), 1);
+    assert.equal(runtime.owns(first), false);
+    assert.equal(runtime.resolve(first, "late"), false);
+    assert.equal(runtime.reject(first, new Error("late")), false);
     assert.equal(await firstRejected, "reset");
     const second = runtime.register({payload: {}});
     assert.equal(second.wireId, 2);
     const secondRejected = second.promise.catch(error => error.message);
     assert.equal(runtime.retire(new Error("retired")), 1);
+    assert.equal(runtime.owns(second), false);
+    assert.equal(runtime.resolve(second, "late"), false);
+    assert.equal(runtime.reject(second, new Error("late")), false);
     assert.equal(await secondRejected, "retired");
     assert.equal(runtime.phase, "retired");
     assert.throws(() => runtime.register({payload: {}}), /retired/);
