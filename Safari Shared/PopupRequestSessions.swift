@@ -747,23 +747,11 @@ final class PopupRequestSessions {
                 return ignoredResponse()
             }
             guard let approved = await transactionSession.approve(authenticate: {
-                guard session.beginAuthentication(
-                    claim: approval.claim,
-                    token: approval.token
-                ) else { return nil }
-                let walletAccess = await self.authenticate(
+                await self.authenticateClaimedSession(
                     session: session,
+                    approval: approval,
                     reason: Strings.sendTransaction
                 )
-                guard self.isCurrent(session, token: approval.token),
-                      session.finishAuthentication(
-                          claim: approval.claim,
-                          token: approval.token
-                      ) else {
-                    walletAccess?.invalidate()
-                    return nil
-                }
-                return walletAccess
             }) else {
                 await releaseApproval(
                     approval.claim,
@@ -1006,44 +994,17 @@ final class PopupRequestSessions {
             return true
         }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
-        guard session.beginAuthentication(
-            claim: approval.claim,
-            token: approval.token
-        ) else {
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token
-            )
-            return true
-        }
-        guard let walletAccess = await authenticate(
+        guard let walletAccess = await authenticateClaimedSession(
             session: session,
+            approval: approval,
             reason: action.subject.title
         ) else {
-            _ = session.finishAuthentication(
-                claim: approval.claim,
-                token: approval.token
-            )
             await releaseApproval(
                 approval.claim,
                 for: session,
                 token: approval.token,
                 rematerializeOnSuccess:
                     session.takeAuthenticationRematerializationRequirement()
-            )
-            return true
-        }
-        guard isCurrent(session, token: approval.token),
-              session.finishAuthentication(
-                  claim: approval.claim,
-                  token: approval.token
-        ) else {
-            walletAccess.invalidate()
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token
             )
             return true
         }
@@ -1219,6 +1180,27 @@ final class PopupRequestSessions {
             }
         }
         return nil
+    }
+
+    private func authenticateClaimedSession(
+        session: PopupRequestSession,
+        approval: ClaimedApproval,
+        reason: String
+    ) async -> RequestScopedWalletAccess? {
+        guard session.beginAuthentication(
+            claim: approval.claim,
+            token: approval.token
+        ) else { return nil }
+        let walletAccess = await authenticate(session: session, reason: reason)
+        guard isCurrent(session, token: approval.token),
+              session.finishAuthentication(
+                claim: approval.claim,
+                token: approval.token
+              ) else {
+            walletAccess?.invalidate()
+            return nil
+        }
+        return walletAccess
     }
 
     private func authenticate(

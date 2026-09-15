@@ -12,11 +12,12 @@ import {
 
 import BigWalletEthereum, {
     applyDecodedEnvelope as applyEthereumDecodedEnvelope,
-    subscribeReadiness as ethereumSubscribeReadiness,
+    subscribeNotifications as ethereumSubscribeNotifications,
     withReadyState as ethereumWithReadyState,
 } from "./ethereum";
 import BigWalletSolana, {
     applyDecodedEnvelope as applySolanaDecodedEnvelope,
+    subscribeNotifications as solanaSubscribeNotifications,
 } from "./solana";
 import {providerReplacementError} from "./error";
 import {
@@ -538,7 +539,7 @@ solanaProvider = new BigWalletSolana(
 const facadeTransaction = stableFacades.prepareTargets({
     ethereumProvider: Object.freeze({
         provider: ethereumProvider,
-        subscribeReadiness: listener => ethereumSubscribeReadiness(
+        subscribeNotifications: listener => ethereumSubscribeNotifications(
             ethereumProvider,
             listener
         ),
@@ -551,6 +552,10 @@ const facadeTransaction = stableFacades.prepareTargets({
     }),
     solanaProvider: Object.freeze({
         provider: solanaProvider,
+        subscribeNotifications: listener => solanaSubscribeNotifications(
+            solanaProvider,
+            listener
+        ),
         retire: error => BigWalletSolana.retire(solanaProvider, error),
         snapshot: () => BigWalletSolana.snapshot(solanaProvider),
     }),

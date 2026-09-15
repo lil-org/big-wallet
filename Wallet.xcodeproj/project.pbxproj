@@ -746,8 +746,11 @@
 		BF5C00052FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		BF5C00062FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		BF5C00112FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */; };
+		D42A00012FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */; };
 		BF5C00122FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */; };
+		D42A00022FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */; };
 		BF5C00132FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */; };
+		D42A00032FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */; };
 		BFC2C1EC2777C5FE0762D591 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
 		C0D400012FC0000000000001 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = C0D400022FC0000000000001 /* manifest.json */; };
 		C18A5A8722057E1454F97B76 /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
@@ -1116,6 +1119,7 @@
 		BF4000012FB6000000000000 /* PopupStringsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupStringsTests.swift; sourceTree = "<group>"; };
 		BF4100012FB7000000000000 /* bridge_wire.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = bridge_wire.js; sourceTree = "<group>"; };
 		BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupRequestSessionsTests.swift; sourceTree = "<group>"; };
+		D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalStoreTestFixture.swift; sourceTree = "<group>"; };
 		C0D400022FC0000000000001 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		C17BC1A0EB4948D11C9B1226 /* EditTransactionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditTransactionView.swift; sourceTree = "<group>"; };
 		C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupApprovalStatePresenter.swift; sourceTree = "<group>"; };
@@ -1228,6 +1232,7 @@
 				BF4000012FB6000000000000 /* PopupStringsTests.swift */,
 				BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */,
 				BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */,
+				D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */,
 				2F4E01002FAC000000000000 /* GasServiceTests.swift */,
 				2FA802002FBE000000000001 /* TransactionApprovalCoordinatorTests.swift */,
 				2F2A00000000000000000011 /* SolanaOptionsTests.swift */,
@@ -3183,6 +3188,7 @@
 			files = (
 				D0A301012FD1000000000001 /* SafariApprovalVaultTests.swift in Sources */,
 				BF5C00112FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
+				D42A00012FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				BF4000112FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */,
@@ -3420,6 +3426,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF5C00122FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
+				D42A00022FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				BF4000122FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */,
@@ -3455,6 +3462,7 @@
 			files = (
 				D0A301022FD1000000000001 /* SafariApprovalVaultTests.swift in Sources */,
 				BF5C00132FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
+				D42A00032FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				BF4000132FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */,

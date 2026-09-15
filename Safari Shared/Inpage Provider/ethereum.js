@@ -93,12 +93,12 @@ function transportIsCurrent(state) {
 }
 
 function emitSafely(provider, eventName, values, isCurrent = null) {
-    const listener = stateFor(provider)?.eventForwarders[eventName];
+    const listener = stateFor(provider)?.notificationListener;
     if (typeof listener !== "function" || isCurrent && !isCurrent()) {
         return false;
     }
     try {
-        applyFunction(listener, provider, values);
+        applyFunction(listener, provider, [{kind: "event", name: eventName, args: values}]);
     } catch (error) {
         reportListenerError(error);
     }
@@ -125,25 +125,25 @@ function withReadyState(provider, listener) {
     }
 }
 
-function subscribeReadiness(provider, listener) {
+function subscribeNotifications(provider, listener) {
     const state = stateFor(provider);
     if (!state || state.retired || typeof listener !== "function") {
         return () => {};
     }
-    state.readinessObserver = listener;
+    state.notificationListener = listener;
     return () => {
-        if (state.readinessObserver === listener) {
-            state.readinessObserver = null;
+        if (state.notificationListener === listener) {
+            state.notificationListener = null;
         }
     };
 }
 
 function notifyReadiness(provider, flushed) {
     const state = stateFor(provider);
-    const listener = state?.readinessObserver;
+    const listener = state?.notificationListener;
     if (!state || state.retired || typeof listener !== "function") { return; }
     try {
-        applyFunction(listener, undefined, [freezeObjectNormally({flushed})]);
+        applyFunction(listener, undefined, [freezeObjectNormally({kind: "readiness", flushed})]);
     } catch (error) {
         reportListenerError(error);
     }
@@ -889,9 +889,9 @@ function retire(provider, error = providerReplacementError()) {
     state.address = "";
     state.accountRevision += 1;
     state.runtime.retire(error);
-    state.readinessObserver = null;
     emitSafely(provider, "disconnect", [error]);
     if (hadAccount) { emitSafely(provider, "accountsChanged", [[]]); }
+    state.notificationListener = null;
     return true;
 }
 
@@ -955,8 +955,7 @@ class BigWalletEthereum {
             address: normalizedAddress(initial?.address),
             chainId,
             copiedStateBaseline: null,
-            eventForwarders: createObjectNormally(null),
-            readinessObserver: null,
+            notificationListener: null,
             initialized: true,
             networkVersion: normalizedNetworkVersion(chainId),
             pendingConfigurationEvent: null,
@@ -977,12 +976,6 @@ class BigWalletEthereum {
                 chainId: state.chainId,
             };
         }
-        state.eventForwarders.accountsChanged = null;
-        state.eventForwarders.chainChanged = null;
-        state.eventForwarders.disconnect = null;
-        state.eventForwarders.message = null;
-        state.eventForwarders.networkChanged = null;
-        state.eventForwarders._initialized = null;
         setWeakMapValue(providerStates, this, state);
         state.rpc = createRPCServer(state);
         try {
@@ -1004,27 +997,6 @@ class BigWalletEthereum {
     get networkVersion() { return stateFor(this)?.networkVersion || null; }
     get ready() { return !!stateFor(this)?.address; }
     get selectedAddress() { return stateFor(this)?.address || null; }
-
-    // Stable facades install one private forwarder for each ordinary event.
-    on(eventName, listener) {
-        const state = stateFor(this);
-        if (state && typeof eventName === "string" &&
-            hasOwnProperty(state.eventForwarders, eventName) &&
-            typeof listener === "function") {
-            state.eventForwarders[eventName] = listener;
-        }
-        return this;
-    }
-
-    removeListener(eventName, listener) {
-        const state = stateFor(this);
-        if (state && typeof eventName === "string" &&
-            hasOwnProperty(state.eventForwarders, eventName) &&
-            state.eventForwarders[eventName] === listener) {
-            state.eventForwarders[eventName] = null;
-        }
-        return this;
-    }
 
     request(payload) {
         return registerOperation(this, payload, false);
@@ -1088,7 +1060,7 @@ BigWalletEthereum.snapshot = snapshot;
 export {
     applyDecodedEnvelope,
     isReady,
-    subscribeReadiness,
+    subscribeNotifications,
     withReadyState,
     retire,
     snapshot,

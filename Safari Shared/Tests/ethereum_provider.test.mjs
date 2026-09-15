@@ -36,11 +36,11 @@ function bundle(entryPoint, format = "cjs", contents) {
 const operationRuntimeSource = bundle("operation_runtime.js");
 const rpcSource = bundle("rpc.js");
 const ethereumSource = bundle("ethereum-harness.js", "cjs", `
-    export {default, applyDecodedEnvelope, subscribeReadiness, withReadyState} from "./ethereum";
+    export {default, applyDecodedEnvelope, subscribeNotifications, withReadyState} from "./ethereum";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const solanaSource = bundle("solana-harness.js", "cjs", `
-    export {default, applyDecodedEnvelope} from "./solana";
+    export {default, applyDecodedEnvelope, subscribeNotifications} from "./solana";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const base58Source = bundle("base58.js");
@@ -155,7 +155,7 @@ function ethereumHarness(initialState = null) {
     record.prepareTargets({
         ethereumProvider: {
             provider: engine,
-            subscribeReadiness: listener => module.exports.subscribeReadiness(
+            subscribeNotifications: listener => module.exports.subscribeNotifications(
                 engine,
                 listener
             ),
@@ -166,10 +166,10 @@ function ethereumHarness(initialState = null) {
             retire: error => Ethereum.retire(engine, error),
             snapshot: () => Ethereum.snapshot(engine),
         },
-        solanaProvider: {provider: {
-            accountState: () => null,
-            onAccountChange: () => () => {},
-        }},
+        solanaProvider: {
+            provider: {accountState: () => null},
+            subscribeNotifications: () => () => {},
+        },
     }).commit();
     return {
         ...module,
@@ -214,17 +214,22 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
     const record = module.exports.createStableFacadeRecord({
         uuid: "00000000-0000-4000-8000-000000000002",
     });
+    const target = {
+        provider,
+        subscribeNotifications: listener => module.exports.subscribeNotifications(provider, listener),
+    };
     record.prepareTargets({
         ethereumProvider: {
             provider: {},
-            subscribeReadiness: () => () => {},
+            subscribeNotifications: () => () => {},
             withReadyState: () => false,
         },
-        solanaProvider: {provider},
+        solanaProvider: target,
     }).commit();
     return {
         applyDecodedEnvelope: (provider, envelope) => module.exports.applyDecodedEnvelope(provider, decodedDelivery(envelope)),
         standardProvider: record.solana,
+        target,
         wallet: record.wallet,
         ...module,
         disconnects,
@@ -2203,7 +2208,7 @@ test("suppressed initial Solana configuration preserves the loading queue", asyn
     const harness = solanaHarness();
     const events = [];
     for (const eventName of ["accountChanged", "connect", "disconnect"]) {
-        harness.provider.on(eventName, () => { events.push(eventName); });
+        harness.standardProvider.on(eventName, () => { events.push(eventName); });
     }
     harness.standardProvider.standardOn("change", () => { events.push("change"); });
     const connection = harness.provider.connect();
@@ -2337,7 +2342,7 @@ test("Solana local reconnect emits connect after settlement", async () => {
         solanaAuthorizationEpoch: 1,
     });
     let connects = 0;
-    harness.provider.on("connect", () => { connects += 1; });
+    harness.standardProvider.on("connect", () => { connects += 1; });
     assert.equal((await harness.provider.connect()).publicKey.toString(), firstSolanaKey);
     assert.equal(connects, 1);
     assert.equal(harness.requests.length, 0);
@@ -2351,7 +2356,7 @@ test("Solana local reconnect emits connect after settlement", async () => {
         solanaAuthorizationEpoch: 1,
     });
     let loadingConnects = 0;
-    loading.provider.on("connect", () => { loadingConnects += 1; });
+    loading.standardProvider.on("connect", () => { loadingConnects += 1; });
     const queued = loading.provider.connect();
     applySolanaConfiguration(loading, {
         accountRevision: 1,
@@ -2369,8 +2374,8 @@ test("Solana local reconnect emits connect after settlement", async () => {
         solanaAuthorizationEpoch: 1,
     });
     const events = [];
-    ordered.provider.on("connect", () => { events.push("connect"); });
-    ordered.provider.on("disconnect", () => { events.push("disconnect"); });
+    ordered.standardProvider.on("connect", () => { events.push("connect"); });
+    ordered.standardProvider.on("disconnect", () => { events.push("disconnect"); });
     const reconnect = ordered.provider.connect();
     applySolanaConfiguration(ordered, {
         accountRevision: 1,
@@ -4140,8 +4145,22 @@ function facadeHarness({navigator = {wallets: []}, registerOnDispatch = true} = 
     return {...module, listeners, registeredWallets, window};
 }
 
+function notificationSlot() {
+    let current = null;
+    return {
+        subscribeNotifications(listener) {
+            current = listener;
+            return () => {
+                if (current === listener) { current = null; }
+            };
+        },
+        publish(notification) { current?.(notification); },
+        notificationListenerCount() { return current ? 1 : 0; },
+    };
+}
+
 function ethereumFacadeTarget(name) {
-    const provider = new EventEmitter;
+    const provider = {};
     provider.address = "";
     provider.chainId = "0x1";
     provider.request = payload => Promise.resolve(`${name}:${payload.method}`);
@@ -4152,15 +4171,11 @@ function ethereumFacadeTarget(name) {
     provider.isUnlocked = () => Promise.resolve(true);
     let retired = 0;
     let ready = false;
-    let readinessObserver = null;
+    const notifications = notificationSlot();
     return {
         provider,
-        subscribeReadiness(listener) {
-            readinessObserver = listener;
-            return () => {
-                if (readinessObserver === listener) { readinessObserver = null; }
-            };
-        },
+        ...notifications,
+        publishEvent(name, ...args) { notifications.publish({kind: "event", name, args}); },
         withReadyState(listener) {
             return ready && retired === 0
                 ? listener(Object.freeze({chainId: provider.chainId})) === true
@@ -4168,9 +4183,8 @@ function ethereumFacadeTarget(name) {
         },
         publishReadiness(flushed = true) {
             ready = true;
-            readinessObserver?.(Object.freeze({flushed}));
+            notifications.publish(Object.freeze({kind: "readiness", flushed}));
         },
-        readinessListenerCount() { return readinessObserver ? 1 : 0; },
         retire() { retired += 1; },
         retired() { return retired; },
         snapshot() {
@@ -4185,20 +4199,16 @@ function ethereumFacadeTarget(name) {
 }
 
 function solanaFacadeTarget(name, address = firstSolanaKey) {
-    const changeListeners = new Set;
+    const notifications = notificationSlot();
     const account = {
         address,
         publicKey: new Uint8Array(32),
     };
     const calls = [];
-    const provider = Object.assign(new EventEmitter, {
+    const provider = Object.assign({}, {
         accountState() { return account; },
         connect() { calls.push("connect"); return Promise.resolve(); },
         disconnect() { calls.push("disconnect"); return Promise.resolve(); },
-        onAccountChange(listener) {
-            changeListeners.add(listener);
-            return () => changeListeners.delete(listener);
-        },
         standardSignAndSendTransaction: () => Promise.resolve(name),
         standardSignMessage: () => Promise.resolve(name),
         standardSignTransaction: () => Promise.resolve(name),
@@ -4206,7 +4216,9 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
     let retired = 0;
     return {
         calls,
-        changeListeners,
+        ...notifications,
+        publishEvent(name, ...args) { notifications.publish({kind: "event", name, args}); },
+        publishAccountChange() { notifications.publish({kind: "accountStateChanged"}); },
         provider,
         retire() { retired += 1; },
         retired() { return retired; },
@@ -4246,16 +4258,8 @@ test("Wallet Standard public entry points share accounts and features", async ()
     assert.equal(account.publicKey[0], 0);
 });
 
-test("Wallet Standard subscribers share one source subscription and isolate errors", () => {
+test("Wallet Standard subscribers isolate errors and unsubscribe independently", () => {
     const harness = solanaHarness();
-    let installed = 0;
-    let disposed = 0;
-    const onAccountChange = harness.provider.onAccountChange.bind(harness.provider);
-    harness.provider.onAccountChange = listener => {
-        installed += 1;
-        const dispose = onAccountChange(listener);
-        return () => { disposed += 1; dispose(); };
-    };
     harness.standardProvider.on("accountChanged", () => { throw new Error("ordinary listener"); });
     const unsubscribeFirst = harness.standardProvider.standardOn("change", value => {
         value.accounts = [];
@@ -4265,7 +4269,6 @@ test("Wallet Standard subscribers share one source subscription and isolate erro
     const unsubscribeSecond = harness.wallet.features["standard:events"].on(
         "change", value => changes.push(value)
     );
-    assert.equal(installed, 1);
     vm.runInContext(`Set.prototype[Symbol.iterator] = function() {
         throw new Error("mutated iterator");
     };`, harness.context);
@@ -4273,9 +4276,102 @@ test("Wallet Standard subscribers share one source subscription and isolate erro
     assert.equal(changes.length, 1);
     assert.equal(changes[0].accounts[0], harness.wallet.accounts[0]);
     unsubscribeFirst();
-    assert.equal(disposed, 0);
     unsubscribeSecond();
-    assert.equal(disposed, 1);
+    applySolanaConfiguration(harness, {publicKey: secondSolanaKey, isConnected: true});
+    assert.equal(changes.length, 1);
+});
+
+for (const sizeGetter of ["zero", "throwing"]) {
+    test(`Wallet Standard account changes ignore a ${sizeGetter} Set size getter`, () => {
+        const harness = solanaHarness();
+        const changes = [];
+        const unsubscribe = harness.wallet.features["standard:events"].on("change", value => {
+            changes.push(value.accounts.map(account => account.address));
+        });
+        vm.runInContext(`
+            globalThis.sizeReads = 0;
+            Object.defineProperty(Set.prototype, "size", {
+                configurable: true,
+                get() {
+                    globalThis.sizeReads += 1;
+                    ${sizeGetter === "zero" ? "return 0;" : "throw new Error('mutated size getter');"}
+                },
+            });
+        `, harness.context);
+
+        applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+
+        assert.deepEqual(normalized(changes), [[firstSolanaKey]]);
+        assert.equal(vm.runInContext("sizeReads", harness.context), 0);
+        unsubscribe();
+        applySolanaConfiguration(harness, {publicKey: secondSolanaKey, isConnected: true});
+        assert.deepEqual(normalized(changes), [[firstSolanaKey]]);
+    });
+}
+
+test("public Solana events cannot synthesize Wallet Standard account changes", () => {
+    const harness = connectedSolanaHarness();
+    const changes = [];
+    harness.wallet.features["standard:events"].on("change", value => changes.push(value));
+
+    harness.standardProvider.emit("accountChanged", publicKey(secondSolanaKey));
+    harness.standardProvider.emit("disconnect");
+
+    assert.deepEqual(changes, []);
+    assert.equal(harness.wallet.accounts[0].address, firstSolanaKey);
+});
+
+test("Solana forwarding drops events when argument iteration replaces the target", () => {
+    const harness = solanaHarness();
+    const replacement = connectedSolanaHarness(secondSolanaKey);
+    const record = harness.exports.createStableFacadeRecord({uuid: "argument-replacement"});
+    const ethereum = ethereumFacadeTarget("current");
+    record.prepareTargets({ethereumProvider: ethereum, solanaProvider: harness.target}).commit();
+    const events = [];
+    record.solana.on("accountChanged", key => events.push(key.toString()));
+    harness.context.retarget = () => record.prepareTargets({
+        ethereumProvider: ethereum,
+        solanaProvider: replacement.target,
+    }).commit();
+    vm.runInContext(`
+        const originalIterator = Array.prototype[Symbol.iterator];
+        let replaced = false;
+        Array.prototype[Symbol.iterator] = function () {
+            if (!replaced && this.length === 1 && typeof this[0]?.toBase58 === "function") {
+                replaced = true;
+                retarget();
+            }
+            return Reflect.apply(originalIterator, this, []);
+        };
+    `, harness.context);
+
+    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+
+    assert.equal(record.wallet.accounts[0].address, secondSolanaKey);
+    assert.deepEqual(events, []);
+});
+
+test("Solana notification replacement survives an obsolete disposer during delivery", () => {
+    const harness = solanaHarness();
+    const first = [];
+    const second = [];
+    let disposeSecond;
+    const disposeFirst = harness.exports.subscribeNotifications(harness.provider, notification => {
+        first.push(notification.kind === "event" ? notification.name : notification.kind);
+        disposeSecond = harness.exports.subscribeNotifications(harness.provider, next => {
+            second.push(next.kind === "event" ? next.name : next.kind);
+        });
+    });
+
+    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+    assert.deepEqual(first, ["accountChanged"]);
+    assert.deepEqual(second, ["accountStateChanged", "connect"]);
+    disposeFirst();
+    applySolanaConfiguration(harness, {publicKey: secondSolanaKey, isConnected: true});
+    assert.deepEqual(second, ["accountStateChanged", "connect", "accountChanged", "accountStateChanged"]);
+    disposeSecond();
+    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
+    assert.equal(second.length, 4);
 });
 
 test("Wallet Standard subscriber revocation cannot deliver stale accounts to later listeners", () => {
@@ -4325,13 +4421,13 @@ test("Wallet Standard connect cannot move to a replacement provider during optio
     const ethereum = ethereumFacadeTarget("ethereum");
     record.prepareTargets({
         ethereumProvider: ethereum,
-        solanaProvider: {provider: first.provider},
+        solanaProvider: first.target,
     }).commit();
     const connecting = record.wallet.features["standard:connect"].connect({
         get silent() {
             record.prepareTargets({
                 ethereumProvider: ethereum,
-                solanaProvider: {provider: second.provider},
+                solanaProvider: second.target,
             }).commit();
             first.Solana.retire(first.provider);
             return false;
@@ -4450,7 +4546,7 @@ test("stable facades retarget atomically while preserving identities and listene
     const accountEvents = [];
     const on = features["standard:events"].on;
     const unsubscribe = on("change", value => accountEvents.push(value));
-    assert.equal(firstSolana.changeListeners.size, 1);
+    assert.equal(firstSolana.notificationListenerCount(), 1);
     for (const {name, callback} of callbacks) {
         const result = await callback({});
         if (name === "standard:connect") {
@@ -4462,7 +4558,7 @@ test("stable facades retarget atomically while preserving identities and listene
     assert.deepEqual(firstSolana.calls, ["connect", "disconnect"]);
     eipProvider.on("accountsChanged", value => events.push(value));
     record.solana.on("accountChanged", value => solanaEvents.push(value));
-    firstEthereum.provider.emit("accountsChanged", ["first"]);
+    firstEthereum.publishEvent("accountsChanged", ["first"]);
     assert.deepEqual(events, [["first"]]);
     assert.equal(await eipProvider.request({method: "eth_chainId"}),
         "first:eth_chainId");
@@ -4494,16 +4590,16 @@ test("stable facades retarget atomically while preserving identities and listene
         }
     }
     assert.deepEqual(secondSolana.calls, ["connect", "disconnect"]);
-    assert.equal(firstSolana.changeListeners.size, 0);
-    assert.equal(secondSolana.changeListeners.size, 1);
-    for (const listener of secondSolana.changeListeners) { listener({}); }
+    assert.equal(firstSolana.notificationListenerCount(), 0);
+    assert.equal(secondSolana.notificationListenerCount(), 1);
+    secondSolana.publishAccountChange();
     assert.equal(accountEvents.at(-1).accounts[0], account);
     unsubscribe();
-    assert.equal(secondSolana.changeListeners.size, 0);
-    firstEthereum.provider.emit("accountsChanged", ["stale"]);
-    secondEthereum.provider.emit("accountsChanged", ["second"]);
-    firstSolana.provider.emit("accountChanged", "stale");
-    secondSolana.provider.emit("accountChanged", "second");
+    assert.equal(secondSolana.notificationListenerCount(), 1);
+    firstEthereum.publishEvent("accountsChanged", ["stale"]);
+    secondEthereum.publishEvent("accountsChanged", ["second"]);
+    firstSolana.publishEvent("accountChanged", "stale");
+    secondSolana.publishEvent("accountChanged", "second");
     assert.deepEqual(events, [["first"], ["second"]]);
     assert.deepEqual(solanaEvents, ["second"]);
     previous.ethereum.retire();
@@ -4528,7 +4624,7 @@ test("stable Solana forwarding ignores an overridden public emitter", () => {
         throw new Error("overridden emit called");
     };
 
-    solana.provider.emit("accountChanged", "current");
+    solana.publishEvent("accountChanged", "current");
 
     assert.deepEqual(events, ["current"]);
 });
@@ -4600,8 +4696,8 @@ test("stable facade stale timers and readiness observers cannot suppress a repla
     const first = ethereumFacadeTarget("first");
     const second = ethereumFacadeTarget("second");
     let staleReadiness;
-    const subscribeFirst = first.subscribeReadiness;
-    first.subscribeReadiness = listener => {
+    const subscribeFirst = first.subscribeNotifications;
+    first.subscribeNotifications = listener => {
         staleReadiness = listener;
         return subscribeFirst(listener);
     };
@@ -4619,10 +4715,10 @@ test("stable facade stale timers and readiness observers cannot suppress a repla
         ethereumProvider: second,
         solanaProvider: solanaFacadeTarget("second"),
     }).commit();
-    assert.equal(first.readinessListenerCount(), 0);
-    assert.equal(second.readinessListenerCount(), 1);
-    staleReadiness({flushed: true});
-    first.provider.emit("disconnect", new Error("stale disconnect"));
+    assert.equal(first.notificationListenerCount(), 0);
+    assert.equal(second.notificationListenerCount(), 1);
+    staleReadiness({kind: "readiness", flushed: true});
+    first.publishEvent("disconnect", new Error("stale disconnect"));
     assert.deepEqual(connects, []);
 
     assert.equal(harness.runNextTimer(), true);
@@ -4686,7 +4782,7 @@ test("stable facade preparation keeps old targets until a single commit", async 
         solanaProvider: {provider: {}},
     }));
     const hooklessEthereum = ethereumFacadeTarget("hookless");
-    delete hooklessEthereum.subscribeReadiness;
+    delete hooklessEthereum.subscribeNotifications;
     assert.throws(() => record.prepareTargets({
         ethereumProvider: hooklessEthereum,
         solanaProvider: stagedSolana,
@@ -7122,11 +7218,13 @@ test("Ethereum readiness preserves a replacement observer and reads state withou
     };
     assert.equal(readReadyState("loading"), false);
     let disposeSecond;
-    const disposeFirst = module.exports.subscribeReadiness(engine, notification => {
+    const disposeFirst = module.exports.subscribeNotifications(engine, notification => {
+        if (notification.kind !== "readiness") { return; }
         assert.equal(Object.isFrozen(notification), true);
         assert.equal(notification.flushed, true);
         assert.equal(readReadyState("first"), true);
-        disposeSecond = module.exports.subscribeReadiness(engine, next => {
+        disposeSecond = module.exports.subscribeNotifications(engine, next => {
+            if (next.kind !== "readiness") { return; }
             assert.equal(next.flushed, true);
             assert.equal(readReadyState("second"), true);
         });
@@ -7207,7 +7305,7 @@ for (const consumedConnect of [false, true]) {
         harness.runTimers();
         assert.deepEqual(connects, [consumedConnect ? "0x1" : "0x2"]);
         assert.deepEqual(chains, ["0x2"]);
-        oldEthereum.provider.emit("chainChanged", "stale");
+        oldEthereum.publishEvent("chainChanged", "stale");
         assert.deepEqual(chains, ["0x2"]);
         assert.equal(await provider.request({method: "eth_chainId"}), "0x2");
 

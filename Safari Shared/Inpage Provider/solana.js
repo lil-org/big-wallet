@@ -35,7 +35,6 @@ import {
     solanaMainnetChain,
     solanaTestnetChain,
 } from "./wallet_standard";
-import { EventEmitter } from "events";
 
 const invalidSolanaMessageRequest =
     "Big Wallet could not normalize this Solana message request";
@@ -60,18 +59,12 @@ const unsupportedSolanaChain = "Big Wallet does not support this Solana chain";
 const malformedSolanaResponse = "Failed to process Solana response";
 const maximumTransactionBatchSize = 64;
 const maximumCounter = Number.MAX_SAFE_INTEGER;
-const emitNormally = EventEmitter.prototype.emit;
-const addSetEntryNormally = Set.prototype.add;
-const deleteSetEntryNormally = Set.prototype.delete;
-const clearSetNormally = Set.prototype.clear;
-const forEachSetNormally = Set.prototype.forEach;
 const arrayBufferByteLengthNormally = getOwnPropertyDescriptorNormally(
     ArrayBuffer.prototype,
     "byteLength"
 ).get;
 const getPrototypeOfNormally = Object.getPrototypeOf;
 const isArrayBufferViewNormally = ArrayBuffer.isView;
-const SetConstructor = Set;
 const providerStates = new WeakMap;
 
 function getProviderState(provider) {
@@ -88,18 +81,6 @@ function providerState(provider) {
 
 function setProviderState(provider, state) {
     setWeakMapValue(providerStates, provider, state);
-}
-
-function addSetEntry(set, value) {
-    applyFunction(addSetEntryNormally, set, [value]);
-}
-
-function deleteSetEntry(set, value) {
-    return applyFunction(deleteSetEntryNormally, set, [value]);
-}
-
-function clearSet(set) {
-    applyFunction(clearSetNormally, set, []);
 }
 
 function isArrayBuffer(value) {
@@ -187,25 +168,33 @@ function ownDataDescriptor(value, name) {
     return descriptor && "value" in descriptor ? descriptor : null;
 }
 
-function emitProvider(provider, name, ...values) {
+function notify(provider, notification) {
+    const listener = getProviderState(provider).notificationListener;
+    if (typeof listener !== "function") { return; }
     try {
-        applyFunction(emitNormally, provider, [name, ...values]);
-    } catch {
-    }
+        applyFunction(listener, undefined, [notification]);
+    } catch {}
+}
+
+function emitProvider(provider, name, ...args) {
+    notify(provider, {kind: "event", name, args});
 }
 
 function notifyAccountChange(provider) {
+    notify(provider, {kind: "accountStateChanged"});
+}
+
+function subscribeNotifications(provider, listener) {
     const state = getProviderState(provider);
-    const listeners = [];
-    applyFunction(forEachSetNormally, state.accountChangeListeners, [listener => {
-        listeners[listeners.length] = listener;
-    }]);
-    for (let index = 0; index < listeners.length; index += 1) {
-        try {
-            listeners[index]();
-        } catch {
-        }
+    if (state.runtime.phase === "retired" || typeof listener !== "function") {
+        return () => {};
     }
+    state.notificationListener = listener;
+    return () => {
+        if (state.notificationListener === listener) {
+            state.notificationListener = null;
+        }
+    };
 }
 
 class PublicKey {
@@ -1290,7 +1279,7 @@ function retire(provider, error = providerReplacementError()) {
     const count = state.runtime.retire(error);
     state.activeDisconnect = null;
     clearAuthorization(provider, true);
-    clearSet(state.accountChangeListeners);
+    state.notificationListener = null;
     return count;
 }
 
@@ -1355,10 +1344,9 @@ function initialAuthorization(initialState) {
     };
 }
 
-class BigWalletSolana extends EventEmitter {
+class BigWalletSolana {
 
     constructor(providerGeneration, transport, initialState = null) {
-        super();
         if (typeof providerGeneration !== "string" ||
             providerGeneration.length === 0) {
             throw new TypeError("Invalid Solana provider generation");
@@ -1372,7 +1360,7 @@ class BigWalletSolana extends EventEmitter {
                 firstWireId: 2,
                 wireIdStep: 2,
             }),
-            accountChangeListeners: new SetConstructor,
+            notificationListener: null,
             transport,
             ...authorization,
         });
@@ -1569,15 +1557,6 @@ class BigWalletSolana extends EventEmitter {
         const params = {transaction};
         if (typeof options !== "undefined") { params.options = options; }
         return this.request({method: "signAndSendTransaction", params});
-    }
-
-    onAccountChange(listener) {
-        const state = getProviderState(this);
-        if (state.runtime.phase === "retired" || typeof listener !== "function") {
-            return () => {};
-        }
-        addSetEntry(state.accountChangeListeners, listener);
-        return () => deleteSetEntry(state.accountChangeListeners, listener);
     }
 
     accountState() {
@@ -1828,5 +1807,5 @@ BigWalletSolana.observeDisconnectedConfigurationRevision =
 BigWalletSolana.snapshot = snapshot;
 BigWalletSolana.isReady = isReady;
 
-export { applyDecodedEnvelope, isReady, retire, snapshot };
+export { applyDecodedEnvelope, isReady, retire, snapshot, subscribeNotifications };
 export default BigWalletSolana;

@@ -122,9 +122,8 @@ final class PopupRequestSessionsTests: XCTestCase {
             let clock = CompactExecutionClock(
                 Date(timeIntervalSince1970: 1_700_000_000)
             )
-            let store = CompactPopupStore(clock: { clock.now })
-            let snapshot = try popupSnapshot(id: 450 + index)
-            await store.insert(snapshot)
+            let store = try makeStore(clock: { clock.now })
+            let snapshot = try await enqueue(popupSnapshot(id: 450 + index), in: store)
             guard case .claimed(let claim) = await store.claim(
                       handle: snapshot.handle
                   ) else {
@@ -176,9 +175,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let clock = CompactExecutionClock(
             Date(timeIntervalSince1970: 1_700_000_000)
         )
-        let store = CompactPopupStore(clock: { clock.now })
-        let snapshot = try popupSnapshot(id: 455)
-        await store.insert(snapshot)
+        let store = try makeStore(clock: { clock.now })
+        let snapshot = try await enqueue(popupSnapshot(id: 455), in: store)
         guard case .claimed(let claim) = await store.claim(
                   handle: snapshot.handle
               ) else {
@@ -218,9 +216,8 @@ final class PopupRequestSessionsTests: XCTestCase {
     func testExecutionLeaseCoversDurableCommitAndEndsBeforeBroadcast()
         async throws {
         for broadcasts in [false, true] {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: broadcasts ? 454 : 453)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: broadcasts ? 454 : 453), in: store)
             guard case .claimed(let claim) = await store.claim(
                       handle: snapshot.handle
                   ) else {
@@ -268,15 +265,14 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast() async throws {
         let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
-        let store = CompactPopupStore(clock: { clock.now })
-        let snapshot = try popupSnapshot(id: 456)
-        await store.insert(snapshot)
+        let store = try makeStore(clock: { clock.now })
+        let snapshot = try await enqueue(popupSnapshot(id: 456), in: store)
         guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
             return XCTFail("Expected claim")
         }
         let executor = DurableApprovalExecutor(store: store, clock: { clock.now })
         let response = try XCTUnwrap(snapshot.request).response(error: .internalError)
-        let gate = CompactPopupGate()
+        let gate = makeGate()
         let finished = expectation(description: "timed out before gate opened")
         let late = expectation(description: "late operation returned")
         var result: DurableApprovalExecutor.Result?
@@ -315,9 +311,8 @@ final class PopupRequestSessionsTests: XCTestCase {
     func testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease() async throws {
         for offset in [0.0, -1.0] {
             let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
-            let store = CompactPopupStore(clock: { clock.now })
-            let snapshot = try popupSnapshot(id: 457)
-            await store.insert(snapshot)
+            let store = try makeStore(clock: { clock.now })
+            let snapshot = try await enqueue(popupSnapshot(id: 457), in: store)
             guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
                 return XCTFail("Expected claim")
             }
@@ -342,15 +337,14 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testCallerCancellationDoesNotAbortStartedDurableOperation() async throws {
         for cancelDuringLease in [false, true] {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 458)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 458), in: store)
             guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
                 return XCTFail("Expected claim")
             }
             let executor = DurableApprovalExecutor(store: store)
             let response = try XCTUnwrap(snapshot.request).response(error: .userRejected)
-            let gate = CompactPopupGate()
+            let gate = makeGate()
             let started = expectation(description: "cancellation boundary reached")
             let walletAccess = RequestScopedWalletAccess(
                 CompactWalletAccess(account: popupTestAccount()),
@@ -387,15 +381,14 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
 
     func testZeroBroadcastTimeoutPersistsRecoveryOnceDespiteLateSend() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 459)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 459), in: store)
         guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
             return XCTFail("Expected claim")
         }
         let request = try XCTUnwrap(snapshot.request)
         let executor = DurableApprovalExecutor(store: store, broadcastTimeoutNanoseconds: 0)
-        let gate = CompactPopupGate()
+        let gate = makeGate()
         let finished = expectation(description: "zero timeout recovery")
         let late = expectation(description: "late broadcast result")
         let task = Task { @MainActor in
@@ -1246,7 +1239,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             "name": "switchAccount",
             "provider": "unknown",
             "host": "wallet.example",
-            "configurationKey": "wallet.example",
+            "configurationKey": "https://wallet.example",
             "enqueueAttempt": String(repeating: "a", count: 32),
             "admissionDeadline": popupRequestAdmissionDeadline,
             "workflowVersion": ExtensionBridge.workflowVersion,
@@ -1275,16 +1268,16 @@ final class PopupRequestSessionsTests: XCTestCase {
 extension PopupRequestSessionsTests {
 
     func testPendingResponseIsFIFO() async throws {
-        let store = CompactPopupStore()
-        let receivedAt = Date(timeIntervalSince1970: 1)
-        let first = try popupSnapshot(
+        let receivedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try makeStore(clock: { receivedAt })
+        let first = try await enqueue(popupSnapshot(
             id: 1,
             createdAt: receivedAt,
             provider: .ethereum
-        )
-        let second = try popupSnapshot(id: 2, createdAt: receivedAt)
-        await store.insert(second)
-        await store.insert(first)
+        ), in: store)
+        let second = try await enqueue(popupSnapshot(id: 2, createdAt: receivedAt), in: store)
+        XCTAssertEqual(first.createdAt, second.createdAt)
+        XCTAssertLessThan(first.sequence, second.sequence)
         let controller = popupController(store: store)
         let request = try popupCommand(subject: "getPendingRequests", id: 99)
 
@@ -1296,7 +1289,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(requests.compactMap { $0["id"] as? Int }, [1, 2])
         XCTAssertEqual(
             requests.compactMap { $0["configurationKey"] as? String },
-            ["wallet.example", "wallet.example"]
+            ["https://wallet.example", "https://wallet.example"]
         )
         XCTAssertEqual(
             requests.compactMap { $0["provider"] as? String },
@@ -1311,21 +1304,20 @@ extension PopupRequestSessionsTests {
     }
 
     func testPendingResponseCarriesCompletedIdentitiesBeforeQueuedRequests() async throws {
-        let store = CompactPopupStore()
-        let completed = try popupSnapshot(
+        let store = try makeStore()
+        let completed = try await enqueue(popupSnapshot(
             id: 10,
             createdAt: Date(timeIntervalSince1970: 1),
             provider: .ethereum,
-            revisions: popupRevisions(ethereum: 2, solana: 3),
-            phase: .responded
-        )
-        let pending = try popupSnapshot(
+            revisions: popupRevisions(ethereum: 2, solana: 3)
+        ), in: store)
+        let completedResult = await store.bridge.reject(handle: completed.handle)
+        XCTAssertEqual(completedResult, .persisted)
+        let pending = try await enqueue(popupSnapshot(
             id: 11,
             createdAt: Date(timeIntervalSince1970: 2),
             provider: .solana
-        )
-        await store.insert(pending)
-        await store.insert(completed)
+        ), in: store)
         let controller = popupController(store: store)
         let request = try popupCommand(subject: "getPendingRequests", id: 99)
 
@@ -1358,9 +1350,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testUnavailableCatalogRequiresSecureSetup() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 20)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 20), in: store)
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupProcessor(),
@@ -1387,9 +1378,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testNonemptySwitchMaterializesImmediateResponseFromCatalog() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSwitchSnapshot(id: 24, address: "0x0000000000000000000000000000000000000001")
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSwitchSnapshot(id: 24, address: "0x0000000000000000000000000000000000000001"), in: store)
         let catalog = CompactWalletAccess(account: popupTestAccount())
         var catalogReads = 0
         var preparations = 0
@@ -1422,13 +1412,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testUnknownNonemptySwitchPersistsWithoutReadingCatalog() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSwitchSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSwitchSnapshot(
             id: 26,
             address: "0x0000000000000000000000000000000000000001",
             requestedChainId: "0x7fffffffffffffff"
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let admission = DappRequestAdmission(
             store: store,
             requestProcessor: DappRequestProcessor(),
@@ -1450,13 +1439,12 @@ extension PopupRequestSessionsTests {
             runtimeInstanceIdentifier: UUID(),
             owner: popupNativeDeliveryOwner
         )
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 30,
             provider: .ethereum,
             nativeDeliveryReceipt: receipt
-        )
-        await store.insert(snapshot)
+        ), in: store)
         var preparations = 0
         let admission = DappRequestAdmission(
             store: store,
@@ -1478,9 +1466,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testWalletDependentAdmissionDefersWithoutCatalogProvider() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 31, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 31, provider: .ethereum), in: store)
         var preparations = 0
         let admission = DappRequestAdmission(
             store: store,
@@ -1497,9 +1484,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testWalletDependentImmediateResponseUsesInjectedCatalog() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 27, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 27, provider: .ethereum), in: store)
         let catalog = CompactWalletAccess(account: popupTestAccount())
         var catalogReads = 0
         var preparations = 0
@@ -1524,9 +1510,8 @@ extension PopupRequestSessionsTests {
 
     func testCompletionOwnershipLossToReceiptRequiresApprovalDelivery()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 32, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 32, provider: .ethereum), in: store)
         await store.forceNextCompletionOwnershipLoss(receipt: .init(
             nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
             runtimeInstanceIdentifier: UUID(),
@@ -1549,12 +1534,11 @@ extension PopupRequestSessionsTests {
     }
 
     func testStagedDecisionReplaySkipsRequestRematerialization() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 29,
             nativeDecisionStaged: true
-        )
-        await store.insert(snapshot)
+        ), in: store)
         var preparations = 0
         let admission = DappRequestAdmission(
             store: store,
@@ -1579,9 +1563,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testImmediateResponsePersistenceShowsWorkingUntilReconciled() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 28)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 28), in: store)
         await store.suspendNextCompletion()
         var preparations = 0
         let controller = PopupRequestSessions(
@@ -1661,9 +1644,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testReadsPreserveCachedErrorUntilIdentityBoundRetry() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 481)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 481), in: store)
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
@@ -1742,9 +1724,8 @@ extension PopupRequestSessionsTests {
 
     func testImmediatePersistenceFailureRetriesExplicitlyAndDuplicateRetryDoesNotRestartWork()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 482)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 482), in: store)
         await store.failNextCompletion()
         var preparations = 0
         let controller = PopupRequestSessions(
@@ -1814,9 +1795,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testImmediatePersistenceRetryCanMaterializeAReview() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 484)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 484), in: store)
         await store.failNextCompletion()
         var preparations = 0
         var requiresReview = false
@@ -1871,9 +1851,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testOldImmediatePersistenceCompletionPreservesReplacementFailure() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 485)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 485), in: store)
         await store.suspendNextCompletion()
         var preparations = 0
         let controller = PopupRequestSessions(
@@ -1927,9 +1906,8 @@ extension PopupRequestSessionsTests {
 
     func testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors() async throws {
         for ownership in ["receipt", "decision", "approving"] {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 483)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 483), in: store)
             var preparations = 0
             let controller = PopupRequestSessions(
                 store: store,
@@ -1961,7 +1939,7 @@ extension PopupRequestSessionsTests {
             } else if ownership == "decision" {
                 _ = await store.installNativeDecision(handle: snapshot.handle, decision: .addEthereumChain)
             } else {
-                _ = await store.claim(handle: snapshot.handle)
+                try await store.holdForeignClaim(handle: snapshot.handle)
             }
             let retry = try popupCommand(
                 subject: "retryApproval", id: snapshot.handle.id,
@@ -1978,9 +1956,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testColdControllerShowsWorkingForApprovingSnapshot() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 22, phase: .approving)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 22, phase: .approving), in: store)
         var preparationCount = 0
         let controller = PopupRequestSessions(
             store: store,
@@ -2011,9 +1988,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testReceiptOwnedApprovalStateInvalidatesCachedReview() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 31)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 31), in: store)
         var preparationCount = 0
         let controller = PopupRequestSessions(
             store: store,
@@ -2066,12 +2042,11 @@ extension PopupRequestSessionsTests {
     }
 
     func testStagedNativeApprovalRemainsPendingAndShowsWorking() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 32,
             nativeDecisionStaged: true
-        )
-        await store.insert(snapshot)
+        ), in: store)
         var preparationCount = 0
         let controller = PopupRequestSessions(
             store: store,
@@ -2114,9 +2089,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testCachedControllerShowsWorkingAfterForeignClaim() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 23)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 23), in: store)
         let controller = popupController(store: store)
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -2128,9 +2102,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
         XCTAssertNotNil((initial["review"] as? [String: Any])?["reviewToken"])
-        guard case .claimed = await store.claim(handle: snapshot.handle) else {
-            return XCTFail("Expected foreign claim")
-        }
+        try await store.holdForeignClaim(handle: snapshot.handle)
 
         let response = await controller.dispatchJSON(
             request: request,
@@ -2146,9 +2118,8 @@ extension PopupRequestSessionsTests {
         var refreshEvents = [String]()
         let catalog = CompactWalletAccess(account: popupTestAccount())
         var catalogAvailable = true
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 21)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 21), in: store)
         let processor = CompactPopupProcessor { request in
             .approval(.switchAccount(SelectAccountAction(
                 coinType: nil,
@@ -2226,9 +2197,8 @@ extension PopupRequestSessionsTests {
             [firstAccount, secondAccount],
             [wrongCoinAccount],
         ].enumerated() {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 40 + index, provider: .solana)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 40 + index, provider: .solana), in: store)
             var resolveCount = 0
             let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
                 resolveCount += 1
@@ -2296,9 +2266,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testStaleReviewTokenRejectsApproveAndMutation() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 3)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 3), in: store)
         let controller = popupController(store: store)
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -2333,9 +2302,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testAddChainApprovalSkipsRevisionsAndRejectUsesSingleActionPath() async throws {
-        let store = CompactPopupStore()
-        let approved = try popupSnapshot(id: 4)
-        await store.insert(approved)
+        let store = try makeStore()
+        let approved = try await enqueue(popupSnapshot(id: 4, provider: .ethereum, method: "addEthereumChain"), in: store)
         let controller = popupController(store: store)
         let reviewToken = try await materializeToken(
             controller: controller,
@@ -2362,8 +2330,7 @@ extension PopupRequestSessionsTests {
         )
         XCTAssertTrue(approvalWasCommitted)
 
-        let rejected = try popupSnapshot(id: 5)
-        await store.insert(rejected)
+        let rejected = try await enqueue(popupSnapshot(id: 5, provider: .ethereum, method: "addEthereumChain"), in: store)
         _ = try await materializeToken(
             controller: controller,
             snapshot: rejected
@@ -2389,9 +2356,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testColdControllerRejectsQueuedHandleWithoutMaterializingSession() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 25)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 25), in: store)
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
@@ -2426,9 +2392,8 @@ extension PopupRequestSessionsTests {
             (ExtensionBridge.StoreMutationResult.ownershipLost, "ignored"),
             (.retryablePersistenceFailure, "unavailable"),
         ] {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 27)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 27), in: store)
             var preparations = 0
             let controller = PopupRequestSessions(
                 store: store,
@@ -2468,9 +2433,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testAuthenticationFailureReleasesClaimAndReturnsToReview() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 6)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 6), in: store)
         let processor = CompactPopupProcessor { request in
             .approval(.approveMessage(SignMessageAction(
                 subject: .signMessage,
@@ -2519,9 +2483,8 @@ extension PopupRequestSessionsTests {
             ExtensionBridge.StoreMutationResult.retryablePersistenceFailure,
             .ownershipLost,
         ] {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 476)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 476), in: store)
             await store.forceNextReleaseResult(result)
             var authenticatedSession: PopupRequestSession?
             let controller = PopupRequestSessions(
@@ -2576,7 +2539,7 @@ extension PopupRequestSessionsTests {
                 request: stateRequest,
                 profileIdentifier: nil
             )
-            XCTAssertEqual(state["state"] as? String, "working")
+            XCTAssertEqual(state["state"] as? String, result == .retryablePersistenceFailure ? "error" : "working")
             XCTAssertNil((state["review"] as? [String: Any])?["reviewToken"])
             let events = await store.events()
             XCTAssertEqual(events, ["claim", "release"])
@@ -2585,9 +2548,8 @@ extension PopupRequestSessionsTests {
 
     func testSigningApprovalRequiresCurrentBoundedExecutionDeadline()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 59)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 59), in: store)
         let now = Date(timeIntervalSince1970: 1_900_000_000)
         let controller = PopupRequestSessions(
             store: store,
@@ -2634,9 +2596,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 60, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 60, provider: .ethereum), in: store)
         let catalog = CompactWalletAccess(account: popupTestAccount())
         let unlockedCatalog = CompactWalletAccess(
             accounts: catalog.orderedAccounts,
@@ -2724,9 +2685,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testMessageApprovalReleasesClaimWhenAccountDisappears() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 61, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 61, provider: .ethereum), in: store)
         let catalog = CompactWalletAccess(account: popupTestAccount())
         let emptyCatalog = CompactWalletAccess(accounts: [], catalogIdentity: catalog.catalogIdentity)
         var preparations = 0
@@ -2782,9 +2742,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testApprovalDispatchAwaitsAuthenticationAndFinalPersistence() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 30)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 30), in: store)
         await store.suspendNextCompletion()
         var authenticationCompletion: ((Bool) -> Void)?
         var dispatchCompleted = false
@@ -2845,10 +2804,9 @@ extension PopupRequestSessionsTests {
     }
 
     func testExecutionPersistsAfterReviewTokenBecomesStale() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 31)
-        await store.insert(snapshot)
-        let executionGate = CompactPopupGate()
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 31), in: store)
+        let executionGate = makeGate()
         var approvalSession: PopupRequestSession?
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
             await executionGate.wait()
@@ -2905,9 +2863,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testBroadcastCheckpointsBeforeSendAndCompletion() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 7)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 7), in: store)
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
             .broadcast(PreparedBroadcast(
                 recoveryResponse: request.response(error: .internalError),
@@ -2953,9 +2910,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testUnlockedWalletAccessIsDroppedBeforeBroadcastSend() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 411)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 411), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
         let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
@@ -3026,9 +2982,8 @@ extension PopupRequestSessionsTests {
 
     func testVaultRotationDuringSigningDiscardsPreparedBroadcast()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 415)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 415), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
         var accessIsCurrent = true
@@ -3113,16 +3068,15 @@ extension PopupRequestSessionsTests {
 
     func testProviderRevisionChangeDuringAuthenticationReleasesWithoutSigning()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 419,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 3, solana: 2)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
-        let authenticationGate = CompactPopupGate()
+        let authenticationGate = makeGate()
         var authenticationStarted = false
         var resolveCount = 0
         let now = Date(timeIntervalSince1970: 1_700_000_000)
@@ -3177,10 +3131,16 @@ extension PopupRequestSessionsTests {
         }
 
         try await waitForCondition { authenticationStarted }
-        await store.setRevisions(
-            popupRevisions(ethereum: 4, solana: 2),
-            handle: snapshot.handle
-        )
+        await store.transformNextLoad { stored in
+            ExtensionBridge.Snapshot(
+                handle: stored.handle, state: stored.state,
+                nativeDeliveryNonce: stored.nativeDeliveryNonce,
+                host: stored.host, configurationKey: stored.configurationKey,
+                revisions: popupRevisions(ethereum: 4, solana: 2),
+                createdAt: stored.createdAt, enqueueAttempt: stored.enqueueAttempt,
+                sequence: stored.sequence
+            )
+        }
         await authenticationGate.open()
         _ = await approval.value
 
@@ -3191,9 +3151,8 @@ extension PopupRequestSessionsTests {
 
     func testVaultAuthenticationCancellationReturnsToReviewWithoutError()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 412)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 412), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
         let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
@@ -3252,9 +3211,8 @@ extension PopupRequestSessionsTests {
 
     func testMissingVaultDuringAuthenticationShowsSecureSetupRequired()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 413)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 413), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
         var currentCatalog: WalletAccess? = catalog
@@ -3320,9 +3278,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testChangedVaultDuringAuthenticationReleasesBeforeRematerializing() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 477)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 477), in: store)
         let account = popupTestAccount()
         let original = CompactWalletAccess(account: account)
         let replacement = CompactWalletAccess(account: account)
@@ -3375,9 +3332,8 @@ extension PopupRequestSessionsTests {
     func testCachedSigningAndSelectionReviewsDetectVaultTombstone()
         async throws {
         for (index, isSelection) in [false, true].enumerated() {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 416 + index)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 416 + index), in: store)
             let account = popupTestAccount()
             let catalog = CompactWalletAccess(account: account)
             var currentCatalog: WalletAccess? = catalog
@@ -3449,7 +3405,7 @@ extension PopupRequestSessionsTests {
         let account = popupTestAccount()
         let accountKey = "wallet-\(account.coin.rawValue)-\(account.derivationPath)"
         for isSelection in [false, true] {
-            let store = CompactPopupStore()
+            let store = try makeStore()
             let catalog = CompactWalletAccess(account: account)
             let processor = CompactPopupAccessProcessor { request, _ in
                 if isSelection {
@@ -3480,10 +3436,8 @@ extension PopupRequestSessionsTests {
                 ),
                 loadsTransactionContext: false
             )
-            let first = try popupSnapshot(id: 418)
-            let next = try popupSnapshot(id: 419)
-            await store.insert(first)
-            await store.insert(next)
+            let first = try await enqueue(popupSnapshot(id: 418), in: store)
+            let next = try await enqueue(popupSnapshot(id: 419, provider: .ethereum), in: store)
             var names = originalNames ?? [:]
             names[accountKey] = "Cached name"
             Defaults.walletsAndAccountsNames = names
@@ -3518,9 +3472,8 @@ extension PopupRequestSessionsTests {
 
     func testWalletIndependentApprovalDoesNotRequireVaultCatalog()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 414)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 414), in: store)
         let processor = CompactPopupProcessor(walletIndependent: true)
         let controller = PopupRequestSessions(
             store: store,
@@ -3552,10 +3505,9 @@ extension PopupRequestSessionsTests {
     }
 
     func testApprovalDispatchAwaitsBroadcastSend() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 32)
-        await store.insert(snapshot)
-        let sendGate = CompactPopupGate()
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 32), in: store)
+        let sendGate = makeGate()
         var dispatchCompleted = false
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
             .broadcast(PreparedBroadcast(
@@ -3620,9 +3572,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionApprovalAwaitsSynchronousAuthenticationOutputAndPreflight() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 33, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 33, provider: .ethereum), in: store)
         let transaction = popupReadyTransaction()
         let network = popupTransactionNetwork()
         var authenticationCompletion: ((Bool) -> Void)?
@@ -3708,9 +3659,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionApprovalRetainsReviewedPayloadAndAppliesExecutionEdits() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 62, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 62, provider: .ethereum), in: store)
         let reviewedTransaction = popupReadyTransaction()
         var approvedTransaction = reviewedTransaction
         approvedTransaction.nonce = "0x7"
@@ -3798,9 +3748,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 63, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 63, provider: .ethereum), in: store)
         let reviewedTransaction = popupReadyTransaction()
         let changedTransaction = Transaction(
             id: reviewedTransaction.id,
@@ -3886,9 +3835,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionApprovalRejectsFreshRPCEndpointDrift() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 64, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 64, provider: .ethereum), in: store)
         let transaction = popupReadyTransaction()
         let reviewedNetwork = popupTransactionNetwork()
         let changedNetwork = EthereumNetwork(
@@ -3966,9 +3914,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionRematerializesAfterRetryableExecutionStartFailure() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 36, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 36, provider: .ethereum), in: store)
         await store.failNextBegin()
         let transaction = popupReadyTransaction()
         let network = popupTransactionNetwork()
@@ -4067,9 +4014,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionPresentationChangeWhileClaimingReturnsToReview() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 35, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 35, provider: .ethereum), in: store)
         await store.suspendNextClaim()
         let transaction = popupReadyTransaction()
         let network = popupTransactionNetwork()
@@ -4159,9 +4105,10 @@ extension PopupRequestSessionsTests {
     }
 
     func testCompletedRequestPollingSettlesPendingTransactionPreflight() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 64, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 64, provider: .ethereum), in: store)
+        var activeClaim: ExtensionBridge.ApprovalClaim?
+        await store.observeNextClaim { activeClaim = $0 }
         let transaction = popupReadyTransaction()
         let catalog = CompactWalletAccess(account: popupTestAccount())
         let access = RequestScopedWalletAccess(catalog)
@@ -4217,11 +4164,12 @@ extension PopupRequestSessionsTests {
         }
         try await waitForCondition { preflightCompletion != nil }
         let request = try XCTUnwrap(snapshot.request)
+        let released = await store.bridge.release(claim: try XCTUnwrap(activeClaim))
+        XCTAssertEqual(released, .persisted)
         _ = await store.complete(
             handle: snapshot.handle,
             response: request.response(error: .userRejected)
         )
-        await store.forceNextReleaseResult(.ownershipLost)
         let pending = try popupCommand(subject: "getPendingRequests", id: 99)
 
         _ = await controller.dispatchJSON(request: pending, profileIdentifier: nil)
@@ -4238,9 +4186,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testTransactionAlertReleasesClaimBeforeApprovalReturns() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 34, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 34, provider: .ethereum), in: store)
         let transaction = popupReadyTransaction()
         let network = popupTransactionNetwork()
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
@@ -4311,12 +4258,11 @@ extension PopupRequestSessionsTests {
     }
 
     func testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce() async throws {
-        let store = CompactPopupStore()
-        let gate = CompactPopupGate()
+        let store = try makeStore()
+        let gate = makeGate()
         let recovered = expectation(description: "recovery before sender returns")
         let late = expectation(description: "sender returned after recovery")
-        let snapshot = try popupSnapshot(id: 8)
-        await store.insert(snapshot)
+        let snapshot = try await enqueue(popupSnapshot(id: 8), in: store)
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
             .broadcast(PreparedBroadcast(
                 recoveryResponse: request.response(error: .internalError),
@@ -4386,13 +4332,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testEthereumRevisionMismatchCompletesBeforeAuthenticationOrResolve() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 9,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 3, solana: 4)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         var authenticationCount = 0
         var resolveCount = 0
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
@@ -4444,13 +4389,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testUnrelatedEthereumDriftDoesNotBlockSolanaApproval() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 10,
             provider: .solana,
             revisions: popupRevisions(ethereum: 1, solana: 7)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let catalog = CompactWalletAccess(account: popupSolanaTestAccount())
         var resolveCount = 0
         let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
@@ -4497,12 +4441,11 @@ extension PopupRequestSessionsTests {
     }
 
     func testUnknownProviderRequiresBothRevisions() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 11,
             revisions: popupRevisions(ethereum: 2, solana: 8)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         var authenticationCount = 0
         let processor = CompactPopupProcessor { request in
             .approval(.approveMessage(SignMessageAction(
@@ -4548,9 +4491,8 @@ extension PopupRequestSessionsTests {
     }
 
     func testMissingRevisionsCompletesNonAddApprovalAsStale() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(id: 12, provider: .ethereum)
-        await store.insert(snapshot)
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 12, provider: .ethereum), in: store)
         let processor = CompactPopupProcessor { request in
             .approval(.approveMessage(SignMessageAction(
                 subject: .signMessage,
@@ -4615,9 +4557,8 @@ extension PopupRequestSessionsTests {
             ("disconnect after network removal", [], [], nil, true),
         ]
         for (index, scenario) in cases.enumerated() {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(id: 800 + index, provider: .unknown)
-            await store.insert(snapshot)
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 800 + index, provider: .unknown), in: store)
             let decision = DappApprovalDecision.accountSelection(.init(
                 accounts: scenario.selection,
                 ethereumChainID: network.chainIdHexString
@@ -4655,13 +4596,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerExecutesMatchingDecisionExactlyOnce() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 130,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 4, solana: 2)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let account = popupTestAccount()
         let access = CompactWalletAccess(account: account)
         var refreshes = 0
@@ -4743,20 +4683,21 @@ extension PopupRequestSessionsTests {
 
     func testNativeFinalizerProductionPathRequiresLiveExecutionContext()
         async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let now = Date(timeIntervalSince1970: 2_050_000_000)
+        let nativeClock = CompactExecutionClock(now)
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 138,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 4, solana: 2)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .message(.init(solanaCluster: nil))
         )
         XCTAssertEqual(staged, .persisted)
+        nativeClock.now = now
         let request = try XCTUnwrap(snapshot.request)
-        let now = Date(timeIntervalSince1970: 2_050_000_000)
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: CompactPopupProcessor(
@@ -4797,10 +4738,12 @@ extension PopupRequestSessionsTests {
 
     func testNativeFinalizerKeepsLiveReceiptPendingWhenExecutionContextIsLost()
         async throws {
-        let store = CompactPopupStore()
+        let now = Date(timeIntervalSince1970: 2_060_000_000)
+        let nativeClock = CompactExecutionClock(now)
+        let store = try makeStore(clock: { nativeClock.now })
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let runtime = UUID()
-        let snapshot = try popupSnapshot(
+        let snapshot = try await enqueue(popupSnapshot(
             id: 172,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 4, solana: 2),
@@ -4809,14 +4752,13 @@ extension PopupRequestSessionsTests {
                 runtimeInstanceIdentifier: runtime,
                 owner: popupNativeDeliveryOwner
             )
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .message(.init(solanaCluster: nil))
         )
         XCTAssertEqual(staged, .persisted)
-        let now = Date(timeIntervalSince1970: 2_060_000_000)
+        nativeClock.now = now
         let context = ExtensionBridge.NativeExecutionContext(
             revisions: snapshot.revisions,
             observedAt: now,
@@ -4834,15 +4776,7 @@ extension PopupRequestSessionsTests {
             ,
             execute: { request, action, decision, walletAccess in
                 XCTAssertNil(walletAccess)
-                await store.installNativeExecutionContext(
-                    .init(
-                        revisions: snapshot.revisions,
-                        observedAt: now,
-                        executionDeadline: now.addingTimeInterval(60),
-                        fenceToken: UUID()
-                    ),
-                    handle: snapshot.handle
-                )
+                await store.releaseExecutionFence(handle: snapshot.handle)
                 return .response(request.response(error: .userRejected))
             }) { _ in
                 .approval(.approveMessage(SignMessageAction(
@@ -4870,10 +4804,10 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
 
         XCTAssertEqual(result, .pending)
-        XCTAssertEqual(retained.phase, .approving)
+        XCTAssertEqual(retained.phase, .queued)
         XCTAssertEqual(
             retained.nativeDeliveryReceipt?.nativeDeliveryNonce,
-            nonce
+            snapshot.nativeDeliveryNonce
         )
         XCTAssertEqual(
             retained.nativeDeliveryReceipt?.runtimeInstanceIdentifier,
@@ -4884,14 +4818,13 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRejectsChangedReviewedRPCEndpoint() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 139,
             provider: .ethereum,
             method: "signTransaction",
             revisions: popupRevisions(ethereum: 4, solana: 2)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let transaction = popupReadyTransaction()
         let reviewedNetwork = ResolvedEthereumNetwork(
             network: popupTransactionNetwork(),
@@ -4963,13 +4896,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRetriesStagedDecisionAfterWalletRefreshFailure() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 136,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 4, solana: 2)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let account = popupTestAccount()
         let network = popupTransactionNetwork()
         let staged = await store.installNativeDecision(
@@ -5067,14 +4999,14 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerWalletRetryPreservesTransactionFreshness() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let nativeClock = CompactExecutionClock(Date(timeIntervalSince1970: 2_400_000_000))
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 137,
             provider: .ethereum,
             method: "signTransaction",
             revisions: popupRevisions(ethereum: 2, solana: 1)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let execution = try XCTUnwrap(
             DappApprovalDecision.TransactionExecution(
                 popupReadyTransaction(),
@@ -5084,11 +5016,10 @@ extension PopupRequestSessionsTests {
                 )
             )
         )
-        var now = Date(timeIntervalSince1970: 2_400_000_000)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .transaction(execution),
-            stagedAt: now
+            stagedAt: nativeClock.now
         )
         XCTAssertEqual(staged, .persisted)
         let request = try XCTUnwrap(snapshot.request)
@@ -5105,23 +5036,23 @@ extension PopupRequestSessionsTests {
                 refreshes += 1
                 return refreshes == 1 ? nil : CompactWalletAccess(account: popupTestAccount())
             },
-            clock: { now }
+            clock: { nativeClock.now }
         )
 
         let first = await finalizeNativeDecision(
             finalizer,
             store: store,
             snapshot: snapshot,
-            observedAt: now
+            observedAt: nativeClock.now
         )
-        now = now.addingTimeInterval(
+        nativeClock.now = nativeClock.now.addingTimeInterval(
             NativeApprovalFinalizer.maximumTransactionDecisionAge + 1
         )
         let second = await finalizeNativeDecision(
             finalizer,
             store: store,
             snapshot: snapshot,
-            observedAt: now
+            observedAt: nativeClock.now
         )
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
         let committed = await store.completedApprovalWasCommitted(
@@ -5141,13 +5072,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerWalletRetryPreservesRevisionLineage() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 138,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 3, solana: 8)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let account = popupTestAccount()
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
@@ -5207,13 +5137,12 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRevisionMismatchCompletesBeforeResolve() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
             id: 131,
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 3, solana: 8)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .message(.init(solanaCluster: nil))
@@ -5252,14 +5181,15 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRejectsExpiredTransactionDecisionBeforeResolve() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let now = Date(timeIntervalSince1970: 2_100_000_000)
+        let nativeClock = CompactExecutionClock(now.addingTimeInterval(-NativeApprovalFinalizer.maximumTransactionDecisionAge - 1))
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 132,
             provider: .ethereum,
             method: "signTransaction",
             revisions: popupRevisions(ethereum: 2, solana: 1)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let transaction = popupReadyTransaction()
         let execution = try XCTUnwrap(
             DappApprovalDecision.TransactionExecution(
@@ -5270,7 +5200,6 @@ extension PopupRequestSessionsTests {
                 )
             )
         )
-        let now = Date(timeIntervalSince1970: 2_100_000_000)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .transaction(execution),
@@ -5279,6 +5208,7 @@ extension PopupRequestSessionsTests {
             )
         )
         XCTAssertEqual(staged, .persisted)
+        nativeClock.now = now
         let request = try XCTUnwrap(snapshot.request)
         let processor = CompactPopupProcessor { _ in
             XCTFail("Expired transaction decision must not rematerialize or resolve")
@@ -5313,14 +5243,15 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRejectsFutureTransactionDecisionBeforeResolve() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let now = Date(timeIntervalSince1970: 2_100_000_000)
+        let nativeClock = CompactExecutionClock(now)
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 133,
             provider: .ethereum,
             method: "signTransaction",
             revisions: popupRevisions(ethereum: 2, solana: 1)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let execution = try XCTUnwrap(
             DappApprovalDecision.TransactionExecution(
                 popupReadyTransaction(),
@@ -5330,13 +5261,14 @@ extension PopupRequestSessionsTests {
                 )
             )
         )
-        let now = Date(timeIntervalSince1970: 2_100_000_000)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .transaction(execution),
-            stagedAt: now.addingTimeInterval(1)
+            stagedAt: now
         )
         XCTAssertEqual(staged, .persisted)
+        nativeClock.now = now
+        await store.overrideNextNativeClaimDate(now.addingTimeInterval(1))
         let request = try XCTUnwrap(snapshot.request)
         let finalizer = NativeApprovalFinalizer(
             store: store,
@@ -5372,16 +5304,16 @@ extension PopupRequestSessionsTests {
             "signAllTransactions",
             "signAndSendTransaction",
         ]
-        let now = Date(timeIntervalSince1970: 2_150_000_000)
         for (offset, method) in methods.enumerated() {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(
+            let now = Date(timeIntervalSince1970: 2_150_000_000)
+            let nativeClock = CompactExecutionClock(now.addingTimeInterval(-NativeApprovalFinalizer.maximumTransactionDecisionAge - 1))
+            let store = try makeStore(clock: { nativeClock.now })
+            let snapshot = try await enqueue(popupSnapshot(
                 id: 140 + offset,
                 provider: .solana,
                 method: method,
                 revisions: popupRevisions(ethereum: 1, solana: 2)
-            )
-            await store.insert(snapshot)
+            ), in: store)
             let staged = await store.installNativeDecision(
                 handle: snapshot.handle,
                 decision: .message(.init(solanaCluster: nil)),
@@ -5390,6 +5322,7 @@ extension PopupRequestSessionsTests {
                 )
             )
             XCTAssertEqual(staged, .persisted, method)
+            nativeClock.now = now
             let request = try XCTUnwrap(snapshot.request)
             let finalizer = NativeApprovalFinalizer(
                 store: store,
@@ -5425,22 +5358,24 @@ extension PopupRequestSessionsTests {
             "signAllTransactions",
             "signAndSendTransaction",
         ]
-        let now = Date(timeIntervalSince1970: 2_160_000_000)
         for (offset, method) in methods.enumerated() {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(
+            let now = Date(timeIntervalSince1970: 2_160_000_000)
+            let nativeClock = CompactExecutionClock(now)
+            let store = try makeStore(clock: { nativeClock.now })
+            let snapshot = try await enqueue(popupSnapshot(
                 id: 150 + offset,
                 provider: .solana,
                 method: method,
                 revisions: popupRevisions(ethereum: 1, solana: 2)
-            )
-            await store.insert(snapshot)
+            ), in: store)
             let staged = await store.installNativeDecision(
                 handle: snapshot.handle,
                 decision: .message(.init(solanaCluster: nil)),
-                stagedAt: now.addingTimeInterval(1)
+                stagedAt: now
             )
             XCTAssertEqual(staged, .persisted, method)
+            nativeClock.now = now
+            await store.overrideNextNativeClaimDate(now.addingTimeInterval(1))
             let request = try XCTUnwrap(snapshot.request)
             let finalizer = NativeApprovalFinalizer(
                 store: store,
@@ -5467,15 +5402,15 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerDoesNotAgeOrdinarySolanaMessageSigning() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let now = Date(timeIntervalSince1970: 2_170_000_000)
+        let nativeClock = CompactExecutionClock(now.addingTimeInterval(-NativeApprovalFinalizer.maximumTransactionDecisionAge - 1))
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 160,
             provider: .solana,
             method: "signMessage",
             revisions: popupRevisions(ethereum: 1, solana: 2)
-        )
-        await store.insert(snapshot)
-        let now = Date(timeIntervalSince1970: 2_170_000_000)
+        ), in: store)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .message(.init(solanaCluster: nil)),
@@ -5484,6 +5419,7 @@ extension PopupRequestSessionsTests {
             )
         )
         XCTAssertEqual(staged, .persisted)
+        nativeClock.now = now
         var resolveCount = 0
         let finalizer = NativeApprovalFinalizer(
             store: store,
@@ -5518,14 +5454,14 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRechecksTransactionAgeAfterPreparation() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let nativeClock = CompactExecutionClock(Date(timeIntervalSince1970: 2_200_000_000))
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 134,
             provider: .ethereum,
             method: "signTransaction",
             revisions: popupRevisions(ethereum: 2, solana: 1)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let transaction = popupReadyTransaction()
         let execution = try XCTUnwrap(
             DappApprovalDecision.TransactionExecution(
@@ -5536,11 +5472,10 @@ extension PopupRequestSessionsTests {
                 )
             )
         )
-        var now = Date(timeIntervalSince1970: 2_200_000_000)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .transaction(execution),
-            stagedAt: now
+            stagedAt: nativeClock.now
         )
         XCTAssertEqual(staged, .persisted)
         var resolveCount = 0
@@ -5549,7 +5484,7 @@ extension PopupRequestSessionsTests {
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { _ in
-            now = now.addingTimeInterval(
+            nativeClock.now = nativeClock.now.addingTimeInterval(
                 NativeApprovalFinalizer.maximumTransactionDecisionAge + 1
             )
             return .approval(.approveTransaction(SendTransactionAction(
@@ -5563,14 +5498,14 @@ extension PopupRequestSessionsTests {
             store: store,
             requestProcessor: processor,
             refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
-            clock: { now }
+            clock: { nativeClock.now }
         )
 
         let result = await finalizeNativeDecision(
             finalizer,
             store: store,
             snapshot: snapshot,
-            observedAt: now
+            observedAt: nativeClock.now
         )
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
@@ -5586,14 +5521,14 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeFinalizerRechecksTransactionAgeAfterBegin() async throws {
-        let store = CompactPopupStore()
-        let snapshot = try popupSnapshot(
+        let nativeClock = CompactExecutionClock(Date(timeIntervalSince1970: 2_300_000_000))
+        let store = try makeStore(clock: { nativeClock.now })
+        let snapshot = try await enqueue(popupSnapshot(
             id: 135,
             provider: .ethereum,
             method: "signTransaction",
             revisions: popupRevisions(ethereum: 2, solana: 1)
-        )
-        await store.insert(snapshot)
+        ), in: store)
         let transaction = popupReadyTransaction()
         let execution = try XCTUnwrap(
             DappApprovalDecision.TransactionExecution(
@@ -5604,11 +5539,10 @@ extension PopupRequestSessionsTests {
                 )
             )
         )
-        var now = Date(timeIntervalSince1970: 2_300_000_000)
         let staged = await store.installNativeDecision(
             handle: snapshot.handle,
             decision: .transaction(execution),
-            stagedAt: now
+            stagedAt: nativeClock.now
         )
         XCTAssertEqual(staged, .persisted)
         var resolveCount = 0
@@ -5625,7 +5559,7 @@ extension PopupRequestSessionsTests {
             )))
         }
         await store.setBeginHook {
-            now = now.addingTimeInterval(
+            nativeClock.now = nativeClock.now.addingTimeInterval(
                 NativeApprovalFinalizer.maximumTransactionDecisionAge + 1
             )
         }
@@ -5633,14 +5567,14 @@ extension PopupRequestSessionsTests {
             store: store,
             requestProcessor: processor,
             refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
-            clock: { now }
+            clock: { nativeClock.now }
         )
 
         let result = await finalizeNativeDecision(
             finalizer,
             store: store,
             snapshot: snapshot,
-            observedAt: now
+            observedAt: nativeClock.now
         )
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
@@ -5657,19 +5591,18 @@ extension PopupRequestSessionsTests {
 
     func testNativeFinalizerRechecksSolanaTransactionAgeBeforeExecution() async throws {
         for advancesAtBegin in [false, true] {
-            let store = CompactPopupStore()
-            let snapshot = try popupSnapshot(
+            let nativeClock = CompactExecutionClock(Date(timeIntervalSince1970: 2_350_000_000))
+            let store = try makeStore(clock: { nativeClock.now })
+            let snapshot = try await enqueue(popupSnapshot(
                 id: advancesAtBegin ? 171 : 170,
                 provider: .solana,
                 method: "signTransaction",
                 revisions: popupRevisions(ethereum: 1, solana: 2)
-            )
-            await store.insert(snapshot)
-            var now = Date(timeIntervalSince1970: 2_350_000_000)
+            ), in: store)
             let staged = await store.installNativeDecision(
                 handle: snapshot.handle,
                 decision: .message(.init(solanaCluster: nil)),
-                stagedAt: now
+                stagedAt: nativeClock.now
             )
             XCTAssertEqual(staged, .persisted)
                 var resolveCount = 0
@@ -5678,7 +5611,7 @@ extension PopupRequestSessionsTests {
                 return .response(request.response(error: .userRejected))
             }) { _ in
                 if !advancesAtBegin {
-                    now = now.addingTimeInterval(
+                    nativeClock.now = nativeClock.now.addingTimeInterval(
                         NativeApprovalFinalizer.maximumTransactionDecisionAge + 1
                     )
                 }
@@ -5692,7 +5625,7 @@ extension PopupRequestSessionsTests {
             }
             if advancesAtBegin {
                 await store.setBeginHook {
-                    now = now.addingTimeInterval(
+                    nativeClock.now = nativeClock.now.addingTimeInterval(
                         NativeApprovalFinalizer.maximumTransactionDecisionAge + 1
                     )
                 }
@@ -5701,14 +5634,14 @@ extension PopupRequestSessionsTests {
                 store: store,
                 requestProcessor: processor,
                 refreshWalletAccess: { CompactWalletAccess(account: popupTestAccount()) },
-                clock: { now }
+                clock: { nativeClock.now }
             )
 
         let result = await finalizeNativeDecision(
             finalizer,
             store: store,
             snapshot: snapshot,
-            observedAt: now
+            observedAt: nativeClock.now
         )
             let errorCode = await store.completedErrorCode(
                 handle: snapshot.handle
@@ -5731,8 +5664,8 @@ extension PopupRequestSessionsTests {
         var confirmationCount = 0
         var deliveredRoutes = [URL]()
         var events = [String]()
-        let resolutionEntered = CompactPopupGate()
-        let releaseResolution = CompactPopupGate()
+        let resolutionEntered = makeGate()
+        let releaseResolution = makeGate()
         let handle = ExtensionBridge.Handle(
             id: 401,
             token: .init(value: UUID()),
@@ -5832,8 +5765,8 @@ extension PopupRequestSessionsTests {
             ),
             nativeDeliveryNonce: .init(value: UUID())
         )
-        let firstResolutionEntered = CompactPopupGate()
-        let releaseFirstResolution = CompactPopupGate()
+        let firstResolutionEntered = makeGate()
+        let releaseFirstResolution = makeGate()
         let approvalDelivered = expectation(
             description: "queued approval delivered with a fresh deadline"
         )
@@ -5904,8 +5837,8 @@ extension PopupRequestSessionsTests {
         let route = NativeAgentRoute.showWallet(
             workflowVersion: ExtensionBridge.workflowVersion
         )
-        let resolutionEntered = CompactPopupGate()
-        let releaseResolution = CompactPopupGate()
+        let resolutionEntered = makeGate()
+        let releaseResolution = makeGate()
         var resolutionCount = 0
         var launchCount = 0
         var confirmationCount = 0
@@ -5954,8 +5887,8 @@ extension PopupRequestSessionsTests {
         let route = NativeAgentRoute.showWallet(
             workflowVersion: ExtensionBridge.workflowVersion
         )
-        let resolutionEntered = CompactPopupGate()
-        let releaseResolution = CompactPopupGate()
+        let resolutionEntered = makeGate()
+        let releaseResolution = makeGate()
         var resolutionCount = 0
         var launchCount = 0
         var confirmationCount = 0
@@ -6060,8 +5993,8 @@ extension PopupRequestSessionsTests {
         let route = NativeAgentRoute.showWallet(
             workflowVersion: ExtensionBridge.workflowVersion
         )
-        let resolutionEntered = CompactPopupGate()
-        let releaseResolution = CompactPopupGate()
+        let resolutionEntered = makeGate()
+        let releaseResolution = makeGate()
         var launchCount = 0
         var resolutionCount = 0
         let launcher = NativeAgentLauncher(
@@ -6110,7 +6043,7 @@ extension PopupRequestSessionsTests {
         let resolutionEntered = expectation(description: "fallback delivery started")
         let callerFinished = expectation(description: "reactivation caller timed out")
         let deliveryFinished = expectation(description: "shared delivery continued")
-        let releaseResolution = CompactPopupGate()
+        let releaseResolution = makeGate()
         var launchCount = 0
         let launcher = NativeAgentLauncher(
             helperURL: { helperURL },
@@ -6479,7 +6412,7 @@ extension PopupRequestSessionsTests {
 
     private func finalizeNativeDecision(
         _ finalizer: NativeApprovalFinalizer,
-        store: CompactPopupStore,
+        store: ApprovalStoreTestFixture,
         snapshot: ExtensionBridge.Snapshot,
         revisions: ExtensionBridge.ProviderRevisions? = nil,
         observedAt: Date = Date()
@@ -6493,11 +6426,74 @@ extension PopupRequestSessionsTests {
             ),
             handle: snapshot.handle
         )
-        return await finalizer.finalize(handle: snapshot.handle)
+        let result = await finalizer.finalize(handle: snapshot.handle)
+        await store.releaseExecutionFence(handle: snapshot.handle)
+        return result
     }
     #endif
 
-    private func popupController(store: CompactPopupStore) -> PopupRequestSessions {
+    private func makeGate() -> CompactPopupGate {
+        let gate = CompactPopupGate()
+        addTeardownBlock { await gate.open() }
+        return gate
+    }
+
+    private func makeStore(
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) throws -> ApprovalStoreTestFixture {
+        let store = try ApprovalStoreTestFixture(clock: clock)
+        addTeardownBlock { try await store.cleanup() }
+        return store
+    }
+
+    private func enqueue(
+        _ template: ExtensionBridge.Snapshot,
+        in store: ApprovalStoreTestFixture
+    ) async throws -> ExtensionBridge.Snapshot {
+        let request = try XCTUnwrap(template.request)
+        let body: [String: Any]
+        switch request.body {
+        case .ethereum(let value):
+            var json: [String: Any] = ["address": value.address]
+            if let chain = value.currentChainId { json["chainId"] = String.hex(chain, withPrefix: true) }
+            if let parameters = value.parameters { json["object"] = parameters }
+            body = json
+        case .solana(let value):
+            var parameters = [String: Any]()
+            parameters["message"] = value.message
+            parameters["messages"] = value.messages
+            parameters["transaction"] = value.transaction
+            parameters["options"] = value.sendOptions
+            parameters["messageEncoding"] = value.signMessageEncoding == .utf8 ? "utf8" : "hex"
+            if value.displayHex { parameters["display"] = "hex" }
+            body = ["publicKey": value.publicKey, "object": ["params": parameters]]
+        case .unknown(let value):
+            body = ["latestConfigurations": value.providerConfigurations.map { configuration in
+                var json: [String: Any] = ["provider": configuration.provider.rawValue]
+                if configuration.provider == .ethereum {
+                    json["results"] = configuration.address.map { [$0] } ?? []
+                    json["chainId"] = configuration.chainId
+                } else { json["publicKey"] = configuration.address }
+                return json
+            }]
+        }
+        let admitted = try await store.enqueue(rawObject: [
+            "id": request.id, "name": request.name, "provider": request.provider.rawValue,
+            "body": body, "host": request.host, "configurationKey": request.configurationKey,
+            "enqueueAttempt": request.enqueueAttempt, "workflowVersion": ExtensionBridge.workflowVersion,
+        ], profileIdentifier: template.handle.profileIdentifier, revisions: template.revisions)
+        if let receipt = template.nativeDeliveryReceipt {
+            await store.setNativeDeliveryReceipt(receipt, handle: admitted.handle)
+        }
+        if template.nativeApproval != nil {
+            let result = await store.installNativeDecision(handle: admitted.handle, decision: .addEthereumChain)
+            XCTAssertEqual(result, .persisted)
+        }
+        if template.phase == .approving { try await store.holdForeignClaim(handle: admitted.handle) }
+        return try await store.snapshot(handle: admitted.handle)
+    }
+
+    private func popupController(store: ApprovalStoreTestFixture) -> PopupRequestSessions {
         return PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupProcessor(),
@@ -6524,19 +6520,21 @@ extension PopupRequestSessionsTests {
 
     private func waitForEvent(
         _ event: String,
-        store: CompactPopupStore
+        store: ApprovalStoreTestFixture
     ) async throws {
-        for _ in 0..<100 {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline {
             if await store.events().contains(event) { return }
-            await Task.yield()
+            try await Task.sleep(for: .milliseconds(1))
         }
         throw PopupRequestSessionsTestError.timedOut
     }
 
     private func waitForCondition(_ condition: () -> Bool) async throws {
-        for _ in 0..<100 {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline {
             if condition() { return }
-            await Task.yield()
+            try await Task.sleep(for: .milliseconds(1))
         }
         throw PopupRequestSessionsTestError.timedOut
     }
@@ -6727,462 +6725,6 @@ private final class CompactExecutionLeaseState: @unchecked Sendable {
     }
 }
 
-private actor CompactPopupStore: NativeApprovalStore {
-    private let clock: @Sendable () -> Date
-    private var records = [ExtensionBridge.Handle: ExtensionBridge.Snapshot]()
-    private var eventValues = [String]()
-    private var claims = [ExtensionBridge.Handle: ExtensionBridge.ApprovalClaim]()
-    private var permits = [ExtensionBridge.Handle: ExtensionBridge.ExecutionPermit]()
-    private var permitRequests = [ExtensionBridge.Handle: SafariRequest]()
-    private var nativeDecisions = [
-        ExtensionBridge.Handle: DappApprovalDecision
-    ]()
-    private var nativeDecisionStagedDates = [ExtensionBridge.Handle: Date]()
-    private var nativeExecutionContexts = [
-        ExtensionBridge.Handle: ExtensionBridge.NativeExecutionContext
-    ]()
-    private var completedErrorCodes = [ExtensionBridge.Handle: Int]()
-    private var committedCompletions = Set<ExtensionBridge.Handle>()
-    private var committedCheckpoints = Set<ExtensionBridge.Handle>()
-    private var nextRejectResult: ExtensionBridge.StoreMutationResult?
-    private var nextClaimResult: ExtensionBridge.ApprovalClaimResult?
-    private var shouldFailNextCompletion = false
-    private var nextReleaseResult: ExtensionBridge.StoreMutationResult?
-    private var nextCompletionOwnershipReceipt:
-        ExtensionBridge.NativeDeliveryReceipt?
-    private var shouldFailNextBegin = false
-    private var beginHook: (@MainActor () -> Void)?
-    private var permitCompletionHook: (@Sendable () -> Void)?
-    private var broadcastCheckpointHook: (@Sendable () -> Void)?
-    private var suspendClaim = false
-    private var claimContinuation: CheckedContinuation<Void, Never>?
-    private var suspendCompletion = false
-    private var completionContinuation:
-        CheckedContinuation<ExtensionBridge.StoreMutationResult?, Never>?
-    private var loadCountValue = 0
-
-    init(clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.clock = clock
-    }
-
-    func insert(_ snapshot: ExtensionBridge.Snapshot) { records[snapshot.handle] = snapshot }
-
-    func setNativeDeliveryReceipt(
-        _ receipt: ExtensionBridge.NativeDeliveryReceipt?,
-        handle: ExtensionBridge.Handle
-    ) {
-        guard let snapshot = records[handle] else { return }
-        records[handle] = replacingNativeDeliveryReceipt(
-            snapshot,
-            receipt: receipt
-        )
-    }
-
-    func setRevisions(
-        _ revisions: ExtensionBridge.ProviderRevisions,
-        handle: ExtensionBridge.Handle
-    ) {
-        guard let snapshot = records[handle] else { return }
-        records[handle] = replacing(
-            snapshot,
-            phase: snapshot.phase,
-            request: snapshot.request,
-            revisions: revisions
-        )
-    }
-
-    func events() -> [String] { eventValues }
-    func loadCount() -> Int { loadCountValue }
-    func record(_ event: String) { eventValues.append(event) }
-    func installNativeExecutionContext(
-        _ context: ExtensionBridge.NativeExecutionContext,
-        handle: ExtensionBridge.Handle
-    ) {
-        nativeExecutionContexts[handle] = context
-        if let snapshot = records[handle] {
-            records[handle] = replacing(snapshot, phase: snapshot.phase, request: snapshot.request)
-        }
-    }
-    func completedErrorCode(handle: ExtensionBridge.Handle) -> Int? {
-        return completedErrorCodes[handle]
-    }
-    func completedApprovalWasCommitted(
-        handle: ExtensionBridge.Handle
-    ) -> Bool {
-        return committedCompletions.contains(handle)
-    }
-    func checkpointApprovalWasCommitted(
-        handle: ExtensionBridge.Handle
-    ) -> Bool {
-        return committedCheckpoints.contains(handle)
-    }
-    func forceNextRejectResult(_ result: ExtensionBridge.StoreMutationResult) {
-        nextRejectResult = result
-    }
-    func forceNextReleaseResult(_ result: ExtensionBridge.StoreMutationResult) {
-        nextReleaseResult = result
-    }
-    func forceNextCompletionOwnershipLoss(
-        receipt: ExtensionBridge.NativeDeliveryReceipt
-    ) {
-        nextCompletionOwnershipReceipt = receipt
-    }
-    func forceNextClaimResult(_ result: ExtensionBridge.ApprovalClaimResult) {
-        nextClaimResult = result
-    }
-    func failNextCompletion() { shouldFailNextCompletion = true }
-    func failNextBegin() { shouldFailNextBegin = true }
-    func setBeginHook(_ hook: @escaping @MainActor () -> Void) {
-        beginHook = hook
-    }
-    func setPermitCompletionHook(_ hook: @escaping @Sendable () -> Void) {
-        permitCompletionHook = hook
-    }
-    func setBroadcastCheckpointHook(_ hook: @escaping @Sendable () -> Void) {
-        broadcastCheckpointHook = hook
-    }
-    func suspendNextClaim() { suspendClaim = true }
-    func resumeClaim() {
-        let continuation = claimContinuation
-        claimContinuation = nil
-        continuation?.resume()
-    }
-    func suspendNextCompletion() { suspendCompletion = true }
-    func resumeCompletion(result: ExtensionBridge.StoreMutationResult? = nil) {
-        let continuation = completionContinuation
-        completionContinuation = nil
-        continuation?.resume(returning: result)
-    }
-
-    func list(profileIdentifier: UUID?) async -> ExtensionBridge.SnapshotsResult {
-        .available(records.filter { $0.key.profileIdentifier == profileIdentifier })
-    }
-
-    func load(handle: ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult {
-        loadCountValue += 1
-        return records[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
-    }
-
-    func claim(handle: ExtensionBridge.Handle) async -> ExtensionBridge.ApprovalClaimResult {
-        if let result = nextClaimResult {
-            nextClaimResult = nil
-            return result
-        }
-        if suspendClaim {
-            suspendClaim = false
-            await withCheckedContinuation { continuation in
-                eventValues.append("claimStarted")
-                claimContinuation = continuation
-            }
-        }
-        guard let snapshot = records[handle], snapshot.phase == .queued else { return .missing }
-        guard !snapshot.isQueuedForNativeApproval else { return .executing }
-        eventValues.append("claim")
-        let claim = ExtensionBridge.ApprovalClaim(handle: handle, value: UUID())
-        claims[handle] = claim
-        records[handle] = replacing(snapshot, phase: .approving, request: snapshot.request)
-        return .claimed(claim)
-    }
-
-    func installNativeDecision(
-        handle: ExtensionBridge.Handle,
-        decision: DappApprovalDecision,
-        stagedAt: Date = Date()
-    ) -> ExtensionBridge.StoreMutationResult {
-        guard let snapshot = records[handle], snapshot.phase == .queued else {
-            return .ownershipLost
-        }
-        if let existing = nativeDecisions[handle] {
-            return existing == decision ? .persisted : .ownershipLost
-        }
-        nativeDecisions[handle] = decision
-        nativeDecisionStagedDates[handle] = stagedAt
-        records[handle] = replacing(
-            snapshot,
-            phase: .queued,
-            request: snapshot.request,
-            nativeDecisionStaged: true
-        )
-        return .persisted
-    }
-
-    func claimExecutableNativeDecision(
-        handle: ExtensionBridge.Handle
-    ) async -> ExtensionBridge.NativeDecisionClaimResult {
-        guard let snapshot = records[handle] else { return .missing }
-        switch snapshot.phase {
-        case .queued:
-            guard let context = nativeExecutionContexts[handle],
-                  let decision = nativeDecisions[handle] else {
-                return .notStaged
-            }
-            guard let stagedAt = nativeDecisionStagedDates[handle] else {
-                return .unavailable
-            }
-            eventValues.append("nativeClaim")
-            let claim = ExtensionBridge.ApprovalClaim(
-                handle: handle,
-                value: UUID()
-            )
-            claims[handle] = claim
-            records[handle] = replacing(
-                snapshot,
-                phase: .approving,
-                request: snapshot.request,
-                nativeDecisionStaged: true
-            )
-            return .claimed(.init(
-                approvalClaim: claim,
-                decision: decision,
-                stagedAt: stagedAt,
-                executionContext: context
-            ))
-        case .approving:
-            return .executing
-        case .responded:
-            return .responded
-        }
-    }
-
-    func complete(handle: ExtensionBridge.Handle, response: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
-        completedErrorCodes[handle] = response.json["errorCode"] as? Int
-        if let receipt = nextCompletionOwnershipReceipt,
-           let snapshot = records[handle] {
-            nextCompletionOwnershipReceipt = nil
-            records[handle] = replacingNativeDeliveryReceipt(
-                snapshot,
-                receipt: receipt
-            )
-            return .ownershipLost
-        }
-        return await complete(handle: handle)
-    }
-
-    func reject(handle: ExtensionBridge.Handle) async -> ExtensionBridge.StoreMutationResult {
-        eventValues.append("reject")
-        if let result = nextRejectResult {
-            nextRejectResult = nil
-            return result
-        }
-        return await complete(handle: handle, recordsEvent: false)
-    }
-
-    func release(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult {
-        guard claims[claim.handle] == claim, let snapshot = records[claim.handle] else {
-            return .ownershipLost
-        }
-        eventValues.append("release")
-        if let result = nextReleaseResult {
-            nextReleaseResult = nil
-            return result
-        }
-        claims[claim.handle] = nil
-        records[claim.handle] = replacing(snapshot, phase: .queued, request: snapshot.request)
-        return .persisted
-    }
-
-    func begin(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.BeginExecutionResult {
-        guard claims[claim.handle] == claim, let snapshot = records[claim.handle] else {
-            return .ownershipLost
-        }
-        eventValues.append("begin")
-        await beginHook?()
-        if shouldFailNextBegin {
-            shouldFailNextBegin = false
-            return .retryablePersistenceFailure
-        }
-        let permit = ExtensionBridge.ExecutionPermit(handle: claim.handle, value: UUID())
-        claims[claim.handle] = nil
-        permits[claim.handle] = permit
-        permitRequests[claim.handle] = snapshot.request
-        records[claim.handle] = replacing(snapshot, phase: .approving, request: snapshot.request)
-        return .began(permit)
-    }
-
-    func complete(
-        permit: ExtensionBridge.ExecutionPermit,
-        response: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
-    ) async -> ExtensionBridge.StoreMutationResult {
-        permitCompletionHook?()
-        guard permits[permit.handle] == permit,
-              executionAuthorityAuthorizes(
-                  handle: permit.handle,
-                  authority: authority
-              ) else {
-            return .ownershipLost
-        }
-        permits[permit.handle] = nil
-        permitRequests[permit.handle] = nil
-        completedErrorCodes[permit.handle] = response.json["errorCode"] as? Int
-        if response.json[ExtensionBridge.approvalCommittedKey] as? Bool == true {
-            committedCompletions.insert(permit.handle)
-        }
-        return await complete(handle: permit.handle)
-    }
-
-    func prepareBroadcast(
-        permit: ExtensionBridge.ExecutionPermit,
-        recoveryResponse: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
-    ) async -> ExtensionBridge.StoreMutationResult {
-        broadcastCheckpointHook?()
-        guard permits[permit.handle] == permit,
-              executionAuthorityAuthorizes(
-                  handle: permit.handle,
-                  authority: authority
-              ) else {
-            return .ownershipLost
-        }
-        if recoveryResponse.json[ExtensionBridge.approvalCommittedKey] as? Bool == true {
-            committedCheckpoints.insert(permit.handle)
-        }
-        eventValues.append("checkpoint")
-        nativeExecutionContexts[permit.handle] = nil
-        if let snapshot = records[permit.handle] {
-            records[permit.handle] = replacing(snapshot, phase: snapshot.phase, request: snapshot.request)
-        }
-        return .persisted
-    }
-
-    func rollback(
-        permit: ExtensionBridge.ExecutionPermit
-    ) async -> ExtensionBridge.StoreMutationResult {
-        guard permits[permit.handle] == permit,
-              let snapshot = records[permit.handle],
-              let request = permitRequests[permit.handle] else {
-            return .ownershipLost
-        }
-        permits[permit.handle] = nil
-        permitRequests[permit.handle] = nil
-        records[permit.handle] = replacing(
-            snapshot,
-            phase: .queued,
-            request: request
-        )
-        eventValues.append("rollback")
-        return .persisted
-    }
-
-    private func executionAuthorityAuthorizes(
-        handle: ExtensionBridge.Handle,
-        authority: ExtensionBridge.ExecutionAuthority
-    ) -> Bool {
-        switch authority {
-        case .ordinary:
-            return nativeExecutionContexts[handle] == nil
-        case .mobileSigning(let deadline):
-            return nativeExecutionContexts[handle] == nil && clock() < deadline
-        case .native(let expected):
-            return nativeExecutionContexts[handle] == expected
-        }
-    }
-
-    private func complete(
-        handle: ExtensionBridge.Handle,
-        recordsEvent: Bool = true
-    ) async -> ExtensionBridge.StoreMutationResult {
-        guard let snapshot = records[handle] else { return .ownershipLost }
-        if suspendCompletion {
-            suspendCompletion = false
-            let result = await withCheckedContinuation { continuation in
-                eventValues.append("completeStarted")
-                completionContinuation = continuation
-            }
-            if let result {
-                eventValues.append("completeResumed")
-                return result
-            }
-        }
-        if shouldFailNextCompletion {
-            shouldFailNextCompletion = false
-            eventValues.append("completeFailed")
-            return .retryablePersistenceFailure
-        }
-        if recordsEvent { eventValues.append("complete") }
-        nativeDecisions[handle] = nil
-        nativeDecisionStagedDates[handle] = nil
-        nativeExecutionContexts[handle] = nil
-        records[handle] = replacing(
-            snapshot,
-            phase: .responded,
-            request: nil,
-            nativeDecisionStaged: false,
-            clearsNativeDeliveryReceipt: true
-        )
-        return .persisted
-    }
-
-    private func replacing(
-        _ snapshot: ExtensionBridge.Snapshot,
-        phase: ExtensionBridge.Phase,
-        request: SafariRequest?,
-        nativeDecisionStaged: Bool? = nil,
-        clearsNativeDeliveryReceipt: Bool = false,
-        revisions: ExtensionBridge.ProviderRevisions? = nil
-    ) -> ExtensionBridge.Snapshot {
-        let receipt = clearsNativeDeliveryReceipt ? nil : snapshot.nativeDeliveryReceipt
-        let native: ExtensionBridge.Snapshot.NativeApproval? =
-            (nativeDecisionStaged ?? (snapshot.nativeApproval != nil))
-                ? .init(receipt: receipt, executionContext: nativeExecutionContexts[snapshot.handle])
-                : nil
-        let state: ExtensionBridge.Snapshot.State
-        if phase == .responded {
-            state = .responded
-        } else {
-            guard let request else { preconditionFailure("Active fixture requires a request") }
-            state = phase == .queued
-                ? .queued(request: request, approval: native.map { .staged($0) } ??
-                    receipt.map { .delivered($0) } ?? .unowned)
-                : .approving(request: request, nativeApproval: native)
-        }
-        return ExtensionBridge.Snapshot(
-            handle: snapshot.handle,
-            state: state,
-            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            host: snapshot.host,
-            configurationKey: snapshot.configurationKey,
-            revisions: revisions ?? snapshot.revisions,
-            createdAt: snapshot.createdAt,
-            enqueueAttempt: snapshot.enqueueAttempt,
-            sequence: snapshot.sequence
-        )
-    }
-
-    private func replacingNativeDeliveryReceipt(
-        _ snapshot: ExtensionBridge.Snapshot,
-        receipt: ExtensionBridge.NativeDeliveryReceipt?
-    ) -> ExtensionBridge.Snapshot {
-        let state: ExtensionBridge.Snapshot.State
-        switch snapshot.state {
-        case .queued(let request, .staged(let approval)):
-            state = .queued(request: request, approval: .staged(.init(
-                receipt: receipt, executionContext: approval.executionContext
-            )))
-        case .queued(let request, _):
-            state = .queued(request: request, approval: receipt.map { .delivered($0) } ?? .unowned)
-        case .approving(let request, let approval):
-            state = .approving(request: request, nativeApproval: approval.map {
-                .init(receipt: receipt, executionContext: $0.executionContext)
-            })
-        case .responded:
-            state = .responded
-        }
-        return ExtensionBridge.Snapshot(
-            handle: snapshot.handle,
-            state: state,
-            nativeDeliveryNonce: receipt?.nativeDeliveryNonce ??
-                snapshot.nativeDeliveryNonce,
-            host: snapshot.host,
-            configurationKey: snapshot.configurationKey,
-            revisions: snapshot.revisions,
-            createdAt: snapshot.createdAt,
-            enqueueAttempt: snapshot.enqueueAttempt,
-            sequence: snapshot.sequence
-        )
-    }
-}
-
 private extension SafariRequest {
     func response(error: ProviderResponseError) -> ResponseToExtension {
         ResponseToExtension(for: self, payload: .error(error))
@@ -7274,7 +6816,7 @@ private func popupSwitchSnapshot(
         "name": "switchEthereumChain",
         "provider": "ethereum",
         "host": "wallet.example",
-        "configurationKey": "wallet.example",
+        "configurationKey": "https://wallet.example",
         "enqueueAttempt": String(format: "%032x", id),
         "admissionDeadline": popupRequestAdmissionDeadline,
         "workflowVersion": ExtensionBridge.workflowVersion,
@@ -7347,7 +6889,7 @@ private func popupSnapshot(
         "name": name,
         "provider": provider.rawValue,
         "host": "wallet.example",
-        "configurationKey": "wallet.example",
+        "configurationKey": "https://wallet.example",
         "enqueueAttempt": String(format: "%032x", id),
         "admissionDeadline": popupRequestAdmissionDeadline,
         "workflowVersion": ExtensionBridge.workflowVersion,

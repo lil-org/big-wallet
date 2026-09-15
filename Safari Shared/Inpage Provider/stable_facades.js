@@ -20,14 +20,6 @@ const emitEvent = EventEmitter.prototype.emit;
 const forEachSet = Set.prototype.forEach;
 const setTimeoutNormally = setTimeout;
 
-const ethereumEvents = [
-    "accountsChanged",
-    "chainChanged",
-    "disconnect",
-    "message",
-    "networkChanged",
-    "_initialized",
-];
 const ethereumMethods = [
     "request",
     "send",
@@ -49,7 +41,6 @@ const ethereumProperties = [
     "_isUnlocked",
     "_metamask",
 ];
-const solanaEvents = ["connect", "disconnect", "accountChanged"];
 const solanaMethods = [
     "connect",
     "request",
@@ -121,15 +112,13 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
 
     let ethereumTarget = null;
     let solanaTarget = null;
-    let ethereumForwarding = [];
-    let solanaForwarding = [];
+    let disposeEthereum = null;
+    let disposeSolana = null;
     let accounts = Object.freeze([]);
     let accountEntry = null;
-    let disposeAccountChanges = null;
     let deliveredConnect = false;
     let observedReadyFlush = false;
     let connectReplayToken = null;
-    let disposeReadiness = null;
     let registration = null;
     const subscriptions = new Set;
     const ethereum = new EventEmitter;
@@ -241,53 +230,32 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         }
     }
 
-    function detachEthereum() {
-        disposeReadiness?.();
-        disposeReadiness = null;
-        connectReplayToken = null;
-        for (const {provider, eventName, listener} of ethereumForwarding) {
-            provider.removeListener?.(eventName, listener);
-        }
-        ethereumForwarding = [];
-    }
-
     function attachEthereum(current) {
-        detachEthereum();
+        disposeEthereum?.();
+        disposeEthereum = null;
+        connectReplayToken = null;
         if (!current) { return; }
-        disposeReadiness = current.subscribeReadiness(({flushed}) => {
+        disposeEthereum = current.subscribeNotifications(notification => {
             if (ethereumTarget !== current) { return; }
-            if (flushed === true && !observedReadyFlush) {
-                observedReadyFlush = true;
-                replayConnect(current);
-            }
-            if (ethereumTarget === current) {
-                scheduleConnectReplay({reserveTimer: true});
+            if (notification.kind === "readiness") {
+                if (notification.flushed === true && !observedReadyFlush) {
+                    observedReadyFlush = true;
+                    replayConnect(current);
+                }
+                if (ethereumTarget === current) {
+                    scheduleConnectReplay({reserveTimer: true});
+                }
+            } else if (notification.kind === "event") {
+                if (notification.name === "disconnect") {
+                    deliveredConnect = false;
+                    if (current.snapshot?.()?.phase !== "retired") {
+                        observedReadyFlush = false;
+                    }
+                    scheduleConnectReplay();
+                }
+                applyFunction(emitEvent, ethereum, [notification.name, ...notification.args]);
             }
         });
-        for (const eventName of ethereumEvents) {
-            const listener = (...arguments_) => {
-                if (ethereumTarget === current) {
-                    if (eventName === "disconnect") {
-                        deliveredConnect = false;
-                        if (current.snapshot?.()?.phase !== "retired") {
-                            observedReadyFlush = false;
-                        }
-                        scheduleConnectReplay();
-                    }
-                    applyFunction(
-                        emitEvent,
-                        ethereum,
-                        [eventName, ...arguments_]
-                    );
-                }
-            };
-            current.provider.on?.(eventName, listener);
-            ethereumForwarding.push({
-                eventName,
-                listener,
-                provider: current.provider,
-            });
-        }
     }
 
     function readAccount(current) {
@@ -315,28 +283,22 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         return accounts;
     }
 
-    function bindAccountChanges() {
-        disposeAccountChanges?.();
-        disposeAccountChanges = null;
-        const current = solanaTarget;
-        if (!current || subscriptions.size === 0) { return; }
-        disposeAccountChanges = current.provider.onAccountChange(() => {
+    function notifyAccountChanges(current) {
+        if (solanaTarget !== current) { return; }
+        const pending = [];
+        applyFunction(forEachSet, subscriptions, [subscription => {
+            pending[pending.length] = subscription;
+        }]);
+        for (let index = 0; index < pending.length; index += 1) {
+            const subscription = pending[index];
             if (solanaTarget !== current) { return; }
-            const pending = [];
-            applyFunction(forEachSet, subscriptions, [subscription => {
-                pending[pending.length] = subscription;
-            }]);
-            for (let index = 0; index < pending.length; index += 1) {
-                const subscription = pending[index];
+            if (!subscription.active) { continue; }
+            try {
+                const currentAccounts = refreshAccounts();
                 if (solanaTarget !== current) { return; }
-                if (!subscription.active) { continue; }
-                try {
-                    const currentAccounts = refreshAccounts();
-                    if (solanaTarget !== current) { return; }
-                    subscription.listener({accounts: currentAccounts});
-                } catch {}
-            }
-        });
+                subscription.listener({accounts: currentAccounts});
+            } catch {}
+        }
     }
 
     function standardOn(eventName, listener) {
@@ -346,14 +308,9 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         if (eventName !== "change") { return () => {}; }
         const subscription = {active: true, listener};
         subscriptions.add(subscription);
-        if (subscriptions.size === 1) { bindAccountChanges(); }
         return () => {
             subscription.active = false;
             subscriptions.delete(subscription);
-            if (subscriptions.size === 0) {
-                disposeAccountChanges?.();
-                disposeAccountChanges = null;
-            }
         };
     }
 
@@ -405,33 +362,20 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         });
     }
 
-    function detachSolana() {
-        for (const {provider, eventName, listener} of solanaForwarding) {
-            provider.removeListener?.(eventName, listener);
-        }
-        solanaForwarding = [];
-    }
-
     function attachSolana(current) {
-        detachSolana();
+        disposeSolana?.();
+        disposeSolana = null;
         if (!current) { return; }
-        for (const eventName of solanaEvents) {
-            const listener = (...arguments_) => {
-                if (solanaTarget === current) {
-                    applyFunction(
-                        emitEvent,
-                        solana,
-                        [eventName, ...arguments_]
-                    );
-                }
-            };
-            current.provider.on?.(eventName, listener);
-            solanaForwarding.push({
-                eventName,
-                listener,
-                provider: current.provider,
-            });
-        }
+        disposeSolana = current.subscribeNotifications(notification => {
+            if (solanaTarget !== current) { return; }
+            if (notification.kind === "accountStateChanged") {
+                notifyAccountChanges(current);
+            } else if (notification.kind === "event") {
+                const args = [notification.name, ...notification.args];
+                if (solanaTarget !== current) { return; }
+                applyFunction(emitEvent, solana, args);
+            }
+        });
     }
 
     const features = makeWalletStandardFeatures({
@@ -477,12 +421,12 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     function prepareTargets(values = {}) {
         const nextEthereum = target(values.ethereumProvider, "Ethereum");
         const nextSolana = target(values.solanaProvider, "Solana");
-        if (typeof nextEthereum.subscribeReadiness !== "function" ||
+        if (typeof nextEthereum.subscribeNotifications !== "function" ||
             typeof nextEthereum.withReadyState !== "function") {
             throw new TypeError("Ethereum target is invalid");
         }
         if (typeof nextSolana.provider.accountState !== "function" ||
-            typeof nextSolana.provider.onAccountChange !== "function") {
+            typeof nextSolana.subscribeNotifications !== "function") {
             throw new TypeError("Solana account state is unavailable");
         }
         readAccount(nextSolana);
@@ -500,7 +444,6 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
                 attachEthereum(nextEthereum);
                 attachSolana(nextSolana);
                 refreshAccounts();
-                bindAccountChanges();
                 scheduleConnectReplay();
                 return previous;
             },
