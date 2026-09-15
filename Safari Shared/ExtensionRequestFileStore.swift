@@ -764,12 +764,10 @@ final class ExtensionRequestFileStore {
     func recordNativeDeliveryReceipt(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
         owner: ExtensionBridge.NativeDeliveryOwner
     ) -> ExtensionBridge.StoreMutationResult {
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
             owner: owner
         )
         return withLock(or: .retryablePersistenceFailure) {
@@ -820,7 +818,7 @@ final class ExtensionRequestFileStore {
                 return .persisted
             }
             guard existing.nativeDeliveryNonce == nativeDeliveryNonce,
-                  existing.runtimeInstanceIdentifier ==
+                  existing.owner.runtimeInstanceIdentifier ==
                     runtimeInstanceIdentifier else {
                 return .ownershipLost
             }
@@ -889,74 +887,12 @@ final class ExtensionRequestFileStore {
         }
     }
 
-    func acquireNativeExecutionFence(
-        handle: ExtensionBridge.Handle,
-        token: UUID
-    ) -> ExtensionBridge.NativeExecutionFence? {
-        guard let storeLock else { return nil }
-        return withLock(or: nil) {
-            guard prepareDirectoriesLocked(),
-                  case .state(let profile) = readProfileLocked(
-                      profileIdentifier: handle.profileIdentifier,
-                      now: clock(),
-                      recover: true
-                  ), let record = profile.state.records.first(where: {
-                      $0.handle == handle
-                  }), record.state.isActive else { return nil }
-            let url = nativeExecutionFenceURL(handle)
-            let ownerURL = nativeExecutionFenceOwnerURL(handle)
-            switch regularFileStatusLocked(at: url) {
-            case .missing, .regular:
-                break
-            case .unsafe, .unavailable:
-                return nil
-            }
-            switch regularFileStatusLocked(at: ownerURL) {
-            case .missing, .regular:
-                break
-            case .unsafe, .unavailable:
-                return nil
-            }
-            let lock = CrossProcessFileLock(fileURL: url)
-            do {
-                try lock.acquire(
-                    timeoutNanoseconds: lockTimeout,
-                    pollNanoseconds: lockPoll
-                )
-                try Data(token.uuidString.lowercased().utf8).write(
-                    to: ownerURL,
-                    options: .atomic
-                )
-                return .init(
-                    fileURL: url,
-                    token: token,
-                    lock: lock,
-                    coordinationLock: storeLock,
-                    coordinationPollNanoseconds: lockPoll
-                )
-            } catch {
-                lock.release()
-                return nil
-            }
-        }
-    }
-
-    func nativeExecutionFenceIsHeld(
-        handle: ExtensionBridge.Handle,
-        token: UUID
-    ) -> Bool {
-        withLock(or: false) {
-            nativeExecutionFenceIsHeldLocked(handle: handle, token: token)
-        }
-    }
-
-    func recordNativeExecutionContext(
+    func beginNativeExecutionRead(
         handle: ExtensionBridge.Handle,
         configurationKey: String,
         revisions: ExtensionBridge.ProviderRevisions,
-        executionDeadline: Date,
-        fenceToken: UUID
-    ) -> ExtensionBridge.NativeExecutionContextResult {
+        executionDeadline: Date
+    ) -> ExtensionBridge.NativeExecutionReadResult {
         withLock(or: .unavailable) {
             let now = clock()
             guard case .state(var profile) = readProfileLocked(
@@ -965,33 +901,46 @@ final class ExtensionRequestFileStore {
                 recover: true
             ) else { return .unavailable }
             guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == handle
+                $0.handle == handle && $0.configurationKey == configurationKey
             }) else { return .missing }
             let record = profile.state.records[index]
-            guard record.configurationKey == configurationKey else {
-                return .missing
-            }
             switch record.state {
             case .completed:
                 return .responseReady
             case .claimed, .broadcastPrepared:
-                return record.nativeExecutionContext.map {
-                    .recorded($0)
-                } ?? .pending
+                return .pending
             case .pending(let request, let pendingApproval):
-                guard case .staged(let approval, _) = pendingApproval else {
-                    return .pending
+                guard case .staged(let approval, let previous) = pendingApproval else {
+                    return .needsDelivery(record.nativeDeliveryNonce)
                 }
-                guard nativeExecutionFenceIsHeldLocked(
-                    handle: handle,
-                    token: fenceToken
-                ) else { return .unavailable }
                 let observedAt = max(approval.stagedAt, now)
                 guard executionDeadline >= observedAt,
                       executionDeadline <= now.addingTimeInterval(
-                          ExtensionBridge.nativeExecutionTimeout +
-                            Self.futureSkew
+                          ExtensionBridge.nativeExecutionTimeout + Self.futureSkew
+                      ), let fenceToken = nextID(
+                          excluding: previous?.fenceToken ?? handle.token.value
                       ) else { return .unavailable }
+                let url = nativeExecutionFenceURL(handle)
+                let ownerURL = nativeExecutionFenceOwnerURL(handle)
+                for candidate in [url, ownerURL] {
+                    switch regularFileStatusLocked(at: candidate) {
+                    case .missing, .regular:
+                        break
+                    case .unsafe, .unavailable:
+                        return .unavailable
+                    }
+                }
+                let fence = CrossProcessFileLock(fileURL: url)
+                do {
+                    guard try fence.tryAcquire() else { return .pending }
+                    try Data(fenceToken.uuidString.lowercased().utf8).write(
+                        to: ownerURL,
+                        options: .atomic
+                    )
+                } catch {
+                    fence.release()
+                    return .unavailable
+                }
                 let context = ExtensionBridge.NativeExecutionContext(
                     revisions: revisions,
                     observedAt: observedAt,
@@ -1002,41 +951,64 @@ final class ExtensionRequestFileStore {
                     request: request,
                     approval: .staged(approval, context: context)
                 )
-                return writeProfileLocked(profile, failureRecovery: .readBack)
-                    ? .recorded(context)
-                    : .unavailable
+                guard writeProfileLocked(profile, failureRecovery: .readBack) else {
+                    fence.release()
+                    removeNativeExecutionFenceLocked(handle: handle)
+                    return .unavailable
+                }
+                return .acquired(.init(
+                    handle: handle,
+                    context: context,
+                    nativeDeliveryNonce: record.nativeDeliveryNonce,
+                    finish: {
+                        self.finishNativeExecutionRead(
+                            handle: handle,
+                            context: context,
+                            fence: fence
+                        )
+                    }
+                ))
             }
         }
     }
 
-    func clearNativeExecutionContext(
+    private func finishNativeExecutionRead(
         handle: ExtensionBridge.Handle,
-        expected: ExtensionBridge.NativeExecutionContext
-    ) -> ExtensionBridge.StoreMutationResult {
-        withLock(or: .retryablePersistenceFailure) {
-            guard case .state(var profile) = readProfileLocked(
-                profileIdentifier: handle.profileIdentifier,
-                now: clock(),
-                recover: true
-            ) else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == handle
-            }), case .pending(let request, .staged(let approval, let context)) =
-                    profile.state.records[index].state else {
-                return .ownershipLost
-            }
-            guard let existing = context else {
-                return .persisted
-            }
-            guard existing == expected else { return .ownershipLost }
-            profile.state.records[index].state = .pending(
-                request: request,
-                approval: .staged(approval, context: nil)
-            )
-            return writeProfileLocked(profile, failureRecovery: .readBack)
-                ? .persisted
-                : .retryablePersistenceFailure
+        context: ExtensionBridge.NativeExecutionContext,
+        fence: CrossProcessFileLock
+    ) {
+        guard let storeLock else {
+            fence.release()
+            return
         }
+        do {
+            try storeLock.acquire(
+                timeoutNanoseconds: UInt64.max,
+                pollNanoseconds: lockPoll
+            )
+        } catch {
+            fence.release()
+            return
+        }
+        defer {
+            fence.release()
+            removeNativeExecutionFenceLocked(handle: handle)
+            storeLock.release()
+        }
+        guard case .state(var profile) = readProfileLocked(
+            profileIdentifier: handle.profileIdentifier,
+            now: clock(),
+            recover: false
+        ), let index = profile.state.records.firstIndex(where: {
+            $0.handle == handle
+        }), case .pending(let request, .staged(let approval, let current)) =
+                profile.state.records[index].state,
+              current == context else { return }
+        profile.state.records[index].state = .pending(
+            request: request,
+            approval: .staged(approval, context: nil)
+        )
+        _ = writeProfileLocked(profile, failureRecovery: .readBack)
     }
 
     func release(

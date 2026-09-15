@@ -80,7 +80,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var recordHandler: ((
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
-            UUID,
             ExtensionBridge.NativeDeliveryOwner
         ) async -> ExtensionBridge.StoreMutationResult)?
         var unownedRejectHandler: (ExtensionBridge.Handle) async ->
@@ -119,7 +118,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         func recordNativeDeliveryReceipt(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID,
             owner: ExtensionBridge.NativeDeliveryOwner
         ) async -> ExtensionBridge.StoreMutationResult {
             beginWrite()
@@ -128,7 +126,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             recordedOwner = owner
             if let recordHandler {
                 return await recordHandler(
-                    handle, nativeDeliveryNonce, runtimeInstanceIdentifier, owner
+                    handle, nativeDeliveryNonce, owner
                 )
             }
             guard case .found(let current) = await load(handle: handle),
@@ -138,7 +136,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
             let receipt = ExtensionBridge.NativeDeliveryReceipt(
                 nativeDeliveryNonce: nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtimeInstanceIdentifier,
                 owner: owner
             )
             if let existing = current.nativeDeliveryReceipt {
@@ -393,7 +390,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         XCTAssertEqual(fixture.store.recordCount, 1)
-        XCTAssertEqual(fixture.store.recordedOwner, nativeOwner)
+        XCTAssertEqual(fixture.store.recordedOwner, nativeOwner(runtime: fixture.runtime))
         XCTAssertEqual(fixture.events.authenticationCount, 1)
         XCTAssertTrue(fixture.events.presentations.isEmpty)
     }
@@ -524,7 +521,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testCancellationWaitsForInFlightReceiptThenRejectsExactOwner() async throws {
         let fixture = try makeFixture()
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        fixture.store.recordHandler = { _, _, _, _ in await gate.run() }
+        fixture.store.recordHandler = { _, _, _ in await gate.run() }
         var rejections = 0
         fixture.store.rejectHandler = { handle, nonce, runtime in
             XCTAssertEqual(handle, fixture.key.handle)
@@ -752,7 +749,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 return .approval(self.accountSelectionAction())
             }
         ))
-        fixture.store.recordHandler = { _, _, _, _ in
+        fixture.store.recordHandler = { _, _, _ in
             fixture.store.recordHandler = nil
             return .retryablePersistenceFailure
         }
@@ -816,7 +813,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(inbox.register(second.coordinator))
         XCTAssertFalse(inbox.register(third.coordinator))
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        first.store.recordHandler = { _, _, _, _ in await gate.run() }
+        first.store.recordHandler = { _, _, _ in await gate.run() }
         start(first)
         await waitForState(first.coordinator, .acquiringReceipt(cancelRequested: false))
         XCTAssertFalse(inbox.register(third.coordinator))
@@ -1435,15 +1432,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var failureCount = 0
         let store = CoordinatorStore()
         store.loadHandler = { _ in .found(snapshot) }
-        store.recordHandler = { _, _, _, _ in
+        store.recordHandler = { _, _, _ in
             snapshot = try! self.approvalSnapshot(
                 handle: handle,
                 nonce: nonce,
                 deadline: clock.now.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: runtime,
-                    owner: self.nativeOwner
+                    owner: self.nativeOwner(runtime: runtime)
                 )
             )
             return .persisted
@@ -2174,8 +2170,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime,
-                owner: self.nativeOwner
+                owner: self.nativeOwner(runtime: runtime)
             )
         )
         let staged = expectation(description: "reconciled staged decision")
@@ -2188,8 +2183,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 deadline: clock.now.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: runtime,
-                    owner: self.nativeOwner
+                    owner: self.nativeOwner(runtime: runtime)
                 ),
                 nativeDecisionStaged: true
             )
@@ -2232,8 +2226,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime,
-                owner: self.nativeOwner
+                owner: self.nativeOwner(runtime: runtime)
             ),
             nativeDecisionStaged: true
         )
@@ -2275,8 +2268,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
         }
         coordinator.start(
-            runtimeInstanceIdentifier: runtime,
-            nativeDeliveryOwner: nativeOwner
+            nativeDeliveryOwner: nativeOwner(runtime: runtime)
         )
         await fulfillment(of: [authentication], timeout: 1)
         XCTAssertEqual(finalizationCount, 0)
@@ -2298,8 +2290,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime,
-                owner: self.nativeOwner
+                owner: self.nativeOwner(runtime: runtime)
             )
         )
         let staged = expectation(description: "decision staged")
@@ -2353,8 +2344,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime,
-                owner: self.nativeOwner
+                owner: self.nativeOwner(runtime: runtime)
             )
         )
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
@@ -2415,8 +2405,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime,
-                owner: self.nativeOwner
+                owner: self.nativeOwner(runtime: runtime)
             )
         )
         let rejected = expectation(description: "rejected")
@@ -2462,8 +2451,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
-                runtimeInstanceIdentifier: runtime,
-                owner: self.nativeOwner
+                owner: self.nativeOwner(runtime: runtime)
             )
         )
         var rejectionCount = 0
@@ -2478,8 +2466,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 deadline: clock.now.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
-                    runtimeInstanceIdentifier: UUID(),
-                    owner: self.nativeOwner
+                    owner: self.nativeOwner(runtime: UUID())
                 )
             )
             return .ownershipLost
@@ -2816,8 +2803,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(waits.delays.count, count, file: file, line: line)
     }
 
-    private var nativeOwner: ExtensionBridge.NativeDeliveryOwner {
+    private func nativeOwner(runtime: UUID) -> ExtensionBridge.NativeDeliveryOwner {
         .init(
+            runtimeInstanceIdentifier: runtime,
+            processIdentifier: 42,
+            processStartDate: Date(timeIntervalSince1970: 1_800_000_000),
             bundleURL: URL(fileURLWithPath: "/tmp/Big Wallet.app"),
             marketingVersion: "1.0.99",
             buildVersion: "148"
@@ -2887,8 +2877,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     private func start(_ fixture: Fixture) {
         fixture.coordinator.start(
-            runtimeInstanceIdentifier: fixture.runtime,
-            nativeDeliveryOwner: nativeOwner
+            nativeDeliveryOwner: nativeOwner(runtime: fixture.runtime)
         )
     }
 
@@ -2904,8 +2893,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: fixture.clock.now.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: fixture.key.nativeDeliveryNonce,
-                runtimeInstanceIdentifier: runtime ?? fixture.runtime,
-                owner: nativeOwner
+                owner: nativeOwner(runtime: runtime ?? fixture.runtime)
             ),
             phase: phase,
             nativeDecisionStaged: staged
@@ -2945,8 +2933,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
         }
         coordinator.start(
-            runtimeInstanceIdentifier: runtime,
-            nativeDeliveryOwner: nativeOwner
+            nativeDeliveryOwner: nativeOwner(runtime: runtime)
         )
         await fulfillment(of: [ready], timeout: 1)
         return presentation ?? .finished

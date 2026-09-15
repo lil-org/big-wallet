@@ -38,15 +38,24 @@ actor ExtensionBridge {
     }
 
     struct NativeDeliveryOwner: Codable, Equatable, Sendable {
+        let runtimeInstanceIdentifier: UUID
+        let processIdentifier: Int32
+        let processStartDate: Date
         let bundlePath: String
         let marketingVersion: String
         let buildVersion: String
 
         init?(
+            runtimeInstanceIdentifier: UUID,
+            processIdentifier: Int32,
+            processStartDate: Date,
             bundleURL: URL,
             marketingVersion: String,
             buildVersion: String
         ) {
+            self.runtimeInstanceIdentifier = runtimeInstanceIdentifier
+            self.processIdentifier = processIdentifier
+            self.processStartDate = processStartDate
             bundlePath = bundleURL.standardizedFileURL.path
             self.marketingVersion = marketingVersion
             self.buildVersion = buildVersion
@@ -58,7 +67,10 @@ actor ExtensionBridge {
         }
 
         var isValid: Bool {
-            !bundlePath.isEmpty && bundlePath.count <= 4_096 &&
+            processIdentifier > 0 &&
+                processStartDate.timeIntervalSince1970.isFinite &&
+                processStartDate.timeIntervalSince1970 > 0 &&
+                !bundlePath.isEmpty && bundlePath.count <= 4_096 &&
                 bundleURL.path == bundlePath &&
                 bundleURL.pathExtension == "app" &&
                 !marketingVersion.isEmpty && marketingVersion.count <= 128 &&
@@ -68,16 +80,13 @@ actor ExtensionBridge {
 
     struct NativeDeliveryReceipt: Codable, Equatable, Sendable {
         let nativeDeliveryNonce: NativeDeliveryNonce
-        let runtimeInstanceIdentifier: UUID
         let owner: NativeDeliveryOwner
     
         init(
             nativeDeliveryNonce: NativeDeliveryNonce,
-            runtimeInstanceIdentifier: UUID,
             owner: NativeDeliveryOwner
         ) {
             self.nativeDeliveryNonce = nativeDeliveryNonce
-            self.runtimeInstanceIdentifier = runtimeInstanceIdentifier
             self.owner = owner
         }
 
@@ -86,7 +95,7 @@ actor ExtensionBridge {
             runtimeInstanceIdentifier: UUID
         ) -> Bool {
             self.nativeDeliveryNonce == nativeDeliveryNonce &&
-                self.runtimeInstanceIdentifier == runtimeInstanceIdentifier
+                owner.runtimeInstanceIdentifier == runtimeInstanceIdentifier
         }
     }
 
@@ -300,47 +309,31 @@ actor ExtensionBridge {
         deinit { release() }
     }
 
-    final class NativeExecutionFence: @unchecked Sendable {
-        let fileURL: URL
-        let token: UUID
-        private let lock: CrossProcessFileLock
-        private let coordinationLock: CrossProcessFileLock
-        private let coordinationPollNanoseconds: UInt64
-        private let stateLock = NSLock()
-        private var released = false
+    final class NativeExecutionReadLease: @unchecked Sendable {
+        let handle: Handle
+        let context: NativeExecutionContext
+        let nativeDeliveryNonce: NativeDeliveryNonce
+        private let lock = NSLock()
+        private var finish: (() -> Void)?
 
         init(
-            fileURL: URL,
-            token: UUID,
-            lock: CrossProcessFileLock,
-            coordinationLock: CrossProcessFileLock,
-            coordinationPollNanoseconds: UInt64
+            handle: Handle,
+            context: NativeExecutionContext,
+            nativeDeliveryNonce: NativeDeliveryNonce,
+            finish: @escaping () -> Void
         ) {
-            self.fileURL = fileURL
-            self.token = token
-            self.lock = lock
-            self.coordinationLock = coordinationLock
-            self.coordinationPollNanoseconds = coordinationPollNanoseconds
+            self.handle = handle
+            self.context = context
+            self.nativeDeliveryNonce = nativeDeliveryNonce
+            self.finish = finish
         }
 
         func release() {
-            stateLock.lock()
-            guard !released else {
-                stateLock.unlock()
-                return
-            }
-            released = true
-            stateLock.unlock()
-            do {
-                try coordinationLock.acquire(
-                    timeoutNanoseconds: UInt64.max,
-                    pollNanoseconds: coordinationPollNanoseconds
-                )
-                lock.release()
-                coordinationLock.release()
-            } catch {
-                lock.release()
-            }
+            lock.lock()
+            let finish = finish
+            self.finish = nil
+            lock.unlock()
+            finish?()
         }
 
         deinit { release() }
@@ -441,8 +434,9 @@ actor ExtensionBridge {
         case notStaged, executing, responded, missing, unavailable
     }
 
-    enum NativeExecutionContextResult: Equatable {
-        case recorded(NativeExecutionContext)
+    enum NativeExecutionReadResult {
+        case acquired(NativeExecutionReadLease)
+        case needsDelivery(NativeDeliveryNonce)
         case pending, responseReady, missing, unavailable
     }
 
@@ -665,43 +659,17 @@ actor ExtensionBridge {
         store.claimExecutableNativeDecision(handle: handle)
     }
 
-    func acquireNativeExecutionFence(
-        handle: Handle,
-        token: UUID
-    ) -> NativeExecutionFence? {
-        store.acquireNativeExecutionFence(handle: handle, token: token)
-    }
-
-    func nativeExecutionFenceIsHeld(
-        handle: Handle,
-        token: UUID
-    ) -> Bool {
-        store.nativeExecutionFenceIsHeld(handle: handle, token: token)
-    }
-
-    func recordNativeExecutionContext(
+    func beginNativeExecutionRead(
         handle: Handle,
         configurationKey: String,
         revisions: ProviderRevisions,
-        executionDeadline: Date,
-        fenceToken: UUID
-    ) -> NativeExecutionContextResult {
-        store.recordNativeExecutionContext(
+        executionDeadline: Date
+    ) -> NativeExecutionReadResult {
+        store.beginNativeExecutionRead(
             handle: handle,
             configurationKey: configurationKey,
             revisions: revisions,
-            executionDeadline: executionDeadline,
-            fenceToken: fenceToken
-        )
-    }
-
-    func clearNativeExecutionContext(
-        handle: Handle,
-        expected: NativeExecutionContext
-    ) -> StoreMutationResult {
-        store.clearNativeExecutionContext(
-            handle: handle,
-            expected: expected
+            executionDeadline: executionDeadline
         )
     }
 
@@ -724,13 +692,11 @@ actor ExtensionBridge {
     func recordNativeDeliveryReceipt(
         handle: Handle,
         nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
         owner: NativeDeliveryOwner
     ) -> StoreMutationResult {
         store.recordNativeDeliveryReceipt(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
             owner: owner
         )
     }

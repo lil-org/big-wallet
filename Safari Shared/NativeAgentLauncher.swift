@@ -186,7 +186,7 @@ actor NativeAgentLauncher {
                     handle: handle,
                     nativeDeliveryNonce: receipt.nativeDeliveryNonce,
                     runtimeInstanceIdentifier:
-                        receipt.runtimeInstanceIdentifier
+                        receipt.owner.runtimeInstanceIdentifier
                 )
             },
             wait: { try? await Task.sleep(nanoseconds: $0) }
@@ -353,7 +353,7 @@ actor NativeAgentLauncher {
               case .compatible(let target) = await dependencies
                 .receiptRuntimeStatus(receipt),
               case .running(_, _, let runtimeInstanceIdentifier) = target,
-              runtimeInstanceIdentifier == receipt.runtimeInstanceIdentifier else {
+              runtimeInstanceIdentifier == receipt.owner.runtimeInstanceIdentifier else {
             return false
         }
         return await launchOnce(route: route, to: target, deadline: deadline)
@@ -669,30 +669,36 @@ actor NativeAgentLauncher {
     private static func runningHelpers() -> [RuntimeHelper] {
         NSRunningApplication.runningApplications(
             withBundleIdentifier: "org.lil.wallet.ambient"
-        ).map { application in
-            let processIdentifier = application.processIdentifier
-            let processStartDate = AmbientRuntimeIdentity.processStartDate(
-                processIdentifier: processIdentifier
-            )
-            return RuntimeHelper(
-                processIdentifier: processIdentifier,
-                bundleURL: application.bundleURL,
-                processStartDate: processStartDate,
-                isRunning: {
-                    runtimeProcessIsRunning(
-                        processIdentifier: processIdentifier,
-                        capturedStartDate: processStartDate,
-                        isTerminated: application.isTerminated
-                    )
-                },
-                requestQuit: {
-                    requestExactReceiptOwnerQuit(
-                        processIdentifier: processIdentifier,
-                        capturedStartDate: processStartDate
-                    )
-                }
-            )
-        }
+        ).map(runtimeHelper)
+    }
+
+    private static func runningHelper(processIdentifier: Int32) -> RuntimeHelper? {
+        NSRunningApplication(processIdentifier: processIdentifier).map(runtimeHelper)
+    }
+
+    private static func runtimeHelper(_ application: NSRunningApplication) -> RuntimeHelper {
+        let processIdentifier = application.processIdentifier
+        let processStartDate = AmbientRuntimeIdentity.processStartDate(
+            processIdentifier: processIdentifier
+        )
+        return RuntimeHelper(
+            processIdentifier: processIdentifier,
+            bundleURL: application.bundleURL,
+            processStartDate: processStartDate,
+            isRunning: {
+                runtimeProcessIsRunning(
+                    processIdentifier: processIdentifier,
+                    capturedStartDate: processStartDate,
+                    isTerminated: application.isTerminated
+                )
+            },
+            requestQuit: {
+                requestExactReceiptOwnerQuit(
+                    processIdentifier: processIdentifier,
+                    capturedStartDate: processStartDate
+                )
+            }
+        )
     }
 
     static func requestExactReceiptOwnerQuit(
@@ -1126,7 +1132,7 @@ actor NativeAgentLauncher {
               receipt.nativeDeliveryNonce == nativeDeliveryNonce,
               case .compatible(.running(_, _, let runtimeInstanceIdentifier)) =
                 await dependencies.receiptRuntimeStatus(receipt) else { return false }
-        return runtimeInstanceIdentifier == receipt.runtimeInstanceIdentifier
+        return runtimeInstanceIdentifier == receipt.owner.runtimeInstanceIdentifier
     }
 
     @MainActor
@@ -1157,7 +1163,7 @@ actor NativeAgentLauncher {
         return await runtimeStatus(
             receipt: receipt,
             expected: expected,
-            helpers: runningHelpers,
+            helper: runningHelper,
             identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) },
             validate: validateEmbeddedHelper
         )
@@ -1168,7 +1174,7 @@ actor NativeAgentLauncher {
         receipt: ExtensionBridge.NativeDeliveryReceipt,
         expectedURL: URL,
         expectedVersion: AmbientRuntimeIdentity.Version,
-        helpers: @escaping () -> [RuntimeHelper],
+        helper: @escaping (Int32) -> RuntimeHelper?,
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
         validate: @escaping (URL) async -> Bool
     ) async -> ReceiptRuntimeStatus {
@@ -1179,7 +1185,7 @@ actor NativeAgentLauncher {
         return await runtimeStatus(
             receipt: receipt,
             expected: expected,
-            helpers: helpers,
+            helper: helper,
             identity: identity,
             validate: validate
         )
@@ -1189,11 +1195,11 @@ actor NativeAgentLauncher {
     private static func runtimeStatus(
         receipt: ExtensionBridge.NativeDeliveryReceipt,
         expected: ExpectedRuntime,
-        helpers: @escaping () -> [RuntimeHelper],
+        helper: @escaping (Int32) -> RuntimeHelper?,
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
         validate: @escaping (URL) async -> Bool
     ) async -> ReceiptRuntimeStatus {
-        switch observeReceiptOwner(receipt, helpers: helpers, identity: identity) {
+        switch observeReceiptOwner(receipt, helper: helper, identity: identity) {
         case .absent:
             return .absent
         case .indeterminate:
@@ -1220,7 +1226,7 @@ actor NativeAgentLauncher {
             return .incompatible(ExactReceiptOwner(
                 requestQuit: { isPending in
                     guard case .owner(let current) = observeReceiptOwner(
-                        receipt, helpers: helpers, identity: identity
+                        receipt, helper: helper, identity: identity
                     ), current.helper.processIdentifier == runtime.helper.processIdentifier,
                        current.identity == runtimeIdentity,
                        await verifyRuntime(
@@ -1238,34 +1244,33 @@ actor NativeAgentLauncher {
 
     private static func observeReceiptOwner(
         _ receipt: ExtensionBridge.NativeDeliveryReceipt,
-        helpers: () -> [RuntimeHelper],
+        helper: (Int32) -> RuntimeHelper?,
         identity: (Int32) -> AmbientRuntimeIdentity?
     ) -> ReceiptOwnerObservation {
-        guard receipt.owner.isValid else { return .indeterminate }
-        var hasPossibleUnidentifiedOwner = false
-        var owner: ObservedRuntime?
-        for runtime in observedRuntimes(helpers(), identity: identity) {
-            guard let runtimeURL = runtime.bundleURL else {
-                hasPossibleUnidentifiedOwner = true
-                continue
-            }
-            guard let identity = runtime.identity else {
-                if receipt.owner.bundleURL == runtimeURL {
-                    hasPossibleUnidentifiedOwner = true
-                }
-                continue
-            }
-            guard identity.instanceIdentifier == receipt.runtimeInstanceIdentifier else {
-                continue
-            }
-            guard owner == nil,
-                  identity.matches(receipt.owner) else {
-                return .indeterminate
-            }
-            owner = runtime
+        let owner = receipt.owner
+        guard owner.isValid else { return .indeterminate }
+        guard let runtime = helper(owner.processIdentifier), runtime.isRunning() else {
+            return .absent
         }
-        if let owner { return .owner(owner) }
-        return hasPossibleUnidentifiedOwner ? .indeterminate : .absent
+        guard runtime.processIdentifier == owner.processIdentifier,
+              let startDate = runtime.processStartDate else {
+            return .indeterminate
+        }
+        guard AmbientRuntimeIdentity.matchesProcessStart(owner.processStartDate, startDate) else {
+            return .absent
+        }
+        guard let runtimeURL = runtime.bundleURL,
+              let runtimeIdentity = verifiedRuntimeIdentity(
+                  processIdentifier: owner.processIdentifier,
+                  bundleURL: runtimeURL,
+                  processStartDate: startDate,
+                  identity: identity
+              ), runtimeIdentity.matches(owner) else { return .indeterminate }
+        return .owner(ObservedRuntime(
+            helper: runtime,
+            bundleURL: runtimeURL,
+            identity: runtimeIdentity
+        ))
     }
 
     @MainActor

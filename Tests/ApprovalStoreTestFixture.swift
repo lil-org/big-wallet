@@ -27,7 +27,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private let clock: @Sendable () -> Date
     private let writes: ApprovalStoreWrites
     private var retainedClaims = [ExtensionBridge.ApprovalClaim]()
-    private var fences = [ExtensionBridge.Handle: ExtensionBridge.NativeExecutionFence]()
+    private var executionReads = [ExtensionBridge.Handle: ExtensionBridge.NativeExecutionReadLease]()
     private var eventValues = [String]()
     private var loadCountValue = 0
     private var activeOperations = 0
@@ -74,8 +74,8 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         for claim in retainedClaims { _ = await bridge.release(claim: claim) }
         retainedClaims.removeAll()
-        fences.values.forEach { $0.release() }
-        fences.removeAll()
+        executionReads.values.forEach { $0.release() }
+        executionReads.removeAll()
         try FileManager.default.removeItem(at: rootURL)
     }
 
@@ -126,14 +126,13 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             result = await bridge.recordNativeDeliveryReceipt(
                 handle: handle,
                 nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-                runtimeInstanceIdentifier: receipt.runtimeInstanceIdentifier,
                 owner: receipt.owner
             )
         } else if let receipt = snapshot.nativeDeliveryReceipt {
             result = await bridge.clearNativeDeliveryReceipt(
                 handle: handle,
                 nativeDeliveryNonce: receipt.nativeDeliveryNonce,
-                runtimeInstanceIdentifier: receipt.runtimeInstanceIdentifier
+                runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier
             )
         } else { return }
         XCTAssertEqual(result, .persisted)
@@ -145,14 +144,17 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         stagedAt: Date? = nil
     ) async -> ExtensionBridge.StoreMutationResult {
         guard let snapshot = try? await snapshot(handle: handle) else { return .ownershipLost }
-        let runtime = snapshot.nativeDeliveryReceipt?.runtimeInstanceIdentifier ?? UUID()
+        let runtime = snapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier ?? UUID()
         let owner = snapshot.nativeDeliveryReceipt?.owner ?? ExtensionBridge.NativeDeliveryOwner(
+            runtimeInstanceIdentifier: runtime,
+            processIdentifier: 42,
+            processStartDate: clock(),
             bundleURL: rootURL.appendingPathComponent("Helper.app"),
             marketingVersion: "1.0.99", buildVersion: "148"
         )!
         let delivered = await bridge.recordNativeDeliveryReceipt(
             handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime, owner: owner
+            owner: owner
         )
         guard delivered == .persisted else { return delivered }
         return await bridge.stageNativeDecision(
@@ -162,30 +164,27 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         )
     }
 
-    func installNativeExecutionContext(
-        _ context: ExtensionBridge.NativeExecutionContext,
-        handle: ExtensionBridge.Handle
+    func installNativeExecutionRead(
+        handle: ExtensionBridge.Handle,
+        revisions: ExtensionBridge.ProviderRevisions,
+        executionDeadline: Date
     ) async {
-        releaseExecutionFence(handle: handle)
+        releaseExecutionRead(handle: handle)
         guard let snapshot = try? await snapshot(handle: handle), snapshot.phase != .responded else { return }
-        guard let fence = await bridge.acquireNativeExecutionFence(handle: handle, token: context.fenceToken) else {
-            XCTFail("Expected native execution fence")
+        guard case .acquired(let lease) = await bridge.beginNativeExecutionRead(
+            handle: handle,
+            configurationKey: snapshot.configurationKey,
+            revisions: revisions,
+            executionDeadline: executionDeadline
+        ) else {
+            XCTFail("Expected executable native read")
             return
         }
-        fences[handle] = fence
-        let result = await bridge.recordNativeExecutionContext(
-            handle: handle, configurationKey: snapshot.configurationKey,
-            revisions: context.revisions, executionDeadline: context.executionDeadline,
-            fenceToken: context.fenceToken
-        )
-        guard case .recorded = result else {
-            XCTFail("Expected executable context: \(result)")
-            return
-        }
+        executionReads[handle] = lease
     }
 
-    func releaseExecutionFence(handle: ExtensionBridge.Handle) {
-        fences.removeValue(forKey: handle)?.release()
+    func releaseExecutionRead(handle: ExtensionBridge.Handle) {
+        executionReads.removeValue(forKey: handle)?.release()
     }
 
     func transformNextLoad(_ transform: @escaping (ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot) {

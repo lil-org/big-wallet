@@ -9,7 +9,6 @@ protocol NativeDeliveryStore: AnyObject {
     func recordNativeDeliveryReceipt(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
         owner: ExtensionBridge.NativeDeliveryOwner
     ) async -> ExtensionBridge.StoreMutationResult
     func reject(handle: ExtensionBridge.Handle) async ->
@@ -117,11 +116,6 @@ final class NativeApprovalCoordinator {
         let sequence: Int
     }
 
-    private struct Runtime {
-        let instanceIdentifier: UUID
-        let owner: ExtensionBridge.NativeDeliveryOwner
-    }
-
     struct Environment {
         let now: () -> Date
         let uptime: () -> TimeInterval
@@ -204,7 +198,7 @@ final class NativeApprovalCoordinator {
     private let store: NativeDeliveryStore
     private let environment: Environment
     private var lifecycle = Lifecycle.registered
-    private var runtime: Runtime?
+    private var runtime: ExtensionBridge.NativeDeliveryOwner?
     private var foregroundTask: Task<Void, Never>?
     private var foregroundIdentifier: UUID?
     private var observationTask: Task<Void, Never>?
@@ -248,14 +242,10 @@ final class NativeApprovalCoordinator {
     }
 
     func start(
-        runtimeInstanceIdentifier: UUID,
         nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner
     ) {
         guard state == .registered else { return }
-        runtime = Runtime(
-            instanceIdentifier: runtimeInstanceIdentifier,
-            owner: nativeDeliveryOwner
-        )
+        runtime = nativeDeliveryOwner
         lifecycle = .validating
         validate()
     }
@@ -436,7 +426,7 @@ final class NativeApprovalCoordinator {
                 guard let runtime,
                       snapshot.nativeDeliveryReceipt?.matches(
                           nativeDeliveryNonce: nativeDeliveryNonce,
-                          runtimeInstanceIdentifier: runtime.instanceIdentifier
+                          runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
                       ) == true else {
                     finish()
                     return
@@ -534,7 +524,7 @@ final class NativeApprovalCoordinator {
                 return .superseded
             }
             let request: SafariRequest
-            let owner: ExtensionBridge.NativeDeliveryReceipt?
+            let delivery: ExtensionBridge.NativeDeliveryReceipt?
             switch snapshot.state {
             case .responded:
                 return .responded
@@ -542,15 +532,15 @@ final class NativeApprovalCoordinator {
                 return .staged
             case .queued(let pendingRequest, .unowned):
                 request = pendingRequest
-                owner = nil
+                delivery = nil
             case .queued(let pendingRequest, .delivered(let receipt)):
                 request = pendingRequest
-                owner = receipt
+                delivery = receipt
             }
             let receipt: ReceiptOwnership
-            if let owner {
-                receipt = owner.nativeDeliveryNonce == nativeDeliveryNonce &&
-                    owner.runtimeInstanceIdentifier == runtime?.instanceIdentifier
+            if let delivery {
+                receipt = delivery.nativeDeliveryNonce == nativeDeliveryNonce &&
+                    delivery.owner.runtimeInstanceIdentifier == runtime?.runtimeInstanceIdentifier
                     ? .current : .foreign
             } else {
                 receipt = .none
@@ -619,8 +609,7 @@ final class NativeApprovalCoordinator {
                 await store.recordNativeDeliveryReceipt(
                     handle: handle,
                     nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
-                    owner: runtime.owner
+                    owner: runtime
                 )
             }) { $0.handlePersistence($1) }
         case .stage(let decision, let approvedAt):
@@ -628,7 +617,7 @@ final class NativeApprovalCoordinator {
                 await store.stageNativeDecision(
                     handle: handle,
                     nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
                     decision: decision,
                     approvedAt: approvedAt
                 )
@@ -638,7 +627,7 @@ final class NativeApprovalCoordinator {
                 await store.completeNativeDelivery(
                     handle: handle,
                     nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.instanceIdentifier,
+                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
                     response: response
                 )
             }) { $0.handlePersistence($1) }
@@ -659,7 +648,7 @@ final class NativeApprovalCoordinator {
                 await store.rejectNativeDelivery(
                     handle: handle,
                     nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.instanceIdentifier
+                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
                 )
             }) { $0.handlePersistence($1) }
         } else {

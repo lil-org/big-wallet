@@ -68,6 +68,9 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
 
     var nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner? {
         ExtensionBridge.NativeDeliveryOwner(
+            runtimeInstanceIdentifier: instanceIdentifier,
+            processIdentifier: processIdentifier,
+            processStartDate: launchedAt,
             bundleURL: bundleURL,
             marketingVersion: version.marketing,
             buildVersion: version.build
@@ -75,7 +78,10 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
     }
 
     func matches(_ owner: ExtensionBridge.NativeDeliveryOwner) -> Bool {
-        bundleURL == owner.bundleURL &&
+        instanceIdentifier == owner.runtimeInstanceIdentifier &&
+            processIdentifier == owner.processIdentifier &&
+            Self.matchesProcessStart(launchedAt, owner.processStartDate) &&
+            bundleURL == owner.bundleURL &&
             version.marketing == owner.marketingVersion &&
             version.build == owner.buildVersion
     }
@@ -368,7 +374,7 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
             : .replaced
     }
 
-    private static func matchesProcessStart(
+    static func matchesProcessStart(
         _ lhs: Date,
         _ rhs: Date
     ) -> Bool {

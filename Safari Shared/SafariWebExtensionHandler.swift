@@ -417,14 +417,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 token: identity.token,
                 profileIdentifier: profileIdentifier
             )
-            var manualSnapshot: ExtensionBridge.Snapshot?
             if mode == .manualRecovery {
                 switch await Self.bridge.loadManualSwitch(
                     handle: handle,
                     configurationKey: identity.configurationKey
                 ) {
                 case .found(let snapshot):
-                    manualSnapshot = snapshot
                     if snapshot.phase != .responded {
 #if os(macOS)
                         guard await NativeAgentLauncher.hasCompatibleApprovalDelivery(
@@ -448,96 +446,51 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 }
             }
 #if os(macOS)
-            var nativeExecutionFence: ExtensionBridge.NativeExecutionFence?
-            defer { nativeExecutionFence?.release() }
-            let loaded: ExtensionBridge.SnapshotResult = if let manualSnapshot {
-                .found(manualSnapshot)
-            } else {
-                await Self.bridge.load(handle: handle)
-            }
-            switch loaded {
-            case .found(let snapshot):
-                let fenceToken = UUID()
-                if snapshot.hasStagedOrActiveExecution,
-                   let fence = await Self.bridge
-                    .acquireNativeExecutionFence(
-                        handle: handle,
-                        token: fenceToken
-                    ) {
-                    nativeExecutionFence = fence
-                    switch await Self.bridge.recordNativeExecutionContext(
-                        handle: handle,
-                        configurationKey: identity.configurationKey,
-                        revisions: identity.revisions,
-                        executionDeadline: identity.executionDeadline,
-                        fenceToken: fenceToken
-                    ) {
-                    case .responseReady, .missing:
-                        break
-                    case .recorded(let executionContext):
-                        guard executionContext.fenceToken == fenceToken else {
-                            break
-                        }
-                        guard await ensureNativeApprovalDeliveryIfNeeded(
-                            handle: handle,
-                            mode: mode
-                        ) else {
-                            _ = await Self.bridge
-                                .clearNativeExecutionContext(
-                                    handle: handle,
-                                    expected: executionContext
-                                )
-                            Self.respondPending(
-                                id: id, mode: mode, context: context,
-                                error: .bridgeUnavailable
-                            )
-                            return
-                        }
-                        guard await waitForNativeApprovalFinalization(
-                            handle: handle,
-                            configurationKey: identity.configurationKey,
-                            initialContext: executionContext,
-                            mode: mode
-                        ) else {
-                            Self.respondPending(id: id, mode: mode, context: context)
-                            return
-                        }
-                    case .pending:
-                        guard await ensureNativeApprovalDeliveryIfNeeded(
-                            handle: handle,
-                            mode: mode
-                        ) else {
-                            Self.respondPending(
-                                id: id, mode: mode, context: context,
-                                error: .bridgeUnavailable
-                            )
-                            return
-                        }
-                    case .unavailable:
-                        context.cancelRequest(
-                            withError: HandlerError.bridgeUnavailable
-                        )
-                        return
-                    }
-                } else if !snapshot.hasStagedOrActiveExecution,
-                          snapshot.phase == .queued {
-                    guard await ensureNativeApprovalDeliveryIfNeeded(
-                        handle: handle,
-                        mode: mode
-                    ) else {
-                        Self.respondPending(
-                            id: id, mode: mode, context: context,
-                            error: .bridgeUnavailable
-                        )
-                        return
-                    }
+            var executionLease: ExtensionBridge.NativeExecutionReadLease?
+            defer { executionLease?.release() }
+            let execution = await Self.bridge.beginNativeExecutionRead(
+                handle: handle,
+                configurationKey: identity.configurationKey,
+                revisions: identity.revisions,
+                executionDeadline: identity.executionDeadline
+            )
+            switch execution {
+            case .acquired(let lease):
+                executionLease = lease
+                guard await ensureNativeApprovalDeliveryIfNeeded(
+                    handle: handle,
+                    mode: mode
+                ) else {
+                    Self.respondPending(
+                        id: id, mode: mode, context: context,
+                        error: .bridgeUnavailable
+                    )
+                    return
                 }
-            case .missing:
+                guard await waitForNativeApprovalFinalization(
+                    handle: handle,
+                    configurationKey: identity.configurationKey,
+                    initialContext: lease.context,
+                    mode: mode
+                ) else {
+                    Self.respondPending(id: id, mode: mode, context: context)
+                    return
+                }
+            case .needsDelivery:
+                guard await ensureNativeApprovalDeliveryIfNeeded(
+                    handle: handle,
+                    mode: mode
+                ) else {
+                    Self.respondPending(
+                        id: id, mode: mode, context: context,
+                        error: .bridgeUnavailable
+                    )
+                    return
+                }
+            case .pending, .responseReady, .missing:
                 break
             case .unavailable:
-                context.cancelRequest(
-                    withError: HandlerError.bridgeUnavailable
-                )
+                context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 return
             }
 #endif
@@ -688,10 +641,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         ).partialValue
         var nextDeliveryCheck = startedAt
         if Date() >= initialContext.executionDeadline {
-            _ = await Self.bridge.clearNativeExecutionContext(
-                handle: handle,
-                expected: initialContext
-            )
             return false
         }
         while !Task.isCancelled,
@@ -702,18 +651,10 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                       snapshot.phase != .responded else { return true }
                 if snapshot.phase == .queued,
                    Date() >= initialContext.executionDeadline {
-                    _ = await Self.bridge.clearNativeExecutionContext(
-                        handle: handle,
-                        expected: initialContext
-                    )
                     return false
                 }
                 if case .queued(_, .staged(let approval)) = snapshot.state,
                    approval.receipt == nil {
-                    _ = await Self.bridge.clearNativeExecutionContext(
-                        handle: handle,
-                        expected: initialContext
-                    )
                     return false
                 }
                 let now = DispatchTime.now().uptimeNanoseconds
@@ -724,10 +665,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         mode: mode,
                         waitDeadline: deadline
                     ) else {
-                        _ = await Self.bridge.clearNativeExecutionContext(
-                            handle: handle,
-                            expected: initialContext
-                        )
                         return false
                     }
                     nextDeliveryCheck = now.addingReportingOverflow(
@@ -741,10 +678,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             }
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
-        _ = await Self.bridge.clearNativeExecutionContext(
-            handle: handle,
-            expected: initialContext
-        )
         return false
     }
 

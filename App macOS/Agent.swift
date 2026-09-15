@@ -176,7 +176,6 @@ class Agent: NSObject {
     private var walletWindowController: NSWindowController?
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
     private var dockOnboardingHandoff = DockOnboardingHandoff()
-    private var runtimeInstanceIdentifier: UUID?
     private var nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner?
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
 
@@ -194,7 +193,6 @@ class Agent: NSObject {
     ) {
         if let runtimeIdentity,
            let owner = runtimeIdentity.nativeDeliveryOwner {
-            runtimeInstanceIdentifier = runtimeIdentity.instanceIdentifier
             nativeDeliveryOwner = owner
             isReady = true
         } else if CurrentApp.isDockApp {
@@ -407,11 +405,9 @@ class Agent: NSObject {
         
     private func startPendingApprovals() {
         guard isReady,
-              let runtimeInstanceIdentifier,
               let nativeDeliveryOwner else { return }
         for coordinator in approvalInbox.coordinators {
             coordinator.start(
-                runtimeInstanceIdentifier: runtimeInstanceIdentifier,
                 nativeDeliveryOwner: nativeDeliveryOwner
             )
         }
