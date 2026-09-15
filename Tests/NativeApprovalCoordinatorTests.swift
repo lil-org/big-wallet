@@ -2736,6 +2736,88 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
+    func testSuspendedPersistenceDoesNotRetainCoordinatorOrResumeWork() async throws {
+        enum Suspension: CaseIterable {
+            case write, reconciliation, retry
+        }
+
+        for suspension in Suspension.allCases {
+            let clock = Clock()
+            let waits = ScheduledWaits()
+            let write = AsyncGate<ExtensionBridge.StoreMutationResult>()
+            let reconciliation = AsyncGate<ExtensionBridge.SnapshotResult>()
+            let suspensionStarted = expectation(description: "persistence suspended at \(suspension)")
+            var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now },
+                uptime: { clock.uptime },
+                wait: waits.wait,
+                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            ))
+            weak var coordinator = fixture?.coordinator
+            let store = try XCTUnwrap(fixture?.store)
+            let events = try XCTUnwrap(fixture?.events)
+            defer {
+                write.resume(.ownershipLost)
+                reconciliation.resume(.missing)
+                waits.resumeAll()
+            }
+
+            start(try XCTUnwrap(fixture))
+            await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
+            coordinator?.resumeAfterAuthentication()
+            await waitForState(try XCTUnwrap(coordinator), .reviewing)
+            await waitForScheduledWait(waits, count: 1)
+            let snapshot = try XCTUnwrap(store.snapshot)
+            var writes = 0
+            var reads = 0
+            store.stageHandler = { _, _, _, _ in
+                writes += 1
+                if suspension == .write {
+                    suspensionStarted.fulfill()
+                    return await write.run()
+                }
+                if suspension == .retry { suspensionStarted.fulfill() }
+                return .retryablePersistenceFailure
+            }
+            store.loadHandler = { _ in
+                reads += 1
+                if suspension == .reconciliation {
+                    suspensionStarted.fulfill()
+                    return await reconciliation.run()
+                }
+                return .found(snapshot)
+            }
+            store.rejectHandler = { _, _, _ in
+                XCTFail("Released persistence must not start a rejection")
+                return .persisted
+            }
+            coordinator?.approveAccounts([], ethereumNetwork: nil)
+            await fulfillment(of: [suspensionStarted], timeout: 1)
+            if suspension == .retry {
+                await waitForScheduledWait(waits, count: 2)
+            }
+            XCTAssertEqual(coordinator?.state, .staging)
+            let presentationCount = events.presentations.count
+            let authenticationCount = events.authenticationCount
+            let readCount = reads
+            let waitCount = waits.delays.count
+
+            fixture = nil
+            XCTAssertNil(coordinator)
+            write.resume(.persisted)
+            reconciliation.resume(.found(snapshot))
+            waits.resumeAll()
+            for _ in 0..<30 { await Task.yield() }
+
+            XCTAssertEqual(writes, 1)
+            XCTAssertEqual(reads, readCount)
+            XCTAssertEqual(waits.delays.count, waitCount)
+            XCTAssertEqual(store.maximumOutstandingWrites, 1)
+            XCTAssertEqual(events.presentations.count, presentationCount)
+            XCTAssertEqual(events.authenticationCount, authenticationCount)
+        }
+    }
+
     func testObsoleteFinalizerCannotFinishOrFailNewObservation() async throws {
         for obsoleteResult in [NativeApprovalFinalizationResult.responseReady, .unavailable] {
             let clock = Clock()

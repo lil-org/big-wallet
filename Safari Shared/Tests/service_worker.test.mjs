@@ -553,7 +553,7 @@ function openRecoveryPopup(worker, native) {
     return {
         element: id => document.getElementById(id),
         close() { open = false; },
-        refresh: () => vm.runInContext("refreshIdleStatus()", context),
+        refresh: () => vm.runInContext("popupQueue.refreshIdleStatus()", context),
         async waitForIdleText(text) {
             for (let attempt = 0; attempt < 50; attempt += 1) {
                 await settle();

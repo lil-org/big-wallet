@@ -257,7 +257,7 @@ async function idleRecoveryRefreshHarness(reload = async () => {}) {
 test("update recovery reloads only the active tab on explicit Refresh", async () => {
     const success = await idleRecoveryRefreshHarness();
     assert.deepEqual(success.reloaded, []);
-    await success.call("refreshIdleStatus");
+    await success.queue.refreshIdleStatus();
     assert.deepEqual(success.reloaded, [success.tab.id]);
     assert.equal(success.tabMessages.length, 1);
     assert.equal(success.tabMessages[0].id, success.tab.id);
@@ -265,7 +265,7 @@ test("update recovery reloads only the active tab on explicit Refresh", async ()
     assert.equal(success.model.closed, 1);
 
     const failure = await idleRecoveryRefreshHarness(async () => { throw new Error("reload failed"); });
-    await failure.call("refreshIdleStatus");
+    await failure.queue.refreshIdleStatus();
     assert.deepEqual(failure.reloaded, [failure.tab.id]);
     assert.equal(failure.lookups(), 1);
     assert.equal(failure.model.closed, 0);
@@ -275,7 +275,7 @@ test("update recovery reloads only the active tab on explicit Refresh", async ()
 
     const unknownQueue = await idleRecoveryRefreshHarness();
     unknownQueue.notify();
-    await unknownQueue.call("refreshIdleStatus");
+    await unknownQueue.queue.refreshIdleStatus();
     assert.deepEqual(unknownQueue.reloaded, []);
     assert.deepEqual(unknownQueue.tabMessages, []);
     assert.equal(unknownQueue.lookups(), 0);
@@ -290,34 +290,34 @@ test("update recovery requires the exact stored tab identity at click", async ()
     ]) {
         const changed = await idleRecoveryRefreshHarness();
         Object.assign(changed.tab, overrides);
-        await changed.call("refreshIdleStatus");
+        await changed.queue.refreshIdleStatus();
         assert.deepEqual(changed.reloaded, []);
         assert.deepEqual(changed.tabMessages, []);
         assert.equal(changed.lookups(), 1);
         assert.equal(changed.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
-        assert.equal(changed.queue.activeTab.id, changed.tab.id);
-        assert.equal(changed.queue.activeTab.url, changed.tab.url);
-        assert.equal(changed.queue.updateRecoveryTab, null);
+        assert.equal(changed.queue.tab.activeTab.id, changed.tab.id);
+        assert.equal(changed.queue.tab.activeTab.url, changed.tab.url);
+        assert.equal(changed.queue.tab.recoveryTab, null);
     }
 });
 
 test("update recovery clears a candidate that now answers with this build", async () => {
     const recovered = await idleRecoveryRefreshHarness();
     recovered.handlers.tab = undefined;
-    await recovered.call("refreshIdleStatus");
+    await recovered.queue.refreshIdleStatus();
     assert.deepEqual(recovered.reloaded, []);
     assert.equal(recovered.tabMessages.length, 1);
     assert.equal(recovered.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
-    assert.equal(recovered.queue.updateRecoveryTab, null);
+    assert.equal(recovered.queue.tab.recoveryTab, null);
     assert.equal(recovered.get("idle-check-status").disabled, false);
 });
 
 test("queue notifications win the click probe without clearing recovery", async () => {
     const raced = await idleRecoveryRefreshHarness();
-    const recoveryTab = raced.queue.updateRecoveryTab;
+    const recoveryTab = raced.queue.tab.recoveryTab;
     const probe = deferred();
     raced.handlers.tab = () => probe.promise;
-    const refresh = raced.call("refreshIdleStatus");
+    const refresh = raced.queue.refreshIdleStatus();
     await flushPopup();
     raced.notify();
     probe.resolve({
@@ -330,7 +330,7 @@ test("queue notifications win the click probe without clearing recovery", async 
     assert.deepEqual(raced.reloaded, []);
     assert.equal(raced.lookups(), 1);
     assert.equal(raced.tabMessages.length, 1);
-    assert.equal(raced.queue.updateRecoveryTab, recoveryTab);
+    assert.equal(raced.queue.tab.recoveryTab, recoveryTab);
     assert.equal(raced.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
 });
 
@@ -372,6 +372,7 @@ function recoveredQueueHarness({failedID, includeCompletions = true, missingID} 
         const result = fallback(message);
         return message.id === missingID ? {id: message.id, missing: true} : result;
     }});
+    vm.runInContext('popupQueue = new PopupQueueController(); popupQueue.presentation = {kind: "loading"};', harness.context);
     harness.model.completed = includeCompletions ? [completedResponse(1), completedResponse(2)] : [];
     return Object.assign(harness, {applied, pending, firstApply,
         notified: () => harness.workerMessages.filter(message => message.subject === "responseReady")
@@ -381,7 +382,7 @@ function recoveredQueueHarness({failedID, includeCompletions = true, missingID} 
 
 test("recovered completions apply in FIFO order before rendering queued work", async () => {
     const harness = recoveredQueueHarness();
-    const refresh = harness.call("refreshQueue");
+    const refresh = harness.queue.refreshQueue();
     await flushPopup();
     assert.deepEqual(harness.applied, [1]);
     assert.equal(harness.controller, null);
@@ -396,21 +397,21 @@ test("recovered completions apply in FIFO order before rendering queued work", a
 
 test("a failed recovered completion keeps the queue in failed-load state", async () => {
     const harness = recoveredQueueHarness({failedID: 2});
-    const refresh = harness.call("refreshQueue");
+    const refresh = harness.queue.refreshQueue();
     harness.firstApply.resolve();
     await refresh;
     await flushPopup();
     assert.deepEqual(harness.applied, [1, 2]);
     assert.deepEqual(harness.notified(), [1]);
     assert.equal(harness.controller, null);
-    assert.equal(harness.queue.snapshotStatus, "unknown");
+    assert.equal(harness.queue.snapshot.kind, "failed");
     assert.equal(harness.get("idle-connection").textContent, "Failed to load");
     assert.deepEqual(harness.model.completed.map(item => item.id), [2]);
 });
 
 test("an absent missing response disappears through authoritative queue refresh", async () => {
     const harness = recoveredQueueHarness({includeCompletions: false});
-    await harness.call("refreshQueue");
+    await harness.queue.refreshQueue();
     await flushPopup();
     assert.deepEqual(harness.applied, []);
     assert.deepEqual(harness.notified(), []);
@@ -419,7 +420,7 @@ test("an absent missing response disappears through authoritative queue refresh"
 
 test("an evicted recovered completion is skipped without hiding queued work", async () => {
     const harness = recoveredQueueHarness({missingID: 2});
-    const refresh = harness.call("refreshQueue");
+    const refresh = harness.queue.refreshQueue();
     harness.firstApply.resolve();
     await refresh;
     await flushPopup();
@@ -468,10 +469,10 @@ test("a pending-request notification refreshes an already-open idle popup", asyn
     const request = pendingRequest(60, 60);
     harness.model.requests = [request];
     harness.notify();
-    assert.equal(harness.timers.get(harness.queue.refreshTimer).delay, 0);
-    await harness.fire(harness.queue.refreshTimer);
+    assert.equal(harness.timers.get(harness.queue.refresh.timer).delay, 0);
+    await harness.fire(harness.queue.refresh.timer);
     assert.equal(harness.controller.request.requestToken, request.requestToken);
-    assert.deepEqual(normalized(harness.queue.items), [request]);
+    assert.deepEqual(normalized(harness.queue.snapshot.requests), [request]);
 });
 
 test("a pending-request notification fences a stale initial empty queue", async () => {
@@ -490,6 +491,173 @@ test("a pending-request notification fences a stale initial empty queue", async 
     assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 2);
     assert.equal(harness.controller.request.requestToken, request.requestToken);
     assert.equal(harness.workerMessages.some(message => message.subject === "getLatestConfiguration"), false);
+});
+
+test("notification bursts coalesce into one scheduled refresh and one necessary follow-up", async () => {
+    const harness = popupHarness();
+    await harness.boot();
+    harness.clearMessages();
+    harness.timerHistory.length = 0;
+    const firstRead = deferred();
+    const request = pendingRequest(62, 62);
+    let reads = 0;
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "getPendingRequests" && ++reads === 1
+            ? firstRead.promise : fallback(message);
+
+    for (let index = 0; index < 3; index += 1) { harness.notify(); }
+    assert.equal(harness.timerHistory.filter(timer => timer.delay === 0).length, 1);
+    assert.equal(harness.nativeMessages.length, 0);
+    await harness.fire(harness.queue.refresh.timer);
+    assert.equal(reads, 1);
+    const flight = harness.queue.refresh.promise;
+    assert.equal(harness.queue.refreshQueue(), flight);
+    for (let index = 0; index < 3; index += 1) { harness.notify(); }
+    harness.model.requests = [request];
+    firstRead.resolve({completedResponses: [], requests: []});
+    await flight;
+    await flushPopup();
+
+    assert.equal(reads, 2);
+    assert.equal(harness.timerHistory.filter(timer => timer.delay === 0).length, 1);
+    assert.equal(harness.controller.request.requestToken, request.requestToken);
+    assert.equal(harness.queue.refresh.kind, "idle");
+    assert.equal(harness.queue.isFresh, true);
+    assert.equal(harness.workerMessages.some(message => message.subject === "getLatestConfiguration"), false);
+});
+
+test("queue invalidation preserves the active review and its selections until reconciliation", async () => {
+    const harness = await reviewedPopup(selectionState);
+    const controller = harness.controller;
+    await harness.get("accounts-list").children[0].emit("click");
+    const selected = normalized(controller.presentation.accounts);
+    const accountRow = harness.get("accounts-list").children[0];
+    const review = controller.state;
+    const next = pendingRequest(63, 63);
+    harness.model.requests = [controller.request, next];
+
+    harness.notify();
+    harness.notify();
+    await harness.queue.refreshQueue();
+    await flushPopup();
+    assert.equal(harness.queue.isFresh, false);
+    assert.equal(harness.queue.refresh.kind, "idle");
+    assert.equal(harness.controller, controller);
+    assert.equal(controller.state, review);
+    assert.deepEqual(normalized(controller.presentation.accounts), selected);
+    assert.equal(harness.get("accounts-list").children[0], accountRow);
+    assert.equal(harness.nativeMessages.length, 0);
+
+    harness.model.requests = [next];
+    harness.setState(controller.request, {id: controller.request.id, state: "missing", actions: []});
+    harness.setState(next, selectionState(next));
+    await controller.readState();
+    await flushPopup();
+    assert.equal(controller.lifecycle, "disposed");
+    assert.equal(harness.controller.request.requestToken, next.requestToken);
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
+});
+
+test("a failed refresh retains the badge without scheduling automatic retries", async () => {
+    const harness = await reviewedPopup();
+    harness.handlers.native = (message, fallback) => {
+        if (message.subject === "getPendingRequests") { throw new Error("Unavailable"); }
+        return fallback(message);
+    };
+    await harness.controller.reconcile();
+    await flushPopup();
+    const failed = harness.queue.snapshot;
+    assert.equal(failed.kind, "failed");
+    assert.equal(harness.queue.isFresh, true);
+    assert.equal(harness.queue.refresh.kind, "idle");
+    assert.equal(harness.model.closed, 0);
+    assert.equal(harness.workerMessages.some(message => message.subject === "updatePendingRequestBadge"), false);
+    assert.equal(harness.get("idle-check-status").classList.contains("hidden"), false);
+    assert.equal(harness.timers.size, 0);
+
+    harness.notify();
+    assert.equal(harness.queue.snapshot, failed);
+    assert.equal(harness.queue.isFresh, false);
+    assert.equal(harness.get("idle-check-status").classList.contains("hidden"), false);
+    await harness.fire(harness.queue.refresh.timer);
+    assert.equal(harness.queue.snapshot.kind, "failed");
+    assert.equal(harness.queue.refresh.kind, "idle");
+    assert.equal(harness.timers.size, 0);
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 2);
+    await harness.queue.refreshIdleStatus();
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 3);
+    assert.equal(harness.workerMessages.some(message => message.subject === "updatePendingRequestBadge"), false);
+});
+
+test("DOM visibility changes cannot enable idle switching or replace an active review", async () => {
+    const harness = await reviewedPopup();
+    const controller = harness.controller;
+    harness.get("screen-request").classList.add("hidden");
+    harness.get("screen-idle").classList.remove("hidden");
+    harness.get("idle-switch-account").disabled = false;
+    await harness.queue.switchAccountFromIdle();
+    await harness.queue.refreshIdleStatus();
+    harness.notify();
+    await harness.queue.refreshQueue();
+    assert.equal(controller.isActive, true);
+    assert.equal(harness.controller, controller);
+    assert.equal(harness.queue.refresh.kind, "idle");
+    assert.deepEqual(harness.nativeMessages, []);
+    assert.deepEqual(harness.tabMessages, []);
+});
+
+test("an invalidation before the empty-result close check prevents closure", async () => {
+    const harness = await reviewedPopup();
+    const controller = harness.controller;
+    harness.model.requests = [];
+    let invalidated = false;
+    harness.handlers.worker = (message, fallback) => {
+        if (message.subject === "getLatestConfiguration" && !invalidated) {
+            assert.equal(harness.queue.isEmpty, true);
+            invalidated = true;
+            harness.notify();
+        }
+        return fallback(message);
+    };
+    await controller.reconcile();
+    await flushPopup();
+    assert.equal(invalidated, true);
+    assert.equal(harness.model.closed, 0);
+    assert.equal(harness.queue.isFresh, false);
+    assert.equal(harness.get("idle-switch-account").disabled, true);
+    const next = pendingRequest(64, 64);
+    harness.model.requests = [next];
+    await harness.fire(harness.queue.refresh.timer);
+    assert.equal(harness.controller.request.requestToken, next.requestToken);
+    assert.equal(harness.model.closed, 0);
+});
+
+test("idle operation ownership prevents repeat actions even if controls are enabled", async () => {
+    const admission = deferred();
+    const harness = await manualSwitchHarness(() => admission.promise);
+    const switching = harness.queue.switchAccountFromIdle();
+    await flushPopup();
+    harness.get("idle-switch-account").disabled = false;
+    harness.get("idle-check-status").disabled = false;
+    await harness.queue.switchAccountFromIdle();
+    await harness.queue.refreshIdleStatus();
+    assert.equal(harness.tabMessages.length, 1);
+    assert.deepEqual(harness.nativeMessages, []);
+    admission.resolve(manualSwitchAcknowledgement());
+    await switching;
+
+    const recovery = await idleRecoveryRefreshHarness();
+    const lookup = deferred();
+    let lookups = 0;
+    recovery.browser.tabs.query = () => { lookups += 1; return lookup.promise; };
+    const refreshing = recovery.queue.refreshIdleStatus();
+    await flushPopup();
+    recovery.get("idle-check-status").disabled = false;
+    await recovery.queue.refreshIdleStatus();
+    assert.equal(lookups, 1);
+    lookup.resolve([recovery.tab]);
+    await refreshing;
+    assert.equal(recovery.model.closed, 1);
 });
 
 async function manualSwitchHarness(sendMessage) {
@@ -517,7 +685,7 @@ test("manual Switch Account sends one exact stateless intent with a full native 
     const harness = await manualSwitchHarness(async () => manualSwitchAcknowledgement());
     const queue = deferred();
     harness.handlers.native = () => queue.promise;
-    const switching = harness.call("switchAccountFromIdle");
+    const switching = harness.queue.switchAccountFromIdle();
     await flushPopup();
     assert.deepEqual(harness.tabMessages, [{
         id: harness.tab.id,
@@ -543,10 +711,10 @@ test("manual Switch Account accepts canonical native handles and terminal respon
     ];
     for (const response of responses) {
         const harness = await manualSwitchHarness(async () => response);
-        await harness.call("switchAccountFromIdle");
+        await harness.queue.switchAccountFromIdle();
         assert.equal(harness.nativeMessages.length, 1);
         assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
-        assert.equal(harness.queue.snapshotStatus, "empty");
+        assert.equal(harness.queue.isEmpty, true);
         assert.notEqual(harness.get("idle-connection").textContent, "Failed to load");
     }
 });
@@ -561,7 +729,7 @@ test("manual Switch Account rejects undefined malformed and cross-key replies", 
         manualSwitchAcknowledgement({id: "41"}),
     ]) {
         const harness = await manualSwitchHarness(async () => response);
-        await harness.call("switchAccountFromIdle");
+        await harness.queue.switchAccountFromIdle();
         assert.equal(harness.get("idle-switch-account").disabled, false);
         assert.deepEqual(harness.nativeMessages, []);
         assert.equal(harness.get("idle-connection").textContent, "Failed to load");
@@ -573,9 +741,9 @@ test("manual Switch Account repeats the same intent after transport failure", as
         if (attempt === 1) { throw new Error("unavailable"); }
         return manualSwitchAcknowledgement();
     });
-    await harness.call("switchAccountFromIdle");
+    await harness.queue.switchAccountFromIdle();
     assert.equal(harness.get("idle-switch-account").disabled, false);
-    await harness.call("switchAccountFromIdle");
+    await harness.queue.switchAccountFromIdle();
     assert.equal(harness.tabMessages.length, 2);
     assert.deepEqual(harness.tabMessages[0].message, harness.tabMessages[1].message);
     assert.equal(harness.nativeMessages.length, 1);
@@ -618,9 +786,9 @@ for (const recovery of ["queue failure", "extension update"]) {
         new vm.Script(popupWireSource).runInContext(context);
         new vm.Script(source).runInContext(context);
         vm.runInContext(`
-            queueTab.domReady = true;
-            queueTab.booting = false;
-            queueTab.activeTab = {
+            popupQueue = new PopupQueueController();
+            popupQueue.presentation = {kind: "loading"};
+            popupQueue.tab.activeTab = {
                 id: 3,
                 host: "wallet.example",
                 configurationKey: "https://wallet.example",
@@ -628,10 +796,10 @@ for (const recovery of ["queue failure", "extension update"]) {
             };
         `, context);
         if (recovery === "extension update") {
-            vm.runInContext("queueTab.updateRecoveryTab = queueTab.activeTab", context);
+            vm.runInContext("popupQueue.tab.recoveryTab = popupQueue.tab.activeTab", context);
         }
 
-        await vm.runInContext("refreshQueue()", context);
+        await vm.runInContext("popupQueue.refreshQueue()", context);
 
         const refresh = document.getElementById("idle-check-status");
         assert.equal(document.getElementById("idle-connection").textContent, "Failed to load");
@@ -640,8 +808,8 @@ for (const recovery of ["queue failure", "extension update"]) {
         assert.equal(document.getElementById("idle-switch-account").disabled, true);
 
         queueFails = false;
-        vm.runInContext("queueTab.updateRecoveryTab = null", context);
-        await vm.runInContext("refreshQueue()", context);
+        vm.runInContext("popupQueue.tab.recoveryTab = null", context);
+        await vm.runInContext("popupQueue.refreshQueue()", context);
 
         assert.equal(refresh.classList.contains("hidden"), true);
         assert.equal(document.getElementById("idle-switch-account").disabled, false);
@@ -922,8 +1090,8 @@ function popupHarness(options = {}) {
         timerHistory,
         timers,
         workerMessages,
-        get controller() { return vm.runInContext("currentRequestController", context); },
-        get queue() { return vm.runInContext("queueTab", context); },
+        get controller() { return vm.runInContext("popupQueue?.currentRequest ?? null", context); },
+        get queue() { return vm.runInContext("popupQueue", context); },
         get(name) { return document.getElementById(name); },
         call(name, ...arguments_) { return vm.runInContext(name, context)(...arguments_); },
         setState(request, state) { states.set(request.requestToken, state); },
@@ -945,7 +1113,8 @@ function popupHarness(options = {}) {
         },
         async show(requests) {
             model.requests = requests;
-            this.call("showQueue", requests);
+            this.queue.snapshot = {kind: "ready", revision: this.queue.revision, requests};
+            this.queue.presentSnapshot();
             await flushPopup();
             return this.controller;
         },
@@ -1456,7 +1625,7 @@ test("missing-state reconciliation shares one authoritative queue refresh", asyn
     assert.equal(completion, repeated);
     assert.equal(controller.lifecycle, "reconciling");
     assert.equal(controller.isActive, false);
-    assert.equal(harness.call("shouldDeferQueueRefreshForCurrentRequest"), false);
+    assert.equal(harness.queue.canRefresh, true);
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests"]);
     gate.resolve({completedResponses: [], requests: [replacement]});
     await completion;
@@ -1483,7 +1652,7 @@ test("update recovery renders pending approvals first and keeps a drained popup 
     await harness.boot();
     assert.equal(harness.get("request-title").textContent, "Sign message");
     assert.equal(harness.get("screen-request").classList.contains("hidden"), false);
-    assert.ok(harness.queue.updateRecoveryTab);
+    assert.ok(harness.queue.tab.recoveryTab);
     assert.equal(harness.tabMessages.length, 1);
 
     harness.model.requests = [];
@@ -2004,7 +2173,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             const intent = deferred();
             const harness = popupHarness({tab: () => intent.promise});
             await harness.boot();
-            const switching = harness.call("switchAccountFromIdle");
+            const switching = harness.queue.switchAccountFromIdle();
             await flushPopup();
             const switchTimeout = [...harness.timers.values()].find(timer => timer.delay === 10_000);
             assert.ok(switchTimeout);
@@ -2014,7 +2183,7 @@ test("late idle switch replies preserve preparing and working requests", async (
                 ? {id: request.id, state: "working", actions: []}
                 : transactionState(request, {phase: "preparing"}, {actions: ["reject"]}));
             harness.notify();
-            await harness.fire(harness.queue.refreshTimer);
+            await harness.fire(harness.queue.refresh.timer);
             const controller = harness.controller;
             const timer = harness.followUpTimerId([switchTimeout.id]);
             const title = harness.get("request-title").textContent;
@@ -2182,9 +2351,9 @@ test("late idle status lookups probes and reloads cannot replace an active reque
                 }),
             });
             await harness.boot();
-            assert.ok(harness.queue.updateRecoveryTab);
-            const originalTab = harness.queue.activeTab;
-            const recoveryTab = harness.queue.updateRecoveryTab;
+            assert.ok(harness.queue.tab.recoveryTab);
+            const originalTab = harness.queue.tab.activeTab;
+            const recoveryTab = harness.queue.tab.recoveryTab;
             const gate = deferred();
             let reloads = 0;
             harness.browser.tabs.reload = () => {
@@ -2193,13 +2362,13 @@ test("late idle status lookups probes and reloads cannot replace an active reque
             };
             if (stage === "query") { harness.browser.tabs.query = () => gate.promise; }
             if (stage === "probe") { harness.handlers.tab = () => gate.promise; }
-            const refreshing = harness.call("refreshIdleStatus");
+            const refreshing = harness.queue.refreshIdleStatus();
             await flushPopup();
             const request = pendingRequest();
             harness.model.requests = [request];
             harness.setState(request, {id: request.id, state: "working", actions: []});
             harness.notify();
-            await harness.fire(harness.queue.refreshTimer);
+            await harness.fire(harness.queue.refresh.timer);
             const controller = harness.controller;
             const timer = harness.followUpTimerId();
             if (stage === "query") {
@@ -2219,8 +2388,8 @@ test("late idle status lookups probes and reloads cannot replace an active reque
             await refreshing;
             assert.equal(harness.model.closed, 0);
             assert.equal(reloads, stage === "reload" ? 1 : 0);
-            assert.equal(harness.queue.activeTab, originalTab);
-            assert.equal(harness.queue.updateRecoveryTab, recoveryTab);
+            assert.equal(harness.queue.tab.activeTab, originalTab);
+            assert.equal(harness.queue.tab.recoveryTab, recoveryTab);
             assert.equal(harness.controller, controller);
             assert.notEqual(harness.followUpTimerId(), null);
             assert.equal(harness.get("screen-loading").classList.contains("hidden"), true);
@@ -2250,13 +2419,13 @@ test("a new empty idle presentation releases Refresh without disturbing its next
             };
             if (stage === "query") { harness.browser.tabs.query = () => oldGate.promise; }
             if (stage === "probe") { harness.handlers.tab = () => oldGate.promise; }
-            const oldRefresh = harness.call("refreshIdleStatus");
+            const oldRefresh = harness.queue.refreshIdleStatus();
             await flushPopup();
             const oldProbe = harness.tabMessages.at(-1).message;
             assert.equal(harness.get("idle-check-status").disabled, true);
             harness.notify();
-            await harness.fire(harness.queue.refreshTimer);
-            assert.equal(harness.queue.snapshotStatus, "empty");
+            await harness.fire(harness.queue.refresh.timer);
+            assert.equal(harness.queue.isEmpty, true);
             assert.equal(harness.get("screen-idle").classList.contains("hidden"), false);
             assert.equal(harness.get("idle-check-status").disabled, false);
 
@@ -2264,7 +2433,7 @@ test("a new empty idle presentation releases Refresh without disturbing its next
             harness.browser.tabs.query = () => nextGate.promise;
             harness.handlers.tab = probe;
             harness.browser.tabs.reload = async () => { reloads += 1; };
-            const nextRefresh = harness.call("refreshIdleStatus");
+            const nextRefresh = harness.queue.refreshIdleStatus();
             await flushPopup();
             assert.equal(harness.get("idle-check-status").disabled, true);
             if (fails) { oldGate.reject(new Error("Superseded refresh failed")); }

@@ -6068,6 +6068,321 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertFalse(opened)
     }
 
+    @MainActor
+    func testNativeDeliveryDriverProbesShowWalletOnceAfterInitialConfirmationWindow() async throws {
+        let helperURL = try makeAmbientBundle(name: "Delayed Wallet Confirmation", build: "148")
+        let launchDate = Date(timeIntervalSince1970: 14_200)
+        let identity = try runtimeIdentity(
+            processIdentifier: 849,
+            bundleURL: helperURL,
+            launchDate: launchDate
+        )
+        let helper = runtimeHelper(
+            processIdentifier: identity.processIdentifier,
+            bundleURL: helperURL,
+            launchDate: launchDate
+        )
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        var uptime = startedAt
+        var clockReadsAfterLaunch = 0
+        var advancedPastConfirmationWindow = false
+        var launches = 0
+        var observedRuntimeTimes = [UInt64]()
+        let route = NativeAgentRoute.showWallet(workflowVersion: ExtensionBridge.workflowVersion)
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { $0 == helperURL },
+            resolveHelper: nil,
+            confirm: nil,
+            existingDelivery: nil,
+            environment: .init(
+                helpers: {
+                    guard launches > 0 else { return [] }
+                    observedRuntimeTimes.append(uptime - startedAt)
+                    return [helper]
+                },
+                identity: { $0 == identity.processIdentifier ? identity : nil },
+                uptime: {
+                    if launches == 1, !advancedPastConfirmationWindow {
+                        clockReadsAfterLaunch += 1
+                        if clockReadsAfterLaunch == 2 {
+                            let confirmationStartedAt = uptime
+                            uptime += 300_000_000
+                            advancedPastConfirmationWindow = true
+                            return confirmationStartedAt
+                        }
+                    }
+                    return uptime
+                },
+                wait: { delay in
+                    XCTFail("An already compatible helper should confirm without polling")
+                    uptime += delay
+                }
+            ),
+            launch: { _, url, completion in
+                XCTAssertEqual(url, route.url)
+                launches += 1
+                completion(true)
+            }
+        )
+
+        let opened = await launcher.open(route)
+
+        XCTAssertTrue(opened)
+        XCTAssertTrue(advancedPastConfirmationWindow)
+        XCTAssertEqual(uptime - startedAt, 300_000_000)
+        XCTAssertEqual(observedRuntimeTimes, [300_000_000])
+        XCTAssertEqual(launches, 1)
+    }
+
+    @MainActor
+    func testNativeDeliveryDriverPreservesThreeConfirmationWindows() async throws {
+        let fixture = try makeFixture(id: 845)
+        let admission = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        ))
+        let helperURL = try makeAmbientBundle(name: "Delivery Windows", build: "148")
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        var uptime = startedAt
+        var launches = [UInt64]()
+        var waits = [UInt64]()
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { $0 == helperURL },
+            resolveHelper: nil,
+            confirm: nil,
+            existingDelivery: nil,
+            environment: .init(
+                approvals: .init(
+                    load: { await self.bridge.load(handle: $0) },
+                    receiptRuntimeStatus: { _ in XCTFail("No receipt was delivered"); return .absent },
+                    clearReceipt: { _, _ in XCTFail("No receipt needs clearing"); return .ownershipLost },
+                    wait: { _ in XCTFail("Only the delivery session may schedule retries") }
+                ),
+                helpers: { [] },
+                identity: { _ in nil },
+                uptime: { uptime },
+                wait: { delay in waits.append(delay); uptime += delay }
+            ),
+            launch: { _, _, completion in
+                launches.append(uptime - startedAt)
+                completion(true)
+            }
+        )
+        let opened = await launcher.open(.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce
+        ))
+        XCTAssertFalse(opened)
+        XCTAssertEqual(launches, [0, 250_000_000, 500_000_000])
+        XCTAssertEqual(waits, Array(repeating: 50_000_000, count: 100))
+        XCTAssertEqual(uptime - startedAt, 5_000_000_000)
+    }
+
+    @MainActor
+    func testNativeDeliveryDriverPollsUnavailableConfirmationButStopsUnavailablePreflight() async throws {
+        let fixture = try makeFixture(id: 846)
+        let admission = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        ))
+        let helperURL = try makeAmbientBundle(name: "Unavailable Confirmation", build: "148")
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        var uptime = startedAt
+        var launches = 0
+        var waits = [UInt64]()
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { $0 == helperURL },
+            resolveHelper: nil,
+            confirm: nil,
+            existingDelivery: nil,
+            environment: .init(
+                approvals: .init(
+                    load: { handle in
+                        launches == 0 ? await self.bridge.load(handle: handle) : .unavailable
+                    },
+                    receiptRuntimeStatus: { _ in .indeterminate },
+                    clearReceipt: { _, _ in .ownershipLost },
+                    wait: { _ in XCTFail("Only the delivery session may schedule retries") }
+                ),
+                helpers: { [] },
+                identity: { _ in nil },
+                uptime: { uptime },
+                wait: { delay in waits.append(delay); uptime += delay }
+            ),
+            launch: { _, _, completion in launches += 1; completion(true) }
+        )
+        let opened = await launcher.open(.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce
+        ))
+        XCTAssertFalse(opened)
+        XCTAssertEqual(launches, 1)
+        XCTAssertEqual(waits, Array(repeating: 50_000_000, count: 5))
+        XCTAssertEqual(uptime - startedAt, 250_000_000)
+    }
+
+    @MainActor
+    func testNativeAgentResolutionStopsWhenClockReachesDeadlineBetweenChecks() async throws {
+        let helperURL = try makeAmbientBundle(name: "Resolution Deadline Boundary", build: "148")
+        var clockReads = 0
+        var helperReads = 0
+        let target = await NativeAgentLauncher.resolveTargetHelper(
+            currentURL: helperURL,
+            deadline: 50_000_000,
+            isPending: { true },
+            helpers: { helperReads += 1; return [] },
+            identity: { _ in nil },
+            validate: { _ in XCTFail("An expired resolution must not validate a helper"); return false },
+            uptime: {
+                clockReads += 1
+                return clockReads <= 2 ? 0 : 50_000_000
+            },
+            sleep: { _ in XCTFail("An expired resolution must not sleep") }
+        )
+        XCTAssertNil(target)
+        XCTAssertEqual(helperReads, 0)
+    }
+
+    @MainActor
+    func testNativeDeliveryDriverFinishesReceiptRepairBeyondConfirmationWindow() async throws {
+        let fixture = try makeFixture(id: 847)
+        let admission = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        ))
+        guard case .found(let snapshot) = await bridge.load(handle: admission.handle),
+              case .queued(let request, _) = snapshot.state else {
+            return XCTFail("Expected queued request")
+        }
+        let helperURL = try makeAmbientBundle(name: "Receipt Repair Window", build: "148")
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            owner: try nativeDeliveryOwner(bundleURL: helperURL)
+        )
+        let delivered = ExtensionBridge.Snapshot(
+            handle: snapshot.handle,
+            state: .queued(request: request, approval: .delivered(receipt)),
+            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+            host: snapshot.host,
+            configurationKey: snapshot.configurationKey,
+            revisions: snapshot.revisions,
+            createdAt: snapshot.createdAt,
+            enqueueAttempt: snapshot.enqueueAttempt,
+            sequence: snapshot.sequence
+        )
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        var uptime = startedAt
+        var receiptPresent = false
+        var launches = [UInt64]()
+        var quits = 0
+        var clears = 0
+        var waits = [UInt64]()
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { $0 == helperURL },
+            resolveHelper: nil,
+            confirm: nil,
+            existingDelivery: nil,
+            environment: .init(
+                approvals: .init(
+                    load: { _ in .found(receiptPresent ? delivered : snapshot) },
+                    receiptRuntimeStatus: { _ in
+                        if launches.count > 1 {
+                            return .compatible(.running(
+                                url: helperURL,
+                                processIdentifier: receipt.owner.processIdentifier,
+                                runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier
+                            ))
+                        }
+                        return .incompatible(.init(
+                            requestQuit: { _ in quits += 1; return true },
+                            isRunning: { uptime - startedAt < 300_000_000 }
+                        ))
+                    },
+                    clearReceipt: { _, checked in
+                        XCTAssertEqual(checked, receipt)
+                        XCTAssertEqual(uptime - startedAt, 300_000_000)
+                        clears += 1
+                        receiptPresent = false
+                        return .persisted
+                    },
+                    wait: { _ in XCTFail("Receipt repair must use the session driver") }
+                ),
+                helpers: { [] },
+                identity: { _ in nil },
+                uptime: { uptime },
+                wait: { delay in waits.append(delay); uptime += delay }
+            ),
+            launch: { _, _, completion in
+                launches.append(uptime - startedAt)
+                receiptPresent = true
+                completion(true)
+            }
+        )
+        let opened = await launcher.open(.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce
+        ))
+        XCTAssertTrue(opened)
+        XCTAssertEqual(launches, [0, 300_000_000])
+        XCTAssertEqual(waits, Array(repeating: 50_000_000, count: 6))
+        XCTAssertEqual(quits, 1)
+        XCTAssertEqual(clears, 1)
+    }
+
+    @MainActor
+    func testNativeDeliveryDriverStopsAfterNonceReplacement() async throws {
+        let fixture = try makeFixture(id: 848)
+        let admission = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        ))
+        guard case .found(let snapshot) = await bridge.load(handle: admission.handle) else {
+            return XCTFail("Expected queued request")
+        }
+        let replacement = ExtensionBridge.Snapshot(
+            handle: snapshot.handle,
+            state: snapshot.state,
+            nativeDeliveryNonce: .init(value: UUID()),
+            host: snapshot.host,
+            configurationKey: snapshot.configurationKey,
+            revisions: snapshot.revisions,
+            createdAt: snapshot.createdAt,
+            enqueueAttempt: snapshot.enqueueAttempt,
+            sequence: snapshot.sequence
+        )
+        let helperURL = try makeAmbientBundle(name: "Replaced Delivery Nonce", build: "148")
+        var launches = 0
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { $0 == helperURL },
+            resolveHelper: nil,
+            confirm: nil,
+            existingDelivery: nil,
+            environment: .init(
+                approvals: .init(
+                    load: { _ in .found(launches == 0 ? snapshot : replacement) },
+                    receiptRuntimeStatus: { _ in XCTFail("Replaced nonce must stop before inspection"); return .indeterminate },
+                    clearReceipt: { _, _ in XCTFail("Replaced nonce must not clear ownership"); return .ownershipLost },
+                    wait: { _ in }
+                ),
+                helpers: { [] },
+                identity: { _ in nil },
+                wait: { _ in XCTFail("A replaced delivery must stop without another retry") }
+            ),
+            launch: { _, _, completion in launches += 1; completion(true) }
+        )
+        let opened = await launcher.open(.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce
+        ))
+        XCTAssertFalse(opened)
+        XCTAssertEqual(launches, 1)
+    }
+
     func testNativeAgentLaunchRetriesTheIdenticalApprovalDelivery() async throws {
         let helperURL = try makeAmbientBundle(name: "Retry", build: "148")
         let handle = ExtensionBridge.Handle(

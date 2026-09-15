@@ -50,28 +50,283 @@ function transactionEditorValues(editor) {
     };
 }
 
-const queueTab = {
-    activeTab: null,
-    booting: true,
-    domReady: false,
-    items: [],
-    index: 0,
-    idleGeneration: 0,
-    lastRefreshFailed: false,
-    privateBrowsing: extensionPrivateBrowsing(),
-    refreshGeneration: 0,
-    refreshInFlight: null,
-    refreshRequested: false,
-    refreshTimer: null,
-    snapshotStatus: "unknown",
-    updateRecoveryTab: null,
-};
-let currentRequestController = null;
+let popupQueue = null;
 let popupStrings = {};
 let ignoreSliderUntilRelease = false;
 
+class PopupQueueController {
+    constructor() {
+        this.tab = {
+            activeTab: null,
+            privateBrowsing: extensionPrivateBrowsing(),
+            recoveryTab: null,
+        };
+        this.revision = 0;
+        this.snapshot = {kind: "unknown", revision: -1};
+        this.presentation = {kind: "booting"};
+        this.refresh = {kind: "idle"};
+    }
+
+    get currentRequest() {
+        return this.presentation.kind === "review" || this.presentation.kind === "reconciling"
+            ? this.presentation.controller : null;
+    }
+
+    get privateBrowsing() {
+        return this.tab.activeTab?.incognito ?? this.tab.privateBrowsing;
+    }
+
+    get isFresh() { return this.snapshot.revision === this.revision; }
+
+    get isEmpty() {
+        return this.isFresh && this.snapshot.kind === "ready" && this.snapshot.requests.length === 0;
+    }
+
+    get canRefresh() {
+        return !["booting", "review", "closed"].includes(this.presentation.kind);
+    }
+
+    get showsUpdateRecovery() { return this.tab.recoveryTab !== null && this.isEmpty; }
+
+    get canSwitchAccount() {
+        return this.presentation.kind === "idle" && this.presentation.operation === null &&
+            !this.privateBrowsing && this.tab.activeTab !== null &&
+            this.tab.recoveryTab === null && this.isEmpty && this.refresh.kind === "idle";
+    }
+
+    async boot() {
+        try {
+            Object.assign(this.tab, await currentActiveTab());
+            this.tab.recoveryTab = await readUpdateRecoveryFlag()
+                ? await updateRecoveryTabFor(this.tab.activeTab) : null;
+        } finally {
+            this.presentation = {kind: "loading"};
+        }
+        await this.refreshQueue();
+    }
+
+    invalidate() {
+        this.revision += 1;
+        document.getElementById("idle-switch-account").disabled = true;
+        this.scheduleRefresh();
+    }
+
+    scheduleRefresh() {
+        if (this.isFresh || !this.canRefresh || this.refresh.kind !== "idle") { return; }
+        const scheduled = {kind: "scheduled", timer: null};
+        scheduled.timer = setTimeout(() => {
+            if (this.refresh !== scheduled) { return; }
+            this.refresh = {kind: "idle"};
+            if (!this.isFresh && this.canRefresh) { void this.refreshQueue(); }
+        }, 0);
+        this.refresh = scheduled;
+    }
+
+    refreshQueue() {
+        if (this.refresh.kind === "running") { return this.refresh.promise; }
+        if (!this.canRefresh) { return Promise.resolve(null); }
+        if (this.refresh.kind === "scheduled") { clearTimeout(this.refresh.timer); }
+        if (this.isFresh) { this.revision += 1; }
+        document.getElementById("idle-switch-account").disabled = true;
+        const flight = {kind: "running", promise: null};
+        this.refresh = flight;
+        flight.promise = (async () => {
+            try {
+                while (this.canRefresh) {
+                    const revision = this.revision;
+                    const response = await fetchPendingResponse();
+                    if (revision !== this.revision) { continue; }
+                    if (!this.canRefresh) { return null; }
+                    this.snapshot = response
+                        ? {kind: "ready", revision, requests: response.requests}
+                        : {kind: "failed", revision};
+                    this.presentSnapshot();
+                    return this.snapshot;
+                }
+                return null;
+            } finally {
+                if (this.refresh === flight) { this.refresh = {kind: "idle"}; }
+                if (this.presentation.kind === "idle") { this.renderIdleControls(); }
+                this.scheduleRefresh();
+            }
+        })();
+        return flight.promise;
+    }
+
+    presentSnapshot() {
+        this.currentRequest?.dispose();
+        hide("screen-loading");
+        const requests = this.snapshot.kind === "ready" ? this.snapshot.requests : null;
+        if (requests) { setPendingRequestBadge(requests.length); }
+        if (!requests || requests.length === 0) {
+            this.presentation = {kind: "idle", token: {}, operation: null};
+            void this.renderIdle();
+            return;
+        }
+        const controller = new PopupRequestController(this, requests[0]);
+        this.presentation = {kind: "review", controller};
+        setHidden("queue-indicator", requests.length <= 1);
+        if (requests.length > 1) {
+            setText("queue-indicator", formatted(localized("queuePosition", "%1$@ of %2$@"), "1", String(requests.length)));
+        }
+        hide("screen-idle");
+        void controller.start();
+    }
+
+    async reconcile(controller) {
+        if (this.currentRequest !== controller) { return; }
+        this.presentation = {kind: "reconciling", controller};
+        const snapshot = await this.refreshQueue();
+        if (snapshot !== null && this.snapshot === snapshot && this.isEmpty &&
+            !this.showsUpdateRecovery && this.refresh.kind === "idle" &&
+            this.presentation.kind === "idle" && this.presentation.operation === null) {
+            this.presentation = {kind: "closed"};
+            window.close();
+        }
+    }
+
+    ownsIdle(token, tab, operation) {
+        return this.presentation.kind === "idle" && this.presentation.token === token &&
+            sameTab(this.tab.activeTab, tab) &&
+            (typeof operation === "undefined" || this.presentation.operation === operation);
+    }
+
+    renderIdleControls() {
+        const canSwitch = this.canSwitchAccount;
+        setHidden("idle-switch-account", !canSwitch);
+        document.getElementById("idle-switch-account").disabled = !canSwitch;
+        setHidden("idle-check-status", this.snapshot.kind !== "failed" && !this.showsUpdateRecovery);
+        document.getElementById("idle-check-status").disabled = this.presentation.operation !== null;
+        hide("idle-pending-spinner");
+    }
+
+    async renderIdle() {
+        const {token} = this.presentation;
+        const tab = this.tab.activeTab;
+        hide("screen-request");
+        hide("working-overlay");
+        show("screen-idle");
+        this.renderIdleControls();
+        setText("idle-host", tab ? (tab.host || tab.configurationKey) : "");
+        if (this.snapshot.kind === "failed" || this.showsUpdateRecovery) {
+            setText("idle-connection", localized("failedToLoad", "Failed to load"));
+            return;
+        }
+        if (!tab) {
+            setText("idle-connection", localized("noActivePage", "No active page"));
+            return;
+        }
+        if (this.privateBrowsing) {
+            setText("idle-connection", localized("privateBrowsingUnsupported", "Big Wallet requests are unavailable in Private Browsing."));
+            return;
+        }
+        const configuration = await readLatestConfiguration(tab);
+        if (!this.ownsIdle(token, tab)) { return; }
+        let connectionText = localized("failedToLoad", "Failed to load");
+        if (configuration) {
+            const lines = [];
+            if (configuration.ethereum?.address) { lines.push(configuration.ethereum.address); }
+            if (configuration.solana?.isConnected) { lines.push(configuration.solana.publicKey); }
+            connectionText = lines.length > 0 ? lines.join("\n") : localized("notConnected", "Not connected");
+        }
+        setText("idle-connection", connectionText);
+    }
+
+    async switchAccountFromIdle() {
+        if (!this.canSwitchAccount) { return; }
+        const tab = this.tab.activeTab;
+        const {token} = this.presentation;
+        const operation = {kind: "switch"};
+        this.presentation.operation = operation;
+        document.getElementById("idle-switch-account").disabled = true;
+        let pending;
+        try {
+            pending = browser.tabs.sendMessage(tab.id, {
+                configurationKey: tab.configurationKey,
+                subject: BigWalletBridgeWire.MANUAL_SWITCH_INTENT_SUBJECT,
+                workflowVersion: WORKFLOW_VERSION,
+            });
+        } catch { pending = Promise.reject(); }
+        const outcome = await settleExtensionMessage(pending, MANUAL_SWITCH_TIMEOUT);
+        if (!this.ownsIdle(token, tab, operation)) {
+            this.invalidate();
+            return;
+        }
+        const response = outcome.status === "response" ? outcome.response : null;
+        const id = response?.id;
+        const valid = Number.isSafeInteger(id) && (
+            BigWalletBridgeWire.isManualSwitchAcknowledgement(response, id, tab.configurationKey) ||
+            BigWalletBridgeWire.isManualSwitchTerminalResponse(response, id));
+        if (!valid) {
+            this.presentation.operation = null;
+            setText("idle-connection", localized("failedToLoad", "Failed to load"));
+            this.renderIdleControls();
+            return;
+        }
+        this.showLoading();
+        await this.refreshQueue();
+    }
+
+    showLoading() {
+        this.presentation = {kind: "loading"};
+        hide("screen-idle");
+        show("screen-loading");
+    }
+
+    async refreshIdleStatus() {
+        if (this.presentation.kind !== "idle" || this.presentation.operation !== null) { return; }
+        const recoveryTab = this.showsUpdateRecovery ? this.tab.recoveryTab : null;
+        if (!recoveryTab) {
+            this.showLoading();
+            await this.refreshQueue();
+            return;
+        }
+        if (!Number.isSafeInteger(recoveryTab.id)) { return; }
+        const {token} = this.presentation;
+        const tab = this.tab.activeTab;
+        const operation = {kind: "recovery"};
+        this.presentation.operation = operation;
+        document.getElementById("idle-check-status").disabled = true;
+        const revision = this.revision;
+        const current = await currentActiveTab();
+        if (!this.ownsIdle(token, tab, operation)) { return; }
+        const sameCurrentTab = sameUpdateRecoveryTab(current.activeTab, recoveryTab);
+        const currentRecoveryTab = sameCurrentTab ? await updateRecoveryTabFor(current.activeTab) : null;
+        if (!this.ownsIdle(token, tab, operation)) { return; }
+        if (revision !== this.revision || !this.isEmpty || this.refresh.kind !== "idle") {
+            this.showLoading();
+            await this.refreshQueue();
+            return;
+        }
+        if (!sameCurrentTab || !sameUpdateRecoveryTab(currentRecoveryTab, recoveryTab)) {
+            Object.assign(this.tab, current, {recoveryTab: null});
+            this.showLoading();
+            await this.refreshQueue();
+            return;
+        }
+        let pendingReload;
+        let reloadStarted = false;
+        try {
+            pendingReload = browser.tabs.reload(current.activeTab.id);
+            reloadStarted = true;
+        } catch {}
+        const outcome = reloadStarted ? await settleExtensionMessage(pendingReload) : {status: "failure"};
+        if (!this.ownsIdle(token, tab, operation)) { return; }
+        if (outcome.status === "response") {
+            this.presentation = {kind: "closed"};
+            window.close();
+            return;
+        }
+        this.presentation.operation = null;
+        this.renderIdleControls();
+        show("idle-check-status");
+        setText("idle-connection", localized("failedToLoad", "Failed to load"));
+    }
+}
+
 class PopupRequestController {
-    constructor(request) {
+    constructor(owner, request) {
+        this.owner = owner;
         this.request = request;
         this.presentation = {
             accounts: null, chainId: null, networksKey: null, cluster: null,
@@ -90,8 +345,8 @@ class PopupRequestController {
     }
 
     get isActive() {
-        return currentRequestController === this && this.lifecycle === "active" &&
-            sameRequest(this.request, queueTab.items[queueTab.index]);
+        return this.owner.presentation.kind === "review" &&
+            this.owner.currentRequest === this && this.lifecycle === "active";
     }
 
     get state() { return this.nativeState; }
@@ -169,7 +424,7 @@ class PopupRequestController {
         this.action = null;
         this.discardSliderGesture();
         this.closeAlert(false);
-        this.completion = closeIfNothingIsLeft();
+        this.completion = this.owner.reconcile(this);
         return this.completion;
     }
 
@@ -371,7 +626,7 @@ class PopupRequestController {
     }
 
     closeAlert(restoreFocus) {
-        if (currentRequestController !== this) { return; }
+        if (this.owner.currentRequest !== this) { return; }
         const overlay = document.getElementById("alert-overlay");
         const wasOpen = this.presentation.alertKey !== null || !overlay.classList.contains("hidden");
         const focusTarget = this.presentation.alertReturnFocus;
@@ -920,9 +1175,7 @@ function extensionPrivateBrowsing() {
 }
 
 function currentPrivateBrowsing() {
-    return typeof queueTab.activeTab?.incognito === "boolean"
-        ? queueTab.activeTab.incognito
-        : queueTab.privateBrowsing;
+    return popupQueue?.privateBrowsing ?? extensionPrivateBrowsing();
 }
 
 function sendRawNativeMessage(message) {
@@ -1083,61 +1336,6 @@ function tabIdentity(tab, windowIncognito) {
     return identity ? { id: tab.id, incognito, url: tab.url, ...identity } : null;
 }
 
-async function boot() {
-    try {
-        queueTab.activeTab = await currentActiveTab();
-        queueTab.updateRecoveryTab = await readUpdateRecoveryFlag()
-            ? await updateRecoveryTabFor(queueTab.activeTab)
-            : null;
-    } finally {
-        queueTab.booting = false;
-    }
-    await refreshQueue();
-    schedulePendingQueueRefresh();
-}
-
-function requestPendingQueueRefresh() {
-    queueTab.refreshRequested = true;
-    queueTab.refreshGeneration += 1;
-    queueTab.snapshotStatus = "unknown";
-    if (queueTab.domReady) {
-        document.getElementById("idle-switch-account").disabled = true;
-    }
-    schedulePendingQueueRefresh();
-}
-
-function shouldDeferQueueRefreshForCurrentRequest() {
-    const currentRequest = queueTab.items[queueTab.index];
-    if (!currentRequest || currentRequestController?.lifecycle === "reconciling") {
-        return false;
-    }
-    return !document.getElementById("screen-request").classList.contains("hidden") ||
-        document.getElementById("screen-idle").classList.contains("hidden");
-}
-
-function schedulePendingQueueRefresh() {
-    if (!queueTab.domReady || queueTab.booting || !queueTab.refreshRequested ||
-        queueTab.refreshTimer !== null ||
-        queueTab.refreshInFlight !== null ||
-        shouldDeferQueueRefreshForCurrentRequest()) {
-        return;
-    }
-    queueTab.refreshTimer = setTimeout(() => {
-        queueTab.refreshTimer = null;
-        if (!queueTab.refreshRequested || queueTab.refreshInFlight !== null ||
-            shouldDeferQueueRefreshForCurrentRequest()) {
-            return;
-        }
-        void refreshQueue();
-    }, 0);
-}
-
-function handlePopupRuntimeMessage(request) {
-    if (isPendingRequestAvailable(request)) {
-        requestPendingQueueRefresh();
-    }
-}
-
 async function currentActiveTab() {
     const lookupDeadline = Date.now() + NATIVE_MESSAGE_TIMEOUT;
     let tabs;
@@ -1156,8 +1354,7 @@ async function currentActiveTab() {
     }
     const tab = Array.isArray(tabs) ? tabs[0] : null;
     if (typeof tab?.incognito === "boolean") {
-        queueTab.privateBrowsing = tab.incognito;
-        return tabIdentity(tab);
+        return {activeTab: tabIdentity(tab), privateBrowsing: tab.incognito};
     }
     let windowIncognito;
     if (!tabsLookupTimedOut && browser.windows &&
@@ -1179,8 +1376,10 @@ async function currentActiveTab() {
                 : true;
         }
     }
-    queueTab.privateBrowsing = privateBrowsingForTab(tab, windowIncognito);
-    return tabIdentity(tab, windowIncognito);
+    return {
+        activeTab: tabIdentity(tab, windowIncognito),
+        privateBrowsing: privateBrowsingForTab(tab, windowIncognito),
+    };
 }
 
 async function readUpdateRecoveryFlag() {
@@ -1327,183 +1526,6 @@ async function fetchPendingResponse() {
     }
 }
 
-async function performQueueRefresh() {
-    while (true) {
-        queueTab.refreshRequested = false;
-        const generation = queueTab.refreshGeneration;
-        const pendingResponse = await fetchPendingResponse();
-        const requests = pendingResponse?.requests ?? null;
-        if (generation !== queueTab.refreshGeneration) { continue; }
-        if (shouldDeferQueueRefreshForCurrentRequest()) {
-            queueTab.refreshRequested = true;
-            return null;
-        }
-        showQueue(requests);
-        return requests;
-    }
-}
-
-function refreshQueue() {
-    if (queueTab.refreshInFlight !== null) {
-        return queueTab.refreshInFlight;
-    }
-    queueTab.snapshotStatus = "unknown";
-    if (queueTab.domReady) {
-        document.getElementById("idle-switch-account").disabled = true;
-    }
-    const operation = (async () => {
-        try {
-            return await performQueueRefresh();
-        } finally {
-            if (queueTab.refreshInFlight === operation) {
-                queueTab.refreshInFlight = null;
-            }
-            if (queueTab.domReady &&
-                document.getElementById("screen-request").classList.contains("hidden") &&
-                !document.getElementById("screen-idle").classList.contains("hidden")) {
-                renderIdleSwitchControls(false);
-            }
-            schedulePendingQueueRefresh();
-        }
-    })();
-    queueTab.refreshInFlight = operation;
-    return operation;
-}
-
-function showQueue(requests) {
-    currentRequestController?.dispose();
-    currentRequestController = null;
-    queueTab.idleGeneration += 1;
-    const fetchFailed = requests === null;
-    if (fetchFailed) {
-        requests = [];
-    }
-    queueTab.lastRefreshFailed = fetchFailed;
-    queueTab.snapshotStatus = fetchFailed
-        ? "unknown"
-        : (requests.length === 0 ? "empty" : "nonempty");
-    queueTab.items = requests;
-    queueTab.index = 0;
-    if (!fetchFailed) {
-        setPendingRequestBadge(queueTab.items.length);
-    }
-    hide("screen-loading");
-    if (fetchFailed) {
-        showIdle(true);
-    } else if (queueTab.items.length === 0) {
-        showIdle();
-    } else {
-        hide("screen-idle");
-        showCurrentRequest();
-    }
-    schedulePendingQueueRefresh();
-}
-
-function shouldShowUpdateRecovery() {
-    return queueTab.updateRecoveryTab !== null &&
-        queueTab.snapshotStatus === "empty" && queueTab.items.length === 0;
-}
-
-function canBeginIdleSwitch() {
-    return !currentPrivateBrowsing() &&
-        queueTab.activeTab !== null &&
-        queueTab.updateRecoveryTab === null &&
-        queueTab.snapshotStatus === "empty" &&
-        queueTab.items.length === 0 &&
-        queueTab.refreshInFlight === null &&
-        queueTab.refreshTimer === null &&
-        queueTab.refreshRequested === false &&
-        document.getElementById("screen-request").classList.contains("hidden");
-}
-
-async function showIdle(queueFetchFailed = false) {
-    const generation = ++queueTab.idleGeneration;
-    currentRequestController?.dispose();
-    currentRequestController = null;
-    document.getElementById("idle-check-status").disabled = false;
-    hide("screen-request");
-    hide("working-overlay");
-    show("screen-idle");
-    schedulePendingQueueRefresh();
-    // A failed queue fetch is not an empty queue, and saying "not connected" would report the one
-    // thing the popup does not know.
-    if (queueFetchFailed) {
-        renderIdleSwitchControls(false);
-        setHidden("idle-check-status", false);
-        setText("idle-host", queueTab.activeTab ? (queueTab.activeTab.host || queueTab.activeTab.configurationKey) : "");
-        setText("idle-connection", localized("failedToLoad", "Failed to load"));
-        return;
-    }
-    if (!queueTab.activeTab) {
-        renderIdleSwitchControls(false);
-        setText("idle-host", "");
-        setText("idle-connection", localized("noActivePage", "No active page"));
-        return;
-    }
-    setText("idle-host", queueTab.activeTab.host || queueTab.activeTab.configurationKey);
-    renderIdleSwitchControls(false);
-    if (shouldShowUpdateRecovery()) {
-        setHidden("idle-check-status", false);
-        setText("idle-connection", localized("failedToLoad", "Failed to load"));
-        return;
-    }
-    let connectionText = localized("notConnected", "Not connected");
-    if (currentPrivateBrowsing()) {
-        setText(
-            "idle-connection",
-            localized("privateBrowsingUnsupported",
-                "Big Wallet requests are unavailable in Private Browsing."
-            )
-        );
-        return;
-    }
-    const configuration = await readLatestConfiguration(queueTab.activeTab);
-    if (generation !== queueTab.idleGeneration) { return; }
-    if (configuration) {
-        const lines = [];
-        if (configuration.ethereum?.address) { lines.push(configuration.ethereum.address); }
-        if (configuration.solana?.isConnected) { lines.push(configuration.solana.publicKey); }
-        if (lines.length > 0) {
-            connectionText = lines.join("\n");
-        }
-    } else {
-        connectionText = localized("failedToLoad", "Failed to load");
-    }
-    setText("idle-connection", connectionText);
-}
-
-function renderIdleSwitchControls(pending) {
-    const switchButton = document.getElementById("idle-switch-account");
-    const canSwitch = canBeginIdleSwitch();
-    const privateBrowsing = currentPrivateBrowsing();
-    setHidden(
-        "idle-switch-account",
-        privateBrowsing || !canSwitch
-    );
-    setHidden("idle-check-status", !queueTab.lastRefreshFailed && !shouldShowUpdateRecovery());
-    setHidden("idle-pending-spinner", true);
-    switchButton.disabled = privateBrowsing || !canSwitch;
-}
-
-function showCurrentRequest() {
-    const request = queueTab.items[queueTab.index];
-    if (!request) {
-        refreshQueue();
-        return;
-    }
-    if (queueTab.items.length > 1) {
-        setText("queue-indicator", formatted(localized("queuePosition", "%1$@ of %2$@"),
-                                             String(queueTab.index + 1), String(queueTab.items.length)));
-        show("queue-indicator");
-    } else {
-        hide("queue-indicator");
-    }
-    currentRequestController?.dispose();
-    const controller = new PopupRequestController(request);
-    currentRequestController = controller;
-    controller.start();
-}
-
 function sameRequest(left, right) {
     return !!left && !!right &&
         left.id === right.id &&
@@ -1611,159 +1633,32 @@ async function applyCompletedResponse(request) {
     return "failure";
 }
 
-// The queue is a snapshot taken when the popup opened, so it is asked again before closing:
-// a request that arrived in the meantime gets shown instead of being left behind. A fetch
-// failure keeps the popup open too — an unreachable wallet does not mean the queue drained.
-async function closeIfNothingIsLeft() {
-    const requests = await refreshQueue();
-    if (requests !== null && requests.length === 0 &&
-        !shouldShowUpdateRecovery() &&
-        queueTab.snapshotStatus === "empty" &&
-        queueTab.refreshInFlight === null &&
-        queueTab.refreshRequested === false &&
-        queueTab.refreshTimer === null) {
-        window.close();
-    }
-}
-
-function isCurrentIdlePresentation(generation, tab) {
-    return queueTab.idleGeneration === generation &&
-        sameTab(queueTab.activeTab, tab) &&
-        !currentRequestController &&
-        !document.getElementById("screen-idle").classList.contains("hidden");
-}
-
-async function switchAccountFromIdle() {
-    const button = document.getElementById("idle-switch-account");
-    const tab = queueTab.activeTab;
-    if (button.disabled || !tab || currentPrivateBrowsing()) { return; }
-    const generation = queueTab.idleGeneration;
-    button.disabled = true;
-    const message = {
-        configurationKey: tab.configurationKey,
-        subject: BigWalletBridgeWire.MANUAL_SWITCH_INTENT_SUBJECT,
-        workflowVersion: WORKFLOW_VERSION,
-    };
-    let pending;
-    try {
-        pending = browser.tabs.sendMessage(tab.id, message);
-    } catch {
-        pending = Promise.reject();
-    }
-    const outcome = await settleExtensionMessage(
-        pending,
-        MANUAL_SWITCH_TIMEOUT
-    );
-    const response = outcome.status === "response" ? outcome.response : null;
-    if (!isCurrentIdlePresentation(generation, tab)) {
-        requestPendingQueueRefresh();
-        return;
-    }
-    const id = response?.id;
-    const valid = Number.isSafeInteger(id) && (
-        BigWalletBridgeWire.isManualSwitchAcknowledgement(
-            response,
-            id,
-            tab.configurationKey
-        ) ||
-        BigWalletBridgeWire.isManualSwitchTerminalResponse(response, id));
-    if (!valid) {
-        setText("idle-connection", localized("failedToLoad", "Failed to load"));
-        button.disabled = false;
-        renderIdleSwitchControls(false);
-        return;
-    }
-    hide("screen-idle");
-    show("screen-loading");
-    await refreshQueue();
-}
-
-async function refreshIdleStatus() {
-    const tab = shouldShowUpdateRecovery()
-        ? queueTab.updateRecoveryTab
-        : null;
-    if (!tab) {
-        hide("screen-idle");
-        show("screen-loading");
-        await refreshQueue();
-        return;
-    }
-    const button = document.getElementById("idle-check-status");
-    if (button.disabled || !Number.isSafeInteger(tab.id)) { return; }
-    const generation = queueTab.idleGeneration;
-    const activeTab = queueTab.activeTab;
-    button.disabled = true;
-    const refreshGeneration = queueTab.refreshGeneration;
-    const currentTab = await currentActiveTab();
-    if (!isCurrentIdlePresentation(generation, activeTab)) { return; }
-    const sameCurrentTab = sameUpdateRecoveryTab(currentTab, tab);
-    const currentRecoveryTab = sameCurrentTab
-        ? await updateRecoveryTabFor(currentTab)
-        : null;
-    if (!isCurrentIdlePresentation(generation, activeTab)) { return; }
-    if (refreshGeneration !== queueTab.refreshGeneration ||
-        queueTab.snapshotStatus !== "empty" || queueTab.items.length !== 0 ||
-        queueTab.refreshRequested || queueTab.refreshInFlight !== null ||
-        queueTab.refreshTimer !== null) {
-        button.disabled = false;
-        hide("screen-idle");
-        show("screen-loading");
-        await refreshQueue();
-        return;
-    }
-    if (!sameCurrentTab || !sameUpdateRecoveryTab(currentRecoveryTab, tab)) {
-        queueTab.activeTab = currentTab;
-        queueTab.updateRecoveryTab = null;
-        button.disabled = false;
-        hide("screen-idle");
-        show("screen-loading");
-        await refreshQueue();
-        return;
-    }
-    let pendingReload;
-    let reloadStarted = false;
-    try {
-        pendingReload = browser.tabs.reload(currentTab.id);
-        reloadStarted = true;
-    } catch {}
-    const outcome = reloadStarted
-        ? await settleExtensionMessage(pendingReload)
-        : {status: "failure"};
-    if (!isCurrentIdlePresentation(generation, activeTab)) { return; }
-    if (outcome.status === "response") {
-        window.close();
-        return;
-    }
-    button.disabled = false;
-    renderIdleSwitchControls(false);
-    setHidden("idle-check-status", false);
-    setText("idle-connection", localized("failedToLoad", "Failed to load"));
-}
-
 document.addEventListener("DOMContentLoaded", () => {
-    queueTab.domReady = true;
-    browser.runtime.onMessage.addListener(handlePopupRuntimeMessage);
-    document.getElementById("button-approve").addEventListener("click", () => currentRequestController?.approveCurrent());
-    document.getElementById("button-reject").addEventListener("click", () => currentRequestController?.rejectCurrent());
-    document.getElementById("idle-switch-account").addEventListener("click", switchAccountFromIdle);
-    document.getElementById("idle-check-status").addEventListener("click", refreshIdleStatus);
-    document.getElementById("editor-apply").addEventListener("click", () => currentRequestController?.applyEdits());
-    document.getElementById("editor-suggested").addEventListener("click", () => currentRequestController?.applySuggested());
+    popupQueue = new PopupQueueController();
+    browser.runtime.onMessage.addListener(request => {
+        if (isPendingRequestAvailable(request)) { popupQueue.invalidate(); }
+    });
+    document.getElementById("button-approve").addEventListener("click", () => popupQueue.currentRequest?.approveCurrent());
+    document.getElementById("button-reject").addEventListener("click", () => popupQueue.currentRequest?.rejectCurrent());
+    document.getElementById("idle-switch-account").addEventListener("click", () => popupQueue.switchAccountFromIdle());
+    document.getElementById("idle-check-status").addEventListener("click", () => popupQueue.refreshIdleStatus());
+    document.getElementById("editor-apply").addEventListener("click", () => popupQueue.currentRequest?.applyEdits());
+    document.getElementById("editor-suggested").addEventListener("click", () => popupQueue.currentRequest?.applySuggested());
     document.getElementById("network-select").addEventListener("change", () => {
-        if (currentRequestController?.isActive && !currentRequestController.action) {
-            currentRequestController.presentation.chainId = document.getElementById("network-select").value;
+        if (popupQueue.currentRequest?.isActive && !popupQueue.currentRequest.action) {
+            popupQueue.currentRequest.presentation.chainId = document.getElementById("network-select").value;
         }
     });
-    document.getElementById("tx-editor").addEventListener("toggle", () => currentRequestController?.editorToggled());
+    document.getElementById("tx-editor").addEventListener("toggle", () => popupQueue.currentRequest?.editorToggled());
 
     const slider = document.getElementById("tx-slider");
     slider.addEventListener("pointerdown", () => {
-        currentRequestController?.beginSliderInteraction();
+        popupQueue.currentRequest?.beginSliderInteraction();
     });
     slider.addEventListener("input", () => {
         if (ignoreSliderUntilRelease) { return; }
-        if (currentRequestController?.interaction?.kind !== "slider") {
-            currentRequestController?.beginSliderInteraction();
+        if (popupQueue.currentRequest?.interaction?.kind !== "slider") {
+            popupQueue.currentRequest?.beginSliderInteraction();
         }
     });
     const endDrag = interaction => {
@@ -1771,7 +1666,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ignoreSliderUntilRelease = false;
             return;
         }
-        currentRequestController?.finishSliderInteraction(interaction);
+        popupQueue.currentRequest?.finishSliderInteraction(interaction);
     };
     slider.addEventListener("pointerup", () => { endDrag("ended"); });
     slider.addEventListener("pointercancel", () => {
@@ -1779,5 +1674,5 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     slider.addEventListener("change", () => { endDrag("ended"); });
 
-    boot();
+    void popupQueue.boot();
 });

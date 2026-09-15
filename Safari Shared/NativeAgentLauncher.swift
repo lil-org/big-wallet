@@ -199,6 +199,491 @@ actor NativeAgentLauncher {
         let task: Task<Bool, Never>
     }
 
+    private struct RuntimeDependencies {
+        let helpers: () -> [RuntimeHelper]
+        let identity: (Int32) -> AmbientRuntimeIdentity?
+
+        static var live: Self {
+#if os(macOS)
+            return Self(
+                helpers: NativeAgentLauncher.runningHelpers,
+                identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) }
+            )
+#else
+            return Self(helpers: { [] }, identity: { _ in nil })
+#endif
+        }
+    }
+
+    struct DeliveryEnvironment {
+        let approvals: ApprovalDeliveryDependencies
+        let helpers: () -> [RuntimeHelper]
+        let identity: (Int32) -> AmbientRuntimeIdentity?
+        let uptime: () -> UInt64
+        let wait: (UInt64) async -> Void
+
+        init(
+            approvals: ApprovalDeliveryDependencies = .live,
+            helpers: (() -> [RuntimeHelper])? = nil,
+            identity: ((Int32) -> AmbientRuntimeIdentity?)? = nil,
+            uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+            wait: @escaping (UInt64) async -> Void = {
+                try? await Task.sleep(nanoseconds: $0)
+            }
+        ) {
+            self.approvals = approvals
+            self.helpers = helpers ?? RuntimeDependencies.live.helpers
+            self.identity = identity ?? RuntimeDependencies.live.identity
+            self.uptime = uptime
+            self.wait = wait
+        }
+
+        static let live = Self()
+    }
+
+    @MainActor
+    private final class DeliverySession {
+        enum Request {
+            case delivery(NativeAgentRoute)
+            case receipt(ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryNonce)
+            case helper(URL)
+        }
+
+        enum Result {
+            case delivered, needsDelivery, terminal, unavailable, timedOut
+            case helper(HelperTarget)
+        }
+
+        private enum Phase {
+            case inspect, resolve, launch(HelperTarget)
+            case confirm(HelperTarget, UInt64)
+        }
+
+        private enum ReceiptStep {
+            case status(ExistingDeliveryStatus), wait, retry
+        }
+
+        private enum HelperStep {
+            case target(HelperTarget), wait(UInt64), unavailable
+        }
+
+        private struct HelperResolutionState {
+            let expected: ExpectedRuntime
+            var unknownFirstObservedAt = [RuntimeProcessKey: UInt64]()
+            var requestedQuit = Set<RuntimeProcessKey>()
+        }
+
+        private let request: Request
+        private let deadline: UInt64
+        private let isPending: () -> Bool
+        private let helperURL: () -> URL?
+        private let validate: (URL) async -> Bool
+        private let resolveHelper: HelperResolution?
+        private let confirm: Confirm?
+        private let existingDelivery: ExistingDelivery?
+        private let launch: Launch?
+        private let approvalDependencies: ApprovalDeliveryDependencies
+        private let runtimeDependencies: RuntimeDependencies
+        private let uptime: () -> UInt64
+        private let wait: (UInt64) async -> Void
+        private var phase: Phase
+        private var attempt = 0
+        private var selectedHelperURL: URL?
+        private var resolutionState: HelperResolutionState?
+        private var receiptExit: (ExtensionBridge.NativeDeliveryReceipt, ExactReceiptOwner)?
+        private var confirmationProbeActive = false
+        private var confirmationExpected: ExpectedRuntime?
+
+        init(
+            request: Request,
+            deadline: UInt64,
+            isPending: @escaping () -> Bool,
+            helperURL: @escaping () -> URL? = { nil },
+            validate: @escaping (URL) async -> Bool = { _ in false },
+            resolveHelper: HelperResolution? = nil,
+            confirm: Confirm? = nil,
+            existingDelivery: ExistingDelivery? = nil,
+            launch: Launch? = nil,
+            approvalDependencies: ApprovalDeliveryDependencies = .live,
+            runtimeDependencies: RuntimeDependencies = .live,
+            uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+            wait: @escaping (UInt64) async -> Void = {
+                try? await Task.sleep(nanoseconds: $0)
+            }
+        ) {
+            self.request = request
+            self.deadline = deadline
+            self.isPending = { isPending() && uptime() < deadline }
+            self.helperURL = helperURL
+            self.validate = validate
+            self.resolveHelper = resolveHelper
+            self.confirm = confirm
+            self.existingDelivery = existingDelivery
+            self.launch = launch
+            self.approvalDependencies = approvalDependencies
+            self.runtimeDependencies = runtimeDependencies
+            self.uptime = uptime
+            self.wait = wait
+            if case .helper(let url) = request {
+                selectedHelperURL = url
+                phase = .resolve
+            } else {
+                phase = .inspect
+            }
+        }
+
+        func run() async -> Result {
+            while !shouldStopForCancellation, isPending(), uptime() < deadline {
+                switch phase {
+                case .inspect:
+                    let step: ReceiptStep
+                    if case .delivery(let route) = request, let existingDelivery {
+                        step = .status(await existingDelivery(route, isPending))
+                    } else {
+                        step = await inspectReceipt()
+                    }
+                    switch step {
+                    case .status(.delivered):
+                        return .delivered
+                    case .status(.terminal):
+                        return .terminal
+                    case .status(.unavailable):
+                        return failure
+                    case .status(.needsDelivery):
+                        if case .receipt = request {
+                            return .needsDelivery
+                        }
+                        phase = .resolve
+                    case .wait:
+                        await wait(50_000_000)
+                    case .retry:
+                        break
+                    }
+                case .resolve:
+                    guard let url = selectedHelperURL ?? helperURL() else {
+                        return failure
+                    }
+                    selectedHelperURL = url
+                    let step: HelperStep
+                    if let resolveHelper {
+                        step = await resolveHelper(url, deadline, isPending)
+                            .map(HelperStep.target) ?? .unavailable
+                    } else {
+                        step = await resolveHelperStep(url)
+                    }
+                    switch step {
+                    case .target(let target):
+                        guard isPending() else { return failure }
+                        if case .helper = request {
+                            return .helper(target)
+                        }
+                        phase = .launch(target)
+                    case .wait(let delay):
+                        await wait(delay)
+                    case .unavailable:
+                        return failure
+                    }
+                case .launch(let target):
+                    guard case .delivery(let route) = request, let launch else {
+                        return failure
+                    }
+                    guard await NativeAgentLauncher.performLaunch(
+                        route: route,
+                        to: target,
+                        deadline: deadline,
+                        isPending: isPending,
+                        validate: validate,
+                        launch: launch
+                    ) else {
+                        guard retryDelivery() else { return failure }
+                        continue
+                    }
+                    let confirmationLimit = uptime().addingReportingOverflow(250_000_000)
+                    let window = attempt == 2 ? deadline : min(
+                        deadline,
+                        confirmationLimit.overflow ? UInt64.max : confirmationLimit.partialValue
+                    )
+                    confirmationExpected = ExpectedRuntime(url: target.url)
+                    switch route {
+                    case .showWallet:
+                        confirmationProbeActive = true
+                    case .approval:
+                        confirmationProbeActive = false
+                    }
+                    phase = .confirm(target, window)
+                case .confirm(let target, let window):
+                    guard case .delivery(let route) = request else {
+                        return failure
+                    }
+                    if let confirm {
+                        if await confirm(target.url, route, window, isPending) {
+                            return .delivered
+                        }
+                        guard retryDelivery() else { return failure }
+                        continue
+                    }
+                    if !confirmationProbeActive, uptime() >= window {
+                        guard retryDelivery() else { return failure }
+                        continue
+                    }
+                    let step: ReceiptStep
+                    switch route {
+                    case .showWallet:
+                        guard confirmationExpected != nil else {
+                            guard retryDelivery() else { return failure }
+                            continue
+                        }
+                        step = .status(await runtimeIsConfirmed() ? .delivered : .needsDelivery)
+                    case .approval:
+                        confirmationProbeActive = true
+                        step = await inspectReceipt()
+                    }
+                    switch step {
+                    case .status(.delivered):
+                        return .delivered
+                    case .status(.terminal):
+                        return .terminal
+                    case .status(.needsDelivery), .status(.unavailable):
+                        confirmationProbeActive = false
+                        let now = uptime()
+                        if !isPending() || now >= window {
+                            guard retryDelivery() else { return failure }
+                        } else {
+                            await wait(min(50_000_000, window - now))
+                        }
+                    case .wait:
+                        await wait(50_000_000)
+                    case .retry:
+                        break
+                    }
+                }
+            }
+            return failure
+        }
+
+        private var shouldStopForCancellation: Bool {
+            if case .receipt = request { return false }
+            return Task.isCancelled
+        }
+
+        private var failure: Result {
+            uptime() >= deadline || !isPending() ? .timedOut : .unavailable
+        }
+
+        private func retryDelivery() -> Bool {
+            attempt += 1
+            guard attempt < 3 else { return false }
+            selectedHelperURL = nil
+            resolutionState = nil
+            receiptExit = nil
+            confirmationProbeActive = false
+            confirmationExpected = nil
+            phase = .inspect
+            return true
+        }
+
+        private var approvalIdentity: (
+            ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryNonce
+        )? {
+            switch request {
+            case .receipt(let handle, let nonce):
+                return (handle, nonce)
+            case .delivery(.approval(_, let handle, let nonce)):
+                return (handle, nonce)
+            case .delivery(.showWallet), .helper:
+                return nil
+            }
+        }
+
+        private func inspectReceipt() async -> ReceiptStep {
+            guard let (handle, nonce) = approvalIdentity else {
+                return .status(.needsDelivery)
+            }
+            if let (receipt, owner) = receiptExit {
+                if owner.isRunning() { return .wait }
+                receiptExit = nil
+                return await clearReceipt(handle, receipt)
+            }
+            let receipt: ExtensionBridge.NativeDeliveryReceipt
+            switch await approvalDependencies.load(handle) {
+            case .found(let snapshot):
+                guard snapshot.nativeDeliveryNonce == nonce else { return .status(.terminal) }
+                if snapshot.phase == .responded { return .status(.delivered) }
+                guard let current = snapshot.nativeDeliveryReceipt else {
+                    return .status(.needsDelivery)
+                }
+                guard current.nativeDeliveryNonce == nonce else { return .status(.terminal) }
+                receipt = current
+            case .missing:
+                return .status(.terminal)
+            case .unavailable:
+                return .status(.unavailable)
+            }
+            switch await approvalDependencies.receiptRuntimeStatus(receipt) {
+            case .compatible:
+                return .status(isPending() ? .delivered : .unavailable)
+            case .incompatible(let owner):
+                switch await approvalDependencies.load(handle) {
+                case .found(let current):
+                    if current.phase == .responded { return .status(.delivered) }
+                    guard current.nativeDeliveryNonce == nonce,
+                          current.nativeDeliveryReceipt == receipt else { return .retry }
+                case .missing:
+                    return .status(.terminal)
+                case .unavailable:
+                    return .status(.unavailable)
+                }
+                guard isPending(), await owner.requestQuit(isPending) else {
+                    return .status(.unavailable)
+                }
+                if owner.isRunning() {
+                    receiptExit = (receipt, owner)
+                    return .wait
+                }
+            case .absent:
+                break
+            case .indeterminate:
+                return .status(.unavailable)
+            }
+            return await clearReceipt(handle, receipt)
+        }
+
+        private func clearReceipt(
+            _ handle: ExtensionBridge.Handle,
+            _ receipt: ExtensionBridge.NativeDeliveryReceipt
+        ) async -> ReceiptStep {
+            guard isPending() else { return .status(.unavailable) }
+            switch await approvalDependencies.clearReceipt(handle, receipt) {
+            case .persisted:
+                return .status(.needsDelivery)
+            case .ownershipLost:
+                return .retry
+            case .retryablePersistenceFailure:
+                return .status(.unavailable)
+            }
+        }
+
+        private func resolveHelperStep(_ url: URL) async -> HelperStep {
+            if resolutionState == nil {
+                guard let expected = ExpectedRuntime(url: url) else { return .unavailable }
+                resolutionState = HelperResolutionState(expected: expected)
+            }
+            guard var state = resolutionState else { return .unavailable }
+            defer { resolutionState = state }
+            let now = uptime()
+            guard !Task.isCancelled, isPending(), now < deadline else { return .unavailable }
+            let expected = state.expected
+            let samePath = NativeAgentLauncher.observedRuntimes(
+                runtimeDependencies.helpers(), identity: runtimeDependencies.identity
+            ).filter { $0.bundleURL == expected.url }
+            var unknown = [ObservedRuntime]()
+            var incompatible = [ObservedRuntime]()
+            var target: HelperTarget?
+            for runtime in samePath {
+                guard let identity = runtime.identity else {
+                    unknown.append(runtime)
+                    continue
+                }
+                if expected.isCompatible(identity, runtimeURL: runtime.bundleURL) {
+                    if target == nil {
+                        target = .running(
+                            url: expected.url,
+                            processIdentifier: runtime.helper.processIdentifier,
+                            runtimeInstanceIdentifier: identity.instanceIdentifier
+                        )
+                    }
+                } else {
+                    incompatible.append(runtime)
+                }
+            }
+            var mustWait = false
+            var verifiedCurrentBundle = false
+            func verifyBeforeQuit() async -> Bool {
+                guard isPending() else { return false }
+                if !verifiedCurrentBundle {
+                    guard await validate(expected.url) else { return false }
+                    verifiedCurrentBundle = true
+                }
+                return isPending() && expected.installedVersionMatches
+            }
+            for runtime in unknown {
+                let key = RuntimeProcessKey(runtime.helper)
+                let firstObservedAt = state.unknownFirstObservedAt[key] ?? now
+                state.unknownFirstObservedAt[key] = firstObservedAt
+                let graceElapsed = now >= firstObservedAt &&
+                    now - firstObservedAt >= 1_000_000_000
+                if graceElapsed, !state.requestedQuit.contains(key) {
+                    guard await verifyBeforeQuit() else { return .unavailable }
+                    if let identity = NativeAgentLauncher.verifiedRuntimeIdentity(
+                        processIdentifier: runtime.helper.processIdentifier,
+                        bundleURL: expected.url,
+                        processStartDate: runtime.helper.processStartDate,
+                        identity: runtimeDependencies.identity
+                    ), expected.isCompatible(identity, runtimeURL: runtime.bundleURL) {
+                        if target == nil {
+                            target = .running(
+                                url: expected.url,
+                                processIdentifier: runtime.helper.processIdentifier,
+                                runtimeInstanceIdentifier: identity.instanceIdentifier
+                            )
+                        }
+                        continue
+                    }
+                    guard runtime.helper.isRunning() else {
+                        mustWait = true
+                        continue
+                    }
+                    state.requestedQuit.insert(key)
+                    guard runtime.helper.requestQuit() else { return .unavailable }
+                }
+                mustWait = true
+            }
+            for runtime in incompatible {
+                let key = RuntimeProcessKey(runtime.helper)
+                if !state.requestedQuit.contains(key) {
+                    guard await verifyBeforeQuit() else { return .unavailable }
+                    if let identity = NativeAgentLauncher.verifiedRuntimeIdentity(
+                        processIdentifier: runtime.helper.processIdentifier,
+                        bundleURL: expected.url,
+                        processStartDate: runtime.helper.processStartDate,
+                        identity: runtimeDependencies.identity
+                    ), expected.isCompatible(identity, runtimeURL: runtime.bundleURL) {
+                        mustWait = true
+                        continue
+                    }
+                    guard runtime.helper.isRunning() else {
+                        mustWait = true
+                        continue
+                    }
+                    state.requestedQuit.insert(key)
+                    guard runtime.helper.requestQuit() else { return .unavailable }
+                }
+                mustWait = true
+            }
+            if mustWait { return .wait(min(50_000_000, deadline - now)) }
+            if let target { return .target(target) }
+            guard isPending() else { return .unavailable }
+            return .target(.launch(url: expected.url, createsNewApplicationInstance: false))
+        }
+
+        private func runtimeIsConfirmed() async -> Bool {
+#if os(macOS)
+            guard let expected = confirmationExpected else { return false }
+            for helper in runtimeDependencies.helpers() {
+                if await NativeAgentLauncher.isConfirmedRuntimeHelper(
+                    helper,
+                    expected: expected,
+                    identity: runtimeDependencies.identity,
+                    validate: validate
+                ) {
+                    return isPending()
+                }
+            }
+#endif
+            return false
+        }
+    }
+
     private actor LaunchResolution {
         private var continuation: CheckedContinuation<Bool, Never>?
         private var timeoutTask: Task<Void, Never>?
@@ -227,51 +712,35 @@ actor NativeAgentLauncher {
     static let live = NativeAgentLauncher(
         helperURL: embeddedHelperURL,
         validate: validateEmbeddedHelper,
-        resolveHelper: { helperURL, deadline, isPending in
-            await resolveTargetHelper(
-                currentURL: helperURL,
-                deadline: deadline,
-                isPending: isPending
-            )
-        },
-        confirm: { helperURL, route, deadline, isPending in
-            await confirmDelivery(
-                to: helperURL,
-                route: route,
-                deadline: deadline,
-                isPending: isPending
-            )
-        },
-        existingDelivery: { route, isPending in
-            await existingDeliveryStatus(
-                route: route,
-                isPending: isPending
-            )
-        },
+        resolveHelper: nil,
+        confirm: nil,
+        existingDelivery: nil,
         launch: launchApplication
     )
 
     private let helperURL: () -> URL?
     private let validate: (URL) async -> Bool
-    private let resolveHelper: HelperResolution
-    private let confirm: Confirm
-    private let existingDelivery: ExistingDelivery
+    private let resolveHelper: HelperResolution?
+    private let confirm: Confirm?
+    private let existingDelivery: ExistingDelivery?
     private let launch: Launch
     private let launchTimeoutNanoseconds: UInt64
+    private let environment: DeliveryEnvironment
     private var sharedDeliveries = [SharedDelivery]()
     private var deliveryTail: Task<Void, Never>?
     private var deliveryTailIdentifier: UUID?
     init(
         helperURL: @escaping () -> URL?,
         validate: @escaping (URL) async -> Bool,
-        resolveHelper: @escaping HelperResolution = { url, _, _ in
+        resolveHelper: HelperResolution? = { url, _, _ in
             .launch(url: url, createsNewApplicationInstance: false)
         },
-        confirm: @escaping Confirm = { _, _, _, _ in true },
-        existingDelivery: @escaping ExistingDelivery = { _, _ in
+        confirm: Confirm? = { _, _, _, _ in true },
+        existingDelivery: ExistingDelivery? = { _, _ in
             .needsDelivery
         },
         launchTimeoutNanoseconds: UInt64 = 5_000_000_000,
+        environment: DeliveryEnvironment = .live,
         launch: @escaping Launch
     ) {
         self.helperURL = helperURL
@@ -281,6 +750,7 @@ actor NativeAgentLauncher {
         self.existingDelivery = existingDelivery
         self.launch = launch
         self.launchTimeoutNanoseconds = launchTimeoutNanoseconds
+        self.environment = environment
     }
 
     func open(
@@ -317,6 +787,120 @@ actor NativeAgentLauncher {
         deliveryTail = Task { _ = await task.value }
         deliveryTailIdentifier = identifier
         return await Self.awaitResult(of: task, deadline: callerDeadline)
+    }
+
+    enum ApprovalReadMode {
+        case page, manualRecovery
+    }
+
+    enum FinalizationResult {
+        case readyToRead, pending, deliveryUnavailable
+    }
+
+    struct FinalizationDependencies {
+        let delivery: ApprovalDeliveryDependencies
+        let uptime: () -> UInt64
+        let wallClock: () -> Date
+        let wait: (UInt64) async -> Void
+
+        init(
+            delivery: ApprovalDeliveryDependencies = .live,
+            uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+            wallClock: @escaping () -> Date = Date.init,
+            wait: @escaping (UInt64) async -> Void = {
+                try? await Task.sleep(nanoseconds: $0)
+            }
+        ) {
+            self.delivery = delivery
+            self.uptime = uptime
+            self.wallClock = wallClock
+            self.wait = wait
+        }
+
+        static let live = Self()
+    }
+
+    @MainActor
+    func ensureApprovalDelivery(
+        handle: ExtensionBridge.Handle,
+        mode: ApprovalReadMode,
+        waitDeadline: UInt64? = nil,
+        dependencies: ApprovalDeliveryDependencies = .live
+    ) async -> Bool {
+        switch await dependencies.load(handle) {
+        case .found(let snapshot):
+            guard snapshot.phase != .responded else { return true }
+            if mode == .manualRecovery {
+                return await Self.hasCompatibleApprovalDelivery(
+                    handle: handle,
+                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+                    dependencies: dependencies
+                )
+            }
+            return await open(
+                .approval(
+                    workflowVersion: ExtensionBridge.workflowVersion,
+                    handle: handle,
+                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+                ),
+                waitDeadline: waitDeadline
+            )
+        case .missing:
+            return true
+        case .unavailable:
+            return false
+        }
+    }
+
+    @MainActor
+    func waitForFinalization(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String,
+        initialContext: ExtensionBridge.NativeExecutionContext,
+        mode: ApprovalReadMode,
+        dependencies: FinalizationDependencies = .live
+    ) async -> FinalizationResult {
+        guard await ensureApprovalDelivery(
+            handle: handle,
+            mode: mode,
+            dependencies: dependencies.delivery
+        ) else { return .deliveryUnavailable }
+        let startedAt = dependencies.uptime()
+        let deadline = startedAt.addingReportingOverflow(170_000_000_000).partialValue
+        var nextDeliveryCheck = startedAt
+        if dependencies.wallClock() >= initialContext.executionDeadline { return .pending }
+        while !Task.isCancelled, dependencies.uptime() < deadline {
+            switch await dependencies.delivery.load(handle) {
+            case .found(let snapshot):
+                guard snapshot.configurationKey == configurationKey,
+                      snapshot.phase != .responded else { return .readyToRead }
+                if snapshot.phase == .queued,
+                   dependencies.wallClock() >= initialContext.executionDeadline {
+                    return .pending
+                }
+                if case .queued(_, .staged(let approval)) = snapshot.state,
+                   approval.receipt == nil {
+                    return .pending
+                }
+                let now = dependencies.uptime()
+                if case .queued(_, .staged) = snapshot.state,
+                   now >= nextDeliveryCheck {
+                    guard await ensureApprovalDelivery(
+                        handle: handle,
+                        mode: mode,
+                        waitDeadline: deadline,
+                        dependencies: dependencies.delivery
+                    ) else { return .pending }
+                    nextDeliveryCheck = now.addingReportingOverflow(1_000_000_000).partialValue
+                }
+            case .missing:
+                return .readyToRead
+            case .unavailable:
+                break
+            }
+            await dependencies.wait(250_000_000)
+        }
+        return .pending
     }
 
     func reactivate(
@@ -360,9 +944,8 @@ actor NativeAgentLauncher {
     }
 
     private func runQueuedDelivery(_ route: NativeAgentRoute) async -> Bool {
-        let deliveryDeadline = Self.deadline(
-            afterNanoseconds: launchTimeoutNanoseconds
-        )
+        let limit = environment.uptime().addingReportingOverflow(launchTimeoutNanoseconds)
+        let deliveryDeadline = limit.overflow ? UInt64.max : limit.partialValue
         return await deliver(route, deadline: deliveryDeadline)
     }
 
@@ -378,59 +961,23 @@ actor NativeAgentLauncher {
         _ route: NativeAgentRoute,
         deadline: UInt64
     ) async -> Bool {
-        for attempt in 0..<3 {
-            guard Self.isPending(deadline: deadline) else { return false }
-            switch await preflight(route: route, deadline: deadline) {
-            case .delivered:
-                return true
-            case .terminal, .unavailable:
-                return false
-            case .needsDelivery:
-                break
-            }
-            guard let target = await prepareHelper(deadline: deadline) else {
-                return false
-            }
-            guard await launchOnce(
-                route: route,
-                to: target,
-                deadline: deadline
-            ) else { continue }
-            let confirmationDeadline = attempt == 2 ? deadline : min(
-                deadline,
-                Self.deadline(afterNanoseconds: 250_000_000)
-            )
-            guard await confirm(
-                      target.url,
-                      route,
-                      confirmationDeadline,
-                      { Self.isPending(deadline: deadline) }
-                  ) else { continue }
-            return true
-        }
+        let result = await DeliverySession(
+            request: .delivery(route),
+            deadline: deadline,
+            isPending: { Self.isPending(deadline: deadline) },
+            helperURL: helperURL,
+            validate: validate,
+            resolveHelper: resolveHelper,
+            confirm: confirm,
+            existingDelivery: existingDelivery,
+            launch: launch,
+            approvalDependencies: environment.approvals,
+            runtimeDependencies: .init(helpers: environment.helpers, identity: environment.identity),
+            uptime: environment.uptime,
+            wait: environment.wait
+        ).run()
+        if case .delivered = result { return true }
         return false
-    }
-
-    private func preflight(
-        route: NativeAgentRoute,
-        deadline: UInt64
-    ) async -> ExistingDeliveryStatus {
-        let isPending = { Self.isPending(deadline: deadline) }
-        guard isPending() else { return .unavailable }
-        return await existingDelivery(route, isPending)
-    }
-
-    private func prepareHelper(deadline: UInt64) async -> HelperTarget? {
-        let isPending = { Self.isPending(deadline: deadline) }
-        guard isPending(), let helperURL = helperURL(),
-              let selectedTarget = await resolveHelper(
-                  helperURL,
-                  deadline,
-                  isPending
-              ), isPending() else {
-            return nil
-        }
-        return selectedTarget
     }
 
     private func launchOnce(
@@ -452,10 +999,11 @@ actor NativeAgentLauncher {
         route: NativeAgentRoute,
         to selectedTarget: HelperTarget,
         deadline: UInt64,
+        isPending: (() -> Bool)? = nil,
         validate: @escaping (URL) async -> Bool,
         launch: @escaping Launch
     ) async -> Bool {
-        let isPending = { Self.isPending(deadline: deadline) }
+        let isPending = isPending ?? { Self.isPending(deadline: deadline) }
         guard isPending(), await validate(selectedTarget.url), isPending() else {
             return false
         }
@@ -641,30 +1189,6 @@ actor NativeAgentLauncher {
     }
 #endif
 
-    @MainActor
-    private static func resolveTargetHelper(
-        currentURL helperURL: URL,
-        deadline: UInt64,
-        isPending: @escaping () -> Bool
-    ) async -> HelperTarget? {
-#if os(macOS)
-        return await resolveTargetHelper(
-            currentURL: helperURL,
-            deadline: deadline,
-            isPending: isPending,
-            helpers: runningHelpers,
-            identity: { processIdentifier in
-                AmbientRuntimeIdentity.load(
-                    processIdentifier: processIdentifier
-                )
-            },
-            validate: validateEmbeddedHelper
-        )
-#else
-        return nil
-#endif
-    }
-
 #if os(macOS)
     private static func runningHelpers() -> [RuntimeHelper] {
         NSRunningApplication.runningApplications(
@@ -824,219 +1348,17 @@ actor NativeAgentLauncher {
             try? await Task.sleep(nanoseconds: nanoseconds)
         }
     ) async -> HelperTarget? {
-        guard let expected = ExpectedRuntime(url: currentURL) else { return nil }
-        let currentURL = expected.url
-        let identityStartupGraceNanoseconds: UInt64 = 1_000_000_000
-        var unknownFirstObservedAt = [RuntimeProcessKey: UInt64]()
-        var requestedQuit = Set<RuntimeProcessKey>()
-        while true {
-            let monotonicNow = uptime()
-            guard !Task.isCancelled,
-                  isPending(), monotonicNow < deadline else { return nil }
-            let samePath = observedRuntimes(
-                helpers(),
-                identity: identity
-            ).filter {
-                $0.bundleURL == currentURL
-            }
-            var unknownRuntimes = [ObservedRuntime]()
-            var compatibleTarget: HelperTarget?
-            var incompatibleRuntimes = [ObservedRuntime]()
-            for runtime in samePath {
-                guard let runtimeIdentity = runtime.identity else {
-                    unknownRuntimes.append(runtime)
-                    continue
-                }
-                if expected.isCompatible(
-                    runtimeIdentity,
-                    runtimeURL: runtime.bundleURL
-                ) {
-                    if compatibleTarget == nil {
-                        compatibleTarget = .running(
-                            url: currentURL,
-                            processIdentifier:
-                                runtime.helper.processIdentifier,
-                            runtimeInstanceIdentifier:
-                                runtimeIdentity.instanceIdentifier
-                        )
-                    }
-                } else {
-                    incompatibleRuntimes.append(runtime)
-                }
-            }
-            var mustWait = false
-            var verifiedCurrentBundle = false
-            func verifyBeforeQuit() async -> Bool {
-                guard isPending() else { return false }
-                if !verifiedCurrentBundle {
-                    guard await validate(currentURL) else { return false }
-                    verifiedCurrentBundle = true
-                }
-                return isPending() && expected.installedVersionMatches
-            }
-            for runtime in unknownRuntimes {
-                let key = RuntimeProcessKey(runtime.helper)
-                let firstObservedAt = unknownFirstObservedAt[key] ??
-                    monotonicNow
-                unknownFirstObservedAt[key] = firstObservedAt
-                let graceElapsed = monotonicNow >= firstObservedAt &&
-                    monotonicNow - firstObservedAt >=
-                        identityStartupGraceNanoseconds
-                if graceElapsed, !requestedQuit.contains(key) {
-                    guard await verifyBeforeQuit() else { return nil }
-                    let refreshedIdentity = verifiedRuntimeIdentity(
-                        processIdentifier:
-                            runtime.helper.processIdentifier,
-                        bundleURL: currentURL,
-                        processStartDate:
-                            runtime.helper.processStartDate,
-                        identity: identity
-                    )
-                    if let refreshedIdentity,
-                       expected.isCompatible(
-                           refreshedIdentity,
-                           runtimeURL: runtime.bundleURL
-                       ) {
-                        if compatibleTarget == nil {
-                            compatibleTarget = .running(
-                                url: currentURL,
-                                processIdentifier:
-                                    runtime.helper.processIdentifier,
-                                runtimeInstanceIdentifier:
-                                    refreshedIdentity.instanceIdentifier
-                            )
-                        }
-                        continue
-                    }
-                    guard runtime.helper.isRunning() else {
-                        mustWait = true
-                        continue
-                    }
-                    requestedQuit.insert(key)
-                    guard runtime.helper.requestQuit() else { return nil }
-                }
-                mustWait = true
-            }
-            for runtime in incompatibleRuntimes {
-                let key = RuntimeProcessKey(runtime.helper)
-                if !requestedQuit.contains(key) {
-                    guard await verifyBeforeQuit() else { return nil }
-                    if let refreshedIdentity = verifiedRuntimeIdentity(
-                        processIdentifier: runtime.helper.processIdentifier,
-                        bundleURL: currentURL,
-                        processStartDate: runtime.helper.processStartDate,
-                        identity: identity
-                    ), expected.isCompatible(
-                        refreshedIdentity,
-                        runtimeURL: runtime.bundleURL
-                    ) {
-                        mustWait = true
-                        continue
-                    }
-                    guard runtime.helper.isRunning() else {
-                        mustWait = true
-                        continue
-                    }
-                    requestedQuit.insert(key)
-                    guard runtime.helper.requestQuit() else { return nil }
-                }
-                mustWait = true
-            }
-            if mustWait {
-                await sleep(min(50_000_000, deadline - monotonicNow))
-                continue
-            }
-            if let compatibleTarget { return compatibleTarget }
-            guard isPending() else { return nil }
-            return .launch(
-                url: currentURL,
-                createsNewApplicationInstance: false
-            )
-        }
-    }
-
-    @MainActor
-    private static func confirmDelivery(
-        to helperURL: URL,
-        route: NativeAgentRoute,
-        deadline: UInt64,
-        isPending: @escaping () -> Bool
-    ) async -> Bool {
-        switch route {
-        case .showWallet:
-            return await confirmRuntimeHelper(
-                helperURL,
-                deadline: deadline,
-                isPending: isPending
-            )
-        case .approval(
-            _,
-            let handle,
-            let nativeDeliveryNonce
-        ):
-            return await confirmApprovalDelivery(
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce,
-                deadline: deadline,
-                isPending: isPending
-            )
-        }
-    }
-
-    @MainActor
-    private static func confirmApprovalDelivery(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        deadline: UInt64,
-        isPending: @escaping () -> Bool
-    ) async -> Bool {
-#if os(macOS)
-        while isPending(), DispatchTime.now().uptimeNanoseconds < deadline {
-            switch await approvalDeliveryStatus(
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce,
-                isPending: isPending
-            ) {
-            case .delivered:
-                return true
-            case .terminal:
-                return false
-            case .needsDelivery, .unavailable:
-                break
-            }
-            let now = DispatchTime.now().uptimeNanoseconds
-            guard isPending(), now < deadline else { return false }
-            do {
-                try await Task.sleep(
-                    nanoseconds: min(50_000_000, deadline - now)
-                )
-            } catch {
-                return false
-            }
-        }
-        return false
-#else
-        return false
-#endif
-    }
-
-    @MainActor
-    private static func existingDeliveryStatus(
-        route: NativeAgentRoute,
-        isPending: @escaping () -> Bool
-    ) async -> ExistingDeliveryStatus {
-        guard case .approval(
-                  _,
-                  let handle,
-                  let nativeDeliveryNonce
-              ) = route else {
-            return .needsDelivery
-        }
-        return await approvalDeliveryStatus(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            isPending: isPending
-        )
+        let result = await DeliverySession(
+            request: .helper(currentURL),
+            deadline: deadline,
+            isPending: isPending,
+            validate: validate,
+            runtimeDependencies: .init(helpers: helpers, identity: identity),
+            uptime: uptime,
+            wait: sleep
+        ).run()
+        guard case .helper(let target) = result else { return nil }
+        return target
     }
 
     @MainActor
@@ -1047,72 +1369,19 @@ actor NativeAgentLauncher {
         dependencies: ApprovalDeliveryDependencies = .live
     ) async -> ExistingDeliveryStatus {
 #if os(macOS)
-        while isPending() {
-            let receipt: ExtensionBridge.NativeDeliveryReceipt
-            switch await dependencies.load(handle) {
-            case .found(let snapshot):
-                guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce else {
-                    return .terminal
-                }
-                if snapshot.phase == .responded {
-                    return .delivered
-                }
-                guard let currentReceipt = snapshot.nativeDeliveryReceipt else {
-                    return .needsDelivery
-                }
-                guard currentReceipt.nativeDeliveryNonce ==
-                        nativeDeliveryNonce else {
-                    return .terminal
-                }
-                receipt = currentReceipt
-            case .missing:
-                return .terminal
-            case .unavailable:
-                return .unavailable
-            }
-
-            switch await dependencies.receiptRuntimeStatus(receipt) {
-            case .compatible:
-                return isPending() ? .delivered : .unavailable
-            case .incompatible(let helper):
-                switch await dependencies.load(handle) {
-                case .found(let current):
-                    if current.phase == .responded {
-                        return .delivered
-                    }
-                    guard current.nativeDeliveryNonce == nativeDeliveryNonce,
-                          current.nativeDeliveryReceipt == receipt else {
-                        continue
-                    }
-                case .missing:
-                    return .terminal
-                case .unavailable:
-                    return .unavailable
-                }
-                guard isPending(), await helper.requestQuit(isPending) else {
-                    return .unavailable
-                }
-                while helper.isRunning() {
-                    guard isPending() else { return .unavailable }
-                    await dependencies.wait(50_000_000)
-                }
-            case .absent:
-                break
-            case .indeterminate:
-                return .unavailable
-            }
-
-            guard isPending() else { return .unavailable }
-            switch await dependencies.clearReceipt(handle, receipt) {
-            case .persisted:
-                return .needsDelivery
-            case .ownershipLost:
-                continue
-            case .retryablePersistenceFailure:
-                return .unavailable
-            }
+        let result = await DeliverySession(
+            request: .receipt(handle, nativeDeliveryNonce),
+            deadline: UInt64.max,
+            isPending: isPending,
+            approvalDependencies: dependencies,
+            wait: dependencies.wait
+        ).run()
+        switch result {
+        case .delivered: return .delivered
+        case .needsDelivery: return .needsDelivery
+        case .terminal: return .terminal
+        case .unavailable, .timedOut, .helper: return .unavailable
         }
-        return .unavailable
 #else
         return .terminal
 #endif
@@ -1298,40 +1567,6 @@ actor NativeAgentLauncher {
     }
 
 #endif
-
-    @MainActor
-    private static func confirmRuntimeHelper(
-        _ helperURL: URL,
-        deadline: UInt64,
-        isPending: @escaping () -> Bool
-    ) async -> Bool {
-#if os(macOS)
-        guard let expected = ExpectedRuntime(url: helperURL) else { return false }
-        repeat {
-            for helper in runningHelpers() {
-                if await isConfirmedRuntimeHelper(
-                    helper,
-                    expected: expected,
-                    identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) },
-                    validate: validateEmbeddedHelper
-                ) {
-                    return isPending()
-                }
-            }
-            let now = DispatchTime.now().uptimeNanoseconds
-            guard isPending(), now < deadline else { return false }
-            let remaining = deadline - now
-            do {
-                try await Task.sleep(nanoseconds: min(50_000_000, remaining))
-            } catch {
-                return false
-            }
-        } while isPending() && DispatchTime.now().uptimeNanoseconds < deadline
-        return false
-#else
-        return false
-#endif
-    }
 
     private static func awaitResult(
         of task: Task<Bool, Never>,

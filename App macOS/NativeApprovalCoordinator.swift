@@ -65,7 +65,8 @@ final class NativeApprovalCoordinator {
         case finished
     }
 
-    private struct PersistenceOperation {
+    @MainActor
+    private final class PersistenceOperation {
         enum Action {
             case acquireReceipt
             case cancelBeforeAuthentication(receiptOwned: Bool)
@@ -74,12 +75,294 @@ final class NativeApprovalCoordinator {
             case reject
         }
 
-        var action: Action
-        var cancellationRequested = false
-        var nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
+        private weak var owner: NativeApprovalCoordinator?
+        private let identifier: UUID
+        private let handle: ExtensionBridge.Handle
+        private let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
+        private let runtime: ExtensionBridge.NativeDeliveryOwner?
+        private let store: NativeDeliveryStore
+        private let environment: Environment
 
-        init(_ action: Action) {
+        private(set) var action: Action
+        var cancellationRequested = false
+        private var nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
+
+        init(
+            _ action: Action,
+            owner: NativeApprovalCoordinator,
+            identifier: UUID
+        ) {
             self.action = action
+            self.owner = owner
+            self.identifier = identifier
+            handle = owner.handle
+            nativeDeliveryNonce = owner.nativeDeliveryNonce
+            runtime = owner.runtime
+            store = owner.store
+            environment = owner.environment
+        }
+
+        private var isCurrent: Bool {
+            guard !Task.isCancelled,
+                  let owner,
+                  owner.foregroundIdentifier == identifier,
+                  case .persisting(let current) = owner.lifecycle else {
+                return false
+            }
+            return current === self
+        }
+
+        private var hasTimeRemaining: Bool {
+            guard let deadline = owner?.terminalDeadline else { return false }
+            return environment.now() < deadline
+        }
+
+        func prepareAction() {
+            switch action {
+            case .cancelBeforeAuthentication:
+                owner?.terminalDeadline = environment.now().addingTimeInterval(
+                    ExtensionBridge.requestTTL
+                )
+                owner?.stopObservation()
+            case .reject:
+                owner?.stopObservation()
+            case .acquireReceipt, .stage, .respond:
+                break
+            }
+        }
+
+        private func replaceAction(_ action: Action) {
+            self.action = action
+            cancellationRequested = false
+            nextRetryDelay = NativeApprovalCoordinator.initialRetryDelayNanoseconds
+            prepareAction()
+        }
+
+        func run() async {
+            while isCurrent {
+                guard hasTimeRemaining else {
+                    switch action {
+                    case .cancelBeforeAuthentication(receiptOwned: true):
+                        owner?.restoreAuthenticationWaiting()
+                    case .stage, .respond, .reject:
+                        _ = await reconcile(ownershipLost: false, expiring: true)
+                    default:
+                        owner?.finish()
+                    }
+                    return
+                }
+
+                if cancellationRequested {
+                    switch action {
+                    case .stage, .respond:
+                        guard await reconcile(ownershipLost: false, expiring: false) else {
+                            return
+                        }
+                        continue
+                    default:
+                        break
+                    }
+                }
+
+                if case .cancelBeforeAuthentication(let receiptOwned) = action {
+                    let loaded = await store.load(handle: handle)
+                    guard isCurrent else { return }
+                    switch loaded {
+                    case .found(let snapshot):
+                        guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
+                              case .queued(let request, let approval) = snapshot.state else {
+                            owner?.finish()
+                            return
+                        }
+                        owner?.recordDeadline(from: request)
+                        if receiptOwned {
+                            guard let runtime,
+                                  snapshot.nativeDeliveryReceipt?.matches(
+                                    nativeDeliveryNonce: nativeDeliveryNonce,
+                                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
+                                  ) == true else {
+                                owner?.finish()
+                                return
+                            }
+                            if case .staged = approval {
+                                owner?.restoreAuthenticationWaiting()
+                                return
+                            }
+                        } else {
+                            guard case .unowned = approval else {
+                                owner?.finish()
+                                return
+                            }
+                        }
+                    case .missing:
+                        owner?.finish()
+                        return
+                    case .unavailable:
+                        await waitForRetry()
+                        continue
+                    }
+                }
+
+                let result: ExtensionBridge.StoreMutationResult
+                switch action {
+                case .cancelBeforeAuthentication(receiptOwned: false):
+                    result = await store.reject(handle: handle)
+                default:
+                    guard let runtime else {
+                        owner?.finish()
+                        return
+                    }
+                    switch action {
+                    case .acquireReceipt:
+                        result = await store.recordNativeDeliveryReceipt(
+                            handle: handle,
+                            nativeDeliveryNonce: nativeDeliveryNonce,
+                            owner: runtime
+                        )
+                    case .stage(let decision, let approvedAt):
+                        result = await store.stageNativeDecision(
+                            handle: handle,
+                            nativeDeliveryNonce: nativeDeliveryNonce,
+                            runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
+                            decision: decision,
+                            approvedAt: approvedAt
+                        )
+                    case .respond(let response, _):
+                        result = await store.completeNativeDelivery(
+                            handle: handle,
+                            nativeDeliveryNonce: nativeDeliveryNonce,
+                            runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
+                            response: response
+                        )
+                    case .reject, .cancelBeforeAuthentication:
+                        result = await store.rejectNativeDelivery(
+                            handle: handle,
+                            nativeDeliveryNonce: nativeDeliveryNonce,
+                            runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
+                        )
+                    }
+                }
+                guard isCurrent else { return }
+
+                if case .cancelBeforeAuthentication = action {
+                    if result == .persisted {
+                        owner?.finish()
+                        return
+                    }
+                    await waitForRetry()
+                    continue
+                }
+
+                switch result {
+                case .persisted:
+                    switch action {
+                    case .acquireReceipt:
+                        if cancellationRequested {
+                            replaceAction(.cancelBeforeAuthentication(receiptOwned: true))
+                            continue
+                        }
+                        owner?.restoreAuthenticationWaiting()
+                        owner?.onEvent?(.authenticationRequired)
+                    case .stage:
+                        owner?.enterWaitingState()
+                    case .respond, .reject:
+                        owner?.finish()
+                    case .cancelBeforeAuthentication:
+                        break
+                    }
+                    return
+                case .ownershipLost, .retryablePersistenceFailure:
+                    if case .acquireReceipt = action {
+                        if result == .ownershipLost {
+                            owner?.finish()
+                            return
+                        }
+                        await waitForRetry()
+                        continue
+                    }
+                    if case .reject = action, result == .retryablePersistenceFailure {
+                        owner?.notifyFailureOnce()
+                    }
+                    guard await reconcile(
+                        ownershipLost: result == .ownershipLost,
+                        expiring: false
+                    ) else { return }
+                }
+            }
+        }
+
+        private func reconcile(ownershipLost: Bool, expiring: Bool) async -> Bool {
+            guard isCurrent else { return false }
+            let loaded = await store.load(handle: handle)
+            guard isCurrent, let status = owner?.storedStatus(loaded) else {
+                return false
+            }
+            switch status {
+            case .staged:
+                owner?.enterWaitingState()
+            case .responded, .missing:
+                owner?.finish()
+            case .superseded:
+                if case .reject = action { owner?.finish() }
+                else { owner?.supersede() }
+            case .unavailable:
+                if expiring { owner?.finish() }
+                else { await waitForRetry() }
+            case .pending(_, let receipt):
+                guard receipt == .current else {
+                    if case .reject = action { owner?.finish() }
+                    else { owner?.supersede() }
+                    return false
+                }
+                guard !expiring else {
+                    owner?.finish()
+                    return false
+                }
+                if cancellationRequested {
+                    replaceAction(.reject)
+                    return isCurrent
+                }
+                if ownershipLost {
+                    switch action {
+                    case .stage:
+                        owner?.notifyFailureOnce()
+                        replaceAction(.reject)
+                        return isCurrent
+                    case .respond(let response, let delay):
+                        let nextDelay = owner?.nextDelay(after: delay) ?? delay
+                        action = .respond(response, preparationDelay: nextDelay)
+                        await wait(after: delay)
+                        guard isCurrent else { return false }
+                        if cancellationRequested {
+                            replaceAction(.reject)
+                            return isCurrent
+                        }
+                        owner?.lifecycle = .loading(retryDelay: nextDelay)
+                        if hasTimeRemaining { owner?.prepare() }
+                        else { owner?.finish() }
+                        return false
+                    default:
+                        break
+                    }
+                }
+                await waitForRetry()
+            }
+            return isCurrent
+        }
+
+        private func waitForRetry() async {
+            guard isCurrent else { return }
+            let delay = nextRetryDelay
+            nextRetryDelay = owner?.nextDelay(after: delay) ?? delay
+            await wait(after: delay)
+        }
+
+        private func wait(after delay: UInt64) async {
+            guard isCurrent, let deadline = owner?.wakeUptime(after: delay) else {
+                return
+            }
+            let remaining = max(0, deadline - environment.uptime())
+            await environment.wait(UInt64(remaining * 1_000_000_000))
         }
     }
 
@@ -274,9 +557,8 @@ final class NativeApprovalCoordinator {
     }
 
     private func requestPersistenceCancellation() {
-        guard case .persisting(var operation) = lifecycle else { return }
+        guard case .persisting(let operation) = lifecycle else { return }
         operation.cancellationRequested = true
-        lifecycle = .persisting(operation)
     }
 
     private func startForeground<Value>(
@@ -327,26 +609,6 @@ final class NativeApprovalCoordinator {
             await store.load(handle: handle)
         }) { coordinator, loaded in
             coordinator.handlePreparation(coordinator.storedStatus(loaded))
-        }
-    }
-
-    private func reconcile(ownershipLost: Bool, expiring: Bool) {
-        startForeground(operation: { [store, handle] in
-            await store.load(handle: handle)
-        }) { coordinator, loaded in
-            coordinator.handleReconciliation(
-                coordinator.storedStatus(loaded),
-                ownershipLost: ownershipLost,
-                expiring: expiring
-            )
-        }
-    }
-
-    private func checkPreauthenticationCancellation(receiptOwned: Bool) {
-        startForeground(operation: { [store, handle] in
-            await store.load(handle: handle)
-        }) { coordinator, loaded in
-            coordinator.handlePreauthenticationCancellation(loaded, receiptOwned: receiptOwned)
         }
     }
 
@@ -407,45 +669,6 @@ final class NativeApprovalCoordinator {
             } else {
                 coordinator.prepare()
             }
-        }
-    }
-
-    private func handlePreauthenticationCancellation(
-        _ loaded: ExtensionBridge.SnapshotResult,
-        receiptOwned: Bool
-    ) {
-        switch loaded {
-        case .found(let snapshot):
-            guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
-                  case .queued(let request, let approval) = snapshot.state else {
-                finish()
-                return
-            }
-            recordDeadline(from: request)
-            if receiptOwned {
-                guard let runtime,
-                      snapshot.nativeDeliveryReceipt?.matches(
-                          nativeDeliveryNonce: nativeDeliveryNonce,
-                          runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
-                      ) == true else {
-                    finish()
-                    return
-                }
-                if case .staged = approval {
-                    restoreAuthenticationWaiting()
-                    return
-                }
-            } else {
-                guard case .unowned = approval else {
-                    finish()
-                    return
-                }
-            }
-            persistRejection(receiptOwned: receiptOwned)
-        case .missing:
-            finish()
-        case .unavailable:
-            retryPersistence()
         }
     }
 
@@ -563,224 +786,15 @@ final class NativeApprovalCoordinator {
 
     private func startPersistence(_ action: PersistenceOperation.Action) {
         if case .persisting = lifecycle { return }
-        replacePersistence(action)
-    }
-
-    private func replacePersistence(_ action: PersistenceOperation.Action) {
         cancelAuthenticationExpiry()
         cancelForeground()
-        lifecycle = .persisting(PersistenceOperation(action))
-        switch action {
-        case .cancelBeforeAuthentication:
-            terminalDeadline = environment.now().addingTimeInterval(
-                ExtensionBridge.requestTTL
-            )
-            stopObservation()
-        case .reject:
-            stopObservation()
-        case .acquireReceipt, .stage, .respond:
-            break
-        }
-        performPersistence()
-    }
-
-    private func performPersistence() {
-        guard case .persisting(let operation) = lifecycle else { return }
-        guard environment.now() < terminalDeadline else {
-            expirePersistence()
-            return
-        }
-        if operation.cancellationRequested,
-           state == .staging || state == .responding {
-            reconcile(ownershipLost: false, expiring: false)
-            return
-        }
-        if case .cancelBeforeAuthentication(let receiptOwned) = operation.action {
-            checkPreauthenticationCancellation(receiptOwned: receiptOwned)
-            return
-        }
-        guard let runtime else {
-            finish()
-            return
-        }
-        switch operation.action {
-        case .acquireReceipt:
-            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
-                await store.recordNativeDeliveryReceipt(
-                    handle: handle,
-                    nativeDeliveryNonce: nativeDeliveryNonce,
-                    owner: runtime
-                )
-            }) { $0.handlePersistence($1) }
-        case .stage(let decision, let approvedAt):
-            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
-                await store.stageNativeDecision(
-                    handle: handle,
-                    nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
-                    decision: decision,
-                    approvedAt: approvedAt
-                )
-            }) { $0.handlePersistence($1) }
-        case .respond(let response, _):
-            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
-                await store.completeNativeDelivery(
-                    handle: handle,
-                    nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
-                    response: response
-                )
-            }) { $0.handlePersistence($1) }
-        case .reject:
-            persistRejection(receiptOwned: true)
-        case .cancelBeforeAuthentication:
-            break
-        }
-    }
-
-    private func persistRejection(receiptOwned: Bool) {
-        if receiptOwned {
-            guard let runtime else {
-                finish()
-                return
-            }
-            startForeground(operation: { [store, handle, nativeDeliveryNonce] in
-                await store.rejectNativeDelivery(
-                    handle: handle,
-                    nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
-                )
-            }) { $0.handlePersistence($1) }
-        } else {
-            startForeground(operation: { [store, handle] in
-                await store.reject(handle: handle)
-            }) { $0.handlePersistence($1) }
-        }
-    }
-
-    private func handlePersistence(_ result: ExtensionBridge.StoreMutationResult) {
-        guard case .persisting(let operation) = lifecycle else { return }
-        if case .cancelBeforeAuthentication = operation.action {
-            if result == .persisted { finish() }
-            else { retryPersistence() }
-            return
-        }
-        switch result {
-        case .persisted:
-            switch operation.action {
-            case .acquireReceipt:
-                if operation.cancellationRequested {
-                    replacePersistence(.cancelBeforeAuthentication(receiptOwned: true))
-                } else {
-                    restoreAuthenticationWaiting()
-                    onEvent?(.authenticationRequired)
-                }
-            case .stage:
-                enterWaitingState()
-            case .respond, .reject:
-                finish()
-            case .cancelBeforeAuthentication:
-                break
-            }
-        case .ownershipLost, .retryablePersistenceFailure:
-            if case .acquireReceipt = operation.action {
-                if result == .ownershipLost { finish() }
-                else { retryPersistence() }
-                return
-            }
-            if case .reject = operation.action, result == .retryablePersistenceFailure {
-                notifyFailureOnce()
-            }
-            reconcile(ownershipLost: result == .ownershipLost, expiring: false)
-        }
-    }
-
-    private func handleReconciliation(
-        _ status: StoredStatus,
-        ownershipLost: Bool,
-        expiring: Bool
-    ) {
-        guard case .persisting(var operation) = lifecycle else { return }
-        switch status {
-        case .staged:
-            enterWaitingState()
-        case .responded, .missing:
-            finish()
-        case .superseded:
-            if case .reject = operation.action { finish() }
-            else { supersede() }
-        case .unavailable:
-            if expiring { finish() }
-            else { retryPersistence() }
-        case .pending(_, let receipt):
-            guard receipt == .current else {
-                if case .reject = operation.action { finish() }
-                else { supersede() }
-                return
-            }
-            guard !expiring else {
-                finish()
-                return
-            }
-            if operation.cancellationRequested {
-                replacePersistence(.reject)
-                return
-            }
-            if ownershipLost {
-                switch operation.action {
-                case .stage:
-                    notifyFailureOnce()
-                    replacePersistence(.reject)
-                    return
-                case .respond(let response, let delay):
-                    operation.action = .respond(
-                        response,
-                        preparationDelay: nextDelay(after: delay)
-                    )
-                    lifecycle = .persisting(operation)
-                    scheduleForeground(after: delay) { coordinator in
-                        coordinator.prepareAgain()
-                    }
-                    return
-                default:
-                    break
-                }
-            }
-            retryPersistence()
-        }
-    }
-
-    private func retryPersistence() {
-        guard case .persisting(var operation) = lifecycle else { return }
-        let delay = operation.nextRetryDelay
-        operation.nextRetryDelay = nextDelay(after: delay)
+        let identifier = UUID()
+        let operation = PersistenceOperation(action, owner: self, identifier: identifier)
         lifecycle = .persisting(operation)
-        scheduleForeground(after: delay) { coordinator in
-            coordinator.performPersistence()
-        }
-    }
-
-    private func expirePersistence() {
-        guard case .persisting(let operation) = lifecycle else { return }
-        switch operation.action {
-        case .cancelBeforeAuthentication(receiptOwned: true):
-            restoreAuthenticationWaiting()
-        case .stage, .respond, .reject:
-            reconcile(ownershipLost: false, expiring: true)
-        default:
-            finish()
-        }
-    }
-
-    private func prepareAgain() {
-        guard case .persisting(let operation) = lifecycle,
-              case .respond(_, let delay) = operation.action else { return }
-        if operation.cancellationRequested {
-            replacePersistence(.reject)
-        } else {
-            lifecycle = .loading(retryDelay: delay)
-            if environment.now() >= terminalDeadline { finish() }
-            else { prepare() }
+        foregroundIdentifier = identifier
+        operation.prepareAction()
+        foregroundTask = Task {
+            await operation.run()
         }
     }
 

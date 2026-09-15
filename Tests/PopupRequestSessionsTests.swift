@@ -575,6 +575,48 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
+    func testCancelledReceiptStatusQueryPreservesDeadlineControlledObservation() async throws {
+        let snapshot = try popupSnapshot(id: 418, phase: .responded)
+        for isPending in [true, false] {
+            let queryEntered = makeGate()
+            let releaseQuery = makeGate()
+            var loads = 0
+            let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
+                load: { handle in
+                    XCTAssertEqual(handle, snapshot.handle)
+                    loads += 1
+                    return .found(snapshot)
+                },
+                receiptRuntimeStatus: { _ in
+                    XCTFail("A responded request needs no runtime inspection")
+                    return .indeterminate
+                },
+                clearReceipt: { _, _ in
+                    XCTFail("A responded request must not clear ownership")
+                    return .ownershipLost
+                },
+                wait: { _ in XCTFail("A terminal observation must not wait") }
+            )
+            let query = Task {
+                await queryEntered.open()
+                await releaseQuery.wait()
+                XCTAssertTrue(Task.isCancelled)
+                return await NativeAgentLauncher.approvalDeliveryStatus(
+                    handle: snapshot.handle,
+                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+                    isPending: { isPending },
+                    dependencies: dependencies
+                )
+            }
+            await queryEntered.wait()
+            query.cancel()
+            await releaseQuery.open()
+            let status = await query.value
+            XCTAssertEqual(status, isPending ? .delivered : .unavailable)
+            XCTAssertEqual(loads, isPending ? 1 : 0)
+        }
+    }
+
     func testNativeLaunchReconciliationRequiresLiveExactReceipt() async throws {
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let snapshot = try popupSnapshot(
@@ -5637,6 +5679,391 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(errorCode, 4100)
             XCTAssertFalse(committed)
         }
+    }
+
+    func testNativeFinalizationPreservesStagedDeliveryAndPollIntervals() async throws {
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: .init(value: UUID()),
+            owner: popupNativeDeliveryOwner()
+        )
+        let snapshot = try popupSnapshot(
+            id: 411, nativeDecisionStaged: true, nativeDeliveryReceipt: receipt
+        )
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        let now = Date()
+        var uptime = startedAt
+        var deliveryChecks = [UInt64]()
+        var waits = [UInt64]()
+        let launcher = NativeAgentLauncher(
+            helperURL: { nil },
+            validate: { _ in false },
+            existingDelivery: { _, _ in
+                deliveryChecks.append(uptime - startedAt)
+                return .delivered
+            },
+            launch: { _, _, _ in XCTFail("A live receipt must not reactivate the helper") }
+        )
+        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
+            load: { _ in
+                uptime - startedAt >= 2_250_000_000 ? .missing : .found(snapshot)
+            },
+            receiptRuntimeStatus: { _ in .indeterminate },
+            clearReceipt: { _, _ in .ownershipLost },
+            wait: { _ in XCTFail("Receipt inspection must not own finalization polling") }
+        )
+        let result = await launcher.waitForFinalization(
+            handle: snapshot.handle,
+            configurationKey: snapshot.configurationKey,
+            initialContext: .init(
+                revisions: snapshot.revisions,
+                observedAt: now,
+                executionDeadline: now.addingTimeInterval(300),
+                fenceToken: UUID()
+            ),
+            mode: .page,
+            dependencies: .init(
+                delivery: dependencies,
+                uptime: { uptime },
+                wallClock: { now },
+                wait: { delay in waits.append(delay); uptime += delay }
+            )
+        )
+        guard case .readyToRead = result else { return XCTFail("Expected final response read") }
+        XCTAssertEqual(deliveryChecks, [0, 0, 1_000_000_000, 2_000_000_000])
+        XCTAssertEqual(waits, Array(repeating: 250_000_000, count: 9))
+    }
+
+    func testNativeFinalizationPreservesIts170SecondBudget() async throws {
+        let snapshot = try popupSnapshot(id: 412, phase: .approving)
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        let now = Date()
+        var uptime = startedAt
+        var deliveryChecks = 0
+        var waits = [UInt64]()
+        let launcher = NativeAgentLauncher(
+            helperURL: { nil },
+            validate: { _ in false },
+            existingDelivery: { _, _ in deliveryChecks += 1; return .delivered },
+            launch: { _, _, _ in XCTFail("An executing approval must not relaunch") }
+        )
+        let result = await launcher.waitForFinalization(
+            handle: snapshot.handle,
+            configurationKey: snapshot.configurationKey,
+            initialContext: .init(
+                revisions: snapshot.revisions,
+                observedAt: now,
+                executionDeadline: now.addingTimeInterval(1),
+                fenceToken: UUID()
+            ),
+            mode: .page,
+            dependencies: .init(
+                delivery: .init(
+                    load: { _ in .found(snapshot) },
+                    receiptRuntimeStatus: { _ in .indeterminate },
+                    clearReceipt: { _, _ in .ownershipLost },
+                    wait: { _ in }
+                ),
+                uptime: { uptime },
+                wallClock: { now.addingTimeInterval(Double(uptime - startedAt) / 1_000_000_000) },
+                wait: { delay in waits.append(delay); uptime += delay }
+            )
+        )
+        guard case .pending = result else { return XCTFail("Expected bounded pending result") }
+        XCTAssertEqual(uptime - startedAt, 170_000_000_000)
+        XCTAssertEqual(waits, Array(repeating: 250_000_000, count: 680))
+        XCTAssertEqual(deliveryChecks, 1)
+    }
+
+    func testNativeFinalizationDistinguishesInitialAndLaterDeliveryFailure() async throws {
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: .init(value: UUID()),
+            owner: popupNativeDeliveryOwner()
+        )
+        let snapshot = try popupSnapshot(
+            id: 413, nativeDecisionStaged: true, nativeDeliveryReceipt: receipt
+        )
+        let now = Date()
+        for initialFailure in [true, false] {
+            var deliveryChecks = 0
+            let launcher = NativeAgentLauncher(
+                helperURL: { nil },
+                validate: { _ in false },
+                existingDelivery: { _, _ in
+                    deliveryChecks += 1
+                    return initialFailure || deliveryChecks > 1 ? .unavailable : .delivered
+                },
+                launch: { _, _, _ in XCTFail("Unavailable ownership must not launch") }
+            )
+            let result = await launcher.waitForFinalization(
+                handle: snapshot.handle,
+                configurationKey: snapshot.configurationKey,
+                initialContext: .init(
+                    revisions: snapshot.revisions,
+                    observedAt: now,
+                    executionDeadline: now.addingTimeInterval(300),
+                    fenceToken: UUID()
+                ),
+                mode: .page,
+                dependencies: .init(
+                    delivery: .init(
+                        load: { _ in .found(snapshot) },
+                        receiptRuntimeStatus: { _ in .indeterminate },
+                        clearReceipt: { _, _ in .ownershipLost },
+                        wait: { _ in }
+                    ),
+                    wait: { _ in XCTFail("Failed delivery must return without another poll") }
+                )
+            )
+            if initialFailure {
+                guard case .deliveryUnavailable = result else { return XCTFail("Expected initial delivery failure") }
+            } else {
+                guard case .pending = result else { return XCTFail("Later failure must remain pending") }
+            }
+            XCTAssertEqual(deliveryChecks, initialFailure ? 1 : 2)
+        }
+    }
+
+    func testNativeFinalizationWaitDoesNotOccupyTheDeliveryQueue() async throws {
+        let snapshot = try popupSnapshot(id: 414, phase: .approving)
+        let now = Date()
+        let monitorEntered = makeGate()
+        let releaseMonitor = makeGate()
+        let walletOpened = expectation(description: "independent wallet route delivered")
+        var finished = false
+        let launcher = NativeAgentLauncher(
+            helperURL: { nil },
+            validate: { _ in false },
+            existingDelivery: { _, _ in .delivered },
+            launch: { _, _, _ in XCTFail("Compatible delivery must not relaunch") }
+        )
+        let monitoring = Task {
+            await launcher.waitForFinalization(
+                handle: snapshot.handle,
+                configurationKey: snapshot.configurationKey,
+                initialContext: .init(
+                    revisions: snapshot.revisions,
+                    observedAt: now,
+                    executionDeadline: now.addingTimeInterval(300),
+                    fenceToken: UUID()
+                ),
+                mode: .page,
+                dependencies: .init(
+                    delivery: .init(
+                        load: { _ in finished ? .missing : .found(snapshot) },
+                        receiptRuntimeStatus: { _ in .indeterminate },
+                        clearReceipt: { _, _ in .ownershipLost },
+                        wait: { _ in }
+                    ),
+                    wait: { _ in
+                        await monitorEntered.open()
+                        await releaseMonitor.wait()
+                    }
+                )
+            )
+        }
+        await monitorEntered.wait()
+        let opening = Task {
+            let result = await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+            walletOpened.fulfill()
+            return result
+        }
+        await fulfillment(of: [walletOpened], timeout: 1)
+        finished = true
+        await releaseMonitor.open()
+        let opened = await opening.value
+        let result = await monitoring.value
+        XCTAssertTrue(opened)
+        guard case .readyToRead = result else { return XCTFail("Expected final response read") }
+    }
+
+    func testQuietFinalizationDoesNotJoinConcurrentPageDelivery() async throws {
+        let snapshot = try popupSnapshot(id: 415, nativeDecisionStaged: true)
+        let now = Date()
+        let resolutionEntered = makeGate()
+        let releaseResolution = makeGate()
+        var launches = 0
+        var quietRuntimeChecks = 0
+        let launcher = NativeAgentLauncher(
+            helperURL: { URL(fileURLWithPath: "/tmp/Big Wallet Quiet Delivery.app") },
+            validate: { _ in true },
+            resolveHelper: { url, _, _ in
+                await resolutionEntered.open()
+                await releaseResolution.wait()
+                return .launch(url: url, createsNewApplicationInstance: false)
+            },
+            launch: { _, _, completion in launches += 1; completion(true) }
+        )
+        let opening = Task {
+            await launcher.open(.approval(
+                workflowVersion: ExtensionBridge.workflowVersion,
+                handle: snapshot.handle,
+                nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+            ))
+        }
+        await resolutionEntered.wait()
+        let quietResult = await launcher.waitForFinalization(
+            handle: snapshot.handle,
+            configurationKey: snapshot.configurationKey,
+            initialContext: .init(
+                revisions: snapshot.revisions,
+                observedAt: now,
+                executionDeadline: now.addingTimeInterval(300),
+                fenceToken: UUID()
+            ),
+            mode: .manualRecovery,
+            dependencies: .init(delivery: .init(
+                load: { _ in .found(snapshot) },
+                receiptRuntimeStatus: { _ in quietRuntimeChecks += 1; return .absent },
+                clearReceipt: { _, _ in XCTFail("Quiet recovery must not clear receipts"); return .ownershipLost },
+                wait: { _ in XCTFail("Quiet recovery must not wait for process actions") }
+            ))
+        )
+        guard case .deliveryUnavailable = quietResult else { return XCTFail("Quiet recovery needs a compatible receipt") }
+        XCTAssertEqual(launches, 0)
+        XCTAssertEqual(quietRuntimeChecks, 0)
+        await releaseResolution.open()
+        let opened = await opening.value
+        XCTAssertTrue(opened)
+        XCTAssertEqual(launches, 1)
+    }
+
+    func testNativeFinalizationKeepsEachCallersExecutionContext() async throws {
+        let snapshot = try popupSnapshot(id: 416, phase: .approving)
+        let now = Date()
+        let monitorEntered = makeGate()
+        let releaseMonitor = makeGate()
+        var finished = false
+        let launcher = NativeAgentLauncher(
+            helperURL: { nil },
+            validate: { _ in false },
+            existingDelivery: { _, _ in .delivered },
+            launch: { _, _, _ in XCTFail("An executing approval must not relaunch") }
+        )
+        let dependencies = NativeAgentLauncher.FinalizationDependencies(
+            delivery: .init(
+                load: { _ in finished ? .missing : .found(snapshot) },
+                receiptRuntimeStatus: { _ in .indeterminate },
+                clearReceipt: { _, _ in .ownershipLost },
+                wait: { _ in }
+            ),
+            wallClock: { now },
+            wait: { _ in await monitorEntered.open(); await releaseMonitor.wait() }
+        )
+        let first = Task {
+            await launcher.waitForFinalization(
+                handle: snapshot.handle,
+                configurationKey: snapshot.configurationKey,
+                initialContext: .init(
+                    revisions: snapshot.revisions,
+                    observedAt: now,
+                    executionDeadline: now.addingTimeInterval(300),
+                    fenceToken: UUID()
+                ),
+                mode: .page,
+                dependencies: dependencies
+            )
+        }
+        await monitorEntered.wait()
+        let expired = await launcher.waitForFinalization(
+            handle: snapshot.handle,
+            configurationKey: snapshot.configurationKey,
+            initialContext: .init(
+                revisions: snapshot.revisions,
+                observedAt: now.addingTimeInterval(-2),
+                executionDeadline: now.addingTimeInterval(-1),
+                fenceToken: UUID()
+            ),
+            mode: .page,
+            dependencies: dependencies
+        )
+        guard case .pending = expired else { return XCTFail("Each caller must honor its own execution deadline") }
+        finished = true
+        await releaseMonitor.open()
+        let result = await first.value
+        guard case .readyToRead = result else { return XCTFail("The live caller must continue independently") }
+    }
+
+    func testNativeFinalizationRedeliversAfterStagedHelperLoss() async throws {
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: .init(value: UUID()),
+            owner: popupNativeDeliveryOwner()
+        )
+        let snapshot = try popupSnapshot(
+            id: 417, nativeDecisionStaged: true, nativeDeliveryReceipt: receipt
+        )
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        let now = Date()
+        var uptime = startedAt
+        var live = true
+        var finished = false
+        var deliveredRoutes = [NativeAgentRoute]()
+        let launcher = NativeAgentLauncher(
+            helperURL: { URL(fileURLWithPath: "/tmp/Big Wallet Helper Recovery.app") },
+            validate: { _ in true },
+            existingDelivery: { route, _ in
+                if !live { deliveredRoutes.append(route) }
+                return live ? .delivered : .needsDelivery
+            },
+            launch: { _, _, completion in live = true; finished = true; completion(true) }
+        )
+        let result = await launcher.waitForFinalization(
+            handle: snapshot.handle,
+            configurationKey: snapshot.configurationKey,
+            initialContext: .init(
+                revisions: snapshot.revisions,
+                observedAt: now,
+                executionDeadline: now.addingTimeInterval(300),
+                fenceToken: UUID()
+            ),
+            mode: .page,
+            dependencies: .init(
+                delivery: .init(
+                    load: { _ in finished ? .missing : .found(snapshot) },
+                    receiptRuntimeStatus: { _ in .absent },
+                    clearReceipt: { _, _ in .persisted },
+                    wait: { _ in }
+                ),
+                uptime: { uptime },
+                wallClock: { now },
+                wait: { delay in
+                    uptime += delay
+                    if uptime - startedAt >= 1_000_000_000 { live = false }
+                }
+            )
+        )
+        guard case .readyToRead = result else { return XCTFail("Expected recovery to finish the read") }
+        XCTAssertEqual(deliveredRoutes, [.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: snapshot.handle,
+            nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+        )])
+    }
+
+    func testCancelledNativeDeliveryWaiterPreservesTheSharedDelivery() async {
+        let entered = makeGate()
+        let release = makeGate()
+        var launches = 0
+        let launcher = NativeAgentLauncher(
+            helperURL: { URL(fileURLWithPath: "/tmp/Big Wallet Cancelled Waiter.app") },
+            validate: { _ in true },
+            resolveHelper: { url, _, _ in
+                await entered.open()
+                await release.wait()
+                return .launch(url: url, createsNewApplicationInstance: false)
+            },
+            launch: { _, _, completion in launches += 1; completion(true) }
+        )
+        let route = NativeAgentRoute.showWallet(workflowVersion: ExtensionBridge.workflowVersion)
+        let first = Task { await launcher.open(route) }
+        await entered.wait()
+        let second = Task { await launcher.open(route) }
+        await Task.yield()
+        first.cancel()
+        await release.open()
+        _ = await first.value
+        let delivered = await second.value
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(launches, 1)
     }
 
     func testNativeAgentLauncherSerializesConcurrentRoutes() async throws {

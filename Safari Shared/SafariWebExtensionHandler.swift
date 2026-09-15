@@ -397,6 +397,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private enum ResponseReadMode {
         case page, manualRecovery
+
+#if os(macOS)
+        var nativeMode: NativeAgentLauncher.ApprovalReadMode {
+            self == .page ? .page : .manualRecovery
+        }
+#endif
     }
 
     private func readResponse(
@@ -457,29 +463,28 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             switch execution {
             case .acquired(let lease):
                 executionLease = lease
-                guard await ensureNativeApprovalDeliveryIfNeeded(
+                switch await Self.nativeAgentLauncher.waitForFinalization(
                     handle: handle,
-                    mode: mode
-                ) else {
+                    configurationKey: identity.configurationKey,
+                    initialContext: lease.context,
+                    mode: mode.nativeMode
+                ) {
+                case .readyToRead:
+                    break
+                case .pending:
+                    Self.respondPending(id: id, mode: mode, context: context)
+                    return
+                case .deliveryUnavailable:
                     Self.respondPending(
                         id: id, mode: mode, context: context,
                         error: .bridgeUnavailable
                     )
                     return
                 }
-                guard await waitForNativeApprovalFinalization(
-                    handle: handle,
-                    configurationKey: identity.configurationKey,
-                    initialContext: lease.context,
-                    mode: mode
-                ) else {
-                    Self.respondPending(id: id, mode: mode, context: context)
-                    return
-                }
             case .needsDelivery:
-                guard await ensureNativeApprovalDeliveryIfNeeded(
+                guard await Self.nativeAgentLauncher.ensureApprovalDelivery(
                     handle: handle,
-                    mode: mode
+                    mode: mode.nativeMode
                 ) else {
                     Self.respondPending(
                         id: id, mode: mode, context: context,
@@ -599,88 +604,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }
 
 #if os(macOS)
-    @MainActor
-    private func ensureNativeApprovalDeliveryIfNeeded(
-        handle: ExtensionBridge.Handle,
-        mode: ResponseReadMode,
-        waitDeadline: UInt64? = nil
-    ) async -> Bool {
-        switch await Self.bridge.load(handle: handle) {
-        case .found(let snapshot):
-            guard snapshot.phase != .responded else { return true }
-            if mode == .manualRecovery {
-                return await NativeAgentLauncher.hasCompatibleApprovalDelivery(
-                    handle: handle,
-                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
-                )
-            }
-            return await Self.nativeAgentLauncher.open(
-                .approval(
-                    workflowVersion: ExtensionBridge.workflowVersion,
-                    handle: handle,
-                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
-                ),
-                waitDeadline: waitDeadline
-            )
-        case .missing:
-            return true
-        case .unavailable:
-            return false
-        }
-    }
-
-    private func waitForNativeApprovalFinalization(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        initialContext: ExtensionBridge.NativeExecutionContext,
-        mode: ResponseReadMode
-    ) async -> Bool {
-        let startedAt = DispatchTime.now().uptimeNanoseconds
-        let deadline = startedAt.addingReportingOverflow(
-            170_000_000_000
-        ).partialValue
-        var nextDeliveryCheck = startedAt
-        if Date() >= initialContext.executionDeadline {
-            return false
-        }
-        while !Task.isCancelled,
-              DispatchTime.now().uptimeNanoseconds < deadline {
-            switch await Self.bridge.load(handle: handle) {
-            case .found(let snapshot):
-                guard snapshot.configurationKey == configurationKey,
-                      snapshot.phase != .responded else { return true }
-                if snapshot.phase == .queued,
-                   Date() >= initialContext.executionDeadline {
-                    return false
-                }
-                if case .queued(_, .staged(let approval)) = snapshot.state,
-                   approval.receipt == nil {
-                    return false
-                }
-                let now = DispatchTime.now().uptimeNanoseconds
-                if case .queued(_, .staged) = snapshot.state,
-                   now >= nextDeliveryCheck {
-                    guard await ensureNativeApprovalDeliveryIfNeeded(
-                        handle: handle,
-                        mode: mode,
-                        waitDeadline: deadline
-                    ) else {
-                        return false
-                    }
-                    nextDeliveryCheck = now.addingReportingOverflow(
-                        1_000_000_000
-                    ).partialValue
-                }
-            case .missing:
-                return true
-            case .unavailable:
-                break
-            }
-            try? await Task.sleep(nanoseconds: 250_000_000)
-        }
-        return false
-    }
-
     private func openNativeAgent(id: Int, context: NSExtensionContext) {
         Task {
             let opened = await Self.nativeAgentLauncher.open(
