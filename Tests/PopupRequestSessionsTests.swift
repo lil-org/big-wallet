@@ -5946,7 +5946,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(confirmationCount, 1)
     }
 
-    func testNativeAgentLauncherRetriesAfterSharedDeliveryFailsAndCoalescesThirdCaller()
+    func testNativeAgentLauncherSharesFailedDeliveryAndAllowsLaterRetry()
         async {
         let helperURL = URL(
             fileURLWithPath: "/tmp/Big Wallet Shared Retry Test.app"
@@ -5992,11 +5992,169 @@ extension PopupRequestSessionsTests {
         let results = await (first.value, second.value, third.value)
 
         XCTAssertFalse(results.0)
-        XCTAssertTrue(results.1)
-        XCTAssertTrue(results.2)
+        XCTAssertFalse(results.1)
+        XCTAssertFalse(results.2)
+        XCTAssertEqual(resolutionCount, 3)
+        XCTAssertEqual(launchCount, 3)
+        XCTAssertEqual(confirmationCount, 3)
+
+        let retried = await launcher.open(route)
+
+        XCTAssertTrue(retried)
         XCTAssertEqual(resolutionCount, 4)
         XCTAssertEqual(launchCount, 4)
         XCTAssertEqual(confirmationCount, 4)
+    }
+
+    func testNativeAgentLauncherExpiredWaitDeadlineDoesNotStartWork()
+        async throws {
+        let snapshot = try popupSnapshot(id: 409)
+        let route = NativeAgentRoute.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: snapshot.handle,
+            nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+        )
+        var helperLookups = 0
+        var loads = 0
+        let launcher = NativeAgentLauncher(
+            helperURL: {
+                helperLookups += 1
+                return URL(fileURLWithPath: "/tmp/Big Wallet Expired Wait.app")
+            },
+            validate: { _ in
+                XCTFail("An expired caller must not validate a helper")
+                return true
+            },
+            launch: { _, _, completion in
+                XCTFail("An expired caller must not launch a helper")
+                completion(true)
+            }
+        )
+        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
+            load: { _ in
+                loads += 1
+                return .found(snapshot)
+            },
+            receiptRuntimeStatus: { _ in .absent },
+            clearReceipt: { _, _ in .persisted },
+            wait: { _ in }
+        )
+        let expired = DispatchTime.now().uptimeNanoseconds
+
+        let opened = await launcher.open(route, waitDeadline: expired)
+        let reactivated = await launcher.reactivate(
+            route,
+            waitDeadline: expired,
+            dependencies: dependencies
+        )
+
+        XCTAssertFalse(opened)
+        XCTAssertFalse(reactivated)
+        XCTAssertEqual(helperLookups, 0)
+        XCTAssertEqual(loads, 0)
+    }
+
+    func testNativeAgentLauncherCallerDeadlinePreservesSharedDelivery()
+        async {
+        let helperURL = URL(fileURLWithPath: "/tmp/Big Wallet Shared Deadline.app")
+        let route = NativeAgentRoute.showWallet(
+            workflowVersion: ExtensionBridge.workflowVersion
+        )
+        let resolutionEntered = CompactPopupGate()
+        let releaseResolution = CompactPopupGate()
+        var launchCount = 0
+        var resolutionCount = 0
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { _ in true },
+            resolveHelper: { url, _, _ in
+                resolutionCount += 1
+                await resolutionEntered.open()
+                await releaseResolution.wait()
+                return .launch(url: url, createsNewApplicationInstance: false)
+            },
+            launchTimeoutNanoseconds: 2_000_000_000,
+            launch: { _, _, completion in
+                launchCount += 1
+                completion(true)
+            }
+        )
+        let owner = Task { await launcher.open(route) }
+        await resolutionEntered.wait()
+
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        let callerResult = await launcher.open(
+            route,
+            waitDeadline: startedAt + 50_000_000
+        )
+        let elapsed = DispatchTime.now().uptimeNanoseconds - startedAt
+        await releaseResolution.open()
+        let ownerResult = await owner.value
+
+        XCTAssertFalse(callerResult)
+        XCTAssertLessThan(elapsed, 1_000_000_000)
+        XCTAssertTrue(ownerResult)
+        XCTAssertEqual(resolutionCount, 1)
+        XCTAssertEqual(launchCount, 1)
+    }
+
+    func testNativeAgentReactivationFallbackPreservesRemainingWaitDeadline()
+        async throws {
+        let snapshot = try popupSnapshot(id: 410)
+        let route = NativeAgentRoute.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: snapshot.handle,
+            nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+        )
+        let helperURL = URL(fileURLWithPath: "/tmp/Big Wallet Reactivation Deadline.app")
+        let resolutionEntered = expectation(description: "fallback delivery started")
+        let callerFinished = expectation(description: "reactivation caller timed out")
+        let deliveryFinished = expectation(description: "shared delivery continued")
+        let releaseResolution = CompactPopupGate()
+        var launchCount = 0
+        let launcher = NativeAgentLauncher(
+            helperURL: { helperURL },
+            validate: { _ in true },
+            resolveHelper: { url, _, _ in
+                resolutionEntered.fulfill()
+                await releaseResolution.wait()
+                return .launch(url: url, createsNewApplicationInstance: false)
+            },
+            launchTimeoutNanoseconds: 3_000_000_000,
+            launch: { _, _, completion in
+                launchCount += 1
+                completion(true)
+                deliveryFinished.fulfill()
+            }
+        )
+        let dependencies = NativeAgentLauncher.ApprovalDeliveryDependencies(
+            load: { _ in
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                return .found(snapshot)
+            },
+            receiptRuntimeStatus: { _ in .absent },
+            clearReceipt: { _, _ in .persisted },
+            wait: { _ in }
+        )
+        let deadline = DispatchTime.now().uptimeNanoseconds + 300_000_000
+        let reactivation = Task {
+            let result = await launcher.reactivate(
+                route,
+                waitDeadline: deadline,
+                dependencies: dependencies
+            )
+            callerFinished.fulfill()
+            return result
+        }
+
+        await fulfillment(of: [resolutionEntered, callerFinished], timeout: 1)
+        XCTAssertEqual(launchCount, 0)
+        await releaseResolution.open()
+        let result = await reactivation.value
+        await fulfillment(of: [deliveryFinished], timeout: 1)
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(launchCount, 1)
     }
 
     func testNativeAgentLauncherDoesNotReactivateDeliveredApproval() async {

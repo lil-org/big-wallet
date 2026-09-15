@@ -19,6 +19,7 @@ import {
 
 import OperationRuntime from "./operation_runtime";
 import {
+    nativeJSONClone,
     outboundDataSnapshot,
     trustedOutboundArray,
     trustedOutboundRecord,
@@ -1041,41 +1042,16 @@ function signedResult(
     }
 }
 
-function normalizedConfiguration(configuration, current) {
-    if (!configuration || typeof configuration !== "object") {
-        throw new ProviderRpcError(-32603, "Invalid Solana configuration");
-    }
-    const publicKey = configuration.publicKey == null
-        ? null
-        : configuration.publicKey;
-    const accountRevision = configuration.accountRevision;
-    const solanaAuthorizationEpoch = configuration.solanaAuthorizationEpoch;
-    if ((publicKey !== null && !validPublicKeyString(publicKey)) ||
-        typeof configuration.isConnected !== "boolean" ||
-        !Number.isSafeInteger(accountRevision) || accountRevision < 0 ||
-        !Number.isSafeInteger(solanaAuthorizationEpoch) ||
-        solanaAuthorizationEpoch < 0) {
-        throw new ProviderRpcError(-32603, "Invalid Solana configuration");
-    }
-    if (accountRevision < current.accountRevision ||
-        solanaAuthorizationEpoch < current.solanaAuthorizationEpoch) {
-        return null;
-    }
-    return {
-        accountRevision,
-        isConnected: configuration.isConnected && publicKey !== null,
-        publicKey,
-        reauthorizationRevision: configuration.reauthorizationRevision,
-        solanaAuthorizationEpoch,
-    };
-}
-
 function applyConfiguration(provider, envelope) {
     const state = getProviderState(provider);
     if (envelope.suppressUpdate === true) {
         return state.runtime.phase === "ready";
     }
-    const configuration = normalizedConfiguration(envelope.configuration, state);
+    const incoming = envelope.configuration;
+    const configuration = incoming.accountRevision < state.accountRevision ||
+        incoming.solanaAuthorizationEpoch < state.solanaAuthorizationEpoch
+        ? null
+        : incoming;
     const previousPublicKey = state.publicKey?.toString() || null;
     const previousConnected = state.isConnected;
     const reauthorizationRevision = configuration?.reauthorizationRevision;
@@ -1084,11 +1060,8 @@ function applyConfiguration(provider, envelope) {
     const switchAccount = hasReauthorization
         ? reauthorizationRevision > state.reauthorizationRevision
         : envelope.switchAccount === true;
-    if (hasReauthorization) {
-        state.reauthorizationRevision = Math.max(
-            state.reauthorizationRevision,
-            reauthorizationRevision
-        );
+    if (hasReauthorization && reauthorizationRevision > state.reauthorizationRevision) {
+        state.reauthorizationRevision = reauthorizationRevision;
     }
     const preservesTombstone = state.accountRevocationTombstone &&
         !switchAccount;
@@ -1128,7 +1101,7 @@ function applyConfiguration(provider, envelope) {
 }
 
 
-function applyEnvelope(provider, envelope) {
+function applyDecodedEnvelope(provider, envelope) {
     const state = providerState(provider);
     if (!state || state.runtime.phase === "retired") {
         return false;
@@ -1137,12 +1110,6 @@ function applyEnvelope(provider, envelope) {
         retire(provider, providerReplacementError());
         return false;
     }
-    try {
-        envelope = outboundDataSnapshot(envelope);
-    } catch {
-        return false;
-    }
-    if (!envelope || typeof envelope !== "object") { return false; }
     if (envelope.kind === "configuration") {
         return applyConfiguration(provider, envelope);
     }
@@ -1154,7 +1121,6 @@ function applyEnvelope(provider, envelope) {
         if (wasConnected) { emitProvider(provider, "disconnect"); }
         return true;
     }
-    if (!Number.isSafeInteger(envelope.id)) { return false; }
     const record = state.runtime.operation(envelope.id);
     if (!record || !state.runtime.owns(record) ||
         record.metadata.dispatched !== true) {
@@ -1181,7 +1147,9 @@ function applyEnvelope(provider, envelope) {
             normalizeSolanaProviderError(
                 envelope.error,
                 envelope.error?.code,
-                envelope.error?.data
+                getOwnPropertyDescriptorNormally(envelope.error, "data")
+                    ? nativeJSONClone(envelope.error.data)
+                    : undefined
             )
         );
     }
@@ -1854,12 +1822,11 @@ class BigWalletSolana extends EventEmitter {
     }
 }
 
-BigWalletSolana.applyEnvelope = applyEnvelope;
 BigWalletSolana.retire = retire;
 BigWalletSolana.observeDisconnectedConfigurationRevision =
     observeDisconnectedConfigurationRevision;
 BigWalletSolana.snapshot = snapshot;
 BigWalletSolana.isReady = isReady;
 
-export { applyEnvelope, isReady, retire, snapshot };
+export { applyDecodedEnvelope, isReady, retire, snapshot };
 export default BigWalletSolana;

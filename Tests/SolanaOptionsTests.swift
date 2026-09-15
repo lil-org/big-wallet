@@ -170,6 +170,49 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(Solana.RPCSource.publicFallback.displayName, Strings.publicRPC)
     }
 
+    func testSolanaMissingEndpointDoesNotAuthorizeOrSubmit() throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            throw SolanaRPCStubError.unexpectedRequest
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+
+        let authorizationProvider = SolanaAuthorizationProviderStub()
+        let solana = Solana(
+            urlSession: session,
+            rpcConfiguration: Solana.RPCConfiguration { _ in nil },
+            authorizationProvider: authorizationProvider
+        )
+        let signedTransaction = try signedTransactionFixture()
+        let completed = expectation(description: "Missing endpoints rejected")
+        completed.expectedFulfillmentCount = 2
+
+        for cluster in [Solana.Cluster.mainnetBeta, .devnet] {
+            solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: cluster,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: cluster,
+                    rpcOptions: ["encoding": "base64"],
+                    confirmationCommitment: nil
+                )
+            ) { result in
+                XCTAssertEqual(result, .failure(.rpcUnavailable))
+                completed.fulfill()
+            }
+        }
+
+        wait(for: [completed], timeout: 5)
+        XCTAssertTrue(recorder.snapshot().isEmpty)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 0)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
     func testSolanaDevnetSubmissionAndConfirmationReuseResolvedEndpoint() throws {
         let sentinelURL = try XCTUnwrap(URL(string: "https://sentinel.example/devnet"))
         let configuration = Solana.RPCConfiguration { network in
@@ -203,12 +246,11 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(description: "Solana transaction confirmed")
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .devnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .devnet,
@@ -217,8 +259,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertEqual(result, .success("test-signature"))
             completion.fulfill()
@@ -262,14 +303,11 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(description: "Custom keyless endpoint completed")
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .devnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .devnet,
@@ -278,8 +316,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertEqual(result, .success("test-signature"))
             completion.fulfill()
@@ -321,16 +358,13 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: .bundled,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Authorization failure returned before submission"
         )
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -339,8 +373,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertEqual(result, .failure(.notSubmitted))
             completion.fulfill()
@@ -381,16 +414,13 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Successful submission returned before authorization replay"
         )
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -399,8 +429,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertEqual(result, .success("test-signature"))
             completion.fulfill()
@@ -456,15 +485,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Submission recovered with replacement authorization"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -473,8 +501,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(result, .success("test-signature"))
@@ -525,17 +552,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Persistent submission authorization failure returned"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -544,8 +568,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(
@@ -600,17 +623,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Replacement authorization failure returned"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -619,8 +639,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(
@@ -689,17 +708,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Confirmation recovered on a later poll"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -708,8 +724,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(result, .success("test-signature"))
@@ -794,17 +809,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Persistent confirmation authorization failed"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -813,8 +825,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(
@@ -880,17 +891,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Authorization acquisition failure was bounded"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -899,8 +907,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             guard case .failure(
@@ -979,17 +986,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Confirmation polling recovered without resubmission"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -998,8 +1002,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(result, .success("test-signature"))
@@ -1086,17 +1089,14 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Forbidden confirmation response stayed retryable"
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -1105,8 +1105,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(result, .success("test-signature"))
@@ -1162,13 +1161,12 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(description: "Forbidden response returned")
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -1177,8 +1175,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertEqual(result, .failure(.rpcError(message: "forbidden", code: 403)))
             completion.fulfill()
@@ -1237,12 +1234,11 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(description: "Public testnet transaction sent")
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .testnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .testnet,
@@ -1251,8 +1247,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertEqual(result, .success("test-signature"))
             completion.fulfill()
@@ -1313,16 +1308,13 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: configuration,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(using: solana)
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
-        )
+        let signedTransaction = try signedTransactionFixture()
         let completion = expectation(
             description: "Public testnet confirmation recovered"
         )
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .testnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .testnet,
@@ -1331,8 +1323,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: .finalized
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(result, .success("test-signature"))
@@ -1375,13 +1366,7 @@ final class SolanaOptionsTests: XCTestCase {
             rpcConfiguration: .bundled,
             authorizationProvider: authorizationProvider
         )
-        let prepared = try preparedTransaction(
-            using: solana,
-            file: file,
-            line: line
-        )
-        let privateKey = try XCTUnwrap(
-            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey),
+        let signedTransaction = try signedTransactionFixture(
             file: file,
             line: line
         )
@@ -1390,8 +1375,8 @@ final class SolanaOptionsTests: XCTestCase {
         )
         completion.assertForOverFulfill = true
 
-        solana.signAndSendTransaction(
-            preparedSerializedTransaction: prepared,
+        solana.sendSignedTransaction(
+            signedTransaction,
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
@@ -1400,8 +1385,7 @@ final class SolanaOptionsTests: XCTestCase {
                     "skipPreflight": false,
                 ],
                 confirmationCommitment: nil
-            ),
-            privateKey: privateKey
+            )
         ) { result in
             XCTAssertTrue(Thread.isMainThread, file: file, line: line)
             XCTAssertEqual(result, expectedResult, file: file, line: line)
@@ -1436,19 +1420,23 @@ final class SolanaOptionsTests: XCTestCase {
         )
     }
 
-    private func preparedTransaction(using solana: Solana,
-                                     file: StaticString = #filePath,
-                                     line: UInt = #line) throws -> Solana.PreparedSerializedTransaction {
-        switch solana.preparedSerializedTransactionForSignAndSend(
+    private func signedTransactionFixture(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> String {
+        let prepared = try Solana.shared.preparedSerializedTransactionForSignAndSend(
             serializedTransaction: Vectors.solanaPreparedSerializedTransaction,
             publicKey: Vectors.solanaPreparedSignerPublicKey
-        ) {
-        case .success(let prepared):
-            return prepared
-        case .failure(let error):
-            XCTFail("Expected valid prepared transaction, got \(error)", file: file, line: line)
-            throw SolanaRPCStubError.invalidFixture
-        }
+        ).get()
+        let privateKey = try XCTUnwrap(
+            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey),
+            file: file,
+            line: line
+        )
+        return try Solana.signedTransactionForSignAndSend(
+            preparedSerializedTransaction: prepared,
+            privateKey: privateKey
+        ).get()
     }
 
     private func makeRPCSession(
@@ -1543,7 +1531,6 @@ private final class SolanaRPCRequestRecorder {
 }
 
 private enum SolanaRPCStubError: Error {
-    case invalidFixture
     case invalidRequest
     case unexpectedMethod
     case unexpectedRequest

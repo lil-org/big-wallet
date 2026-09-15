@@ -283,28 +283,31 @@ actor NativeAgentLauncher {
         self.launchTimeoutNanoseconds = launchTimeoutNanoseconds
     }
 
-    func open(_ route: NativeAgentRoute) async -> Bool {
-        let callerDeadline = Self.deadline(
-            afterNanoseconds: launchTimeoutNanoseconds
+    func open(
+        _ route: NativeAgentRoute,
+        waitDeadline: UInt64? = nil
+    ) async -> Bool {
+        let callerDeadline = min(
+            Self.deadline(afterNanoseconds: launchTimeoutNanoseconds),
+            waitDeadline ?? UInt64.max
         )
-        while let shared = sharedDeliveries.first(where: {
+        guard Self.isPending(deadline: callerDeadline) else { return false }
+        if let shared = sharedDeliveries.first(where: {
             $0.route == route
         }) {
-            if await Self.awaitResult(
+            return await Self.awaitResult(
                 of: shared.task,
                 deadline: callerDeadline
-            ) {
-                return true
-            }
-            guard Self.isPending(deadline: callerDeadline) else { return false }
-            finishSharedDelivery(identifier: shared.identifier)
+            )
         }
         let identifier = UUID()
         let precedingDelivery = deliveryTail
         let task = Task { [weak self] in
             await precedingDelivery?.value
             guard let self else { return false }
-            return await self.runQueuedDelivery(route)
+            let result = await self.runQueuedDelivery(route)
+            await self.finishSharedDelivery(identifier: identifier)
+            return result
         }
         sharedDeliveries.append(SharedDelivery(
             identifier: identifier,
@@ -313,22 +316,20 @@ actor NativeAgentLauncher {
         ))
         deliveryTail = Task { _ = await task.value }
         deliveryTailIdentifier = identifier
-        Task { [weak self] in
-            _ = await task.value
-            await self?.finishSharedDelivery(identifier: identifier)
-        }
         return await Self.awaitResult(of: task, deadline: callerDeadline)
     }
 
     func reactivate(
         _ route: NativeAgentRoute,
+        waitDeadline: UInt64? = nil,
         dependencies: ApprovalDeliveryDependencies = .live
     ) async -> Bool {
         guard case .approval(_, let handle, let nativeDeliveryNonce) = route else {
             return false
         }
-        let deadline = Self.deadline(
-            afterNanoseconds: launchTimeoutNanoseconds
+        let deadline = min(
+            Self.deadline(afterNanoseconds: launchTimeoutNanoseconds),
+            waitDeadline ?? UInt64.max
         )
         let isPending = { Self.isPending(deadline: deadline) }
         switch await Self.approvalDeliveryStatus(
@@ -338,7 +339,7 @@ actor NativeAgentLauncher {
             dependencies: dependencies
         ) {
         case .needsDelivery:
-            return isPending() ? await open(route) : false
+            return isPending() ? await open(route, waitDeadline: deadline) : false
         case .delivered:
             break
         case .terminal, .unavailable:

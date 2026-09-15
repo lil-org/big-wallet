@@ -238,7 +238,6 @@ function providerForOperation(provider) {
         retire(provider, providerReplacementError());
         throw providerReplacementError();
     }
-    if (state.configurationError) { throw providerStateError(); }
     return state;
 }
 
@@ -258,9 +257,6 @@ function registerOperation(provider, payload, wrapResult) {
         const error = providerReplacementError();
         retire(provider, error);
         return Promise.reject(error);
-    }
-    if (state.configurationError) {
-        return Promise.reject(providerStateError());
     }
     let record;
     try {
@@ -641,41 +637,14 @@ function applyConfiguration(provider, envelope) {
     }
     const epoch = state.stateEpoch + 1;
     state.stateEpoch = epoch;
-    let configuration;
-    try {
-        configuration = outboundDataSnapshot(
-            dataProperty(envelope, "configuration")
-        );
-    } catch {
-        if (state.stateEpoch === epoch) {
-            state.configurationError = true;
-            state.pendingConfigurationEvent = null;
-            state.runtime.rejectAll(providerStateError());
-        }
-        return false;
-    }
-    const address = configuration?.address;
-    const chainId = configuration?.chainId;
-    if (typeof address !== "string" || !validChainId(chainId)) {
-        if (state.stateEpoch === epoch) {
-            state.configurationError = true;
-            state.pendingConfigurationEvent = null;
-            state.runtime.rejectAll(providerStateError());
-        }
-        return false;
-    }
-    if (state.stateEpoch !== epoch || state.retired) { return false; }
-    const reauthorizationRevision = configuration.reauthorizationRevision;
+    const {address, chainId, reauthorizationRevision} = envelope.configuration;
     const hasReauthorization = isSafeIntegerNormally(reauthorizationRevision) &&
         reauthorizationRevision >= 0;
     const switchAccount = hasReauthorization
         ? reauthorizationRevision > state.reauthorizationRevision
         : dataProperty(envelope, "switchAccount") === true;
-    if (hasReauthorization) {
-        state.reauthorizationRevision = Math.max(
-            state.reauthorizationRevision,
-            reauthorizationRevision
-        );
+    if (hasReauthorization && reauthorizationRevision > state.reauthorizationRevision) {
+        state.reauthorizationRevision = reauthorizationRevision;
     }
     const wasReady = state.runtime.phase === "ready";
     const copiedStateBaseline = state.copiedStateBaseline;
@@ -693,7 +662,6 @@ function applyConfiguration(provider, envelope) {
         switchAccount
     );
     chainChanged = commitChain(state, chainId);
-    state.configurationError = false;
     state.pendingConfigurationEvent = {
         accountsChanged: copiedStateBaseline
             ? state.address !== copiedStateBaseline.address
@@ -881,10 +849,9 @@ function applyErrorEnvelope(provider, state, envelope) {
     return settled;
 }
 
-function applyEnvelope(provider, envelope) {
+function applyDecodedEnvelope(provider, envelope) {
     const state = stateFor(provider);
-    if (!state || state.retired || !envelope ||
-        typeof envelope !== "object") {
+    if (!state || state.retired) {
         return false;
     }
     if (!transportIsCurrent(state)) {
@@ -946,7 +913,7 @@ function snapshot(provider) {
 
 function isReady(provider) {
     const state = stateFor(provider);
-    return !!state && !state.retired && !state.configurationError &&
+    return !!state && !state.retired &&
         state.runtime.phase === "ready";
 }
 
@@ -987,7 +954,6 @@ class BigWalletEthereum {
                     : 0,
             address: normalizedAddress(initial?.address),
             chainId,
-            configurationError: false,
             copiedStateBaseline: null,
             eventForwarders: createObjectNormally(null),
             readinessObserver: null,
@@ -1115,13 +1081,12 @@ class BigWalletEthereum {
     }
 }
 
-BigWalletEthereum.applyEnvelope = applyEnvelope;
 BigWalletEthereum.isReady = isReady;
 BigWalletEthereum.retire = retire;
 BigWalletEthereum.snapshot = snapshot;
 
 export {
-    applyEnvelope,
+    applyDecodedEnvelope,
     isReady,
     subscribeReadiness,
     withReadyState,

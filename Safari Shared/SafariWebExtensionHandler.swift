@@ -649,7 +649,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     @MainActor
     private func ensureNativeApprovalDeliveryIfNeeded(
         handle: ExtensionBridge.Handle,
-        mode: ResponseReadMode
+        mode: ResponseReadMode,
+        waitDeadline: UInt64? = nil
     ) async -> Bool {
         switch await Self.bridge.load(handle: handle) {
         case .found(let snapshot):
@@ -660,11 +661,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     nativeDeliveryNonce: snapshot.nativeDeliveryNonce
                 )
             }
-            return await Self.nativeAgentLauncher.open(.approval(
-                workflowVersion: ExtensionBridge.workflowVersion,
-                handle: handle,
-                nativeDeliveryNonce: snapshot.nativeDeliveryNonce
-            ))
+            return await Self.nativeAgentLauncher.open(
+                .approval(
+                    workflowVersion: ExtensionBridge.workflowVersion,
+                    handle: handle,
+                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+                ),
+                waitDeadline: waitDeadline
+            )
         case .missing:
             return true
         case .unavailable:
@@ -717,7 +721,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                    now >= nextDeliveryCheck {
                     guard await ensureNativeApprovalDeliveryIfNeeded(
                         handle: handle,
-                        mode: mode
+                        mode: mode,
+                        waitDeadline: deadline
                     ) else {
                         _ = await Self.bridge.clearNativeExecutionContext(
                             handle: handle,

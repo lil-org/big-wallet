@@ -1535,56 +1535,6 @@ final class Solana {
         }
     }
 
-    func signAndSendTransaction(preparedSerializedTransaction: PreparedSerializedTransaction,
-                                cluster: Cluster,
-                                sendOptions: PreparedSendOptions,
-                                privateKey: WalletPrivateKey,
-                                completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        guard let endpoint = rpcConfiguration.endpoint(for: cluster) else {
-            completion(.failure(.rpcUnavailable))
-            return
-        }
-        switch Self.signedTransactionForSignAndSend(
-            preparedSerializedTransaction: preparedSerializedTransaction,
-            privateKey: privateKey
-        ) {
-        case .failure(let error):
-            completion(.failure(error))
-        case .success(let signedTransaction):
-            sendSignedTransaction(
-                signedTransaction,
-                endpoint: endpoint,
-                sendOptions: sendOptions,
-                completion: completion
-            )
-        }
-    }
-
-    func signAndSendTransaction(preparedLegacyTransaction: PreparedLegacySignAndSendTransaction,
-                                cluster: Cluster,
-                                sendOptions: PreparedSendOptions,
-                                privateKey: WalletPrivateKey,
-                                completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        guard let endpoint = rpcConfiguration.endpoint(for: cluster) else {
-            completion(.failure(.rpcUnavailable))
-            return
-        }
-        switch Self.signedTransactionForSignAndSend(
-            preparedLegacyTransaction: preparedLegacyTransaction,
-            privateKey: privateKey
-        ) {
-        case .failure(let error):
-            completion(.failure(error))
-        case .success(let signedTransaction):
-            sendSignedTransaction(
-                signedTransaction,
-                endpoint: endpoint,
-                sendOptions: sendOptions,
-                completion: completion
-            )
-        }
-    }
-
     static func signedTransactionForSignAndSend(
         preparedSerializedTransaction: PreparedSerializedTransaction,
         privateKey: WalletPrivateKey
@@ -1653,20 +1603,6 @@ final class Solana {
             completion(.failure(.rpcUnavailable))
             return
         }
-        sendSignedTransaction(
-            signedTransaction,
-            endpoint: endpoint,
-            sendOptions: sendOptions,
-            completion: completion
-        )
-    }
-
-    private func sendSignedTransaction(
-        _ signedTransaction: String,
-        endpoint: RPCConfiguration.Endpoint,
-        sendOptions: PreparedSendOptions,
-        completion: @escaping (Result<String, SendTransactionError>) -> Void
-    ) {
         sendTransaction(
             signed: signedTransaction,
             endpoint: endpoint,

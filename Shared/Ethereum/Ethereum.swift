@@ -294,28 +294,6 @@ struct Ethereum {
         return cancellation
     }
     
-    func send(
-        transaction: Transaction,
-        privateKey: WalletPrivateKey,
-        network: EthereumNetwork,
-        completion: @escaping (Result<String, EthereumSendFailure>) -> Void
-    ) {
-        switch Self.signedTransaction(
-            transaction: transaction,
-            privateKey: privateKey,
-            network: network
-        ) {
-        case .success(let signedTransaction):
-            sendSignedTransaction(
-                signedTransaction,
-                network: network,
-                completion: completion
-            )
-        case .failure(let failure):
-            completion(.failure(failure))
-        }
-    }
-
     static func signedTransaction(
         transaction: Transaction,
         privateKey: WalletPrivateKey,

@@ -3537,13 +3537,18 @@ final class GasServiceTests: XCTestCase {
         let completed = expectation(description: "type-2 send completed")
         var receivedFailure: EthereumSendFailure?
 
-        Ethereum(rpc: rpc).send(
+        let network = makeNetwork(
+            chainID: 100,
+            rpcURL: rpcURL + "/type-2-send"
+        )
+        let signedTransaction = try Ethereum.signedTransaction(
             transaction: transaction,
             privateKey: privateKey,
-            network: makeNetwork(
-                chainID: 100,
-                rpcURL: rpcURL + "/type-2-send"
-            )
+            network: network
+        ).get()
+        Ethereum(rpc: rpc).sendSignedTransaction(
+            signedTransaction,
+            network: network
         ) { result in
             switch result {
             case .success(let transactionHash):
@@ -3562,7 +3567,7 @@ final class GasServiceTests: XCTestCase {
         )
     }
 
-    func testEthereumSendSignsCanonicalNonemptyAccessListFixedVector()
+    func testEthereumSignsCanonicalNonemptyAccessListFixedVector()
         throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
@@ -3612,34 +3617,19 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 1,
             nextBaseFeePerGas: 1
         )
-        let rpc = EthereumCoreRPCStub()
-        let completed = expectation(
-            description: "canonical access-list transaction sent"
-        )
-
-        Ethereum(rpc: rpc).send(
+        let signedTransaction = try Ethereum.signedTransaction(
             transaction: transaction,
             privateKey: privateKey,
             network: makeNetwork(chainID: 8_453)
-        ) { result in
-            XCTAssertEqual(
-                try? result.get(),
-                "0xtransaction"
-            )
-            completed.fulfill()
-        }
+        ).get()
 
-        wait(for: [completed], timeout: 2)
         XCTAssertEqual(
-            rpc.sentRawTransactions,
-            [
-                "0x02f8e5822105068459682f008509502f9000830186a09435353535353535353535353535353535353535350184deadbeeff872f859940000000000000000000000000000000000000101f842a00000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000060a7d6941111111111111111111111111111111111111111c080a014dd6d80870ac4a49e57ae811431fb78be23f11b96846631f823204cf892f6c9a026e1a1ce4bf3cc048eb39089271fc8e1bab0eb75e16630737e8f3fc827f4b1dd"
-            ]
+            signedTransaction,
+            "0x02f8e5822105068459682f008509502f9000830186a09435353535353535353535353535353535353535350184deadbeeff872f859940000000000000000000000000000000000000101f842a00000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000060a7d6941111111111111111111111111111111111111111c080a014dd6d80870ac4a49e57ae811431fb78be23f11b96846631f823204cf892f6c9a026e1a1ce4bf3cc048eb39089271fc8e1bab0eb75e16630737e8f3fc827f4b1dd"
         )
     }
 
-    func testDirectSendRejectsUnsafeType2FeeBeforeSigning() throws {
-        let rpc = EthereumCoreRPCStub()
+    func testSigningRejectsUnsafeType2Fee() throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
                 data: Data(repeating: 0, count: 31) + Data([1])
@@ -3660,28 +3650,17 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 306,
             nextBaseFeePerGas: 306
         )
-        let completed = expectation(description: "unsafe fee rejected")
-
-        Ethereum(rpc: rpc).send(
-            transaction: transaction,
-            privateKey: privateKey,
-            network: makeNetwork(chainID: 100)
-        ) { result in
-            guard case .failure(let failure) = result else {
-                XCTFail("Unsafe type-2 fee unexpectedly sent")
-                completed.fulfill()
-                return
-            }
-            XCTAssertEqual(failure, .invalidTransaction)
-            completed.fulfill()
-        }
-
-        wait(for: [completed], timeout: 2)
-        XCTAssertTrue(rpc.sentRawTransactions.isEmpty)
+        XCTAssertEqual(
+            Ethereum.signedTransaction(
+                transaction: transaction,
+                privateKey: privateKey,
+                network: makeNetwork(chainID: 100)
+            ),
+            .failure(.invalidTransaction)
+        )
     }
 
-    func testZeroEffectiveTipDappFeeSends() throws {
-        let rpc = EthereumCoreRPCStub()
+    func testZeroEffectiveTipDappFeeSigns() throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
                 data: Data(repeating: 0, count: 31) + Data([1])
@@ -3702,28 +3681,16 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 306,
             nextBaseFeePerGas: 306
         )
-        let completed = expectation(
-            description: "zero effective tip sent"
-        )
-
-        Ethereum(rpc: rpc).send(
+        let signedTransaction = try Ethereum.signedTransaction(
             transaction: transaction,
             privateKey: privateKey,
             network: makeNetwork(chainID: 100)
-        ) { result in
-            XCTAssertEqual(try? result.get(), "0xtransaction")
-            completed.fulfill()
-        }
+        ).get()
 
-        wait(for: [completed], timeout: 2)
-        XCTAssertEqual(rpc.sentRawTransactions.count, 1)
-        XCTAssertTrue(
-            try XCTUnwrap(rpc.sentRawTransactions.first).hasPrefix("0x02")
-        )
+        XCTAssertTrue(signedTransaction.hasPrefix("0x02"))
     }
 
-    func testDirectSendRejectsLegacyFeeWithAccessList() throws {
-        let rpc = EthereumCoreRPCStub()
+    func testSigningRejectsLegacyFeeWithAccessList() throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
                 data: Data(repeating: 0, count: 31) + Data([1])
@@ -3746,32 +3713,18 @@ final class GasServiceTests: XCTestCase {
             feeSource: .dapp,
             accessList: [accessListEntry]
         )
-        let completed = expectation(
-            description: "legacy access list rejected"
+        XCTAssertEqual(
+            Ethereum.signedTransaction(
+                transaction: transaction,
+                privateKey: privateKey,
+                network: makeNetwork(chainID: 100)
+            ),
+            .failure(.invalidTransaction)
         )
-
-        Ethereum(rpc: rpc).send(
-            transaction: transaction,
-            privateKey: privateKey,
-            network: makeNetwork(chainID: 100)
-        ) { result in
-            guard case .failure(let failure) = result else {
-                XCTFail("Legacy transaction silently dropped its access list")
-                completed.fulfill()
-                return
-            }
-            XCTAssertEqual(failure, .invalidTransaction)
-            completed.fulfill()
-        }
-
-        wait(for: [completed], timeout: 2)
-        XCTAssertTrue(rpc.sentRawTransactions.isEmpty)
     }
 
-    func testDirectSendUsesOnlyAuthoritativeCatalogFeeMarketCapability()
+    func testSigningUsesOnlyAuthoritativeCatalogFeeMarketCapability()
         throws {
-        let rpc = EthereumCoreRPCStub()
-        let ethereum = Ethereum(rpc: rpc)
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
                 data: Data(repeating: 0, count: 31) + Data([1])
@@ -3827,43 +3780,24 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 0,
             nextBaseFeePerGas: 0
         )
-        let legacyCompleted = expectation(
-            description: "legacy rejected on EIP-1559 catalog"
+        XCTAssertEqual(
+            Ethereum.signedTransaction(
+                transaction: legacyTransaction,
+                privateKey: privateKey,
+                network: network(support: .eip1559)
+            ),
+            .failure(.invalidTransaction)
         )
-        let type2Completed = expectation(
-            description: "type-2 ignores dated legacy observation"
-        )
-
-        ethereum.send(
-            transaction: legacyTransaction,
-            privateKey: privateKey,
-            network: network(support: .eip1559)
-        ) { result in
-            if case .failure(let failure) = result {
-                XCTAssertEqual(failure, .invalidTransaction)
-            } else {
-                XCTFail("Legacy fee without a base snapshot was sent")
-            }
-            legacyCompleted.fulfill()
-        }
-        ethereum.send(
+        let signedTransaction = try Ethereum.signedTransaction(
             transaction: type2Transaction,
             privateKey: privateKey,
             network: network(support: .legacy)
-        ) { result in
-            XCTAssertEqual(try? result.get(), "0xtransaction")
-            type2Completed.fulfill()
-        }
+        ).get()
 
-        wait(for: [legacyCompleted, type2Completed], timeout: 2)
-        XCTAssertEqual(rpc.sentRawTransactions.count, 1)
-        XCTAssertTrue(
-            rpc.sentRawTransactions.first?.hasPrefix("0x02") == true
-        )
+        XCTAssertTrue(signedTransaction.hasPrefix("0x02"))
     }
 
-    func testSendRejectsUInt256MaximumFeeProductBeforeSigning() throws {
-        let rpc = EthereumCoreRPCStub()
+    func testSigningRejectsUInt256MaximumFeeProduct() throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
                 data: Data(repeating: 0, count: 31) + Data([1])
@@ -3880,29 +3814,17 @@ final class GasServiceTests: XCTestCase {
             preparedFee: .legacy(gasPrice: maximum),
             feeSource: .dapp
         )
-        let completed = expectation(description: "overflow rejected")
-
-        Ethereum(rpc: rpc).send(
-            transaction: transaction,
-            privateKey: privateKey,
-            network: makeNetwork(chainID: 1)
-        ) { result in
-            guard case .failure(let failure) = result else {
-                XCTFail("Overflowing fee product unexpectedly sent")
-                completed.fulfill()
-                return
-            }
-            XCTAssertEqual(failure, .invalidTransaction)
-            completed.fulfill()
-        }
-
-        wait(for: [completed], timeout: 2)
-        XCTAssertTrue(rpc.sentRawTransactions.isEmpty)
+        XCTAssertEqual(
+            Ethereum.signedTransaction(
+                transaction: transaction,
+                privateKey: privateKey,
+                network: makeNetwork(chainID: 1)
+            ),
+            .failure(.invalidTransaction)
+        )
     }
 
-    func testDirectSendRejectsZeroLegacyGasOnlyOnMainnet() throws {
-        let rpc = EthereumCoreRPCStub()
-        let ethereum = Ethereum(rpc: rpc)
+    func testSigningRejectsZeroLegacyGasOnlyOnMainnet() throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(
                 data: Data(repeating: 0, count: 31) + Data([1])
@@ -3917,47 +3839,23 @@ final class GasServiceTests: XCTestCase {
             value: "0x0",
             data: "0x"
         )
-        let mainnetCompleted = expectation(
-            description: "mainnet zero fee rejected"
+        XCTAssertEqual(
+            Ethereum.signedTransaction(
+                transaction: transaction,
+                privateKey: privateKey,
+                network: makeNetwork(
+                    chainID: EthereumNetwork.ethMainnetChainId
+                )
+            ),
+            .failure(.invalidTransaction)
         )
-        let otherNetworkCompleted = expectation(
-            description: "other network zero fee sent"
-        )
-
-        ethereum.send(
-            transaction: transaction,
-            privateKey: privateKey,
-            network: makeNetwork(
-                chainID: EthereumNetwork.ethMainnetChainId
-            )
-        ) { result in
-            guard case .failure(let failure) = result else {
-                XCTFail("Mainnet zero gas price unexpectedly sent")
-                mainnetCompleted.fulfill()
-                return
-            }
-            XCTAssertEqual(failure, .invalidTransaction)
-            mainnetCompleted.fulfill()
-        }
-        ethereum.send(
+        let signedTransaction = try Ethereum.signedTransaction(
             transaction: transaction,
             privateKey: privateKey,
             network: makeNetwork(chainID: 10)
-        ) { result in
-            guard case .success(let hash) = result else {
-                XCTFail("Non-mainnet zero gas price was rejected")
-                otherNetworkCompleted.fulfill()
-                return
-            }
-            XCTAssertEqual(hash, "0xtransaction")
-            otherNetworkCompleted.fulfill()
-        }
+        ).get()
 
-        wait(
-            for: [mainnetCompleted, otherNetworkCompleted],
-            timeout: 2
-        )
-        XCTAssertEqual(rpc.sentRawTransactions.count, 1)
+        XCTAssertFalse(signedTransaction.isEmpty)
     }
 
     func testPreparationFillsOnlyMissingType2FieldsAndPreservesProvenance() {
@@ -6316,9 +6214,13 @@ final class GasServiceTests: XCTestCase {
             )
         )
         let sent = expectation(description: "chain-id-less send")
-        ethereum.send(
+        let signedTransaction = try Ethereum.signedTransaction(
             transaction: try XCTUnwrap(prepared),
             privateKey: privateKey,
+            network: network
+        ).get()
+        ethereum.sendSignedTransaction(
+            signedTransaction,
             network: network
         ) { result in
             XCTAssertEqual(try? result.get(), "0xtransaction")

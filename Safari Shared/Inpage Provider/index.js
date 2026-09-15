@@ -8,14 +8,16 @@ import {
     freezeObjectNormally,
     getOwnPropertyDescriptorNormally,
     isSafeIntegerNormally,
-    hasOwnProperty as hasOwn,
 } from "./intrinsics";
 
 import BigWalletEthereum, {
+    applyDecodedEnvelope as applyEthereumDecodedEnvelope,
     subscribeReadiness as ethereumSubscribeReadiness,
     withReadyState as ethereumWithReadyState,
 } from "./ethereum";
-import BigWalletSolana from "./solana";
+import BigWalletSolana, {
+    applyDecodedEnvelope as applySolanaDecodedEnvelope,
+} from "./solana";
 import {providerReplacementError} from "./error";
 import {
     createStableFacadeRecord,
@@ -249,11 +251,17 @@ function malformedError() {
 }
 
 
-function applyCanonical(providerName, envelope) {
+function applyDecoded(providerName, envelope) {
+    const delivery = freezeObjectNormally({
+        __proto__: null,
+        suppressUpdate: false,
+        switchAccount: false,
+        ...envelope,
+    });
     try {
         return providerName === "ethereum"
-            ? BigWalletEthereum.applyEnvelope(ethereumProvider, envelope)
-            : BigWalletSolana.applyEnvelope(solanaProvider, envelope);
+            ? applyEthereumDecodedEnvelope(ethereumProvider, delivery)
+            : applySolanaDecodedEnvelope(solanaProvider, delivery);
     } catch {
         return false;
     }
@@ -266,34 +274,21 @@ function currentSnapshot(providerName) {
 }
 
 function configurationFor(providerName, value, switchAccount = false) {
-    const current = currentSnapshot(providerName) || {};
-    const reauthorizationRevision = ownValue(value, "reauthorizationRevision");
-    const reauthorization = isSafeIntegerNormally(reauthorizationRevision) &&
-        reauthorizationRevision >= 0 ? {reauthorizationRevision} : {};
-    if (hasOwn(reauthorization, "reauthorizationRevision")) {
+    const current = currentSnapshot(providerName) || {__proto__: null};
+    const reauthorizationRevision = value?.reauthorizationRevision;
+    if (reauthorizationRevision !== undefined) {
         switchAccount = reauthorizationRevision > (current.reauthorizationRevision || 0);
     }
     if (providerName === "ethereum") {
-        const configuredAddress = ownValue(value, "address");
-        const address = typeof configuredAddress === "string" ? configuredAddress : "";
-        const configuredChainId = ownValue(value, "chainId");
-        return {
-            ...reauthorization,
-            address,
-            chainId: typeof configuredChainId === "string"
-                ? configuredChainId
-                : typeof current.chainId === "string" ? current.chainId : "0x1",
-        };
+        return freezeObjectNormally({
+            __proto__: null,
+            reauthorizationRevision,
+            address: value?.address ?? "",
+            chainId: value?.chainId ?? current.chainId ?? "0x1",
+        });
     }
-    const configuredKey = ownValue(value, "publicKey");
-    const publicKey = typeof configuredKey === "string" ? configuredKey : null;
-    const revision = ownValue(value, "accountRevision");
-    const epoch = ownValue(value, "solanaAuthorizationEpoch");
-    const connected = ownValue(value, "isConnected");
-    const currentRevision = isSafeIntegerNormally(current.accountRevision) &&
-        current.accountRevision >= 0
-        ? current.accountRevision
-        : 0;
+    const publicKey = value?.publicKey ?? null;
+    const currentRevision = current.accountRevision ?? 0;
     const changesAccount = switchAccount || publicKey !== current.publicKey;
     if (changesAccount && currentRevision === Number.MAX_SAFE_INTEGER) {
         return null;
@@ -301,20 +296,18 @@ function configurationFor(providerName, value, switchAccount = false) {
     const minimumRevision = changesAccount
         ? currentRevision + 1
         : currentRevision;
-    return {
-        ...reauthorization,
-        accountRevision: isSafeIntegerNormally(revision) && revision >= 0
-            ? Math.max(revision, minimumRevision)
+    const incomingRevision = value?.accountRevision ?? 0;
+    return freezeObjectNormally({
+        __proto__: null,
+        reauthorizationRevision,
+        accountRevision: incomingRevision > minimumRevision
+            ? incomingRevision
             : minimumRevision,
-        isConnected: typeof connected === "boolean"
-            ? connected && publicKey !== null
-            : publicKey !== null,
+        isConnected: value?.isConnected === true && publicKey !== null,
         publicKey,
-        solanaAuthorizationEpoch: isSafeIntegerNormally(epoch) && epoch >= 0
-            ? epoch
-            : isSafeIntegerNormally(current.solanaAuthorizationEpoch)
-                ? current.solanaAuthorizationEpoch : 0,
-    };
+        solanaAuthorizationEpoch:
+            value?.solanaAuthorizationEpoch ?? current.solanaAuthorizationEpoch ?? 0,
+    });
 }
 
 function deliverConfiguration(
@@ -332,7 +325,7 @@ function deliverConfiguration(
         : null;
     const configuration = configurationFor(
         providerName,
-        value || {},
+        value,
         switchAccount
     );
     if (!ingressIsCurrent(ingressEpoch)) {
@@ -355,16 +348,18 @@ function deliverConfiguration(
         if (!disconnected) {
             return {configuration: null, delivered: false};
         }
-        const disconnectedConfiguration = {
+        const disconnectedConfiguration = freezeObjectNormally({
+            __proto__: null,
             accountRevision: disconnected.accountRevision,
             isConnected: false,
             publicKey: null,
+            reauthorizationRevision: undefined,
             solanaAuthorizationEpoch:
                 disconnected.solanaAuthorizationEpoch,
-        };
+        });
         return {
             configuration: disconnectedConfiguration,
-            delivered: applyCanonical(providerName, {
+            delivered: applyDecoded(providerName, {
                 configuration: disconnectedConfiguration,
                 kind: "configuration",
                 suppressUpdate: false,
@@ -374,7 +369,7 @@ function deliverConfiguration(
     }
     return {
         configuration,
-        delivered: applyCanonical(providerName, {
+        delivered: applyDecoded(providerName, {
             configuration,
             kind: "configuration",
             suppressUpdate,
@@ -415,7 +410,7 @@ function providerForWireId(id) {
 function rejectMalformedCorrelation(id, name, suppressUpdate, ingressEpoch) {
     const providerName = providerForWireId(id);
     if (!providerName) { return false; }
-    return applyCanonical(providerName, {
+    return applyDecoded(providerName, {
         error: malformedError(),
         id,
         kind: "error",
@@ -471,7 +466,7 @@ function handleContentBridgeMessage(event) {
                 response.state !== null || response.configurationMatch !== null) {
                 delivered = rejectMalformedCorrelation(id, null, true, ingressEpoch);
             } else {
-                delivered = applyCanonical("ethereum", {
+                delivered = applyDecoded("ethereum", {
                     ...response,
                     suppressUpdate: true,
                     authorizationFailure: false,
@@ -481,8 +476,8 @@ function handleContentBridgeMessage(event) {
             return;
         }
         if (response.kind === "configurationError") {
-            delivered = applyCanonical("ethereum", response);
-            delivered = applyCanonical("solana", response) || delivered;
+            delivered = applyDecoded("ethereum", response);
+            delivered = applyDecoded("solana", response) || delivered;
             return;
         }
         delivered = deliverConfigurations(response, suppressUpdate, ingressEpoch);
@@ -493,7 +488,7 @@ function handleContentBridgeMessage(event) {
             ) || delivered;
             return;
         }
-        delivered = applyCanonical(response.provider, {
+        delivered = applyDecoded(response.provider, {
             ...response,
             suppressUpdate: suppressUpdate || !ingressIsCurrent(ingressEpoch),
         }) || delivered;
