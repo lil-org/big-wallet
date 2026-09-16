@@ -256,7 +256,6 @@ function applyDecoded(providerName, envelope) {
     const delivery = freezeObjectNormally({
         __proto__: null,
         suppressUpdate: false,
-        switchAccount: false,
         ...envelope,
     });
     try {
@@ -274,12 +273,10 @@ function currentSnapshot(providerName) {
         : BigWalletSolana.snapshot(solanaProvider);
 }
 
-function configurationFor(providerName, value, switchAccount = false) {
+function configurationFor(providerName, value) {
     const current = currentSnapshot(providerName) || {__proto__: null};
-    const reauthorizationRevision = value?.reauthorizationRevision;
-    if (reauthorizationRevision !== undefined) {
-        switchAccount = reauthorizationRevision > (current.reauthorizationRevision || 0);
-    }
+    const reauthorizationRevision = value?.reauthorizationRevision ??
+        current.reauthorizationRevision ?? 0;
     if (providerName === "ethereum") {
         return freezeObjectNormally({
             __proto__: null,
@@ -290,7 +287,8 @@ function configurationFor(providerName, value, switchAccount = false) {
     }
     const publicKey = value?.publicKey ?? null;
     const currentRevision = current.accountRevision ?? 0;
-    const changesAccount = switchAccount || publicKey !== current.publicKey;
+    const changesAccount = reauthorizationRevision > (current.reauthorizationRevision ?? 0) ||
+        publicKey !== current.publicKey;
     if (changesAccount && currentRevision === Number.MAX_SAFE_INTEGER) {
         return null;
     }
@@ -314,7 +312,6 @@ function configurationFor(providerName, value, switchAccount = false) {
 function deliverConfiguration(
     providerName,
     value,
-    switchAccount,
     suppressUpdate,
     ingressEpoch
 ) {
@@ -324,11 +321,7 @@ function deliverConfiguration(
     const current = providerName === "solana"
         ? currentSnapshot("solana")
         : null;
-    const configuration = configurationFor(
-        providerName,
-        value,
-        switchAccount
-    );
+    const configuration = configurationFor(providerName, value);
     if (!ingressIsCurrent(ingressEpoch)) {
         return {configuration: null, delivered: false};
     }
@@ -354,7 +347,7 @@ function deliverConfiguration(
             accountRevision: disconnected.accountRevision,
             isConnected: false,
             publicKey: null,
-            reauthorizationRevision: undefined,
+            reauthorizationRevision: disconnected.reauthorizationRevision,
             solanaAuthorizationEpoch:
                 disconnected.solanaAuthorizationEpoch,
         });
@@ -364,7 +357,6 @@ function deliverConfiguration(
                 configuration: disconnectedConfiguration,
                 kind: "configuration",
                 suppressUpdate: false,
-                switchAccount,
             }),
         };
     }
@@ -374,7 +366,6 @@ function deliverConfiguration(
             configuration,
             kind: "configuration",
             suppressUpdate,
-            switchAccount,
         }),
     };
 }
@@ -389,7 +380,7 @@ function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
         );
     }
     let delivered = deliverConfiguration(
-        "ethereum", state.ethereum, false, suppressUpdate, ingressEpoch
+        "ethereum", state.ethereum, suppressUpdate, ingressEpoch
     ).delivered;
     if (!ingressIsCurrent(ingressEpoch)) { return delivered; }
     const solana = state.solana ? {
@@ -398,7 +389,7 @@ function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
         solanaAuthorizationEpoch: state.revisions.solana,
     } : null;
     delivered = deliverConfiguration(
-        "solana", solana, false, suppressUpdate, ingressEpoch
+        "solana", solana, suppressUpdate, ingressEpoch
     ).delivered || delivered;
     return delivered;
 }

@@ -9,30 +9,14 @@ import UIKit
 
 struct EditTransactionView: View {
 
-    private static let maximumExactGweiTextLength = 79
-
     private enum FeeMode: Equatable {
         case legacy
         case eip1559
     }
 
-    private enum EIP1559FeeField {
-        case priority
-        case cap
-    }
-
+    private let initialTransaction: Transaction
     private let chain: EthereumNetwork
     private let feeMode: FeeMode
-    private let initialGasPriceText: String
-    private let initialMaxPriorityFeeText: String
-    private let initialMaxFeeText: String
-    private let initialFeeProvenance: TransactionFeeProvenance
-    private let initialNonce: BigUInt?
-    private let initialNonceWasPresent: Bool
-    private let initialNonceText: String
-    private let gasLimit: BigUInt?
-    private let currentBaseFeePerGas: BigUInt?
-    private let nextBaseFeePerGas: BigUInt?
     private let suggestedNonce: String?
     private let suggestedFee: PreparedTransactionFee?
     private let completion: (Transaction.Edits?) -> Void
@@ -41,84 +25,15 @@ struct EditTransactionView: View {
     @State private var maxPriorityFee: String
     @State private var maxFee: String
     @State private var nonce: String
-    @State private var workingFeeProvenance: TransactionFeeProvenance
+    @State private var selectedSuggestedFee: PreparedTransactionFee?
 
-    private var feeBasisBaseFeePerGas: BigUInt? {
-        nextBaseFeePerGas ?? currentBaseFeePerGas
+    private var pendingEdits: Transaction.Edits? {
+        edits(nonce: nonce)
     }
 
-    private var parsedGasPrice: BigUInt? {
-        Self.exactWei(fromGwei: gasPrice)
-    }
-
-    private var parsedMaxPriorityFee: BigUInt? {
-        Self.exactWei(fromGwei: maxPriorityFee)
-    }
-
-    private var parsedMaxFee: BigUInt? {
-        Self.exactWei(fromGwei: maxFee)
-    }
-
-    private var legacyFeeIsValid: Bool {
-        guard let parsedGasPrice else { return false }
-        guard Transaction.isValidGasPrice(parsedGasPrice, on: chain) else {
-            return false
-        }
-        guard let feeBasisBaseFeePerGas else { return true }
-        return parsedGasPrice >= feeBasisBaseFeePerGas
-    }
-
-    private var eip1559FeeIsValid: Bool {
-        guard let candidateFee,
-              case .eip1559(_, let cap) = candidateFee else {
-            return false
-        }
-
-        guard let feeBasisBaseFeePerGas else { return true }
-        return cap >= feeBasisBaseFeePerGas
-    }
-
-    private var nonceIsValid: Bool {
-        if nonce == initialNonceText {
-            return !initialNonceWasPresent || initialNonce != nil
-        }
-        return UInt(nonce) != nil
-    }
-
-    private var canCommit: Bool {
-        let feeIsValid = switch feeMode {
-        case .legacy:
-            legacyFeeIsValid
-        case .eip1559:
-            eip1559FeeIsValid
-        }
-        return feeIsValid &&
-            maximumNetworkFeeFitsUInt256 &&
-            nonceIsValid
-    }
-
-    private var candidateFee: PreparedTransactionFee? {
-        switch feeMode {
-        case .legacy:
-            guard let gasPrice = parsedGasPrice else { return nil }
-            let fee = PreparedTransactionFee.legacy(gasPrice: gasPrice)
-            return fee.isStructurallyValid ? fee : nil
-        case .eip1559:
-            guard let priority = parsedMaxPriorityFee,
-                  let cap = parsedMaxFee else {
-                return nil
-            }
-            let fee = PreparedTransactionFee.eip1559(
-                maxPriorityFeePerGas: priority,
-                maxFeePerGas: cap
-            )
-            return fee.isStructurallyValid ? fee : nil
-        }
-    }
-
-    private var maximumNetworkFeeFitsUInt256: Bool {
-        guard let candidateFee else { return true }
-        return candidateFee.maximumNetworkFeeFitsUInt256(gasLimit: gasLimit)
+    private var feeProvenance: TransactionFeeProvenance {
+        edits(nonce: initialTransaction.editableFields.nonce)?.replacementFeeProvenance
+            ?? initialTransaction.feeProvenance
     }
 
     private var suggestedGasPriceText: String? {
@@ -129,7 +44,7 @@ struct EditTransactionView: View {
     private var shouldOfferSuggestedLegacyFee: Bool {
         guard let suggestedGasPriceText else { return false }
         return suggestedGasPriceText != gasPrice ||
-            workingFeeProvenance != automaticSuggestedFeeProvenance
+            feeProvenance != automaticSuggestedFeeProvenance
     }
 
     private var suggestedEIP1559Texts: (priority: String, cap: String)? {
@@ -145,7 +60,7 @@ struct EditTransactionView: View {
         guard let suggested = suggestedEIP1559Texts else { return false }
         return suggested.priority != maxPriorityFee ||
             suggested.cap != maxFee ||
-            workingFeeProvenance != automaticSuggestedFeeProvenance
+            feeProvenance != automaticSuggestedFeeProvenance
     }
 
     private var automaticSuggestedFeeProvenance:
@@ -165,43 +80,18 @@ struct EditTransactionView: View {
         let feeMode: FeeMode = initialTransaction.usesEIP1559Fees
             ? .eip1559
             : .legacy
-        let gasPrice = initialTransaction.editableGasPriceGwei ?? ""
-        let maxPriorityFee = Transaction.editableGwei(
-            fromWei: initialTransaction.maxPriorityFeePerGasValue
-        ) ?? ""
-        let maxFee = Transaction.editableGwei(
-            fromWei: initialTransaction.maxFeePerGasValue
-        ) ?? ""
-        let initialNonce = initialTransaction.nonce.flatMap {
-            EthereumQuantity.parseUInt256(
-                $0,
-                allowPrefixless: true
-            )
-        }
-        let nonce = initialNonce?.description ?? ""
+        let fields = initialTransaction.editableFields
 
+        self.initialTransaction = initialTransaction
         self.chain = chain
         self.feeMode = feeMode
-        self.initialGasPriceText = gasPrice
-        self.initialMaxPriorityFeeText = maxPriorityFee
-        self.initialMaxFeeText = maxFee
-        self.initialFeeProvenance = initialTransaction.feeProvenance
-        self.initialNonce = initialNonce
-        self.initialNonceWasPresent = initialTransaction.nonce != nil
-        self.initialNonceText = nonce
-        self.gasLimit = initialTransaction.gasLimitValue
-        self.currentBaseFeePerGas = initialTransaction.currentBaseFeePerGas
-        self.nextBaseFeePerGas = initialTransaction.nextBaseFeePerGas
         self.suggestedNonce = suggestedNonce
         self.suggestedFee = suggestedFee
         self.completion = completion
-        self._gasPrice = State(initialValue: gasPrice)
-        self._maxPriorityFee = State(initialValue: maxPriorityFee)
-        self._maxFee = State(initialValue: maxFee)
-        self._nonce = State(initialValue: nonce)
-        self._workingFeeProvenance = State(
-            initialValue: initialTransaction.feeProvenance
-        )
+        self._gasPrice = State(initialValue: fields.gasPriceGwei)
+        self._maxPriorityFee = State(initialValue: fields.maxPriorityFeePerGasGwei)
+        self._maxFee = State(initialValue: fields.maxFeePerGasGwei)
+        self._nonce = State(initialValue: fields.nonce)
     }
 
     var body: some View {
@@ -251,7 +141,7 @@ struct EditTransactionView: View {
     private var applyButton: some View {
         Button(Strings.apply, action: commit)
             .keyboardShortcut(.defaultAction)
-            .disabled(!canCommit)
+            .disabled(pendingEdits == nil)
             .buttonStyle(.borderedProminent)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -273,7 +163,7 @@ struct EditTransactionView: View {
             }
             TransactionTextField(
                 placeholder: Strings.customGasPrice,
-                text: manuallyEditedLegacyFeeBinding,
+                text: $gasPrice,
                 keyboard: .decimal,
                 suffix: nil,
                 identifier: "transactionGasPriceField"
@@ -303,10 +193,7 @@ struct EditTransactionView: View {
                 }
                 TransactionTextField(
                     placeholder: Strings.customMaxPriorityFee,
-                    text: manuallyEditedFeeBinding(
-                        $maxPriorityFee,
-                        field: .priority
-                    ),
+                    text: $maxPriorityFee,
                     keyboard: .decimal,
                     suffix: Strings.gwei,
                     identifier: "transactionMaxPriorityFeeField"
@@ -315,10 +202,7 @@ struct EditTransactionView: View {
             feeField(
                 title: Strings.maxFee,
                 placeholder: Strings.customMaxFee,
-                text: manuallyEditedFeeBinding(
-                    $maxFee,
-                    field: .cap
-                ),
+                text: $maxFee,
                 identifier: "transactionMaxFeeField"
             )
         }
@@ -368,18 +252,16 @@ struct EditTransactionView: View {
     }
 
     private func resetGasPrice() {
-        guard let suggestedGasPriceText,
-              let automaticSuggestedFeeProvenance else { return }
+        guard let suggestedGasPriceText, let suggestedFee else { return }
         gasPrice = suggestedGasPriceText
-        workingFeeProvenance = automaticSuggestedFeeProvenance
+        selectedSuggestedFee = suggestedFee
     }
 
     private func resetEIP1559Fees() {
-        guard let suggested = suggestedEIP1559Texts,
-              let automaticSuggestedFeeProvenance else { return }
+        guard let suggested = suggestedEIP1559Texts, let suggestedFee else { return }
         maxPriorityFee = suggested.priority
         maxFee = suggested.cap
-        workingFeeProvenance = automaticSuggestedFeeProvenance
+        selectedSuggestedFee = suggestedFee
     }
 
     private func resetNonce() {
@@ -392,100 +274,21 @@ struct EditTransactionView: View {
     }
 
     private func commit() {
-        guard canCommit else { return }
-
-        let feeChanged: Bool
-        switch feeMode {
-        case .legacy:
-            feeChanged = gasPrice != initialGasPriceText
-        case .eip1559:
-            feeChanged =
-                maxPriorityFee != initialMaxPriorityFeeText ||
-                maxFee != initialMaxFeeText
-        }
-
-        let nonceEdit = nonce == initialNonceText ? nil : UInt(nonce)
-        let provenanceChanged =
-            workingFeeProvenance != initialFeeProvenance
-        guard (feeChanged || provenanceChanged),
-              let candidateFee else {
-            completion(Transaction.Edits(nonce: nonceEdit))
-            return
-        }
-
-        completion(
-            Transaction.Edits(
-                preparedFee: candidateFee,
-                source: workingFeeProvenance.dominantSource(
-                    for: candidateFee
-                ),
-                replacementFeeProvenance: workingFeeProvenance,
-                restoresSuggestedFee:
-                    candidateFee == suggestedFee &&
-                    workingFeeProvenance ==
-                        automaticSuggestedFeeProvenance,
-                nonce: nonceEdit
-            )
-        )
+        guard let pendingEdits else { return }
+        completion(pendingEdits)
     }
 
-    private func manuallyEditedFeeBinding(
-        _ binding: Binding<String>,
-        field: EIP1559FeeField
-    ) -> Binding<String> {
-        Binding(
-            get: { binding.wrappedValue },
-            set: { value in
-                if workingFeeProvenance.maxPriorityFeePerGas == .slider ||
-                    workingFeeProvenance.maxFeePerGas == .slider {
-                    workingFeeProvenance =
-                        TransactionFeeProvenance(
-                            maxPriorityFeePerGas: .manual,
-                            maxFeePerGas: .manual
-                        )
-                } else {
-                    switch field {
-                    case .priority:
-                        workingFeeProvenance.maxPriorityFeePerGas =
-                            .manual
-                    case .cap:
-                        workingFeeProvenance.maxFeePerGas = .manual
-                    }
-                }
-                binding.wrappedValue = value
-            }
+    private func edits(nonce: String) -> Transaction.Edits? {
+        initialTransaction.edits(
+            from: Transaction.EditableFields(
+                nonce: nonce,
+                gasPriceGwei: gasPrice,
+                maxPriorityFeePerGasGwei: maxPriorityFee,
+                maxFeePerGasGwei: maxFee
+            ),
+            on: chain,
+            resettingFeeTo: selectedSuggestedFee
         )
-    }
-
-    private var manuallyEditedLegacyFeeBinding: Binding<String> {
-        Binding(
-            get: { gasPrice },
-            set: { value in
-                workingFeeProvenance =
-                    TransactionFeeProvenance(gasPrice: .manual)
-                gasPrice = value
-            }
-        )
-    }
-
-    private static func exactWei(fromGwei rawText: String) -> BigUInt? {
-        let text = rawText.replacingOccurrences(of: ",", with: ".")
-        guard !text.isEmpty,
-              text.utf8.count <= maximumExactGweiTextLength else {
-            return nil
-        }
-        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count <= 2,
-              parts.allSatisfy({ part in
-                  part.unicodeScalars.allSatisfy {
-                      (48...57).contains($0.value)
-                  }
-              }),
-              parts.contains(where: { !$0.isEmpty }),
-              parts.count < 2 || parts[1].count <= 9 else {
-            return nil
-        }
-        return Transaction.feeWei(fromGwei: text)
     }
 
 }

@@ -702,6 +702,7 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
 
     private func makeTransactionApprovalSession(
+        transaction: Transaction = popupReadyTransaction(),
         prepare: @escaping TransactionApprovalOperations.Prepare = {
             transaction, _, _, _, _, completion in
             completion(.success(transaction))
@@ -711,7 +712,7 @@ final class PopupRequestSessionsTests: XCTestCase {
     ) -> PopupTransactionSession {
         let session = PopupTransactionSession(
             action: SendTransactionAction(
-                transaction: popupReadyTransaction(),
+                transaction: transaction,
                 resolvedNetwork: ResolvedEthereumNetwork(
                     network: popupTransactionNetwork(),
                     source: .custom
@@ -915,6 +916,116 @@ final class PopupRequestSessionsTests: XCTestCase {
             XCTAssertEqual(session.snapshot.transaction.decimalNonceString, "1")
             XCTAssertEqual(session.snapshot.transaction.feeProvenance, provenance)
         }
+    }
+
+    func testNonceOnlyEditKeepsFailedTransactionUnapprovable() {
+        let transaction = Transaction(
+            from: popupTestAccount().address,
+            to: "0x0000000000000000000000000000000000000002",
+            nonce: "0x0",
+            gas: "0x5208",
+            value: "0x0",
+            data: "0x",
+            feeIntent: .automatic
+        )
+        var preparationCount = 0
+        let session = makeTransactionApprovalSession(
+            transaction: transaction,
+            prepare: { _, _, _, _, _, completion in
+                preparationCount += 1
+                completion(.failure(.gasPriceUnavailable))
+                return EthereumRequestCancellation()
+            },
+            preflight: { _, _, _ in
+                XCTFail("An invalid fee must not reach preflight")
+                return EthereumRequestCancellation()
+            }
+        )
+
+        XCTAssertTrue(session.applyEdits(
+            .custom(.init(
+                nonce: "1",
+                gasPriceGwei: "",
+                maxPriorityFeePerGasGwei: nil,
+                maxFeePerGasGwei: nil
+            )),
+            chain: popupTransactionNetwork()
+        ))
+
+        XCTAssertEqual(session.snapshot.transaction.decimalNonceString, "1")
+        XCTAssertNil(session.snapshot.transaction.preparedFee)
+        XCTAssertEqual(session.snapshot.phase, .failed)
+        XCTAssertFalse(session.snapshot.canApprove)
+        XCTAssertEqual(preparationCount, 2)
+    }
+
+    func testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee() {
+        var transaction = popupReadyTransaction()
+        transaction.replacePreparedFee(
+            .legacy(gasPrice: 10),
+            provenance: .init(gasPrice: .manual)
+        )
+        let session = makeTransactionApprovalSession(
+            transaction: transaction,
+            prepare: { transaction, _, _, _, onFeeEstimate, completion in
+                onFeeEstimate(popupTransactionEstimate())
+                completion(.success(transaction))
+                return EthereumRequestCancellation()
+            },
+            preflight: { _, _, _ in EthereumRequestCancellation() }
+        )
+        XCTAssertTrue(session.applyEdits(
+            .custom(.init(
+                nonce: "7",
+                gasPriceGwei: "0.00000001",
+                maxPriorityFeePerGasGwei: nil,
+                maxFeePerGasGwei: nil
+            )),
+            chain: popupTransactionNetwork()
+        ))
+        XCTAssertEqual(session.snapshot.transaction.feeProvenance.gasPrice, .manual)
+
+        XCTAssertTrue(session.applyEdits(.suggested, chain: popupTransactionNetwork()))
+
+        XCTAssertEqual(session.snapshot.transaction.decimalNonceString, "0")
+        XCTAssertEqual(session.snapshot.transaction.preparedFee, .legacy(gasPrice: 10))
+        XCTAssertEqual(session.snapshot.transaction.feeProvenance.gasPrice, .automatic)
+    }
+
+    func testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation() {
+        var preparationCount = 0
+        let session = makeTransactionApprovalSession(
+            prepare: { transaction, _, _, _, _, completion in
+                preparationCount += 1
+                completion(.success(transaction))
+                return EthereumRequestCancellation()
+            },
+            preflight: { _, _, _ in EthereumRequestCancellation() }
+        )
+        let original = session.snapshot.transaction
+
+        XCTAssertFalse(session.applyEdits(
+            .custom(.init(
+                nonce: "1",
+                gasPriceGwei: "invalid",
+                maxPriorityFeePerGasGwei: nil,
+                maxFeePerGasGwei: nil
+            )),
+            chain: popupTransactionNetwork()
+        ))
+        XCTAssertTrue(session.applyEdits(
+            .custom(.init(
+                nonce: original.editableFields.nonce,
+                gasPriceGwei: original.editableFields.gasPriceGwei,
+                maxPriorityFeePerGasGwei: nil,
+                maxFeePerGasGwei: nil
+            )),
+            chain: popupTransactionNetwork()
+        ))
+
+        XCTAssertEqual(session.snapshot.transaction.id, original.id)
+        XCTAssertEqual(session.snapshot.transaction.nonce, original.nonce)
+        XCTAssertEqual(preparationCount, 1)
     }
 
     private func makeFeeEditingSession(

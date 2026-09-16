@@ -723,7 +723,9 @@ struct Transaction: Sendable {
 
     var editableFields: EditableFields {
         return EditableFields(
-            nonce: decimalNonceString ?? "",
+            nonce: nonce.flatMap {
+                EthereumQuantity.parseUInt256($0, allowPrefixless: true)
+            }?.description ?? "",
             gasPriceGwei: editableGasPriceGwei ?? "",
             maxPriorityFeePerGasGwei: Self.editableGwei(
                 fromWei: maxPriorityFeePerGasValue
@@ -731,6 +733,92 @@ struct Transaction: Sendable {
             maxFeePerGasGwei: Self.editableGwei(
                 fromWei: maxFeePerGasValue
             ) ?? ""
+        )
+    }
+
+    func edits(
+        from fields: EditableFields,
+        on chain: EthereumNetwork,
+        resettingFeeTo suggestedFee: PreparedTransactionFee? = nil
+    ) -> Edits? {
+        var nonceEdit: UInt?
+        if fields.nonce != editableFields.nonce {
+            guard let nonce = UInt(fields.nonce) else { return nil }
+            nonceEdit = nonce
+        }
+
+        var baseline = self
+        if let suggestedFee {
+            baseline.replacePreparedFee(
+                suggestedFee,
+                provenance: TransactionFeeProvenance(
+                    source: .automatic,
+                    for: suggestedFee
+                )
+            )
+        }
+        let baselineFields = baseline.editableFields
+        var provenance = baseline.feeProvenance
+        let candidateFee: PreparedTransactionFee
+
+        if suggestedFee?.isEIP1559 ?? usesEIP1559Fees {
+            let priorityChanged = fields.maxPriorityFeePerGasGwei !=
+                baselineFields.maxPriorityFeePerGasGwei
+            let capChanged = fields.maxFeePerGasGwei !=
+                baselineFields.maxFeePerGasGwei
+            guard priorityChanged || capChanged || suggestedFee != nil else {
+                return Edits(nonce: nonceEdit)
+            }
+            guard let priority = Self.exactFeeWei(
+                fromGwei: fields.maxPriorityFeePerGasGwei
+            ), let cap = Self.exactFeeWei(
+                fromGwei: fields.maxFeePerGasGwei
+            ) else { return nil }
+
+            candidateFee = .eip1559(
+                maxPriorityFeePerGas: priority,
+                maxFeePerGas: cap
+            )
+            let editsSliderFee = (priorityChanged || capChanged) &&
+                (provenance.maxPriorityFeePerGas == .slider ||
+                    provenance.maxFeePerGas == .slider)
+            if priorityChanged || editsSliderFee {
+                provenance.maxPriorityFeePerGas = .manual
+            }
+            if capChanged || editsSliderFee {
+                provenance.maxFeePerGas = .manual
+            }
+        } else {
+            let gasPriceChanged = fields.gasPriceGwei != baselineFields.gasPriceGwei
+            guard gasPriceChanged || suggestedFee != nil else {
+                return Edits(nonce: nonceEdit)
+            }
+            guard let gasPrice = Self.exactFeeWei(fromGwei: fields.gasPriceGwei),
+                  Self.isValidGasPrice(gasPrice, on: chain) else { return nil }
+            candidateFee = .legacy(gasPrice: gasPrice)
+            if gasPriceChanged {
+                provenance = TransactionFeeProvenance(gasPrice: .manual)
+            }
+        }
+
+        guard candidateFee.isStructurallyValid,
+              feeBasisBaseFeePerGas.map({ candidateFee.feeCapPerGas >= $0 }) != false,
+              candidateFee.maximumNetworkFeeFitsUInt256(gasLimit: gasLimitValue)
+        else { return nil }
+        guard candidateFee != preparedFee || provenance != feeProvenance else {
+            return Edits(nonce: nonceEdit)
+        }
+
+        return Edits(
+            preparedFee: candidateFee,
+            source: provenance.dominantSource(for: candidateFee),
+            replacementFeeProvenance: provenance,
+            restoresSuggestedFee: suggestedFee == candidateFee &&
+                provenance == TransactionFeeProvenance(
+                    source: .automatic,
+                    for: candidateFee
+                ),
+            nonce: nonceEdit
         )
     }
 

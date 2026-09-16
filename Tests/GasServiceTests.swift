@@ -23,6 +23,22 @@ final class GasServiceTests: XCTestCase {
         return .unauthenticated(URL(string: value)!)
     }
 
+    private func editedFields(
+        for transaction: Transaction,
+        nonce: String? = nil,
+        gasPrice: String? = nil,
+        priority: String? = nil,
+        cap: String? = nil
+    ) -> Transaction.EditableFields {
+        let fields = transaction.editableFields
+        return Transaction.EditableFields(
+            nonce: nonce ?? fields.nonce,
+            gasPriceGwei: gasPrice ?? fields.gasPriceGwei,
+            maxPriorityFeePerGasGwei: priority ?? fields.maxPriorityFeePerGasGwei,
+            maxFeePerGasGwei: cap ?? fields.maxFeePerGasGwei
+        )
+    }
+
     private func fullBaseFees(
         current: String,
         next: String
@@ -1790,6 +1806,307 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(dynamic.editableFields.nonce, "8")
         XCTAssertEqual(dynamic.editableFields.maxPriorityFeePerGasGwei, "1.5")
         XCTAssertEqual(dynamic.editableFields.maxFeePerGasGwei, "2")
+    }
+
+    func testEditorUsesFinalTextToPreserveOriginalFeeOwnership() throws {
+        let chain = makeNetwork(chainID: 1)
+        for source in [TransactionFeeSource.automatic, .dapp, .slider, .manual] {
+            let transaction = Transaction(
+                from: "0x0", to: "0x1", nonce: "0x7", value: nil, data: "0x",
+                preparedFee: .legacy(gasPrice: 1_000_000_000),
+                feeSource: source
+            )
+            let changed = try XCTUnwrap(transaction.edits(
+                from: editedFields(for: transaction, gasPrice: "2"),
+                on: chain
+            ))
+            XCTAssertEqual(changed.preparedFee, .legacy(gasPrice: 2_000_000_000))
+            XCTAssertEqual(changed.replacementFeeProvenance, .init(gasPrice: .manual))
+            XCTAssertFalse(changed.restoresSuggestedFee)
+            XCTAssertEqual(
+                transaction.edits(from: transaction.editableFields, on: chain),
+                Transaction.Edits()
+            )
+            XCTAssertEqual(transaction.feeSource, source)
+            XCTAssertEqual(transaction.nonce, "0x7")
+        }
+    }
+
+    func testEditorAllowsNonceOnlyChangesWithUnchangedInvalidFees() throws {
+        let chain = makeNetwork(chainID: 1)
+        let invalidFees: [PreparedTransactionFee?] = [
+            nil,
+            .legacy(gasPrice: 0),
+            .legacy(gasPrice: 1),
+            .legacy(gasPrice: Transaction.maximumUInt256),
+            .eip1559(maxPriorityFeePerGas: 3, maxFeePerGas: 2),
+        ]
+        for fee in invalidFees {
+            var transaction = Transaction(
+                from: "0x0", to: "0x1", nonce: "0x1", gas: "0x2",
+                value: nil, data: "0x", preparedFee: fee,
+                currentBaseFeePerGas: 2
+            )
+            XCTAssertFalse(transaction.isReadyForApproval(on: chain))
+            XCTAssertEqual(
+                transaction.edits(from: transaction.editableFields, on: chain),
+                Transaction.Edits()
+            )
+            let edits = try XCTUnwrap(transaction.edits(
+                from: editedFields(for: transaction, nonce: "2"),
+                on: chain
+            ))
+            XCTAssertEqual(edits, Transaction.Edits(nonce: 2))
+            XCTAssertTrue(transaction.apply(edits))
+            XCTAssertEqual(transaction.preparedFee, fee)
+            XCTAssertFalse(transaction.isReadyForApproval(on: chain))
+        }
+    }
+
+    func testEditorPreservesUnchangedUInt256NonceAndRejectsOversizedEdits() throws {
+        let chain = makeNetwork(chainID: 1)
+        let maximum = Transaction.maximumUInt256
+        let transaction = Transaction(
+            from: "0x0", to: "0x1", nonce: maximum.toHexString(withPrefix: true),
+            value: nil, data: "0x", preparedFee: .legacy(gasPrice: 1_000_000_000)
+        )
+        XCTAssertEqual(transaction.editableFields.nonce, maximum.description)
+        XCTAssertNil(transaction.decimalNonceString)
+        let edits = try XCTUnwrap(transaction.edits(
+            from: editedFields(for: transaction, gasPrice: "2"),
+            on: chain
+        ))
+        XCTAssertNil(edits.nonce)
+        XCTAssertEqual(edits.preparedFee, .legacy(gasPrice: 2_000_000_000))
+
+        for nonce in ["", "-1", "abc", (BigUInt(UInt64(UInt.max)) + BigUInt(1)).description] {
+            XCTAssertNil(transaction.edits(
+                from: editedFields(for: transaction, nonce: nonce, gasPrice: "2"),
+                on: chain
+            ))
+        }
+        XCTAssertEqual(
+            transaction.edits(
+                from: editedFields(for: transaction, nonce: String(UInt.max)),
+                on: chain
+            ),
+            Transaction.Edits(nonce: UInt.max)
+        )
+    }
+
+    func testEditorPreservesMixedFeeOwnershipAndRetiresSliderOwnershipTogether() throws {
+        let chain = makeNetwork(chainID: 1)
+        var transaction = Transaction(
+            from: "0x0", to: "0x1", value: nil, data: "0x",
+            preparedFee: .eip1559(
+                maxPriorityFeePerGas: 1_000_000_000,
+                maxFeePerGas: 3_000_000_000
+            ),
+            feeProvenance: .init(maxPriorityFeePerGas: .dapp, maxFeePerGas: .automatic)
+        )
+        let capEdit = try XCTUnwrap(transaction.edits(
+            from: editedFields(for: transaction, cap: "4"), on: chain
+        ))
+        XCTAssertEqual(
+            capEdit.replacementFeeProvenance,
+            .init(maxPriorityFeePerGas: .dapp, maxFeePerGas: .manual)
+        )
+        let priorityEdit = try XCTUnwrap(transaction.edits(
+            from: editedFields(for: transaction, priority: "2"), on: chain
+        ))
+        XCTAssertEqual(
+            priorityEdit.replacementFeeProvenance,
+            .init(maxPriorityFeePerGas: .manual, maxFeePerGas: .automatic)
+        )
+        XCTAssertEqual(
+            transaction.edits(from: transaction.editableFields, on: chain),
+            Transaction.Edits()
+        )
+
+        for provenance in [
+            TransactionFeeProvenance(maxPriorityFeePerGas: .slider, maxFeePerGas: .automatic),
+            TransactionFeeProvenance(maxPriorityFeePerGas: .dapp, maxFeePerGas: .slider),
+        ] {
+            transaction.feeProvenance = provenance
+            for fields in [
+                editedFields(for: transaction, cap: "4"),
+                editedFields(for: transaction, priority: "2"),
+            ] {
+                let edits = try XCTUnwrap(transaction.edits(from: fields, on: chain))
+                XCTAssertEqual(
+                    edits.replacementFeeProvenance,
+                    .init(maxPriorityFeePerGas: .manual, maxFeePerGas: .manual)
+                )
+            }
+            XCTAssertEqual(
+                transaction.edits(from: transaction.editableFields, on: chain),
+                Transaction.Edits()
+            )
+        }
+    }
+
+    func testEditorExplicitResetRestoresOwnershipEvenAtSameFeeValues() throws {
+        let chain = makeNetwork(chainID: 1)
+        for fee in [
+            PreparedTransactionFee.legacy(gasPrice: 1_000_000_000),
+            PreparedTransactionFee.eip1559(
+                maxPriorityFeePerGas: 1_000_000_000,
+                maxFeePerGas: 3_000_000_000
+            ),
+        ] {
+            var transaction = Transaction(
+                from: "0x0", to: "0x1", value: nil, data: "0x",
+                preparedFee: fee, feeSource: .manual
+            )
+            let edits = try XCTUnwrap(transaction.edits(
+                from: transaction.editableFields, on: chain, resettingFeeTo: fee
+            ))
+            XCTAssertEqual(edits.preparedFee, fee)
+            XCTAssertEqual(edits.feeSource, .automatic)
+            XCTAssertEqual(edits.replacementFeeProvenance, .init(source: .automatic, for: fee))
+            XCTAssertTrue(edits.restoresSuggestedFee)
+            XCTAssertTrue(transaction.apply(edits))
+            XCTAssertEqual(
+                transaction.edits(
+                    from: transaction.editableFields, on: chain, resettingFeeTo: fee
+                ),
+                Transaction.Edits()
+            )
+        }
+    }
+
+    func testEditorResetThenPartialEditKeepsUntouchedSuggestedFieldsAutomatic() throws {
+        let chain = makeNetwork(chainID: 1)
+        let transaction = Transaction(
+            from: "0x0", to: "0x1", value: nil, data: "0x",
+            preparedFee: .eip1559(
+                maxPriorityFeePerGas: 1_000_000_000,
+                maxFeePerGas: 3_000_000_000
+            ),
+            feeSource: .slider
+        )
+        let suggestedFee = PreparedTransactionFee.eip1559(
+            maxPriorityFeePerGas: 2_000_000_000,
+            maxFeePerGas: 4_000_000_000
+        )
+        let cases: [(String, String, TransactionFeeProvenance)] = [
+            ("2", "5", .init(maxPriorityFeePerGas: .automatic, maxFeePerGas: .manual)),
+            ("3", "4", .init(maxPriorityFeePerGas: .manual, maxFeePerGas: .automatic)),
+            ("2.0", "4", .init(maxPriorityFeePerGas: .manual, maxFeePerGas: .automatic)),
+        ]
+        for (priority, cap, provenance) in cases {
+            let edits = try XCTUnwrap(transaction.edits(
+                from: editedFields(for: transaction, priority: priority, cap: cap),
+                on: chain, resettingFeeTo: suggestedFee
+            ))
+            XCTAssertEqual(edits.replacementFeeProvenance, provenance)
+            XCTAssertFalse(edits.restoresSuggestedFee)
+        }
+        let restored = try XCTUnwrap(transaction.edits(
+            from: editedFields(for: transaction, priority: "2", cap: "4"),
+            on: chain, resettingFeeTo: suggestedFee
+        ))
+        XCTAssertTrue(restored.restoresSuggestedFee)
+        XCTAssertEqual(restored.preparedFee, suggestedFee)
+        XCTAssertEqual(restored.replacementFeeProvenance, .init(source: .automatic, for: suggestedFee))
+    }
+
+    func testEditorResetSelectsSuggestedFeeMode() throws {
+        let chain = makeNetwork(chainID: 1)
+        let dynamic = Transaction(
+            from: "0x0", to: "0x1", value: nil, data: "0x",
+            preparedFee: .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 2)
+        )
+        let legacyFee = PreparedTransactionFee.legacy(gasPrice: 1_000_000_000)
+        let legacyEdit = try XCTUnwrap(dynamic.edits(
+            from: editedFields(for: dynamic, gasPrice: "1", priority: "invalid", cap: "invalid"),
+            on: chain, resettingFeeTo: legacyFee
+        ))
+        XCTAssertEqual(legacyEdit.preparedFee, legacyFee)
+        XCTAssertTrue(legacyEdit.restoresSuggestedFee)
+
+        let legacy = Transaction(
+            from: "0x0", to: "0x1", value: nil, data: "0x", preparedFee: legacyFee
+        )
+        let dynamicFee = PreparedTransactionFee.eip1559(
+            maxPriorityFeePerGas: 1_000_000_000,
+            maxFeePerGas: 2_000_000_000
+        )
+        let dynamicEdit = try XCTUnwrap(legacy.edits(
+            from: editedFields(for: legacy, gasPrice: "invalid", priority: "1", cap: "2"),
+            on: chain, resettingFeeTo: dynamicFee
+        ))
+        XCTAssertEqual(dynamicEdit.preparedFee, dynamicFee)
+        XCTAssertTrue(dynamicEdit.restoresSuggestedFee)
+    }
+
+    func testEditorRejectsInvalidChangedFeesAndExplicitResetsAtomically() {
+        let chain = makeNetwork(chainID: 1)
+        let invalidFees: [PreparedTransactionFee] = [
+            .legacy(gasPrice: 0),
+            .legacy(gasPrice: 1),
+            .legacy(gasPrice: Transaction.maximumUInt256),
+            .eip1559(maxPriorityFeePerGas: 3, maxFeePerGas: 2),
+            .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 1),
+        ]
+        for fee in invalidFees {
+            let invalid = Transaction(
+                from: "0x0", to: "0x1", nonce: "0x1", gas: "0x2",
+                value: nil, data: "0x", preparedFee: fee,
+                currentBaseFeePerGas: 1, nextBaseFeePerGas: 2
+            )
+            let invalidFields = editedFields(for: invalid, nonce: "2")
+            XCTAssertNil(invalid.edits(
+                from: invalidFields, on: chain, resettingFeeTo: fee
+            ))
+            var valid = invalid
+            valid.preparedFee = fee.isEIP1559
+                ? .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 3)
+                : .legacy(gasPrice: 3)
+            XCTAssertNil(valid.edits(from: invalidFields, on: chain))
+            XCTAssertEqual(valid.nonce, "0x1")
+        }
+    }
+
+    func testEditorValidatesExactDecimalPrecisionAndChainZeroFeeRules() throws {
+        let mainnet = makeNetwork(chainID: 1)
+        let transaction = Transaction(
+            from: "0x0", to: "0x1", nonce: "0x1", gas: "0x1",
+            value: nil, data: "0x", preparedFee: .legacy(gasPrice: 1_000_000_000)
+        )
+        for text in ["1.000000001", "1,000000001"] {
+            let edits = try XCTUnwrap(transaction.edits(
+                from: editedFields(for: transaction, nonce: "2", gasPrice: text),
+                on: mainnet
+            ))
+            XCTAssertEqual(edits.preparedFee, .legacy(gasPrice: 1_000_000_001))
+            XCTAssertEqual(edits.nonce, 2)
+        }
+        for text in ["1.0000000001", "1.2.3", "", "-1", "1e2"] {
+            XCTAssertNil(transaction.edits(
+                from: editedFields(for: transaction, nonce: "2", gasPrice: text),
+                on: mainnet
+            ))
+        }
+        let zeroFields = editedFields(for: transaction, gasPrice: "0")
+        XCTAssertNil(transaction.edits(from: zeroFields, on: mainnet))
+        XCTAssertEqual(
+            transaction.edits(from: zeroFields, on: makeNetwork(chainID: 10))?.preparedFee,
+            .legacy(gasPrice: 0)
+        )
+        let maximumText = try XCTUnwrap(Transaction.editableGwei(fromWei: Transaction.maximumUInt256))
+        XCTAssertEqual(
+            transaction.edits(
+                from: editedFields(for: transaction, gasPrice: maximumText), on: mainnet
+            )?.preparedFee,
+            .legacy(gasPrice: Transaction.maximumUInt256)
+        )
+        let overflowText = try XCTUnwrap(Transaction.editableGwei(
+            fromWei: Transaction.maximumUInt256 + BigUInt(1)
+        ))
+        XCTAssertNil(transaction.edits(
+            from: editedFields(for: transaction, gasPrice: overflowText), on: mainnet
+        ))
     }
 
     func testTransactionEditsApplyOnlyChangedFieldsToLatestTransaction() {

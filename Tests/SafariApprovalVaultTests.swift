@@ -76,9 +76,10 @@ final class SafariApprovalVaultTests: XCTestCase {
         source: SafariApprovalSourceSnapshot
     ) throws -> UnlockedWalletAccess {
         try XCTUnwrap(UnlockedWalletAccess(
-            catalog: source.catalog,
+            catalog: XCTUnwrap(ValidatedWalletAccountCatalog(
+                data: SourceWalletAccess.encodeCatalog(source.catalog)
+            )),
             generation: UUID(),
-            catalogData: SourceWalletAccess.encodeCatalog(source.catalog),
             password: source.password,
             walletRecords: source.wallets.map {
                 (id: $0.walletID, data: $0.storedKeyJSON)
@@ -211,6 +212,13 @@ final class SafariApprovalVaultTests: XCTestCase {
             "walletID",
         ])
         let catalogAccess = try XCTUnwrap(vault.catalogAccess())
+        let originalCatalogData = try XCTUnwrap(Data(
+            base64Encoded: XCTUnwrap(envelope["catalog"] as? String)
+        ))
+        XCTAssertEqual(
+            catalogAccess.catalogIdentity.catalogData,
+            originalCatalogData
+        )
         XCTAssertEqual(catalogAccess.orderedAccounts.count, 1)
         XCTAssertNil(catalogAccess.privateKey(
             walletID: "wallet",
@@ -798,11 +806,94 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(unlocked)
     }
 
-    func testCatalogRejectsDuplicateDescriptor() throws {
-        let descriptor = try XCTUnwrap(fixture().source.catalog.accounts.first)
-        XCTAssertFalse(WalletAccountCatalog(
-            accounts: [descriptor, descriptor]
-        ).isValid)
+    func testValidatedCatalogRetainsCanonicalBytes() throws {
+        let catalog = try fixture().source.catalog
+        let data = try SourceWalletAccess.encodeCatalog(catalog)
+        let validated = try XCTUnwrap(ValidatedWalletAccountCatalog(data: data))
+
+        XCTAssertEqual(validated.catalog, catalog)
+        XCTAssertEqual(validated.data, data)
+    }
+
+    func testUnlockedAccessRejectsEmptyPasswordWithValidatedCatalog() throws {
+        let source = try fixture().source
+        let catalog = try XCTUnwrap(ValidatedWalletAccountCatalog(
+            data: SourceWalletAccess.encodeCatalog(source.catalog)
+        ))
+
+        XCTAssertNil(UnlockedWalletAccess(
+            catalog: catalog,
+            generation: UUID(),
+            password: Data(),
+            walletRecords: source.wallets.map {
+                (id: $0.walletID, data: $0.storedKeyJSON)
+            }
+        ))
+    }
+
+    func testInvalidCatalogBytesFailBeforeAuthentication() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        var authenticationChecks = 0
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in
+                authenticationChecks += 1
+                return true
+            },
+            authentication: { _, _, _ in
+                XCTFail("An invalid catalog must not reach authentication")
+                return true
+            }
+        )
+        let source = try fixture().source
+        try vault.publish(source: source, integrityKey: integrityKey)
+        var envelope = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        )
+        let descriptor = try XCTUnwrap(source.catalog.accounts.first)
+        let invalidDescriptor = WalletAccountDescriptor(
+            walletID: descriptor.walletID,
+            coin: descriptor.coin,
+            normalizedAddress: "invalid-address",
+            derivationPath: descriptor.derivationPath
+        )
+        let canonicalData = try SourceWalletAccess.encodeCatalog(source.catalog)
+        var unknownCoin = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: canonicalData) as? [String: Any]
+        )
+        var accounts = try XCTUnwrap(unknownCoin["accounts"] as? [[String: Any]])
+        accounts[0]["coin"] = UInt32.max
+        unknownCoin["accounts"] = accounts
+        let invalidCatalogs = [
+            Data(),
+            Data("{".utf8),
+            Data(#"{"accounts":[],"unexpected":true}"#.utf8),
+            canonicalData + Data("\n".utf8),
+            try JSONSerialization.data(withJSONObject: unknownCoin, options: [.sortedKeys]),
+            try SourceWalletAccess.encodeCatalog(WalletAccountCatalog(
+                accounts: [invalidDescriptor]
+            )),
+            try SourceWalletAccess.encodeCatalog(WalletAccountCatalog(
+                accounts: [descriptor, descriptor]
+            )),
+        ]
+
+        for data in invalidCatalogs {
+            XCTAssertNil(ValidatedWalletAccountCatalog(data: data))
+            envelope["catalog"] = data.base64EncodedString()
+            try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+                .write(to: url, options: .atomic)
+
+            XCTAssertNil(vault.catalogAccess())
+            guard case .unavailable = await vault.unlockResult(reason: "Approve") else {
+                return XCTFail("An invalid catalog must make the vault unavailable")
+            }
+        }
+        XCTAssertEqual(authenticationChecks, 0)
+        XCTAssertNil(keys.loadedContext)
     }
 
     func testCatalogAndUnlockedAccessPreserveWalletAndAccountArrayOrder() async throws {
@@ -908,9 +999,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             XCTAssertTrue(keys.keys.isEmpty)
             XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
             XCTAssertNil(UnlockedWalletAccess(
-                catalog: source.catalog,
+                catalog: try XCTUnwrap(ValidatedWalletAccountCatalog(
+                    data: SourceWalletAccess.encodeCatalog(source.catalog)
+                )),
                 generation: UUID(),
-                catalogData: try SourceWalletAccess.encodeCatalog(source.catalog),
                 password: source.password,
                 walletRecords: source.wallets.map {
                     (id: $0.walletID, data: $0.storedKeyJSON)

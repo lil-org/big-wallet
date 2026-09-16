@@ -436,6 +436,12 @@ final class SafariApprovalVault {
         let tag: Data
     }
 
+    private struct EnvelopeRecord {
+        let envelope: Envelope
+        let data: Data
+        let catalog: ValidatedWalletAccountCatalog
+    }
+
     private struct SecretSnapshot: Codable {
         let catalog: Data
         var password: Data
@@ -659,14 +665,12 @@ final class SafariApprovalVault {
     func catalogAccess() -> CatalogWalletAccess? {
         lock.lock()
         defer { lock.unlock() }
-        guard let envelope = loadEnvelopeLocked(),
-              keyStore.availability(generation: envelope.generation)
-                .permitsPublishedEnvelope,
-              let catalog = decodeCatalog(envelope.catalog) else { return nil }
+        guard let record = loadEnvelopeRecordLocked(),
+              keyStore.availability(generation: record.envelope.generation)
+                .permitsPublishedEnvelope else { return nil }
         return CatalogWalletAccess(
-            catalog: catalog,
-            generation: envelope.generation,
-            catalogData: envelope.catalog
+            catalog: record.catalog,
+            generation: record.envelope.generation
         )
     }
 
@@ -725,11 +729,10 @@ final class SafariApprovalVault {
     }
 
     func unlockResult(reason: String) async -> WalletUnlockResult {
-        let envelope: Envelope
-        guard let loaded = withLock({ loadEnvelopeLocked() }) else {
+        guard let record = withLock({ loadEnvelopeRecordLocked() }) else {
             return .unavailable
         }
-        envelope = loaded
+        let envelope = record.envelope
 
         let context = LAContext()
         context.localizedCancelTitle = Strings.cancel
@@ -781,11 +784,9 @@ final class SafariApprovalVault {
         defer { secret.resetSecrets() }
         guard
               secret.catalog == envelope.catalog,
-              let catalog = decodeCatalog(envelope.catalog),
               let access = UnlockedWalletAccess(
-                  catalog: catalog,
+                  catalog: record.catalog,
                   generation: envelope.generation,
-                  catalogData: envelope.catalog,
                   password: secret.password,
                   walletRecords: secret.wallets.map {
                       (id: $0.walletID, data: $0.storedKeyJSON)
@@ -881,14 +882,10 @@ final class SafariApprovalVault {
             SafariApprovalDiagnostics.record("write tombstone", error: error)
             throw Error.unavailable
         }
-        guard loadEnvelopeLocked() == nil else { throw Error.unavailable }
+        guard loadEnvelopeRecordLocked() == nil else { throw Error.unavailable }
     }
 
-    private func loadEnvelopeLocked() -> Envelope? {
-        loadEnvelopeRecordLocked()?.envelope
-    }
-
-    private func loadEnvelopeRecordLocked() -> (envelope: Envelope, data: Data)? {
+    private func loadEnvelopeRecordLocked() -> EnvelopeRecord? {
         guard let fileURL,
               let data = Self.readEnvelopeData(at: fileURL),
               !data.isEmpty,
@@ -906,8 +903,9 @@ final class SafariApprovalVault {
               envelope.tag.count == 16,
               !envelope.ciphertext.isEmpty,
               envelope.catalog.count <= Self.maximumEnvelopeBytes,
-              decodeCatalog(envelope.catalog) != nil else { return nil }
-        return (envelope, data)
+              let catalog = ValidatedWalletAccountCatalog(data: envelope.catalog)
+        else { return nil }
+        return EnvelopeRecord(envelope: envelope, data: data, catalog: catalog)
     }
 
     private static func readEnvelopeData(at fileURL: URL) -> Data? {
@@ -996,7 +994,7 @@ final class SafariApprovalVault {
 
     private func isCurrent(_ envelope: Envelope) -> Bool {
         withLock {
-            loadEnvelopeLocked() == envelope &&
+            loadEnvelopeRecordLocked()?.envelope == envelope &&
                 keyStore.availability(generation: envelope.generation)
                     .permitsPublishedEnvelope
         }
@@ -1019,7 +1017,7 @@ final class SafariApprovalVault {
             return nil
         }
         let current = withLock {
-            loadEnvelopeLocked() == envelope &&
+            loadEnvelopeRecordLocked()?.envelope == envelope &&
                 keyStore.availability(generation: envelope.generation)
                     .permitsPublishedEnvelope
         }
@@ -1055,20 +1053,6 @@ final class SafariApprovalVault {
         lock.lock()
         defer { lock.unlock() }
         return operation()
-    }
-
-    private func decodeCatalog(_ data: Data) -> WalletAccountCatalog? {
-        guard !data.isEmpty,
-              data.count <= Self.maximumEnvelopeBytes,
-              let catalog = try? JSONDecoder().decode(
-                  WalletAccountCatalog.self,
-                  from: data
-              ),
-              catalog.isValid,
-              (try? SourceWalletAccess.encodeCatalog(catalog)) == data else {
-            return nil
-        }
-        return catalog
     }
 
     private func canonicalEncoder() -> JSONEncoder {

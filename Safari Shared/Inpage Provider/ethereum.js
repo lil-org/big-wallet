@@ -638,19 +638,16 @@ function applyConfiguration(provider, envelope) {
     const epoch = state.stateEpoch + 1;
     state.stateEpoch = epoch;
     const {address, chainId, reauthorizationRevision} = envelope.configuration;
-    const hasReauthorization = isSafeIntegerNormally(reauthorizationRevision) &&
-        reauthorizationRevision >= 0;
-    const switchAccount = hasReauthorization
-        ? reauthorizationRevision > state.reauthorizationRevision
-        : dataProperty(envelope, "switchAccount") === true;
-    if (hasReauthorization && reauthorizationRevision > state.reauthorizationRevision) {
+    const reauthorizes = isSafeIntegerNormally(reauthorizationRevision) &&
+        reauthorizationRevision > state.reauthorizationRevision;
+    if (reauthorizes) {
         state.reauthorizationRevision = reauthorizationRevision;
     }
     const wasReady = state.runtime.phase === "ready";
     const copiedStateBaseline = state.copiedStateBaseline;
     let accountsChanged = false;
     let chainChanged = false;
-    if (switchAccount && normalizedAddress(address)) {
+    if (reauthorizes && normalizedAddress(address)) {
         state.accountRevocationTombstone = false;
     }
     const configuredAddress = state.accountRevocationTombstone
@@ -659,16 +656,16 @@ function applyConfiguration(provider, envelope) {
     accountsChanged = commitAccount(
         state,
         configuredAddress,
-        switchAccount
+        reauthorizes
     );
     chainChanged = commitChain(state, chainId);
     state.pendingConfigurationEvent = {
         accountsChanged: copiedStateBaseline
             ? state.address !== copiedStateBaseline.address
-            : (wasReady || switchAccount) && accountsChanged,
+            : (wasReady || reauthorizes) && accountsChanged,
         chainChanged: copiedStateBaseline
             ? state.chainId !== copiedStateBaseline.chainId
-            : (wasReady || switchAccount) && chainChanged,
+            : (wasReady || reauthorizes) && chainChanged,
         epoch,
     };
     state.runtime.drain(record => dispatchOperation(provider, record));

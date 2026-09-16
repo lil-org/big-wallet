@@ -153,92 +153,48 @@ final class PopupTransactionSession {
     ) -> Bool {
         let transactionSnapshot = snapshot
         let transaction = transactionSnapshot.transaction
-        let suggestedFee = transactionSnapshot.latestWalletSuggestedFee
-        let fields = transaction.editableFields
+        let fields: Transaction.EditableFields
+        let selectedSuggestedFee: PreparedTransactionFee?
 
         switch payload {
         case .suggested:
-            guard let suggestedFee else { return false }
-            return commit(
-                Transaction.Edits(
-                    preparedFee: suggestedFee,
-                    source: .automatic,
-                    replacementFeeProvenance: TransactionFeeProvenance(
-                        source: .automatic,
-                        for: suggestedFee
-                    ),
-                    restoresSuggestedFee: true,
-                    nonce: transactionSnapshot.suggestedNonce.flatMap { UInt($0) }
-                ),
-                previousTransaction: transaction
-            )
+            guard let suggestedFee = transactionSnapshot.latestWalletSuggestedFee else {
+                return false
+            }
+            selectedSuggestedFee = suggestedFee
+            let nonce = transactionSnapshot.suggestedNonce ?? transaction.editableFields.nonce
+            switch suggestedFee {
+            case .legacy(let gasPrice):
+                fields = Transaction.EditableFields(
+                    nonce: nonce,
+                    gasPriceGwei: Transaction.editableGwei(fromWei: gasPrice) ?? "",
+                    maxPriorityFeePerGasGwei: "",
+                    maxFeePerGasGwei: ""
+                )
+            case .eip1559(let priority, let maximum):
+                fields = Transaction.EditableFields(
+                    nonce: nonce,
+                    gasPriceGwei: "",
+                    maxPriorityFeePerGasGwei: Transaction.editableGwei(fromWei: priority) ?? "",
+                    maxFeePerGasGwei: Transaction.editableGwei(fromWei: maximum) ?? ""
+                )
+            }
         case .custom(let custom):
-            var nonceEdit: UInt?
-            if custom.nonce != fields.nonce {
-                guard let nonce = UInt(custom.nonce) else { return false }
-                nonceEdit = nonce
-            }
-            var candidateFee: PreparedTransactionFee?
-            var candidateProvenance = transaction.feeProvenance
-            if transaction.usesEIP1559Fees {
-                let priorityText = custom.maxPriorityFeePerGasGwei ?? ""
-                let maximumText = custom.maxFeePerGasGwei ?? ""
-                if priorityText != fields.maxPriorityFeePerGasGwei ||
-                    maximumText != fields.maxFeePerGasGwei {
-                    guard let priority = Transaction.exactFeeWei(fromGwei: priorityText),
-                          let maximum = Transaction.exactFeeWei(fromGwei: maximumText)
-                    else { return false }
-                    let fee = PreparedTransactionFee.eip1559(
-                        maxPriorityFeePerGas: priority,
-                        maxFeePerGas: maximum
-                    )
-                    guard fee.isStructurallyValid,
-                          transaction.feeBasisBaseFeePerGas.map({ maximum >= $0 }) != false
-                    else { return false }
-                    candidateFee = fee
-                    let editsSliderFee =
-                        candidateProvenance.maxPriorityFeePerGas == .slider ||
-                        candidateProvenance.maxFeePerGas == .slider
-                    if editsSliderFee || priorityText != fields.maxPriorityFeePerGasGwei {
-                        candidateProvenance.maxPriorityFeePerGas = .manual
-                    }
-                    if editsSliderFee || maximumText != fields.maxFeePerGasGwei {
-                        candidateProvenance.maxFeePerGas = .manual
-                    }
-                }
-            } else {
-                let gasPriceText = custom.gasPriceGwei ?? ""
-                if gasPriceText != fields.gasPriceGwei {
-                    guard let gasPrice = Transaction.exactFeeWei(fromGwei: gasPriceText),
-                          Transaction.isValidGasPrice(gasPrice, on: chain),
-                          transaction.feeBasisBaseFeePerGas.map({ gasPrice >= $0 }) != false
-                    else { return false }
-                    candidateFee = .legacy(gasPrice: gasPrice)
-                    candidateProvenance = TransactionFeeProvenance(gasPrice: .manual)
-                }
-            }
-            if let candidateFee {
-                guard candidateFee.maximumNetworkFeeFitsUInt256(
-                    gasLimit: transaction.gasLimitValue
-                ) else { return false }
-                return commit(
-                    Transaction.Edits(
-                        preparedFee: candidateFee,
-                        source: .manual,
-                        replacementFeeProvenance: candidateProvenance,
-                        nonce: nonceEdit
-                    ),
-                    previousTransaction: transaction
-                )
-            }
-            if let nonceEdit {
-                return commit(
-                    Transaction.Edits(nonce: nonceEdit),
-                    previousTransaction: transaction
-                )
-            }
-            return true
+            selectedSuggestedFee = nil
+            fields = Transaction.EditableFields(
+                nonce: custom.nonce,
+                gasPriceGwei: custom.gasPriceGwei ?? "",
+                maxPriorityFeePerGasGwei: custom.maxPriorityFeePerGasGwei ?? "",
+                maxFeePerGasGwei: custom.maxFeePerGasGwei ?? ""
+            )
         }
+        guard let edits = transaction.edits(
+            from: fields,
+            on: chain,
+            resettingFeeTo: selectedSuggestedFee
+        ) else { return false }
+        guard edits != Transaction.Edits() else { return true }
+        return commit(edits, previousTransaction: transaction)
     }
 
     @discardableResult

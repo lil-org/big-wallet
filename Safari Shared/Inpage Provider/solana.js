@@ -1044,19 +1044,16 @@ function applyConfiguration(provider, envelope) {
     const previousPublicKey = state.publicKey?.toString() || null;
     const previousConnected = state.isConnected;
     const reauthorizationRevision = configuration?.reauthorizationRevision;
-    const hasReauthorization = Number.isSafeInteger(reauthorizationRevision) &&
-        reauthorizationRevision >= 0;
-    const switchAccount = hasReauthorization
-        ? reauthorizationRevision > state.reauthorizationRevision
-        : envelope.switchAccount === true;
-    if (hasReauthorization && reauthorizationRevision > state.reauthorizationRevision) {
+    const reauthorizes = Number.isSafeInteger(reauthorizationRevision) &&
+        reauthorizationRevision > state.reauthorizationRevision;
+    if (reauthorizes) {
         state.reauthorizationRevision = reauthorizationRevision;
     }
     const preservesTombstone = state.accountRevocationTombstone &&
-        !switchAccount;
+        !reauthorizes;
     if (configuration && !preservesTombstone) {
         const canClearTombstone = state.accountRevocationTombstone &&
-            switchAccount &&
+            reauthorizes &&
             configuration.publicKey !== null;
         state.accountRevision = configuration.accountRevision;
         state.solanaAuthorizationEpoch = configuration.solanaAuthorizationEpoch;

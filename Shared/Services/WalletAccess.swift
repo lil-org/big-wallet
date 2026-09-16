@@ -103,6 +103,25 @@ struct WalletAccountCatalog: Codable, Equatable, Sendable {
     }
 }
 
+struct ValidatedWalletAccountCatalog: Sendable {
+
+    let catalog: WalletAccountCatalog
+    let data: Data
+
+    init?(data: Data) {
+        guard let catalog = try? JSONDecoder().decode(
+                  WalletAccountCatalog.self,
+                  from: data
+              ),
+              catalog.isValid,
+              (try? SourceWalletAccess.encodeCatalog(catalog)) == data else {
+            return nil
+        }
+        self.catalog = catalog
+        self.data = data
+    }
+}
+
 struct WalletCatalogIdentity: Equatable, Sendable {
     let generation: UUID?
     let catalogData: Data
@@ -249,19 +268,12 @@ final class CatalogWalletAccess: WalletAccess {
     let catalogIdentity: WalletCatalogIdentity
     let orderedAccounts: [SpecificWalletAccount]
 
-    init?(
-        catalog: WalletAccountCatalog,
-        generation: UUID,
-        catalogData: Data
-    ) {
-        guard catalog.isValid,
-              (try? SourceWalletAccess.encodeCatalog(catalog)) == catalogData
-        else { return nil }
+    init(catalog: ValidatedWalletAccountCatalog, generation: UUID) {
         catalogIdentity = WalletCatalogIdentity(
             generation: generation,
-            catalogData: catalogData
+            catalogData: catalog.data
         )
-        orderedAccounts = catalog.accounts.map(\.specificAccount)
+        orderedAccounts = catalog.catalog.accounts.map(\.specificAccount)
     }
 
     func privateKey(
@@ -384,17 +396,14 @@ final class UnlockedWalletAccess: WalletAccess {
     private var walletsByID: [String: WalletContainer]
 
     init?(
-        catalog: WalletAccountCatalog,
+        catalog: ValidatedWalletAccountCatalog,
         generation: UUID,
-        catalogData: Data,
         password: Data,
         walletRecords: [(id: String, data: Data)]
     ) {
         guard !password.isEmpty,
-              catalog.isValid,
-              (try? SourceWalletAccess.encodeCatalog(catalog)) == catalogData,
               let wallets = WalletSnapshotValidation.wallets(
-                  catalog: catalog,
+                  catalog: catalog.catalog,
                   walletRecords: walletRecords
               ) else { return nil }
 
@@ -409,7 +418,7 @@ final class UnlockedWalletAccess: WalletAccess {
         }
         catalogIdentity = WalletCatalogIdentity(
             generation: generation,
-            catalogData: catalogData
+            catalogData: catalog.data
         )
     }
 
