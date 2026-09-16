@@ -733,6 +733,8 @@ final class SafariApprovalVault {
             return .unavailable
         }
         let envelope = record.envelope
+        let snapshotData = record.data
+        let generation = envelope.generation
 
         let context = LAContext()
         context.localizedCancelTitle = Strings.cancel
@@ -792,7 +794,7 @@ final class SafariApprovalVault {
                       (id: $0.walletID, data: $0.storedKeyJSON)
                   }
               ) else { return .unavailable }
-        let isStillCurrent = isCurrent(envelope)
+        let isStillCurrent = isCurrent(snapshotData, generation: generation)
         guard isStillCurrent else {
             access.invalidate()
             return .unavailable
@@ -800,10 +802,10 @@ final class SafariApprovalVault {
         return .unlocked(RequestScopedWalletAccess(
             access,
             isCurrent: { [weak self] in
-                self?.isCurrent(envelope) == true
+                self?.isCurrent(snapshotData, generation: generation) == true
             },
             acquireExecutionLease: { [weak self] in
-                await self?.executionLease(ifCurrent: envelope)
+                await self?.executionLease(ifCurrent: snapshotData, generation: generation)
             }
         ))
     }
@@ -992,16 +994,18 @@ final class SafariApprovalVault {
             lhs.st_ctimespec.tv_nsec == rhs.st_ctimespec.tv_nsec
     }
 
-    private func isCurrent(_ envelope: Envelope) -> Bool {
+    private func isCurrent(_ snapshotData: Data, generation: UUID) -> Bool {
         withLock {
-            loadEnvelopeRecordLocked()?.envelope == envelope &&
-                keyStore.availability(generation: envelope.generation)
+            fileURL.flatMap(Self.readEnvelopeData(at:)) == snapshotData &&
+                keyStore.availability(generation: generation)
                     .permitsPublishedEnvelope
         }
     }
 
-    private func executionLease(ifCurrent envelope: Envelope)
-        async -> WalletExecutionLease? {
+    private func executionLease(
+        ifCurrent snapshotData: Data,
+        generation: UUID
+    ) async -> WalletExecutionLease? {
         let coordinationLock = CrossProcessFileLock(fileURL: coordinationLockURL)
         let deadline = ContinuousClock.now + .nanoseconds(
             Int64(Self.coordinationLockTimeoutNanoseconds)
@@ -1016,12 +1020,7 @@ final class SafariApprovalVault {
         } catch {
             return nil
         }
-        let current = withLock {
-            loadEnvelopeRecordLocked()?.envelope == envelope &&
-                keyStore.availability(generation: envelope.generation)
-                    .permitsPublishedEnvelope
-        }
-        guard current else {
+        guard isCurrent(snapshotData, generation: generation) else {
             coordinationLock.release()
             return nil
         }

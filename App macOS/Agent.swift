@@ -117,6 +117,12 @@ class Agent: NSObject {
 
     @MainActor
     final class ActiveApproval {
+        private enum ReviewState {
+            case inactive
+            case reviewing(cleanup: (() -> Void)?)
+            case retired
+        }
+
         let coordinator: NativeApprovalCoordinator
         private lazy var windowCloseObserver = NativeApprovalWindowCloseObserver { [weak self] in
             guard let self else { return }
@@ -125,10 +131,10 @@ class Agent: NSObject {
         }
         private(set) var isDismissed = false
         var pendingPresentation: NativeApprovalCoordinator.Presentation?
-        private var sharedReviewCleanup: (() -> Void)?
-        private(set) var acceptsReviewActions = false
+        private var reviewState = ReviewState.inactive
         var windowController: NSWindowController? {
             didSet {
+                guard !isRetired else { return }
                 if let window = windowController?.window {
                     windowCloseObserver.observe(window)
                 }
@@ -137,10 +143,20 @@ class Agent: NSObject {
 
         init(coordinator: NativeApprovalCoordinator) {
             self.coordinator = coordinator
+        }
 
+        var acceptsReviewActions: Bool {
+            if case .reviewing = reviewState { return true }
+            return false
+        }
+
+        private var isRetired: Bool {
+            if case .retired = reviewState { return true }
+            return false
         }
 
         func activate() {
+            guard !isRetired else { return }
             guard let windowController,
                   windowController.window != nil else {
                 NSApp.activate(ignoringOtherApps: true)
@@ -150,10 +166,12 @@ class Agent: NSObject {
         }
 
         func restorePresentation() {
+            guard !isRetired else { return }
             isDismissed = false
         }
 
         func receive(_ presentation: NativeApprovalCoordinator.Presentation) -> Bool {
+            guard !isRetired else { return false }
             guard isDismissed else { return true }
             switch presentation {
             case .finished, .superseded: return true
@@ -163,23 +181,35 @@ class Agent: NSObject {
             }
         }
 
-        func beginReview(
-            sharedCleanup: (() -> Void)? = nil
-        ) {
-            acceptsReviewActions = true
-            sharedReviewCleanup = sharedCleanup
+        func beginReview(sharedCleanup: (() -> Void)? = nil) {
+            guard !isRetired else { return }
+            reviewState = .reviewing(cleanup: sharedCleanup)
         }
 
         func endReview() {
-            acceptsReviewActions = false
-            sharedReviewCleanup?()
-            sharedReviewCleanup = nil
+            finishReview(retiring: false)
+        }
+
+        private func finishReview(retiring: Bool) {
+            guard !isRetired else { return }
+            let cleanup: (() -> Void)?
+            if case .reviewing(let operation) = reviewState {
+                cleanup = operation
+            } else {
+                cleanup = nil
+            }
+            reviewState = retiring ? .retired : .inactive
+            if retiring {
+                windowCloseObserver.disable()
+                pendingPresentation = nil
+            }
+            cleanup?()
             (windowController?.contentViewController as?
                 NativeApprovalReviewTeardown)?
                 .invalidateNativeApprovalReview()
         }
     }
-    
+
     static let shared = Agent()
     private var didStart = false
     private var isReady = false
@@ -560,465 +590,22 @@ class Agent: NSObject {
         for handle: ExtensionBridge.Handle,
         coordinator: NativeApprovalCoordinator
     ) {
-        guard activeApproval(for: handle, coordinator: coordinator)?.receive(presentation) != false else {
-            return
+        guard let approval = activeApproval(for: handle, coordinator: coordinator),
+              approval.receive(presentation) else { return }
+        let finishedWindowAction = approval.present(presentation, using: self)
+        if finishedWindowAction != nil {
+            approvalInbox.remove(ApprovalRouteKey(
+                handle: handle,
+                nativeDeliveryNonce: coordinator.nativeDeliveryNonce
+            ))
         }
-        switch presentation {
-        case .approval(let request, let action):
-            present(
-                action: action,
-                peer: request.peerMeta,
-                for: handle,
-                coordinator: coordinator
-            )
-        case .waiting:
-            showWaiting(for: handle, coordinator: coordinator)
-        case .retryRequired:
-            showFailureSurface(for: handle, coordinator: coordinator, retry: true)
-        case .rejecting:
-            showFailureSurface(for: handle, coordinator: coordinator)
-        case .finished, .superseded:
-            closeApproval(handle: handle, coordinator: coordinator)
-        }
-    }
-
-    private func present(
-        action: DappRequestAction,
-        peer: PeerMeta,
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        guard let windowController = approvalWindow(
-            peer: peer,
-            for: handle,
-            coordinator: coordinator
-        ) else { return }
-        switch action {
-        case .selectAccount(let action):
-            presentAccountSelection(
-                action,
-                mode: .selectAccount,
-                windowController: windowController,
-                for: handle,
-                coordinator: coordinator
-            )
-        case .switchAccount(let action):
-            presentAccountSelection(
-                action,
-                mode: .switchAccount,
-                windowController: windowController,
-                for: handle,
-                coordinator: coordinator
-            )
-        case .approveMessage(let action):
-            showApprove(
-                windowController: windowController,
-                browser: .safari,
-                subject: action.subject,
-                meta: action.meta,
-                account: action.account,
-                walletId: action.walletId,
-                solanaClusterOptions: action.solanaClusterOptions
-            ) { [weak self, weak coordinator] decision in
-                guard let self, let coordinator,
-                      self.acceptsReviewAction(
-                          for: handle,
-                          coordinator: coordinator
-                      ) else { return }
-                switch decision {
-                case .approved(let cluster):
-                    coordinator.approveMessage(solanaCluster: cluster)
-                case .rejected:
-                    coordinator.reject()
-                }
-            }
-            activeApproval(
-                for: handle,
-                coordinator: coordinator
-            )?.beginReview()
-        case .approveTransaction(let action):
-            showApprove(
-                windowController: windowController,
-                transaction: action.transaction,
-                account: action.account,
-                walletId: action.walletId,
-                chain: action.chain
-            ) { [weak self, weak coordinator] transaction in
-                guard let self, let coordinator,
-                      self.acceptsReviewAction(
-                          for: handle,
-                          coordinator: coordinator
-                ) else { return }
-                if let transaction {
-                    coordinator.approveTransaction(
-                        transaction,
-                        reviewedNetwork: action.resolvedNetwork
-                    )
-                } else {
-                    coordinator.reject()
-                }
-            }
-            activeApproval(
-                for: handle,
-                coordinator: coordinator
-            )?.beginReview()
-        case .addEthereumChain(let action):
-            presentAddEthereumChain(
-                action,
-                windowController: windowController,
-                for: handle,
-                coordinator: coordinator
-            )
-        }
-        activateOldestPresentedApproval()
-    }
-
-    private func approvalWindow(
-        peer: PeerMeta,
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) -> WalletWindowController? {
-        guard let approval = activeApproval(
-            for: handle,
-            coordinator: coordinator
-        ) else { return nil }
-        if let existing = approval.windowController as? WalletWindowController {
-            existing.approvalPeer = peer
-            return existing
-        }
-        let windowController = Window.showNew(
-            closeOthers: false,
-            approvalPeer: peer
-        )
-        approval.windowController = windowController
-        return windowController
-    }
-
-    private func presentAddEthereumChain(
-        _ action: AddEthereumChainAction,
-        windowController: WalletWindowController,
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        guard let approval = activeApproval(
-            for: handle,
-            coordinator: coordinator
-        ) else { return }
-        approval.beginReview()
-        Self.installWaitingSurface(
-            reason: Strings.loading,
-            in: windowController
-        )
-        guard let window = windowController.window else {
-            coordinator.reject()
-            return
-        }
-
-        let alert = Alert()
-        alert.messageText = Strings.addNetwork
-        alert.informativeText =
-            action.chainToAdd.chainName + "\n\n" +
-            action.chainToAdd.defaultRpcUrl
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: Strings.ok)
-        alert.addButton(withTitle: Strings.cancel)
-        alert.beginSheetModal(for: window) { [weak self, weak coordinator]
-            response in
-            guard let self, let coordinator else { return }
-            Self.handleAddEthereumChainSheetResponse(
-                response,
-                isCurrentApproval: self.acceptsReviewAction(
-                    for: handle,
-                    coordinator: coordinator
-                ),
-                approve: coordinator.approveAddEthereumChain,
-                reject: coordinator.reject
-            )
-        }
-    }
-
-    static func handleAddEthereumChainSheetResponse(
-        _ response: NSApplication.ModalResponse,
-        isCurrentApproval: Bool,
-        approve: () -> Void,
-        reject: () -> Void
-    ) {
-        guard isCurrentApproval else { return }
-        if response == .alertFirstButtonReturn {
-            approve()
-        } else {
-            reject()
-        }
-    }
-
-    private func presentAccountSelection(
-        _ action: SelectAccountAction,
-        mode: NativeAccountSelectionMode,
-        windowController: WalletWindowController,
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        let accountsList = instantiate(AccountsListViewController.self)
-        let session = NativeAccountSelectionSession(
-            action: action,
-            mode: mode
-        ) { [weak self, weak coordinator] accounts, network in
-            guard let self, let coordinator,
-                  self.acceptsReviewAction(
-                      for: handle,
-                      coordinator: coordinator
-                  ) else { return }
-            self.showWaiting(for: handle, coordinator: coordinator)
-            guard let accounts else {
-                coordinator.reject()
-                return
-            }
-            let ethereumNetwork = accounts.contains {
-                $0.account.coin == .ethereum
-            } ? network : nil
-            coordinator.approveAccounts(
-                accounts,
-                ethereumNetwork: ethereumNetwork
-            )
-        }
-        accountsList.accountSelection = session
-        windowController.contentViewController = accountsList
-        activeApproval(
-            for: handle,
-            coordinator: coordinator
-        )?.beginReview {
-            session.invalidate()
-        }
-    }
-
-    private func showApprove(
-        windowController: NSWindowController,
-        transaction: Transaction,
-        account: WalletAccount,
-        walletId: String,
-        chain: EthereumNetwork,
-        completion: @escaping (Transaction?) -> Void
-    ) {
-        let controller = ApproveTransactionViewController.with(
-            transaction: transaction,
-            chain: chain,
-            account: account,
-            walletId: walletId,
-            completion: completion
-        )
-        windowController.contentViewController = controller
-    }
-
-    private func showApprove(
-        windowController: NSWindowController,
-        browser: Browser?,
-        subject: ApprovalSubject,
-        meta: String,
-        account: WalletAccount,
-        walletId: String,
-        solanaClusterOptions: SolanaClusterOptions?,
-        completion: @escaping (ApproveViewController.Decision) -> Void
-    ) {
-        let window = windowController.window
-        var authenticationContext: LAContext?
-        var didResolveAuthentication = false
-        let approveViewController = ApproveViewController.with(
-            subject: subject,
-            meta: meta,
-            account: account,
-            walletId: walletId,
-            solanaClusterOptions: solanaClusterOptions
-        ) { [weak self, weak window] decision in
-            guard case .approved = decision else {
-                guard !didResolveAuthentication else { return }
-                didResolveAuthentication = true
-                completion(.rejected)
-                return
-            }
-            authenticationContext = self?.askAuthentication(
-                on: window,
-                getBackTo: window?.contentViewController,
-                browser: browser,
-                onStart: false,
-                reason: subject.asAuthenticationReason,
-                onWindowClose: {
-                    didResolveAuthentication = true
-                }
-            ) { success in
-                guard !didResolveAuthentication else { return }
-                didResolveAuthentication = true
-                authenticationContext = nil
-                completion(success ? decision : .rejected)
-                if success {
-                    (window?.contentViewController as? ApproveViewController)?
-                        .enableWaiting()
-                }
-            }
-        }
-        approveViewController.localWindowCloseCompletion = {
-            authenticationContext?.invalidate()
-            authenticationContext = nil
-            didResolveAuthentication = true
-        }
-        windowController.contentViewController = approveViewController
-    }
-
-    private func showWaiting(
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        guard let approval = activeApproval(
-            for: handle,
-            coordinator: coordinator
-        ) else {
-            return
-        }
-        let windowController: NSWindowController
-        if let existing = approval.windowController {
-            windowController = existing
-        } else {
-            windowController = Window.showNew(
-                closeOthers: false,
-                approvalPeer: coordinator.peer
-            )
-        }
-        approval.endReview()
-        approval.windowController = windowController
-        Self.installWaitingSurface(
-            reason: Strings.loading,
-            in: windowController
-        )
-        activateOldestPresentedApproval()
-    }
-
-    private func showFailureSurface(
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator,
-        retry: Bool = false
-    ) {
-        guard let approval = activeApproval(
-            for: handle,
-            coordinator: coordinator
-        ) else { return }
-        approval.endReview()
-        if approval.windowController == nil {
-            approval.windowController = Window.showNew(
-                closeOthers: false,
-                approvalPeer: coordinator.peer
-            )
-        }
-        approval.windowController = Self.installFailureSurface(
-            in: approval.windowController,
-            retryAction: retry ? { [weak coordinator] in coordinator?.retryRecovery() } : nil
-        )
-        activateOldestPresentedApproval()
-    }
-
-    @discardableResult
-    static func installFailureSurface(
-        in retainedWindowController: NSWindowController?,
-        retryAction: (() -> Void)? = nil
-    ) -> NSWindowController {
-        let windowController = retainedWindowController ??
-            Window.showNew(closeOthers: false)
-        Self.installWaitingSurface(
-            reason: Strings.somethingWentWrong,
-            in: windowController,
-            retryAction: retryAction
-        )
-        return windowController
-    }
-
-    static func installWaitingSurface(
-        reason: String,
-        in windowController: NSWindowController,
-        retryAction: (() -> Void)? = nil
-    ) {
-        let outgoing = windowController.contentViewController
-        if !(outgoing is WaitingViewController) {
-            windowController.window?.delegate = nil
-        }
-        dismissApprovalSheets(in: windowController.window)
-        if let waiting = outgoing as? WaitingViewController {
-            waiting.update(reason: reason, retryAction: retryAction)
-            return
-        }
-        windowController.contentViewController = WaitingViewController.with(
-            reason: reason,
-            retryAction: retryAction
-        ) {
+        if !activateOldestPresentedApproval(), finishedWindowAction == .closeAndActivate {
             Window.activateBrowser(specific: .safari)
         }
     }
 
-    private func closeApproval(
-        handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        guard let approval = activeApproval(
-            for: handle,
-            coordinator: coordinator
-        ) else { return }
-        let window = approval.windowController?.window
-        let windowNumber = window?.windowNumber
-        let windowAction = Self.finishedApprovalWindowAction(
-            windowNumber: windowNumber,
-            isVisible: window?.isVisible == true,
-            isMiniaturized: window?.isMiniaturized == true
-        )
-        approval.endReview()
-        removeActiveApproval(for: handle, coordinator: coordinator)
-        window?.delegate = nil
-        Self.dismissApprovalSheets(in: window)
-        switch windowAction {
-        case .none:
-            activateOldestPresentedApproval()
-        case .close:
-            Window.closeWindow(idToClose: windowNumber)
-            activateOldestPresentedApproval()
-        case .closeAndActivate:
-            Window.closeWindow(idToClose: windowNumber)
-            if !activateOldestPresentedApproval() {
-                Window.activateBrowser(specific: .safari)
-            }
-        }
-    }
-
-    static func finishedApprovalWindowAction(
-        windowNumber: Int?,
-        isVisible: Bool,
-        isMiniaturized: Bool
-    ) -> FinishedApprovalWindowAction {
-        guard windowNumber != nil else { return .none }
-        return isVisible || isMiniaturized ? .closeAndActivate : .close
-    }
-
     private func reactivateApprovalIfNeeded(for key: ApprovalRouteKey) {
-        guard let approval = approvalInbox.active(for: key) else { return }
-        restorePresentation(for: key, approval: approval, retryPaused: true)
-    }
-
-    private func restorePresentation(
-        for key: ApprovalRouteKey,
-        approval: ActiveApproval,
-        retryPaused: Bool
-    ) {
-        guard approval.coordinator.canReactivate else { return }
-        approval.restorePresentation()
-        if approval.coordinator.isPaused {
-            approval.pendingPresentation = nil
-            if retryPaused {
-                approval.coordinator.retryRecovery()
-            } else {
-                present(.retryRequired, for: key.handle, coordinator: approval.coordinator)
-            }
-        } else if let pending = approval.pendingPresentation {
-            approval.pendingPresentation = nil
-            present(pending, for: key.handle, coordinator: approval.coordinator)
-        } else if !approval.acceptsReviewActions {
-            showWaiting(for: key.handle, coordinator: approval.coordinator)
-        }
-        approval.activate()
+        approvalInbox.active(for: key)?.restorePresentation(retryPaused: true, using: self)
     }
 
     @discardableResult
@@ -1047,52 +634,11 @@ class Agent: NSObject {
         return approval
     }
 
-    private func removeActiveApproval(
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        let key = ApprovalRouteKey(
-            handle: handle,
-            nativeDeliveryNonce: coordinator.nativeDeliveryNonce
-        )
-        guard approvalInbox.active(for: key)?.coordinator === coordinator else {
-            return
-        }
-        approvalInbox.remove(key)
-    }
-
     func restoreOldestRecoverableApproval() {
         guard let oldest = approvalInbox.oldestActive(where: {
             $0.coordinator.canReactivate && ($0.coordinator.isPaused || $0.isDismissed)
         }) else { return }
-        restorePresentation(for: oldest.key, approval: oldest.value, retryPaused: false)
-    }
-
-    private func acceptsReviewAction(
-        for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) -> Bool {
-        activeApproval(
-            for: handle,
-            coordinator: coordinator
-        )?.acceptsReviewActions == true
-    }
-
-    static func dismissApprovalSheets(in window: NSWindow?) {
-        guard let window else { return }
-        for sheet in window.sheets {
-            dismissApprovalSheets(in: sheet)
-            window.endSheet(sheet, returnCode: .abort)
-            sheet.orderOut(nil)
-        }
-    }
-
-    static func rejectionHandler(
-        for coordinator: NativeApprovalCoordinator
-    ) -> () -> Void {
-        return { [weak coordinator] in
-            coordinator?.reject()
-        }
+        oldest.value.restorePresentation(retryPaused: false, using: self)
     }
 
     @objc private func walletsChanged() {
@@ -1100,6 +646,266 @@ class Agent: NSObject {
               approvalInbox.hasAwaitingAuthentication ||
                 pendingWalletOpenIntent.isPending else { return }
         resumePendingWork()
+    }
+}
+
+extension Agent.ActiveApproval {
+
+    fileprivate func present(
+        _ presentation: NativeApprovalCoordinator.Presentation,
+        using agent: Agent
+    ) -> Agent.FinishedApprovalWindowAction? {
+        switch presentation {
+        case .approval(let request, let action):
+            present(action: action, peer: request.peerMeta, using: agent)
+        case .waiting:
+            showWaiting()
+        case .retryRequired:
+            showFailureSurface(retry: true)
+        case .rejecting:
+            showFailureSurface()
+        case .finished, .superseded:
+            return close()
+        }
+        return nil
+    }
+
+    private func present(action: DappRequestAction, peer: PeerMeta, using agent: Agent) {
+        let windowController = approvalWindow(peer: peer)
+        switch action {
+        case .selectAccount(let action):
+            presentAccountSelection(action, mode: .selectAccount, using: agent)
+        case .switchAccount(let action):
+            presentAccountSelection(action, mode: .switchAccount, using: agent)
+        case .approveMessage(let action):
+            showApproveMessage(action, using: agent)
+            beginReview()
+        case .approveTransaction(let action):
+            windowController.contentViewController = ApproveTransactionViewController.with(
+                transaction: action.transaction,
+                chain: action.chain,
+                account: action.account,
+                walletId: action.walletId
+            ) { [weak self] transaction in
+                guard let self, acceptsReviewActions else { return }
+                if let transaction {
+                    coordinator.approveTransaction(
+                        transaction,
+                        reviewedNetwork: action.resolvedNetwork
+                    )
+                } else {
+                    coordinator.reject()
+                }
+            }
+            beginReview()
+        case .addEthereumChain(let action):
+            presentAddEthereumChain(action)
+        }
+    }
+
+    private func approvalWindow(peer: PeerMeta? = nil) -> NSWindowController {
+        if let windowController {
+            if let peer {
+                (windowController as? WalletWindowController)?.approvalPeer = peer
+            }
+            return windowController
+        }
+        let controller = Window.showNew(
+            closeOthers: false,
+            approvalPeer: peer ?? coordinator.peer
+        )
+        windowController = controller
+        return controller
+    }
+
+    private func presentAddEthereumChain(_ action: AddEthereumChainAction) {
+        beginReview()
+        let controller = approvalWindow()
+        Self.installWaitingSurface(reason: Strings.loading, in: controller)
+        guard let window = controller.window else {
+            coordinator.reject()
+            return
+        }
+        let alert = Alert()
+        alert.messageText = Strings.addNetwork
+        alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.cancel)
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self, acceptsReviewActions else { return }
+            if response == .alertFirstButtonReturn {
+                coordinator.approveAddEthereumChain()
+            } else {
+                coordinator.reject()
+            }
+        }
+    }
+
+    private func presentAccountSelection(
+        _ action: SelectAccountAction,
+        mode: NativeAccountSelectionMode,
+        using agent: Agent
+    ) {
+        let accountsList = instantiate(AccountsListViewController.self)
+        let session = NativeAccountSelectionSession(action: action, mode: mode) {
+            [weak self, weak agent] accounts, network in
+            guard let self, acceptsReviewActions else { return }
+            showWaiting()
+            agent?.activateOldestPresentedApproval()
+            guard let accounts else {
+                coordinator.reject()
+                return
+            }
+            let ethereumNetwork = accounts.contains {
+                $0.account.coin == .ethereum
+            } ? network : nil
+            coordinator.approveAccounts(accounts, ethereumNetwork: ethereumNetwork)
+        }
+        accountsList.accountSelection = session
+        approvalWindow().contentViewController = accountsList
+        beginReview { session.invalidate() }
+    }
+
+    private func showApproveMessage(_ action: SignMessageAction, using agent: Agent) {
+        let controller = approvalWindow()
+        let window = controller.window
+        var authenticationContext: LAContext?
+        var didResolveAuthentication = false
+        let approveViewController = ApproveViewController.with(
+            subject: action.subject,
+            meta: action.meta,
+            account: action.account,
+            walletId: action.walletId,
+            solanaClusterOptions: action.solanaClusterOptions
+        ) { [weak self, weak agent, weak window] decision in
+            guard let self, acceptsReviewActions else { return }
+            guard case .approved = decision else {
+                guard !didResolveAuthentication else { return }
+                didResolveAuthentication = true
+                coordinator.reject()
+                return
+            }
+            authenticationContext = agent?.askAuthentication(
+                on: window,
+                getBackTo: window?.contentViewController,
+                browser: .safari,
+                onStart: false,
+                reason: action.subject.asAuthenticationReason,
+                onWindowClose: { didResolveAuthentication = true }
+            ) { [weak self, weak window] success in
+                guard let self, acceptsReviewActions, !didResolveAuthentication else { return }
+                didResolveAuthentication = true
+                authenticationContext = nil
+                if success, case .approved(let cluster) = decision {
+                    coordinator.approveMessage(solanaCluster: cluster)
+                    (window?.contentViewController as? ApproveViewController)?.enableWaiting()
+                } else {
+                    coordinator.reject()
+                }
+            }
+        }
+        approveViewController.localWindowCloseCompletion = {
+            authenticationContext?.invalidate()
+            authenticationContext = nil
+            didResolveAuthentication = true
+        }
+        controller.contentViewController = approveViewController
+    }
+
+    private func showWaiting() {
+        let controller = approvalWindow()
+        endReview()
+        Self.installWaitingSurface(reason: Strings.loading, in: controller)
+    }
+
+    private func showFailureSurface(retry: Bool = false) {
+        endReview()
+        Self.installWaitingSurface(
+            reason: Strings.somethingWentWrong,
+            in: approvalWindow(),
+            retryAction: retry ? { [weak self] in
+                guard let self, !isRetired else { return }
+                coordinator.retryRecovery()
+            } : nil
+        )
+    }
+
+    private static func installWaitingSurface(
+        reason: String,
+        in windowController: NSWindowController,
+        retryAction: (() -> Void)? = nil
+    ) {
+        let outgoing = windowController.contentViewController
+        if !(outgoing is WaitingViewController) {
+            windowController.window?.delegate = nil
+        }
+        dismissApprovalSheets(in: windowController.window)
+        if let waiting = outgoing as? WaitingViewController {
+            waiting.update(reason: reason, retryAction: retryAction)
+            return
+        }
+        windowController.contentViewController = WaitingViewController.with(
+            reason: reason,
+            retryAction: retryAction
+        ) {
+            Window.activateBrowser(specific: .safari)
+        }
+    }
+
+    @discardableResult
+    func close() -> Agent.FinishedApprovalWindowAction {
+        guard !isRetired else { return .none }
+        let window = windowController?.window
+        let action = Self.finishedApprovalWindowAction(
+            windowNumber: window?.windowNumber,
+            isVisible: window?.isVisible == true,
+            isMiniaturized: window?.isMiniaturized == true
+        )
+        finishReview(retiring: true)
+        window?.delegate = nil
+        Self.dismissApprovalSheets(in: window)
+        if action != .none {
+            Window.closeWindow(idToClose: window?.windowNumber)
+        }
+        return action
+    }
+
+    static func finishedApprovalWindowAction(
+        windowNumber: Int?,
+        isVisible: Bool,
+        isMiniaturized: Bool
+    ) -> Agent.FinishedApprovalWindowAction {
+        guard windowNumber != nil else { return .none }
+        return isVisible || isMiniaturized ? .closeAndActivate : .close
+    }
+
+    fileprivate func restorePresentation(retryPaused: Bool, using agent: Agent) {
+        guard !isRetired, coordinator.canReactivate else { return }
+        restorePresentation()
+        if coordinator.isPaused {
+            pendingPresentation = nil
+            if retryPaused {
+                coordinator.retryRecovery()
+            } else {
+                showFailureSurface(retry: true)
+            }
+        } else if let pending = pendingPresentation {
+            pendingPresentation = nil
+            _ = present(pending, using: agent)
+        } else if !acceptsReviewActions {
+            showWaiting()
+        }
+        activate()
+    }
+
+    private static func dismissApprovalSheets(in window: NSWindow?) {
+        guard let window else { return }
+        for sheet in window.sheets {
+            dismissApprovalSheets(in: sheet)
+            window.endSheet(sheet, returnCode: .abort)
+            sheet.orderOut(nil)
+        }
     }
 }
 

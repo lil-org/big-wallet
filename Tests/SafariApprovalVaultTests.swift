@@ -633,6 +633,8 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         let unlockedValue = await vault.unlock(reason: "Approve")
         let unlocked = try XCTUnwrap(unlockedValue)
+        let executionValue = await vault.unlock(reason: "Approve")
+        let execution = try XCTUnwrap(executionValue)
 
         try keys.removeAll()
 
@@ -642,6 +644,42 @@ final class SafariApprovalVaultTests: XCTestCase {
             walletID: "wallet",
             account: fixture.account
         ))
+        let lease = await execution.takeExecutionLease()
+        XCTAssertNil(lease)
+    }
+
+    func testUnlockedScopesRequireUnchangedEnvelopeBytes() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: MemoryApprovalKeyStore(),
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true },
+            randomKey: { Data(repeating: 6, count: 32) }
+        )
+        let fixture = try fixture()
+        try vault.publish(source: fixture.source, integrityKey: integrityKey)
+        let unlockedValue = await vault.unlock(reason: "Approve")
+        let unlocked = try XCTUnwrap(unlockedValue)
+        let executionValue = await vault.unlock(reason: "Approve")
+        let execution = try XCTUnwrap(executionValue)
+        let originalData = try Data(contentsOf: url)
+
+        try originalData.write(to: url, options: .atomic)
+
+        XCTAssertFalse(unlocked.orderedAccounts.isEmpty)
+        XCTAssertNotNil(unlocked.privateKey(walletID: "wallet", account: fixture.account))
+
+        try (originalData + Data("\n".utf8)).write(to: url, options: .atomic)
+
+        XCTAssertNotNil(vault.catalogAccess())
+        let replacement = await vault.unlock(reason: "Approve")
+        XCTAssertNotNil(replacement)
+        XCTAssertTrue(unlocked.orderedAccounts.isEmpty)
+        XCTAssertNil(unlocked.privateKey(walletID: "wallet", account: fixture.account))
+        let lease = await execution.takeExecutionLease()
+        XCTAssertNil(lease)
     }
 
     func testRequestScopeRechecksGenerationAfterPrivateKeyDerivation() throws {

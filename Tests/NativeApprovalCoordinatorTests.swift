@@ -246,6 +246,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
+    private final class ReviewTeardownController: NSViewController, NativeApprovalReviewTeardown {
+        var onInvalidate: (() -> Void)?
+
+        func invalidateNativeApprovalReview() {
+            onInvalidate?()
+        }
+    }
+
     private final class TrackingWindow: NSWindow {
         private(set) var activationCount = 0
         private(set) var deminiaturizationCount = 0
@@ -991,22 +999,22 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testFinishedApprovalAlwaysClosesExistingWindow() {
-        XCTAssertEqual(Agent.finishedApprovalWindowAction(
+        XCTAssertEqual(Agent.ActiveApproval.finishedApprovalWindowAction(
             windowNumber: nil,
             isVisible: true,
             isMiniaturized: false
         ), .none)
-        XCTAssertEqual(Agent.finishedApprovalWindowAction(
+        XCTAssertEqual(Agent.ActiveApproval.finishedApprovalWindowAction(
             windowNumber: 42,
             isVisible: false,
             isMiniaturized: false
         ), .close)
-        XCTAssertEqual(Agent.finishedApprovalWindowAction(
+        XCTAssertEqual(Agent.ActiveApproval.finishedApprovalWindowAction(
             windowNumber: 42,
             isVisible: true,
             isMiniaturized: false
         ), .closeAndActivate)
-        XCTAssertEqual(Agent.finishedApprovalWindowAction(
+        XCTAssertEqual(Agent.ActiveApproval.finishedApprovalWindowAction(
             windowNumber: 42,
             isVisible: false,
             isMiniaturized: true
@@ -3286,6 +3294,57 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.restorePresentation()
         XCTAssertTrue(approval.receive(try XCTUnwrap(approval.pendingPresentation)))
         XCTAssertFalse(approval.isDismissed)
+        fixture.store.snapshot = nil
+    }
+
+    func testRetiredApprovalFencesRetainedSelectionAndWindowCallbacks() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        XCTAssertTrue(inbox.activate(approval, for: fixture.key))
+        let agent = Agent(approvalInbox: inbox)
+        let window = TrackingWindow(
+            contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        approval.windowController = WalletWindowController(window: window)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        let request = try XCTUnwrap(fixture.store.snapshot?.request)
+        agent.present(.approval(request: request, action: accountSelectionAction()),
+                      for: fixture.key.handle, coordinator: fixture.coordinator)
+        let accountsList = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
+        let selection = try XCTUnwrap(accountsList.accountSelection)
+        let outgoing = ReviewTeardownController()
+        var teardowns = 0
+        outgoing.onInvalidate = { [weak approval] in
+            guard let approval else { return XCTFail("The approval must own teardown") }
+            teardowns += 1
+            XCTAssertFalse(approval.acceptsReviewActions)
+            approval.beginReview()
+            XCTAssertFalse(approval.acceptsReviewActions)
+            XCTAssertFalse(approval.receive(.waiting))
+        }
+        window.contentViewController = outgoing
+
+        agent.present(.finished, for: fixture.key.handle, coordinator: fixture.coordinator)
+
+        window.resetActivationCount()
+        selection.complete(accounts: nil)
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        approval.activate()
+        approval.close()
+        agent.present(.waiting, for: fixture.key.handle, coordinator: fixture.coordinator)
+        await Task.yield()
+        XCTAssertEqual(teardowns, 1)
+        XCTAssertFalse(approval.acceptsReviewActions)
+        XCTAssertEqual(fixture.coordinator.phase, .reviewing)
+        XCTAssertEqual(window.activationCount, 0)
+        XCTAssertTrue(window.contentViewController === outgoing)
         fixture.store.snapshot = nil
     }
 
