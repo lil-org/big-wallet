@@ -206,51 +206,59 @@ struct DappRequestProcessor: DappRequestProcessing {
         switch request.body {
         case .unknown:
             let resolvedChain = network ?? Networks.ethereum
-            let bodies = accounts.compactMap {
-                selectedAccountResponseBody(for: $0.account, chain: resolvedChain)
+            var updates = accounts.compactMap {
+                selectedAccountUpdate(for: $0.account, chain: resolvedChain)
             }
-            guard bodies.count == accounts.count else {
+            guard updates.count == accounts.count else {
                 return response(to: request, error: .internalError)
             }
-            return response(to: request, body: .multiple(.init(
-                bodies: bodies,
-                providersToDisconnect: Array(disconnectedProviders(
-                    initiallyConnectedProviders: action.initiallyConnectedProviders,
-                    selectedAccounts: accounts
-                ))
-            )))
+            for provider in disconnectedProviders(
+                initiallyConnectedProviders: action.initiallyConnectedProviders,
+                selectedAccounts: accounts
+            ) {
+                switch provider {
+                case .ethereum: updates.append(.disconnectEthereum)
+                case .solana: updates.append(.disconnectSolana)
+                case .unknown, .multiple: break
+                }
+            }
+            return ResponseToExtension(
+                for: request, payload: .result(.null), mutation: .accounts(updates)
+            )
         case .ethereum(let body) where body.method == .requestAccounts:
             guard let network, let account = accounts.first?.account,
                   account.coin == .ethereum else {
                 return response(to: request, error: .internalError)
             }
-            return response(to: request, body: .ethereum(.init(
-                results: [account.address],
-                chainId: network.chainIdHexString
-            )))
+            return ResponseToExtension(
+                for: request,
+                payload: .result(.strings([account.address])),
+                mutation: .accounts([.ethereum(address: account.address, chainId: network.chainIdHexString)])
+            )
         case .solana(let body) where body.method == .connect:
             guard let account = accounts.first?.account, account.coin == .solana else {
                 return response(to: request, error: .internalError)
             }
-            return response(to: request, body: .solana(.init(publicKey: account.address)))
+            return ResponseToExtension(
+                for: request,
+                payload: .result(.solanaPublicKey(account.address)),
+                mutation: .accounts([.solana(publicKey: account.address)])
+            )
         case .ethereum, .solana:
             return response(to: request, error: .internalError)
         }
     }
 
-    private static func selectedAccountResponseBody(
+    private static func selectedAccountUpdate(
         for account: WalletAccount,
         chain: EthereumNetwork?
-    ) -> ResponseToExtension.Body? {
+    ) -> ResponseToExtension.AccountUpdate? {
         switch account.coin {
         case .ethereum:
             guard let chain else { return nil }
-            return .ethereum(.init(
-                results: [account.address],
-                chainId: chain.chainIdHexString
-            ))
+            return .ethereum(address: account.address, chainId: chain.chainIdHexString)
         case .solana:
-            return .solana(.init(publicKey: account.address))
+            return .solana(publicKey: account.address)
         }
     }
 
@@ -345,13 +353,6 @@ struct DappRequestProcessor: DappRequestProcessing {
             }
             return configuration.provider
         })
-    }
-
-    private static func response(
-        to request: SafariRequest,
-        body: ResponseToExtension.Body
-    ) -> ResponseToExtension {
-        return ResponseToExtension(for: request, payload: .body(body))
     }
 
     private static func response(

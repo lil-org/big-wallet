@@ -1910,7 +1910,7 @@ final class ExtensionRequestFileStore {
             for: request,
             payload: .error(.internalError)
         )
-        if response.json[ExtensionBridge.approvalCommittedKey] as? Bool == true {
+        if response.approvalCommitted {
             fallback = fallback.markingApprovalCommitted()
         }
         return exactResponseData(fallback)
@@ -1926,8 +1926,9 @@ final class ExtensionRequestFileStore {
     private func responseJSON(_ data: Data, id: Int) -> [String: Any]? {
         guard data.count <= ExtensionBridge.maximumPayloadBytes,
               let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              response["id"] as? Int == id else { return nil }
-        return response
+              let decoded = ResponseToExtension(json: response),
+              decoded.id == id else { return nil }
+        return decoded.json
     }
 
     private func acquireOperationLeaseLocked(

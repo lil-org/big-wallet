@@ -1225,10 +1225,8 @@ extension PopupRequestSessionsTests {
                 XCTAssertEqual(access.catalogIdentity, catalog.catalogIdentity)
                 return .response(ResponseToExtension(
                     for: request,
-                    payload: .body(.ethereum(.init(
-                        results: ["0x0000000000000000000000000000000000000001"],
-                        chainId: "0x1"
-                    )))
+                    payload: .result(.null),
+                    mutation: .ethereumChain("0x1")
                 ))
             },
             catalogAccess: {
@@ -4461,10 +4459,10 @@ extension PopupRequestSessionsTests {
             await store.record("resolve")
             return .response(ResponseToExtension(
                 for: request,
-                payload: .body(.ethereum(.init(
-                    results: selection.accounts.map(\.address),
-                    chainId: network.chainIdHexString
-                )))
+                payload: .result(.strings(selection.accounts.map(\.address))),
+                mutation: .accounts(selection.accounts.map {
+                    .ethereum(address: $0.address, chainId: network.chainIdHexString)
+                })
             ))
         }) { request, walletAccess in
             preparations += 1
@@ -4748,10 +4746,10 @@ extension PopupRequestSessionsTests {
             await store.record("resolve")
             return .response(ResponseToExtension(
                 for: request,
-                payload: .body(.ethereum(.init(
-                    results: selection.accounts.map(\.address),
-                    chainId: network.chainIdHexString
-                )))
+                payload: .result(.strings(selection.accounts.map(\.address))),
+                mutation: .accounts(selection.accounts.map {
+                    .ethereum(address: $0.address, chainId: network.chainIdHexString)
+                })
             ))
         }) { request in
             preparations += 1

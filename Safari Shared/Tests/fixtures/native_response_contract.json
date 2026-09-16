@@ -1,0 +1,798 @@
+{
+  "valid": [
+    {
+      "name": "signature",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "committed-signature",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": true
+      }
+    },
+    {
+      "name": "solana-signatures",
+      "response": {
+        "id": 1,
+        "name": "signAllTransactions",
+        "provider": "solana",
+        "kind": "result",
+        "result": [
+          "signature-1",
+          "signature-2"
+        ],
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "ethereum-connect",
+      "response": {
+        "id": 1,
+        "name": "requestAccounts",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "ethereum": {
+              "address": "0x0000000000000000000000000000000000000001",
+              "chainId": "0x1"
+            }
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "solana-connect",
+      "response": {
+        "id": 1,
+        "name": "connect",
+        "provider": "solana",
+        "kind": "result",
+        "result": {
+          "publicKey": "11111111111111111111111111111111"
+        },
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "solana": {
+              "publicKey": "11111111111111111111111111111111"
+            }
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "switch-accounts",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "result",
+        "result": null,
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "ethereum": {
+              "address": "0x0000000000000000000000000000000000000001",
+              "chainId": "0x1"
+            },
+            "solana": null
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "disconnect-accounts",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "result",
+        "result": null,
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "ethereum": null,
+            "solana": null
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "empty-account-selection",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "result",
+        "result": null,
+        "mutation": {
+          "kind": "accounts",
+          "updates": {}
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "switch-chain",
+      "response": {
+        "id": 1,
+        "name": "switchEthereumChain",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": null,
+        "mutation": {
+          "kind": "ethereumChain",
+          "chainId": "0x2a"
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "add-chain",
+      "response": {
+        "id": 1,
+        "name": "addEthereumChain",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": null,
+        "mutation": {
+          "kind": "ethereumChain",
+          "chainId": "0x2a"
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "generic-error",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed"
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "error-null-data",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed",
+          "data": null
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "error-array-data",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed",
+          "data": [
+            false,
+            3,
+            "reason"
+          ]
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "error-rpc-data",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32000,
+          "message": "Failed",
+          "data": {
+            "reason": "rejected"
+          }
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "error-transaction-hash",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed",
+          "data": {
+            "transactionHash": "0x1234"
+          }
+        },
+        "mutation": null,
+        "approvalCommitted": true,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "error-transaction-signature",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "solana",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed",
+          "data": {
+            "signature": "signature"
+          }
+        },
+        "mutation": null,
+        "approvalCommitted": true,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "revoke-solana",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "solana",
+        "kind": "error",
+        "error": {
+          "code": 4100,
+          "message": "Failed"
+        },
+        "mutation": {
+          "kind": "revokeSolana",
+          "publicKey": "11111111111111111111111111111111"
+        },
+        "approvalCommitted": false,
+        "authorizationFailure": true
+      }
+    },
+    {
+      "name": "ordinary-4100",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "solana",
+        "kind": "error",
+        "error": {
+          "code": 4100,
+          "message": "Failed"
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "manual-rejection",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "error",
+        "error": {
+          "code": 4001,
+          "message": "Canceled"
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "large-positive-error-code",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": 9007199254740992,
+          "message": "Custom rejection",
+          "data": {
+            "reason": "custom"
+          }
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "large-negative-error-code",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -9007199254740992,
+          "message": "Custom rejection",
+          "data": {
+            "reason": "custom"
+          }
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "boolean-id",
+      "response": {
+        "id": true,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "fractional-id",
+      "response": {
+        "id": 1.5,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "unsafe-id",
+      "response": {
+        "id": 9007199254740992,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "string-committed",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": "true"
+      }
+    },
+    {
+      "name": "unknown-provider",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "unknown",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "wrong-kind",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "success",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "both-outcomes",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false,
+        "error": {
+          "code": 4001,
+          "message": "Canceled"
+        }
+      }
+    },
+    {
+      "name": "extra-field",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false,
+        "extra": true
+      }
+    },
+    {
+      "name": "invalid-result",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": {
+          "unexpected": "field"
+        },
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "invalid-array-result",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": [
+          1
+        ],
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "manual-provider-mismatch",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "multiple",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "result-with-revocation",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "solana",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": {
+          "kind": "revokeSolana",
+          "publicKey": "11111111111111111111111111111111"
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "cross-provider-mutation",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "solana": {
+              "publicKey": "11111111111111111111111111111111"
+            }
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "invalid-chain",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": {
+          "kind": "ethereumChain",
+          "chainId": "0x00"
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "unknown-update",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "unknown": null
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "injected-reauthorization",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "ethereum": {
+              "address": "0x0000000000000000000000000000000000000001",
+              "chainId": "0x1",
+              "reauthorizationRevision": 99
+            }
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "bad-solana-key",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "solana",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "solana": {
+              "publicKey": "invalid"
+            }
+          }
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "error-with-accounts",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed"
+        },
+        "mutation": {
+          "kind": "accounts",
+          "updates": {
+            "ethereum": null
+          }
+        },
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "missing-error-message",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": 4001
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "boolean-error-code",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": true,
+          "message": "Failure"
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "fractional-error-code",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": 1.5,
+          "message": "Failure"
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "invalid-authorization-flag",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "error",
+        "error": {
+          "code": -32603,
+          "message": "Failed"
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": 1
+      }
+    },
+    {
+      "name": "revocation-without-authorization",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "solana",
+        "kind": "error",
+        "error": {
+          "code": 4100,
+          "message": "Failed"
+        },
+        "mutation": {
+          "kind": "revokeSolana",
+          "publicKey": "11111111111111111111111111111111"
+        },
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    },
+    {
+      "name": "missing-mutation",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "missing-result",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "missing-approvalCommitted",
+      "response": {
+        "id": 1,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "0xsigned",
+        "mutation": null
+      }
+    },
+    {
+      "name": "manual-missing-accounts",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "result",
+        "result": null,
+        "mutation": null,
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "manual-nonnull-result",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "result",
+        "result": "invalid",
+        "mutation": {
+          "kind": "accounts",
+          "updates": {}
+        },
+        "approvalCommitted": false
+      }
+    },
+    {
+      "name": "manual-empty-error",
+      "response": {
+        "id": 1,
+        "name": "switchAccount",
+        "provider": "multiple",
+        "kind": "error",
+        "error": {
+          "code": 4001,
+          "message": ""
+        },
+        "mutation": null,
+        "approvalCommitted": false,
+        "authorizationFailure": false
+      }
+    }
+  ]
+}

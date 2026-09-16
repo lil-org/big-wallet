@@ -116,7 +116,16 @@ final class NativeApprovalCoordinator {
         )
     }
 
-    private typealias Workflow = @MainActor (Work) async -> Void
+    private enum WorkflowIntent {
+        case validateReceipt
+        case awaitAuthenticationExpiry
+        case prepareReview
+        case stage(DappApprovalDecision, approvedAt: Date)
+        case respond(ResponseToExtension)
+        case rejectBeforeAuthentication(notifyOnStaged: Bool)
+        case rejectOwned
+        case observe
+    }
 
     @MainActor
     private final class Work {
@@ -183,7 +192,7 @@ final class NativeApprovalCoordinator {
     private var runtime: ExtensionBridge.NativeDeliveryOwner?
     private var work: Work?
     private var task: Task<Void, Never>?
-    private var recovery: Workflow?
+    private var recovery: WorkflowIntent?
     private var terminalDeadline: Date
     private var hasVerifiedReceipt = false
     private(set) var hasAuthenticated = false
@@ -221,13 +230,13 @@ final class NativeApprovalCoordinator {
     func start(nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner) {
         if runtime == nil { runtime = nativeDeliveryOwner }
         guard phase == .registered else { return }
-        run(.validating, operation: Self.validateAndAcquireReceipt)
+        run(.validating, intent: .validateReceipt)
     }
 
     func resumeAfterAuthentication() {
         guard isAwaitingAuthentication else { return }
         hasAuthenticated = true
-        run(.loading, operation: Self.prepareReview)
+        run(.loading, intent: .prepareReview)
     }
 
     func retryRecovery() {
@@ -238,15 +247,13 @@ final class NativeApprovalCoordinator {
         }
         if !hasAuthenticated {
             if rejectionRequested {
-                run(.rejecting) { work in
-                    await Self.rejectBeforeAuthentication(work, notifyOnStaged: true)
-                }
+                run(.rejecting, intent: .rejectBeforeAuthentication(notifyOnStaged: true))
             } else {
-                run(.validating, operation: Self.validateAndAcquireReceipt)
+                run(.validating, intent: .validateReceipt)
             }
         } else if let recovery {
             didPresentWaiting = false
-            run(.loading, operation: recovery)
+            run(.loading, intent: recovery)
             presentWaiting()
         }
     }
@@ -258,10 +265,10 @@ final class NativeApprovalCoordinator {
     func cancelBeforeAuthentication() {
         guard !hasAuthenticated, !isFinished, !rejectionRequested else { return }
         rejectionRequested = true
-        let rejection: Workflow = { await Self.rejectBeforeAuthentication($0) }
+        let rejection = WorkflowIntent.rejectBeforeAuthentication(notifyOnStaged: false)
         recovery = rejection
         guard phase != .acquiringReceipt else { return }
-        run(.rejecting, operation: rejection)
+        run(.rejecting, intent: rejection)
     }
 
     func approveAccounts(
@@ -310,7 +317,7 @@ final class NativeApprovalCoordinator {
             cancelBeforeAuthentication()
         } else {
             rejectionRequested = true
-            run(.rejecting, operation: Self.rejectOwned)
+            run(.rejecting, intent: .rejectOwned)
         }
     }
 
@@ -318,20 +325,39 @@ final class NativeApprovalCoordinator {
         guard phase == .reviewing, runtime != nil else { return }
         decisionIsFinal = true
         let approvedAt = environment.now()
-        run(.staging) { work in
-            await Self.persistStage(work, decision: decision, approvedAt: approvedAt)
-        }
+        run(.staging, intent: .stage(decision, approvedAt: approvedAt))
         presentWaiting()
     }
 
-    private func run(_ phase: Phase, operation: @escaping Workflow, remembers: Bool = true) {
+    private func run(_ phase: Phase, intent: WorkflowIntent, remembers: Bool = true) {
         guard !isFinished else { return }
         stopWork()
         self.phase = phase
-        if remembers { recovery = operation }
+        if remembers { recovery = intent }
         let work = Work(owner: self)
         self.work = work
-        task = Task { await operation(work) }
+        task = Task { await Self.perform(intent, work: work) }
+    }
+
+    private static func perform(_ intent: WorkflowIntent, work: Work) async {
+        switch intent {
+        case .validateReceipt:
+            await validateAndAcquireReceipt(work)
+        case .awaitAuthenticationExpiry:
+            await awaitAuthenticationExpiry(work)
+        case .prepareReview:
+            await prepareReview(work)
+        case .stage(let decision, let approvedAt):
+            await persistStage(work, decision: decision, approvedAt: approvedAt)
+        case .respond(let response):
+            await persistResponse(work, response: response)
+        case .rejectBeforeAuthentication(let notifyOnStaged):
+            await rejectBeforeAuthentication(work, notifyOnStaged: notifyOnStaged)
+        case .rejectOwned:
+            await rejectOwned(work)
+        case .observe:
+            await observe(work)
+        }
     }
 
     private func stopWork() {
@@ -351,20 +377,22 @@ final class NativeApprovalCoordinator {
     }
 
     private func awaitAuthentication(notify: Bool = true) {
-        run(.awaitingAuthentication, operation: { work in
-            while work.isCurrent {
-                let remaining = work.update {
-                    $0.terminalDeadline.timeIntervalSince(work.environment.now())
-                } ?? 0
-                guard remaining > 0 else {
-                    work.update { $0.finish() }
-                    return
-                }
-                do { try await Task.sleep(for: .seconds(remaining)) }
-                catch { return }
-            }
-        }, remembers: false)
+        run(.awaitingAuthentication, intent: .awaitAuthenticationExpiry, remembers: false)
         if notify { onEvent?(.authenticationRequired) }
+    }
+
+    private static func awaitAuthenticationExpiry(_ work: Work) async {
+        while work.isCurrent {
+            let remaining = work.update {
+                $0.terminalDeadline.timeIntervalSince(work.environment.now())
+            } ?? 0
+            guard remaining > 0 else {
+                work.update { $0.finish() }
+                return
+            }
+            do { try await Task.sleep(for: .seconds(remaining)) }
+            catch { return }
+        }
     }
 
     private func presentWaiting() {
@@ -379,7 +407,7 @@ final class NativeApprovalCoordinator {
             return
         }
         decisionIsFinal = true
-        run(.waiting, operation: Self.observe)
+        run(.waiting, intent: .observe)
         presentWaiting()
     }
 
@@ -506,7 +534,7 @@ final class NativeApprovalCoordinator {
                     switch preparation {
                     case .approval(let action):
                         work.update {
-                            $0.run(.reviewing, operation: Self.observe, remembers: false)
+                            $0.run(.reviewing, intent: .observe, remembers: false)
                             $0.didPresentWaiting = false
                             $0.onEvent?(.presentation(.approval(request: request, action: action)))
                         }
@@ -514,7 +542,7 @@ final class NativeApprovalCoordinator {
                         work.update {
                             $0.decisionIsFinal = true
                             $0.phase = .responding
-                            $0.recovery = { work in await Self.persistResponse(work, response: response) }
+                            $0.recovery = .respond(response)
                         }
                         await persistResponse(work, response: response)
                     }

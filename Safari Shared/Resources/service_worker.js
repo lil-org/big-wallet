@@ -278,7 +278,6 @@ function validPopupApprovalPayload(payload) {
 function cleanConfiguration(configuration) {
     const clean = {...configuration};
     delete clean.__bwEthereumAuthorization;
-    delete clean[WIRE.ETHEREUM_AUTHORIZATION_FAILURE_KEY];
     delete clean.accountRevision;
     delete clean.solanaAuthorizationEpoch;
     return clean;
@@ -527,31 +526,11 @@ function validatedDappMessage(request, sender, state) {
     };
 }
 
-function affectedProviders(response, storedConfigurations) {
-    const providers = new Set;
-    if (storedConfigurations !== null) {
-        storedConfigurations.forEach(item => providers.add(item.provider));
-    }
-    if (response?.provider === "ethereum" &&
-        (response.name === "addEthereumChain" ||
-            response.name === "switchEthereumChain") &&
-        typeof response.chainId === "string" &&
-        !Object.prototype.hasOwnProperty.call(response, "error")) {
-        providers.add("ethereum");
-    }
-    if (response?.provider === "solana" && response.errorCode === 4100 &&
-        typeof response.errorPublicKey === "string" &&
-        response.errorPublicKey.length > 0) {
-        providers.add("solana");
-    }
-    if (Array.isArray(response?.providersToDisconnect)) {
-        response.providersToDisconnect.forEach(provider => {
-            if (provider === "ethereum" || provider === "solana") {
-                providers.add(provider);
-            }
-        });
-    }
-    return providers;
+function affectedProviders(mutation) {
+    if (mutation?.kind === "accounts") { return Object.keys(mutation.updates); }
+    if (mutation?.kind === "ethereumChain") { return ["ethereum"]; }
+    if (mutation?.kind === "revokeSolana") { return ["solana"]; }
+    return [];
 }
 
 function sameProviderConfiguration(left, right) {
@@ -580,36 +559,23 @@ function configurationAccount(configuration) {
         : configuration?.publicKey || null;
 }
 
-function configurationsAfterResponse(state, response, storedConfigurations) {
-    const trustedEthereum = configurationFor(state, "ethereum");
+function configurationsAfterResponse(state, mutation) {
     let configurations = state.configurations;
-    if (storedConfigurations !== null) {
-        for (const configuration of storedConfigurations) {
-            configurations = replacingProviderConfiguration(
-                configurations, configuration.provider, configuration
-            );
+    if (mutation?.kind === "accounts") {
+        for (const [provider, update] of Object.entries(mutation.updates)) {
+            const configuration = update === null ? null : provider === "ethereum"
+                ? {provider, results: [update.address], chainId: update.chainId}
+                : {provider, publicKey: update.publicKey};
+            configurations = replacingProviderConfiguration(configurations, provider, configuration);
         }
-    }
-    if (response.provider === "ethereum" &&
-        (response.name === "addEthereumChain" ||
-            response.name === "switchEthereumChain") &&
-        typeof response.chainId === "string" &&
-        !Object.prototype.hasOwnProperty.call(response, "error")) {
+    } else if (mutation?.kind === "ethereumChain") {
         configurations = replacingProviderConfiguration(configurations, "ethereum", {
-            provider: "ethereum",
-            chainId: response.chainId,
-            results: trustedEthereum?.results || [],
+            provider: "ethereum", chainId: mutation.chainId,
+            results: configurationFor(state, "ethereum")?.results || [],
         });
-    }
-    if (response.provider === "solana" && response.errorCode === 4100 &&
-        configurationFor({...state, configurations}, "solana")?.publicKey ===
-            response.errorPublicKey) {
-        configurations = configurations.filter(item => item.provider !== "solana");
-    }
-    if (Array.isArray(response.providersToDisconnect)) {
-        configurations = configurations.filter(item => {
-            return !response.providersToDisconnect.includes(item.provider);
-        });
+    } else if (mutation?.kind === "revokeSolana" &&
+        configurationFor(state, "solana")?.publicKey === mutation.publicKey) {
+        configurations = replacingProviderConfiguration(configurations, "solana", null);
     }
     return configurations;
 }
@@ -617,22 +583,17 @@ function configurationsAfterResponse(state, response, storedConfigurations) {
 function applyResponseToState(
     state,
     response,
-    expectedRevisions,
-    storedConfigurations
+    expectedRevisions
 ) {
-    if (!WIRE.isRecord(response) || response[WIRE.NATIVE_STALE_RESPONSE_KEY] === true) {
-        return {changed: false, stale: false};
-    }
-    const affected = [...affectedProviders(response, storedConfigurations)];
+    const affected = affectedProviders(response.mutation);
     if (affected.length === 0) {
         return {changed: false, replay: false, stale: false};
     }
     const configurations = configurationsAfterResponse(
         state,
-        response,
-        storedConfigurations
+        response.mutation
     );
-    const committed = response[WIRE.APPROVAL_COMMITTED_KEY] === true;
+    const committed = response.approvalCommitted;
     const plans = [];
     for (const provider of affected) {
         const current = configurationFor(state, provider);
@@ -666,8 +627,7 @@ function applyResponseToState(
                 const current = configurationFor(state, plan.provider);
                 const account = configurationAccount(desired);
                 if (account && response.name === "switchAccount" &&
-                    response.provider === "multiple" &&
-                    !Object.prototype.hasOwnProperty.call(response, "error")) {
+                    response.provider === "multiple" && response.kind === "result") {
                     desired.reauthorizationRevision = state.revisions[plan.provider] + 1;
                 } else if (account && account === configurationAccount(current) &&
                     Number.isSafeInteger(current?.reauthorizationRevision) &&
@@ -725,179 +685,86 @@ function pageConfigurationFailure() {
     }};
 }
 
-function nativePageError(response, rpc) {
-    const raw = response.error;
-    const own = key => raw && typeof raw === "object" && Object.prototype.hasOwnProperty.call(raw, key);
-    const code = own("code") && Number.isFinite(raw.code) ? raw.code
-        : Number.isFinite(response.errorCode) ? response.errorCode : -32603;
-    const message = own("message") && typeof raw.message === "string" ? raw.message
-        : typeof raw === "string" ? raw
-        : rpc ? "Failed to process RPC response" : "Failed to process provider response";
-    let data = own("data") ? raw.data : undefined;
-    if (!rpc && typeof data === "undefined") {
-        try { data = JSON.parse(response.errorDataJSON); } catch {}
+function rpcPageResponse(response, id) {
+    if (!WIRE.isRecord(response) || response.id !== id) {
+        return pageFailure(id, "ethereum", null, "Failed to process RPC response");
     }
-    if (!rpc && typeof data === "undefined" && typeof response.errorSignature === "string") {
-        data = {signature: response.errorSignature};
+    const base = {id, provider: "ethereum", name: null, state: null, configurationMatch: null};
+    if (Object.prototype.hasOwnProperty.call(response, "error")) {
+        if (Object.prototype.hasOwnProperty.call(response, "result")) {
+            return pageFailure(id, "ethereum", null, "Failed to process RPC response");
+        }
+        const raw = response.error;
+        const error = {
+            code: Number.isFinite(raw?.code) ? raw.code : -32603,
+            message: typeof raw?.message === "string" ? raw.message
+                : typeof raw === "string" ? raw : "Failed to process RPC response",
+            ...(raw && typeof raw === "object" && Object.prototype.hasOwnProperty.call(raw, "data")
+                ? {data: raw.data} : {}),
+        };
+        return WIRE.decodePageResponse({...base, kind: "error", error, authorizationFailure: false}, id) ||
+            pageFailure(id, "ethereum", null, "Failed to process RPC response");
     }
-    return {code, message, ...(typeof data === "undefined" ? {} : {data})};
+    return WIRE.decodePageResponse({...base, kind: "result", result: response.result, approvalCommitted: false}, id) ||
+        pageFailure(id, "ethereum", null, "Failed to process RPC response");
 }
 
-function pageResponse(response, id = response?.id, rpc = false) {
-    const provider = rpc ? "ethereum" : response?.provider;
-    const name = rpc ? null : response?.name;
-    const malformed = () => pageFailure(id, provider, name,
-        rpc ? "Failed to process RPC response" : "Failed to process provider response");
-    if (!WIRE.isRecord(response) || response.id !== id) { return malformed(); }
-    const has = key => Object.prototype.hasOwnProperty.call(response, key);
-    const hasConfiguration = !rpc && has("latestConfigurations");
-    const state = hasConfiguration ? pageConfigurationState(response) : null;
-    if (hasConfiguration && !state) { return malformed(); }
+function terminalFailure(response, message, code = -32603) {
+    return {
+        id: response.id, name: response.name, provider: response.provider, kind: "error",
+        approvalCommitted: false, mutation: null, error: {code, message}, authorizationFailure: false,
+    };
+}
+
+function decodeNativeTerminal(response, id) {
+    const terminal = WIRE.decodeNativeResponse(response, id);
+    if (terminal) { return terminal; }
+    if (!WIRE.isRecord(response) || response.id !== id ||
+        typeof response.name !== "string" || response.name === "switchAccount" ||
+        !["ethereum", "solana"].includes(response.provider)) { return null; }
+    return terminalFailure(response, "Failed to process provider response");
+}
+
+function pageResponse(terminal, configurationState = null) {
+    const state = configurationState ? pageConfigurationState(configurationState) : null;
+    if (terminal.provider === "multiple") {
+        return terminal.kind === "error"
+            ? {kind: "configurationError", error: terminal.error}
+            : {kind: "configuration", state};
+    }
     let configurationMatch = state ? false : null;
-    const base = {id, provider, name, state, configurationMatch};
-    const hasError = has("error");
-    if (!rpc && name === "switchAccount" && (provider === "multiple" || provider === "unknown")) {
-        return WIRE.decodePageResponse(hasError
-            ? {kind: "configurationError", error: nativePageError(response, false)}
-            : {kind: "configuration", state}) || pageConfigurationFailure();
-    }
-    const resultFields = ["result", ...(rpc ? [] : ["results"]),
-        ...(provider === "solana" ? ["publicKey"] : [])].filter(has);
-    if (hasError) {
-        if (resultFields.length) { return malformed(); }
-        const error = nativePageError(response, rpc);
-        return WIRE.decodePageResponse({
-            ...base, kind: "error", error,
-            authorizationFailure: !rpc && (
-                provider === "ethereum" && response[WIRE.ETHEREUM_AUTHORIZATION_FAILURE_KEY] ===
-                    WIRE.ETHEREUM_AUTHORIZATION_FAILURE_VERSION ||
-                provider === "solana" && error.code === 4100 && typeof response.errorPublicKey === "string"
-            ),
-        }, id) || malformed();
-    }
-    if (resultFields.length !== 1) { return malformed(); }
-    let result = response[resultFields[0]];
-    if (provider === "solana") {
-        if (name === "connect") {
-            const publicKey = typeof result === "string" ? result : result?.publicKey;
-            result = {publicKey};
-            if (state) { configurationMatch = state.solana?.publicKey === publicKey; }
-        } else if (name !== "signAllTransactions" && typeof result?.signature === "string") {
-            result = result.signature;
-        }
-    } else if (state) {
-        if (name === "requestAccounts") {
+    let result = terminal.result;
+    if (state && terminal.kind === "result") {
+        if (terminal.name === "requestAccounts") {
             configurationMatch = !!state.ethereum && Array.isArray(result) &&
-                (typeof result[0] === "string" ? result[0].toLowerCase() : "") ===
-                    state.ethereum.address.toLowerCase();
-        } else if (name === "switchEthereumChain" || name === "addEthereumChain") {
-            configurationMatch = state.ethereum?.chainId === response.chainId;
+                (typeof result[0] === "string" ? result[0].toLowerCase() : "") === state.ethereum.address.toLowerCase();
+        } else if (terminal.provider === "solana" && terminal.name === "connect") {
+            configurationMatch = state.solana?.publicKey === result?.publicKey;
+        } else if (terminal.mutation?.kind === "ethereumChain") {
+            configurationMatch = state.ethereum?.chainId === terminal.mutation.chainId;
+            const ethereum = configurationState.latestConfigurations.find(item => item.provider === "ethereum");
+            result = [...(ethereum?.results || [])];
         }
     }
-    return WIRE.decodePageResponse({
-        ...base, configurationMatch, kind: "result", result,
-        approvalCommitted: !rpc && response[WIRE.APPROVAL_COMMITTED_KEY] === true,
-    }, id) || malformed();
+    const base = {id: terminal.id, provider: terminal.provider, name: terminal.name, state, configurationMatch};
+    return terminal.kind === "error"
+        ? {...base, kind: "error", error: terminal.error, authorizationFailure: terminal.authorizationFailure}
+        : {...base, kind: "result", result, approvalCommitted: terminal.approvalCommitted};
 }
 
-function appliedNativeResponse(response, configurationState, stale) {
-    const clean = stale ? {
-        id: response.id,
-        name: response.name,
-        provider: response.provider,
-        error: "Authorization changed while the request was pending",
-        errorCode: 4100,
-    } : {...response};
-    if (!stale && clean.provider === "ethereum" &&
-        (clean.name === "addEthereumChain" ||
-            clean.name === "switchEthereumChain") &&
-        !Object.prototype.hasOwnProperty.call(clean, "error") &&
-        Object.prototype.hasOwnProperty.call(clean, "results")) {
-        const configuration = configurationState?.latestConfigurations.find(item => {
-            return item.provider === "ethereum";
-        });
-        clean.results = [...(configuration?.results || [])];
-    }
-    delete clean.configurationToStore;
-    delete clean.latestConfigurations;
-    delete clean.revisions;
-    delete clean[WIRE.NATIVE_STALE_RESPONSE_KEY];
-    if (configurationState) {
-        clean.latestConfigurations = configurationState.latestConfigurations;
-        clean.revisions = configurationState.revisions;
-        if (!stale && clean.provider === "multiple") {
-            delete clean.bodies;
-            delete clean.providersToDisconnect;
-        }
-    }
-    return clean;
-}
-
-function applyDappResponseToState(state, response, revisions) {
+function applyDappResponseToState(state, terminal, revisions) {
     if (!WIRE.isProviderRevisions(revisions)) { return {value: undefined}; }
-    const contradictoryError = WIRE.isRecord(response) &&
-        Object.prototype.hasOwnProperty.call(response, "error") && [
-            "bodies", "configurationToStore", "providersToDisconnect",
-        ].some(key => Object.prototype.hasOwnProperty.call(response, key));
-    if (contradictoryError) {
-        return {value: {
-            id: response.id,
-            name: response.name,
-            provider: response.provider,
-            error: "Failed to process provider response",
-            errorCode: -32603,
-        }};
-    }
-    const successfulChainMutation = response?.provider === "ethereum" &&
-        (response.name === "addEthereumChain" ||
-            response.name === "switchEthereumChain") &&
-        !Object.prototype.hasOwnProperty.call(response, "error");
-    if (successfulChainMutation &&
-        !WIRE.isCanonicalEthereumChainId(response.chainId)) {
-        return {value: {
-            id: response.id,
-            name: response.name,
-            provider: response.provider,
-            error: "Failed to process provider response",
-            errorCode: -32603,
-        }};
-    }
-    const hasStoredConfiguration = WIRE.isRecord(response) &&
-        Object.prototype.hasOwnProperty.call(response, "configurationToStore");
-    const parsed = WIRE.parseLatestConfigurations(response?.configurationToStore);
-    if (hasStoredConfiguration &&
-        (typeof response.configurationToStore === "undefined" || !parsed.valid)) {
-        return {value: {
-            id: response.id,
-            name: response.name,
-            provider: response.provider,
-            error: "Failed to process provider response",
-            errorCode: -32603,
-        }};
-    }
-    const storedConfigurations = hasStoredConfiguration
-        ? parsed.latestConfigurations
-        : null;
-    const applied = applyResponseToState(
-        state,
-        response,
-        revisions,
-        storedConfigurations
-    );
-    const manualSwitch = response?.name === "switchAccount" &&
-        response.provider === "multiple" &&
-        !Object.prototype.hasOwnProperty.call(response, "error");
+    const applied = applyResponseToState(state, terminal, revisions);
+    const manualSwitch = terminal.name === "switchAccount" && terminal.kind === "result";
+    const configurationState = manualSwitch || applied.changed || applied.replay || applied.stale || applied.committedDrift
+        ? publicConfigurationState(state) : null;
+    const response = applied.stale
+        ? terminalFailure(terminal, "Authorization changed while the request was pending", 4100)
+        : terminal;
     return {
         changed: applied.changed,
         broadcastConfiguration: manualSwitch,
-        value: appliedNativeResponse(
-            response,
-            manualSwitch || applied.changed || applied.replay || applied.stale ||
-                applied.committedDrift
-                ? publicConfigurationState(state)
-                : null,
-            applied.stale
-        ),
+        value: {response, pageResponse: pageResponse(response, configurationState)},
     };
 }
 
@@ -930,26 +797,15 @@ function readStoredResponse(context) {
     );
 }
 
-async function completeResponse(context, response) {
-    const validate = response?.name === "switchAccount"
-        ? WIRE.isManualSwitchTerminalResponse
-        : WIRE.isCorrelatedDappResponse;
-    if (!validate(response, context.id)) { return undefined; }
+async function completeResponse(context, terminal) {
     const applied = await applyDappResponse(
-        context.configurationKey,
-        response,
-        context.revisions,
-        context.legacyConfigurationKey
+        context.configurationKey, terminal, context.revisions, context.legacyConfigurationKey
     );
-    if (!validate(applied, context.id)) { return undefined; }
+    if (!applied) { return undefined; }
     return {
-        response: applied,
+        ...applied,
         acknowledgement: context.requestToken
-            ? acknowledgeCompletedResponse(
-                context.id,
-                context.configurationKey,
-                context.requestToken
-            )
+            ? acknowledgeCompletedResponse(context.id, context.configurationKey, context.requestToken)
             : Promise.resolve(true),
     };
 }
@@ -981,7 +837,8 @@ async function readAndApplyDappResponse(
             response.id === id && response.pending === true) {
             return {pending: true, response};
         }
-        return completeResponse(context, response);
+        const terminal = decodeNativeTerminal(response, id);
+        return terminal ? completeResponse(context, terminal) : undefined;
     })();
     const entry = {promise, revisions: {...revisions}, quiet};
     responseReadFlights.set(key, entry);
@@ -1296,7 +1153,8 @@ function beginManualSwitch(identity) {
                     workflowVersion: WORKFLOW_VERSION,
                 };
             }
-            if (!WIRE.isManualSwitchTerminalResponse(response, id)) {
+            const terminal = WIRE.decodeNativeResponse(response, id);
+            if (!terminal || terminal.name !== "switchAccount") {
                 forgetManualSwitch(context);
                 return undefined;
             }
@@ -1304,7 +1162,7 @@ function beginManualSwitch(identity) {
                 id,
                 ...identity,
                 revisions: snapshot.revisions,
-            }, response);
+            }, terminal);
             forgetManualSwitch(context);
             return completed?.response;
         } catch {
@@ -1364,23 +1222,16 @@ async function handleDappRequest(request, sender) {
         }
         return response;
     }
-    if (WIRE.isCorrelatedDappResponse(response, message.id)) {
+    const terminal = decodeNativeTerminal(response, message.id);
+    if (terminal) {
         if (!authorized) {
-            return pageResponse({
-                id: message.id,
-                name: message.name,
-                provider: message.provider,
-                error: "Authorization changed while the request was pending",
-                errorCode: 4100,
-                latestConfigurations: publicConfigurations(state),
-                revisions: {...state.revisions},
+            return pageResponse(terminalFailure(terminal,
+                "Authorization changed while the request was pending", 4100), {
+                latestConfigurations: publicConfigurations(state), revisions: {...state.revisions},
             });
         }
-        return pageResponse(await applyDappResponse(
-            message.configurationKey,
-            response,
-            directResponseRevisions
-        ));
+        const applied = await applyDappResponse(message.configurationKey, terminal, directResponseRevisions);
+        return applied?.pageResponse;
     }
     return undefined;
 }
@@ -1405,9 +1256,7 @@ async function handleGetResponse(request, sender) {
         request.revisions,
         identity.legacyConfigurationKey
     );
-    const response = completed?.response;
-    return WIRE.isCorrelatedDappResponse(response, request.id)
-        ? pageResponse(response, request.id) : response;
+    return completed?.pageResponse || completed?.response;
 }
 
 async function handleRPC(request, sender) {
@@ -1425,7 +1274,7 @@ async function handleRPC(request, sender) {
             NATIVE_OPERATION_TIMEOUT
         );
         return WIRE.isCorrelatedRPCResponse(response, request.id)
-            ? pageResponse(response, request.id, true)
+            ? rpcPageResponse(response, request.id)
             : pageFailure(request.id, "ethereum", null);
     } catch {
         return pageFailure(request.id, "ethereum", null);
@@ -1489,8 +1338,7 @@ async function applyCompletedResponse(request, sender) {
     if (isMissingStoredResponse(response, request.id)) {
         return response;
     }
-    return WIRE.isCorrelatedDappResponse(response, request.id) &&
-        await completed.acknowledgement
+    return completed?.pageResponse && await completed.acknowledgement
         ? {applied: true}
         : undefined;
 }
@@ -1543,9 +1391,11 @@ async function disconnect(request, sender) {
             id: request.id,
             name: "revokePermissions",
             provider: request.provider,
+            kind: "result",
+            approvalCommitted: false,
+            mutation: null,
             result: null,
-            ...publicConfigurationState(state),
-        })};
+        }, publicConfigurationState(state))};
     }, identity.legacyConfigurationKey).catch(() => disconnectFailure(request));
 }
 

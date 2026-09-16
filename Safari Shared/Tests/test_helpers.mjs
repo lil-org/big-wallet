@@ -43,3 +43,11 @@ export function popupElement(id) {
     });
     return element;
 }
+
+export function nativeResult({id, name, provider, result, mutation = null, approvalCommitted = false}) {
+    return {id, name, provider, kind: "result", result, mutation, approvalCommitted};
+}
+
+export function nativeError({id, name, provider, error, mutation = null, approvalCommitted = false, authorizationFailure = false}) {
+    return {id, name, provider, kind: "error", error, mutation, approvalCommitted, authorizationFailure};
+}

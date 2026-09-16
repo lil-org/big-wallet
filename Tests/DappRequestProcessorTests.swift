@@ -107,11 +107,11 @@ final class DappRequestProcessorTests: XCTestCase {
                 return XCTFail("Account selection must not broadcast")
             }
             if path == account.derivationPath {
-                XCTAssertEqual(response.json["results"] as? [String], [account.address])
-                XCTAssertNotNil(response.json["configurationToStore"])
+                XCTAssertEqual(response.json["result"] as? [String], [account.address])
+                XCTAssertNotNil(response.mutation)
             } else {
-                XCTAssertEqual(response.json["errorCode"] as? Int, ProviderResponseError.internalErrorCode)
-                XCTAssertNil(response.json["configurationToStore"])
+                XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.internalErrorCode)
+                XCTAssertNil(response.mutation)
             }
         }
         XCTAssertEqual(access.privateKeyReads, 0)
@@ -160,7 +160,7 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("Execution must return a broadcast for the durable executor")
         }
         let signature = try XCTUnwrap(
-            broadcast.recoveryResponse.json["errorSignature"] as? String
+            ((broadcast.recoveryResponse.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"] as? String
         )
         let signatureData = try XCTUnwrap(WalletCrypto.base58Decode(string: signature))
         let publicKey = try Curve25519.Signing.PublicKey(
@@ -243,8 +243,8 @@ final class DappRequestProcessorTests: XCTestCase {
             guard case .response(let response) = result else {
                 return XCTFail("Invalid selections must not broadcast")
             }
-            XCTAssertEqual(response.json["errorCode"] as? Int, ProviderResponseError.internalErrorCode)
-            XCTAssertNil(response.json["configurationToStore"])
+            XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.internalErrorCode)
+            XCTAssertNil(response.mutation)
             XCTAssertEqual(access.privateKeyReads, 0)
         }
     }
@@ -310,9 +310,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 guard case .response(let response) = result else {
                     return XCTFail("Invalid decisions must not broadcast")
                 }
-                XCTAssertEqual(response.json["error"] as? String,
+                XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String,
                                Strings.somethingWentWrong)
-                XCTAssertEqual(response.json["errorCode"] as? Int, ProviderResponseError.internalErrorCode)
+                XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.internalErrorCode)
                 XCTAssertEqual(access.orderedAccountReads, 0)
                 XCTAssertEqual(access.privateKeyReads, 0)
             }
@@ -394,7 +394,7 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("Disconnecting must not broadcast")
         }
         XCTAssertNil(response.json["error"])
-        XCTAssertEqual(response.json["providersToDisconnect"] as? [String], ["ethereum"])
+        XCTAssertEqual(response.mutation, .accounts([.disconnectEthereum]))
     }
 
     private func processorAccount(privateKey: WalletPrivateKey, coin: WalletCoin) -> WalletAccount {
@@ -446,10 +446,10 @@ final class DappRequestProcessorTests: XCTestCase {
 
         XCTAssertEqual(response.json["id"] as? Int, request.id)
         XCTAssertEqual(
-            response.json["error"] as? String,
+            (response.json["error"] as? [String: Any])?["message"] as? String,
             Strings.privateBrowsingUnsupported
         )
-        XCTAssertEqual(response.json["errorCode"] as? Int, 4200)
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, 4200)
         XCTAssertEqual(
             response.json["provider"] as? String,
             InpageProvider.ethereum.rawValue
@@ -493,19 +493,15 @@ final class DappRequestProcessorTests: XCTestCase {
                 transactionHash: transactionHash
             )
         XCTAssertEqual(
-            ethereumResponse.json["error"] as? String,
+            (ethereumResponse.json["error"] as? [String: Any])?["message"] as? String,
             Strings.transactionSubmissionStatusUnknown
         )
         XCTAssertEqual(
-            ethereumResponse.json["errorCode"] as? Int,
+            (ethereumResponse.json["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.transactionSubmissionUnknownCode
         )
-        let encodedData = try XCTUnwrap(
-            ethereumResponse.json["errorDataJSON"] as? String
-        )
         let decodedData = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(encodedData.utf8))
-                as? [String: String]
+            (ethereumResponse.json["error"] as? [String: Any])?["data"] as? [String: String]
         )
         XCTAssertEqual(decodedData, ["transactionHash": transactionHash])
         XCTAssertNil(ethereumResponse.json["result"])
@@ -520,15 +516,14 @@ final class DappRequestProcessorTests: XCTestCase {
                 signature: signature
             )
         XCTAssertEqual(
-            solanaResponse.json["error"] as? String,
+            (solanaResponse.json["error"] as? [String: Any])?["message"] as? String,
             Strings.transactionSubmissionStatusUnknown
         )
         XCTAssertEqual(
-            solanaResponse.json["errorCode"] as? Int,
+            (solanaResponse.json["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.transactionSubmissionUnknownCode
         )
-        XCTAssertEqual(solanaResponse.json["errorSignature"] as? String, signature)
-        XCTAssertNil(solanaResponse.json["errorDataJSON"])
+        XCTAssertEqual(((solanaResponse.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"] as? String, signature)
         XCTAssertNil(solanaResponse.json["result"])
     }
 
@@ -578,11 +573,11 @@ final class DappRequestProcessorTests: XCTestCase {
                     dataJSON: #"{"reason":"nonce"}"#
                 )))
             )
-        XCTAssertEqual(serverFailure.json["error"] as? String, "transaction rejected")
-        XCTAssertEqual(serverFailure.json["errorCode"] as? Int, -32_000)
+        XCTAssertEqual((serverFailure.json["error"] as? [String: Any])?["message"] as? String, "transaction rejected")
+        XCTAssertEqual((serverFailure.json["error"] as? [String: Any])?["code"] as? Int, -32_000)
         XCTAssertEqual(
-            serverFailure.json["errorDataJSON"] as? String,
-            #"{"reason":"nonce"}"#
+            (serverFailure.json["error"] as? [String: Any])?["data"] as? [String: String],
+            ["reason": "nonce"]
         )
 
         let notSubmitted = EthereumDappRequestProcessor
@@ -592,12 +587,12 @@ final class DappRequestProcessorTests: XCTestCase {
                 recoveryResponse: recovery,
                 result: .failure(.rpc(.notSubmitted))
             )
-        XCTAssertEqual(notSubmitted.json["error"] as? String, Strings.failedToSend)
+        XCTAssertEqual((notSubmitted.json["error"] as? [String: Any])?["message"] as? String, Strings.failedToSend)
         XCTAssertEqual(
-            notSubmitted.json["errorCode"] as? Int,
+            (notSubmitted.json["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.internalErrorCode
         )
-        XCTAssertNil(notSubmitted.json["errorDataJSON"])
+        XCTAssertNil((notSubmitted.json["error"] as? [String: Any])?["data"])
         XCTAssertNil(notSubmitted.json["result"])
     }
 
@@ -675,11 +670,11 @@ final class DappRequestProcessorTests: XCTestCase {
                 ))
             )
         XCTAssertEqual(
-            confirmationFailure.json["error"] as? String,
+            (confirmationFailure.json["error"] as? [String: Any])?["message"] as? String,
             Strings.solanaConfirmationTimedOut
         )
         XCTAssertEqual(
-            confirmationFailure.json["errorSignature"] as? String,
+            ((confirmationFailure.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"] as? String,
             expectedSignature
         )
 
@@ -693,9 +688,9 @@ final class DappRequestProcessorTests: XCTestCase {
                     code: -32_003
                 ))
             )
-        XCTAssertEqual(explicitFailure.json["error"] as? String, "transaction rejected")
-        XCTAssertEqual(explicitFailure.json["errorCode"] as? Int, -32_003)
-        XCTAssertNil(explicitFailure.json["errorSignature"])
+        XCTAssertEqual((explicitFailure.json["error"] as? [String: Any])?["message"] as? String, "transaction rejected")
+        XCTAssertEqual((explicitFailure.json["error"] as? [String: Any])?["code"] as? Int, -32_003)
+        XCTAssertNil(((explicitFailure.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"])
 
         let notSubmitted = SolanaDappRequestProcessor.transactionBroadcastResponse(
             to: request,
@@ -703,12 +698,12 @@ final class DappRequestProcessorTests: XCTestCase {
             recoveryResponse: recovery,
             result: .failure(.notSubmitted)
         )
-        XCTAssertEqual(notSubmitted.json["error"] as? String, Strings.failedToSend)
+        XCTAssertEqual((notSubmitted.json["error"] as? [String: Any])?["message"] as? String, Strings.failedToSend)
         XCTAssertEqual(
-            notSubmitted.json["errorCode"] as? Int,
+            (notSubmitted.json["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.internalErrorCode
         )
-        XCTAssertNil(notSubmitted.json["errorSignature"])
+        XCTAssertNil(((notSubmitted.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"])
         XCTAssertNil(notSubmitted.json["result"])
     }
 
@@ -876,26 +871,22 @@ final class DappRequestProcessorTests: XCTestCase {
         return try XCTUnwrap(SafariRequest(data: requestData))
     }
 
-    func testOnlyEthereumAccountApprovalAdvertisesConfigurationStorage() throws {
-        let responseBody = ResponseToExtension.Body.ethereum(
-            .init(
-                results: ["0x0000000000000000000000000000000000000001"],
-                chainId: "0x1"
-            )
-        )
-
-        let requestAccountsResponse = ResponseToExtension(
+    func testAccountAndChainMutationsAreExplicit() throws {
+        let address = "0x0000000000000000000000000000000000000001"
+        let accounts = ResponseToExtension(
             for: try ethereumRequest(method: "requestAccounts"),
-            payload: .body(responseBody)
+            payload: .result(.strings([address])),
+            mutation: .accounts([.ethereum(address: address, chainId: "0x1")])
         )
-        XCTAssertNotNil(requestAccountsResponse.json["configurationToStore"])
-
+        XCTAssertEqual(accounts.mutation, .accounts([.ethereum(address: address, chainId: "0x1")]))
         for method in ["addEthereumChain", "switchEthereumChain"] {
             let response = ResponseToExtension(
-                for: try ethereumRequest(method: method),
-                payload: .body(responseBody)
+                for: try ethereumRequest(method: method), payload: .result(.null),
+                mutation: .ethereumChain("0x1")
             )
-            XCTAssertNil(response.json["configurationToStore"], method)
+            XCTAssertEqual(response.mutation, .ethereumChain("0x1"))
+            XCTAssertEqual(response.addsEthereumChain, method == "addEthereumChain")
+            XCTAssertTrue(response.json["result"] is NSNull)
         }
     }
 
@@ -940,8 +931,8 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("Expected immediate response")
         }
 
-        XCTAssertEqual(response.json["errorCode"] as? Int, 4100)
-        XCTAssertEqual(response.json["error"] as? String, Strings.providerNotReady)
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, 4100)
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, Strings.providerNotReady)
     }
 
     func testPrepareWithoutWalletsReturnsDisconnectedKnownChainSwitch() throws {
@@ -955,8 +946,8 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("Expected wallet-independent response")
         }
 
-        XCTAssertEqual(response.json["results"] as? [String], [])
-        XCTAssertEqual(response.json["chainId"] as? String, "0x1")
+        XCTAssertTrue(response.json["result"] is NSNull)
+        XCTAssertEqual(response.mutation, .ethereumChain("0x1"))
         XCTAssertNil(response.json["error"])
         let access = ProcessorWalletAccess(accounts: [])
         guard case .response(let withWallets) = DappRequestProcessor().prepare(
@@ -981,8 +972,8 @@ final class DappRequestProcessorTests: XCTestCase {
             guard case let .response(response) = preparation else {
                 return XCTFail("Expected wallet-independent response")
             }
-            XCTAssertEqual(response.json["errorCode"] as? Int, 4902)
-            XCTAssertEqual(response.json["error"] as? String, Strings.unrecognizedChainId)
+            XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, 4902)
+            XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, Strings.unrecognizedChainId)
         }
         XCTAssertEqual(access.orderedAccountReads, 0)
         XCTAssertEqual(access.privateKeyReads, 0)
@@ -1014,9 +1005,9 @@ final class DappRequestProcessorTests: XCTestCase {
         }
 
         XCTAssertEqual(response.json["provider"] as? String, "solana")
-        XCTAssertEqual(response.json["errorCode"] as? Int, 4100)
-        XCTAssertEqual(response.json["error"] as? String, Strings.providerNotReady)
-        XCTAssertEqual(response.json["errorPublicKey"] as? String, publicKey)
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, 4100)
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, Strings.providerNotReady)
+        XCTAssertEqual((response.json["mutation"] as? [String: Any])?["publicKey"] as? String, publicKey)
     }
 
     func testPrepareEthereumAccountRequestReturnsApproval() async throws {
@@ -1051,7 +1042,7 @@ final class DappRequestProcessorTests: XCTestCase {
             }
             XCTAssertEqual(try encodedResponse(response), try encodedResponse(withoutWallets))
             XCTAssertNotNil(response.json["error"])
-            XCTAssertEqual(response.json["errorCode"] as? Int, testCase.errorCode)
+            XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, testCase.errorCode ?? ProviderResponseError.internalErrorCode)
             XCTAssertEqual(access.orderedAccountReads, 0)
             XCTAssertEqual(access.privateKeyReads, 0)
         }
@@ -1087,7 +1078,8 @@ final class DappRequestProcessorTests: XCTestCase {
             case ("signTransaction", .approval(.approveTransaction(let action))):
                 XCTAssertEqual(action.account, account)
             case ("switchEthereumChain", .response(let response)):
-                XCTAssertEqual(response.json["results"] as? [String], [account.address])
+                XCTAssertTrue(response.json["result"] is NSNull)
+                XCTAssertEqual(response.mutation, .ethereumChain("0x1"))
                 XCTAssertNil(response.json["error"])
             default:
                 XCTFail("Unexpected preparation for \(testCase.method)")
@@ -1151,13 +1143,13 @@ final class DappRequestProcessorTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(response.json["error"] as? String, "transaction underpriced")
-        XCTAssertEqual(response.json["errorCode"] as? Int, -32_000)
-        XCTAssertEqual(response.json["errorDataJSON"] as? String, "null")
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, "transaction underpriced")
+        XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, -32_000)
+        XCTAssertTrue((response.json["error"] as? [String: Any])?["data"] is NSNull)
         XCTAssertEqual(response.json["provider"] as? String, "ethereum")
-        XCTAssertNil(response.json["errorPublicKey"])
-        XCTAssertNil(response.json["errorSignature"])
-        XCTAssertNil(response.json["configurationToStore"])
+        XCTAssertNil((response.json["mutation"] as? [String: Any])?["publicKey"])
+        XCTAssertNil(((response.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"])
+        XCTAssertNil(response.mutation)
 
         let canceledResponse = ResponseToExtension(
             for: request,
@@ -1168,8 +1160,8 @@ final class DappRequestProcessorTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(canceledResponse.json["error"] as? String, Strings.canceled)
-        XCTAssertEqual(canceledResponse.json["errorCode"] as? Int, 4001)
+        XCTAssertEqual((canceledResponse.json["error"] as? [String: Any])?["message"] as? String, Strings.canceled)
+        XCTAssertEqual((canceledResponse.json["error"] as? [String: Any])?["code"] as? Int, 4001)
 
         let unrecognizedChainResponse = ResponseToExtension(
             for: request,
@@ -1181,11 +1173,11 @@ final class DappRequestProcessorTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            unrecognizedChainResponse.json["error"] as? String,
+            (unrecognizedChainResponse.json["error"] as? [String: Any])?["message"] as? String,
             Strings.unrecognizedChainId
         )
         XCTAssertEqual(
-            unrecognizedChainResponse.json["errorCode"] as? Int,
+            (unrecognizedChainResponse.json["error"] as? [String: Any])?["code"] as? Int,
             4902
         )
 
@@ -1195,10 +1187,10 @@ final class DappRequestProcessorTests: XCTestCase {
                 ProviderResponseError(message: "generic failure")
             )
         )
-        XCTAssertNil(codeLessResponse.json["errorCode"])
+        XCTAssertEqual((codeLessResponse.json["error"] as? [String: Any])?["code"] as? Int, -32_603)
 
         let publicKeyResponse = ResponseToExtension(
-            for: request,
+            for: try solanaRequest(method: "signMessage", publicKey: "public-key", parameters: [:]),
             payload: .error(
                 ProviderResponseError(
                     message: Strings.providerNotReady,
@@ -1208,11 +1200,11 @@ final class DappRequestProcessorTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            publicKeyResponse.json["errorPublicKey"] as? String,
+            (publicKeyResponse.json["mutation"] as? [String: Any])?["publicKey"] as? String,
             "public-key"
         )
-        XCTAssertNil(publicKeyResponse.json["errorDataJSON"])
-        XCTAssertNil(publicKeyResponse.json["errorSignature"])
+        XCTAssertNil((publicKeyResponse.json["error"] as? [String: Any])?["data"])
+        XCTAssertNil(((publicKeyResponse.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"])
 
         let signatureResponse = ResponseToExtension(
             for: request,
@@ -1225,11 +1217,10 @@ final class DappRequestProcessorTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            signatureResponse.json["errorSignature"] as? String,
+            ((signatureResponse.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"] as? String,
             "signature"
         )
-        XCTAssertNil(signatureResponse.json["errorDataJSON"])
-        XCTAssertNil(signatureResponse.json["errorPublicKey"])
+        XCTAssertNil((signatureResponse.json["mutation"] as? [String: Any])?["publicKey"])
     }
 
     func testEthereumTransactionFeeModeInferenceAndLegacyNonceOwnership() throws {
@@ -2169,41 +2160,41 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
-    func testConfigurationMutationClassificationUsesOneStrictContract() {
-        XCTAssertEqual(
-            ResponseToExtension.ConfigurationMutation.classify([
-                "name": "addEthereumChain",
-                "provider": "ethereum",
-                "chainId": "0x2a",
-            ]),
-            .addsEthereumChain(chainId: "0x2a")
-        )
-        XCTAssertEqual(
-            ResponseToExtension.ConfigurationMutation.classify([
-                "provider": "solana",
-                "errorCode": 4100,
-                "errorPublicKey": "public-key",
-            ]),
-            .removesSolanaAuthorization(publicKey: "public-key")
-        )
-        XCTAssertEqual(
-            ResponseToExtension.ConfigurationMutation.classify([
-                "configurationToStore": [["provider": "ethereum"]],
-            ]),
-            .storesConfiguration
-        )
-        for response: [String: Any] in [
-            ["name": "addEthereumChain", "chainId": "0x2a"],
-            ["name": "addEthereumChain", "provider": "solana", "chainId": "0x2a"],
-            [
-                "name": "addEthereumChain",
-                "provider": "ethereum",
-                "chainId": "0x2a",
-                "error": "failed",
-            ],
-            ["provider": "solana", "errorCode": 4100],
+    func testConfigurationMutationDecodingUsesOneStrictContract() {
+        XCTAssertEqual(ResponseToExtension.ConfigurationMutation(json: [
+            "kind": "ethereumChain", "chainId": "0x2a",
+        ]), .ethereumChain("0x2a"))
+        XCTAssertEqual(ResponseToExtension.ConfigurationMutation(json: [
+            "kind": "revokeSolana", "publicKey": "public-key",
+        ]), .revokeSolana("public-key"))
+        XCTAssertEqual(ResponseToExtension.ConfigurationMutation(json: [
+            "kind": "accounts", "updates": ["ethereum": NSNull()],
+        ]), .accounts([.disconnectEthereum]))
+        for mutation: [String: Any] in [
+            ["kind": "ethereumChain"],
+            ["kind": "ethereumChain", "chainId": "0x00"],
+            ["kind": "ethereumChain", "chainId": "0x2a", "extra": true],
+            ["kind": "accounts", "updates": ["unknown": NSNull()]],
+            ["kind": "revokeSolana", "publicKey": ""],
         ] {
-            XCTAssertNil(ResponseToExtension.ConfigurationMutation.classify(response))
+            XCTAssertNil(ResponseToExtension.ConfigurationMutation(json: mutation))
+        }
+    }
+
+    func testNativeResponsesMatchSharedJavaScriptContract() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Safari Shared/Tests/fixtures/native_response_contract.json")
+        let fixtures = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: [[String: Any]]])
+        for fixture in try XCTUnwrap(fixtures["valid"]) {
+            let name = try XCTUnwrap(fixture["name"] as? String)
+            let json = try XCTUnwrap(fixture["response"] as? [String: Any])
+            let response = try XCTUnwrap(ResponseToExtension(json: json), name)
+            XCTAssertEqual(response.json as NSDictionary, json as NSDictionary, name)
+        }
+        for fixture in try XCTUnwrap(fixtures["invalid"]) {
+            let name = try XCTUnwrap(fixture["name"] as? String)
+            let json = try XCTUnwrap(fixture["response"] as? [String: Any])
+            XCTAssertNil(ResponseToExtension(json: json), name)
         }
     }
 

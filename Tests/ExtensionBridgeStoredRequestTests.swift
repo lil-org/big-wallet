@@ -660,7 +660,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: original.handle,
             response: ResponseToExtension(
                 for: fixture.request,
-                payload: .body(.ethereum(.init(result: "signed")))
+                payload: .result(.string("signed"))
             )
         )
         XCTAssertEqual(completion, .persisted)
@@ -735,7 +735,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         XCTAssertEqual(
-            response["errorCode"] as? Int,
+            (response["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.transactionSubmissionUnknownCode
         )
     }
@@ -2678,7 +2678,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: pendingHandle.requestToken,
             profileIdentifier: nil
         ))
-        XCTAssertEqual(rejection["errorCode"] as? Int, 4001)
+        XCTAssertEqual((rejection["error"] as? [String: Any])?["code"] as? Int, 4001)
         let retry = try accepted(await bridge.enqueue(
             ingress: pending.ingress,
             profileIdentifier: nil
@@ -2725,7 +2725,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: handle.requestToken,
             profileIdentifier: nil
         ))
-        XCTAssertEqual(rejection["errorCode"] as? Int, 4001)
+        XCTAssertEqual((rejection["error"] as? [String: Any])?["code"] as? Int, 4001)
         XCTAssertNil(rejection["result"])
     }
 
@@ -3025,7 +3025,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: handle.requestToken,
             profileIdentifier: nil
         ))
-        XCTAssertEqual(response["errorCode"] as? Int, 4001)
+        XCTAssertEqual((response["error"] as? [String: Any])?["code"] as? Int, 4001)
     }
 
     func testReleasedClaimAfterDeadlineBecomesRetainedRejection() async throws {
@@ -3049,7 +3049,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: handle.requestToken,
             profileIdentifier: nil
         ))
-        XCTAssertEqual(response["errorCode"] as? Int, 4001)
+        XCTAssertEqual((response["error"] as? [String: Any])?["code"] as? Int, 4001)
     }
 
     func testClaimCanBeginExecutionOnlyOnce() async throws {
@@ -3235,7 +3235,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         XCTAssertEqual(
-            delivered["errorCode"] as? Int,
+            (delivered["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.transactionSubmissionUnknownCode
         )
     }
@@ -3312,16 +3312,52 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         XCTAssertEqual(
-            delivered["errorCode"] as? Int,
+            (delivered["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.transactionSubmissionUnknownCode
         )
-        XCTAssertNotNil(delivered["errorDataJSON"] as? String)
+        XCTAssertNotNil((delivered["error"] as? [String: Any])?["data"] as? [String: String])
         let retry = try accepted(await observer.enqueue(
             ingress: fixture.ingress,
             profileIdentifier: nil
         ))
         XCTAssertEqual(retry.handle, handle)
         XCTAssertFalse(retry.approvalRequired)
+    }
+
+    func testBroadcastRejectionPreservesFullRangeRPCErrorCodes() async throws {
+        for (index, code) in [9_007_199_254_740_992, -9_007_199_254_740_992, Int.min, Int.max].enumerated() {
+            let fixture = try makeFixture(id: 80 + index)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress, profileIdentifier: nil
+            )).handle
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            let permit = try executionPermit(await bridge.begin(claim: claim))
+            let recovery = ambiguousSubmissionResponse(
+                for: fixture.request, transactionHash: "0x1234"
+            ).markingApprovalCommitted()
+            let preparation = await bridge.prepareBroadcast(
+                permit: permit, recoveryResponse: recovery, authority: .ordinary
+            )
+            XCTAssertEqual(preparation, .persisted)
+            let rejection = EthereumDappRequestProcessor.transactionBroadcastResponse(
+                to: fixture.request, expectedHash: "0x1234", recoveryResponse: recovery,
+                result: .failure(.rpc(.serverError(code, "Rejected", dataJSON: #"{"reason":"custom"}"#)))
+            ).markingApprovalCommitted()
+            let completion = await bridge.complete(
+                permit: permit, response: rejection, authority: .ordinary
+            )
+            XCTAssertEqual(completion, .persisted)
+
+            let delivered = try responseJSON(await bridge.readResponse(
+                id: handle.id, configurationKey: fixture.request.configurationKey,
+                requestToken: handle.requestToken, profileIdentifier: nil
+            ))
+            let error = try XCTUnwrap(delivered["error"] as? [String: Any])
+            XCTAssertEqual(error["code"] as? Int, code)
+            XCTAssertEqual(error["message"] as? String, "Rejected")
+            XCTAssertEqual(error["data"] as? [String: String], ["reason": "custom"])
+            XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
+        }
     }
 
     func testOversizedBroadcastCompletionPreservesRecoveryResponse() async throws {
@@ -3357,16 +3393,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         XCTAssertEqual(
-            delivered[ExtensionBridge.approvalCommittedKey] as? Bool,
+            delivered["approvalCommitted"] as? Bool,
             true
         )
         XCTAssertEqual(
-            delivered["errorCode"] as? Int,
+            (delivered["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.transactionSubmissionUnknownCode
         )
         XCTAssertEqual(
-            delivered["errorDataJSON"] as? String,
-            "{\"transactionHash\":\"0x1234\"}"
+            (delivered["error"] as? [String: Any])?["data"] as? [String: String],
+            ["transactionHash": "0x1234"]
         )
     }
 
@@ -3393,14 +3429,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         XCTAssertEqual(
-            delivered[ExtensionBridge.approvalCommittedKey] as? Bool,
+            delivered["approvalCommitted"] as? Bool,
             true
         )
         XCTAssertEqual(
-            delivered["errorCode"] as? Int,
+            (delivered["error"] as? [String: Any])?["code"] as? Int,
             ProviderResponseError.internalErrorCode
         )
-        XCTAssertNil(delivered["errorDataJSON"])
+        XCTAssertNil((delivered["error"] as? [String: Any])?["data"])
     }
 
     func testCompletedResponseRemainsReadableUntilExpiryOrEviction() async throws {
@@ -4208,7 +4244,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         XCTAssertEqual(
-            delivered[ExtensionBridge.approvalCommittedKey] as? Bool,
+            delivered["approvalCommitted"] as? Bool,
             true
         )
     }
@@ -5989,7 +6025,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func largeResponse(for request: SafariRequest) -> ResponseToExtension {
         ResponseToExtension(
             for: request,
-            payload: .body(.ethereum(.init(result: largeResponseResult)))
+            payload: .result(.string(largeResponseResult))
         )
     }
 
@@ -6015,9 +6051,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     private func response(for request: SafariRequest) -> ResponseToExtension {
-        ResponseToExtension(
+        if case .unknown = request.body {
+            return ResponseToExtension(for: request, payload: .result(.null), mutation: .accounts([]))
+        }
+        return ResponseToExtension(
             for: request,
-            payload: .body(.ethereum(.init(result: "0xsigned")))
+            payload: .result(.string("0xsigned"))
         )
     }
 
@@ -6041,12 +6080,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ResponseToExtension(
             for: request,
             payload: .error(.init(
-                message: "oversized",
-                code: ProviderResponseError.internalErrorCode,
-                context: .dataJSON(String(
-                    repeating: "x",
-                    count: ExtensionBridge.maximumPayloadBytes
-                ))
+                message: String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes),
+                code: ProviderResponseError.internalErrorCode
             ))
         ).markingApprovalCommitted()
     }

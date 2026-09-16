@@ -2,10 +2,6 @@
 
 import Foundation
 
-protocol SafariRequestBody {
-    var responseUpdatesStoredConfiguration: Bool { get }
-}
-
 struct SafariRequest {
 
     let id: Int
@@ -23,17 +19,6 @@ struct SafariRequest {
         case unknown(Unknown)
         case ethereum(Ethereum)
         case solana(Solana)
-
-        var value: SafariRequestBody {
-            switch self {
-            case .ethereum(let body):
-                return body
-            case .solana(let body):
-                return body
-            case .unknown(let body):
-                return body
-            }
-        }
     }
     
     init?(data: Data) {

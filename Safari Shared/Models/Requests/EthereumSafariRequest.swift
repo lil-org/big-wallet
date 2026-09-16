@@ -2,7 +2,7 @@
 
 extension SafariRequest {
     
-    struct Ethereum: SafariRequestBody {
+    struct Ethereum {
         
         enum Method: String {
             case signTransaction
@@ -43,16 +43,6 @@ extension SafariRequest {
                 self.switchToChainId = nil
             }
         }
-        
-        var responseUpdatesStoredConfiguration: Bool {
-            switch method {
-            case .requestAccounts:
-                return true
-            case .addEthereumChain, .ecRecover, .signMessage, .signPersonalMessage, .signTransaction, .signTypedMessage, .switchEthereumChain:
-                return false
-            }
-        }
-        
     }
     
 }

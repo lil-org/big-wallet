@@ -5,6 +5,7 @@ import {webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import {nativeError} from "./test_helpers.mjs";
 
 const [wireSource, contentSource] = await Promise.all([
     readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
@@ -1580,13 +1581,12 @@ test("manual switch intent forwards exact trusted identity and worker status", a
             subject: "manualSwitchAcknowledged",
             workflowVersion: 3,
         },
-        {
+        nativeError({
             id: 30,
             name: "switchAccount",
-            provider: "unknown",
-            error: "Canceled",
-            errorCode: 4001,
-        },
+            provider: "multiple",
+            error: {code: 4001, message: "Canceled"},
+        }),
     ];
     for (const expected of responses) {
         const harness = makeHarness({sendMessage: message =>

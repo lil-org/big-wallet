@@ -466,7 +466,6 @@ actor ExtensionBridge {
     static let admissionDeadlineFutureSkew: TimeInterval = 60
     static let responseExpiry: TimeInterval = 60 * 60
     static let nativeExecutionTimeout: TimeInterval = 160
-    static let approvalCommittedKey = "__bwApprovalCommitted"
     static let privateBrowsingKey = "__bwPrivateBrowsing"
 
     static let shared = ExtensionBridge(store: ExtensionRequestFileStore(

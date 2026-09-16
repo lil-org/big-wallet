@@ -8,6 +8,7 @@ import test from "node:test";
 import {fileURLToPath} from "node:url";
 import {promisify} from "node:util";
 import vm from "node:vm";
+import {nativeResult, nativeError, normalized} from "./test_helpers.mjs";
 
 const resourceURL = name => new URL(`../Resources/${name}`, import.meta.url);
 const [source, nativeSource] = await Promise.all([
@@ -206,94 +207,35 @@ test("validates exact manual-switch acknowledgements", () => {
 });
 
 test("requires substantive bounded manual-switch terminals", () => {
-    const ethereum = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    const success = {
-        id: 31,
-        name: "switchAccount",
-        provider: "multiple",
-        bodies: [ethereum],
-        providersToDisconnect: ["solana"],
-        configurationToStore: [ethereum],
-    };
-    const applied = {
-        id: 31,
-        name: "switchAccount",
-        provider: "multiple",
-        latestConfigurations: [ethereum],
-        revisions: {ethereum: 3, solana: 4},
-    };
-    const emptySuccess = {
-        id: 31,
-        name: "switchAccount",
-        provider: "multiple",
-        bodies: [],
-        providersToDisconnect: [],
-        configurationToStore: [],
-    };
-    const rejected = {
-        id: 31,
-        name: "switchAccount",
-        provider: "unknown",
-        error: "Canceled",
-        errorCode: 4001,
-    };
-    const stale = {
-        ...rejected,
-        latestConfigurations: [ethereum],
-        revisions: {ethereum: 3, solana: 4},
-    };
-
-    for (const response of [success, emptySuccess, applied, rejected, stale]) {
+    const success = nativeResult({
+        id: 31, name: "switchAccount", provider: "multiple", result: null,
+        mutation: {kind: "accounts", updates: {
+            ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+            solana: null,
+        }},
+    });
+    const rejected = nativeError({
+        id: 31, name: "switchAccount", provider: "multiple", error: {code: 4001, message: "Canceled"},
+    });
+    const empty = {...success, mutation: {kind: "accounts", updates: {}}};
+    for (const response of [success, empty, rejected]) {
         assert.equal(wire.isManualSwitchTerminalResponse(response, 31), true);
     }
     for (const response of [
-        {id: 31, name: "switchAccount"},
-        {id: 31, name: "switchAccount", provider: "multiple"},
-        {...success, id: 32},
-        {...success, name: "requestAccounts"},
-        {...success, provider: "unknown"},
-        {...success, error: "Canceled", errorCode: 4001},
-        {...success, error: 123},
-        {...success, errorCode: 4001},
-        {...success, __bwStale: true},
+        {id: 31, name: "switchAccount"}, {...success, id: 32},
+        {...success, name: "requestAccounts"}, {...success, provider: "unknown"},
+        {...success, error: {code: 4001, message: "Canceled"}},
+        {...success, mutation: null}, {...success, result: "invalid"},
         {...success, extra: true},
-        {...success, providersToDisconnect: ["solana", "solana"]},
-        {...success, providersToDisconnect: ["ethereum"]},
-        {
-            ...success,
-            bodies: [ethereum, {
-                provider: "solana",
-                publicKey: "11111111111111111111111111111111",
-            }],
-            configurationToStore: [ethereum, {
-                provider: "solana",
-                publicKey: "11111111111111111111111111111111",
-            }],
-            providersToDisconnect: ["solana"],
-        },
-        {...success, configurationToStore: "invalid"},
-        {...success, configurationToStore: []},
-        {
-            ...success,
-            latestConfigurations: [ethereum],
-            revisions: {ethereum: 3, solana: 4},
-        },
-        {...applied, bodies: [], providersToDisconnect: []},
-        {...applied, revisions: {ethereum: -1, solana: 4}},
-        {...rejected, error: ""},
-        {...rejected, errorCode: 1.5},
-        {...rejected, error: "x".repeat(256 * 1024)},
+        {...success, mutation: {kind: "accounts", updates: {unknown: null}}},
+        {...success, mutation: {kind: "accounts", updates: {ethereum: {address: "x", chainId: "invalid"}}}},
+        {...rejected, error: {code: 1.5, message: "Canceled"}},
+        {...rejected, error: {code: 4001, message: ""}},
+        {...rejected, error: {code: 4001, message: "x".repeat(256 * 1024)}},
     ]) {
         assert.equal(wire.isManualSwitchTerminalResponse(response, 31), false);
     }
-    assert.equal(wire.isManualSwitchTerminalResponse(
-        {...success, id: "31"},
-        "31"
-    ), false);
+    assert.equal(wire.isManualSwitchTerminalResponse({...success, id: "31"}, "31"), false);
 });
 
 test("keeps workflow policy aligned with the native request authority", () => {
@@ -310,9 +252,7 @@ test("keeps workflow policy aligned with the native request authority", () => {
         nativeNumber("maximumRetainedRequests"));
     assert.equal(wire.WORKFLOW_POLICY.requestTTLMilliseconds, 15 * 60 * 1000);
     assert.equal(wire.WORKFLOW_POLICY.responseExpiryMilliseconds, 60 * 60 * 1000);
-    assert.equal(wire.APPROVAL_COMMITTED_KEY, nativeSource.match(
-        /static let approvalCommittedKey = "([^"]+)"/
-    )[1]);
+
 });
 
 test("validates enqueue and response correlations", () => {
@@ -328,12 +268,9 @@ test("validates enqueue and response correlations", () => {
         ...native,
         revisions: {ethereum: 2, solana: -1},
     }, 7), false);
-    assert.equal(wire.isCorrelatedDappResponse({
-        id: 7,
-        name: "signMessage",
-        provider: "ethereum",
-        result: "ok",
-    }, 7), true);
+    const response = nativeResult({id: 7, name: "signMessage", provider: "ethereum", result: "ok"});
+    assert.notEqual(wire.decodeNativeResponse(response, 7), null);
+    assert.equal(wire.decodeNativeResponse(response, 8), null);
 });
 
 test("parses plain and wrapped configuration arrays without workflow metadata", () => {
@@ -470,4 +407,14 @@ test("keeps the real platform manifests on their intended MV3 routes", async () 
         "Safari Shared/Resources/manifest.json");
     assert.equal(manifestPathForTarget(project, "Safari visionOS"),
         "Safari Shared/Resources/manifest.json");
+});
+
+test("native responses match the shared Swift contract", async () => {
+    const fixtures = JSON.parse(await readFile(new URL("./fixtures/native_response_contract.json", import.meta.url), "utf8"));
+    for (const {name, response} of fixtures.valid) {
+        assert.deepEqual(normalized(wire.decodeNativeResponse(response, response.id)), response, name);
+    }
+    for (const {name, response} of fixtures.invalid) {
+        assert.equal(wire.decodeNativeResponse(response), null, name);
+    }
 });

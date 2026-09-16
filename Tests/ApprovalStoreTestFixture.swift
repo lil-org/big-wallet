@@ -196,10 +196,10 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     func loadCount() -> Int { loadCountValue }
     func record(_ event: String) { eventValues.append(event) }
     func completedErrorCode(handle: ExtensionBridge.Handle) async -> Int? {
-        await response(handle: handle)?["errorCode"] as? Int
+        (await response(handle: handle)?["error"] as? [String: Any])?["code"] as? Int
     }
     func completedApprovalWasCommitted(handle: ExtensionBridge.Handle) async -> Bool {
-        await response(handle: handle)?[ExtensionBridge.approvalCommittedKey] as? Bool == true
+        await response(handle: handle)?["approvalCommitted"] as? Bool == true
     }
     func checkpointApprovalWasCommitted(handle: ExtensionBridge.Handle) -> Bool {
         committedCheckpoints.contains(handle)
@@ -362,7 +362,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         let result = await bridge.prepareBroadcast(permit: permit, recoveryResponse: recoveryResponse, authority: authority)
         if result == .persisted {
             eventValues.append("checkpoint")
-            if recoveryResponse.json[ExtensionBridge.approvalCommittedKey] as? Bool == true {
+            if recoveryResponse.approvalCommitted {
                 committedCheckpoints.insert(permit.handle)
             }
         }

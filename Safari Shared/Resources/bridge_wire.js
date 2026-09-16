@@ -14,11 +14,6 @@
     const CONTENT_TO_PAGE_DIRECTION = "big-wallet-content-v1";
     const PROVIDER_REPLACED_ERROR_CODE = 4900;
     const PROVIDER_REPLACED_MESSAGE = "Big Wallet provider was replaced";
-    const ETHEREUM_AUTHORIZATION_FAILURE_KEY =
-        "__bwEthereumAuthorizationFailure";
-    const ETHEREUM_AUTHORIZATION_FAILURE_VERSION = "v1";
-    const APPROVAL_COMMITTED_KEY = "__bwApprovalCommitted";
-    const NATIVE_STALE_RESPONSE_KEY = "__bwStale";
     const PRIVATE_BROWSING_KEY = "__bwPrivateBrowsing";
     const MAX_RESPONSE_READY_IDS = 16;
     const MANUAL_SWITCH_INTENT_SUBJECT = "manualSwitchIntent";
@@ -273,11 +268,72 @@
             isProviderRevisions(response.revisions);
     }
 
-    function isCorrelatedDappResponse(response, id) {
-        return isRecord(response) && response.id === id &&
-            typeof response.name === "string" &&
-            !hasOwn(response, "requestToken") &&
-            !hasOwn(response, "approvalRequired");
+    function decodeNativeResponse(value, correlationId) {
+        try {
+            if (!isRecord(value) ||
+                value.provider === "multiple" && !hasBoundedJSON(value)) { return null; }
+            const common = ["id", "name", "provider", "kind", "approvalCommitted", "mutation"];
+            const {id, name, provider, kind, approvalCommitted} = value;
+            if (!isValidRequestId(id) || correlationId !== undefined && id !== correlationId ||
+                typeof name !== "string" || !["ethereum", "solana", "multiple"].includes(provider) ||
+                (provider === "multiple") !== (name === "switchAccount") ||
+                typeof approvalCommitted !== "boolean") { return null; }
+            let mutation = null;
+            if (value.mutation !== null) {
+                const raw = value.mutation;
+                if (!isRecord(raw)) { return null; }
+                if (raw.kind === "accounts") {
+                    if (!hasExactKeys(raw, ["kind", "updates"]) || !isRecord(raw.updates) ||
+                        Object.keys(raw.updates).some(key => key !== "ethereum" && key !== "solana")) {
+                        return null;
+                    }
+                    const updates = {};
+                    for (const [coin, account] of Object.entries(raw.updates)) {
+                        if (provider !== "multiple" && provider !== coin) { return null; }
+                        if (account !== null && (coin === "ethereum"
+                            ? !hasExactKeys(account, ["address", "chainId"]) ||
+                                typeof account.address !== "string" || !isCanonicalEthereumChainId(account.chainId)
+                            : !hasExactKeys(account, ["publicKey"]) || !isSolanaPublicKey(account.publicKey))) {
+                            return null;
+                        }
+                        updates[coin] = account === null ? null : {...account};
+                    }
+                    mutation = {kind: "accounts", updates};
+                } else if (raw.kind === "ethereumChain") {
+                    if (!hasExactKeys(raw, ["kind", "chainId"]) || provider !== "ethereum" ||
+                        !isCanonicalEthereumChainId(raw.chainId)) { return null; }
+                    mutation = {kind: "ethereumChain", chainId: raw.chainId};
+                } else if (raw.kind === "revokeSolana") {
+                    if (!hasExactKeys(raw, ["kind", "publicKey"]) || provider !== "solana" ||
+                        typeof raw.publicKey !== "string" || raw.publicKey.length === 0) { return null; }
+                    mutation = {kind: "revokeSolana", publicKey: raw.publicKey};
+                } else { return null; }
+            }
+            const base = {id, name, provider, kind, approvalCommitted, mutation};
+            if (kind === "result") {
+                if (!hasExactKeys(value, [...common, "result"]) || mutation?.kind === "revokeSolana") {
+                    return null;
+                }
+                const result = value.result;
+                if (provider === "multiple" && (result !== null || mutation?.kind !== "accounts")) {
+                    return null;
+                }
+                if (result !== null && typeof result !== "string" &&
+                    !(Array.isArray(result) && result.every(item => typeof item === "string")) &&
+                    !(hasExactKeys(result, ["publicKey"]) && typeof result.publicKey === "string")) {
+                    return null;
+                }
+                return {...base, result: pageJSON(result)};
+            }
+            if (kind !== "error" || !hasExactKeys(value, [...common, "error", "authorizationFailure"]) ||
+                typeof value.authorizationFailure !== "boolean") { return null; }
+            const error = pageError(value.error);
+            if (!Number.isInteger(error.code) || provider === "multiple" && error.message.length === 0 || mutation !== null &&
+                (mutation.kind !== "revokeSolana" || error.code !== 4100 || !value.authorizationFailure)) {
+                return null;
+            }
+            return {...base, error, authorizationFailure: value.authorizationFailure};
+        } catch { return null; }
     }
 
     function isCorrelatedRPCResponse(response, id) {
@@ -358,30 +414,6 @@
         };
     }
 
-    function isCanonicalManualSwitchConfigurations(value) {
-        if (!Array.isArray(value) ||
-            !parseLatestConfigurations(value).valid) {
-            return false;
-        }
-        return value.every(configuration => configuration.provider === "ethereum"
-            ? hasExactKeys(configuration, ["chainId", "provider", "results"])
-            : hasExactKeys(configuration, ["provider", "publicKey"]));
-    }
-
-    function sameManualSwitchConfigurations(left, right) {
-        return left.length === right.length && left.every(configuration => {
-            const match = right.find(candidate =>
-                candidate.provider === configuration.provider
-            );
-            if (!match) { return false; }
-            return configuration.provider === "ethereum"
-                ? configuration.chainId === match.chainId &&
-                    JSON.stringify(configuration.results) ===
-                        JSON.stringify(match.results)
-                : configuration.publicKey === match.publicKey;
-        });
-    }
-
     function isConfigurationKey(value) {
         return typeof value === "string" && value.length > 0;
     }
@@ -432,88 +464,10 @@
     }
 
     function isManualSwitchTerminalResponse(response, id) {
-        if (!isRecord(response) || !isValidRequestId(response.id) ||
-            response.id !== id ||
-            response.name !== "switchAccount" ||
-            (response.provider !== "unknown" && response.provider !== "multiple") ||
-            hasOwn(response, "requestToken") ||
-            hasOwn(response, "approvalRequired") || !hasBoundedJSON(response)) {
-            return false;
-        }
-        const allowed = new Set([
-            "bodies", "configurationToStore", "error", "errorCode",
-            "errorDataJSON", "errorPublicKey", "errorSignature", "id",
-            "latestConfigurations", "name", "provider",
-            "providersToDisconnect", "revisions", APPROVAL_COMMITTED_KEY,
-            NATIVE_STALE_RESPONSE_KEY,
-        ]);
-        if (Object.keys(response).some(key => !allowed.has(key))) { return false; }
-        if (hasOwn(response, APPROVAL_COMMITTED_KEY) &&
-            response[APPROVAL_COMMITTED_KEY] !== true ||
-            hasOwn(response, NATIVE_STALE_RESPONSE_KEY) &&
-            response[NATIVE_STALE_RESPONSE_KEY] !== true) {
-            return false;
-        }
-        for (const key of [
-            "errorDataJSON", "errorPublicKey", "errorSignature",
-        ]) {
-            if (hasOwn(response, key) && typeof response[key] !== "string") {
-                return false;
-            }
-        }
-        if (hasOwn(response, "errorCode") &&
-            !Number.isSafeInteger(response.errorCode)) {
-            return false;
-        }
-        const hasLatest = hasOwn(response, "latestConfigurations");
-        const hasRevisions = hasOwn(response, "revisions");
-        if (hasLatest !== hasRevisions || hasLatest &&
-            (!Array.isArray(response.latestConfigurations) ||
-                !parseLatestConfigurations(response.latestConfigurations).valid ||
-                !isProviderRevisions(response.revisions))) {
-            return false;
-        }
-        if (hasOwn(response, "configurationToStore") &&
-            (!Array.isArray(response.configurationToStore) ||
-                !isCanonicalManualSwitchConfigurations(
-                    response.configurationToStore
-                ))) {
-            return false;
-        }
-        const hasBodies = hasOwn(response, "bodies");
-        const hasDisconnects = hasOwn(response, "providersToDisconnect");
-        if (hasBodies !== hasDisconnects || hasBodies &&
-            (!isCanonicalManualSwitchConfigurations(response.bodies) ||
-                !Array.isArray(response.providersToDisconnect) ||
-                response.providersToDisconnect.length > 2 ||
-                new Set(response.providersToDisconnect).size !==
-                    response.providersToDisconnect.length ||
-                !response.providersToDisconnect.every(provider =>
-                    provider === "ethereum" || provider === "solana"))) {
-            return false;
-        }
-        const hasError = hasOwn(response, "error");
-        const hasStored = hasOwn(response, "configurationToStore");
-        if (hasError) {
-            return typeof response.error === "string" &&
-                response.error.length > 0 && !hasStored && !hasBodies;
-        }
-        const rawSuccess = hasStored && hasBodies && !hasLatest &&
-            sameManualSwitchConfigurations(
-                response.bodies,
-                response.configurationToStore
-            ) && !response.providersToDisconnect.some(provider =>
-                response.bodies.some(configuration =>
-                    configuration.provider === provider
-                ));
-        const appliedSuccess = hasLatest && !hasStored && !hasBodies;
-        return response.provider === "multiple" &&
-            (rawSuccess || appliedSuccess) &&
-            !hasOwn(response, "errorCode") &&
-            !hasOwn(response, "errorDataJSON") &&
-            !hasOwn(response, "errorPublicKey") &&
-            !hasOwn(response, "errorSignature") &&
-            !hasOwn(response, NATIVE_STALE_RESPONSE_KEY);
+        const terminal = decodeNativeResponse(response, id);
+        return terminal !== null && terminal.name === "switchAccount" &&
+            terminal.provider === "multiple" && (terminal.kind === "error" ||
+                terminal.result === null && terminal.mutation?.kind === "accounts");
     }
 
     function isValidDisconnectRequest(request) {
@@ -609,13 +563,9 @@
     return Object.freeze({
         BUILD_VERSION,
         CONTENT_TO_PAGE_DIRECTION,
-        APPROVAL_COMMITTED_KEY,
-        ETHEREUM_AUTHORIZATION_FAILURE_KEY,
-        ETHEREUM_AUTHORIZATION_FAILURE_VERSION,
         MAX_RESPONSE_READY_IDS,
         MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
         MANUAL_SWITCH_INTENT_SUBJECT,
-        NATIVE_STALE_RESPONSE_KEY,
         PAGE_TO_CONTENT_DIRECTION,
         PRIVATE_BROWSING_KEY,
         PROVIDER_REPLACED_ERROR_CODE,
@@ -625,6 +575,7 @@
         configurationIdentityForURL,
         decodeConfigurationSnapshot,
         decodePageResponse,
+        decodeNativeResponse,
         createTrustedNativeMessageSender,
         genId,
         genPrivateToken,
@@ -633,7 +584,6 @@
         isConfiguration,
         isCanonicalEthereumChainId,
         isConfigurationKey,
-        isCorrelatedDappResponse,
         isCorrelatedRPCResponse,
         isManualSwitchAcknowledgement,
         isManualSwitchTerminalResponse,

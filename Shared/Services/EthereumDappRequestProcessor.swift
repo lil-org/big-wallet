@@ -127,7 +127,7 @@ struct EthereumDappRequestProcessor {
                let recovered = ethereum.recover(signature: signature, message: message) {
                 return .response(response(
                     to: request,
-                    body: .ethereum(.init(result: recovered))
+                    result: .string(recovered)
                 ))
             }
             return .response(response(
@@ -142,25 +142,19 @@ struct EthereumDappRequestProcessor {
                     error: .init(message: Strings.unrecognizedChainId, code: 4902)
                 ))
             }
-            let results: [String]
-            if body.address.isEmpty {
-                results = []
-            } else {
+            if !body.address.isEmpty {
                 guard walletAccess != nil else { return nil }
-                guard let account = walletAndAccount?.1 else {
+                guard walletAndAccount != nil else {
                     return .response(response(
                         to: request,
                         error: .init(message: Strings.providerNotReady, code: 4100)
                     ))
                 }
-                results = [account.address]
             }
             return .response(response(
                 to: request,
-                body: .ethereum(.init(
-                    results: results,
-                    chainId: String.hex(chainId, withPrefix: true)
-                ))
+                result: .null,
+                mutation: .ethereumChain(String.hex(chainId, withPrefix: true))
             ))
         }
     }
@@ -210,13 +204,13 @@ struct EthereumDappRequestProcessor {
         case .addEthereumChain(let action):
             guard let chainID = Int(hexString: action.chainToAdd.chainId),
                   completeApprovedChainAddition(action.chainToAdd, chainId: chainID),
-                  case .ethereum(let body) = request.body else {
+                  case .ethereum = request.body else {
                 return .response(genericFailureResponse(to: request))
             }
-            return .response(response(to: request, body: .ethereum(.init(
-                results: [body.address],
-                chainId: action.chainToAdd.chainId
-            ))))
+            return .response(response(
+                to: request, result: .null,
+                mutation: .ethereumChain(String.hex(chainID, withPrefix: true))
+            ))
         default:
             return .response(response(to: request, error: .internalError))
         }
@@ -295,11 +289,10 @@ struct EthereumDappRequestProcessor {
             ) else {
                 return .response(genericFailureResponse(to: request))
             }
-            let responseBody = ResponseToExtension.Ethereum(
-                results: [body.address],
-                chainId: chainToAdd.chainId
-            )
-            return .response(response(to: request, body: .ethereum(responseBody)))
+            return .response(response(
+                to: request, result: .null,
+                mutation: .ethereumChain(String.hex(chainId, withPrefix: true))
+            ))
         case .catalogOwnedButUnavailable:
             return .response(genericFailureResponse(to: request))
         case .unknown:
@@ -468,7 +461,7 @@ struct EthereumDappRequestProcessor {
             }
             return response(
                 to: request,
-                body: .ethereum(.init(result: expectedHash))
+                result: .string(expectedHash)
             )
         case .failure(let failure):
             switch failure {
@@ -507,9 +500,10 @@ struct EthereumDappRequestProcessor {
 
     private static func response(
         to request: SafariRequest,
-        body: ResponseToExtension.Body
+        result: ResponseToExtension.Result,
+        mutation: ResponseToExtension.ConfigurationMutation? = nil
     ) -> ResponseToExtension {
-        return ResponseToExtension(for: request, payload: .body(body))
+        return ResponseToExtension(for: request, payload: .result(result), mutation: mutation)
     }
 
     private static func response(
@@ -518,7 +512,7 @@ struct EthereumDappRequestProcessor {
     ) -> ResponseToExtension {
         switch signingResult {
         case .success(let signature):
-            return response(to: request, body: .ethereum(.init(result: signature)))
+            return response(to: request, result: .string(signature))
         case .failure:
             return signingFailedResponse(to: request)
         }

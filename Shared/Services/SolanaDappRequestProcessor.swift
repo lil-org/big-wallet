@@ -108,7 +108,7 @@ struct SolanaDappRequestProcessor {
             guard let results = await awaitBackgroundOptionalOperation({
                 Solana.sign(messageDataList: messages, privateKey: privateKey)
             }) else { return .response(response(to: request, error: .failedToSign)) }
-            return .response(response(to: request, solanaResponse: .init(results: results)))
+            return .response(response(to: request, result: .strings(results)))
         case .solanaLegacyBroadcast(let transaction, let options):
             guard let cluster else {
                 return .response(response(to: request, error: .internalError))
@@ -142,7 +142,7 @@ struct SolanaDappRequestProcessor {
         guard let signed = await awaitBackgroundOptionalOperation({
             Solana.sign(messageData: data, privateKey: privateKey)
         }) else { return .response(response(to: request, error: .failedToSign)) }
-        return .response(response(to: request, solanaResponse: .init(result: signed)))
+        return .response(response(to: request, result: .string(signed)))
     }
 
     static func decodedSignMessage(
@@ -533,7 +533,7 @@ struct SolanaDappRequestProcessor {
             }
             return response(
                 to: request,
-                solanaResponse: .init(result: expectedSignature)
+                result: .string(expectedSignature)
             )
         case .failure(let error):
             switch error {
@@ -578,7 +578,7 @@ struct SolanaDappRequestProcessor {
     ) -> ResponseToExtension {
         switch sendResult {
         case .success(let signature):
-            return response(to: request, solanaResponse: .init(result: signature))
+            return response(to: request, result: .string(signature))
         case .failure(let error):
             return response(to: request, error: .sendTransaction(error))
         }
@@ -586,16 +586,9 @@ struct SolanaDappRequestProcessor {
 
     private static func response(
         to request: SafariRequest,
-        solanaResponse: ResponseToExtension.Solana
+        result: ResponseToExtension.Result
     ) -> ResponseToExtension {
-        return response(to: request, body: .solana(solanaResponse))
-    }
-
-    private static func response(
-        to request: SafariRequest,
-        body: ResponseToExtension.Body
-    ) -> ResponseToExtension {
-        return ResponseToExtension(for: request, payload: .body(body))
+        return ResponseToExtension(for: request, payload: .result(result))
     }
 
     private static func response(

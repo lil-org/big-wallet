@@ -5,7 +5,7 @@ import {webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {deferred, popupElement} from "./test_helpers.mjs";
+import {deferred, popupElement, nativeResult, nativeError} from "./test_helpers.mjs";
 
 const [wireSource, workerSource, sharedManifestSource, macManifestSource, popupSource, popupWireSource] =
     await Promise.all([
@@ -449,12 +449,18 @@ function completedAccountFixture(id = 23) {
         configuration,
         read,
         apply: {...read, subject: "applyCompletedResponse", host: "wallet.example"},
-        response: {
+        response: nativeResult({
             id,
             name: "requestAccounts",
-            ...configuration,
-            configurationToStore: configuration,
-        },
+            provider: "ethereum",
+            result: configuration.results,
+            mutation: {
+                kind: "accounts",
+                updates: {
+                    ethereum: {address: configuration.results[0], chainId: configuration.chainId},
+                },
+            },
+        }),
     };
 }
 
@@ -473,7 +479,7 @@ function completedResponseStore(count) {
                 requestToken: fixture.read.requestToken,
                 revisions: fixture.read.revisions,
             },
-            response: {...fixture.response, __bwApprovalCommitted: true},
+            response: {...fixture.response, approvalCommitted: true},
             acknowledged: false,
         });
     }
@@ -1025,14 +1031,20 @@ test("a live macOS switch polls after one second and persists before notifying a
             {id: 12, url: "http://wallet.example", incognito: false},
             {id: 13, url: "https://wallet.example/private", incognito: true},
         ],
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeResult({
             id: message.id,
             name: "switchAccount",
             provider: "multiple",
-            bodies: [selected],
-            configurationToStore: [selected],
-            providersToDisconnect: [],
-        } : nativeAcknowledgement(message.id, message.revisions),
+            result: null,
+            mutation: {
+                kind: "accounts",
+                updates: {
+                    [selected.provider]: selected.provider === "ethereum"
+                        ? {address: selected.results[0], chainId: selected.chainId}
+                        : {publicKey: selected.publicKey},
+                },
+            },
+        }) : nativeAcknowledgement(message.id, message.revisions),
         acknowledgeResponse: message => {
             assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
             assert.deepEqual(harness.tabMessages.filter(({message}) =>
@@ -1082,14 +1094,13 @@ test("response-ready hints share a live switch read and retries do not repeat a 
     assert.equal(harness.nativeMessages.filter(({message}) =>
         isResponseRead(message)
     ).length, 1);
-    read.resolve({
+    read.resolve(nativeResult({
         id: admitted.id,
         name: "switchAccount",
         provider: "multiple",
-        bodies: [],
-        configurationToStore: [],
-        providersToDisconnect: ["ethereum", "solana"],
-    });
+        result: null,
+        mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
+    }));
     await Promise.all([first, second]);
     const revisions = clone(harness.storage.get("https://wallet.example").revisions);
     const writes = providerStateWrites(harness).length;
@@ -1133,14 +1144,13 @@ test("popup and live switch completion share one native read and configuration c
     assert.equal(harness.nativeMessages.filter(({message}) =>
         isResponseRead(message)
     ).length, 1);
-    read.resolve({
+    read.resolve(nativeResult({
         id: admitted.id,
         name: "switchAccount",
         provider: "multiple",
-        bodies: [],
-        configurationToStore: [],
-        providersToDisconnect: ["ethereum", "solana"],
-    });
+        result: null,
+        mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
+    }));
     const [, response] = await Promise.all([live, popup]);
     assert.deepEqual(clone(response), {applied: true});
     assert.equal(providerStateWrites(harness).length, 1);
@@ -1203,13 +1213,12 @@ test("a click does not readmit a completed switch or a failed native read", asyn
             if (message.name === "switchAccount") {
                 return nativeAcknowledgement(message.id, message.revisions);
             }
-            return completes ? {
+            return completes ? nativeError({
                 id: message.id,
                 name: "switchAccount",
-                provider: "unknown",
-                error: "Canceled",
-                errorCode: 4001,
-            } : undefined;
+                provider: "multiple",
+                error: {code: 4001, message: "Canceled"},
+            }) : undefined;
         }});
         await harness.dispatch(manualSwitchIntent(), contentSender());
 
@@ -1254,13 +1263,12 @@ test("another click recovers an unacknowledged completed switch before a later c
             return {...nativeAcknowledgement(acknowledged ? 32 : 31), approvalRequired: false};
         }
         if (isResponseRead(message)) {
-            return {
+            return nativeError({
                 id: message.id,
                 name: "switchAccount",
-                provider: "unknown",
-                error: "Canceled",
-                errorCode: 4001,
-            };
+                provider: "multiple",
+                error: {code: 4001, message: "Canceled"},
+            });
         }
     };
     const harness = makeHarness({
@@ -1288,14 +1296,13 @@ test("a failed switch configuration write is retried before acknowledgement", as
                 throw new Error("storage unavailable");
             }
         },
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeResult({
             id: message.id,
             name: "switchAccount",
             provider: "multiple",
-            bodies: [],
-            configurationToStore: [],
-            providersToDisconnect: ["ethereum", "solana"],
-        } : nativeAcknowledgement(message.id, message.revisions),
+            result: null,
+            mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
+        }) : nativeAcknowledgement(message.id, message.revisions),
     });
     await harness.dispatch(manualSwitchIntent(), contentSender());
     await harness.runTimer();
@@ -1328,14 +1335,20 @@ test("a switch completed before admission expiry survives a delayed completion h
     const admissionDeadline = harness.nativeMessages[0].message.admissionDeadline;
     assert.equal(admissionDeadline, now + 15 * 60 * 1000);
     now = admissionDeadline - 1;
-    terminal = {
+    terminal = nativeResult({
         id: admitted.id,
         name: "switchAccount",
         provider: "multiple",
-        bodies: [selected],
-        configurationToStore: [selected],
-        providersToDisconnect: [],
-    };
+        result: null,
+        mutation: {
+            kind: "accounts",
+            updates: {
+                [selected.provider]: selected.provider === "ethereum"
+                    ? {address: selected.results[0], chainId: selected.chainId}
+                    : {publicKey: selected.publicKey},
+            },
+        },
+    });
     now = admissionDeadline + 1;
     await harness.dispatch({
         subject: "responseReady",
@@ -1364,17 +1377,16 @@ test("manual polling rejects malformed switch terminals and stops after response
     let now = 1_700_000_000_000;
     const harness = makeHarness({
         dateNow: () => now,
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeResult({
             id: message.id,
             name: "switchAccount",
             provider: "ethereum",
-            results: ["0x0000000000000000000000000000000000000001"],
-            configurationToStore: {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: ["0x0000000000000000000000000000000000000001"],
+            result: null,
+            mutation: {
+                kind: "accounts",
+                updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
             },
-        } : nativeAcknowledgement(message.id, message.revisions),
+        }) : nativeAcknowledgement(message.id, message.revisions),
     });
     await harness.dispatch(manualSwitchIntent(), contentSender());
     await harness.runTimer();
@@ -1434,12 +1446,18 @@ test("an alarm recovers an approval after worker termination before its admissio
         native: message => {
             assert.equal(message.subject, "getManualSwitchResponse");
             assert.equal(message.id, descriptor.id);
-            return {
-                id: message.id, name: "switchAccount", provider: "multiple",
-                bodies: [{provider: "ethereum", chainId: "0x1", results: ["0x0000000000000000000000000000000000000001"]}],
-                configurationToStore: [{provider: "ethereum", chainId: "0x1", results: ["0x0000000000000000000000000000000000000001"]}],
-                providersToDisconnect: [],
-            };
+            return nativeResult({
+                id: message.id,
+                name: "switchAccount",
+                provider: "multiple",
+                result: null,
+                mutation: {
+                    kind: "accounts",
+                    updates: {
+                        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+                    },
+                },
+            });
         },
         acknowledgeResponse: message => {
             assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
@@ -1492,15 +1510,21 @@ test("recovery rebroadcasts the current stored configuration before acknowledgin
                 {id: 11, url: "https://wallet.example/private", incognito: true},
             ],
             recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor], nextCursor: null}),
-            native: message => ({
+            native: message => (nativeResult({
                 id: message.id,
                 name: "switchAccount",
                 provider: "multiple",
-                bodies: [approved],
-                configurationToStore: [approved],
-                providersToDisconnect: [],
-                __bwApprovalCommitted: true,
-            }),
+                result: null,
+                mutation: {
+                    kind: "accounts",
+                    updates: {
+                        [approved.provider]: approved.provider === "ethereum"
+                            ? {address: approved.results[0], chainId: approved.chainId}
+                            : {publicKey: approved.publicKey},
+                    },
+                },
+                approvalCommitted: true,
+            })),
             acknowledgeResponse: message => {
                 assert.deepEqual(harness.tabMessages, [{id: 9, message: {
                     subject: "configurationChanged",
@@ -1529,10 +1553,13 @@ test("recovery retries unacknowledged completions without a duplicate configurat
         recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor], nextCursor: null}),
         native: message => {
             assert.equal(message.subject, "getManualSwitchResponse");
-            return {
-                id: message.id, name: "switchAccount", provider: "multiple",
-                bodies: [], configurationToStore: [], providersToDisconnect: ["ethereum", "solana"],
-            };
+            return nativeResult({
+                id: message.id,
+                name: "switchAccount",
+                provider: "multiple",
+                result: null,
+                mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
+            });
         },
         acknowledgeResponse: message => {
             acknowledged = allowAcknowledgement;
@@ -1581,7 +1608,12 @@ test("page configuration reads and response hints discover approved work without
             recoveryNative: message => ({id: message.id, requests: [descriptor], nextCursor: null}),
             native: message => {
                 assert.equal(message.subject, "getManualSwitchResponse");
-                return {id: message.id, name: "switchAccount", provider: "unknown", error: "Canceled", errorCode: 4001};
+                return nativeError({
+                    id: message.id,
+                    name: "switchAccount",
+                    provider: "multiple",
+                    error: {code: 4001, message: "Canceled"},
+                });
             },
         });
         await settle();
@@ -1638,7 +1670,12 @@ test("paginated discovery drains every same-origin handle without replacing its 
             maximumOutstanding = Math.max(outstanding, maximumOutstanding);
             await settle();
             outstanding -= 1;
-            return {id: message.id, name: "switchAccount", provider: "unknown", error: "Canceled", errorCode: 4001};
+            return nativeError({
+                id: message.id,
+                name: "switchAccount",
+                provider: "multiple",
+                error: {code: 4001, message: "Canceled"},
+            });
         },
     });
     await harness.fireAlarm();
@@ -1699,10 +1736,13 @@ test("a native admission committed after the next worker's empty scan is recover
         alarms, storage, recoveryNative: discovery,
         native: message => {
             assert.equal(message.subject, "getManualSwitchResponse");
-            return {
-                id: message.id, name: "switchAccount", provider: "multiple",
-                bodies: [], configurationToStore: [], providersToDisconnect: ["ethereum", "solana"],
-            };
+            return nativeResult({
+                id: message.id,
+                name: "switchAccount",
+                provider: "multiple",
+                result: null,
+                mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
+            });
         },
         acknowledgeResponse: message => {
             assert.deepEqual(storage.get("https://wallet.example").revisions, {ethereum: 1, solana: 1});
@@ -1771,7 +1811,12 @@ test("quiet recovery never joins or upgrades an interactive response read", asyn
     await harness.runTimer();
     await harness.fireAlarm();
     assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-    reading.resolve({id: admitted.id, name: "switchAccount", provider: "unknown", error: "Canceled", errorCode: 4001});
+    reading.resolve(nativeError({
+        id: admitted.id,
+        name: "switchAccount",
+        provider: "multiple",
+        error: {code: 4001, message: "Canceled"},
+    }));
     await settle();
 });
 
@@ -1816,14 +1861,20 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
                 : nativeAcknowledgement(message.id, message.revisions),
         });
         const acknowledged = await harness.dispatch(manualSwitchIntent(), contentSender());
-        terminal = {
+        terminal = nativeResult({
             id: acknowledged.id,
             name: "switchAccount",
             provider: "multiple",
-            bodies: [selected],
-            providersToDisconnect: [],
-            configurationToStore: [selected],
-        };
+            result: null,
+            mutation: {
+                kind: "accounts",
+                updates: {
+                    [selected.provider]: selected.provider === "ethereum"
+                        ? {address: selected.results[0], chainId: selected.chainId}
+                        : {publicKey: selected.publicKey},
+                },
+            },
+        });
         await harness.dispatch({
             subject: "responseReady",
             id: acknowledged.id,
@@ -1854,12 +1905,20 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
             reauthorizationRevision);
         assert.deepEqual(storage.get("https://wallet.example").revisions, afterManual);
 
-        terminal = {
+        terminal = nativeResult({
             id: 71,
             name: other.provider === "ethereum" ? "requestAccounts" : "connect",
-            ...other,
-            configurationToStore: other,
-        };
+            provider: other.provider,
+            result: other.provider === "ethereum" ? other.results : {publicKey: other.publicKey},
+            mutation: {
+                kind: "accounts",
+                updates: {
+                    [other.provider]: other.provider === "ethereum"
+                        ? {address: other.results[0], chainId: other.chainId}
+                        : {publicKey: other.publicKey},
+                },
+            },
+        });
         await harness.dispatch({
             subject: "getResponse",
             id: terminal.id,
@@ -1899,14 +1958,13 @@ test("Ethereum chain changes preserve reauthorization until the account disconne
         revisions: {ethereum: 3, solana: 0},
         workflowVersion: 3,
     }]]);
-    const harness = makeHarness({storage, native: message => ({
+    const harness = makeHarness({storage, native: message => (nativeResult({
         id: message.id,
         name: "switchEthereumChain",
         provider: "ethereum",
-        chainId: "0x2",
-        results: configuration.results,
-        configurationToStore: {...configuration, chainId: "0x2", reauthorizationRevision: 99},
-    })});
+        result: null,
+        mutation: {kind: "ethereumChain", chainId: "0x2"},
+    }))});
     const switched = await harness.dispatch(request(72, {message: {
         name: "switchEthereumChain",
         body: {address: configuration.results[0], chainId: "0x1", object: {chainId: "0x2"}},
@@ -1941,12 +1999,26 @@ test("native configurations and manual replays cannot invent reauthorization", a
         {provider: "solana", publicKey: firstSolanaPublicKey},
     ];
     for (const configuration of configurations) {
-        let terminal = {
+        let terminal = nativeResult({
             id: 74,
             name: configuration.provider === "ethereum" ? "requestAccounts" : "connect",
-            ...configuration,
-            configurationToStore: {...configuration, reauthorizationRevision: 99},
-        };
+            provider: configuration.provider,
+            result: configuration.provider === "ethereum"
+                ? configuration.results
+                : {publicKey: configuration.publicKey},
+            mutation: {
+                kind: "accounts",
+                updates: {
+                    [configuration.provider]: configuration.provider === "ethereum"
+                        ? {
+                            address: configuration.results[0],
+                            chainId: configuration.chainId,
+                            reauthorizationRevision: 99,
+                        }
+                        : {publicKey: configuration.publicKey, reauthorizationRevision: 99},
+                },
+            },
+        });
         const harness = makeHarness({native: () => terminal});
         const read = {
             subject: "getResponse",
@@ -1957,21 +2029,30 @@ test("native configurations and manual replays cannot invent reauthorization", a
             workflowVersion: 3,
         };
         const connected = await harness.dispatch(read);
-        assert.equal(connected.state[configuration.provider].reauthorizationRevision, 0);
-        terminal = {
+        assert.equal(connected.error.code, -32603);
+        assert.equal(harness.storage.has("https://wallet.example"), false);
+        terminal = nativeResult({
             id: read.id,
             name: "switchAccount",
             provider: "multiple",
-            bodies: [configuration],
-            configurationToStore: [{...configuration, reauthorizationRevision: 99}],
-        };
+            result: null,
+            mutation: {
+                kind: "accounts",
+                updates: {
+                    [configuration.provider]: configuration.provider === "ethereum"
+                        ? {
+                            address: configuration.results[0],
+                            chainId: configuration.chainId,
+                            reauthorizationRevision: 99,
+                        }
+                        : {publicKey: configuration.publicKey, reauthorizationRevision: 99},
+                },
+            },
+        });
         const replay = await harness.dispatch(read);
         assert.equal(replay, undefined);
-        assert.deepEqual(harness.storage.get("https://wallet.example").latestConfigurations,
-            [configuration]);
-        assert.equal(harness.storage.get("https://wallet.example").revisions[
-            configuration.provider
-        ], 1);
+        assert.equal(harness.storage.has("https://wallet.example"), false);
+        assert.deepEqual(providerStateWrites(harness), []);
     }
 });
 
@@ -1993,7 +2074,12 @@ test("manual switch intent requires the exact trusted content identity", async (
 test("rejects stale account-bound operations when native has no matching attempt", async () => {
     const harness = makeHarness({native: message => {
         assert.equal(message.replayOnly, true);
-        return {id: message.id, name: message.name, error: "No matching attempt", errorCode: -32603};
+        return nativeError({
+            id: message.id,
+            name: message.name,
+            provider: message.provider,
+            error: {code: -32603, message: "No matching attempt"},
+        });
     }});
     const response = await harness.dispatch(request(8, {message: {
         name: "signMessage",
@@ -2035,13 +2121,12 @@ test("forwards an account-bound operation with current stored authorization", as
 
 test("allows disconnected non-signing Ethereum methods through to native", async () => {
     for (const name of ["addEthereumChain", "switchEthereumChain", "ecRecover"]) {
-        const harness = makeHarness({native: message => ({
+        const harness = makeHarness({native: message => (nativeResult({
             id: message.id,
             name: message.name,
             provider: "ethereum",
             result: "ok",
-            ...(name === "ecRecover" ? {} : {chainId: "0x1"}),
-        })});
+        }))});
         const response = await harness.dispatch(request(30, {message: {
             name,
             body: {address: "", chainId: "0x1"},
@@ -2059,7 +2144,12 @@ test("rejects account-bearing chain mutations without stored authorization", asy
     ]) {
         const harness = makeHarness({native: message => {
             assert.equal(message.replayOnly, true);
-            return {id: message.id, name: message.name, error: "No matching attempt", errorCode: -32603};
+            return nativeError({
+                id: message.id,
+                name: message.name,
+                provider: message.provider,
+                error: {code: -32603, message: "No matching attempt"},
+            });
         }});
         const response = await harness.dispatch(request(id, {message: {
             name,
@@ -2121,6 +2211,8 @@ test("chain responses preserve only previously trusted Ethereum accounts", async
     const cases = [
         {id: 36, name: "addEthereumChain", storedResults: [], requestAddress: ""},
         {id: 37, name: "switchEthereumChain", storedResults: [], requestAddress: ""},
+        {id: 40, name: "switchEthereumChain", storedResults: [firstAddress, secondAddress], requestAddress: firstAddress},
+        {id: 42, name: "addEthereumChain", storedResults: [""], requestAddress: ""},
         {
             id: 38,
             name: "addEthereumChain",
@@ -2145,13 +2237,13 @@ test("chain responses preserve only previously trusted Ethereum accounts", async
             revisions: {ethereum: 0, solana: 0},
             workflowVersion: 3,
         }]]);
-        const harness = makeHarness({storage, native: message => ({
+        const harness = makeHarness({storage, native: message => (nativeResult({
             id: message.id,
             name: message.name,
             provider: "ethereum",
-            chainId: "0x2",
-            results: [secondAddress],
-        })});
+            result: null,
+            mutation: {kind: "ethereumChain", chainId: "0x2"},
+        }))});
         const response = await harness.dispatch(request(item.id, {message: {
             name: item.name,
             body: {
@@ -2199,13 +2291,13 @@ test("chain replays use current accounts and stale terminal results expose none"
         }]]);
         const harness = makeHarness({storage, native: message => {
             if (message.subject !== "getResponse") { return undefined; }
-            return {
+            return nativeResult({
                 id: 41,
                 name: "switchEthereumChain",
                 provider: "ethereum",
-                chainId: "0x2",
-                results: [nativeAddress],
-            };
+                result: null,
+                mutation: {kind: "ethereumChain", chainId: "0x2"},
+            });
         }});
         const response = await harness.dispatch({
             subject: "getResponse",
@@ -2389,10 +2481,13 @@ test("lost signing acknowledgments recover committed results after disconnect an
                 return nativeAcknowledgement(message.id, admitted.revisions, false);
             }
             if (isResponseRead(message)) {
-                return {
-                    id: message.id, name, provider, result: "committed-transaction",
-                    __bwApprovalCommitted: true,
-                };
+                return nativeResult({
+                    id: message.id,
+                    name,
+                    provider,
+                    result: "committed-transaction",
+                    approvalCommitted: true,
+                });
             }
         };
         const original = request(9, {message: {provider, name, body}});
@@ -2450,16 +2545,18 @@ test("lost enqueue acknowledgement keeps native revisions across disconnect drif
             return admitted;
         }
         if (isResponseRead(message)) {
-            return {
+            return nativeResult({
                 id: 19,
                 name: "requestAccounts",
                 provider: "ethereum",
-                configurationToStore: {
-                    provider: "ethereum",
-                    chainId: "0x1",
-                    results: ["0x0000000000000000000000000000000000000001"],
+                result: ["0x0000000000000000000000000000000000000001"],
+                mutation: {
+                    kind: "accounts",
+                    updates: {
+                        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+                    },
                 },
-            };
+            });
         }
         return undefined;
     }});
@@ -2505,18 +2602,18 @@ test("reads, applies, and retains a native response", async () => {
     const storage = new Map;
     const native = message => {
         if (isResponseRead(message)) {
-            return {
+            return nativeResult({
                 id: 10,
                 name: "requestAccounts",
                 provider: "ethereum",
-                chainId: "0x1",
-                results: ["0x0000000000000000000000000000000000000001"],
-                configurationToStore: {
-                    provider: "ethereum",
-                    chainId: "0x1",
-                    results: ["0x0000000000000000000000000000000000000001"],
+                result: ["0x0000000000000000000000000000000000000001"],
+                mutation: {
+                    kind: "accounts",
+                    updates: {
+                        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+                    },
                 },
-            };
+            });
         }
         return nativeAcknowledgement(10);
     };
@@ -2549,18 +2646,16 @@ test("reads, applies, and retains a native response", async () => {
 
 test("native errors cannot smuggle configuration mutations", async () => {
     const storage = new Map;
-    const harness = makeHarness({storage, native: message => ({
+    const harness = makeHarness({storage, native: message => (nativeError({
         id: message.id,
         name: message.name,
         provider: message.provider,
-        error: "Canceled",
-        errorCode: 4001,
-        configurationToStore: {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
+        error: {code: 4001, message: "Canceled"},
+        mutation: {
+            kind: "accounts",
+            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
         },
-    })});
+    }))});
 
     const response = await harness.dispatch(request(24));
     assert.equal(response.error?.code, -32603);
@@ -2568,17 +2663,16 @@ test("native errors cannot smuggle configuration mutations", async () => {
 });
 
 test("malformed native configuration mutations fail closed before storage", async () => {
-    const harness = makeHarness({native: message => isResponseRead(message) ? {
+    const harness = makeHarness({native: message => isResponseRead(message) ? nativeResult({
         id: 25,
         name: "requestAccounts",
         provider: "ethereum",
-        results: ["0x0000000000000000000000000000000000000001"],
-        configurationToStore: {
-            provider: "ethereum",
-            chainId: "invalid",
-            results: ["0x0000000000000000000000000000000000000001"],
+        result: ["0x0000000000000000000000000000000000000001"],
+        mutation: {
+            kind: "accounts",
+            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "invalid"}},
         },
-    } : undefined});
+    }) : undefined});
     const response = await harness.dispatch({
         subject: "getResponse",
         id: 25,
@@ -2597,26 +2691,16 @@ test("malformed native configuration mutations fail closed before storage", asyn
 });
 
 test("malformed special-chain responses fail closed before storage", async () => {
-    for (const [id, name, configurationToStore] of [
-        [26, "addEthereumChain", {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [],
-        }],
-        [27, "switchEthereumChain", undefined],
-    ]) {
+    for (const [id, name] of [[26, "addEthereumChain"], [27, "switchEthereumChain"]]) {
         const harness = makeHarness({native: message => {
             if (message.subject !== "getResponse") { return undefined; }
-            return {
+            return nativeResult({
                 id,
                 name,
                 provider: "ethereum",
-                chainId: "invalid",
-                results: [],
-                ...(typeof configurationToStore === "undefined"
-                    ? {}
-                    : {configurationToStore}),
-            };
+                result: null,
+                mutation: {kind: "ethereumChain", chainId: "invalid"},
+            });
         }});
         const response = await harness.dispatch({
             subject: "getResponse",
@@ -2638,16 +2722,13 @@ test("malformed special-chain responses fail closed before storage", async () =>
 test("invalid Solana configuration mutations fail closed before storage", async () => {
     const harness = makeHarness({native: message => {
         if (message.subject !== "getResponse") { return undefined; }
-        return {
+        return nativeResult({
             id: 28,
             name: "connect",
             provider: "solana",
-            publicKey: firstSolanaPublicKey,
-            configurationToStore: {
-                provider: "solana",
-                publicKey: "public-key",
-            },
-        };
+            result: {publicKey: firstSolanaPublicKey},
+            mutation: {kind: "accounts", updates: {solana: {publicKey: "public-key"}}},
+        });
     }});
     const response = await harness.dispatch({
         subject: "getResponse",
@@ -2667,17 +2748,16 @@ test("invalid Solana configuration mutations fail closed before storage", async 
 
 test("replays an already-applied response without advancing revisions again", async () => {
     const storage = new Map;
-    const native = message => isResponseRead(message) ? {
+    const native = message => isResponseRead(message) ? nativeResult({
         id: 21,
         name: "requestAccounts",
         provider: "ethereum",
-        results: ["0x0000000000000000000000000000000000000001"],
-        configurationToStore: {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
+        result: ["0x0000000000000000000000000000000000000001"],
+        mutation: {
+            kind: "accounts",
+            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
         },
-    } : nativeAcknowledgement(21);
+    }) : nativeAcknowledgement(21);
     const harness = makeHarness({storage, native});
     const acknowledgement = await harness.dispatch(request(21));
     const read = {
@@ -2709,17 +2789,16 @@ test("replays an already-applied response without advancing revisions again", as
 
 test("popup applies a completed response without consuming its later content replay", async () => {
     const storage = new Map;
-    const native = message => isResponseRead(message) ? {
+    const native = message => isResponseRead(message) ? nativeResult({
         id: 23,
         name: "requestAccounts",
         provider: "ethereum",
-        results: ["0x0000000000000000000000000000000000000001"],
-        configurationToStore: {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
+        result: ["0x0000000000000000000000000000000000000001"],
+        mutation: {
+            kind: "accounts",
+            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
         },
-    } : undefined;
+    }) : undefined;
     const harness = makeHarness({storage, native});
     const apply = {
         subject: "applyCompletedResponse",
@@ -2822,7 +2901,7 @@ test("delayed acknowledgement does not replay configuration from before a discon
     let acknowledge;
     const acknowledgement = new Promise(resolve => { acknowledge = resolve; });
     const harness = makeHarness({
-        native: () => ({...fixture.response, __bwApprovalCommitted: true}),
+        native: () => ({...fixture.response, approvalCommitted: true}),
         acknowledgeResponse: () => acknowledgement,
         tabs: [contentSender().tab],
         sendTabMessage() { throw new Error("Broadcast missed"); },
@@ -2985,13 +3064,13 @@ test("acknowledgment timeout never loses an ordinary committed transaction resul
     const fixture = completedAccountFixture();
     const timers = [];
     const harness = makeHarness({
-        native: () => ({
+        native: () => (nativeResult({
             id: fixture.read.id,
             name: "signTransaction",
             provider: "ethereum",
             result: "0xsubmitted-transaction-hash",
-            __bwApprovalCommitted: true,
-        }),
+            approvalCommitted: true,
+        })),
         acknowledgeResponse: () => new Promise(() => {}),
         scheduleTimeout(callback, delay) {
             const timer = {callback, delay};
@@ -3079,16 +3158,16 @@ test("page response reads relay native pending without committing or acknowledgi
 });
 
 test("disconnect revisions fence a stale authorization response", async () => {
-    const native = message => isResponseRead(message) ? {
+    const native = message => isResponseRead(message) ? nativeResult({
         id: 11,
         name: "requestAccounts",
         provider: "ethereum",
-        configurationToStore: {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
+        result: ["0x0000000000000000000000000000000000000001"],
+        mutation: {
+            kind: "accounts",
+            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
         },
-    } : nativeAcknowledgement(11);
+    }) : nativeAcknowledgement(11);
     const harness = makeHarness({native});
     const acknowledgement = await harness.dispatch(request(11));
     await harness.dispatch({
@@ -3138,16 +3217,13 @@ test("provider revision overflow fails closed without corrupting storage", async
     const storage = new Map([["https://wallet.example", clone(initial)]]);
     const harness = makeHarness({
         storage,
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeResult({
             id: 120,
             name: "requestAccounts",
             provider: "ethereum",
-            configurationToStore: {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: [replacementAddress],
-            },
-        } : undefined,
+            result: [replacementAddress],
+            mutation: {kind: "accounts", updates: {ethereum: {address: replacementAddress, chainId: "0x1"}}},
+        }) : undefined,
     });
 
     const response = await harness.dispatch({
@@ -3195,18 +3271,14 @@ test("a committed approval settles without overwriting a later disconnect", asyn
     }]]);
     const harness = makeHarness({
         storage,
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeResult({
             id: 49,
             name: "requestAccounts",
             provider: "ethereum",
-            results: [address],
-            configurationToStore: {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: [address],
-            },
-            __bwApprovalCommitted: true,
-        } : undefined,
+            result: [address],
+            mutation: {kind: "accounts", updates: {ethereum: {address: address, chainId: "0x1"}}},
+            approvalCommitted: true,
+        }) : undefined,
     });
     await harness.dispatch({
         subject: "disconnect",
@@ -3249,21 +3321,20 @@ test("committed multi-provider drift preserves only the drifted provider", async
         revisions: {ethereum: 0, solana: 0},
         workflowVersion: 3,
     }]]);
-    const response = {
+    const response = nativeResult({
         id: 51,
         name: "switchAccount",
         provider: "multiple",
-        bodies: [
-            {provider: "ethereum", chainId: "0x1", results: [nextEthereum]},
-            {provider: "solana", publicKey: secondSolanaPublicKey},
-        ],
-        configurationToStore: [
-            {provider: "ethereum", chainId: "0x1", results: [nextEthereum]},
-            {provider: "solana", publicKey: secondSolanaPublicKey},
-        ],
-        providersToDisconnect: [],
-        __bwApprovalCommitted: true,
-    };
+        result: null,
+        mutation: {
+            kind: "accounts",
+            updates: {
+                ethereum: {address: nextEthereum, chainId: "0x1"},
+                solana: {publicKey: secondSolanaPublicKey},
+            },
+        },
+        approvalCommitted: true,
+    });
     const harness = makeHarness({
         storage,
         native: message => isResponseRead(message) ? response : undefined,
@@ -3318,28 +3389,19 @@ test("noncommitted multi-provider drift remains atomic", async () => {
         revisions: {ethereum: 1, solana: 0},
         workflowVersion: 3,
     }]]);
-    const harness = makeHarness({native: message => isResponseRead(message) ? {
+    const harness = makeHarness({native: message => isResponseRead(message) ? nativeResult({
         id: 53,
         name: "switchAccount",
         provider: "multiple",
-        bodies: [
-            {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: ["0x0000000000000000000000000000000000000002"],
+        result: null,
+        mutation: {
+            kind: "accounts",
+            updates: {
+                ethereum: {address: "0x0000000000000000000000000000000000000002", chainId: "0x1"},
+                solana: {publicKey: secondSolanaPublicKey},
             },
-            {provider: "solana", publicKey: secondSolanaPublicKey},
-        ],
-        providersToDisconnect: [],
-        configurationToStore: [
-            {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: ["0x0000000000000000000000000000000000000002"],
-            },
-            {provider: "solana", publicKey: secondSolanaPublicKey},
-        ],
-    } : undefined, storage});
+        },
+    }) : undefined, storage});
     const response = await harness.dispatch({
         subject: "getResponse",
         id: 53,
@@ -3379,16 +3441,13 @@ test("one storage lineage serializes a disconnect against response application",
             readCount += 1;
             return readBarrier.then(() => values);
         },
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeResult({
             id: 41,
             name: "requestAccounts",
             provider: "ethereum",
-            configurationToStore: {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: [address],
-            },
-        } : undefined,
+            result: [address],
+            mutation: {kind: "accounts", updates: {ethereum: {address: address, chainId: "0x1"}}},
+        }) : undefined,
     });
 
     const disconnecting = harness.dispatch({
@@ -3454,13 +3513,12 @@ test("concurrent response polls share one native read and exact revisions", asyn
     }), undefined);
     assert.equal(nativeReadCount, 1);
 
-    resolveNative({
+    resolveNative(nativeError({
         id: 73,
         name: "signMessage",
         provider: "ethereum",
-        error: "Rejected",
-        errorCode: 4001,
-    });
+        error: {code: 4001, message: "Rejected"},
+    }));
     const responses = await Promise.all(polls);
     for (const response of responses) {
         assert.deepEqual(clone(response), clone(responses[0]));
@@ -3552,16 +3610,13 @@ test("native finalization rejects mutations while new tabs read committed config
     });
     assert.equal(providerStateWrites(harness).length, 0);
 
-    resolveNative({
+    resolveNative(nativeResult({
         id: 74,
         name: "requestAccounts",
         provider: "ethereum",
-        configurationToStore: {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [address],
-        },
-    });
+        result: [address],
+        mutation: {kind: "accounts", updates: {ethereum: {address: address, chainId: "0x1"}}},
+    }));
     await applying;
     await reading;
     const disconnected = await harness.dispatch({
@@ -4359,13 +4414,12 @@ test("normal finalization keeps revisions leased across worker restart", async (
     });
     assert.equal(blocked.error?.code, -32603);
 
-    resolveNative({
+    resolveNative(nativeError({
         id: 105,
         name: "requestAccounts",
         provider: "ethereum",
-        error: "Canceled",
-        errorCode: 4001,
-    });
+        error: {code: 4001, message: "Canceled"},
+    }));
     assert.equal((await finalizing).error?.code, 4001);
     assert.equal([...storage.keys()].some(key =>
         key.startsWith(approvalLeaseStoragePrefix)
@@ -4414,14 +4468,13 @@ test("manual finalization keeps revisions leased across worker restart", async (
     });
     assert.equal(blocked.error?.code, -32603);
 
-    pending.resolve({
+    pending.resolve(nativeResult({
         id: acknowledged.id,
         name: "switchAccount",
         provider: "multiple",
-        bodies: [],
-        configurationToStore: [],
-        providersToDisconnect: [],
-    });
+        result: null,
+        mutation: {kind: "accounts", updates: {}},
+    }));
     await polling;
     assert.equal([...storage.keys()].some(key =>
         key.startsWith(approvalLeaseStoragePrefix)
@@ -4901,13 +4954,12 @@ test("a generic Solana 4100 does not mutate authorization", async () => {
     }]]);
     const harness = makeHarness({
         storage,
-        native: message => isResponseRead(message) ? {
+        native: message => isResponseRead(message) ? nativeError({
             id: 44,
             name: "signMessage",
             provider: "solana",
-            error: "Unauthorized",
-            errorCode: 4100,
-        } : undefined,
+            error: {code: 4100, message: "Unauthorized"},
+        }) : undefined,
         tabs: [{id: 1, url: "https://wallet.example/"}],
     });
     const response = await harness.dispatch({
@@ -4925,6 +4977,49 @@ test("a generic Solana 4100 does not mutate authorization", async () => {
         solana: 3,
     });
     assert.deepEqual(harness.tabMessages, []);
+});
+
+test("explicit Solana revocation only removes the matching authorized key", async () => {
+    for (const currentPublicKey of [firstSolanaPublicKey, secondSolanaPublicKey]) {
+        const configuration = {provider: "solana", publicKey: currentPublicKey};
+        const storage = new Map([["https://wallet.example", {
+            latestConfigurations: [configuration], revisions: {ethereum: 0, solana: 3}, workflowVersion: 3,
+        }]]);
+        const harness = makeHarness({storage, native: () => nativeError({
+            id: 44, name: "signMessage", provider: "solana",
+            error: {code: 4100, message: "Unauthorized"}, authorizationFailure: true,
+            mutation: {kind: "revokeSolana", publicKey: firstSolanaPublicKey},
+        })});
+        const response = await harness.dispatch({
+            subject: "getResponse", id: 44, configurationKey: "https://wallet.example", requestToken,
+            revisions: {ethereum: 0, solana: 3}, workflowVersion: 3,
+        });
+        assert.equal(response.authorizationFailure, true);
+        assert.equal(response.error.code, 4100);
+        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations,
+            currentPublicKey === firstSolanaPublicKey ? [] : [configuration]);
+        assert.equal(storage.get("https://wallet.example").revisions.solana, 4);
+    }
+});
+
+test("malformed manual completions remain unacknowledged", async () => {
+    for (const terminal of [
+        nativeResult({id: 44, name: "switchAccount", provider: "multiple", result: null}),
+        nativeResult({id: 44, name: "switchAccount", provider: "multiple", result: "invalid",
+            mutation: {kind: "accounts", updates: {}}}),
+        nativeError({id: 44, name: "switchAccount", provider: "multiple", error: {code: 4001, message: ""}}),
+    ]) {
+        let acknowledgements = 0;
+        const harness = makeHarness({native: () => terminal,
+            acknowledgeResponse: () => { acknowledgements += 1; return {id: 44, acknowledged: true}; }});
+        const response = await harness.dispatch({
+            subject: "getResponse", id: 44, configurationKey: "https://wallet.example", requestToken,
+            revisions: {ethereum: 0, solana: 0}, workflowVersion: 3,
+        });
+        assert.equal(response, undefined);
+        assert.equal(acknowledgements, 0);
+        assert.deepEqual(providerStateWrites(harness), []);
+    }
 });
 
 test("ordinary RPC returns failure after the long native-operation timeout", async () => {
@@ -5007,12 +5102,9 @@ test("RPC ignores wallet metadata and leaves stored configuration unchanged", as
             const harness = makeHarness({storage, native: () => ({
                 id, ...metadata, ...terminal,
                 provider: "solana", name: "connect", kind: "configuration",
-                configurationToStore: configurations,
-                providersToDisconnect: ["ethereum", "solana"],
+                mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
                 state: snapshot({solana: solanaState(secondSolanaPublicKey)}),
                 configurationMatch: true, approvalCommitted: true, authorizationFailure: true,
-                __bwApprovalCommitted: true, __bwEthereumAuthorizationFailure: "v1", __bwStale: true,
-                errorPublicKey: secondSolanaPublicKey,
             })});
             assert.deepEqual(clone(await harness.dispatch(rpc)), {
                 id, provider: "ethereum", name: null, state: null, configurationMatch: null,
@@ -5028,22 +5120,45 @@ test("RPC ignores wallet metadata and leaves stored configuration unchanged", as
     }
 });
 
-test("native provider error metadata becomes canonical error data", async () => {
-    for (const [metadata, data] of [
-        [{errorDataJSON: JSON.stringify({reason: "rejected"})}, {reason: "rejected"}],
-        [{errorSignature: "signed-transaction"}, {signature: "signed-transaction"}],
-        [{errorDataJSON: "invalid", errorSignature: "fallback-signature"}, {signature: "fallback-signature"}],
-        [{errorDataJSON: "false", errorSignature: "unused"}, false],
-    ]) {
-        const harness = makeHarness({native: () => ({
-            id: 83, name: "requestAccounts", provider: "ethereum", error: "Rejected", errorCode: 4001,
-            ...metadata,
+test("native provider errors preserve canonical error data", async () => {
+    for (const data of [{reason: "rejected"}, {signature: "signed-transaction"},
+        {transactionHash: "0x1234"}, false, null, [1, "reason"]]) {
+        const harness = makeHarness({native: () => nativeError({
+            id: 83,
+            name: "requestAccounts",
+            provider: "ethereum",
+            error: {code: 4001, message: "Rejected", data},
         })});
         assert.deepEqual(clone(await harness.dispatch(request(83))), {
             ...errorResponse(83, "ethereum", "requestAccounts", 4001, "Rejected"),
             error: {code: 4001, message: "Rejected", data},
         });
     }
+});
+
+test("native error data survives numeric expansion during JavaScript serialization", async () => {
+    const encoded = '{"id":84,"name":"signTransaction","provider":"ethereum","kind":"error",' +
+        '"approvalCommitted":true,"mutation":null,"authorizationFailure":false,' +
+        '"error":{"code":-32000,"message":"Rejected","data":[' +
+        Array(13000).fill("1e+20").join(",") + ']}}';
+    const terminal = JSON.parse(encoded);
+    assert.ok(Buffer.byteLength(encoded) < 256 * 1024);
+    assert.ok(JSON.stringify(terminal).length > 256 * 1024);
+    const harness = makeHarness({
+        native: message => isResponseRead(message) ? terminal : undefined,
+    });
+
+    const response = await harness.dispatch({
+        subject: "getResponse", id: 84, configurationKey: "https://wallet.example",
+        requestToken, revisions: {ethereum: 0, solana: 0}, workflowVersion: 3,
+    });
+
+    assert.deepEqual(clone(response.error), {
+        code: -32000, message: "Rejected", data: Array(13000).fill(1e20),
+    });
+    assert.equal(harness.nativeMessages.filter(({message}) =>
+        message.subject === "acknowledgeResponse"
+    ).length, 1);
 });
 
 test("broadcasts response-ready hints and treats badge updates as best effort", async () => {

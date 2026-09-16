@@ -2,7 +2,7 @@
 
 extension SafariRequest {
 
-    struct Solana: SafariRequestBody {
+    struct Solana {
 
         enum Method: String {
             case connect
@@ -59,14 +59,7 @@ extension SafariRequest {
             self.sendOptions = parameters?["options"] as? [String: Any]
         }
 
-        var responseUpdatesStoredConfiguration: Bool {
-            switch method {
-            case .connect:
-                return true
-            case .signMessage, .signTransaction, .signAllTransactions, .signAndSendTransaction:
-                return false
-            }
-        }
+
 
     }
 

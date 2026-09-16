@@ -4,7 +4,7 @@ import Foundation
 
 extension SafariRequest {
     
-    struct Unknown: SafariRequestBody {
+    struct Unknown {
         
         enum Method: String {
             case switchAccount
@@ -24,24 +24,20 @@ extension SafariRequest {
             self.method = method
             
             var configurations = [ProviderConfiguration]()
-            let jsonDecoder = JSONDecoder()
             if let latestConfigurations = json["latestConfigurations"] as? [[String: Any]] {
                 for configuration in latestConfigurations {
                     guard let providerString = configuration["provider"] as? String,
-                          let provider = InpageProvider(rawValue: providerString),
-                          let data = try? JSONSerialization.data(withJSONObject: configuration)
+                          let provider = InpageProvider(rawValue: providerString)
                     else { continue }
                     
                     switch provider {
                     case .ethereum:
-                        let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data)
                         configurations.append(ProviderConfiguration(provider: provider,
-                                                                     address: response?.results?.first,
-                                                                     chainId: response?.chainId))
+                                                                     address: (configuration["results"] as? [String])?.first,
+                                                                     chainId: configuration["chainId"] as? String))
                     case .solana:
-                        let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data)
                         configurations.append(ProviderConfiguration(provider: provider,
-                                                                     address: response?.publicKey,
+                                                                     address: configuration["publicKey"] as? String,
                                                                      chainId: nil))
                     case .unknown, .multiple:
                         continue
@@ -51,14 +47,6 @@ extension SafariRequest {
             
             self.providerConfigurations = configurations
         }
-        
-        var responseUpdatesStoredConfiguration: Bool {
-            switch method {
-            case .switchAccount:
-                return true
-            }
-        }
-        
     }
     
 }

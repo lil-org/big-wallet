@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import { deferred, normalized, popupElement } from "./test_helpers.mjs";
+import { deferred, normalized, popupElement , nativeResult, nativeError} from "./test_helpers.mjs";
 
 const [source, wireSource, popupWireSource, markup] = await Promise.all([
     readFile(new URL("../Resources/popup.js", import.meta.url), "utf8"),
@@ -707,7 +707,12 @@ test("manual Switch Account accepts canonical native handles and terminal respon
     const responses = [
         manualSwitchAcknowledgement({approvalRequired: false, id: 17, revisions: {ethereum: 3, solana: 2}}),
         manualSwitchAcknowledgement(),
-        {id: 41, name: "switchAccount", provider: "unknown", error: "Canceled", errorCode: 4001},
+        nativeError({
+            id: 41,
+            name: "switchAccount",
+            provider: "multiple",
+            error: {code: 4001, message: "Canceled"},
+        }),
     ];
     for (const response of responses) {
         const harness = await manualSwitchHarness(async () => response);

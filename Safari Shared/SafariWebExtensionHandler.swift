@@ -506,8 +506,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 profileIdentifier: profileIdentifier
             ) {
             case .response(let response):
-                if case .addsEthereumChain =
-                    ResponseToExtension.ConfigurationMutation.classify(response) {
+                if ResponseToExtension(json: response)?.addsEthereumChain == true {
                     CustomNetworkCache.shared.invalidate()
                 }
                 Self.respond(with: response, context: context)
@@ -587,20 +586,18 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         if ExtensionBridge.isPayloadWithinLimit(response.json) {
             return response.json
         }
-        let internalError = ResponseToExtension(
-            for: request,
-            payload: .error(.internalError)
-        ).json
+        var fallback = ResponseToExtension(for: request, payload: .error(.internalError))
+        if response.approvalCommitted { fallback = fallback.markingApprovalCommitted() }
+        var internalError = fallback.json
         if ExtensionBridge.isPayloadWithinLimit(internalError) {
             return internalError
         }
-        return [
-            "id": request.id,
-            "name": "",
-            "provider": request.provider.rawValue,
-            "error": "",
-            "errorCode": ProviderResponseError.internalErrorCode,
+        internalError["name"] = request.provider == .unknown ? "switchAccount" : ""
+        internalError["error"] = [
+            "code": ProviderResponseError.internalErrorCode,
+            "message": "Failed to process provider response",
         ]
+        return internalError
     }
 
 #if os(macOS)
