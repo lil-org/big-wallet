@@ -234,6 +234,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
+    private final class PopupRecordingMenu: NSMenu {
+        var onPopup: (() -> Void)?
+
+        override func popUp(positioning item: NSMenuItem?, at location: NSPoint, in view: NSView?) -> Bool {
+            onPopup?()
+            MainActor.assumeIsolated {
+                delegate?.menuDidClose?(self)
+            }
+            return false
+        }
+    }
+
     private final class TrackingWindow: NSWindow {
         private(set) var activationCount = 0
         private(set) var deminiaturizationCount = 0
@@ -1361,6 +1373,299 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(controller.primaryButton.isEnabled)
         XCTAssertFalse(controller.secondaryButton.isEnabled)
         XCTAssertFalse(controller.tableView.isEnabled)
+    }
+
+    func testAccountSelectionQueriesDoNotChangeSelectedAccounts() throws {
+        let manager = try accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let original = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
+
+        for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
+            let controller = accountSelectionController(
+                manager: manager,
+                mode: mode,
+                selectedAccounts: [original]
+            )
+
+            for _ in 0..<3 {
+                XCTAssertFalse(controller.tableView(controller.tableView, shouldSelectRow: 2))
+                XCTAssertEqual(controller.accountSelection?.selectedAccounts, [original])
+            }
+        }
+    }
+
+    func testWalletListKeyboardSelectionOpensMenuAndAllowsNextClick() async throws {
+        let controller = instantiate(AccountsListViewController.self)
+        controller.walletsManager = try accountSelectionWalletsManager()
+        controller.loadView()
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        let table = try XCTUnwrap(controller.tableView)
+        XCTAssertTrue(window.makeFirstResponder(table))
+        let menu = PopupRecordingMenu()
+        menu.delegate = controller
+        table.menu = menu
+        let opened = [
+            expectation(description: "initial click menu"),
+            expectation(description: "keyboard menu"),
+            expectation(description: "subsequent click menu")
+        ]
+        var rows = [Int]()
+        menu.onPopup = { [weak table] in
+            rows.append(table?.selectedRow ?? -1)
+            if rows.count <= opened.count {
+                opened[rows.count - 1].fulfill()
+            }
+        }
+
+        try clickAccountRow(2, in: controller, window: window)
+        await fulfillment(of: [opened[0]], timeout: 1)
+        try pressDownArrow(in: table, window: window)
+        await fulfillment(of: [opened[1]], timeout: 1)
+        XCTAssertEqual(table.selectedRow, -1)
+
+        try clickAccountRow(3, in: controller, window: window)
+        await fulfillment(of: [opened[2]], timeout: 1)
+        XCTAssertEqual(rows, [2, 1, 3])
+        XCTAssertEqual(table.selectedRow, -1)
+    }
+
+    func testWalletListPendingMenuDoesNotOpenAfterSelectionClears() async throws {
+        let controller = instantiate(AccountsListViewController.self)
+        controller.walletsManager = try accountSelectionWalletsManager()
+        controller.loadView()
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        let table = try XCTUnwrap(controller.tableView)
+        XCTAssertTrue(window.makeFirstResponder(table))
+        let menu = PopupRecordingMenu()
+        menu.delegate = controller
+        table.menu = menu
+        let opened = expectation(description: "cancelled menu stays closed")
+        opened.isInverted = true
+        menu.onPopup = { opened.fulfill() }
+
+        try pressDownArrow(in: table, window: window)
+        XCTAssertEqual(table.selectedRow, 1)
+        table.deselectAll(nil)
+
+        await fulfillment(of: [opened], timeout: 0.1)
+        XCTAssertEqual(table.selectedRow, -1)
+    }
+
+    func testAccountSelectionClickSwitchesAndDeselectsOncePreservingOtherCoin() throws {
+        let manager = try accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let accounts = wallet.accounts.map {
+            SpecificWalletAccount(walletId: wallet.id, account: $0)
+        }
+
+        for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
+            let controller = accountSelectionController(
+                manager: manager,
+                mode: mode,
+                selectedAccounts: [accounts[0], accounts[2]]
+            )
+            let window = accountSelectionWindow(controller: controller)
+            defer { window.close() }
+
+            try clickAccountRow(2, in: controller, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[1], accounts[2]])
+
+            try clickAccountRow(2, in: controller, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[2]])
+
+            try clickAccountRow(1, in: controller, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[0], accounts[2]])
+            XCTAssertTrue(controller.primaryButton.isEnabled)
+        }
+    }
+
+    func testAccountPickerKeyboardNavigatesAndActivatesWithoutSubmitting() throws {
+        let manager = try accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let accounts = wallet.accounts.map {
+            SpecificWalletAccount(walletId: wallet.id, account: $0)
+        }
+        for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
+            let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
+            let window = accountSelectionWindow(controller: controller)
+            defer { window.close() }
+            let table = try XCTUnwrap(controller.tableView)
+            XCTAssertTrue(window.makeFirstResponder(table))
+            XCTAssertFalse(controller.primaryButton.isEnabled)
+
+            try pressDownArrow(in: table, window: window)
+            XCTAssertEqual(table.selectedRow, 1)
+            let focusedRow = try XCTUnwrap(table.rowView(atRow: 1, makeIfNecessary: true))
+            XCTAssertEqual(focusedRow.interiorBackgroundStyle, .normal)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
+            try pressKey(" ", keyCode: 49, in: table, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[0]])
+            XCTAssertTrue(controller.primaryButton.isEnabled)
+
+            try pressDownArrow(in: table, window: window)
+            XCTAssertEqual(table.selectedRow, 2)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[0]])
+            try pressKey("\r", keyCode: 36, in: table, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[1]])
+            XCTAssertTrue(table.isEnabled)
+
+            try pressDownArrow(in: table, window: window)
+            try pressKey(" ", keyCode: 49, in: table, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[1], accounts[2]])
+            try pressKey(" ", keyCode: 49, in: table, window: window, isRepeat: true)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[1], accounts[2]])
+            try pressKey(" ", keyCode: 49, in: table, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [accounts[1]])
+
+            try pressKey("\u{f700}", keyCode: 126, in: table, window: window)
+            XCTAssertEqual(table.selectedRow, 2)
+            try pressKey("\u{3}", keyCode: 76, in: table, window: window)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
+            XCTAssertFalse(controller.primaryButton.isEnabled)
+        }
+    }
+
+    func testAccountPickerKeyboardSkipsDisabledCoinsAndFollowsMouseFocus() throws {
+        let manager = try accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let account = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
+        let controller = accountSelectionController(
+            manager: manager,
+            mode: .selectAccount,
+            selectedAccounts: [account],
+            coinType: .ethereum
+        )
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        let table = try XCTUnwrap(controller.tableView)
+        XCTAssertTrue(window.makeFirstResponder(table))
+        XCTAssertEqual(table.selectedRow, 1)
+
+        try pressDownArrow(in: table, window: window)
+        try pressDownArrow(in: table, window: window)
+        XCTAssertEqual(table.selectedRow, 2)
+        try pressKey(" ", keyCode: 49, in: table, window: window)
+        try clickAccountRow(1, in: controller, window: window)
+        XCTAssertEqual(table.selectedRow, 1)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [account])
+        try pressKey(" ", keyCode: 49, in: table, window: window)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
+        XCTAssertFalse(controller.primaryButton.isEnabled)
+
+        controller.invalidateNativeApprovalReview()
+        try pressKey(" ", keyCode: 49, in: table, window: window)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
+    }
+
+    func testEmptyWalletOptionsSupportKeyboardAndMouseImport() throws {
+        let reader = KeychainCopyMatchingStub()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        XCTAssertTrue(manager.reloadFromStore())
+        let cases: [(NativeAccountSelectionMode?, Bool)] = [(nil, true), (.switchAccount, true), (nil, false)]
+        for (mode, useKeyboard) in cases {
+            let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
+            let window = accountSelectionWindow(controller: controller)
+            defer { window.close() }
+            let table = try XCTUnwrap(controller.tableView)
+            XCTAssertTrue(window.makeFirstResponder(table))
+
+            try pressDownArrow(in: table, window: window)
+            XCTAssertEqual(table.selectedRow, 0)
+            try pressDownArrow(in: table, window: window)
+            XCTAssertEqual(table.selectedRow, 1)
+            try pressKey("\u{f700}", keyCode: 126, in: table, window: window)
+            XCTAssertEqual(table.selectedRow, 0)
+            XCTAssertTrue(window.contentViewController === controller)
+            XCTAssertNil(window.attachedSheet)
+
+            if useKeyboard {
+                try pressDownArrow(in: table, window: window)
+                try pressKey(" ", keyCode: 49, in: table, window: window)
+            } else {
+                try clickAccountRow(1, in: controller, window: window)
+            }
+            XCTAssertTrue(window.contentViewController is ImportViewController)
+            XCTAssertTrue(manager.wallets.isEmpty)
+        }
+    }
+
+    func testEmptyWalletCreateCanBeActivatedWithReturn() throws {
+        let reader = KeychainCopyMatchingStub()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        XCTAssertTrue(manager.reloadFromStore())
+        let controller = accountSelectionController(manager: manager, mode: nil, selectedAccounts: [])
+        let window = accountSelectionWindow(controller: controller)
+        let windowController = WalletWindowController(window: window)
+        windowController.approvalPeer = PeerMeta(title: "wallet.example")
+        defer { windowController.close() }
+        let table = try XCTUnwrap(controller.tableView)
+        XCTAssertTrue(window.makeFirstResponder(table))
+
+        try pressDownArrow(in: table, window: window)
+        try pressKey("\r", keyCode: 36, in: table, window: window)
+        XCTAssertEqual(table.selectedRow, -1)
+        let confirmation = try XCTUnwrap(window.attachedSheet)
+        XCTAssertTrue(manager.wallets.isEmpty)
+        window.endSheet(confirmation, returnCode: .alertSecondButtonReturn)
+        confirmation.orderOut(nil)
+    }
+
+    func testWalletListCancelledDragClearsSelectionAndAllowsNextClick() async throws {
+        let controller = instantiate(AccountsListViewController.self)
+        controller.walletsManager = try accountSelectionWalletsManager()
+        controller.loadView()
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        let table = try XCTUnwrap(controller.tableView)
+        let menu = PopupRecordingMenu()
+        menu.delegate = controller
+        table.menu = menu
+
+        for (destination, nextRow) in [(2, 3), (0, 2)] {
+            let opened = expectation(description: "menu after cancelled drag to row \(destination)")
+            var rows = [Int]()
+            menu.onPopup = { [weak table] in
+                rows.append(table?.selectedRow ?? -1)
+                opened.fulfill()
+            }
+
+            try clickAccountRow(1, endingAt: destination, in: controller, window: window)
+            XCTAssertEqual(table.selectedRow, -1)
+            XCTAssertTrue(rows.isEmpty)
+
+            try clickAccountRow(nextRow, in: controller, window: window)
+            await fulfillment(of: [opened], timeout: 1)
+            XCTAssertEqual(rows, [nextRow])
+            XCTAssertEqual(table.selectedRow, -1)
+        }
+    }
+
+    func testAccountSelectionClickIgnoresOtherCoinAndCanClearSelection() throws {
+        let manager = try accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let original = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
+        let replacement = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[1])
+        let controller = accountSelectionController(
+            manager: manager,
+            mode: .selectAccount,
+            selectedAccounts: [original],
+            coinType: .ethereum
+        )
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+
+        try clickAccountRow(3, in: controller, window: window)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [original])
+
+        try clickAccountRow(2, in: controller, window: window)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [replacement])
+        XCTAssertTrue(controller.primaryButton.isEnabled)
+
+        try clickAccountRow(2, in: controller, window: window)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
+        XCTAssertFalse(controller.primaryButton.isEnabled)
     }
 
     func testAccountSelectionTeardownCancelsMenusAndFencesNavigation() throws {
@@ -3354,6 +3659,179 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             initiallyConnectedProviders: [],
             network: Networks.ethereum
         ))
+    }
+
+    private func accountSelectionWalletsManager() throws -> WalletsManager {
+        typealias Vectors = WalletCoreProxyTestVectors
+        let key = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
+        key.addAccountDerivation(
+            address: Vectors.abandonEthereumSecondAddress,
+            coin: .ethereum,
+            derivation: .custom,
+            derivationPath: "m/44'/60'/0'/0/1",
+            publicKey: Vectors.abandonEthereumSecondPublicKey,
+            extendedPublicKey: Vectors.abandonEthereumExtendedPublicKey
+        )
+        key.addAccountDerivation(
+            address: Vectors.solanaAddressFromPublicKey,
+            coin: .solana,
+            derivation: .custom,
+            derivationPath: "m/44'/501'/0'",
+            publicKey: Vectors.solanaAddressPublicKey,
+            extendedPublicKey: ""
+        )
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "selection-wallet")]
+        reader.walletData = ["selection-wallet": try XCTUnwrap(key.exportJSON())]
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        XCTAssertTrue(manager.reloadFromStore())
+        XCTAssertEqual(manager.wallets.first?.accounts.count, 3)
+        return manager
+    }
+
+    private func accountSelectionController(
+        manager: WalletsManager,
+        mode: NativeAccountSelectionMode?,
+        selectedAccounts: Set<SpecificWalletAccount>,
+        coinType: WalletCoin? = nil
+    ) -> AccountsListViewController {
+        let controller = instantiate(AccountsListViewController.self)
+        controller.walletsManager = manager
+        if let mode {
+            controller.accountSelection = NativeAccountSelectionSession(
+                action: .init(
+                    coinType: coinType,
+                    selectedAccounts: selectedAccounts,
+                    initiallyConnectedProviders: [],
+                    network: Networks.ethereum
+                ),
+                mode: mode,
+                completion: { _, _ in }
+            )
+        }
+        controller.loadView()
+        return controller
+    }
+
+    private func accountSelectionWindow(controller: AccountsListViewController) -> NSWindow {
+        let window = NSPanel(
+            contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        controller.view.layoutSubtreeIfNeeded()
+        return window
+    }
+
+    private func pressDownArrow(in table: NSTableView, window: NSWindow) throws {
+        try pressKey("\u{f701}", keyCode: 125, in: table, window: window)
+    }
+
+    private func pressKey(
+        _ characters: String,
+        keyCode: UInt16,
+        in table: NSTableView,
+        window: NSWindow,
+        isRepeat: Bool = false
+    ) throws {
+        XCTAssertTrue(window.firstResponder === table)
+        let down = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: characters,
+            charactersIgnoringModifiers: characters,
+            isARepeat: isRepeat,
+            keyCode: keyCode
+        ))
+        NSApp.postEvent(down, atStart: true)
+        let keyEvent = try XCTUnwrap(NSApp.nextEvent(
+            matching: .keyDown,
+            until: Date(timeIntervalSinceNow: 1),
+            inMode: .default,
+            dequeue: true
+        ))
+        window.sendEvent(keyEvent)
+    }
+
+    private func clickAccountRow(
+        _ row: Int,
+        endingAt endRow: Int? = nil,
+        in controller: AccountsListViewController,
+        window: NSWindow
+    ) throws {
+        let table = try XCTUnwrap(controller.tableView)
+        let rowRect = table.rect(ofRow: row)
+        let point = table.convert(NSPoint(x: rowRect.minX + 10, y: rowRect.midY), to: nil)
+        let endRect = table.rect(ofRow: endRow ?? row)
+        let endPoint = table.convert(NSPoint(x: endRect.minX + 10, y: endRect.midY), to: nil)
+        let timestamp = ProcessInfo.processInfo.systemUptime
+        let down = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: point,
+            modifierFlags: [],
+            timestamp: timestamp,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1
+        ))
+        let up = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: endPoint,
+            modifierFlags: [],
+            timestamp: timestamp + 0.01,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 1,
+            pressure: 0
+        ))
+        NSApp.postEvent(up, atStart: true)
+        if endRow != nil {
+            let drag = try XCTUnwrap(NSEvent.mouseEvent(
+                with: .leftMouseDragged,
+                location: endPoint,
+                modifierFlags: [],
+                timestamp: timestamp + 0.005,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 2,
+                clickCount: 1,
+                pressure: 1
+            ))
+            NSApp.postEvent(drag, atStart: true)
+        }
+        NSApp.postEvent(down, atStart: true)
+        let mouseEvent = try XCTUnwrap(NSApp.nextEvent(
+            matching: .leftMouseDown,
+            until: Date(timeIntervalSinceNow: 1),
+            inMode: .default,
+            dequeue: true
+        ))
+        if endRow != nil {
+            table.mouseDown(with: mouseEvent)
+        } else {
+            NSApp.sendEvent(mouseEvent)
+        }
+        let deadline = Date(timeIntervalSinceNow: 0.05)
+        while Date() < deadline,
+              let event = NSApp.nextEvent(
+                  matching: .any,
+                  until: deadline,
+                  inMode: .default,
+                  dequeue: true
+              ) {
+            NSApp.sendEvent(event)
+        }
     }
 
     private func approvalSnapshot(

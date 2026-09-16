@@ -3,6 +3,8 @@
 import Cocoa
 
 class AccountCellView: NSTableRowView {
+
+    private var showsAccountSelection = false
     
     @IBOutlet weak var addressImageView: NSImageView! {
         didSet {
@@ -18,11 +20,27 @@ class AccountCellView: NSTableRowView {
         wantsLayer = true
     }
     
-    func setup(account: WalletAccount, walletId: String, isSelected: Bool, isDisabled: Bool) {
+    func setup(account: WalletAccount, walletId: String, isSelected: Bool, isDisabled: Bool, showsAccountSelection: Bool = false) {
+        self.showsAccountSelection = showsAccountSelection
         addressImageView.image = account.image
         addressTextField.stringValue = account.nameOrCroppedAddress(walletId: walletId)
         setSelected(isSelected)
         setDisabled(isDisabled)
+    }
+
+    override var interiorBackgroundStyle: NSView.BackgroundStyle {
+        showsAccountSelection ? .normal : super.interiorBackgroundStyle
+    }
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard showsAccountSelection else {
+            super.drawSelection(in: dirtyRect)
+            return
+        }
+        NSColor.keyboardFocusIndicatorColor.setStroke()
+        let outline = NSBezierPath(rect: bounds.insetBy(dx: 2, dy: 2))
+        outline.lineWidth = 2
+        outline.stroke()
     }
     
     private func setDisabled(_ disabled: Bool) {
