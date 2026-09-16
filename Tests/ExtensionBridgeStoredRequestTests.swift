@@ -5603,7 +5603,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     @MainActor
     func testNativeAgentResolutionStopsWhenClockReachesDeadlineBetweenChecks() async throws {
         let helperURL = try makeAmbientBundle(name: "Resolution Deadline Boundary", build: "148")
-        var clockReads = 0
+        var uptime: UInt64 = 0
         var helperReads = 0
         let target = await NativeAgentLauncher.resolveTargetHelper(
             currentURL: helperURL,
@@ -5616,18 +5616,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 },
                 helpers: {
                     helperReads += 1
+                    uptime = 50_000_000
                     return []
                 },
                 identity: { _ in nil },
                 uptime: {
-                    clockReads += 1
-                    return clockReads <= 2 ? 0 : 50_000_000
+                    uptime
                 },
                 sleepUntil: { _ in XCTFail("An expired resolution must not sleep") }
             )
         )
         XCTAssertNil(target)
-        XCTAssertEqual(helperReads, 0)
+        XCTAssertEqual(helperReads, 1)
     }
 
     func testSeparateProcessStoreLockFencesAccess() async throws {

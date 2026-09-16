@@ -116,11 +116,17 @@ class Agent: NSObject {
     }
 
     @MainActor
-    private final class ActiveApproval {
+    final class ActiveApproval {
         let coordinator: NativeApprovalCoordinator
-        private let windowCloseObserver: NativeApprovalWindowCloseObserver
+        private lazy var windowCloseObserver = NativeApprovalWindowCloseObserver { [weak self] in
+            guard let self else { return }
+            isDismissed = true
+            coordinator.reject()
+        }
+        private(set) var isDismissed = false
+        var pendingPresentation: NativeApprovalCoordinator.Presentation?
         private var sharedReviewCleanup: (() -> Void)?
-        private(set) var acceptsReviewActions = true
+        private(set) var acceptsReviewActions = false
         var windowController: NSWindowController? {
             didSet {
                 if let window = windowController?.window {
@@ -131,9 +137,7 @@ class Agent: NSObject {
 
         init(coordinator: NativeApprovalCoordinator) {
             self.coordinator = coordinator
-            windowCloseObserver = NativeApprovalWindowCloseObserver(
-                onClose: Agent.rejectionHandler(for: coordinator)
-            )
+
         }
 
         func activate() {
@@ -145,13 +149,24 @@ class Agent: NSObject {
             Window.reactivateWindow(windowController)
         }
 
-        func disableRejectionOnWindowClose() {
-            windowCloseObserver.disable()
+        func restorePresentation() {
+            isDismissed = false
+        }
+
+        func receive(_ presentation: NativeApprovalCoordinator.Presentation) -> Bool {
+            guard isDismissed else { return true }
+            switch presentation {
+            case .finished, .superseded: return true
+            default:
+                pendingPresentation = presentation
+                return false
+            }
         }
 
         func beginReview(
             sharedCleanup: (() -> Void)? = nil
         ) {
+            acceptsReviewActions = true
             sharedReviewCleanup = sharedCleanup
         }
 
@@ -180,6 +195,11 @@ class Agent: NSObject {
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
 
     private override init() {
+        super.init()
+    }
+
+    init(approvalInbox: ApprovalInbox<ActiveApproval>) {
+        self.approvalInbox = approvalInbox
         super.init()
     }
     
@@ -215,6 +235,8 @@ class Agent: NSObject {
 
     func process(route: NativeAgentRoute) {
         start(openOnLaunch: false)
+        for coordinator in approvalInbox.coordinators { coordinator.expireIfDormant() }
+        for coordinator in approvalInbox.dormantCoordinators { coordinator.retryRecovery() }
         switch route {
         case .approval(_, let handle, let nativeDeliveryNonce):
             let key = ApprovalRouteKey(
@@ -222,7 +244,7 @@ class Agent: NSObject {
                 nativeDeliveryNonce: nativeDeliveryNonce
             )
             if let existing = approvalInbox.coordinator(for: key) {
-                if existing.state == .awaitingAuthentication {
+                if existing.isAwaitingAuthentication {
                     resumePendingWork()
                     startupAuthenticationPresentation.reactivateWindow()
                 } else {
@@ -235,6 +257,7 @@ class Agent: NSObject {
                 nativeDeliveryNonce: nativeDeliveryNonce
             )
             guard approvalInbox.register(coordinator) else { return }
+            restoreOldestRecoverableApproval()
             coordinator.onEvent = { [weak self, weak coordinator] event in
                 guard let self, let coordinator,
                       self.approvalInbox.coordinator(for: key) === coordinator else {
@@ -263,6 +286,9 @@ class Agent: NSObject {
 
     func open() {
         start(openOnLaunch: false)
+        for coordinator in approvalInbox.coordinators { coordinator.expireIfDormant() }
+        for coordinator in approvalInbox.dormantCoordinators { coordinator.retryRecovery() }
+        restoreOldestRecoverableApproval()
         pendingWalletOpenIntent.record()
         resumePendingWork()
         startupAuthenticationPresentation.reactivateWindow()
@@ -415,7 +441,7 @@ class Agent: NSObject {
 
     private func handleReceiptOwnedApproval(_ key: ApprovalRouteKey) {
         guard let coordinator = approvalInbox.coordinator(for: key),
-              coordinator.state == .awaitingAuthentication else { return }
+              coordinator.isAwaitingAuthentication else { return }
         guard hasPassword else {
             switch Self.missingPasswordApprovalAction(
                 canCreatePassword: CurrentApp.canCreatePassword
@@ -523,17 +549,20 @@ class Agent: NSObject {
 
     private func activateApproval(_ key: ApprovalRouteKey) {
         guard let coordinator = approvalInbox.coordinator(for: key),
-              coordinator.state == .awaitingAuthentication else { return }
+              coordinator.isAwaitingAuthentication else { return }
         let approval = ActiveApproval(coordinator: coordinator)
         guard approvalInbox.activate(approval, for: key) else { return }
         coordinator.resumeAfterAuthentication()
     }
 
-    private func present(
+    func present(
         _ presentation: NativeApprovalCoordinator.Presentation,
         for handle: ExtensionBridge.Handle,
         coordinator: NativeApprovalCoordinator
     ) {
+        guard activeApproval(for: handle, coordinator: coordinator)?.receive(presentation) != false else {
+            return
+        }
         switch presentation {
         case .approval(let request, let action):
             present(
@@ -543,11 +572,9 @@ class Agent: NSObject {
                 coordinator: coordinator
             )
         case .waiting:
-            activeApproval(
-                for: handle,
-                coordinator: coordinator
-            )?.disableRejectionOnWindowClose()
             showWaiting(for: handle, coordinator: coordinator)
+        case .retryRequired:
+            showFailureSurface(for: handle, coordinator: coordinator, retry: true)
         case .rejecting:
             showFailureSurface(for: handle, coordinator: coordinator)
         case .finished, .superseded:
@@ -673,10 +700,11 @@ class Agent: NSObject {
         for handle: ExtensionBridge.Handle,
         coordinator: NativeApprovalCoordinator
     ) {
-        guard activeApproval(
+        guard let approval = activeApproval(
             for: handle,
             coordinator: coordinator
-        ) != nil else { return }
+        ) else { return }
+        approval.beginReview()
         Self.installWaitingSurface(
             reason: Strings.loading,
             in: windowController
@@ -740,10 +768,6 @@ class Agent: NSObject {
                       for: handle,
                       coordinator: coordinator
                   ) else { return }
-            self.activeApproval(
-                for: handle,
-                coordinator: coordinator
-            )?.disableRejectionOnWindowClose()
             self.showWaiting(for: handle, coordinator: coordinator)
             guard let accounts else {
                 coordinator.reject()
@@ -869,7 +893,8 @@ class Agent: NSObject {
 
     private func showFailureSurface(
         for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
+        coordinator: NativeApprovalCoordinator,
+        retry: Bool = false
     ) {
         guard let approval = activeApproval(
             for: handle,
@@ -883,27 +908,31 @@ class Agent: NSObject {
             )
         }
         approval.windowController = Self.installFailureSurface(
-            in: approval.windowController
+            in: approval.windowController,
+            retryAction: retry ? { [weak coordinator] in coordinator?.retryRecovery() } : nil
         )
         activateOldestPresentedApproval()
     }
 
     @discardableResult
     static func installFailureSurface(
-        in retainedWindowController: NSWindowController?
+        in retainedWindowController: NSWindowController?,
+        retryAction: (() -> Void)? = nil
     ) -> NSWindowController {
         let windowController = retainedWindowController ??
             Window.showNew(closeOthers: false)
         Self.installWaitingSurface(
             reason: Strings.somethingWentWrong,
-            in: windowController
+            in: windowController,
+            retryAction: retryAction
         )
         return windowController
     }
 
     static func installWaitingSurface(
         reason: String,
-        in windowController: NSWindowController
+        in windowController: NSWindowController,
+        retryAction: (() -> Void)? = nil
     ) {
         let outgoing = windowController.contentViewController
         if !(outgoing is WaitingViewController) {
@@ -911,11 +940,12 @@ class Agent: NSObject {
         }
         dismissApprovalSheets(in: windowController.window)
         if let waiting = outgoing as? WaitingViewController {
-            waiting.update(reason: reason)
+            waiting.update(reason: reason, retryAction: retryAction)
             return
         }
         windowController.contentViewController = WaitingViewController.with(
-            reason: reason
+            reason: reason,
+            retryAction: retryAction
         ) {
             Window.activateBrowser(specific: .safari)
         }
@@ -936,7 +966,6 @@ class Agent: NSObject {
             isVisible: window?.isVisible == true,
             isMiniaturized: window?.isMiniaturized == true
         )
-        approval.disableRejectionOnWindowClose()
         approval.endReview()
         removeActiveApproval(for: handle, coordinator: coordinator)
         window?.delegate = nil
@@ -966,15 +995,36 @@ class Agent: NSObject {
 
     private func reactivateApprovalIfNeeded(for key: ApprovalRouteKey) {
         guard let approval = approvalInbox.active(for: key) else { return }
-        if Self.shouldReactivateApproval(in: approval.coordinator.state) {
-            activateOldestPresentedApproval()
+        restorePresentation(for: key, approval: approval, retryPaused: true)
+    }
+
+    private func restorePresentation(
+        for key: ApprovalRouteKey,
+        approval: ActiveApproval,
+        retryPaused: Bool
+    ) {
+        guard approval.coordinator.canReactivate else { return }
+        approval.restorePresentation()
+        if approval.coordinator.isPaused {
+            approval.pendingPresentation = nil
+            if retryPaused {
+                approval.coordinator.retryRecovery()
+            } else {
+                present(.retryRequired, for: key.handle, coordinator: approval.coordinator)
+            }
+        } else if let pending = approval.pendingPresentation {
+            approval.pendingPresentation = nil
+            present(pending, for: key.handle, coordinator: approval.coordinator)
+        } else if !approval.acceptsReviewActions {
+            showWaiting(for: key.handle, coordinator: approval.coordinator)
         }
+        approval.activate()
     }
 
     @discardableResult
     private func activateOldestPresentedApproval() -> Bool {
         guard let oldest = approvalInbox.oldestActive(where: { approval in
-            guard approval.coordinator.state != .finished,
+            guard !approval.coordinator.isFinished,
                   let window = approval.windowController?.window else {
                 return false
             }
@@ -1011,17 +1061,11 @@ class Agent: NSObject {
         approvalInbox.remove(key)
     }
 
-    static func shouldReactivateApproval(
-        in state: NativeApprovalCoordinator.State
-    ) -> Bool {
-        switch state {
-        case .loading, .reviewing, .staging, .staged:
-            return true
-        case .registered, .validating, .acquiringReceipt,
-             .awaitingAuthentication, .cancelingBeforeAuthentication,
-             .responding, .rejecting, .finished:
-            return false
-        }
+    func restoreOldestRecoverableApproval() {
+        guard let oldest = approvalInbox.oldestActive(where: {
+            $0.coordinator.canReactivate && ($0.coordinator.isPaused || $0.isDismissed)
+        }) else { return }
+        restorePresentation(for: oldest.key, approval: oldest.value, retryPaused: false)
     }
 
     private func acceptsReviewAction(

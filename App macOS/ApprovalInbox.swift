@@ -39,11 +39,17 @@ struct ApprovalInbox<ActiveApproval> {
         entries.map(\.coordinator)
     }
 
+    var dormantCoordinators: [NativeApprovalCoordinator] {
+        entries.filter { $0.coordinator.isDormant && !$0.coordinator.isExpiredDormant }
+            .sorted(by: precedes).map(\.coordinator)
+    }
+
     var hasAwaitingAuthentication: Bool {
-        entries.contains { $0.coordinator.state == .awaitingAuthentication }
+        entries.contains { $0.coordinator.isAwaitingAuthentication }
     }
 
     mutating func register(_ coordinator: NativeApprovalCoordinator) -> Bool {
+        entries.removeAll { $0.value == nil && $0.coordinator.isExpiredDormant }
         let key = ApprovalRouteKey(
             handle: coordinator.handle,
             nativeDeliveryNonce: coordinator.nativeDeliveryNonce
@@ -70,7 +76,7 @@ struct ApprovalInbox<ActiveApproval> {
         for key: ApprovalRouteKey
     ) -> Bool {
         guard let index = index(for: key),
-              entries[index].coordinator.state == .awaitingAuthentication,
+              entries[index].coordinator.isAwaitingAuthentication,
               entries[index].value == nil else { return false }
         entries[index].value = value
         return true
@@ -92,7 +98,7 @@ struct ApprovalInbox<ActiveApproval> {
 
     var awaitingAuthenticationKeys: [ApprovalRouteKey] {
         entries.filter {
-            $0.coordinator.state == .awaitingAuthentication
+            $0.coordinator.isAwaitingAuthentication
         }.sorted(by: precedes).map(\.key)
     }
 

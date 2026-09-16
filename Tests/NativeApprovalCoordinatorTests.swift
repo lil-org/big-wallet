@@ -14,6 +14,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             didSet { uptime += max(0, now.timeIntervalSince(oldValue)) }
         }
         private(set) var uptime: TimeInterval = 0
+        func advanceUptime(_ interval: TimeInterval) { uptime += interval }
     }
 
     @MainActor
@@ -384,7 +385,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testRegistrationWaitsForRuntimeAndStartIsIdempotent() async throws {
         let fixture = try makeFixture()
         fixture.coordinator.resumeAfterAuthentication()
-        XCTAssertEqual(fixture.coordinator.state, .registered)
+        XCTAssertEqual(fixture.coordinator.phase, .registered)
         XCTAssertEqual(fixture.store.recordCount, 0)
         start(fixture)
         start(fixture)
@@ -395,19 +396,31 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(fixture.events.presentations.isEmpty)
     }
 
-    func testInitialUnavailableValidationFinishesWithoutRetryOrUI() async throws {
-        let fixture = try makeFixture()
-        fixture.store.loadHandler = { _ in .unavailable }
-        var inbox = ApprovalInbox<String>()
-        XCTAssertTrue(inbox.register(fixture.coordinator))
-        fixture.coordinator.onEvent = { event in
-            if case .presentation(.finished) = event { inbox.remove(fixture.key) }
-        }
+    func testUnavailableValidationBecomesDormantAndExplicitlyRecovers() async throws {
+        let clock = Clock()
+        var reads = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                await Task.yield()
+            }
+        ))
+        fixture.store.loadHandler = { _ in reads += 1; return .unavailable }
         start(fixture)
-        await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.store.recordCount, 0)
-        XCTAssertEqual(inbox.count, 0)
-        XCTAssertNil(inbox.oldestActive(where: { _ in true }))
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertTrue(fixture.coordinator.isDormant)
+        XCTAssertTrue(fixture.coordinator.countsTowardUnverifiedLimit)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        let pausedReads = reads
+        start(fixture)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(reads, pausedReads)
+        fixture.store.loadHandler = nil
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+        XCTAssertEqual(fixture.store.recordCount, 1)
     }
 
     func testLateValidationCannotAcquireAfterCancellation() async throws {
@@ -442,7 +455,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
-    func testDelayedValidationStartsReceiptDeadlineAtAcquisition() async throws {
+    func testDelayedValidationCannotExtendRegistrationLifetime() async throws {
         let fixture = try makeFixture()
         let snapshot = try approvalSnapshot(
             handle: fixture.key.handle,
@@ -461,10 +474,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.clock.now.addTimeInterval(ExtensionBridge.requestTTL + 10)
         fixture.store.loadHandler = nil
         gate.resume(.found(snapshot))
-        await waitForState(fixture.coordinator, .awaitingAuthentication)
-        XCTAssertEqual(fixture.store.recordCount, 1)
-        XCTAssertEqual(fixture.events.authenticationCount, 1)
-        XCTAssertTrue(fixture.events.presentations.isEmpty)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 0)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
     }
 
     func testForeignReceiptBeforeStartupNeverAuthenticatesOrPreparesWallets() async throws {
@@ -485,7 +498,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = try ownedSnapshot(fixture, runtime: UUID())
         start(fixture)
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.store.recordCount, 0)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
         XCTAssertEqual(fixture.events.presentations.count, 1)
     }
@@ -498,7 +511,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
         let loadStarted = expectation(description: "bootstrap load started")
         let loadReturned = expectation(description: "canceled bootstrap load returned")
+        var didSuspend = false
         fixture.store.loadHandler = { _ in
+            if didSuspend { return .found(snapshot) }
+            didSuspend = true
             loadStarted.fulfill()
             let result = await gate.run()
             loadReturned.fulfill()
@@ -511,7 +527,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .finished)
         gate.resume(.found(snapshot))
         await fulfillment(of: [loadReturned], timeout: 1)
-        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 1)
         guard case .finished = fixture.events.presentations.first else {
             return XCTFail("A canceled bootstrap must only finish")
@@ -531,11 +547,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return .persisted
         }
         start(fixture)
-        await waitForState(fixture.coordinator, .acquiringReceipt(cancelRequested: false))
+        await waitForState(fixture.coordinator, .acquiringReceipt)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
         fixture.coordinator.cancelBeforeAuthentication()
         fixture.coordinator.cancelBeforeAuthentication()
-        XCTAssertEqual(fixture.coordinator.state, .acquiringReceipt(cancelRequested: true))
+        XCTAssertEqual(fixture.coordinator.phase, .acquiringReceipt)
         XCTAssertEqual(rejections, 0)
         fixture.store.snapshot = try ownedSnapshot(fixture)
         gate.resume(.persisted)
@@ -559,7 +575,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.events.authenticationCount, 1)
         XCTAssertTrue(fixture.events.presentations.isEmpty)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .staged)
+        await waitForState(fixture.coordinator, .waiting)
         XCTAssertEqual(fixture.events.presentations.count, 1)
     }
 
@@ -611,13 +627,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.clock.now = deadline
         await fulfillment(of: [finished], timeout: 1)
 
-        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(inbox.count, 0)
         XCTAssertEqual(events.authenticationCount, 1)
         XCTAssertEqual(events.presentations.count, 1)
         fixture.coordinator.resumeAfterAuthentication()
         fixture.coordinator.cancelBeforeAuthentication()
-        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(events.presentations.count, 1)
     }
 
@@ -636,7 +652,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         start(fixture)
         await fulfillment(of: [prematureFinish], timeout: 0.1)
-        XCTAssertEqual(fixture.coordinator.state, .awaitingAuthentication)
+        XCTAssertEqual(fixture.coordinator.phase, .awaitingAuthentication)
 
         let finished = expectation(description: "recorded deadline elapsed")
         fixture.coordinator.onEvent = { event in
@@ -644,7 +660,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         fixture.clock.now = deadline
         await fulfillment(of: [finished], timeout: 1)
-        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
     }
 
     func testAuthenticationExpiryDoesNotInterruptCancellationPersistence() async throws {
@@ -674,8 +690,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         await fulfillment(of: [prematureFinish], timeout: 0.1)
         XCTAssertEqual(
-            fixture.coordinator.state,
-            .cancelingBeforeAuthentication(receiptOwned: true)
+            fixture.coordinator.phase,
+            .rejecting
         )
 
         fixture.coordinator.onEvent = fixture.events.record
@@ -690,7 +706,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.now },
             uptime: { clock.uptime },
             wait: { delay in
-                if delay < 1_000_000_000 {
+                if delay <= 1_000_000_000 {
                     clock.now.addTimeInterval(ExtensionBridge.requestTTL)
                 } else {
                     try? await Task.sleep(nanoseconds: 60_000_000_000)
@@ -707,8 +723,30 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.loadHandler = nil
         fixture.store.snapshot = try ownedSnapshot(fixture)
         fixture.coordinator.resumeAfterAuthentication()
-        XCTAssertEqual(fixture.coordinator.state, .finished)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 1)
+    }
+
+    func testPreauthenticationCancellationCannotRejectAfterOwnedReceiptDisappears() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.store.snapshot = try approvalSnapshot(
+            handle: fixture.key.handle, nonce: fixture.key.nativeDeliveryNonce,
+            deadline: fixture.clock.now.addingTimeInterval(300)
+        )
+        fixture.store.unownedRejectHandler = { _ in
+            XCTFail("Previously owned cancellation must never fall back to unowned rejection")
+            return .persisted
+        }
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("The receipt is no longer owned")
+            return .persisted
+        }
+        fixture.coordinator.cancelBeforeAuthentication()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
     }
 
     func testLostReceiptAfterAuthenticationCannotBeReacquired() async throws {
@@ -736,7 +774,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.now },
             uptime: { clock.uptime },
             wait: { delay in
-                if delay < 1_000_000_000 { await Task.yield() }
+                if reloads < 2 { await Task.yield() }
                 else { try? await Task.sleep(nanoseconds: 60_000_000_000) }
             },
             prepareWithoutWallets: { _ in nil },
@@ -815,7 +853,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
         first.store.recordHandler = { _, _, _ in await gate.run() }
         start(first)
-        await waitForState(first.coordinator, .acquiringReceipt(cancelRequested: false))
+        await waitForState(first.coordinator, .acquiringReceipt)
         XCTAssertFalse(inbox.register(third.coordinator))
         first.store.snapshot = try ownedSnapshot(first)
         gate.resume(.persisted)
@@ -1004,18 +1042,20 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(description.components(separatedBy: "\n\n").count, 5)
     }
 
-    func testDuplicateRouteReactivationKeepsTerminalUIClosed() {
-        for state in [
-            NativeApprovalCoordinator.State.loading,
-            .reviewing,
-            .staging,
-            .staged,
-        ] {
-            XCTAssertTrue(Agent.shouldReactivateApproval(in: state))
-        }
-        XCTAssertFalse(Agent.shouldReactivateApproval(in: .rejecting))
-        XCTAssertFalse(Agent.shouldReactivateApproval(in: .responding))
-        XCTAssertFalse(Agent.shouldReactivateApproval(in: .finished))
+    func testReactivationCapabilitiesFollowApprovalLifecycle() async throws {
+        let fixture = try makeFixture()
+        XCTAssertFalse(fixture.coordinator.canReactivate)
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertTrue(fixture.coordinator.isAwaitingAuthentication)
+        XCTAssertFalse(fixture.coordinator.canReactivate)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertTrue(fixture.coordinator.canReactivate)
+        fixture.store.rejectHandler = { _, _, _ in .persisted }
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertFalse(fixture.coordinator.canReactivate)
     }
 
     func testApprovalWindowContextSurvivesContentReplacement() throws {
@@ -1400,7 +1440,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .staged)
+        await waitForState(fixture.coordinator, .waiting)
         fixture.store.snapshot = try ownedSnapshot(fixture, runtime: UUID())
         gate.resume(())
         await waitForState(fixture.coordinator, .finished)
@@ -1466,47 +1506,45 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         guard case .finished = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected immediate completion")
         }
-        XCTAssertEqual(coordinator.state, .finished)
+        XCTAssertEqual(coordinator.phase, .finished)
         XCTAssertGreaterThan(completionCount, 3)
         XCTAssertEqual(failureCount, 0)
     }
 
-    func testEarlyResponseCancellationWaitsForTheInFlightWrite() async throws {
-        for responseCommits in [false, true] {
+    func testLateResponseSettlesBeforeRecoveryCanRetry() async throws {
+        for commits in [false, true] {
             let clock = Clock()
-            let writeStarted = expectation(description: "response write in flight")
+            let started = expectation(description: "response in flight")
             let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
+                now: { clock.now }, uptime: { clock.uptime },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { request in
                     .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
                 }
             ))
+            var writes = 0
             fixture.store.completeHandler = { _, _, _, _ in
-                writeStarted.fulfill()
+                writes += 1
+                started.fulfill()
                 return await gate.run()
             }
-            var rejections = 0
             fixture.store.rejectHandler = { _, _, _ in
-                rejections += 1
+                XCTFail("Closing cannot replace an accepted response")
                 return .persisted
             }
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             fixture.coordinator.resumeAfterAuthentication()
-            await fulfillment(of: [writeStarted], timeout: 1)
-
+            await fulfillment(of: [started], timeout: 1)
+            clock.now.addTimeInterval(11)
             fixture.coordinator.reject()
-            fixture.coordinator.reject()
-            XCTAssertEqual(fixture.coordinator.state, .responding)
-            XCTAssertEqual(rejections, 0)
-            gate.resume(responseCommits ? .persisted : .retryablePersistenceFailure)
-            await waitForState(fixture.coordinator, .finished)
-
-            XCTAssertEqual(rejections, responseCommits ? 0 : 1)
-            XCTAssertEqual(fixture.events.presentations.count, 1)
+            fixture.coordinator.retryRecovery()
+            XCTAssertEqual(writes, 1)
+            XCTAssertEqual(fixture.coordinator.phase, .responding)
+            gate.resume(commits ? .persisted : .retryablePersistenceFailure)
+            await waitForState(fixture.coordinator, commits ? .finished : .paused)
+            XCTAssertEqual(writes, 1)
             XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
         }
     }
@@ -1544,7 +1582,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await fulfillment(of: [retryWrite], timeout: 1)
 
-        XCTAssertEqual(fixture.coordinator.state, .responding)
+        XCTAssertEqual(fixture.coordinator.phase, .responding)
         XCTAssertTrue(fixture.events.presentations.isEmpty)
         fixture.coordinator.reject()
         gate.resume(.persisted)
@@ -1556,68 +1594,61 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
-    func testEarlyResponseOwnershipLossPreparesCurrentRequestAgain() async throws {
+    func testResponseOwnershipLossPausesWithoutRepreparing() async throws {
         let clock = Clock()
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in await Task.yield() },
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { _ in XCTFail("Semantic failure must pause") },
             prepareWithoutWallets: { request in
                 preparations += 1
-                return preparations == 1
-                    ? .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
-                    : .approval(self.accountSelectionAction())
+                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
             }
         ))
-        var completionCount = 0
-        fixture.store.completeHandler = { _, _, _, _ in
-            completionCount += 1
-            return .ownershipLost
+        var responses = [NSDictionary]()
+        fixture.store.completeHandler = { _, _, _, response in
+            responses.append(response.json as NSDictionary)
+            return responses.count == 1 ? .ownershipLost : .persisted
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .reviewing)
-
-        XCTAssertEqual(preparations, 2)
-        XCTAssertEqual(completionCount, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
-        guard case .approval = fixture.events.presentations[0] else {
-            return XCTFail("Expected the newly prepared approval")
-        }
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(preparations, 1)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(responses.count, 2)
+        XCTAssertEqual(responses.first, responses.last)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
-        fixture.store.snapshot = nil
     }
 
-    func testCancellationBeforeStageDispatchRejectsWithoutStaging() async throws {
+    func testAcceptedApprovalCannotBeCanceledBeforeStageDispatch() async throws {
         let fixture = try makeFixture()
+        let staged = try ownedSnapshot(fixture, staged: true)
         var stages = 0
-        var rejections = 0
         fixture.store.stageHandler = { _, _, _, _ in
             stages += 1
+            fixture.store.snapshot = staged
             return .persisted
         }
-        fixture.store.rejectHandler = { handle, nonce, runtime in
-            XCTAssertEqual(handle, fixture.key.handle)
-            XCTAssertEqual(nonce, fixture.key.nativeDeliveryNonce)
-            XCTAssertEqual(runtime, fixture.runtime)
-            rejections += 1
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("Accepted approval cannot become rejection")
             return .persisted
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        guard case .waiting? = fixture.events.presentations.last else {
+            return XCTFail("Review must be fenced synchronously")
+        }
         fixture.coordinator.reject()
-        await waitForState(fixture.coordinator, .finished)
-
-        XCTAssertEqual(stages, 0)
-        XCTAssertEqual(rejections, 1)
+        await waitForState(fixture.coordinator, .waiting)
+        XCTAssertEqual(stages, 1)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
-        fixture.store.rejectHandler = { _, _, _ in .ownershipLost }
+        fixture.store.snapshot = nil
     }
 
     func testExpiryBeforeStageDispatchReconcilesWithoutWriting() async throws {
@@ -1675,7 +1706,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.reject()
         fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
         gate.resume(.persisted)
-        await waitForState(fixture.coordinator, .staged)
+        await waitForState(fixture.coordinator, .waiting)
 
         XCTAssertEqual(fixture.events.presentations.count, 2)
         guard case .waiting = fixture.events.presentations[1] else {
@@ -1685,92 +1716,71 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = nil
     }
 
-    func testTransientStageFailuresPreserveApprovalUntilDurablyStaged() async throws {
-        let clock = Clock()
-        let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in await Task.yield() },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
-        ))
+    func testPausedApprovalRetryPreservesDecisionAndOriginalTimestamp() async throws {
+        let fixture = try makeFixture()
         var decisions = [DappApprovalDecision]()
         let staged = try ownedSnapshot(fixture, staged: true)
         fixture.store.stageHandler = { _, _, _, decision in
             decisions.append(decision)
-            clock.now.addTimeInterval(10)
-            guard decisions.count > 6 else { return .retryablePersistenceFailure }
+            if decisions.count == 1 {
+                fixture.clock.now.addTimeInterval(11)
+                return .retryablePersistenceFailure
+            }
             fixture.store.snapshot = staged
             return .persisted
         }
         fixture.store.rejectHandler = { _, _, _ in
-            XCTFail("A transient failure must not reject an approval")
+            XCTFail("Pausing must not reject approved work")
             return .persisted
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        let approvedAt = clock.now
+        let approvedAt = fixture.clock.now
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await waitForState(fixture.coordinator, .staged)
-
-        XCTAssertGreaterThan(decisions.count, 3)
-        XCTAssertEqual(fixture.store.stagedApprovalDates.count, decisions.count)
-        XCTAssertTrue(fixture.store.stagedApprovalDates.allSatisfy { $0 == approvedAt })
-        XCTAssertGreaterThan(clock.now.timeIntervalSince(approvedAt),
+        await waitForState(fixture.coordinator, .paused)
+        fixture.clock.now.addTimeInterval(31)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .waiting)
+        XCTAssertEqual(decisions.count, 2)
+        XCTAssertEqual(decisions.first, decisions.last)
+        XCTAssertEqual(fixture.store.stagedApprovalDates, [approvedAt, approvedAt])
+        XCTAssertGreaterThan(fixture.clock.now.timeIntervalSince(approvedAt),
                              NativeApprovalFinalizer.maximumTransactionDecisionAge)
-        XCTAssertTrue(decisions.allSatisfy { $0 == decisions[0] })
-        XCTAssertEqual(fixture.events.presentations.count, 2)
-        guard case .approval = fixture.events.presentations[0],
-              case .waiting = fixture.events.presentations[1] else {
-            return XCTFail("Waiting must follow durable staging without a failure surface")
-        }
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
         fixture.store.snapshot = nil
     }
 
-    func testCancellationBetweenResponseRetriesRejectsWithoutAnotherResponseWrite() async throws {
+    func testAcceptedResponseIgnoresCloseBetweenRetries() async throws {
         let clock = Clock()
-        let retryWaiting = expectation(description: "response retry suspended")
+        let waiting = expectation(description: "retry suspended")
         let gate = AsyncGate<Void>()
-        var responses = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in
-                if responses > 6 {
-                    retryWaiting.fulfill()
-                    await gate.run()
-                } else {
-                    await Task.yield()
-                }
-            },
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { _ in waiting.fulfill(); await gate.run() },
             prepareWithoutWallets: { request in
                 .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
             }
         ))
+        var responses = 0
         fixture.store.completeHandler = { _, _, _, _ in
             responses += 1
-            return .retryablePersistenceFailure
+            return responses == 1 ? .retryablePersistenceFailure : .persisted
         }
-        var rejections = 0
         fixture.store.rejectHandler = { _, _, _ in
-            rejections += 1
+            XCTFail("A response retry must retain its intent")
             return .persisted
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        await fulfillment(of: [retryWaiting], timeout: 1)
-        let writesBeforeCancellation = responses
+        await fulfillment(of: [waiting], timeout: 1)
         fixture.coordinator.reject()
         gate.resume(())
         await waitForState(fixture.coordinator, .finished)
-
-        XCTAssertGreaterThan(responses, 3)
-        XCTAssertEqual(responses, writesBeforeCancellation)
-        XCTAssertEqual(rejections, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(responses, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -1846,53 +1856,48 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         storageUnavailable = true
         writeGate.resume(.retryablePersistenceFailure)
         await fulfillment(of: [unavailable], timeout: 1)
-        XCTAssertEqual(fixture.coordinator.state, .staging)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(fixture.coordinator.phase, .staging)
+        XCTAssertEqual(fixture.events.presentations.count, 2)
         storageUnavailable = false
         fixture.store.loadHandler = nil
         retryGate.resume(())
-        await waitForState(fixture.coordinator, .staged)
+        await waitForState(fixture.coordinator, .waiting)
         XCTAssertEqual(fixture.events.presentations.count, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
         fixture.store.snapshot = nil
     }
 
-    func testCancellationDuringResponseRepreparationDelayRejects() async throws {
-        let clock = Clock()
-        let preparingAgain = expectation(description: "waiting to prepare again")
-        let gate = AsyncGate<Void>()
-        var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in
-                preparingAgain.fulfill()
-                await gate.run()
-            },
-            prepareWithoutWallets: { request in
-                preparations += 1
-                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
-            }
-        ))
-        fixture.store.completeHandler = { _, _, _, _ in .ownershipLost }
-        var rejections = 0
+    func testRetriedRejectionCannotOverlapAnotherClose() async throws {
+        let fixture = try makeFixture()
+        let started = expectation(description: "retried rejection in flight")
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        var writes = 0
         fixture.store.rejectHandler = { _, _, _ in
-            rejections += 1
-            return .persisted
+            writes += 1
+            if writes == 1 {
+                fixture.clock.now.addTimeInterval(11)
+                return .retryablePersistenceFailure
+            }
+            started.fulfill()
+            return await gate.run()
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        await fulfillment(of: [preparingAgain], timeout: 1)
+        await waitForState(fixture.coordinator, .reviewing)
         fixture.coordinator.reject()
-        gate.resume(())
+        await waitForState(fixture.coordinator, .paused)
+        fixture.coordinator.retryRecovery()
+        await fulfillment(of: [started], timeout: 1)
+        fixture.coordinator.reject()
+        fixture.coordinator.retryRecovery()
+        XCTAssertEqual(writes, 2)
+        gate.resume(.persisted)
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(preparations, 1)
-        XCTAssertEqual(rejections, 1)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
-    func testInvalidStageWithCurrentOwnershipRejects() async throws {
+    func testInvalidStageWithCurrentOwnershipPauses() async throws {
         let fixture = try makeFixture()
         fixture.store.stageHandler = { _, _, _, _ in .ownershipLost }
         var rejections = 0
@@ -1905,8 +1910,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(rejections, 1)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(rejections, 0)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -1943,67 +1948,54 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testResponseRetriesUntilDeadlineWithCappedBackoff() async throws {
+    func testResponseRecoveryUsesTenSecondBudgetAndFixedCadence() async throws {
         let clock = Clock()
-        let deadline = clock.now.addingTimeInterval(300)
+        let started = clock.now
         var delays = [UInt64]()
-        var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.now }, uptime: { clock.uptime },
             wait: { delay in
-                XCTAssertLessThanOrEqual(delay, 5_000_000_000)
-                XCTAssertLessThanOrEqual(Double(delay) / 1_000_000_000,
-                                         deadline.timeIntervalSince(clock.now) + 0.000_001)
                 delays.append(delay)
                 clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
-                preparations += 1
-                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
             }
         ))
-        var responses = 0
+        var writes = 0
         fixture.store.completeHandler = { _, _, _, _ in
-            XCTAssertLessThan(clock.now, deadline)
-            responses += 1
+            writes += 1
             return .retryablePersistenceFailure
         }
         fixture.store.rejectHandler = { _, _, _ in
-            XCTFail("An expired transient outage must not replace the response")
+            XCTFail("Recovery timeout is not rejection")
             return .persisted
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .finished)
-        XCTAssertGreaterThan(responses, 3)
-        XCTAssertEqual(preparations, 1)
-        XCTAssertEqual(delays.max(), 5_000_000_000)
-        XCTAssertEqual(clock.now, deadline)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(clock.now.timeIntervalSince(started), 10)
+        XCTAssertEqual(delays, Array(repeating: 1_000_000_000, count: 10))
+        XCTAssertEqual(writes, 10)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(writes, 10)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
-    func testStageRetriesStopAtDeadlineWithoutRejection() async throws {
-        let clock = Clock()
-        let deadline = clock.now.addingTimeInterval(300)
-        let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in await Task.yield() },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
-        ))
+    func testRecoveryBudgetDoesNotCancelOutstandingStage() async throws {
+        let fixture = try makeFixture()
+        let started = expectation(description: "stage started")
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
         var stages = 0
         fixture.store.stageHandler = { _, _, _, _ in
-            XCTAssertLessThan(clock.now, deadline)
             stages += 1
-            clock.now.addTimeInterval(40)
-            return .retryablePersistenceFailure
+            started.fulfill()
+            return await gate.run()
         }
         fixture.store.rejectHandler = { _, _, _ in
-            XCTFail("The deadline must stop persistence without a new mutation")
+            XCTFail("An outstanding write cannot be replaced")
             return .persisted
         }
         start(fixture)
@@ -2011,68 +2003,51 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await waitForState(fixture.coordinator, .finished)
-        XCTAssertGreaterThan(stages, 3)
-        XCTAssertGreaterThanOrEqual(clock.now, deadline)
-        XCTAssertEqual(fixture.events.presentations.count, 2)
-        guard case .finished? = fixture.events.presentations.last else {
-            return XCTFail("An expired approval must finish without a waiting presentation")
+        await fulfillment(of: [started], timeout: 1)
+        fixture.clock.now.addTimeInterval(11)
+        fixture.coordinator.retryRecovery()
+        fixture.coordinator.reject()
+        XCTAssertEqual(fixture.coordinator.phase, .staging)
+        var reconciliations = 0
+        fixture.store.loadHandler = { _ in
+            reconciliations += 1
+            return .found(fixture.store.snapshot!)
         }
+        gate.resume(.retryablePersistenceFailure)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(reconciliations, 1)
+        XCTAssertEqual(stages, 1)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        fixture.store.loadHandler = nil
     }
 
-    func testResponseDeadlineReconciliationRecognizesDurableWork() async throws {
+    func testLateResponseReconciliationRecognizesDurableWork() async throws {
         for phase in [ExtensionBridge.Phase.queued, .responded] {
             let clock = Clock()
-            let deadline = clock.now.addingTimeInterval(300)
-            let monitorGate = AsyncGate<Void>()
-            var persistAtDeadline: (() -> Void)?
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
-                wait: { delay in
-                    if clock.now >= deadline {
-                        await monitorGate.run()
-                    } else {
-                        clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
-                        if clock.now >= deadline { persistAtDeadline?() }
-                        await Task.yield()
-                    }
-                },
+                now: { clock.now }, uptime: { clock.uptime },
+                wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
                 prepareWithoutWallets: { request in
                     .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
                 }
             ))
             let committed = try ownedSnapshot(fixture, phase: phase, staged: phase == .queued)
-            persistAtDeadline = { fixture.store.snapshot = committed }
             fixture.store.completeHandler = { _, _, _, _ in
-                XCTAssertLessThan(clock.now, deadline)
+                clock.now.addTimeInterval(11)
+                fixture.store.snapshot = committed
                 return .retryablePersistenceFailure
             }
             fixture.store.rejectHandler = { _, _, _ in
-                XCTFail("Durable work discovered at expiry must not be rejected")
+                XCTFail("Late committed work must not be rejected")
                 return .persisted
             }
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             fixture.coordinator.resumeAfterAuthentication()
-            await waitForState(fixture.coordinator, phase == .queued ? .staged : .finished)
-            XCTAssertEqual(clock.now, deadline)
-            XCTAssertEqual(fixture.events.presentations.count, 1)
-            if phase == .queued {
-                guard case .waiting? = fixture.events.presentations.first else {
-                    return XCTFail("Durable staging must receive the waiting presentation")
-                }
-                fixture.store.snapshot = nil
-                monitorGate.resume(())
-                await waitForState(fixture.coordinator, .finished)
-            } else {
-                guard case .finished? = fixture.events.presentations.first else {
-                    return XCTFail("A committed response must finish")
-                }
-            }
+            await waitForState(fixture.coordinator, phase == .queued ? .waiting : .finished)
+            XCTAssertFalse(fixture.coordinator.isPaused)
             XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
-            persistAtDeadline = nil
+            fixture.store.snapshot = nil
         }
     }
 
@@ -2093,132 +2068,68 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .reviewing)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.events.presentations.count, 2)
+        XCTAssertEqual(fixture.events.presentations.count, 3)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
-    func testLifecycleMonitorSupersedesPendingStageWrite() async throws {
-        let results: [ExtensionBridge.StoreMutationResult] = [
-            .persisted, .ownershipLost, .retryablePersistenceFailure,
-        ]
-        for finalizationCompletes in [false, true] {
-            for result in results {
-                try await assertLifecycleMonitorSupersedesStage(
-                    finalizationCompletes: finalizationCompletes,
-                    stageResult: result,
-                    suspendReconciliation: false
-                )
+    func testPersistenceDoesNotObserveOrFinalizeConcurrently() async throws {
+        for suspendReconciliation in [false, true] {
+            let clock = Clock()
+            let waits = ScheduledWaits()
+            let write = AsyncGate<ExtensionBridge.StoreMutationResult>()
+            let reconciliation = AsyncGate<ExtensionBridge.SnapshotResult>()
+            let suspended = expectation(description: "persistence suspended")
+            var finalizations = 0
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                finalizeNativeDecision: { _ in finalizations += 1; return .responseReady }
+            ))
+            defer { waits.resumeAll() }
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication()
+            await waitForState(fixture.coordinator, .reviewing)
+            await waitForScheduledWait(waits, count: 1)
+            var reconcileNext = false
+            var reads = 0
+            let store = fixture.store
+            store.stageHandler = { _, _, _, _ in
+                if suspendReconciliation {
+                    reconcileNext = true
+                    return .retryablePersistenceFailure
+                }
+                suspended.fulfill()
+                return await write.run()
             }
-        }
-    }
-
-    func testLifecycleMonitorSupersedesPendingStageReconciliation() async throws {
-        for finalizationCompletes in [false, true] {
-            try await assertLifecycleMonitorSupersedesStage(
-                finalizationCompletes: finalizationCompletes,
-                stageResult: .ownershipLost,
-                suspendReconciliation: true
-            )
-        }
-    }
-
-    private func assertLifecycleMonitorSupersedesStage(
-        finalizationCompletes: Bool,
-        stageResult: ExtensionBridge.StoreMutationResult,
-        suspendReconciliation: Bool
-    ) async throws {
-        let clock = Clock()
-        let monitorGate = AsyncGate<Void>()
-        let stageGate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        let loadGate = AsyncGate<ExtensionBridge.SnapshotResult>()
-        let operationStarted = expectation(description: "stage operation suspended")
-        let operationResumed = expectation(description: "stale stage operation resumed")
-        let unexpectedPresentation = expectation(description: "stale stage presentation")
-        unexpectedPresentation.isInverted = true
-        var finalizationCount = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in await monitorGate.run() },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-            finalizeNativeDecision: { _ in
-                finalizationCount += 1
-                return finalizationCompletes ? .responseReady : .pending
+            store.loadHandler = { _ in
+                reads += 1
+                if reconcileNext {
+                    reconcileNext = false
+                    suspended.fulfill()
+                    return await reconciliation.run()
+                }
+                return store.snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
             }
-        ))
-        var stageCount = 0
-        var rejectCount = 0
-        var suspendNextLoad = false
-        fixture.store.stageHandler = { _, _, _, _ in
-            stageCount += 1
-            if suspendReconciliation {
-                suspendNextLoad = true
-                return .ownershipLost
-            }
-            operationStarted.fulfill()
-            let result = await stageGate.run()
-            operationResumed.fulfill()
-            return result
-        }
-        fixture.store.rejectHandler = { _, _, _ in
-            rejectCount += 1
-            return .persisted
-        }
-        start(fixture)
-        await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let pendingSnapshot = try ownedSnapshot(fixture)
-        let store = fixture.store
-        var loadCount = 0
-        store.loadHandler = { _ in
-            loadCount += 1
-            if suspendNextLoad {
-                suspendNextLoad = false
-                operationStarted.fulfill()
-                let result = await loadGate.run()
-                operationResumed.fulfill()
-                return result
-            }
-            return store.snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
-        }
-        fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await fulfillment(of: [operationStarted], timeout: 1)
-
-        store.snapshot = try ownedSnapshot(fixture, staged: true)
-        monitorGate.resume(())
-        let expectedState: NativeApprovalCoordinator.State = finalizationCompletes
-            ? .finished : .staged
-        await waitForState(fixture.coordinator, expectedState)
-        XCTAssertEqual(finalizationCount, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 2)
-        let events = fixture.events
-        fixture.coordinator.onEvent = { event in
-            events.record(event)
-            if case .presentation = event { unexpectedPresentation.fulfill() }
-        }
-        let loadsBeforeResuming = loadCount
-
-        if suspendReconciliation {
-            loadGate.resume(.found(pendingSnapshot))
-        } else {
-            stageGate.resume(stageResult)
-        }
-        await fulfillment(of: [operationResumed], timeout: 1)
-        await fulfillment(of: [unexpectedPresentation], timeout: 0.05)
-
-        XCTAssertEqual(fixture.coordinator.state, expectedState)
-        XCTAssertEqual(stageCount, 1)
-        XCTAssertEqual(rejectCount, 0)
-        XCTAssertEqual(loadCount, loadsBeforeResuming)
-        XCTAssertEqual(events.presentations.count, 2)
-        XCTAssertEqual(store.maximumOutstandingWrites, 1)
-        fixture.coordinator.onEvent = events.record
-        store.loadHandler = nil
-        store.snapshot = nil
-        if !finalizationCompletes {
-            monitorGate.resume(())
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+            await fulfillment(of: [suspended], timeout: 1)
+            let committed = try ownedSnapshot(fixture, staged: true)
+            store.snapshot = committed
+            let readsWhileSuspended = reads
+            waits.resume(0)
+            for _ in 0..<30 { await Task.yield() }
+            XCTAssertEqual(reads, readsWhileSuspended)
+            XCTAssertEqual(finalizations, 0)
+            XCTAssertEqual(fixture.coordinator.phase, .staging)
+            if suspendReconciliation { reconciliation.resume(.found(committed)) }
+            else { write.resume(.retryablePersistenceFailure) }
+            await waitForState(fixture.coordinator, .waiting)
+            await waitForScheduledWait(waits, count: 2)
+            waits.resume(1)
             await waitForState(fixture.coordinator, .finished)
+            XCTAssertEqual(finalizations, 1)
+            XCTAssertEqual(store.maximumOutstandingWrites, 1)
+            store.loadHandler = nil
         }
     }
 
@@ -2275,7 +2186,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         coordinator.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [staged], timeout: 1)
 
-        XCTAssertEqual(coordinator.state, .staged)
+        await waitForState(coordinator, .waiting)
     }
 
     func testStagedCoordinatorFinalizesThroughAmbientMonitor() async throws {
@@ -2339,7 +2250,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [waiting, finalized, finished], timeout: 1)
 
         XCTAssertEqual(finalizationCount, 1)
-        XCTAssertEqual(coordinator.state, .finished)
+        XCTAssertEqual(coordinator.phase, .finished)
     }
 
     func testApprovalStagesWithExactReceiptOwner() async throws {
@@ -2393,68 +2304,35 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(stagedNonce, nonce)
         XCTAssertEqual(stagedRuntime, runtime)
-        XCTAssertEqual(coordinator.state, .staged)
+        XCTAssertEqual(coordinator.phase, .waiting)
     }
 
-    func testWindowCloseDuringStageDoesNotReviveFinishedState() async throws {
-        let clock = Clock()
-        let handle = makeHandle(id: 5)
-        let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
-        let runtime = UUID()
-        let snapshot = try approvalSnapshot(
-            handle: handle,
-            nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
-            receipt: .init(
-                nativeDeliveryNonce: nonce,
-                owner: self.nativeOwner(runtime: runtime)
-            )
-        )
+    func testClosedApprovalReconcilesLateCommittedStageWithoutRejection() async throws {
+        let fixture = try makeFixture()
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        let stageStarted = expectation(description: "stage started")
-        let rejectionFinished = expectation(description: "rejection finished")
-        let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(snapshot) }
-        store.stageHandler = { _, _, _, _ in
-            stageStarted.fulfill()
+        let started = expectation(description: "stage suspended")
+        fixture.store.stageHandler = { _, _, _, _ in
+            started.fulfill()
             return await gate.run()
         }
-        store.rejectHandler = { _, _, _ in
-            rejectionFinished.fulfill()
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("Closing is dismissal after the approval callback")
             return .persisted
         }
-        let coordinator = NativeApprovalCoordinator(
-            handle: handle,
-            nativeDeliveryNonce: nonce,
-            store: store,
-            environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
-                wait: { delay in
-                    if delay >= 1_000_000_000 {
-                        try? await Task.sleep(nanoseconds: 60_000_000_000)
-                    }
-                },
-                prepareWithoutWallets: { _ in
-                    .approval(self.accountSelectionAction())
-                }
-            )
-        )
-        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
-            return XCTFail("Expected approval")
-        }
-        coordinator.approveAccounts([], ethereumNetwork: nil)
-        await fulfillment(of: [stageStarted], timeout: 1)
-
-        coordinator.reject()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await fulfillment(of: [started], timeout: 1)
+        fixture.coordinator.reject()
+        fixture.clock.now.addTimeInterval(11)
+        fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
         gate.resume(.retryablePersistenceFailure)
-        await fulfillment(of: [rejectionFinished], timeout: 1)
-        await waitForState(coordinator, .finished)
-
-        XCTAssertEqual(coordinator.state, .finished)
-        gate.resume(.persisted)
-        await Task.yield()
-        XCTAssertEqual(coordinator.state, .finished)
+        await waitForState(fixture.coordinator, .waiting)
+        XCTAssertFalse(fixture.coordinator.isPaused)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        fixture.store.snapshot = nil
     }
 
     func testRejectionUsesExactReceiptOwner() async throws {
@@ -2500,7 +2378,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         coordinator.reject()
         await fulfillment(of: [rejected], timeout: 1)
 
-        XCTAssertEqual(coordinator.state, .finished)
+        XCTAssertEqual(coordinator.phase, .finished)
     }
 
     func testRejectionStopsAfterReceiptOwnershipChanges() async throws {
@@ -2549,7 +2427,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        coordinator.onEvent = { if case .presentation(.finished) = $0 { finished.fulfill() } }
+        coordinator.onEvent = { if case .presentation(.superseded) = $0 { finished.fulfill() } }
         guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
@@ -2558,51 +2436,35 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [finished], timeout: 1)
 
         XCTAssertEqual(rejectionCount, 1)
-        XCTAssertEqual(coordinator.state, .finished)
+        XCTAssertEqual(coordinator.phase, .finished)
     }
 
-    func testBackwardClockChangeDoesNotPostponeObservationBehindAStageRetry() async throws {
+    func testBackwardWallClockCannotExtendRecoveryBudget() async throws {
         let clock = Clock()
-        let waits = ScheduledWaits()
-        let stage = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        let stageStarted = expectation(description: "retried stage suspended")
+        let started = clock.uptime
+        var writes = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                clock.advanceUptime(Double(delay) / 1_000_000_000)
+                clock.now.addTimeInterval(-60)
+                await Task.yield()
+            },
+            prepareWithoutWallets: { request in
+                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+            }
         ))
-        defer { waits.resumeAll() }
+        fixture.store.completeHandler = { _, _, _, _ in
+            writes += 1
+            return .retryablePersistenceFailure
+        }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .reviewing)
-        await waitForScheduledWait(waits, count: 1)
-        XCTAssertEqual(waits.delays[0], 1_000_000_000)
-
-        clock.now.addTimeInterval(-3_600)
-        var stages = 0
-        fixture.store.stageHandler = { _, _, _, _ in
-            stages += 1
-            if stages == 1 { return .retryablePersistenceFailure }
-            stageStarted.fulfill()
-            return await stage.run()
-        }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await waitForScheduledWait(waits, count: 2)
-        XCTAssertEqual(waits.delays[1], 250_000_000)
-        waits.resume(1)
-        await fulfillment(of: [stageStarted], timeout: 1)
-        XCTAssertTrue(waits.isPending(0))
-        XCTAssertEqual(waits.delays.count, 2)
-
-        fixture.store.snapshot = nil
-        waits.resume(0)
-        await waitForState(fixture.coordinator, .finished)
-        stage.resume(.persisted)
-        for _ in 0..<30 { await Task.yield() }
-        XCTAssertEqual(fixture.coordinator.state, .finished)
-        XCTAssertEqual(stages, 2)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(clock.uptime - started, 10)
+        XCTAssertEqual(writes, 10)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
     func testCanceledObservationWaitCannotPollTheNewApprovalState() async throws {
@@ -2633,7 +2495,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         clock.now.addTimeInterval(2)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await waitForState(fixture.coordinator, .staged)
+        await waitForState(fixture.coordinator, .waiting)
         await waitForScheduledWait(waits, count: 2)
         var loads = 0
         store.loadHandler = { _ in
@@ -2694,11 +2556,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForScheduledWait(waits, count: 2)
-        XCTAssertEqual(loads, 2)
+        XCTAssertEqual(loads, 3)
         XCTAssertEqual(stages, 1)
         XCTAssertEqual(waits.delays.count, 2)
         waits.resume(1)
-        await waitForState(fixture.coordinator, .staged)
+        await waitForState(fixture.coordinator, .waiting)
         await waitForScheduledWait(waits, count: 3)
         let stale = try approvalSnapshot(
             handle: fixture.key.handle,
@@ -2707,13 +2569,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             host: "stale.example"
         )
 
+        let readsBeforeOldObservationReturns = loads
         probe.resume(.found(stale))
         for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(fixture.coordinator.peer?.title, "wallet.example")
         XCTAssertEqual(fixture.coordinator.order, originalOrder)
-        XCTAssertEqual(fixture.coordinator.state, .staged)
+        XCTAssertEqual(fixture.coordinator.phase, .waiting)
         XCTAssertEqual(stages, 2)
-        XCTAssertEqual(loads, 2)
+        XCTAssertEqual(loads, readsBeforeOldObservationReturns)
         XCTAssertEqual(store.maximumOutstandingWrites, 1)
         XCTAssertEqual(fixture.events.presentations.count, 2)
 
@@ -2844,7 +2707,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
             store.loadHandler = { _ in
                 reads += 1
-                if suspension == .reconciliation {
+                if suspension == .reconciliation && writes > 0 {
                     suspensionStarted.fulfill()
                     return await reconciliation.run()
                 }
@@ -2859,7 +2722,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             if suspension == .retry {
                 await waitForScheduledWait(waits, count: 2)
             }
-            XCTAssertEqual(coordinator?.state, .staging)
+            XCTAssertEqual(coordinator?.phase, .staging)
             let presentationCount = events.presentations.count
             let authenticationCount = events.authenticationCount
             let readCount = reads
@@ -2881,58 +2744,424 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testObsoleteFinalizerCannotFinishOrFailNewObservation() async throws {
-        for obsoleteResult in [NativeApprovalFinalizationResult.responseReady, .unavailable] {
+    func testSuspendedFinalizerDoesNotRetainCoordinatorOrPresentAfterRelease() async throws {
+        for result in [NativeApprovalFinalizationResult.responseReady, .unavailable] {
             let clock = Clock()
-            let waits = ScheduledWaits()
             let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
-            let stage = AsyncGate<ExtensionBridge.StoreMutationResult>()
-            let finalizerStarted = expectation(description: "obsolete finalizer suspended")
-            let stageStarted = expectation(description: "stage write suspended")
+            let started = expectation(description: "finalizer suspended")
+            var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now }, uptime: { clock.uptime },
+                wait: { _ in await Task.yield() },
+                finalizeNativeDecision: { _ in started.fulfill(); return await finalizer.run() }
+            ))
+            weak var coordinator = fixture?.coordinator
+            let events = try XCTUnwrap(fixture?.events)
+            fixture?.store.snapshot = try ownedSnapshot(try XCTUnwrap(fixture), staged: true)
+            start(try XCTUnwrap(fixture))
+            await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
+            coordinator?.resumeAfterAuthentication()
+            await fulfillment(of: [started], timeout: 1)
+            let count = events.presentations.count
+            fixture = nil
+            XCTAssertNil(coordinator)
+            finalizer.resume(result)
+            for _ in 0..<30 { await Task.yield() }
+            XCTAssertEqual(events.presentations.count, count)
+        }
+    }
+
+    func testRuntimeArrivalDuringCancellationCannotCauseUnownedRejection() async throws {
+        let fixture = try makeFixture()
+        let snapshot = try ownedSnapshot(fixture)
+        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let started = expectation(description: "pre-runtime cancellation read")
+        fixture.store.loadHandler = { _ in started.fulfill(); return await gate.run() }
+        fixture.store.unownedRejectHandler = { _ in
+            XCTFail("Missing captured runtime must not downgrade an owned mutation")
+            return .persisted
+        }
+        fixture.coordinator.cancelBeforeAuthentication()
+        await fulfillment(of: [started], timeout: 1)
+        start(fixture)
+        gate.resume(.found(snapshot))
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 0)
+        fixture.store.loadHandler = nil
+    }
+
+    func testDormantCancellationPreservesRejectionOnForegroundRecovery() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                await Task.yield()
+            }
+        ))
+        fixture.store.loadHandler = { _ in .unavailable }
+        fixture.coordinator.cancelBeforeAuthentication()
+        await waitForState(fixture.coordinator, .paused)
+        fixture.store.loadHandler = nil
+        start(fixture)
+        XCTAssertTrue(fixture.coordinator.isDormant)
+        XCTAssertEqual(fixture.store.recordCount, 0)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 0)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+    }
+
+    func testDormantEntriesExpireWithoutBlockingInboxCapacity() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                await Task.yield()
+            }
+        ))
+        var inbox = ApprovalInbox<String>(maximumUnverifiedCount: 1)
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        fixture.store.loadHandler = { _ in .unavailable }
+        start(fixture)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(inbox.dormantCoordinators.count, 1)
+        clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+        XCTAssertTrue(fixture.coordinator.isExpiredDormant)
+        let replacement = try makeFixture(clock: clock)
+        XCTAssertTrue(inbox.register(replacement.coordinator))
+        XCTAssertEqual(inbox.count, 1)
+        XCTAssertNil(inbox.coordinator(for: fixture.key))
+    }
+
+    func testDormantStagedRecoveryRequestsAuthenticationBeforeResuming() async throws {
+        for duringReconciliation in [false, true] {
+            let clock = Clock()
             var finalizations = 0
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
-                wait: waits.wait,
-                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-                finalizeNativeDecision: { _ in
-                    finalizations += 1
-                    finalizerStarted.fulfill()
-                    return await finalizer.run()
-                }
+                now: { clock.now }, uptime: { clock.uptime },
+                wait: { delay in
+                    clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                    await Task.yield()
+                },
+                finalizeNativeDecision: { _ in finalizations += 1; return .responseReady }
             ))
-            defer { waits.resumeAll() }
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)
-            fixture.coordinator.resumeAfterAuthentication()
-            await waitForState(fixture.coordinator, .reviewing)
-            await waitForScheduledWait(waits, count: 1)
-            fixture.store.stageHandler = { _, _, _, _ in
-                stageStarted.fulfill()
-                return await stage.run()
+            fixture.store.loadHandler = { _ in .unavailable }
+            fixture.coordinator.cancelBeforeAuthentication()
+            await waitForState(fixture.coordinator, .paused)
+            XCTAssertTrue(fixture.coordinator.isDormant)
+            let store = fixture.store
+            store.loadHandler = nil
+            let staged = try ownedSnapshot(fixture, staged: true)
+            if duringReconciliation {
+                store.rejectHandler = { _, _, _ in
+                    store.snapshot = staged
+                    return .ownershipLost
+                }
+            } else {
+                store.snapshot = staged
             }
-            fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-            await fulfillment(of: [stageStarted], timeout: 1)
-            fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
-            waits.resume(0)
-            await fulfillment(of: [finalizerStarted], timeout: 1)
-
-            stage.resume(.persisted)
-            await waitForState(fixture.coordinator, .staged)
-            await waitForScheduledWait(waits, count: 2)
-            finalizer.resume(obsoleteResult)
-            for _ in 0..<30 { await Task.yield() }
-            XCTAssertEqual(fixture.coordinator.state, .staged)
-            XCTAssertEqual(fixture.events.presentations.count, 2)
-            XCTAssertTrue(waits.isPending(1))
-            XCTAssertEqual(finalizations, 1)
-            XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
-
-            fixture.store.snapshot = nil
-            waits.resume(1)
+            let events = fixture.events
+            fixture.coordinator.onEvent = { [weak coordinator = fixture.coordinator] event in
+                events.record(event)
+                if case .authenticationRequired = event {
+                    XCTAssertEqual(finalizations, 0)
+                    coordinator?.resumeAfterAuthentication()
+                }
+            }
+            fixture.coordinator.retryRecovery()
             await waitForState(fixture.coordinator, .finished)
-            XCTAssertEqual(fixture.events.presentations.count, 3)
+            XCTAssertEqual(events.authenticationCount, 2)
+            XCTAssertEqual(finalizations, 1)
+            XCTAssertEqual(store.maximumOutstandingWrites, 1)
         }
+    }
+
+    func testFreshReviewAfterRetryFencesTheNextApproval() async throws {
+        let clock = Clock()
+        var available = false
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                if available { try? await Task.sleep(nanoseconds: 60_000_000_000) }
+                else {
+                    clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                    await Task.yield()
+                }
+            },
+            prepareWithoutWallets: { _ in nil },
+            reloadWallets: { available },
+            prepare: { _ in .approval(self.accountSelectionAction()) }
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .paused)
+        available = true
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .reviewing)
+        let staged = try ownedSnapshot(fixture, staged: true)
+        fixture.store.stageHandler = { _, _, _, _ in fixture.store.snapshot = staged; return .persisted }
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        guard case .waiting? = fixture.events.presentations.last else {
+            return XCTFail("Approval after a recovered review must immediately fence its UI")
+        }
+        await waitForState(fixture.coordinator, .waiting)
+        let waitingCount = fixture.events.presentations.filter {
+            if case .waiting = $0 { return true }
+            return false
+        }.count
+        XCTAssertEqual(waitingCount, 2)
+        fixture.store.snapshot = nil
+    }
+
+    func testObservationOutagePausesAfterTenSeconds() async throws {
+        let clock = Clock()
+        let waits = ScheduledWaits()
+        var unavailable = false
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                if unavailable {
+                    clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                    await Task.yield()
+                } else { await waits.wait(delay) }
+            },
+            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+        ))
+        defer { waits.resumeAll() }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        await waitForScheduledWait(waits, count: 1)
+        var reads = 0
+        unavailable = true
+        fixture.store.loadHandler = { _ in reads += 1; return .unavailable }
+        waits.resume(0)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(clock.uptime, 10)
+        let pausedReads = reads
+        for _ in 0..<30 { await Task.yield() }
+        XCTAssertEqual(reads, pausedReads)
+        fixture.store.loadHandler = nil
+        fixture.store.snapshot = nil
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+    }
+
+    func testDismissedWindowDefersBackgroundPresentationsUntilExplicitRestore() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        let staged = try ownedSnapshot(fixture, staged: true)
+        fixture.store.stageHandler = { _, _, _, _ in fixture.store.snapshot = staged; return .persisted }
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await waitForState(fixture.coordinator, .waiting)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let window = TrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 300),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        let controller = NSWindowController(window: window)
+        approval.windowController = controller
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        XCTAssertTrue(approval.isDismissed)
+        XCTAssertFalse(approval.receive(.waiting))
+        XCTAssertFalse(approval.receive(.retryRequired))
+        XCTAssertEqual(window.activationCount, 0)
+        guard case .retryRequired? = approval.pendingPresentation else {
+            return XCTFail("The latest hidden recovery presentation must survive until reopening")
+        }
+        approval.restorePresentation()
+        XCTAssertTrue(approval.receive(try XCTUnwrap(approval.pendingPresentation)))
+        XCTAssertFalse(approval.isDismissed)
+        fixture.store.snapshot = nil
+    }
+
+    func testWaitingSurfaceReplacesRetryActionAndSpinnerMode() {
+        var retries = 0
+        let controller = WaitingViewController.with(
+            reason: Strings.somethingWentWrong,
+            retryAction: { retries += 1 }, closeCompletion: {}
+        )
+        _ = controller.view
+        XCTAssertTrue(controller.progressIndicator.isHidden)
+        XCTAssertEqual(controller.okButton.title, Strings.tryAgain)
+        controller.actionButtonTapped(self)
+        XCTAssertEqual(retries, 1)
+        controller.update(reason: Strings.loading)
+        XCTAssertFalse(controller.progressIndicator.isHidden)
+        XCTAssertEqual(controller.okButton.title, Strings.ok)
+        controller.actionButtonTapped(self)
+        XCTAssertEqual(retries, 1)
+    }
+
+    func testClosingUnapprovedRecoveryWindowRejectsTheRequest() async throws {
+        let clock = Clock()
+        let waits = ScheduledWaits()
+        var outage = false
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                if outage {
+                    clock.advanceUptime(Double(delay) / 1_000_000_000)
+                    await Task.yield()
+                } else { await waits.wait(delay) }
+            },
+            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+        ))
+        defer { waits.resumeAll() }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        XCTAssertTrue(inbox.activate(approval, for: fixture.key))
+        let agent = Agent(approvalInbox: inbox)
+        let window = TrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 300),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSViewController()
+        approval.windowController = NSWindowController(window: window)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        approval.beginReview()
+        await waitForScheduledWait(waits, count: 1)
+        fixture.coordinator.onEvent = { [weak agent] event in
+            if case .presentation(let presentation) = event {
+                agent?.present(presentation, for: fixture.key.handle, coordinator: fixture.coordinator)
+            }
+        }
+        outage = true
+        fixture.store.loadHandler = { _ in .unavailable }
+        waits.resume(0)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual((window.contentViewController as? WaitingViewController)?.okButton.title,
+                       Strings.tryAgain)
+        fixture.store.loadHandler = nil
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        fixture.coordinator.onEvent = nil
+        window.orderOut(nil)
+    }
+
+    func testGenericForegroundReopensDismissedOutstandingApprovalWithoutRetrying() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        XCTAssertTrue(inbox.activate(approval, for: fixture.key))
+        let agent = Agent(approvalInbox: inbox)
+        let window = TrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 300),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSViewController()
+        approval.windowController = NSWindowController(window: window)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        approval.beginReview()
+        fixture.coordinator.onEvent = { [weak agent] event in
+            if case .presentation(let presentation) = event {
+                agent?.present(presentation, for: fixture.key.handle, coordinator: fixture.coordinator)
+            }
+        }
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let started = expectation(description: "stage in flight")
+        var writes = 0
+        fixture.store.stageHandler = { _, _, _, _ in
+            writes += 1
+            started.fulfill()
+            return await gate.run()
+        }
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("Closing an accepted approval must only dismiss")
+            return .persisted
+        }
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await fulfillment(of: [started], timeout: 1)
+        window.resetActivationCount()
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        XCTAssertTrue(approval.isDismissed)
+        agent.restoreOldestRecoverableApproval()
+        XCTAssertFalse(approval.isDismissed)
+        XCTAssertGreaterThan(window.activationCount, 0)
+        let waiting = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertEqual(waiting.okButton.title, Strings.ok)
+        XCTAssertFalse(waiting.progressIndicator.isHidden)
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
+        gate.resume(.persisted)
+        await waitForState(fixture.coordinator, .waiting)
+        fixture.coordinator.onEvent = nil
+        window.close()
+    }
+
+    func testRepeatedCloseDoesNotRestartPausedRejection() async throws {
+        let fixture = try makeFixture()
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in
+            rejections += 1
+            if rejections == 1 {
+                fixture.clock.now.addTimeInterval(11)
+                return .retryablePersistenceFailure
+            }
+            return .persisted
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .paused)
+        fixture.coordinator.reject()
+        for _ in 0..<30 { await Task.yield() }
+        XCTAssertEqual(rejections, 1)
+        XCTAssertTrue(fixture.coordinator.isPaused)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(rejections, 2)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+    }
+
+    func testCanceledReceiptAcquisitionRemainsCanceledAfterRecoveryPauses() async throws {
+        let fixture = try makeFixture()
+        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let started = expectation(description: "receipt acquisition in flight")
+        fixture.store.recordHandler = { _, _, _ in started.fulfill(); return await gate.run() }
+        var rejections = 0
+        fixture.store.unownedRejectHandler = { _ in rejections += 1; return .persisted }
+        start(fixture)
+        await fulfillment(of: [started], timeout: 1)
+        fixture.coordinator.cancelBeforeAuthentication()
+        fixture.clock.now.addTimeInterval(11)
+        fixture.store.recordHandler = nil
+        gate.resume(.retryablePersistenceFailure)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(rejections, 0)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 0)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
     private func waitForScheduledWait(
@@ -3047,15 +3276,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     private func waitForState(
         _ coordinator: NativeApprovalCoordinator,
-        _ expected: NativeApprovalCoordinator.State,
+        _ expected: NativeApprovalCoordinator.Phase,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         for _ in 0..<1000 {
-            if coordinator.state == expected { return }
+            if coordinator.phase == expected { return }
             await Task.yield()
         }
-        XCTAssertEqual(coordinator.state, expected, file: file, line: line)
+        XCTAssertEqual(coordinator.phase, expected, file: file, line: line)
     }
 
     private func loadPresentation(
