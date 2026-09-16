@@ -410,6 +410,23 @@ actor NativeAgentLauncher {
                     nativeDeliveryNonce: snapshot.nativeDeliveryNonce
                 )
             }
+#if os(macOS)
+            if case .queued(_, .delivered(let receipt)) = snapshot.state,
+               receipt.nativeDeliveryNonce == snapshot.nativeDeliveryNonce,
+               let url = dependencies.helperURL(),
+               let expected = ExpectedRuntime(url: url),
+               case .owner(let runtime) = Self.observeReceiptOwner(
+                   receipt,
+                   helper: dependencies.helper,
+                   identity: dependencies.identity
+               ),
+               let identity = runtime.identity,
+               expected.isCompatible(identity, runtimeURL: runtime.bundleURL),
+               expected.installedVersionMatches,
+               dependencies.uptime() < (waitDeadline ?? UInt64.max) {
+                return true
+            }
+#endif
             return await open(
                 .approval(
                     workflowVersion: ExtensionBridge.workflowVersion,

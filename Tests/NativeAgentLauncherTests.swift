@@ -71,6 +71,77 @@
             }
         }
 
+        func testPendingApprovalPollingValidatesCodeOnlyAfterDecisionIsStaged() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            let launcher = f.launcher()
+            for _ in 0..<3 {
+                let delivered = await launcher.ensureApprovalDelivery(handle: request.handle, mode: .page)
+                XCTAssertTrue(delivered)
+            }
+            XCTAssertTrue(f.validations.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
+
+            let quiet = await launcher.ensureApprovalDelivery(handle: request.handle, mode: .manualRecovery)
+            XCTAssertFalse(quiet)
+            XCTAssertTrue(f.validations.isEmpty)
+
+            f.deliver(request, staged: true)
+            f.onValidate = { _ in false }
+            let delivered = await launcher.ensureApprovalDelivery(handle: request.handle, mode: .page)
+            XCTAssertFalse(delivered)
+            XCTAssertEqual(f.validations.count, 1)
+        }
+
+        func testPendingApprovalPollingRejectsChangedRuntimeIdentity() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            let launcher = f.launcher()
+            let initial = await launcher.ensureApprovalDelivery(handle: request.handle, mode: .page)
+            XCTAssertTrue(initial)
+
+            f.processes[42] = f.runtime(instance: UUID())
+            let replaced = await launcher.ensureApprovalDelivery(handle: request.handle, mode: .page)
+            XCTAssertFalse(replaced)
+            XCTAssertTrue(f.launches.isEmpty)
+        }
+
+        func testPendingApprovalPollingHonorsDeadlineAfterLoading() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            let deadline = f.clock.now + 100_000_000
+            f.onLoad = { _ in
+                f.clock.advance(to: deadline)
+                return .found(f.snapshots[request.handle]!)
+            }
+            let delivered = await f.launcher().ensureApprovalDelivery(
+                handle: request.handle, mode: .page, waitDeadline: deadline)
+            XCTAssertFalse(delivered)
+            XCTAssertTrue(f.validations.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
+        }
+
+        func testPendingApprovalPollingRedeliversAfterHelperExit() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            f.processes.removeAll()
+            f.onLaunch = { _, _, completion in
+                f.deliver(request, runtime: f.runtime(pid: 43))
+                completion(true)
+            }
+            let launcher = f.launcher()
+            let delivered = try await f.finish {
+                await launcher.ensureApprovalDelivery(handle: request.handle, mode: .page)
+            }
+            XCTAssertTrue(delivered)
+            XCTAssertEqual(f.launches.count, 1)
+            XCTAssertFalse(f.validations.isEmpty)
+        }
+
         func testMissingReceiptNeedsDeliveryAndAbsentOwnerIsCleared() async throws {
             let f = try fixture()
             let request = try f.request()
