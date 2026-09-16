@@ -55,3 +55,76 @@ test("popup queue and command replies retain their exact identity contracts", ()
     assert.equal(wire.decodeCommandResult({status: "arbitrary"}), null);
     assert.equal(wire.decodeCommandResult(undefined), null);
 });
+
+test("popup selection identities fold Ethereum address case and retain distinct derivation paths", () => {
+    const source = structuredClone(fixtures.selectAccount);
+    source.review.accounts[0].address = `0x${"ab".repeat(20)}`;
+    source.review.accounts.push({
+        ...source.review.accounts[0],
+        address: `0x${"AB".repeat(20)}`,
+        isSelected: false,
+    });
+    assert.equal(wire.decodeApprovalState(source, source.id), null);
+
+    source.review.accounts[1].derivationPath = "m/44'/60'/0'/0/1";
+    assert.deepEqual(wire.decodeApprovalState(source, source.id), source);
+});
+
+test("popup editors validate and preserve fee fields outside the active fee model", () => {
+    for (const [fixture, field] of [
+        [fixtures.type2Transaction, "gasPriceGwei"],
+        [fixtures.legacyTransaction, "maxFeePerGasGwei"],
+    ]) {
+        const source = structuredClone(fixture);
+        source.review.editor[field] = "12";
+        assert.deepEqual(wire.decodeApprovalState(source, source.id), source);
+
+        source.review.editor[field] = 12;
+        assert.equal(wire.decodeApprovalState(source, source.id), null);
+    }
+});
+
+test("popup optional fields omit undefined and reject null except for decorative images", () => {
+    const queue = structuredClone(fixtures.queue);
+    delete queue.layoutDirection;
+    delete queue.strings;
+    delete queue.requests[0].enqueueAttempt;
+    const queueWithUndefined = structuredClone(queue);
+    queueWithUndefined.layoutDirection = undefined;
+    queueWithUndefined.strings = undefined;
+    queueWithUndefined.requests[0].enqueueAttempt = undefined;
+    assert.deepEqual(wire.decodeQueue(queueWithUndefined), queue);
+    for (const field of ["layoutDirection", "strings"]) {
+        assert.equal(wire.decodeQueue({...queueWithUndefined, [field]: null}), null);
+    }
+    queueWithUndefined.requests[0].enqueueAttempt = null;
+    assert.equal(wire.decodeQueue(queueWithUndefined), null);
+
+    const working = {id: fixtures.working.id, state: "working", actions: []};
+    const workingWithUndefined = {
+        ...working, host: undefined, error: undefined, editsError: undefined, review: undefined,
+    };
+    assert.deepEqual(wire.decodeApprovalState(workingWithUndefined, working.id), working);
+    for (const field of ["host", "error", "editsError", "review"]) {
+        assert.equal(wire.decodeApprovalState({...workingWithUndefined, [field]: null}, working.id), null);
+    }
+
+    const message = structuredClone(fixtures.signMessage);
+    delete message.review.iconURL;
+    delete message.review.account.icon;
+    const messageWithUndefined = structuredClone(message);
+    Object.assign(messageWithUndefined.review, {
+        primaryTitle: undefined, alert: undefined, clusters: undefined,
+        requiresClusterSelection: undefined, iconURL: undefined,
+    });
+    messageWithUndefined.review.account.icon = undefined;
+    assert.deepEqual(wire.decodeApprovalState(messageWithUndefined, message.id), message);
+    for (const field of ["primaryTitle", "alert", "clusters", "requiresClusterSelection"]) {
+        const source = structuredClone(messageWithUndefined);
+        source.review[field] = null;
+        assert.equal(wire.decodeApprovalState(source, source.id), null);
+    }
+    messageWithUndefined.review.iconURL = null;
+    messageWithUndefined.review.account.icon = null;
+    assert.deepEqual(wire.decodeApprovalState(messageWithUndefined, message.id), message);
+});

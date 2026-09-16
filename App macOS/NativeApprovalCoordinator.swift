@@ -531,59 +531,25 @@ final class NativeApprovalCoordinator {
     ) async {
         guard let runtime = work.runtime else { return }
         work.update { $0.phase = .staging }
-        while work.isCurrent {
-            guard let status = await work.load() else { return }
-            if finishIfResolved(status, work: work) { return }
-            guard work.mayAttempt else { break }
-            guard case .pending(_, .current) = status else {
-                if await work.retry() { continue }
-                break
-            }
-            let result = await work.store.stageNativeDecision(
+        await persistOwnedMutation(work, operation: {
+            await work.store.stageNativeDecision(
                 handle: work.handle, nativeDeliveryNonce: work.nonce,
                 runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
                 decision: decision, approvedAt: approvedAt
             )
-            guard work.isCurrent else { return }
-            if result == .persisted {
-                work.update { $0.enterWaiting() }
-                return
-            }
-            guard let current = await work.load() else { return }
-            if finishIfResolved(current, work: work) { return }
-            if result == .ownershipLost { break }
-            if !(await work.retry()) { break }
-        }
-        work.update { $0.pause() }
+        }, onPersisted: { $0.enterWaiting() })
     }
 
     private static func persistResponse(_ work: Work, response: ResponseToExtension) async {
         guard let runtime = work.runtime else { return }
         work.update { $0.phase = .responding }
-        while work.isCurrent {
-            guard let status = await work.load() else { return }
-            if finishIfResolved(status, work: work) { return }
-            guard work.mayAttempt else { break }
-            guard case .pending(_, .current) = status else {
-                if await work.retry() { continue }
-                break
-            }
-            let result = await work.store.completeNativeDelivery(
+        await persistOwnedMutation(work, operation: {
+            await work.store.completeNativeDelivery(
                 handle: work.handle, nativeDeliveryNonce: work.nonce,
                 runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
                 response: response
             )
-            guard work.isCurrent else { return }
-            if result == .persisted {
-                work.update { $0.finish() }
-                return
-            }
-            guard let current = await work.load() else { return }
-            if finishIfResolved(current, work: work) { return }
-            if result == .ownershipLost { break }
-            if !(await work.retry()) { break }
-        }
-        work.update { $0.pause() }
+        }, onPersisted: { $0.finish() })
     }
 
     private static func rejectBeforeAuthentication(
@@ -651,6 +617,19 @@ final class NativeApprovalCoordinator {
     private static func rejectOwned(_ work: Work) async {
         work.update { $0.phase = .rejecting }
         guard let runtime = work.runtime else { return }
+        await persistOwnedMutation(work, operation: {
+            await work.store.rejectNativeDelivery(
+                handle: work.handle, nativeDeliveryNonce: work.nonce,
+                runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
+            )
+        }, onPersisted: { $0.finish() })
+    }
+
+    private static func persistOwnedMutation(
+        _ work: Work,
+        operation: () async -> ExtensionBridge.StoreMutationResult,
+        onPersisted: (NativeApprovalCoordinator) -> Void
+    ) async {
         while work.isCurrent {
             guard let status = await work.load() else { return }
             if finishIfResolved(status, work: work) { return }
@@ -659,13 +638,10 @@ final class NativeApprovalCoordinator {
                 if await work.retry() { continue }
                 break
             }
-            let result = await work.store.rejectNativeDelivery(
-                handle: work.handle, nativeDeliveryNonce: work.nonce,
-                runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier
-            )
+            let result = await operation()
             guard work.isCurrent else { return }
             if result == .persisted {
-                work.update { $0.finish() }
+                work.update(onPersisted)
                 return
             }
             guard let current = await work.load() else { return }

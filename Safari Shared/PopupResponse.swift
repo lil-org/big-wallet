@@ -274,26 +274,6 @@ struct PopupTransactionReview: Encodable {
     let editor: PopupTransactionEditor
     let alert: PopupTransactionAlert?
     let editorRequestToken: Int?
-
-    private enum CodingKeys: String, CodingKey {
-        case account, networkName, balance, valueLine, feeLines, dataInterpretation
-        case phase, slider, editor, alert, editorRequestToken
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(account, forKey: .account)
-        try container.encode(networkName, forKey: .networkName)
-        try container.encodeIfPresent(balance, forKey: .balance)
-        try container.encodeIfPresent(valueLine, forKey: .valueLine)
-        try container.encode(feeLines, forKey: .feeLines)
-        try container.encodeIfPresent(dataInterpretation, forKey: .dataInterpretation)
-        try container.encode(phase.rawValue, forKey: .phase)
-        try container.encode(slider, forKey: .slider)
-        try container.encode(editor, forKey: .editor)
-        try container.encodeIfPresent(alert, forKey: .alert)
-        try container.encodeIfPresent(editorRequestToken, forKey: .editorRequestToken)
-    }
 }
 
 struct PopupTransactionSlider: Encodable {
@@ -345,14 +325,6 @@ struct PopupTransactionAlert: Encodable {
     struct Action: Encodable {
         let title: String
         let action: TransactionApprovalAlertAction
-
-        private enum CodingKeys: String, CodingKey { case title, action }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(title, forKey: .title)
-            try container.encode(action.rawValue, forKey: .action)
-        }
     }
 
     let title: String

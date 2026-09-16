@@ -4,7 +4,7 @@ import Foundation
 
 struct TransactionPreparationState: Equatable {
 
-    enum Phase: String, Equatable {
+    enum Phase: String, Equatable, Encodable {
         case idle
         case preparing
         case ready
@@ -261,7 +261,7 @@ struct TransactionApprovalAlertIntent: Equatable {
 
 }
 
-enum TransactionApprovalAlertAction: String, Decodable {
+enum TransactionApprovalAlertAction: String, Codable {
     case acknowledge
     case retry
     case edit
