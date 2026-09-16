@@ -1506,14 +1506,14 @@ test("terminal decisions fence an older read and poll only after their native re
         await flushPopup();
         assert.equal(controller.action !== null, true);
         assert.equal(harness.followUpTimerId(), null);
-        assert.equal(harness.get("button-reject").disabled, false);
+        assert.equal(harness.get("button-reject").disabled, subject === "approveRequest");
 
         readGate.resolve(messageState(controller.request, {reviewToken: requestToken(999), title: "Stale"}));
         await refresh;
 
         assert.equal(controller.state.review.reviewToken, requestToken(101));
         assert.equal(harness.get("request-title").textContent, "Sign message");
-        assert.equal(harness.get("button-reject").disabled, false);
+        assert.equal(harness.get("button-reject").disabled, subject === "approveRequest");
         assert.equal(harness.followUpTimerId(), null);
         actionGate.resolve({status: "ok"});
         await decision;
@@ -2640,8 +2640,8 @@ test("Cancel supersedes hung reads edits speed and stale-edit recovery without w
     }
 });
 
-test("a hung approval keeps its 190-second timeout without blocking Cancel or replacement requests", async () => {
-    const harness = await reviewedPopup();
+test("a hung approval disables Cancel without blocking replacement requests", async () => {
+    const harness = await reviewedPopup(transactionState);
     const original = harness.controller;
     const gate = deferred();
     harness.handlers.worker = (message, fallback) => message.subject === "approveRequestWithCurrentRevisions" ? gate.promise : fallback(message);
@@ -2649,13 +2649,15 @@ test("a hung approval keeps its 190-second timeout without blocking Cancel or re
     await flushPopup();
     assert.equal(harness.timerHistory.at(-1).delay, 190_000);
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
-    assert.equal(harness.get("button-reject").disabled, false);
+    assert.equal(harness.get("button-reject").disabled, true);
     await harness.get("button-reject").emit("click");
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 0);
+    assert.equal(original.action.kind, "approveRequest");
     const replacement = pendingRequest(original.request.id, 2);
     harness.setState(replacement, messageState(replacement, {title: "Next request"}));
     await harness.show([replacement]);
     await harness.controller.reject();
-    assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 2);
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 1);
     const current = harness.controller;
     const snapshot = harness.visibleSnapshot();
     gate.resolve({status: "ok"});
@@ -2788,7 +2790,7 @@ test("modal Cancel supersedes a hung alert action only with the native reject ca
     }
 });
 
-test("a pending approval locks selection controls while leaving Cancel usable", async () => {
+test("a pending approval locks selection and Cancel until review resumes", async () => {
     const harness = await reviewedPopup(selectionState);
     const controller = harness.controller;
     const gate = deferred();
@@ -2801,11 +2803,15 @@ test("a pending approval locks selection controls while leaving Cancel usable", 
     assert.equal(harness.get("network-select").disabled, true);
     await row.emit("click");
     assert.deepEqual(normalized(controller.presentation.accounts), selected);
-    assert.equal(harness.get("button-reject").disabled, false);
+    assert.equal(harness.get("button-reject").disabled, true);
     await harness.get("button-reject").emit("click");
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 0);
     gate.resolve({status: "ok"});
     await approving;
-    assert.equal(controller.action.kind, "rejectRequest");
+    assert.equal(controller.action.kind, "approveRequest");
+    await harness.fire(harness.followUpTimerId());
+    assert.equal(controller.action, null);
+    assert.equal(harness.get("button-reject").disabled, false);
 });
 
 test("an alert consumes an old editor request and Retry keeps preparation polling", async () => {

@@ -503,7 +503,7 @@ class PopupRequestController {
             }
             if (this.action) { return; }
         } else {
-            if (this.action?.kind === "rejectRequest") { return; }
+            if (this.action?.kind === "approveRequest" || this.action?.kind === "rejectRequest") { return; }
             this.discardSliderGesture();
             this.resetEditorDraft();
             this.closeAlert(false);
@@ -1145,6 +1145,9 @@ class PopupRequestController {
 
     showSubmitting() {
         document.getElementById("button-approve").disabled = true;
+        if (this.action?.kind === "approveRequest") {
+            document.getElementById("button-reject").disabled = true;
+        }
         hide("working-overlay");
     }
 
