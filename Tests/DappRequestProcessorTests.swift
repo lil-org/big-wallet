@@ -77,7 +77,7 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(executionAccess.privateKeyReads, 1)
     }
 
-    func testAccountSelectionExecutionUsesExactPersistedDerivationPath() async throws {
+    func testAccountSelectionExecutionUsesExactReviewedDerivationPath() async throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: privateKey, coin: .ethereum)
         let access = ProcessorWalletAccess(accounts: [account])
@@ -94,13 +94,10 @@ final class DappRequestProcessorTests: XCTestCase {
                 )],
                 ethereumChainID: "0x1"
             ))
-            let encoded = try XCTUnwrap(decision.boundedData)
-            let decoded = try XCTUnwrap(DappApprovalDecision.decodeBounded(encoded))
-            XCTAssertEqual(decoded, decision)
             let result = await DappRequestProcessor().execute(
                 request: request,
                 action: action,
-                decision: decoded,
+                decision: decision,
                 walletAccess: access
             )
             guard case .response(let response) = result else {

@@ -160,6 +160,7 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertFalse(supportedLocales.isEmpty)
 
         for key in [
+            "Approval interrupted. Please try again from the website.",
             "Big Wallet requests are unavailable in Private Browsing.",
             "Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry.",
             "Transaction submission status is unknown. Check the transaction ID before trying again.",

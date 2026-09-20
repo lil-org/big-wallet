@@ -2,9 +2,9 @@
 
 import Foundation
 
-enum DappApprovalDecision: Codable, Equatable, Sendable {
+enum DappApprovalDecision: Equatable, Sendable {
 
-    struct AccountIdentity: Codable, Equatable, Sendable {
+    struct AccountIdentity: Equatable, Sendable {
         let walletID: String
         let address: String
         let provider: InpageProvider
@@ -23,7 +23,7 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         }
     }
 
-    struct AccountSelection: Codable, Equatable, Sendable {
+    struct AccountSelection: Equatable, Sendable {
         let accounts: [AccountIdentity]
         let ethereumChainID: String?
 
@@ -33,7 +33,7 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         }
     }
 
-    struct MessageApproval: Codable, Equatable, Sendable {
+    struct MessageApproval: Equatable, Sendable {
         let solanaCluster: Solana.Cluster?
 
         init(solanaCluster: Solana.Cluster?) {
@@ -41,56 +41,14 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         }
     }
 
-    enum TransactionFee: Codable, Equatable, Sendable {
+    enum TransactionFee: Equatable, Sendable {
         case legacy(gasPrice: String)
         case eip1559(maxPriorityFeePerGas: String, maxFeePerGas: String)
-
-        private enum CodingKeys: String, CodingKey {
-            case kind, gasPrice, maxPriorityFeePerGas, maxFeePerGas
-        }
-
-        private enum Kind: String, Codable {
-            case legacy, eip1559
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            switch try container.decode(Kind.self, forKey: .kind) {
-            case .legacy:
-                self = .legacy(
-                    gasPrice: try container.decode(String.self, forKey: .gasPrice)
-                )
-            case .eip1559:
-                self = .eip1559(
-                    maxPriorityFeePerGas: try container.decode(
-                        String.self,
-                        forKey: .maxPriorityFeePerGas
-                    ),
-                    maxFeePerGas: try container.decode(
-                        String.self,
-                        forKey: .maxFeePerGas
-                    )
-                )
-            }
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            switch self {
-            case .legacy(let gasPrice):
-                try container.encode(Kind.legacy, forKey: .kind)
-                try container.encode(gasPrice, forKey: .gasPrice)
-            case .eip1559(let priority, let maximum):
-                try container.encode(Kind.eip1559, forKey: .kind)
-                try container.encode(priority, forKey: .maxPriorityFeePerGas)
-                try container.encode(maximum, forKey: .maxFeePerGas)
-            }
-        }
     }
 
-    struct NetworkIdentity: Codable, Equatable, Sendable {
+    struct NetworkIdentity: Equatable, Sendable {
 
-        enum Source: String, Codable, Equatable, Sendable {
+        enum Source: String, Equatable, Sendable {
             case alchemy, fallback, custom
 
             init(_ source: RPCSource) {
@@ -121,15 +79,6 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
             allowsAlchemyAuthorization = network.allowsAlchemyAuthorization
         }
 
-        fileprivate var isValid: Bool {
-            guard chainID > 0,
-                  let url = URL(string: canonicalRPCURL),
-                  let normalized = Self.canonicalRPCURL(url) else {
-                return false
-            }
-            return normalized == canonicalRPCURL
-        }
-
         private static func canonicalRPCURL(_ url: URL) -> String? {
             guard var components = URLComponents(
                 url: url,
@@ -152,7 +101,7 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
         }
     }
 
-    struct TransactionExecution: Codable, Equatable, Sendable {
+    struct TransactionExecution: Equatable, Sendable {
         let nonce: String
         let gasLimit: String
         let fee: TransactionFee
@@ -195,16 +144,6 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
             guard let currentNetwork = NetworkIdentity(action.resolvedNetwork),
                   reviewedNetwork == currentNetwork else { return nil }
             return applyingTransactionFields(to: action.transaction)
-        }
-
-        fileprivate var isValid: Bool {
-            guard reviewedNetwork.isValid else { return false }
-            return applyingTransactionFields(to: Transaction(
-                from: "0x0000000000000000000000000000000000000000",
-                to: "0x0000000000000000000000000000000000000000",
-                value: "0x0",
-                data: "0x"
-            )) != nil
         }
 
         private func applyingTransactionFields(
@@ -260,104 +199,6 @@ enum DappApprovalDecision: Codable, Equatable, Sendable {
     case message(MessageApproval)
     case transaction(TransactionExecution)
     case addEthereumChain
-
-    private enum CodingKeys: String, CodingKey {
-        case kind, accountSelection, message, transaction
-    }
-
-    private enum Kind: String, Codable {
-        case accountSelection, message, transaction,
-             addEthereumChain
-    }
-
-    static let maximumEncodedBytes = 32 * 1024
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(Kind.self, forKey: .kind) {
-        case .accountSelection:
-            self = .accountSelection(try container.decode(
-                AccountSelection.self,
-                forKey: .accountSelection
-            ))
-        case .message:
-            self = .message(try container.decode(
-                MessageApproval.self,
-                forKey: .message
-            ))
-        case .transaction:
-            self = .transaction(try container.decode(
-                TransactionExecution.self,
-                forKey: .transaction
-            ))
-        case .addEthereumChain:
-            self = .addEthereumChain
-        }
-        guard isValid else {
-            throw DecodingError.dataCorrupted(
-                .init(codingPath: decoder.codingPath, debugDescription: "invalid decision")
-            )
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        guard isValid else {
-            throw EncodingError.invalidValue(
-                self,
-                .init(codingPath: encoder.codingPath, debugDescription: "invalid decision")
-            )
-        }
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .accountSelection(let selection):
-            try container.encode(Kind.accountSelection, forKey: .kind)
-            try container.encode(selection, forKey: .accountSelection)
-        case .message(let message):
-            try container.encode(Kind.message, forKey: .kind)
-            try container.encode(message, forKey: .message)
-        case .transaction(let transaction):
-            try container.encode(Kind.transaction, forKey: .kind)
-            try container.encode(transaction, forKey: .transaction)
-        case .addEthereumChain:
-            try container.encode(Kind.addEthereumChain, forKey: .kind)
-        }
-    }
-
-    var boundedData: Data? {
-        guard let data = try? JSONEncoder().encode(self),
-              data.count <= Self.maximumEncodedBytes else { return nil }
-        return data
-    }
-
-    static func decodeBounded(_ data: Data) -> Self? {
-        guard !data.isEmpty,
-              data.count <= maximumEncodedBytes else { return nil }
-        return try? JSONDecoder().decode(Self.self, from: data)
-    }
-
-    private var isValid: Bool {
-        switch self {
-        case .accountSelection(let selection):
-            guard selection.accounts.count <= InpageProvider.allCases.count,
-                  Set(selection.accounts.map(\.provider)).count ==
-                    selection.accounts.count,
-                  selection.accounts.allSatisfy({
-                      !$0.walletID.isEmpty && $0.walletID.count <= 256 &&
-                        !$0.address.isEmpty && $0.address.count <= 256 &&
-                        !$0.derivationPath.isEmpty && $0.derivationPath.count <= 1_024 &&
-                        $0.provider != .unknown && $0.provider != .multiple
-                  }) else { return false }
-            return selection.ethereumChainID.map {
-                !$0.isEmpty && $0.count <= 128
-            } ?? true
-        case .message:
-            return true
-        case .transaction(let execution):
-            return execution.isValid
-        case .addEthereumChain:
-            return true
-        }
-    }
 }
 
 enum DappApprovalValidator {

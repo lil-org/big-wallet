@@ -159,10 +159,13 @@ final class DurableApprovalExecutor {
         case .retryablePersistenceFailure:
             return .beginRetryablePersistenceFailure
         }
+        if case .native = plan.authority, Task.isCancelled {
+            return await rollback(permit: permit)
+        }
         if let response = preExecutionValidation?() {
             if let expired = await rollbackIfExpired(
                 permit: permit,
-                deadline: plan.deadline
+                plan: plan
             ) {
                 return expired
             }
@@ -200,7 +203,7 @@ final class DurableApprovalExecutor {
                 : response
             if let expired = await rollbackIfExpired(
                 permit: permit,
-                deadline: plan.deadline
+                plan: plan
             ) {
                 return expired
             }
@@ -215,7 +218,7 @@ final class DurableApprovalExecutor {
                 : prepared.recoveryResponse
             if let expired = await rollbackIfExpired(
                 permit: permit,
-                deadline: plan.deadline
+                plan: plan
             ) {
                 return expired
             }
@@ -246,10 +249,12 @@ final class DurableApprovalExecutor {
 
     private func rollbackIfExpired(
         permit: ExtensionBridge.ExecutionPermit,
-        deadline: Date?
+        plan: ExecutionPlan
     ) async -> Result? {
-        guard let deadline,
-              clock() >= deadline else { return nil }
+        if case .native = plan.authority, Task.isCancelled {
+            return await rollback(permit: permit)
+        }
+        guard let deadline = plan.deadline, clock() >= deadline else { return nil }
         return await rollback(permit: permit)
     }
 

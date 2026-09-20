@@ -93,15 +93,29 @@ actor NativeAgentLauncher {
         }
     }
 
-    private struct ObservedRuntime {
-        let helper: RuntimeHelper
-        let bundleURL: URL?
-        let identity: AmbientRuntimeIdentity?
+    private enum RuntimeSubject {
+        case candidate(RuntimeHelper)
+        case receiptOwner(ExtensionBridge.NativeDeliveryOwner)
     }
 
-    private enum ReceiptOwnerObservation {
-        case owner(ObservedRuntime)
-        case absent, indeterminate
+    struct IdentifiedRuntime {
+        let helper: RuntimeHelper
+        let identity: AmbientRuntimeIdentity
+
+        var target: HelperTarget {
+            .running(
+                url: URL(fileURLWithPath: identity.bundlePath).standardizedFileURL,
+                processIdentifier: helper.processIdentifier,
+                runtimeInstanceIdentifier: identity.instanceIdentifier
+            )
+        }
+    }
+
+    enum RuntimeAssessment {
+        case absent
+        case unidentified(RuntimeHelper?)
+        case compatible(IdentifiedRuntime)
+        case incompatible(IdentifiedRuntime)
     }
 
     private struct RuntimeProcessKey: Hashable {
@@ -112,16 +126,6 @@ actor NativeAgentLauncher {
             processIdentifier = helper.processIdentifier
             processStartDate = helper.processStartDate
         }
-    }
-
-    struct ExactReceiptOwner {
-        let requestQuit: @MainActor (_ isPending: () -> Bool) async -> Bool
-        let isRunning: () -> Bool
-    }
-
-    enum ReceiptRuntimeStatus {
-        case compatible(HelperTarget)
-        case incompatible(ExactReceiptOwner), absent, indeterminate
     }
 
     struct Dependencies {
@@ -190,10 +194,10 @@ actor NativeAgentLauncher {
         @MainActor
         func receiptRuntimeStatus(
             _ receipt: ExtensionBridge.NativeDeliveryReceipt
-        ) async -> ReceiptRuntimeStatus {
+        ) async -> RuntimeAssessment {
 #if os(macOS)
             guard let url = helperURL(), let expected = ExpectedRuntime(url: url) else {
-                return .indeterminate
+                return .unidentified(nil)
             }
             return await NativeAgentLauncher.runtimeStatus(
                 receipt: receipt,
@@ -203,7 +207,7 @@ actor NativeAgentLauncher {
                 validate: validate
             )
 #else
-            return .indeterminate
+            return .unidentified(nil)
 #endif
         }
     }
@@ -243,7 +247,11 @@ actor NativeAgentLauncher {
             switch status {
             case .compatible:
                 return .delivered
-            case .incompatible(let owner):
+            case .incompatible(let runtime):
+                guard let url = dependencies.helperURL(), let expected = ExpectedRuntime(url: url),
+                      await verifyRuntime(runtime, expected: expected,
+                                          identity: dependencies.identity, validate: dependencies.validate),
+                      !Task.isCancelled, isPending() else { return .unavailable }
                 let loaded = await dependencies.load(handle)
                 guard !Task.isCancelled, isPending() else { return .unavailable }
                 switch loaded {
@@ -251,20 +259,29 @@ actor NativeAgentLauncher {
                     guard current.nativeDeliveryNonce == nonce else { return .terminal }
                     if current.phase == .responded { return .delivered }
                     guard current.nativeDeliveryReceipt == receipt else { continue }
-                case .missing:
-                    return .terminal
-                case .unavailable:
-                    return .unavailable
+                case .missing: return .terminal
+                case .unavailable: return .unavailable
                 }
-                guard await owner.requestQuit({ !Task.isCancelled && isPending() }) else {
+                guard expected.installedVersionMatches else { return .unavailable }
+                switch assessRuntime(
+                    .receiptOwner(receipt.owner), expected: expected,
+                    helper: dependencies.helper, identity: dependencies.identity
+                ) {
+                case .absent:
+                    break
+                case .incompatible(let current) where current.identity == runtime.identity:
+                    guard current.helper.requestQuit() else { return .unavailable }
+                    while current.helper.isRunning(), !Task.isCancelled, isPending() {
+                        await dependencies.wait(50_000_000)
+                    }
+                case .compatible:
+                    continue
+                case .incompatible, .unidentified:
                     return .unavailable
-                }
-                while owner.isRunning(), !Task.isCancelled, isPending() {
-                    await dependencies.wait(50_000_000)
                 }
             case .absent:
                 break
-            case .indeterminate:
+            case .unidentified:
                 return .unavailable
             }
             guard !Task.isCancelled, isPending() else { return .unavailable }
@@ -272,7 +289,14 @@ actor NativeAgentLauncher {
             guard !Task.isCancelled, isPending() else { return .unavailable }
             switch cleared {
             case .persisted:
-                return .needsDelivery
+                let current = await dependencies.load(handle)
+                guard !Task.isCancelled, isPending() else { return .unavailable }
+                switch current {
+                case .found(let current):
+                    return current.phase == .responded ? .delivered : .needsDelivery
+                case .missing: return .terminal
+                case .unavailable: return .unavailable
+                }
             case .ownershipLost:
                 continue
             case .retryablePersistenceFailure:
@@ -415,13 +439,10 @@ actor NativeAgentLauncher {
                receipt.nativeDeliveryNonce == snapshot.nativeDeliveryNonce,
                let url = dependencies.helperURL(),
                let expected = ExpectedRuntime(url: url),
-               case .owner(let runtime) = Self.observeReceiptOwner(
-                   receipt,
-                   helper: dependencies.helper,
-                   identity: dependencies.identity
+               case .compatible = Self.assessRuntime(
+                   .receiptOwner(receipt.owner), expected: expected,
+                   helper: dependencies.helper, identity: dependencies.identity
                ),
-               let identity = runtime.identity,
-               expected.isCompatible(identity, runtimeURL: runtime.bundleURL),
                expected.installedVersionMatches,
                dependencies.uptime() < (waitDeadline ?? UInt64.max) {
                 return true
@@ -464,10 +485,6 @@ actor NativeAgentLauncher {
                       snapshot.phase != .responded else { return .readyToRead }
                 if snapshot.phase == .queued,
                    dependencies.wallClock() >= initialContext.executionDeadline {
-                    return .pending
-                }
-                if case .queued(_, .staged(let approval)) = snapshot.state,
-                   approval.receipt == nil {
                     return .pending
                 }
                 let now = dependencies.uptime()
@@ -520,13 +537,12 @@ actor NativeAgentLauncher {
               case .queued = snapshot.state,
               let receipt = snapshot.nativeDeliveryReceipt,
               receipt.nativeDeliveryNonce == nativeDeliveryNonce,
-              case .compatible(let target) = await dependencies
+              case .compatible(let runtime) = await dependencies
                 .receiptRuntimeStatus(receipt),
-              case .running(_, _, let runtimeInstanceIdentifier) = target,
-              runtimeInstanceIdentifier == receipt.owner.runtimeInstanceIdentifier else {
+              runtime.identity.instanceIdentifier == receipt.owner.runtimeInstanceIdentifier else {
             return false
         }
-        return await launchOnce(route: route, to: target, deadline: deadline)
+        return await launchOnce(route: route, to: runtime.target, deadline: deadline)
     }
 
     private func finishSharedDelivery(identifier: UUID) {
@@ -900,27 +916,45 @@ actor NativeAgentLauncher {
 
 #endif
 
-    private static func observedRuntimes(
-        _ helpers: [RuntimeHelper],
+    private static func assessRuntime(
+        _ subject: RuntimeSubject,
+        expected: ExpectedRuntime,
+        helper: (Int32) -> RuntimeHelper?,
         identity: (Int32) -> AmbientRuntimeIdentity?
-    ) -> [ObservedRuntime] {
-        helpers.compactMap { helper in
-            guard helper.isRunning() else { return nil }
-            let bundleURL = helper.bundleURL?.standardizedFileURL
-            let verifiedIdentity = bundleURL.flatMap { bundleURL in
-                verifiedRuntimeIdentity(
-                    processIdentifier: helper.processIdentifier,
-                    bundleURL: bundleURL,
-                    processStartDate: helper.processStartDate,
-                    identity: identity
-                )
+    ) -> RuntimeAssessment {
+        let runtime: RuntimeHelper
+        let owner: ExtensionBridge.NativeDeliveryOwner?
+        switch subject {
+        case .candidate(let candidate):
+            runtime = candidate
+            owner = nil
+        case .receiptOwner(let receiptOwner):
+            guard receiptOwner.isValid else { return .unidentified(nil) }
+            guard let candidate = helper(receiptOwner.processIdentifier) else { return .absent }
+            guard candidate.processIdentifier == receiptOwner.processIdentifier else {
+                return .unidentified(candidate)
             }
-            return ObservedRuntime(
-                helper: helper,
-                bundleURL: bundleURL,
-                identity: verifiedIdentity
-            )
+            runtime = candidate
+            owner = receiptOwner
         }
+        guard runtime.isRunning() else { return .absent }
+        if let owner {
+            guard let started = runtime.processStartDate else { return .unidentified(runtime) }
+            guard AmbientRuntimeIdentity.matchesProcessStart(owner.processStartDate, started) else {
+                return .absent
+            }
+        }
+        guard let url = runtime.bundleURL?.standardizedFileURL,
+              let observed = verifiedRuntimeIdentity(
+                  processIdentifier: runtime.processIdentifier,
+                  bundleURL: url, processStartDate: runtime.processStartDate,
+                  identity: identity
+              ), owner.map({ observed.matches($0) }) ?? true else {
+            return .unidentified(runtime)
+        }
+        let identified = IdentifiedRuntime(helper: runtime, identity: observed)
+        return expected.isCompatible(observed, runtimeURL: url)
+            ? .compatible(identified) : .incompatible(identified)
     }
 
     private static func verifiedRuntimeIdentity(
@@ -952,103 +986,62 @@ actor NativeAgentLauncher {
         while canContinue() {
             let now = dependencies.uptime()
             guard canContinue(), now < deadline else { return nil }
-            let samePath = NativeAgentLauncher.observedRuntimes(
-                dependencies.helpers(), identity: dependencies.identity
-            ).filter { $0.bundleURL == expected.url }
-            var unknown = [ObservedRuntime]()
-            var incompatible = [ObservedRuntime]()
-            var target: HelperTarget?
-            for runtime in samePath {
-                guard let identity = runtime.identity else {
-                    unknown.append(runtime)
-                    continue
-                }
-                if expected.isCompatible(identity, runtimeURL: runtime.bundleURL) {
-                    if target == nil {
-                        target = .running(
-                            url: expected.url,
-                            processIdentifier: runtime.helper.processIdentifier,
-                            runtimeInstanceIdentifier: identity.instanceIdentifier
-                        )
-                    }
-                } else {
-                    incompatible.append(runtime)
-                }
+            let candidates = dependencies.helpers().filter {
+                $0.bundleURL?.standardizedFileURL == expected.url
             }
+            var target: HelperTarget?
             var mustWait = false
             var verifiedCurrentBundle = false
-            func verifyBeforeQuit() async -> Bool {
-                guard canContinue() else { return false }
+            for candidate in candidates {
+                guard canContinue() else { return nil }
+                let key = RuntimeProcessKey(candidate)
+                switch assessRuntime(.candidate(candidate), expected: expected,
+                                     helper: dependencies.helper, identity: dependencies.identity) {
+                case .absent:
+                    continue
+                case .compatible(let runtime):
+                    if target == nil { target = runtime.target }
+                    continue
+                case .unidentified:
+                    let firstObserved = unknownFirstObservedAt[key] ?? now
+                    unknownFirstObservedAt[key] = firstObserved
+                    if now < firstObserved || now - firstObserved < 1_000_000_000 {
+                        mustWait = true
+                        continue
+                    }
+                case .incompatible:
+                    break
+                }
+                if requestedQuit.contains(key) {
+                    mustWait = true
+                    continue
+                }
                 if !verifiedCurrentBundle {
-                    guard await dependencies.validate(expected.url) else { return false }
+                    guard await dependencies.validate(expected.url) else { return nil }
                     verifiedCurrentBundle = true
                 }
-                return canContinue() && expected.installedVersionMatches
-            }
-            for runtime in unknown {
-                let key = RuntimeProcessKey(runtime.helper)
-                let firstObservedAt = unknownFirstObservedAt[key] ?? now
-                unknownFirstObservedAt[key] = firstObservedAt
-                let graceElapsed = now >= firstObservedAt &&
-                    now - firstObservedAt >= 1_000_000_000
-                if graceElapsed, !requestedQuit.contains(key) {
-                    guard await verifyBeforeQuit() else { return nil }
-                    if let identity = NativeAgentLauncher.verifiedRuntimeIdentity(
-                        processIdentifier: runtime.helper.processIdentifier,
-                        bundleURL: expected.url,
-                        processStartDate: runtime.helper.processStartDate,
-                        identity: dependencies.identity
-                    ), expected.isCompatible(identity, runtimeURL: runtime.bundleURL) {
-                        if target == nil {
-                            target = .running(
-                                url: expected.url,
-                                processIdentifier: runtime.helper.processIdentifier,
-                                runtimeInstanceIdentifier: identity.instanceIdentifier
-                            )
-                        }
-                        continue
-                    }
-                    guard runtime.helper.isRunning() else {
-                        mustWait = true
-                        continue
-                    }
+                guard canContinue(), expected.installedVersionMatches else { return nil }
+                switch assessRuntime(.candidate(candidate), expected: expected,
+                                     helper: dependencies.helper, identity: dependencies.identity) {
+                case .absent:
+                    mustWait = true
+                    continue
+                case .compatible(let runtime):
+                    if target == nil { target = runtime.target }
+                case .incompatible, .unidentified:
+                    mustWait = true
                     requestedQuit.insert(key)
-                    guard runtime.helper.requestQuit() else { return nil }
+                    guard candidate.requestQuit() else { return nil }
                 }
-                mustWait = true
-            }
-            for runtime in incompatible {
-                let key = RuntimeProcessKey(runtime.helper)
-                if !requestedQuit.contains(key) {
-                    guard await verifyBeforeQuit() else { return nil }
-                    if let identity = NativeAgentLauncher.verifiedRuntimeIdentity(
-                        processIdentifier: runtime.helper.processIdentifier,
-                        bundleURL: expected.url,
-                        processStartDate: runtime.helper.processStartDate,
-                        identity: dependencies.identity
-                    ), expected.isCompatible(identity, runtimeURL: runtime.bundleURL) {
-                        mustWait = true
-                        continue
-                    }
-                    guard runtime.helper.isRunning() else {
-                        mustWait = true
-                        continue
-                    }
-                    requestedQuit.insert(key)
-                    guard runtime.helper.requestQuit() else { return nil }
-                }
-                mustWait = true
             }
             guard canContinue() else { return nil }
             if mustWait {
-                let remainingFrom = dependencies.uptime()
-                guard remainingFrom < deadline else { return nil }
-                await dependencies.wait(min(50_000_000, deadline - remainingFrom))
+                let now = dependencies.uptime()
+                guard now < deadline else { return nil }
+                await dependencies.wait(min(50_000_000, deadline - now))
                 continue
             }
-            if let target { return target }
-            guard canContinue() else { return nil }
-            return .launch(url: expected.url, createsNewApplicationInstance: false)
+            return target ?? .launch(url: expected.url, createsNewApplicationInstance: false)
         }
         return nil
     }
@@ -1074,15 +1067,28 @@ actor NativeAgentLauncher {
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
     ) async -> Bool {
-        guard case .found(let snapshot) = await dependencies.load(handle),
+        guard !Task.isCancelled,
+              case .found(let snapshot) = await dependencies.load(handle),
+              !Task.isCancelled,
               snapshot.nativeDeliveryNonce == nativeDeliveryNonce else { return false }
         if snapshot.phase == .responded { return true }
         guard snapshot.hasStagedOrActiveExecution,
               let receipt = snapshot.nativeDeliveryReceipt,
-              receipt.nativeDeliveryNonce == nativeDeliveryNonce,
-              case .compatible(.running(_, _, let runtimeInstanceIdentifier)) =
-                await dependencies.receiptRuntimeStatus(receipt) else { return false }
-        return runtimeInstanceIdentifier == receipt.owner.runtimeInstanceIdentifier
+              receipt.nativeDeliveryNonce == nativeDeliveryNonce else { return false }
+        let assessment = await dependencies.receiptRuntimeStatus(receipt)
+        guard !Task.isCancelled else { return false }
+        switch assessment {
+        case .compatible(let runtime):
+            return runtime.identity.instanceIdentifier == receipt.owner.runtimeInstanceIdentifier
+        case .absent:
+            guard await dependencies.clearReceipt(handle, receipt) == .persisted,
+                  !Task.isCancelled,
+                  case .found(let current) = await dependencies.load(handle),
+                  !Task.isCancelled else { return false }
+            return current.phase == .responded
+        case .incompatible, .unidentified:
+            return false
+        }
     }
 
     @MainActor
@@ -1108,7 +1114,7 @@ actor NativeAgentLauncher {
         helper: @escaping (Int32) -> RuntimeHelper?,
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
         validate: @escaping (URL) async -> Bool
-    ) async -> ReceiptRuntimeStatus {
+    ) async -> RuntimeAssessment {
         let expected = ExpectedRuntime(
             url: expectedURL,
             version: expectedVersion
@@ -1129,91 +1135,32 @@ actor NativeAgentLauncher {
         helper: @escaping (Int32) -> RuntimeHelper?,
         identity: @escaping (Int32) -> AmbientRuntimeIdentity?,
         validate: @escaping (URL) async -> Bool
-    ) async -> ReceiptRuntimeStatus {
-        switch observeReceiptOwner(receipt, helper: helper, identity: identity) {
-        case .absent:
-            return .absent
-        case .indeterminate:
-            return .indeterminate
-        case .owner(let runtime):
-            guard let runtimeURL = runtime.bundleURL,
-                  let runtimeIdentity = runtime.identity else { return .indeterminate }
-            if expected.isCompatible(
-                runtimeIdentity,
-                runtimeURL: runtimeURL
-            ) {
-                guard await verifyRuntime(
-                    runtime,
-                    expected: expected,
-                    identity: identity,
-                    validate: validate
-                ) else { return .indeterminate }
-                return .compatible(.running(
-                    url: runtimeURL,
-                    processIdentifier: runtime.helper.processIdentifier,
-                    runtimeInstanceIdentifier: runtimeIdentity.instanceIdentifier
-                ))
+    ) async -> RuntimeAssessment {
+        let assessment = assessRuntime(
+            .receiptOwner(receipt.owner), expected: expected,
+            helper: helper, identity: identity
+        )
+        if case .compatible(let runtime) = assessment {
+            guard await verifyRuntime(runtime, expected: expected,
+                                      identity: identity, validate: validate) else {
+                return .unidentified(runtime.helper)
             }
-            return .incompatible(ExactReceiptOwner(
-                requestQuit: { isPending in
-                    guard case .owner(let current) = observeReceiptOwner(
-                        receipt, helper: helper, identity: identity
-                    ), current.helper.processIdentifier == runtime.helper.processIdentifier,
-                       current.identity == runtimeIdentity,
-                       await verifyRuntime(
-                        current,
-                        expected: expected,
-                        identity: identity,
-                        validate: validate
-                       ), isPending() else { return false }
-                    return current.helper.requestQuit()
-                },
-                isRunning: runtime.helper.isRunning
-            ))
         }
+        return assessment
     }
 
-    private static func observeReceiptOwner(
-        _ receipt: ExtensionBridge.NativeDeliveryReceipt,
-        helper: (Int32) -> RuntimeHelper?,
-        identity: (Int32) -> AmbientRuntimeIdentity?
-    ) -> ReceiptOwnerObservation {
-        let owner = receipt.owner
-        guard owner.isValid else { return .indeterminate }
-        guard let runtime = helper(owner.processIdentifier), runtime.isRunning() else {
-            return .absent
-        }
-        guard runtime.processIdentifier == owner.processIdentifier,
-              let startDate = runtime.processStartDate else {
-            return .indeterminate
-        }
-        guard AmbientRuntimeIdentity.matchesProcessStart(owner.processStartDate, startDate) else {
-            return .absent
-        }
-        guard let runtimeURL = runtime.bundleURL,
-              let runtimeIdentity = verifiedRuntimeIdentity(
-                  processIdentifier: owner.processIdentifier,
-                  bundleURL: runtimeURL,
-                  processStartDate: startDate,
-                  identity: identity
-              ), runtimeIdentity.matches(owner) else { return .indeterminate }
-        return .owner(ObservedRuntime(
-            helper: runtime,
-            bundleURL: runtimeURL,
-            identity: runtimeIdentity
-        ))
-    }
+#endif
 
     @MainActor
     private static func verifyRuntime(
-        _ runtime: ObservedRuntime,
+        _ runtime: IdentifiedRuntime,
         expected: ExpectedRuntime,
         identity: (Int32) -> AmbientRuntimeIdentity?,
         validate: (URL) async -> Bool
     ) async -> Bool {
-        guard let runtimeURL = runtime.bundleURL,
-              let observedIdentity = runtime.identity,
-              await validate(expected.url) else { return false }
+        let runtimeURL = runtime.target.url
+        let observedIdentity = runtime.identity
+        guard await validate(expected.url) else { return false }
         if runtimeURL != expected.url {
             guard await validate(runtimeURL) else { return false }
         }
@@ -1228,7 +1175,6 @@ actor NativeAgentLauncher {
         return true
     }
 
-#endif
 
     private func awaitResult(
         of task: Task<Bool, Never>,
@@ -1279,15 +1225,10 @@ actor NativeAgentLauncher {
         identity: (Int32) -> AmbientRuntimeIdentity?,
         validate: (URL) async -> Bool
     ) async -> Bool {
-        guard let runtime = observedRuntimes(
-                  [helper],
-                  identity: identity
-              ).first,
-              let runtimeIdentity = runtime.identity,
-              expected.isCompatible(
-                  runtimeIdentity,
-                  runtimeURL: runtime.bundleURL
-              ) else { return false }
+        guard case .compatible(let runtime) = assessRuntime(
+            .candidate(helper), expected: expected,
+            helper: { _ in helper }, identity: identity
+        ) else { return false }
 #if os(macOS)
         return await verifyRuntime(
             runtime,

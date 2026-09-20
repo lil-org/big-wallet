@@ -199,7 +199,7 @@
             let receipt = ExtensionBridge.NativeDeliveryReceipt(
                 nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: runtime.nativeDeliveryOwner!
             )
-            let approval = ExtensionBridge.Snapshot.NativeApproval(receipt: receipt, executionContext: nil)
+            let approval = ExtensionBridge.Snapshot.NativeApproval(receipt: receipt, approvedAt: clock.date, executionContext: nil)
             setState(
                 executing
                     ? .approving(request: snapshot.request!, nativeApproval: approval)
@@ -246,13 +246,8 @@
                     guard let snapshot = self.snapshots[handle], snapshot.nativeDeliveryReceipt == receipt,
                         let request = snapshot.request
                     else { return .ownershipLost }
-                    if let approval = snapshot.nativeApproval {
-                        let cleared = ExtensionBridge.Snapshot.NativeApproval(
-                            receipt: nil, executionContext: approval.executionContext)
-                        self.setState(
-                            snapshot.phase == .approving
-                                ? .approving(request: request, nativeApproval: cleared)
-                                : .queued(request: request, approval: .staged(cleared)), for: snapshot)
+                    if snapshot.nativeApproval != nil {
+                        self.setState(.responded, for: snapshot)
                     } else {
                         self.setState(.queued(request: request, approval: .unowned), for: snapshot)
                     }

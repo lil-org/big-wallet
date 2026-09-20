@@ -39,6 +39,10 @@ struct ProviderResponseError: Equatable {
         return ProviderResponseError(message: Strings.somethingWentWrong, code: internalErrorCode)
     }
 
+    static var approvalInterrupted: ProviderResponseError {
+        ProviderResponseError(message: Strings.approvalInterrupted, code: internalErrorCode)
+    }
+
     static var privateBrowsingUnsupported: ProviderResponseError {
         return ProviderResponseError(
             message: Strings.privateBrowsingUnsupported,

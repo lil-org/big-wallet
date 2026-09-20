@@ -167,7 +167,8 @@ actor ExtensionBridge {
         }
 
         struct NativeApproval {
-            let receipt: NativeDeliveryReceipt?
+            let receipt: NativeDeliveryReceipt
+            let approvedAt: Date
             let executionContext: NativeExecutionContext?
         }
 
@@ -383,23 +384,16 @@ actor ExtensionBridge {
         }
     }
 
-    struct NativeDecisionClaim: Equatable, Sendable {
-        let approvalClaim: ApprovalClaim
+    struct NativeApprovalAuthorization: Equatable, Sendable {
+        let receipt: NativeDeliveryReceipt
         let decision: DappApprovalDecision
-        let stagedAt: Date
-        let executionContext: NativeExecutionContext
+        let approvedAt: Date
+    }
 
-        init(
-            approvalClaim: ApprovalClaim,
-            decision: DappApprovalDecision,
-            stagedAt: Date,
-            executionContext: NativeExecutionContext
-        ) {
-            self.approvalClaim = approvalClaim
-            self.decision = decision
-            self.stagedAt = stagedAt
-            self.executionContext = executionContext
-        }
+    struct NativeExecutionClaim: Equatable, Sendable {
+        let approvalClaim: ApprovalClaim
+        let approvedAt: Date
+        let executionContext: NativeExecutionContext
     }
 
     enum AdmissionKind: Equatable, Sendable {
@@ -429,8 +423,8 @@ actor ExtensionBridge {
         case claimed(ApprovalClaim), executing, responded, missing, unavailable
     }
 
-    enum NativeDecisionClaimResult: Equatable {
-        case claimed(NativeDecisionClaim)
+    enum NativeExecutionClaimResult: Equatable {
+        case claimed(NativeExecutionClaim)
         case notStaged, executing, responded, missing, unavailable
     }
 
@@ -442,6 +436,10 @@ actor ExtensionBridge {
 
     enum StoreMutationResult: Equatable {
         case persisted, ownershipLost, retryablePersistenceFailure
+    }
+
+    enum NativeInterruptionResult: Equatable {
+        case interrupted, responseReady, ownershipLost, retryablePersistenceFailure
     }
 
     enum BeginExecutionResult: Equatable {
@@ -652,10 +650,18 @@ actor ExtensionBridge {
 
     func load(handle: Handle) -> SnapshotResult { store.load(handle: handle) }
     func claim(handle: Handle) -> ApprovalClaimResult { store.claim(handle: handle) }
-    func claimExecutableNativeDecision(
-        handle: Handle
-    ) -> NativeDecisionClaimResult {
-        store.claimExecutableNativeDecision(handle: handle)
+    func claimNativeExecution(
+        handle: Handle,
+        nativeDeliveryNonce: NativeDeliveryNonce,
+        runtimeInstanceIdentifier: UUID,
+        approvedAt: Date
+    ) -> NativeExecutionClaimResult {
+        store.claimNativeExecution(
+            handle: handle,
+            nativeDeliveryNonce: nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
+            approvedAt: approvedAt
+        )
     }
 
     func beginNativeExecutionRead(
@@ -672,18 +678,16 @@ actor ExtensionBridge {
         )
     }
 
-    func stageNativeDecision(
+    func markNativeApprovalReady(
         handle: Handle,
         nativeDeliveryNonce: NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        decision: DappApprovalDecision,
         approvedAt: Date
     ) -> StoreMutationResult {
-        store.stageNativeDecision(
+        store.markNativeApprovalReady(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            decision: decision,
             approvedAt: approvedAt
         )
     }
@@ -706,6 +710,18 @@ actor ExtensionBridge {
         runtimeInstanceIdentifier: UUID
     ) -> StoreMutationResult {
         store.clearNativeDeliveryReceipt(
+            handle: handle,
+            nativeDeliveryNonce: nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtimeInstanceIdentifier
+        )
+    }
+
+    func interruptNativeApproval(
+        handle: Handle,
+        nativeDeliveryNonce: NativeDeliveryNonce,
+        runtimeInstanceIdentifier: UUID
+    ) -> NativeInterruptionResult {
+        store.interruptNativeApproval(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier
@@ -834,9 +850,17 @@ protocol PopupRequestStore: AnyObject {
 extension ExtensionBridge: PopupRequestStore {}
 
 protocol NativeApprovalStore: PopupRequestStore {
-    func claimExecutableNativeDecision(
-        handle: ExtensionBridge.Handle
-    ) async -> ExtensionBridge.NativeDecisionClaimResult
+    func claimNativeExecution(
+        handle: ExtensionBridge.Handle,
+        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
+        runtimeInstanceIdentifier: UUID,
+        approvedAt: Date
+    ) async -> ExtensionBridge.NativeExecutionClaimResult
+    func interruptNativeApproval(
+        handle: ExtensionBridge.Handle,
+        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
+        runtimeInstanceIdentifier: UUID
+    ) async -> ExtensionBridge.NativeInterruptionResult
 }
 
 extension ExtensionBridge: NativeApprovalStore {}

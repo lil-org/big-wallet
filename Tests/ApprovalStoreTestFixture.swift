@@ -4,21 +4,19 @@ import XCTest
 
 private final class ApprovalStoreWrites: @unchecked Sendable {
     private let lock = NSLock()
-    private var failures = 0
+    private var failures = [Bool]()
 
-    func failNext() {
-        lock.withLock { failures += 1 }
+    func failNext(afterWriting: Bool = false) {
+        lock.withLock { failures.append(afterWriting) }
     }
 
     func write(_ data: Data, to url: URL) throws {
-        let fails = lock.withLock {
-            guard failures > 0 else { return false }
-            failures -= 1
-            return true
-        }
-        if fails { throw CocoaError(.fileWriteUnknown) }
+        let failure = lock.withLock { failures.isEmpty ? nil : failures.removeFirst() }
+        if failure == false { throw CocoaError(.fileWriteUnknown) }
         try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+        if failure == true { throw CocoaError(.fileWriteUnknown) }
     }
+
 }
 
 actor ApprovalStoreTestFixture: NativeApprovalStore {
@@ -38,10 +36,10 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var nextReleaseResult: ExtensionBridge.StoreMutationResult?
     private var nextClaimResult: ExtensionBridge.ApprovalClaimResult?
     private var nextLoadTransform: ((ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot)?
-    private var nextNativeClaimDate: Date?
     private var nextCompletionReceipt: ExtensionBridge.NativeDeliveryReceipt?
     private var shouldFailNextCompletion = false
     private var shouldFailNextBegin = false
+    private var checkpointFailureAfterWriting: Bool?
     private var beginHook: (@MainActor () -> Void)?
     private var permitCompletionHook: (@Sendable () -> Void)?
     private var broadcastCheckpointHook: (@Sendable () -> Void)?
@@ -138,12 +136,12 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         XCTAssertEqual(result, .persisted)
     }
 
-    func installNativeDecision(
+    func prepareNativeApproval(
         handle: ExtensionBridge.Handle,
         decision: DappApprovalDecision,
-        stagedAt: Date? = nil
-    ) async -> ExtensionBridge.StoreMutationResult {
-        guard let snapshot = try? await snapshot(handle: handle) else { return .ownershipLost }
+        approvedAt: Date? = nil
+    ) async throws -> ExtensionBridge.NativeApprovalAuthorization {
+        let snapshot = try await snapshot(handle: handle)
         let runtime = snapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier ?? UUID()
         let owner = snapshot.nativeDeliveryReceipt?.owner ?? ExtensionBridge.NativeDeliveryOwner(
             runtimeInstanceIdentifier: runtime,
@@ -156,12 +154,16 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
             owner: owner
         )
-        guard delivered == .persisted else { return delivered }
-        return await bridge.stageNativeDecision(
+        guard delivered == .persisted else { throw CocoaError(.fileWriteUnknown) }
+        let approvedAt = approvedAt ?? clock()
+        let marked = await bridge.markNativeApprovalReady(
             handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime, decision: decision,
-            approvedAt: stagedAt ?? clock()
+            runtimeInstanceIdentifier: runtime,
+            approvedAt: approvedAt
         )
+        guard marked == .persisted else { throw CocoaError(.fileWriteUnknown) }
+        return .init(receipt: .init(nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: owner),
+                     decision: decision, approvedAt: approvedAt)
     }
 
     func installNativeExecutionRead(
@@ -191,7 +193,6 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         nextLoadTransform = transform
     }
 
-    func overrideNextNativeClaimDate(_ date: Date) { nextNativeClaimDate = date }
     func events() -> [String] { eventValues }
     func loadCount() -> Int { loadCountValue }
     func record(_ event: String) { eventValues.append(event) }
@@ -222,6 +223,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     func forceNextCompletionOwnershipLoss(receipt: ExtensionBridge.NativeDeliveryReceipt) { nextCompletionReceipt = receipt }
     func failNextCompletion() { shouldFailNextCompletion = true }
     func failNextBegin() { shouldFailNextBegin = true }
+    func failNextCheckpoint(afterWriting: Bool) { checkpointFailureAfterWriting = afterWriting }
     func setBeginHook(_ hook: @escaping @MainActor () -> Void) { beginHook = hook }
     func setPermitCompletionHook(_ hook: @escaping @Sendable () -> Void) { permitCompletionHook = hook }
     func setBroadcastCheckpointHook(_ hook: @escaping @Sendable () -> Void) { broadcastCheckpointHook = hook }
@@ -281,19 +283,34 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         return result
     }
-    func claimExecutableNativeDecision(handle: ExtensionBridge.Handle) async -> ExtensionBridge.NativeDecisionClaimResult {
+    func claimNativeExecution(
+        handle: ExtensionBridge.Handle,
+        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
+        runtimeInstanceIdentifier: UUID,
+        approvedAt: Date
+    ) async -> ExtensionBridge.NativeExecutionClaimResult {
         guard !isClosing else { return .unavailable }
         activeOperations += 1
         defer { finishOperation() }
-        let result = await bridge.claimExecutableNativeDecision(handle: handle)
-        guard case .claimed(let claim) = result else { return result }
-        eventValues.append("nativeClaim")
-        if let date = nextNativeClaimDate {
-            nextNativeClaimDate = nil
-            return .claimed(.init(approvalClaim: claim.approvalClaim, decision: claim.decision,
-                                  stagedAt: date, executionContext: claim.executionContext))
-        }
+        let result = await bridge.claimNativeExecution(
+            handle: handle, nativeDeliveryNonce: nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtimeInstanceIdentifier, approvedAt: approvedAt
+        )
+        if case .claimed = result { eventValues.append("nativeClaim") }
         return result
+    }
+    func interruptNativeApproval(
+        handle: ExtensionBridge.Handle,
+        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
+        runtimeInstanceIdentifier: UUID
+    ) async -> ExtensionBridge.NativeInterruptionResult {
+        guard !isClosing else { return .ownershipLost }
+        activeOperations += 1
+        defer { finishOperation() }
+        return await bridge.interruptNativeApproval(
+            handle: handle, nativeDeliveryNonce: nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtimeInstanceIdentifier
+        )
     }
     func complete(handle: ExtensionBridge.Handle, response: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
@@ -359,6 +376,10 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         activeOperations += 1
         defer { finishOperation() }
         broadcastCheckpointHook?()
+        if let afterWriting = checkpointFailureAfterWriting {
+            checkpointFailureAfterWriting = nil
+            writes.failNext(afterWriting: afterWriting)
+        }
         let result = await bridge.prepareBroadcast(permit: permit, recoveryResponse: recoveryResponse, authority: authority)
         if result == .persisted {
             eventValues.append("checkpoint")

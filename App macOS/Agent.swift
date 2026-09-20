@@ -174,7 +174,7 @@ class Agent: NSObject {
             guard !isRetired else { return false }
             guard isDismissed else { return true }
             switch presentation {
-            case .finished, .superseded: return true
+            case .finished, .superseded, .interrupted: return true
             default:
                 pendingPresentation = presentation
                 return false
@@ -301,6 +301,8 @@ class Agent: NSObject {
                         if case .finished = presentation {
                             self.approvalInbox.remove(key)
                         } else if case .superseded = presentation {
+                            self.approvalInbox.remove(key)
+                        } else if case .interrupted = presentation {
                             self.approvalInbox.remove(key)
                         }
                         return
@@ -664,6 +666,11 @@ extension Agent.ActiveApproval {
             showFailureSurface(retry: true)
         case .rejecting:
             showFailureSurface()
+        case .interrupted:
+            if isDismissed { return close() }
+            showFailureSurface(reason: Strings.approvalInterrupted)
+            finishReview(retiring: true)
+            return Agent.FinishedApprovalWindowAction.none
         case .finished, .superseded:
             return close()
         }
@@ -819,11 +826,12 @@ extension Agent.ActiveApproval {
         Self.installWaitingSurface(reason: Strings.loading, in: controller)
     }
 
-    private func showFailureSurface(retry: Bool = false) {
+    private func showFailureSurface(retry: Bool = false, reason: String = Strings.somethingWentWrong) {
         endReview()
         Self.installWaitingSurface(
-            reason: Strings.somethingWentWrong,
+            reason: reason,
             in: approvalWindow(),
+            isWorking: false,
             retryAction: retry ? { [weak self] in
                 guard let self, !isRetired else { return }
                 coordinator.retryRecovery()
@@ -834,6 +842,7 @@ extension Agent.ActiveApproval {
     private static func installWaitingSurface(
         reason: String,
         in windowController: NSWindowController,
+        isWorking: Bool = true,
         retryAction: (() -> Void)? = nil
     ) {
         let outgoing = windowController.contentViewController
@@ -842,11 +851,12 @@ extension Agent.ActiveApproval {
         }
         dismissApprovalSheets(in: windowController.window)
         if let waiting = outgoing as? WaitingViewController {
-            waiting.update(reason: reason, retryAction: retryAction)
+            waiting.update(reason: reason, isWorking: isWorking, retryAction: retryAction)
             return
         }
         windowController.contentViewController = WaitingViewController.with(
             reason: reason,
+            isWorking: isWorking,
             retryAction: retryAction
         ) {
             Window.activateBrowser(specific: .safari)

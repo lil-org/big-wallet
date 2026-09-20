@@ -1976,6 +1976,287 @@
         }
       }
     },
+    "Approval interrupted. Please try again from the website." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "توقفت عملية الموافقة. يُرجى المحاولة مجددًا من الموقع."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "অনুমোদন প্রক্রিয়া বাধাগ্রস্ত হয়েছে। অনুগ্রহ করে ওয়েবসাইট থেকে আবার চেষ্টা করুন।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’aprovació s’ha interromput. Torna-ho a provar des del lloc web."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schvalování bylo přerušeno. Zkuste to prosím znovu z webu."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkendelsen blev afbrudt. Prøv igen fra webstedet."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Genehmigung wurde unterbrochen. Bitte versuche es erneut über die Website."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Η έγκριση διακόπηκε. Δοκιμάστε ξανά από τον ιστότοπο."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approval interrupted. Please try again from the website."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La aprobación se ha interrumpido. Inténtalo de nuevo desde el sitio web."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La aprobación se interrumpió. Inténtalo de nuevo desde el sitio web."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hyväksyntä keskeytyi. Yritä uudelleen verkkosivustolta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’approbation a été interrompue. Veuillez réessayer depuis le site web."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "મંજૂરીની પ્રક્રિયા અટકી ગઈ. કૃપા કરીને વેબસાઇટ પરથી ફરી પ્રયાસ કરો."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תהליך האישור נקטע. נסה שוב דרך האתר."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्वीकृति प्रक्रिया बाधित हो गई। कृपया वेबसाइट से फिर से प्रयास करें।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odobravanje je prekinuto. Pokušajte ponovno s web-stranice."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A jóváhagyás megszakadt. Próbálja újra a webhelyről."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proses persetujuan terputus. Silakan coba lagi dari situs web."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’approvazione è stata interrotta. Riprova dal sito web."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "承認が中断されました。ウェブサイトからもう一度お試しください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಅನುಮೋದನೆ ಪ್ರಕ್ರಿಯೆಗೆ ಅಡಚಣೆಯಾಗಿದೆ. ದಯವಿಟ್ಟು ವೆಬ್‌ಸೈಟ್‌ನಿಂದ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "승인이 중단되었습니다. 웹사이트에서 다시 시도해 주세요."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "അംഗീകാര പ്രക്രിയ തടസ്സപ്പെട്ടു. വെബ്‌സൈറ്റിൽ നിന്ന് വീണ്ടും ശ്രമിക്കുക."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मंजुरीची प्रक्रिया खंडित झाली. कृपया वेबसाइटवरून पुन्हा प्रयत्न करा."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proses kelulusan terganggu. Sila cuba lagi dari laman web."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenningen ble avbrutt. Prøv igjen fra nettstedet."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De goedkeuring is onderbroken. Probeer het opnieuw via de website."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଅନୁମୋଦନ ପ୍ରକ୍ରିୟା ବାଧାପ୍ରାପ୍ତ ହୋଇଛି। ଦୟାକରି ୱେବସାଇଟ୍‌ରୁ ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਮਨਜ਼ੂਰੀ ਦੀ ਪ੍ਰਕਿਰਿਆ ਵਿੱਚ ਰੁਕਾਵਟ ਆਈ। ਕਿਰਪਾ ਕਰਕੇ ਵੈੱਬਸਾਈਟ ਤੋਂ ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zatwierdzanie zostało przerwane. Spróbuj ponownie na stronie internetowej."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A aprovação foi interrompida. Tente novamente pelo site."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A aprovação foi interrompida. Tente novamente a partir do site."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprobarea a fost întreruptă. Încercați din nou de pe site."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтверждение прервано. Повторите попытку на сайте."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schvaľovanie bolo prerušené. Skúste to znova z webovej stránky."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odobritev je bila prekinjena. Poskusite znova na spletnem mestu."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkännandet avbröts. Försök igen från webbplatsen."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஒப்புதல் செயல்முறை தடைப்பட்டது. இணையதளத்திலிருந்து மீண்டும் முயற்சிக்கவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ఆమోద ప్రక్రియకు అంతరాయం కలిగింది. దయచేసి వెబ్‌సైట్ నుండి మళ్లీ ప్రయత్నించండి."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การอนุมัติถูกขัดจังหวะ โปรดลองอีกครั้งจากเว็บไซต์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onay işlemi kesintiye uğradı. Lütfen web sitesinden tekrar deneyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підтвердження перервано. Повторіть спробу на сайті."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منظوری کا عمل رک گیا۔ براہ کرم ویب سائٹ سے دوبارہ کوشش کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quá trình phê duyệt bị gián đoạn. Vui lòng thử lại từ trang web."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批准过程已中断。请从网站重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "核准程序已中斷。請從網站重試。"
+          }
+        }
+      }
+    },
     "Approve Transaction" : {
       "comment" : "17398232241418607088",
       "localizations" : {
