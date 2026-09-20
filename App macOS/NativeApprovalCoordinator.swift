@@ -805,11 +805,9 @@ final class NativeApprovalCoordinator {
         onPersisted: (NativeApprovalCoordinator) -> Void
     ) async {
         while work.isCurrent {
-            guard let status = await work.load() else { return }
-            if finishIfResolved(status, work: work) { return }
-            guard work.mayAttempt else { break }
-            guard case .pending(_, .current) = status else {
-                if await work.retry() { continue }
+            guard work.mayAttempt else {
+                guard let status = await work.load() else { return }
+                if finishIfResolved(status, work: work) { return }
                 break
             }
             let result = await operation()

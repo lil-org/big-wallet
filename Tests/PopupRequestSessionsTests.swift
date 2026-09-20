@@ -24,6 +24,104 @@ private enum PopupRequestSessionsTestError: Error {
 @MainActor
 final class PopupRequestSessionsTests: XCTestCase {
 
+    func testFinalSelectionValidationAfterBeginRejectsChangedAccounts() async throws {
+#if os(macOS)
+        let modes = [false, true]
+#else
+        let modes = [false]
+#endif
+        for native in modes {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(
+                id: 601, provider: .ethereum,
+                revisions: popupRevisions(ethereum: 1, solana: 0)
+            ), in: store)
+            let account = popupTestAccount()
+            let access = CompactWalletAccess(account: account)
+            let network = popupTransactionNetwork()
+            var executions = 0
+            let processor = CompactPopupAccessProcessor(execute: { request, _, _ in
+                executions += 1
+                return .response(request.response(error: .internalError))
+            }) { _, _ in
+                .approval(.selectAccount(.init(
+                    coinType: .ethereum, selectedAccounts: [],
+                    initiallyConnectedProviders: [], network: network
+                )))
+            }
+            await store.setBeginHook { access.orderedAccounts = [] }
+
+            if native {
+#if os(macOS)
+                let decision = DappApprovalDecision.accountSelection(.init(
+                    accounts: [.init(walletID: "wallet", address: account.address,
+                                     provider: .ethereum, derivationPath: account.derivationPath)],
+                    ethereumChainID: network.chainIdHexString
+                ))
+                let staged = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
+                let finalizer = NativeApprovalFinalizer(
+                    store: store, requestProcessor: processor,
+                    refreshWalletAccess: { access }, networkResolver: { _ in network }
+                )
+                let result = await finalizeNativeDecision(
+                    finalizer, store: store, snapshot: snapshot, authorization: staged
+                )
+                let error = await store.completedErrorCode(handle: snapshot.handle)
+                let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
+                XCTAssertEqual(result, .responseReady)
+                XCTAssertEqual(error, ProviderResponseError.internalErrorCode)
+                XCTAssertFalse(committed)
+#endif
+            } else {
+                let controller = PopupRequestSessions(
+                    store: store, requestProcessor: processor,
+                    walletEnvironment: popupWalletEnvironment(catalogAccess: { access }),
+                    loadsTransactionContext: false,
+                    selectionNetworkResolver: { _ in network }
+                )
+                let token = try await materializeToken(controller: controller, snapshot: snapshot)
+                let command = try popupCommand(
+                    subject: "approveRequest", id: snapshot.handle.id,
+                    requestToken: snapshot.handle.requestToken, reviewToken: token,
+                    payload: [
+                        "selectedAccounts": [["walletId": "wallet", "address": account.address,
+                                              "coin": "ethereum", "derivationPath": account.derivationPath]],
+                        "chainId": network.chainIdHexString,
+                        "revisions": snapshot.revisions.json,
+                    ]
+                )
+                _ = await controller.dispatchJSON(request: command, profileIdentifier: nil)
+                try await waitForEvent("rollback", store: store)
+                let state = await controller.dispatchJSON(request: try popupCommand(
+                    subject: "getApprovalState", id: snapshot.handle.id,
+                    requestToken: snapshot.handle.requestToken
+                ), profileIdentifier: nil)
+                XCTAssertEqual(state["state"] as? String, "review")
+                XCTAssertNotEqual((state["review"] as? [String: Any])?["reviewToken"] as? String, token)
+            }
+            XCTAssertEqual(executions, 0)
+        }
+    }
+
+    func testSigningValidationRollbackDoesNotAcquireWalletLease() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 602), in: store)
+        guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+            return XCTFail("Expected claim")
+        }
+        defer { claim.releaseLease() }
+        var leaseAcquisitions = 0
+        let result = await DurableApprovalExecutor(store: store).executeSigning(
+            claim: claim, deadline: Date().addingTimeInterval(30),
+            acquireWalletLease: { leaseAcquisitions += 1; return WalletExecutionLease() },
+            operation: { .rollback }
+        )
+        XCTAssertEqual(result, .rolledBack)
+        XCTAssertEqual(leaseAcquisitions, 0)
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "begin", "rollback"])
+    }
+
     func testSessionUsesFourDisposablePhasesAndOneReviewToken() throws {
         let session = try makeSession()
         let initialToken = session.reviewToken
@@ -2028,7 +2126,7 @@ extension PopupRequestSessionsTests {
             let store = try makeStore()
             let snapshot = try await enqueue(popupSnapshot(id: 40 + index, provider: .solana), in: store)
             var resolveCount = 0
-            let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+            let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
                 resolveCount += 1
                 return .response(request.response(error: .userRejected))
             }) { request in
@@ -2321,7 +2419,7 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+                requestProcessor: CompactPopupProcessor(execute: { request, approval, walletAccess in
                     XCTFail("A failed release must not sign")
                     return .response(request.response(error: .internalError))
                 }) { request in
@@ -2448,12 +2546,12 @@ extension PopupRequestSessionsTests {
         var events = [String]()
         let authenticationGate = makeGate()
         var authenticationStarted = false
-        let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             executions += 1
             events.append("execute")
             XCTAssertTrue(walletAccess is RequestScopedWalletAccess)
             XCTAssertEqual(walletAccess?.catalogIdentity, unlockedCatalog.catalogIdentity)
-            guard case .approveMessage(let message) = action,
+            guard case .message(let message, _) = approval,
                   case .ethereumPersonalMessage(let payload) = message.payload else {
                 XCTFail("Expected the reviewed message")
                 return .response(request.response(error: .internalError))
@@ -2529,7 +2627,7 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         var authenticationCount = 0
         var staleResolveCount = 0
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             staleResolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { request in
@@ -2652,7 +2750,7 @@ extension PopupRequestSessionsTests {
         let catalog = CompactWalletAccess(account: popupTestAccount())
         var authenticationCount = 0
         var executionCount = 0
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             executionCount += 1
             await executionGate.wait()
             return .response(request.response(error: .userRejected))
@@ -2728,7 +2826,7 @@ extension PopupRequestSessionsTests {
     func testBroadcastCheckpointsBeforeSendAndCompletion() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 7), in: store)
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             .broadcast(PreparedBroadcast(
                 recoveryResponse: request.response(error: .internalError),
                 send: {
@@ -2779,7 +2877,7 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(id: 411), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
-        let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             let walletAccess = walletAccess!
             await store.record(
                 walletAccess.orderedAccounts.isEmpty
@@ -2853,7 +2951,7 @@ extension PopupRequestSessionsTests {
         let catalog = CompactWalletAccess(account: account)
         var accessIsCurrent = true
         var rotateDuringSigning = true
-        let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             if rotateDuringSigning {
                 accessIsCurrent = false
             }
@@ -2945,7 +3043,7 @@ extension PopupRequestSessionsTests {
         var authenticationStarted = false
         var resolveCount = 0
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .internalError))
         }) { request, _ in
@@ -3020,7 +3118,7 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(id: 412), in: store)
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
-        let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             XCTFail("Cancellation must not sign")
             return .response(request.response(error: .internalError))
         }) { request, _ in
@@ -3081,7 +3179,7 @@ extension PopupRequestSessionsTests {
         let account = popupTestAccount()
         let catalog = CompactWalletAccess(account: account)
         var currentCatalog: WalletAccess? = catalog
-        let processor = CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             XCTFail("An unavailable vault must not sign")
             return .response(request.response(error: .internalError))
         }) { request, _ in
@@ -3152,7 +3250,7 @@ extension PopupRequestSessionsTests {
         var preparedCatalogs = [WalletCatalogIdentity]()
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor(execute: { request, action, decision, walletAccess in
+            requestProcessor: CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
                 XCTFail("A changed catalog must be reviewed before signing")
                 return .response(request.response(error: .internalError))
             }) { request, access in
@@ -3374,7 +3472,7 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(id: 32), in: store)
         let sendGate = makeGate()
         var dispatchCompleted = false
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             .broadcast(PreparedBroadcast(
                 recoveryResponse: request.response(error: .internalError),
                 send: {
@@ -3458,8 +3556,8 @@ extension PopupRequestSessionsTests {
                 return EthereumRequestCancellation()
             }
         )
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
-            let transaction = popupExecutedTransaction(action: action, decision: decision)
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
+            let transaction = popupExecutedTransaction(approval: approval)
             XCTAssertNotNil(transaction)
             await store.record("resolve")
             return .response(request.response(error: .userRejected))
@@ -3554,10 +3652,10 @@ extension PopupRequestSessionsTests {
                 return EthereumRequestCancellation()
             }
         )
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
-            let transaction = popupExecutedTransaction(action: action, decision: decision)
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
+            let transaction = popupExecutedTransaction(approval: approval)
             executionCount += 1
-            guard case .approveTransaction(let reviewed) = action else {
+            guard case .transaction(let reviewed, _) = approval else {
                 XCTFail("Expected the reviewed transaction")
                 return .response(request.response(error: .internalError))
             }
@@ -3651,9 +3749,9 @@ extension PopupRequestSessionsTests {
                 return EthereumRequestCancellation()
             }
         )
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
-            let transaction = popupExecutedTransaction(action: action, decision: decision)
+            let transaction = popupExecutedTransaction(approval: approval)
             XCTAssertEqual(transaction?.from, reviewedTransaction.from)
             XCTAssertEqual(transaction?.to, reviewedTransaction.to)
             XCTAssertEqual(transaction?.value, reviewedTransaction.value)
@@ -3739,7 +3837,7 @@ extension PopupRequestSessionsTests {
                 return EthereumRequestCancellation()
             }
         )
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { request in
@@ -3808,8 +3906,8 @@ extension PopupRequestSessionsTests {
                 return EthereumRequestCancellation()
             }
         )
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
-            let transaction = popupExecutedTransaction(action: action, decision: decision)
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
+            let transaction = popupExecutedTransaction(approval: approval)
             XCTAssertNotNil(transaction)
             resolveCount += 1
             await store.record("resolve")
@@ -3914,7 +4012,7 @@ extension PopupRequestSessionsTests {
                 return EthereumRequestCancellation()
             }
         )
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { request in
@@ -4000,7 +4098,7 @@ extension PopupRequestSessionsTests {
         var executionCount = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { request, _, _, _ in
+            requestProcessor: CompactPopupProcessor(execute: { request, _, _ in
                 executionCount += 1
                 return .response(request.response(error: .userRejected))
             }) { _ in
@@ -4147,7 +4245,7 @@ extension PopupRequestSessionsTests {
         let recovered = expectation(description: "recovery before sender returns")
         let late = expectation(description: "sender returned after recovery")
         let snapshot = try await enqueue(popupSnapshot(id: 8), in: store)
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             .broadcast(PreparedBroadcast(
                 recoveryResponse: request.response(error: .internalError),
                 send: {
@@ -4226,7 +4324,7 @@ extension PopupRequestSessionsTests {
         ), in: store)
         var authenticationCount = 0
         var resolveCount = 0
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { request in
@@ -4285,7 +4383,7 @@ extension PopupRequestSessionsTests {
         ), in: store)
         let catalog = CompactWalletAccess(account: popupSolanaTestAccount())
         var resolveCount = 0
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { request in
@@ -4457,7 +4555,7 @@ extension PopupRequestSessionsTests {
             let staged = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
 
             var executionCount = 0
-            let processor = CompactPopupProcessor(execute: { request, _, _, _ in
+            let processor = CompactPopupProcessor(execute: { request, _, _ in
                 executionCount += 1
                 return .response(request.response(error: .userRejected))
             }) { _ in
@@ -4512,19 +4610,20 @@ extension PopupRequestSessionsTests {
             decision: decision
         )
 
-        let processor = CompactPopupAccessProcessor(execute: { request, action, executedDecision, walletAccess in
-            XCTAssertEqual(executedDecision, decision)
+        let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             XCTAssertTrue(walletAccess === access)
-            guard case .accountSelection(let selection) = executedDecision else {
+            guard case .accountSelection(_, let selection) = approval else {
                 XCTFail("Expected account selection")
                 return .response(request.response(error: .internalError))
             }
+            XCTAssertEqual(selection.accounts, access.orderedAccounts)
+            XCTAssertEqual(selection.network, network)
             await store.record("resolve")
             return .response(ResponseToExtension(
                 for: request,
-                payload: .result(.strings(selection.accounts.map(\.address))),
+                payload: .result(.strings(selection.accounts.map(\.account.address))),
                 mutation: .accounts(selection.accounts.map {
-                    .ethereum(address: $0.address, chainId: network.chainIdHexString)
+                    .ethereum(address: $0.account.address, chainId: network.chainIdHexString)
                 })
             ))
         }) { request, walletAccess in
@@ -4654,7 +4753,7 @@ extension PopupRequestSessionsTests {
             requestProcessor: CompactPopupProcessor(
                 walletIndependent: true
             ,
-            execute: { request, action, decision, walletAccess in
+            execute: { request, approval, walletAccess in
                 XCTAssertNil(walletAccess)
                 await store.releaseExecutionRead(handle: snapshot.handle)
                 return .response(request.response(error: .userRejected))
@@ -4730,7 +4829,7 @@ extension PopupRequestSessionsTests {
             explorer: reviewedNetwork.network.explorer
         )
         var resolveCount = 0
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { _ in
@@ -4797,8 +4896,8 @@ extension PopupRequestSessionsTests {
         var refreshes = 0
         var preparations = 0
         var resolves = 0
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
-            guard case .accountSelection(let selection) = decision else {
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
+            guard case .accountSelection(_, let selection) = approval else {
                 XCTFail("Expected account selection")
                 return .response(request.response(error: .internalError))
             }
@@ -4806,9 +4905,9 @@ extension PopupRequestSessionsTests {
             await store.record("resolve")
             return .response(ResponseToExtension(
                 for: request,
-                payload: .result(.strings(selection.accounts.map(\.address))),
+                payload: .result(.strings(selection.accounts.map(\.account.address))),
                 mutation: .accounts(selection.accounts.map {
-                    .ethereum(address: $0.address, chainId: network.chainIdHexString)
+                    .ethereum(address: $0.account.address, chainId: network.chainIdHexString)
                 })
             ))
         }) { request in
@@ -4890,7 +4989,7 @@ extension PopupRequestSessionsTests {
             )
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(walletIndependent: true, execute: { _, _, _, _ in
+                requestProcessor: CompactPopupProcessor(walletIndependent: true, execute: { _, _, _ in
                     executions += 1
                     return .broadcast(PreparedBroadcast(recoveryResponse: recovery, send: {
                         sends += 1
@@ -4936,7 +5035,7 @@ extension PopupRequestSessionsTests {
         var sends = 0
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: CompactPopupProcessor(walletIndependent: true, execute: { request, _, _, _ in
+            requestProcessor: CompactPopupProcessor(walletIndependent: true, execute: { request, _, _ in
                 started.fulfill()
                 await gate.wait()
                 return .broadcast(PreparedBroadcast(
@@ -4978,7 +5077,7 @@ extension PopupRequestSessionsTests {
             var executions = 0
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(walletIndependent: true, execute: { request, _, _, _ in
+                requestProcessor: CompactPopupProcessor(walletIndependent: true, execute: { request, _, _ in
                     executions += 1
                     return .response(request.response(error: .userRejected))
                 }) { _ in
@@ -5283,7 +5382,7 @@ extension PopupRequestSessionsTests {
         var resolveCount = 0
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+            requestProcessor: CompactPopupProcessor(execute: { request, approval, walletAccess in
                 resolveCount += 1
                 return .response(request.response(error: .userRejected))
             }) { _ in
@@ -5340,7 +5439,7 @@ extension PopupRequestSessionsTests {
 
         var resolveCount = 0
         let network = popupTransactionNetwork()
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { _ in
@@ -5407,7 +5506,7 @@ extension PopupRequestSessionsTests {
 
         var resolveCount = 0
         let network = popupTransactionNetwork()
-        let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+        let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             resolveCount += 1
             return .response(request.response(error: .userRejected))
         }) { _ in
@@ -5466,7 +5565,7 @@ extension PopupRequestSessionsTests {
             )
 
                 var resolveCount = 0
-            let processor = CompactPopupProcessor(execute: { request, action, decision, walletAccess in
+            let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
                 resolveCount += 1
                 return .response(request.response(error: .userRejected))
             }) { _ in
@@ -5855,11 +5954,11 @@ extension PopupRequestSessionsTests {
 private final class CompactPopupProcessor: DappRequestProcessing {
     let handler: (SafariRequest) -> DappRequestPreparation
     let walletIndependent: Bool
-    let execution: (SafariRequest, DappRequestAction, DappApprovalDecision, WalletAccess?) async -> DappExecutionResult
+    let execution: (SafariRequest, DappApprovalValidator.Approval, WalletAccess?) async -> DappExecutionResult
 
     init(
         walletIndependent: Bool = false,
-        execute: @escaping (SafariRequest, DappRequestAction, DappApprovalDecision, WalletAccess?) async -> DappExecutionResult,
+        execute: @escaping (SafariRequest, DappApprovalValidator.Approval, WalletAccess?) async -> DappExecutionResult,
         handler: @escaping (SafariRequest) -> DappRequestPreparation
     ) {
         self.walletIndependent = walletIndependent
@@ -5877,7 +5976,7 @@ private final class CompactPopupProcessor: DappRequestProcessing {
     ) {
         self.init(
             walletIndependent: walletIndependent,
-            execute: { request, _, _, _ in
+            execute: { request, _, _ in
                 .response(request.response(error: .userRejected))
             },
             handler: handler
@@ -5892,18 +5991,18 @@ private final class CompactPopupProcessor: DappRequestProcessing {
         walletIndependent ? handler(request) : nil
     }
 
-    func execute(request: SafariRequest, action: DappRequestAction, decision: DappApprovalDecision, walletAccess: WalletAccess?) async -> DappExecutionResult {
-        await execution(request, action, decision, walletAccess)
+    func execute(request: SafariRequest, approval: DappApprovalValidator.Approval, walletAccess: WalletAccess?) async -> DappExecutionResult {
+        await execution(request, approval, walletAccess)
     }
 }
 
 @MainActor
 private final class CompactPopupAccessProcessor: DappRequestProcessing {
     let handler: (SafariRequest, WalletAccess) -> DappRequestPreparation
-    let execution: (SafariRequest, DappRequestAction, DappApprovalDecision, WalletAccess?) async -> DappExecutionResult
+    let execution: (SafariRequest, DappApprovalValidator.Approval, WalletAccess?) async -> DappExecutionResult
 
     init(
-        execute: @escaping (SafariRequest, DappRequestAction, DappApprovalDecision, WalletAccess?) async -> DappExecutionResult = { request, _, _, _ in
+        execute: @escaping (SafariRequest, DappApprovalValidator.Approval, WalletAccess?) async -> DappExecutionResult = { request, _, _ in
             .response(request.response(error: .userRejected))
         },
         handler: @escaping (SafariRequest, WalletAccess) -> DappRequestPreparation
@@ -5920,14 +6019,14 @@ private final class CompactPopupAccessProcessor: DappRequestProcessing {
         nil
     }
 
-    func execute(request: SafariRequest, action: DappRequestAction, decision: DappApprovalDecision, walletAccess: WalletAccess?) async -> DappExecutionResult {
-        await execution(request, action, decision, walletAccess)
+    func execute(request: SafariRequest, approval: DappApprovalValidator.Approval, walletAccess: WalletAccess?) async -> DappExecutionResult {
+        await execution(request, approval, walletAccess)
     }
 }
 
 private final class CompactWalletAccess: WalletAccess {
     let catalogIdentity: WalletCatalogIdentity
-    let orderedAccounts: [SpecificWalletAccount]
+    var orderedAccounts: [SpecificWalletAccount]
 
     init(accounts: [SpecificWalletAccount], catalogIdentity: WalletCatalogIdentity? = nil) {
         self.orderedAccounts = accounts
@@ -5946,10 +6045,9 @@ private final class CompactWalletAccess: WalletAccess {
     }
 }
 
-private func popupExecutedTransaction(action: DappRequestAction, decision: DappApprovalDecision) -> Transaction? {
-    guard case .approveTransaction(let transaction) = action,
-          case .transaction(let execution) = decision else { return nil }
-    return execution.applying(to: transaction)
+private func popupExecutedTransaction(approval: DappApprovalValidator.Approval) -> Transaction? {
+    guard case .transaction(_, let transaction) = approval else { return nil }
+    return transaction
 }
 
 private actor CompactPopupGate {

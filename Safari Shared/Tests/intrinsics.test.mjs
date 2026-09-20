@@ -95,6 +95,7 @@ for (const family of ["reflection", "collections"]) {
                 [globalThis, "TypeError"],
             ] : [
                 [Map.prototype, "get"], [Map.prototype, "set"],
+                [Map.prototype, "delete"], [Map.prototype, "forEach"],
                 [WeakMap.prototype, "get"], [WeakMap.prototype, "set"],
                 [globalThis, "Map"],
             ];
@@ -113,9 +114,15 @@ for (const family of ["reflection", "collections"]) {
                 const record = runtime.register({payload: {value: 7}});
                 runtime.enqueue(record);
                 runtime.drain(operation => runtime.resolve(operation, operation.payload.value));
+                const rejected = runtime.register({payload: {value: 8}});
+                const rejection = rejected.promise.catch(error => error.message);
+                const rejectedCount = runtime.rejectAll(new Error("reset"));
                 const snapshot = outboundDataSnapshot({items: [1, 2]});
                 return {
                     settled: await record.promise,
+                    rejectedCount,
+                    rejectedOwned: runtime.owns(rejected),
+                    rejection: await rejection,
                     map: i.getMapEntry(map, key),
                     weak: i.getWeakMapValue(weak, key),
                     owned: i.hasOwnProperty(value, "owned"),
@@ -135,6 +142,9 @@ for (const family of ["reflection", "collections"]) {
         })()`).runInContext(context);
         assert.deepEqual(JSON.parse(JSON.stringify(result)), {
             settled: 7,
+            rejectedCount: 1,
+            rejectedOwned: false,
+            rejection: "reset",
             map: "map",
             weak: "weak",
             owned: true,
@@ -146,6 +156,48 @@ for (const family of ["reflection", "collections"]) {
         });
     });
 }
+
+test("operation queues do not expose records to inherited array accessors", async () => {
+    const result = await new vm.Script(`(async () => {
+        const runtime = new module.exports.OperationRuntime("generation");
+        const original = Object.getOwnPropertyDescriptor(Array.prototype, "0");
+        let calls = 0;
+        let order = "";
+        let first, second, failure, firstQueued, secondQueued, drained, rejected;
+        Object.defineProperty(Array.prototype, "0", {
+            configurable: true,
+            get() { calls += 1; throw new Error("Inherited array read"); },
+            set() { calls += 1; throw new Error("Inherited array write"); },
+        });
+        try {
+            first = runtime.register({payload: "first"});
+            second = runtime.register({payload: "second"});
+            failure = second.promise.catch(error => error.message);
+            firstQueued = runtime.enqueue(first);
+            secondQueued = runtime.enqueue(second);
+            drained = runtime.drain(operation => {
+                order += operation.payload + ";";
+                if (operation === first) { runtime.resolve(operation, "first"); }
+                else { rejected = runtime.rejectAll(new Error("reset")); }
+            });
+        } finally {
+            if (original) { Object.defineProperty(Array.prototype, "0", original); }
+            else { delete Array.prototype["0"]; }
+        }
+        return {
+            calls, order, firstQueued, secondQueued, drained, rejected,
+            value: await first.promise,
+            failure: await failure,
+            firstOwned: runtime.owns(first),
+            secondOwned: runtime.owns(second),
+        };
+    })()`).runInContext(harness());
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+        calls: 0, order: "first;second;", firstQueued: true, secondQueued: true,
+        drained: 2, rejected: 1, value: "first", failure: "reset",
+        firstOwned: false, secondOwned: false,
+    });
+});
 
 test("trusted payload containers preserve normalized data under prototype changes", () => {
     const result = new vm.Script(`(() => {

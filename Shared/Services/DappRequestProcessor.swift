@@ -121,37 +121,17 @@ struct DappRequestProcessor: DappRequestProcessing {
 
     func execute(
         request: SafariRequest,
-        action: DappRequestAction,
-        decision: DappApprovalDecision,
+        approval: DappApprovalValidator.Approval,
         walletAccess: WalletAccess?
     ) async -> DappExecutionResult {
-        let accounts: [SpecificWalletAccount]?
-        if case .accountSelection = decision {
-            accounts = walletAccess?.orderedAccounts
-        } else {
-            accounts = nil
-        }
-        let approval: DappApprovalValidator.Approval
-        switch DappApprovalValidator.resolve(
-            action: action,
-            decision: decision,
-            accounts: accounts,
-            networkResolver: Networks.withChainIdHex
-        ) {
-        case .success(let resolved):
-            approval = resolved
-        case .failure:
-            return .response(Self.response(to: request, error: .internalError))
-        }
-        switch (action, approval) {
-        case (.selectAccount(let selectionAction), .accountSelection(let selection)),
-             (.switchAccount(let selectionAction), .accountSelection(let selection)):
+        switch approval {
+        case .accountSelection(let selectionAction, let selection):
             return .response(Self.executeAccountSelection(
                 request: request,
                 action: selectionAction,
                 selection: selection
             ))
-        case (_, .message), (_, .transaction), (_, .addEthereumChain):
+        case .message, .transaction, .addEthereumChain:
             switch request.body {
             case .ethereum:
                 return await EthereumDappRequestProcessor.execute(
@@ -168,8 +148,6 @@ struct DappRequestProcessor: DappRequestProcessing {
             case .unknown:
                 break
             }
-        default:
-            break
         }
         return .response(Self.response(to: request, error: .internalError))
     }

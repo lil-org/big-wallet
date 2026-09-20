@@ -9,6 +9,148 @@ import XCTest
 @MainActor
 final class NativeApprovalCoordinatorTests: XCTestCase {
 
+    func testReviewLifetimeInvalidatesBeforeCleanupAndDoesNotRetainParticipants() {
+        let lifetime = NativeApprovalReviewLifetime()
+        var cleanupCount = 0
+        let participant = ReviewTeardownController()
+        participant.onInvalidate = {
+            XCTAssertFalse(lifetime.isActive)
+            cleanupCount += 1
+            lifetime.invalidate()
+        }
+        lifetime.register(participant)
+        lifetime.register(participant)
+        var discarded: ReviewTeardownController? = ReviewTeardownController()
+        weak var weakDiscarded = discarded
+        lifetime.register(discarded!)
+        discarded = nil
+        XCTAssertNil(weakDiscarded)
+
+        lifetime.invalidate()
+        lifetime.invalidate()
+        XCTAssertEqual(cleanupCount, 1)
+
+        let late = ReviewTeardownController()
+        late.onInvalidate = { cleanupCount += 1; XCTAssertFalse(lifetime.isActive) }
+        lifetime.register(late)
+        XCTAssertEqual(cleanupCount, 2)
+    }
+
+    func testReviewLifetimeKeepsAllParticipantsAliveUntilCleanupFinishes() {
+        let lifetime = NativeApprovalReviewLifetime()
+        let first = ReviewTeardownController()
+        var second: ReviewTeardownController? = ReviewTeardownController()
+        weak var weakSecond = second
+        var cleanedSecond = false
+        first.onInvalidate = { second = nil }
+        second?.onInvalidate = { cleanedSecond = true }
+        lifetime.register(first)
+        lifetime.register(second!)
+
+        lifetime.invalidate()
+
+        XCTAssertTrue(cleanedSecond)
+        XCTAssertNil(weakSecond)
+    }
+
+    func testFreshReviewKeepsOldSelectionAndPasswordCallbacksInactive() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, approval, window) = try attachApprovalWindow(to: fixture)
+        defer { fixture.coordinator.onEvent = nil; window.close() }
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
+        let accounts = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
+        let selection = try XCTUnwrap(accounts.accountSelection)
+        let oldReview = try XCTUnwrap(approval.currentReview)
+        var passwordCompletions = 0
+        let password = PasswordViewController.with(
+            mode: .enter, reviewLifetime: oldReview,
+            completion: { _ in passwordCompletions += 1 }
+        )
+        window.contentViewController = password
+        _ = password.view
+
+        let freshReview = try XCTUnwrap(approval.beginReview())
+        XCTAssertFalse(oldReview.isActive)
+        XCTAssertTrue(freshReview.isActive)
+        selection.complete(accounts: [])
+        password.cancelButtonTapped(password.cancelButton)
+        _ = accounts.perform(NSSelectorFromString("didClickImportAccount"))
+
+        XCTAssertTrue(window.contentViewController === password)
+        XCTAssertEqual(passwordCompletions, 0)
+        XCTAssertTrue(fixture.store.stagedApprovalDates.isEmpty)
+        XCTAssertTrue(approval.currentReview === freshReview)
+    }
+
+    func testAccountNavigationSharesLifetimeAndCleansRetainedScreens() throws {
+        let controller = accountSelectionController(
+            manager: try accountSelectionWalletsManager(), mode: .selectAccount,
+            selectedAccounts: []
+        )
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        let lifetime = try XCTUnwrap(controller.accountSelection?.lifetime)
+        let menu = TrackingMenu()
+        controller.addButton.menu = menu
+        _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
+        let imported = try XCTUnwrap(window.contentViewController as? ImportViewController)
+        XCTAssertTrue(imported.accountSelection === controller.accountSelection)
+        _ = imported.view
+
+        lifetime.invalidate()
+        lifetime.invalidate()
+        imported.cancelButtonTapped(imported.cancelButton)
+        _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
+
+        XCTAssertTrue(window.contentViewController === imported)
+        XCTAssertEqual(menu.cancellationCount, 1)
+    }
+
+    func testOrdinaryWalletCloseStillFencesRetainedActions() throws {
+        let controller = accountSelectionController(
+            manager: try accountSelectionWalletsManager(), mode: nil,
+            selectedAccounts: []
+        )
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        let menu = TrackingMenu()
+        controller.addButton.menu = menu
+        let notification = Notification(name: NSWindow.willCloseNotification, object: window)
+
+        controller.windowWillClose(notification)
+        controller.windowWillClose(notification)
+        _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
+
+        XCTAssertNil(controller.accountSelection)
+        XCTAssertTrue(window.contentViewController === controller)
+        XCTAssertEqual(menu.cancellationCount, 1)
+    }
+
+    func testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission() {
+        let lifetime = NativeApprovalReviewLifetime()
+        var completions = 0
+        let session = NativeAccountSelectionSession(
+            action: .init(coinType: nil, selectedAccounts: [],
+                          initiallyConnectedProviders: [], network: nil),
+            mode: .selectAccount, lifetime: lifetime
+        ) { _, _ in completions += 1 }
+
+        session.complete(accounts: []) {
+            XCTAssertTrue(session.hasCompleted)
+            XCTAssertTrue(lifetime.isActive)
+            session.complete(accounts: nil)
+        }
+        XCTAssertEqual(completions, 1)
+        XCTAssertTrue(lifetime.isActive)
+        lifetime.invalidate()
+        session.complete(accounts: nil)
+        XCTAssertEqual(completions, 1)
+    }
+
     private final class Clock {
         var now = Date(timeIntervalSince1970: 1_800_000_000) {
             didSet { uptime += max(0, now.timeIntervalSince(oldValue)) }
@@ -1184,6 +1326,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             meta: "Review this message",
             account: account,
             walletId: "appearance-test",
+            reviewLifetime: NativeApprovalReviewLifetime(),
             completion: { _ in XCTFail("Appearance does not approve a request") }
         )
         windowController.contentViewController = controller
@@ -1286,6 +1429,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let session = NativeAccountSelectionSession(
             action: action,
             mode: .switchAccount,
+            lifetime: NativeApprovalReviewLifetime(),
             completion: { _, _ in }
         )
 
@@ -1307,6 +1451,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let session = NativeAccountSelectionSession(
             action: action,
             mode: .selectAccount,
+            lifetime: NativeApprovalReviewLifetime(),
             completion: { _, network in completedNetwork = network }
         )
         session.network = changedNetwork
@@ -1338,6 +1483,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         controller.accountSelection = NativeAccountSelectionSession(
             action: action,
             mode: .selectAccount,
+            lifetime: NativeApprovalReviewLifetime(),
             completion: { _, _ in }
         )
         controller.loadView()
@@ -1380,6 +1526,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let session = NativeAccountSelectionSession(
             action: action,
             mode: .selectAccount,
+            lifetime: NativeApprovalReviewLifetime(),
             completion: { _, _ in completionCount += 1 }
         )
         let controller = instantiate(AccountsListViewController.self)
@@ -1576,7 +1723,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
         XCTAssertFalse(controller.primaryButton.isEnabled)
 
-        controller.invalidateNativeApprovalReview()
+        controller.accountSelection?.lifetime.invalidate()
         try pressKey(" ", keyCode: 49, in: table, window: window)
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
     }
@@ -1698,6 +1845,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
         let controller = instantiate(AccountsListViewController.self)
+        let lifetime = NativeApprovalReviewLifetime()
+        controller.accountSelection = NativeAccountSelectionSession(
+            action: SelectAccountAction(coinType: nil, selectedAccounts: [],
+                                        initiallyConnectedProviders: [], network: nil),
+            mode: .selectAccount, lifetime: lifetime, completion: { _, _ in }
+        )
         windowController.contentViewController = controller
         let addMenu = TrackingMenu()
         let tableMenu = TrackingMenu()
@@ -1705,8 +1858,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         controller.tableView.menu = tableMenu
         let originalContent = windowController.contentViewController
 
-        controller.invalidateNativeApprovalReview()
-        controller.invalidateNativeApprovalReview()
+        lifetime.invalidate()
+        lifetime.invalidate()
         _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
 
         XCTAssertEqual(addMenu.cancellationCount, 1)
@@ -2154,9 +2307,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             },
             prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
         ))
-        fixture.store.stageHandler = { _, _, _, _ in
-            writeStarted.fulfill()
-            return await writeGate.run()
+        var attempts = 0
+        fixture.store.stageHandler = { handle, nonce, owner, _ in
+            attempts += 1
+            XCTAssertEqual(handle, fixture.key.handle)
+            XCTAssertEqual(nonce, fixture.key.nativeDeliveryNonce)
+            XCTAssertEqual(owner, fixture.runtime)
+            if attempts == 1 {
+                writeStarted.fulfill()
+                return await writeGate.run()
+            }
+            XCTAssertFalse(storageUnavailable)
+            return .persisted
         }
         fixture.store.rejectHandler = { _, _, _ in
             XCTFail("A durably staged decision must win over cancellation")
@@ -2182,6 +2344,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .waiting)
         XCTAssertEqual(fixture.events.presentations.count, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        XCTAssertEqual(attempts, 2)
+        XCTAssertEqual(Set(fixture.store.stagedApprovalDates).count, 1)
         fixture.store.snapshot = nil
     }
 
@@ -2527,8 +2691,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var stagedNonce: ExtensionBridge.NativeDeliveryNonce?
         var stagedRuntime: UUID?
         let store = CoordinatorStore()
-        store.loadHandler = { _ in .found(snapshot) }
+        var loads = 0
+        store.loadHandler = { _ in loads += 1; return .found(snapshot) }
         store.stageHandler = { _, value, owner, _ in
+            XCTAssertEqual(loads, 0, "The store mutation owns the atomic precondition check")
             stagedNonce = value
             stagedRuntime = owner
             staged.fulfill()
@@ -2555,6 +2721,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return XCTFail("Expected approval")
         }
 
+        loads = 0
         coordinator.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [staged], timeout: 1)
 
@@ -2815,7 +2982,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForScheduledWait(waits, count: 2)
-        XCTAssertEqual(loads, 3)
+        XCTAssertEqual(loads, 2)
         XCTAssertEqual(stages, 1)
         XCTAssertEqual(waits.delays.count, 2)
         waits.resume(1)
@@ -3469,6 +3636,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             XCTAssertFalse(approval.acceptsReviewActions)
             XCTAssertNil(approval.beginRenderingCurrentPresentation())
         }
+        approval.currentReview?.register(outgoing)
         window.contentViewController = outgoing
 
         fixture.store.snapshot = nil
@@ -3940,6 +4108,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     network: Networks.ethereum
                 ),
                 mode: mode,
+                lifetime: NativeApprovalReviewLifetime(),
                 completion: { _, _ in }
             )
         }

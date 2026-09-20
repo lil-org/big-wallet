@@ -21,8 +21,9 @@ struct PreparedBroadcast {
 }
 
 enum DappExecutionResult {
-    case response(ResponseToExtension)
+    case response(ResponseToExtension, approvalCommitted: Bool = true)
     case broadcast(PreparedBroadcast)
+    case rollback
 }
 
 struct SelectAccountAction {

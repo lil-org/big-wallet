@@ -1445,13 +1445,13 @@ final class ExtensionRequestFileStore {
     ) -> ExtensionBridge.StoreMutationResult {
         withLock(or: .retryablePersistenceFailure) {
             let now = clock()
-            guard response.id == handle.id,
-                  case .state(var profile) = readProfileLocked(
+            guard response.id == handle.id else { return .ownershipLost }
+            guard case .state(var profile) = readProfileLocked(
                     profileIdentifier: handle.profileIdentifier,
                     now: now,
                     recover: false
-                  ),
-                  let index = profile.state.records.firstIndex(where: { $0.handle == handle }) else {
+                  ) else { return .retryablePersistenceFailure }
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == handle }) else {
                 return .ownershipLost
             }
             guard case .pending = profile.state.records[index].state,

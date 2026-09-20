@@ -130,11 +130,10 @@ final class NativeApprovalFinalizer {
         ) else {
             return await execute(
                 claim: nativeClaim.approvalClaim,
-                markingApprovalCommitted: false,
                 authorization: authorization,
                 executionContext: executionContext
             ) {
-                .response(Self.staleResponse(for: request))
+                .response(Self.staleResponse(for: request), approvalCommitted: false)
             }
         }
 
@@ -158,59 +157,44 @@ final class NativeApprovalFinalizer {
         case .response(let response):
             return await execute(
                 claim: nativeClaim.approvalClaim,
-                markingApprovalCommitted: false,
                 authorization: authorization,
                 executionContext: executionContext
-            ) { .response(response) }
+            ) { .response(response, approvalCommitted: false) }
         case .approval(let action):
-            let accounts: [SpecificWalletAccount]?
-            if case .accountSelection = authorization.decision {
-                accounts = walletAccess?.orderedAccounts
-            } else {
-                accounts = nil
-            }
-            switch DappApprovalValidator.resolve(
-                action: action,
-                decision: authorization.decision,
-                accounts: accounts,
-                networkResolver: networkResolver
-            ) {
-            case .success:
-                break
-            case .failure(.staleTransaction):
-                return await completeStaleTransactionDecision(
-                    nativeClaim,
-                    request: request,
-                    authorization: authorization,
-                    executionContext: executionContext
-                )
-            case .failure(.invalidDecision):
-                return await persistInternalError(
-                    claim: nativeClaim.approvalClaim,
-                    request: request,
-                    authorization: authorization,
-                    executionContext: executionContext
-                )
-            }
             return await execute(
                 claim: nativeClaim.approvalClaim,
-                preExecutionValidation: {
-                    self.transactionDecisionIsFresh(
-                        nativeClaim,
-                        request: request
-                    )
-                        ? nil
-                        : Self.staleResponse(for: request)
-                },
                 authorization: authorization,
                 executionContext: executionContext
             ) {
-                await self.requestProcessor.execute(
-                    request: request,
+                guard self.transactionDecisionIsFresh(nativeClaim, request: request) else {
+                    return .response(Self.staleResponse(for: request), approvalCommitted: false)
+                }
+                let accounts: [SpecificWalletAccount]?
+                if case .accountSelection = authorization.decision {
+                    accounts = walletAccess?.orderedAccounts
+                } else {
+                    accounts = nil
+                }
+                switch DappApprovalValidator.resolve(
                     action: action,
                     decision: authorization.decision,
-                    walletAccess: walletAccess
-                )
+                    accounts: accounts,
+                    networkResolver: self.networkResolver
+                ) {
+                case .success(let approval):
+                    return await self.requestProcessor.execute(
+                        request: request,
+                        approval: approval,
+                        walletAccess: walletAccess
+                    )
+                case .failure(.staleTransaction):
+                    return .response(Self.staleResponse(for: request), approvalCommitted: false)
+                case .failure(.invalidDecision):
+                    return .response(ResponseToExtension(
+                        for: request,
+                        payload: .error(.internalError)
+                    ), approvalCommitted: false)
+                }
             }
         }
     }
@@ -260,30 +244,10 @@ final class NativeApprovalFinalizer {
     ) async -> NativeApprovalFinalizationResult {
         await execute(
             claim: nativeClaim.approvalClaim,
-            markingApprovalCommitted: false,
             authorization: authorization,
             executionContext: executionContext
         ) {
-            .response(Self.staleResponse(for: request))
-        }
-    }
-
-    private func persistInternalError(
-        claim: ExtensionBridge.ApprovalClaim,
-        request: SafariRequest,
-        authorization: ExtensionBridge.NativeApprovalAuthorization,
-        executionContext: ExtensionBridge.NativeExecutionContext
-    ) async -> NativeApprovalFinalizationResult {
-        return await execute(
-            claim: claim,
-            markingApprovalCommitted: false,
-            authorization: authorization,
-            executionContext: executionContext
-        ) {
-            .response(ResponseToExtension(
-                for: request,
-                payload: .error(.internalError)
-            ))
+            .response(Self.staleResponse(for: request), approvalCommitted: false)
         }
     }
 
@@ -305,8 +269,6 @@ final class NativeApprovalFinalizer {
 
     private func execute(
         claim: ExtensionBridge.ApprovalClaim,
-        markingApprovalCommitted: Bool = true,
-        preExecutionValidation: (() -> ResponseToExtension?)? = nil,
         authorization: ExtensionBridge.NativeApprovalAuthorization,
         executionContext: ExtensionBridge.NativeExecutionContext,
         operation: @escaping () async -> DappExecutionResult
@@ -314,8 +276,6 @@ final class NativeApprovalFinalizer {
         let result = await executor.executeNative(
             claim: claim,
             context: executionContext,
-            markingApprovalCommitted: markingApprovalCommitted,
-            preExecutionValidation: preExecutionValidation,
             operation: operation
         )
         switch result {

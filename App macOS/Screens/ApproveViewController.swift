@@ -30,6 +30,7 @@ class ApproveViewController: NSViewController {
     private var account: WalletAccount!
     private var completion: ((Decision) -> Void)!
     private var didCallCompletion = false
+    private var reviewLifetime: NativeApprovalReviewLifetime!
     private var walletId: String!
     private var solanaClusterOptions: SolanaClusterOptions?
     private var selectedCluster: Solana.Cluster?
@@ -44,9 +45,11 @@ class ApproveViewController: NSViewController {
                      account: WalletAccount,
                      walletId: String,
                      solanaClusterOptions: SolanaClusterOptions? = nil,
+                     reviewLifetime: NativeApprovalReviewLifetime,
                      completion: @escaping (Decision) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.walletId = walletId
+        new.reviewLifetime = reviewLifetime
         new.completion = completion
         new.subject = subject
         new.meta = meta
@@ -59,6 +62,8 @@ class ApproveViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        reviewLifetime.register(self)
+        guard reviewLifetime.isActive else { return }
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
@@ -155,7 +160,7 @@ class ApproveViewController: NSViewController {
     }
     
     private func callCompletion(result: Decision) {
-        if !didCallCompletion {
+        if reviewLifetime.isActive && !didCallCompletion {
             didCallCompletion = true
             completion(result)
         }
@@ -187,9 +192,7 @@ extension ApproveViewController: NativeApprovalReviewTeardown {
 extension ApproveViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        peerLogoImageView?.cancelRemoteImageLoad()
-        localWindowCloseCompletion?()
-        localWindowCloseCompletion = nil
+        reviewLifetime.invalidate()
     }
     
 }

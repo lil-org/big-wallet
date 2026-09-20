@@ -117,21 +117,17 @@ class Agent: NSObject {
 
     @MainActor
     final class ActiveApproval {
-        private enum ReviewState {
-            case inactive
-            case reviewing(cleanup: (() -> Void)?)
-            case retired
-        }
-
         let coordinator: NativeApprovalCoordinator
         private lazy var windowCloseObserver = NativeApprovalWindowCloseObserver { [weak self] in
             guard let self else { return }
             isDismissed = true
+            endReview()
             coordinator.reject()
         }
         private(set) var isDismissed = false
         private var lastRenderedRevision: UInt64?
-        private var reviewState = ReviewState.inactive
+        private(set) var currentReview: NativeApprovalReviewLifetime?
+        private var isRetired = false
         var windowController: NSWindowController? {
             didSet {
                 guard !isRetired else { return }
@@ -146,13 +142,11 @@ class Agent: NSObject {
         }
 
         var acceptsReviewActions: Bool {
-            if case .reviewing = reviewState { return true }
-            return false
+            currentReview?.isActive == true
         }
 
-        private var isRetired: Bool {
-            if case .retired = reviewState { return true }
-            return false
+        private func acceptsActions(for review: NativeApprovalReviewLifetime) -> Bool {
+            currentReview === review && review.isActive
         }
 
         func activate() {
@@ -179,9 +173,14 @@ class Agent: NSObject {
             return snapshot
         }
 
-        func beginReview(sharedCleanup: (() -> Void)? = nil) {
-            guard !isRetired else { return }
-            reviewState = .reviewing(cleanup: sharedCleanup)
+        @discardableResult
+        func beginReview() -> NativeApprovalReviewLifetime? {
+            guard !isRetired else { return nil }
+            endReview()
+            guard !isRetired else { return nil }
+            let review = NativeApprovalReviewLifetime()
+            currentReview = review
+            return review
         }
 
         func endReview() {
@@ -190,20 +189,13 @@ class Agent: NSObject {
 
         private func finishReview(retiring: Bool) {
             guard !isRetired else { return }
-            let cleanup: (() -> Void)?
-            if case .reviewing(let operation) = reviewState {
-                cleanup = operation
-            } else {
-                cleanup = nil
-            }
-            reviewState = retiring ? .retired : .inactive
+            let review = currentReview
+            currentReview = nil
+            isRetired = retiring
             if retiring {
                 windowCloseObserver.disable()
             }
-            cleanup?()
-            (windowController?.contentViewController as?
-                NativeApprovalReviewTeardown)?
-                .invalidateNativeApprovalReview()
+            review?.invalidate()
         }
     }
 
@@ -380,9 +372,11 @@ class Agent: NSObject {
         browser: Browser? = nil,
         onStart: Bool,
         reason: AuthenticationReason,
+        reviewLifetime: NativeApprovalReviewLifetime? = nil,
         onWindowClose: (() -> Void)? = nil,
         completion: @escaping (Bool) -> Void
     ) -> LAContext? {
+        guard reviewLifetime?.isActive != false else { return nil }
         let context = LAContext()
         var error: NSError?
         let canDoLocalAuthentication = context.canEvaluatePolicy(
@@ -391,14 +385,17 @@ class Agent: NSObject {
         )
         
         func showPasswordScreen() {
+            guard reviewLifetime?.isActive != false else { return }
             let window = on ?? Window.showNew(closeOthers: onStart).window
             let presentation = WeakViewControllerReference()
             let passwordViewController = PasswordViewController.with(
                 mode: .enter,
                 reason: reason,
+                reviewLifetime: reviewLifetime,
                 windowCloseCompletion: onWindowClose
             ) { [weak window] success in
-                guard window?.contentViewController === presentation.value
+                guard reviewLifetime?.isActive != false,
+                      window?.contentViewController === presentation.value
                 else { return }
                 if let getBackTo {
                     window?.contentViewController = getBackTo
@@ -430,6 +427,7 @@ class Agent: NSObject {
             localizedReason: reason.title
         ) { success, _ in
             DispatchQueue.main.async {
+                guard reviewLifetime?.isActive != false else { return }
                 switch Self.localAuthenticationResolution(
                     success: success,
                     onStart: onStart
@@ -670,23 +668,24 @@ extension Agent.ActiveApproval {
     }
 
     private func present(action: DappRequestAction, peer: PeerMeta, using agent: Agent) {
+        guard let review = beginReview() else { return }
         let windowController = approvalWindow(peer: peer)
         switch action {
         case .selectAccount(let action):
-            presentAccountSelection(action, mode: .selectAccount)
+            presentAccountSelection(action, mode: .selectAccount, review: review)
         case .switchAccount(let action):
-            presentAccountSelection(action, mode: .switchAccount)
+            presentAccountSelection(action, mode: .switchAccount, review: review)
         case .approveMessage(let action):
-            showApproveMessage(action, using: agent)
-            beginReview()
+            showApproveMessage(action, review: review, using: agent)
         case .approveTransaction(let action):
             windowController.contentViewController = ApproveTransactionViewController.with(
                 transaction: action.transaction,
                 chain: action.chain,
                 account: action.account,
-                walletId: action.walletId
+                walletId: action.walletId,
+                reviewLifetime: review
             ) { [weak self] transaction in
-                guard let self, acceptsReviewActions else { return }
+                guard let self, acceptsActions(for: review) else { return }
                 if let transaction {
                     coordinator.approveTransaction(
                         transaction,
@@ -696,9 +695,8 @@ extension Agent.ActiveApproval {
                     coordinator.reject()
                 }
             }
-            beginReview()
         case .addEthereumChain(let action):
-            presentAddEthereumChain(action)
+            presentAddEthereumChain(action, review: review)
         }
     }
 
@@ -717,8 +715,10 @@ extension Agent.ActiveApproval {
         return controller
     }
 
-    private func presentAddEthereumChain(_ action: AddEthereumChainAction) {
-        beginReview()
+    private func presentAddEthereumChain(
+        _ action: AddEthereumChainAction,
+        review: NativeApprovalReviewLifetime
+    ) {
         let controller = approvalWindow()
         Self.installWaitingSurface(reason: Strings.loading, in: controller)
         guard let window = controller.window else {
@@ -732,7 +732,7 @@ extension Agent.ActiveApproval {
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)
         alert.beginSheetModal(for: window) { [weak self] response in
-            guard let self, acceptsReviewActions else { return }
+            guard let self, acceptsActions(for: review) else { return }
             if response == .alertFirstButtonReturn {
                 coordinator.approveAddEthereumChain()
             } else {
@@ -743,12 +743,13 @@ extension Agent.ActiveApproval {
 
     private func presentAccountSelection(
         _ action: SelectAccountAction,
-        mode: NativeAccountSelectionMode
+        mode: NativeAccountSelectionMode,
+        review: NativeApprovalReviewLifetime
     ) {
         let accountsList = instantiate(AccountsListViewController.self)
-        let session = NativeAccountSelectionSession(action: action, mode: mode) {
+        let session = NativeAccountSelectionSession(action: action, mode: mode, lifetime: review) {
             [weak self] accounts, network in
-            guard let self, acceptsReviewActions else { return }
+            guard let self, acceptsActions(for: review) else { return }
             guard let accounts else {
                 coordinator.reject()
                 return
@@ -760,10 +761,13 @@ extension Agent.ActiveApproval {
         }
         accountsList.accountSelection = session
         approvalWindow().contentViewController = accountsList
-        beginReview { session.invalidate() }
     }
 
-    private func showApproveMessage(_ action: SignMessageAction, using agent: Agent) {
+    private func showApproveMessage(
+        _ action: SignMessageAction,
+        review: NativeApprovalReviewLifetime,
+        using agent: Agent
+    ) {
         let controller = approvalWindow()
         let window = controller.window
         var authenticationContext: LAContext?
@@ -773,9 +777,10 @@ extension Agent.ActiveApproval {
             meta: action.meta,
             account: action.account,
             walletId: action.walletId,
-            solanaClusterOptions: action.solanaClusterOptions
+            solanaClusterOptions: action.solanaClusterOptions,
+            reviewLifetime: review
         ) { [weak self, weak agent, weak window] decision in
-            guard let self, acceptsReviewActions else { return }
+            guard let self, acceptsActions(for: review) else { return }
             guard case .approved = decision else {
                 guard !didResolveAuthentication else { return }
                 didResolveAuthentication = true
@@ -788,9 +793,10 @@ extension Agent.ActiveApproval {
                 browser: .safari,
                 onStart: false,
                 reason: action.subject.asAuthenticationReason,
+                reviewLifetime: review,
                 onWindowClose: { didResolveAuthentication = true }
             ) { [weak self, weak window] success in
-                guard let self, acceptsReviewActions, !didResolveAuthentication else { return }
+                guard let self, acceptsActions(for: review), !didResolveAuthentication else { return }
                 didResolveAuthentication = true
                 authenticationContext = nil
                 if success, case .approved(let cluster) = decision {

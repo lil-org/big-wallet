@@ -13,8 +13,7 @@ protocol DappRequestProcessing {
 
     func execute(
         request: SafariRequest,
-        action: DappRequestAction,
-        decision: DappApprovalDecision,
+        approval: DappApprovalValidator.Approval,
         walletAccess: WalletAccess?
     ) async -> DappExecutionResult
 }

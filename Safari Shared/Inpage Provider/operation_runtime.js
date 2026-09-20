@@ -4,12 +4,9 @@
 
 import {
     applyFunction,
-    freezeObjectNormally,
     pushArrayNormally,
     MapConstructor,
     TypeErrorConstructor,
-    getWeakMapValue,
-    setWeakMapValue,
     getMapEntry,
     setMapEntry,
 } from "./intrinsics";
@@ -21,7 +18,6 @@ const ErrorConstructor = Error;
 const RangeErrorConstructor = RangeError;
 const defaultMaximumLoadingOperations = 64;
 const maximumWireId = Number.MAX_SAFE_INTEGER;
-const recordStates = new WeakMap;
 
 function operationQueue() {
     const queue = [];
@@ -94,32 +90,29 @@ class OperationRuntime {
             resolvePromise = resolve;
             rejectPromise = reject;
         });
-        const record = freezeObjectNormally({
+        const record = {
+            __proto__: null,
             generation: this.#generation,
             metadata,
             originalId,
             payload,
             promise,
             wireId,
-        });
-        const entry = {
-            record,
             dispatching: false,
             queued: false,
             rejectPromise,
             resolvePromise,
         };
-        setMapEntry(this.#operations, wireId, entry);
-        setWeakMapValue(recordStates, record, entry);
+        setMapEntry(this.#operations, wireId, record);
         return record;
     }
 
     owns(record) {
-        return this.#entry(record) !== null;
+        return !!record && getMapEntry(this.#operations, record.wireId) === record;
     }
 
     operation(wireId) {
-        return getMapEntry(this.#operations, wireId)?.record;
+        return getMapEntry(this.#operations, wireId);
     }
 
     enqueue(record) {
@@ -127,13 +120,12 @@ class OperationRuntime {
             this.#phase === "failed") {
             return false;
         }
-        const entry = this.#entry(record);
-        if (!entry || entry.queued || entry.dispatching) { return false; }
+        if (!this.owns(record) || record.queued || record.dispatching) { return false; }
         if (this.#loadingAdmissionCount >= this.#maximumLoadingOperations) {
             return false;
         }
         this.#loadingAdmissionCount += 1;
-        entry.queued = true;
+        record.queued = true;
         applyFunction(pushArrayNormally, this.#queue, [record]);
         return true;
     }
@@ -161,17 +153,16 @@ class OperationRuntime {
                 const record = drainingQueue[queueIndex];
                 drainingQueue[queueIndex] = null;
                 queueIndex += 1;
-                const entry = this.#entry(record);
-                if (!entry || !entry.queued) { continue; }
-                entry.queued = false;
-                entry.dispatching = true;
+                if (!this.owns(record) || !record.queued) { continue; }
+                record.queued = false;
+                record.dispatching = true;
                 try {
                     dispatch(record);
                     dispatched += 1;
                 } catch (error) {
                     this.reject(record, error);
                 } finally {
-                    entry.dispatching = false;
+                    record.dispatching = false;
                 }
             }
         } finally {
@@ -231,21 +222,12 @@ class OperationRuntime {
         return this.rejectAll(error);
     }
 
-    #entry(record) {
-        const entry = getWeakMapValue(recordStates, record);
-        if (!entry || getMapEntry(this.#operations, entry.record.wireId) !== entry) {
-            return null;
-        }
-        return entry;
-    }
-
     #take(record) {
-        const entry = this.#entry(record);
-        if (!entry) { return null; }
-        deleteMapEntry(this.#operations, entry.record.wireId);
-        entry.dispatching = false;
-        entry.queued = false;
-        return entry;
+        if (!this.owns(record)) { return null; }
+        deleteMapEntry(this.#operations, record.wireId);
+        record.dispatching = false;
+        record.queued = false;
+        return record;
     }
 }
 

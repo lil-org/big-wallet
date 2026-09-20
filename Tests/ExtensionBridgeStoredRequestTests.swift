@@ -86,6 +86,24 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("Expected private browsing rejection") }
     }
 
+    func testCompletionReadFailureIsRetryableWithoutLosingOwnership() async throws {
+        let fixture = try makeFixture(id: 742)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        )).handle
+        var unavailable = true
+        let writer = makeBridge(clock: { self.clock.now }, readData: { url in
+            if unavailable { throw CocoaError(.fileReadUnknown) }
+            return try ExtensionRequestFileStore.defaultReadData(url)
+        })
+
+        let failed = await writer.complete(handle: handle, response: response(for: fixture.request))
+        XCTAssertEqual(failed, .retryablePersistenceFailure)
+        unavailable = false
+        let retried = await writer.complete(handle: handle, response: response(for: fixture.request))
+        XCTAssertEqual(retried, .persisted)
+    }
+
     #if os(macOS)
     func testEmbeddedHelperStaysInsideTheSafariExtensionBundle() throws {
         let extensionURL = URL(fileURLWithPath:

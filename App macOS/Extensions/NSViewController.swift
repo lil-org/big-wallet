@@ -8,6 +8,35 @@ protocol NativeApprovalReviewTeardown: AnyObject {
     func invalidateNativeApprovalReview()
 }
 
+@MainActor
+final class NativeApprovalReviewLifetime {
+    private struct Participant {
+        weak var value: (any NativeApprovalReviewTeardown)?
+    }
+
+    private(set) var isActive = true
+    private var participants = [ObjectIdentifier: Participant]()
+
+    func register(_ participant: any NativeApprovalReviewTeardown) {
+        guard isActive else {
+            participant.invalidateNativeApprovalReview()
+            return
+        }
+        participants = participants.filter { $0.value.value != nil }
+        participants[ObjectIdentifier(participant)] = Participant(value: participant)
+    }
+
+    func invalidate() {
+        guard isActive else { return }
+        isActive = false
+        let activeParticipants = participants.values.compactMap(\.value)
+        participants.removeAll()
+        for participant in activeParticipants {
+            participant.invalidateNativeApprovalReview()
+        }
+    }
+}
+
 extension NSViewController {
 
     var nativeApprovalPeer: PeerMeta? {

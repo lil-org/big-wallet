@@ -8,7 +8,7 @@ class ImportViewController: NSViewController {
     var accountSelection: NativeAccountSelectionSession?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     private var presentedPasswordAlert: (alert: NSAlert, token: UUID)?
-    private var isNativeApprovalReviewInvalidated = false
+    private var reviewLifetime: NativeApprovalReviewLifetime?
     private var isImporting = false
     
     @IBOutlet weak var titleTextField: NSTextField!
@@ -24,13 +24,16 @@ class ImportViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        reviewLifetime = accountSelection?.lifetime
+        reviewLifetime?.register(self)
+        guard reviewLifetime?.isActive != false else { return }
         cancelButton.title = Strings.cancel
         okButton.title = Strings.ok
         titleTextField.stringValue = Strings.importWallet.replacingOccurrences(of: " ", with: "\n")
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard !isImporting else { return }
+        guard reviewLifetime?.isActive != false, !isImporting else { return }
         if inputValidationResult == .requiresPassword {
             showPasswordAlert()
         } else {
@@ -83,7 +86,7 @@ class ImportViewController: NSViewController {
                   presentedPasswordAlert?.alert === alert,
                   presentedPasswordAlert?.token == token else { return }
             presentedPasswordAlert = nil
-            guard !isNativeApprovalReviewInvalidated,
+            guard reviewLifetime?.isActive != false,
                   response == .alertFirstButtonReturn else { return }
             importWith(
                 input: input,
@@ -105,7 +108,7 @@ class ImportViewController: NSViewController {
     }
     
     private func importWith(input: String, password: String?) {
-        guard !isImporting, !isNativeApprovalReviewInvalidated else { return }
+        guard !isImporting, reviewLifetime?.isActive != false else { return }
         isImporting = true
         okButton.isEnabled = false
         cancelButton.isEnabled = false
@@ -115,19 +118,20 @@ class ImportViewController: NSViewController {
                 okButton.isEnabled = inputValidationResult != .invalid
                 cancelButton.isEnabled = true
             }
-            guard !isNativeApprovalReviewInvalidated else { return }
+            guard reviewLifetime?.isActive != false else { return }
             do {
                 let wallet = try await walletsManager.addWallet(input: input, inputPassword: password)
-                guard !isNativeApprovalReviewInvalidated else { return }
+                guard reviewLifetime?.isActive != false else { return }
                 showAccountsList(newWalletId: wallet.id)
             } catch {
-                guard !isNativeApprovalReviewInvalidated else { return }
+                guard reviewLifetime?.isActive != false else { return }
                 presentMessageAlert(Strings.failedToImportWallet, style: .critical)
             }
         }
     }
     
     private func showAccountsList(newWalletId: String?) {
+        guard reviewLifetime?.isActive != false else { return }
         let accountsListViewController = instantiate(AccountsListViewController.self)
         accountsListViewController.accountSelection = accountSelection
         accountsListViewController.newWalletId = newWalletId
@@ -143,8 +147,6 @@ class ImportViewController: NSViewController {
 extension ImportViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        guard !isNativeApprovalReviewInvalidated else { return }
-        isNativeApprovalReviewInvalidated = true
         dismissPasswordAlert()
         endAllSheets()
     }

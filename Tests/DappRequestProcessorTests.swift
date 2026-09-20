@@ -63,11 +63,15 @@ final class DappRequestProcessorTests: XCTestCase {
         let executionAccess = ProcessorWalletAccess(accounts: [account], key: privateKey)
         let result = await DappRequestProcessor().execute(
             request: request,
-            action: .approveMessage(action),
-            decision: .message(.init(solanaCluster: nil)),
+            approval: try DappApprovalValidator.resolve(
+                action: .approveMessage(action),
+                decision: .message(.init(solanaCluster: nil)),
+                accounts: nil,
+                networkResolver: Networks.withChainIdHex
+            ).get(),
             walletAccess: executionAccess
         )
-        guard case .response(let response) = result else {
+        guard case .response(let response, _) = result else {
             return XCTFail("Message signing must not broadcast")
         }
         XCTAssertEqual(
@@ -94,21 +98,24 @@ final class DappRequestProcessorTests: XCTestCase {
                 )],
                 ethereumChainID: "0x1"
             ))
-            let result = await DappRequestProcessor().execute(
-                request: request,
-                action: action,
-                decision: decision,
-                walletAccess: access
+            let resolved = DappApprovalValidator.resolve(
+                action: action, decision: decision,
+                accounts: access.orderedAccounts,
+                networkResolver: Networks.withChainIdHex
             )
-            guard case .response(let response) = result else {
-                return XCTFail("Account selection must not broadcast")
-            }
             if path == account.derivationPath {
+                let result = await DappRequestProcessor().execute(
+                    request: request, approval: try resolved.get(), walletAccess: access
+                )
+                guard case .response(let response, _) = result else {
+                    return XCTFail("Account selection must not broadcast")
+                }
                 XCTAssertEqual(response.json["result"] as? [String], [account.address])
                 XCTAssertNotNil(response.mutation)
             } else {
-                XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.internalErrorCode)
-                XCTAssertNil(response.mutation)
+                guard case .failure(.invalidDecision) = resolved else {
+                    return XCTFail("A different derivation path must fail validation")
+                }
             }
         }
         XCTAssertEqual(access.privateKeyReads, 0)
@@ -135,22 +142,20 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("Expected prepared Solana broadcast")
         }
         XCTAssertEqual(action.solanaClusterOptions?.suggestedCluster, .devnet)
-        let missingCluster = await DappRequestProcessor().execute(
-            request: request,
+        guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
             action: .approveMessage(action),
             decision: .message(.init(solanaCluster: nil)),
-            walletAccess: access
-        )
-        guard case .response(let failure) = missingCluster else {
-            return XCTFail("A missing cluster must not prepare a broadcast")
-        }
-        XCTAssertNotNil(failure.json["error"])
+            accounts: nil, networkResolver: Networks.withChainIdHex
+        ) else { return XCTFail("A missing cluster must fail validation") }
         XCTAssertEqual(access.privateKeyReads, 0)
 
         let result = await DappRequestProcessor().execute(
             request: request,
-            action: .approveMessage(action),
-            decision: .message(.init(solanaCluster: .testnet)),
+            approval: try DappApprovalValidator.resolve(
+                action: .approveMessage(action),
+                decision: .message(.init(solanaCluster: .testnet)),
+                accounts: nil, networkResolver: Networks.withChainIdHex
+            ).get(),
             walletAccess: access
         )
         guard case .broadcast(let broadcast) = result else {
@@ -228,20 +233,14 @@ final class DappRequestProcessorTests: XCTestCase {
             ([identity], [account, account]),
             ([identity], []),
         ]
-        let request = try ethereumRequest(method: "requestAccounts", address: account.address)
         for (identities, accounts) in cases {
             let access = ProcessorWalletAccess(accounts: accounts, key: key)
-            let result = await DappRequestProcessor().execute(
-                request: request,
+            guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
                 action: .selectAccount(action),
                 decision: .accountSelection(.init(accounts: identities, ethereumChainID: nil)),
-                walletAccess: access
-            )
-            guard case .response(let response) = result else {
-                return XCTFail("Invalid selections must not broadcast")
-            }
-            XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.internalErrorCode)
-            XCTAssertNil(response.mutation)
+                accounts: access.orderedAccounts,
+                networkResolver: Networks.withChainIdHex
+            ) else { return XCTFail("Invalid selections must fail validation") }
             XCTAssertEqual(access.privateKeyReads, 0)
         }
     }
@@ -295,21 +294,12 @@ final class DappRequestProcessorTests: XCTestCase {
                 subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
                 payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
             )
-            let request = try coin == .ethereum
-                ? ethereumRequest(method: "signMessage", address: account.address)
-                : solanaRequest(method: "signMessage", publicKey: account.address)
             for decision in [DappApprovalDecision.message(.init(solanaCluster: .devnet)),
                              .addEthereumChain] {
-                let result = await DappRequestProcessor().execute(
-                    request: request, action: .approveMessage(action),
-                    decision: decision, walletAccess: access
-                )
-                guard case .response(let response) = result else {
-                    return XCTFail("Invalid decisions must not broadcast")
-                }
-                XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String,
-                               Strings.somethingWentWrong)
-                XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.internalErrorCode)
+                guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
+                    action: .approveMessage(action), decision: decision,
+                    accounts: nil, networkResolver: Networks.withChainIdHex
+                ) else { return XCTFail("Invalid decisions must fail validation") }
                 XCTAssertEqual(access.orderedAccountReads, 0)
                 XCTAssertEqual(access.privateKeyReads, 0)
             }
@@ -380,14 +370,16 @@ final class DappRequestProcessorTests: XCTestCase {
         )
         let result = await DappRequestProcessor().execute(
             request: request,
-            action: .switchAccount(action),
-            decision: .accountSelection(.init(
-                accounts: [],
-                ethereumChainID: "0x7fffffffffffffff"
-            )),
+            approval: try DappApprovalValidator.resolve(
+                action: .switchAccount(action),
+                decision: .accountSelection(.init(
+                    accounts: [], ethereumChainID: "0x7fffffffffffffff"
+                )),
+                accounts: [], networkResolver: Networks.withChainIdHex
+            ).get(),
             walletAccess: ProcessorWalletAccess(accounts: [])
         )
-        guard case .response(let response) = result else {
+        guard case .response(let response, _) = result else {
             return XCTFail("Disconnecting must not broadcast")
         }
         XCTAssertNil(response.json["error"])

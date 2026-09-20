@@ -7,12 +7,14 @@ class PasswordViewController: NSViewController {
     static func with(
         mode: Mode,
         reason: AuthenticationReason? = nil,
+        reviewLifetime: NativeApprovalReviewLifetime? = nil,
         windowCloseCompletion: (() -> Void)? = nil,
         completion: ((Bool) -> Void)?
     ) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
         new.reason = reason
+        new.reviewLifetime = reviewLifetime
         new.windowCloseCompletion = windowCloseCompletion
         new.completion = completion
         return new
@@ -29,6 +31,7 @@ class PasswordViewController: NSViewController {
     private var windowCloseCompletion: (() -> Void)?
     private var completion: ((Bool) -> Void)?
     private var didCallCompletion = false
+    private var reviewLifetime: NativeApprovalReviewLifetime?
 
     private var isCreatingPassword: Bool {
         switch mode {
@@ -51,6 +54,8 @@ class PasswordViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        reviewLifetime?.register(self)
+        guard reviewLifetime?.isActive != false else { return }
         
         passwordTextField.placeholderString = Strings.password
         cancelButton.title = Strings.cancel
@@ -95,6 +100,7 @@ class PasswordViewController: NSViewController {
     }
     
     @IBAction func actionButtonTapped(_ sender: Any) {
+        guard reviewLifetime?.isActive != false, !didCallCompletion else { return }
         switch mode {
         case .create:
             switchToMode(.repeatAfterCreate)
@@ -131,6 +137,7 @@ class PasswordViewController: NSViewController {
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
+        guard reviewLifetime?.isActive != false, !didCallCompletion else { return }
         switch mode {
         case .create:
             view.window?.contentViewController = WelcomeViewController.new(completion: completion)
@@ -142,7 +149,7 @@ class PasswordViewController: NSViewController {
     }
     
     private func callCompletion(result: Bool) {
-        if !didCallCompletion {
+        if reviewLifetime?.isActive != false && !didCallCompletion {
             didCallCompletion = true
             NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
             completion?(result)
@@ -171,9 +178,24 @@ extension PasswordViewController: NSTextFieldDelegate {
 extension PasswordViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
+        if let reviewLifetime {
+            reviewLifetime.invalidate()
+            return
+        }
         windowCloseCompletion?()
         windowCloseCompletion = nil
         callCompletion(result: false)
     }
     
+}
+
+extension PasswordViewController: NativeApprovalReviewTeardown {
+
+    func invalidateNativeApprovalReview() {
+        didCallCompletion = true
+        NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
+        completion = nil
+        windowCloseCompletion = nil
+    }
+
 }

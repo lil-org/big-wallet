@@ -50,15 +50,16 @@ class ApproveTransactionViewController: NSViewController {
     private var gasSliderInteractionDidMove = false
     private var sheetState = SheetState.idle
     private var pendingApprovalAlert: TransactionApprovalAlertIntent?
-    private var isNativeApprovalReviewInvalidated = false
+    private var reviewLifetime: NativeApprovalReviewLifetime!
 
     private var transaction: Transaction {
         approvalSnapshot.transaction
     }
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, reviewLifetime: NativeApprovalReviewLifetime, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.walletId = walletId
+        new.reviewLifetime = reviewLifetime
         new.account = account
         new.chain = chain
         new.completion = completion
@@ -76,6 +77,8 @@ class ApproveTransactionViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        reviewLifetime.register(self)
+        guard reviewLifetime.isActive else { return }
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
@@ -138,7 +141,7 @@ class ApproveTransactionViewController: NSViewController {
     private func handleApprovalOutput(
         _ output: TransactionApprovalOutput
     ) {
-        guard !isNativeApprovalReviewInvalidated else { return }
+        guard reviewLifetime.isActive else { return }
         switch output {
         case .snapshot(let snapshot):
             approvalSnapshot = snapshot
@@ -181,13 +184,14 @@ class ApproveTransactionViewController: NSViewController {
             browser: nil,
             onStart: false,
             reason: .sendTransaction,
+            reviewLifetime: reviewLifetime,
             onWindowClose: { [weak self] in
                 self?.cancelAuthentication()
                 self?.coordinator.invalidate()
             }
         ) { [weak self] succeeded in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  reviewLifetime.isActive else { return }
             if authenticationToken == token {
                 authenticationContext = nil
                 authenticationToken = nil
@@ -231,7 +235,7 @@ class ApproveTransactionViewController: NSViewController {
         }
         alert.beginSheetModal(for: window) {
             [weak self, weak alert] response in
-            guard let self, let alert,
+            guard let self, reviewLifetime.isActive, let alert,
                   case let .approvalAlert(currentAlert, currentToken) =
                     self.sheetState,
                   currentAlert === alert,
@@ -446,7 +450,7 @@ class ApproveTransactionViewController: NSViewController {
             suggestedFee: snapshot.latestWalletSuggestedFee,
             completion: { [weak self] edits in
                 guard let self,
-                      !isNativeApprovalReviewInvalidated else { return }
+                      reviewLifetime.isActive else { return }
                 guard let edits else {
                     self.endTransactionEditorSheet()
                     return
@@ -469,7 +473,7 @@ class ApproveTransactionViewController: NSViewController {
                     to: updatedTransaction
                 )
                 self.endTransactionEditorSheet { [weak self] in
-                    guard let self,
+                    guard let self, reviewLifetime.isActive,
                           self.approvalSnapshot.phase != .finished else {
                         return
                     }
@@ -631,8 +635,6 @@ extension ApproveTransactionViewController:
     NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        guard !isNativeApprovalReviewInvalidated else { return }
-        isNativeApprovalReviewInvalidated = true
         peerLogoImageView?.cancelRemoteImageLoad()
         cancelAuthentication()
         pendingApprovalAlert = nil
@@ -640,6 +642,7 @@ extension ApproveTransactionViewController:
         resetGasSliderInteraction()
         coordinator.onOutput = { _ in }
         coordinator.invalidate()
+        endAllSheets()
     }
 
 }
@@ -647,7 +650,7 @@ extension ApproveTransactionViewController:
 extension ApproveTransactionViewController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
-        guard !isNativeApprovalReviewInvalidated else { return }
+        guard reviewLifetime.isActive else { return }
         guard gasSliderInteractionStartValue != nil else { return }
         guard approvalSnapshot.allowsMutation else {
             finishGasSliderInteraction(
@@ -663,7 +666,7 @@ extension ApproveTransactionViewController: NSWindowDelegate {
     }
 
     func windowDidEndSheet(_ notification: Notification) {
-        guard !isNativeApprovalReviewInvalidated else { return }
+        guard reviewLifetime.isActive else { return }
         switch sheetState {
         case .endingTransactionEditor(let completion):
             sheetState = .idle
@@ -680,10 +683,7 @@ extension ApproveTransactionViewController: NSWindowDelegate {
     }
     
     func windowWillClose(_ notification: Notification) {
-        peerLogoImageView?.cancelRemoteImageLoad()
-        cancelAuthentication()
-        coordinator.invalidate()
-        endAllSheets()
+        reviewLifetime.invalidate()
     }
     
 }

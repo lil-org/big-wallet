@@ -777,12 +777,6 @@ final class PopupRequestSessions {
             guard let execution = DappApprovalDecision.TransactionExecution(
                       approved.transaction,
                       reviewedNetwork: reviewedAction.resolvedNetwork
-                  ),
-                  case .success = DappApprovalValidator.resolve(
-                      action: action,
-                      decision: .transaction(execution),
-                      accounts: nil,
-                      networkResolver: selectionNetworkResolver
                   ) else {
                 await releaseApproval(
                     approval.claim,
@@ -801,7 +795,7 @@ final class PopupRequestSessions {
                     await walletAccess.takeExecutionLease()
                 }
             ) {
-                await self.requestProcessor.execute(
+                await self.executeDecision(
                     request: session.request,
                     action: action,
                     decision: .transaction(execution),
@@ -817,7 +811,7 @@ final class PopupRequestSessions {
                 for: session,
                 token: approval.token
             ) {
-                await self.requestProcessor.execute(
+                await self.executeDecision(
                     request: session.request,
                     action: action,
                     decision: .addEthereumChain,
@@ -954,7 +948,7 @@ final class PopupRequestSessions {
             for: session,
             token: approval.token
         ) {
-            await self.requestProcessor.execute(
+            await self.executeDecision(
                 request: session.request,
                 action: approvedAction,
                 decision: decision,
@@ -1028,7 +1022,7 @@ final class PopupRequestSessions {
                 await walletAccess.takeExecutionLease()
             }
         ) {
-            await self.requestProcessor.execute(
+            await self.executeDecision(
                 request: session.request,
                 action: .approveMessage(action),
                 decision: .message(.init(solanaCluster: cluster)),
@@ -1254,6 +1248,31 @@ final class PopupRequestSessions {
         case .retryablePersistenceFailure:
             return .status(.unavailable)
         }
+    }
+
+    private func executeDecision(
+        request: SafariRequest,
+        action: DappRequestAction,
+        decision: DappApprovalDecision,
+        walletAccess: WalletAccess?
+    ) async -> DappExecutionResult {
+        let accounts: [SpecificWalletAccount]?
+        if case .accountSelection = decision {
+            accounts = walletAccess?.orderedAccounts
+        } else {
+            accounts = nil
+        }
+        guard case .success(let approval) = DappApprovalValidator.resolve(
+            action: action,
+            decision: decision,
+            accounts: accounts,
+            networkResolver: selectionNetworkResolver
+        ) else { return .rollback }
+        return await requestProcessor.execute(
+            request: request,
+            approval: approval,
+            walletAccess: walletAccess
+        )
     }
 
     private func beginExecution(

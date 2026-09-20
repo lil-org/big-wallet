@@ -209,7 +209,7 @@ enum DappApprovalValidator {
     }
 
     enum Approval {
-        case accountSelection(Selection)
+        case accountSelection(SelectAccountAction, Selection)
         case message(SignMessageAction, Solana.Cluster?)
         case transaction(SendTransactionAction, Transaction)
         case addEthereumChain(AddEthereumChainAction)
@@ -236,7 +236,7 @@ enum DappApprovalValidator {
                     accounts: accounts,
                     networkResolver: networkResolver
                   ) else { return .failure(.invalidDecision) }
-            return .success(.accountSelection(resolved))
+            return .success(.accountSelection(action, resolved))
         case (.approveMessage(let action), .message(let approval)):
             guard (action.solanaClusterOptions != nil) ==
                     (approval.solanaCluster != nil) else {

@@ -8,7 +8,9 @@ enum NativeAccountSelectionMode {
     case selectAccount, switchAccount
 }
 
+@MainActor
 final class NativeAccountSelectionSession {
+    let lifetime: NativeApprovalReviewLifetime
     let coinType: WalletCoin?
     var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
@@ -19,16 +21,18 @@ final class NativeAccountSelectionSession {
         [SpecificWalletAccount]?,
         EthereumNetwork?
     ) -> Void
-    private var didComplete = false
+    private(set) var hasCompleted = false
 
     init(
         action: SelectAccountAction,
         mode: NativeAccountSelectionMode,
+        lifetime: NativeApprovalReviewLifetime,
         completion: @escaping (
             [SpecificWalletAccount]?,
             EthereumNetwork?
         ) -> Void
     ) {
+        self.lifetime = lifetime
         coinType = action.coinType
         selectedAccounts = action.selectedAccounts
         initiallyConnectedProviders = action.initiallyConnectedProviders
@@ -53,14 +57,15 @@ final class NativeAccountSelectionSession {
         return !needsEthereumNetwork || network != nil
     }
 
-    func complete(accounts: [SpecificWalletAccount]?) {
-        guard !didComplete else { return }
-        didComplete = true
+    func complete(
+        accounts: [SpecificWalletAccount]?,
+        beforeCompletion: () -> Void = {}
+    ) {
+        guard lifetime.isActive, !hasCompleted else { return }
+        hasCompleted = true
+        beforeCompletion()
+        guard lifetime.isActive else { return }
         completion(accounts, network)
-    }
-
-    func invalidate() {
-        didComplete = true
     }
 }
 
@@ -78,8 +83,8 @@ class AccountsListViewController: NSViewController {
     private var didAppear = false
     private var preferencesButton: NSButton?
     private var authenticationContext: LAContext?
-    private var isNativeApprovalReviewInvalidated = false
-    private var isSubmittingAccountSelection = false
+    private var isClosed = false
+    private var reviewLifetime: NativeApprovalReviewLifetime?
     var accountSelection: NativeAccountSelectionSession?
     var newWalletId: String?
     var getBackToRect: CGRect?
@@ -158,8 +163,8 @@ class AccountsListViewController: NSViewController {
     }
 
     private var acceptsUserActions: Bool {
-        !isNativeApprovalReviewInvalidated &&
-            !isSubmittingAccountSelection
+        !isClosed && reviewLifetime?.isActive != false &&
+            accountSelection?.hasCompleted != true
     }
 
     private var shouldShowPreferencesButton: Bool {
@@ -180,7 +185,10 @@ class AccountsListViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+        reviewLifetime = accountSelection?.lifetime
+        reviewLifetime?.register(self)
+        guard acceptsUserActions else { return }
+
         primaryButton.title = Strings.connect
         secondaryButton.title = Strings.cancel
         tableView.keyboardActivation = { [weak self] in
@@ -229,11 +237,11 @@ class AccountsListViewController: NSViewController {
 
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         guard acceptsUserActions, let accountSelection else { return }
-        isSubmittingAccountSelection = true
-        setAccountSelectionControlsEnabled(false)
-        cancelMenuTracking()
-        closeAllPopupsIfNeeded()
-        accountSelection.complete(accounts: specificWalletAccounts)
+        accountSelection.complete(accounts: specificWalletAccounts) {
+            setAccountSelectionControlsEnabled(false)
+            cancelMenuTracking()
+            closeAllPopupsIfNeeded()
+        }
     }
 
     private func setAccountSelectionControlsEnabled(_ isEnabled: Bool) {
@@ -455,7 +463,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: Strings.cancel)
         presentAlert(alert) { [weak self] response in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if response == .alertFirstButtonReturn {
                 createNewAccountAndShowSecretWords()
             }
@@ -653,7 +661,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: Strings.removeAnyway)
         presentAlert(alert) { [weak self] response in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if response != .alertFirstButtonReturn {
                 warnBeforeRemoving(wallet: wallet)
             }
@@ -668,17 +676,18 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: Strings.cancel)
         presentAlert(alert) { [weak self] response in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if response == .alertFirstButtonReturn {
                 authenticationContext = agent.askAuthentication(
                     on: view.window,
                     getBackTo: self,
                     browser: nil,
                     onStart: false,
-                    reason: .removeWallet
+                    reason: .removeWallet,
+                    reviewLifetime: reviewLifetime
                 ) { [weak self] allowed in
                     guard let self,
-                          !isNativeApprovalReviewInvalidated else { return }
+                          acceptsUserActions else { return }
                     authenticationContext = nil
                     Window.activateWindow(view.window)
                     if allowed {
@@ -724,7 +733,7 @@ class AccountsListViewController: NSViewController {
             placeholder: account.croppedAddress
         ) { [weak self] newName in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if let newName {
                 WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
                 tableView.reloadData()
@@ -748,7 +757,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: Strings.cancel)
         presentAlert(alert) { [weak self] response in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if response == .alertFirstButtonReturn {
                 let reason: AuthenticationReason = showingMnemonic
                     ? .showSecretWords
@@ -758,10 +767,11 @@ class AccountsListViewController: NSViewController {
                     getBackTo: self,
                     browser: nil,
                     onStart: false,
-                    reason: reason
+                    reason: reason,
+                    reviewLifetime: reviewLifetime
                 ) { [weak self] allowed in
                     guard let self,
-                          !isNativeApprovalReviewInvalidated else { return }
+                          acceptsUserActions else { return }
                     authenticationContext = nil
                     Window.activateWindow(view.window)
                     if allowed {
@@ -803,7 +813,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: Strings.copy)
         presentAlert(alert) { [weak self] response in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if response != .alertFirstButtonReturn {
                 NSPasteboard.general.clearAndSetString(secret)
             }
@@ -1015,7 +1025,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
             placeholder: Strings.multicoinWallet
         ) { [weak self] newName in
             guard let self,
-                  !isNativeApprovalReviewInvalidated else { return }
+                  acceptsUserActions else { return }
             if let newName {
                 WalletsMetadataService.saveWalletName(newName, wallet: wallet)
                 tableView.reloadData()
@@ -1135,13 +1145,10 @@ extension AccountsListViewController: NSTableViewDataSource {
 extension AccountsListViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        guard !isNativeApprovalReviewInvalidated else { return }
-        isNativeApprovalReviewInvalidated = true
         websiteLogoImageView?.cancelRemoteImageLoad()
         cancelMenuTracking()
         authenticationContext?.invalidate()
         authenticationContext = nil
-        accountSelection?.invalidate()
         endAllSheets()
     }
 
@@ -1165,7 +1172,13 @@ extension AccountsListViewController: NSMenuDelegate {
 extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        invalidateNativeApprovalReview()
+        if let reviewLifetime {
+            reviewLifetime.invalidate()
+        } else {
+            guard !isClosed else { return }
+            isClosed = true
+            invalidateNativeApprovalReview()
+        }
         closeAllPopupsIfNeeded()
     }
     

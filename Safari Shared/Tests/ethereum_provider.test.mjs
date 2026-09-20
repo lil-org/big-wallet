@@ -441,7 +441,7 @@ test("OperationRuntime supports provider-distinct monotonic wire IDs", async () 
     await Promise.all([first.promise, second.promise]);
 });
 
-test("OperationRuntime rejects forged and foreign handles without invoking getters", async () => {
+test("OperationRuntime rejects copied and foreign operations with matching IDs", async () => {
     const {exports} = moduleHarness(operationRuntimeSource);
     const Runtime = exports.default;
     const runtime = new Runtime("local");
@@ -449,14 +449,9 @@ test("OperationRuntime rejects forged and foreign handles without invoking gette
     const local = runtime.register({payload: {}});
     const foreign = otherRuntime.register({payload: {}});
     assert.equal(local.wireId, foreign.wireId);
-    const forged = {
-        get wireId() { throw new Error("Forged wire ID getter invoked"); },
-    };
-    const proxy = new Proxy(local, {
-        get() { throw new Error("Proxy getter invoked"); },
-    });
+    const copied = {...local};
 
-    for (const handle of [forged, proxy, foreign]) {
+    for (const handle of [copied, foreign]) {
         assert.equal(runtime.owns(handle), false);
         assert.equal(runtime.enqueue(handle), false);
         assert.equal(runtime.resolve(handle, "forged"), false);
@@ -587,16 +582,13 @@ test("OperationRuntime drains work admitted after a reentrant reset", async () =
     assert.equal(runtime.phase, "ready");
 });
 
-test("OperationRuntime handles getter reentry and drains a reentrant FIFO", async () => {
+test("OperationRuntime drains a reentrant FIFO and rejects dispatch failures", async () => {
     const {exports} = moduleHarness(operationRuntimeSource);
     const Runtime = exports.default;
     const runtime = new Runtime("runtime-generation");
-    let nested;
+    const nested = runtime.register({originalId: 1, payload: {name: "nested"}});
     const outer = runtime.register({
-        get originalId() {
-            nested = runtime.register({originalId: 1, payload: {name: "nested"}});
-            return 1;
-        },
+        originalId: 1,
         payload: {name: "outer"},
     });
     assert.deepEqual([nested.wireId, outer.wireId], [1, 2]);

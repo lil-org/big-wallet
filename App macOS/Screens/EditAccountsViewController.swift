@@ -21,7 +21,7 @@ class EditAccountsViewController: NSViewController {
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
     private var isSaving = false
-    private var isNativeApprovalReviewInvalidated = false
+    private var reviewLifetime: NativeApprovalReviewLifetime?
     private var previewCoin: WalletCoin? { accountSelection?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
@@ -37,6 +37,9 @@ class EditAccountsViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        reviewLifetime = accountSelection?.lifetime
+        reviewLifetime?.register(self)
+        guard reviewLifetime?.isActive != false else { return }
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
@@ -82,7 +85,7 @@ class EditAccountsViewController: NSViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        guard !isSaving, !isNativeApprovalReviewInvalidated, let wallet else { return }
+        guard !isSaving, reviewLifetime?.isActive != false, let wallet else { return }
         guard !toggledIndexes.isEmpty else {
             showAccountsList()
             return
@@ -99,19 +102,20 @@ class EditAccountsViewController: NSViewController {
                 updateOkButtonState()
                 cancelButton.isEnabled = true
             }
-            guard !isNativeApprovalReviewInvalidated else { return }
+            guard reviewLifetime?.isActive != false else { return }
             do {
                 try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
-                guard !isNativeApprovalReviewInvalidated else { return }
+                guard reviewLifetime?.isActive != false else { return }
                 showAccountsList()
             } catch {
-                guard !isNativeApprovalReviewInvalidated else { return }
+                guard reviewLifetime?.isActive != false else { return }
                 presentMessageAlert(Strings.somethingWentWrong, style: .informational)
             }
         }
     }
     
     private func showAccountsList() {
+        guard reviewLifetime?.isActive != false else { return }
         invalidatePreviewAccounts()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         let accountsListViewController = instantiate(AccountsListViewController.self)
@@ -255,9 +259,7 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
 extension EditAccountsViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        isNativeApprovalReviewInvalidated = true
         invalidatePreviewAccounts()
-        accountSelection?.invalidate()
         NotificationCenter.default.removeObserver(
             self,
             name: .walletsChanged,

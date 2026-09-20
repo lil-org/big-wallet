@@ -103,8 +103,6 @@ final class DurableApprovalExecutor {
         await execute(
             claim: claim,
             plan: .ordinary,
-            markingApprovalCommitted: true,
-            preExecutionValidation: nil,
             operation: operation
         )
     }
@@ -121,8 +119,6 @@ final class DurableApprovalExecutor {
                 deadline: deadline,
                 acquireWalletLease: acquireWalletLease
             ),
-            markingApprovalCommitted: true,
-            preExecutionValidation: nil,
             operation: operation
         )
     }
@@ -130,15 +126,11 @@ final class DurableApprovalExecutor {
     func executeNative(
         claim: ExtensionBridge.ApprovalClaim,
         context: ExtensionBridge.NativeExecutionContext,
-        markingApprovalCommitted: Bool = true,
-        preExecutionValidation: (() -> ResponseToExtension?)? = nil,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
         await execute(
             claim: claim,
             plan: .native(context: context),
-            markingApprovalCommitted: markingApprovalCommitted,
-            preExecutionValidation: preExecutionValidation,
             operation: operation
         )
     }
@@ -146,8 +138,6 @@ final class DurableApprovalExecutor {
     private func execute(
         claim: ExtensionBridge.ApprovalClaim,
         plan: ExecutionPlan,
-        markingApprovalCommitted: Bool,
-        preExecutionValidation: (() -> ResponseToExtension?)?,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
         let permit: ExtensionBridge.ExecutionPermit
@@ -162,19 +152,6 @@ final class DurableApprovalExecutor {
         if case .native = plan.authority, Task.isCancelled {
             return await rollback(permit: permit)
         }
-        if let response = preExecutionValidation?() {
-            if let expired = await rollbackIfExpired(
-                permit: permit,
-                plan: plan
-            ) {
-                return expired
-            }
-            return await complete(
-                permit: permit,
-                response: response,
-                plan: plan
-            )
-        }
         let operationResult: DappExecutionResult
         if let deadline = plan.deadline {
             guard let result = await boundedOperation(
@@ -187,6 +164,9 @@ final class DurableApprovalExecutor {
         } else {
             operationResult = await operation()
         }
+        if case .rollback = operationResult {
+            return await rollback(permit: permit)
+        }
         var acquiredExecutionLease: WalletExecutionLease?
         if let acquireWalletLease = plan.acquireWalletLease {
             let lease = await Task { await acquireWalletLease() }.value
@@ -197,8 +177,8 @@ final class DurableApprovalExecutor {
         }
         defer { acquiredExecutionLease?.release() }
         switch operationResult {
-        case .response(let response):
-            let response = markingApprovalCommitted
+        case .response(let response, let approvalCommitted):
+            let response = approvalCommitted
                 ? response.markingApprovalCommitted()
                 : response
             if let expired = await rollbackIfExpired(
@@ -213,9 +193,7 @@ final class DurableApprovalExecutor {
                 plan: plan
             )
         case .broadcast(let prepared):
-            let recoveryResponse = markingApprovalCommitted
-                ? prepared.recoveryResponse.markingApprovalCommitted()
-                : prepared.recoveryResponse
+            let recoveryResponse = prepared.recoveryResponse.markingApprovalCommitted()
             if let expired = await rollbackIfExpired(
                 permit: permit,
                 plan: plan
@@ -239,11 +217,11 @@ final class DurableApprovalExecutor {
             let delivered = await boundedBroadcast(prepared)
             return await complete(
                 permit: permit,
-                response: markingApprovalCommitted
-                    ? delivered.markingApprovalCommitted()
-                    : delivered,
+                response: delivered.markingApprovalCommitted(),
                 plan: .ordinary
             )
+        case .rollback:
+            return await rollback(permit: permit)
         }
     }
 
