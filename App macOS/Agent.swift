@@ -130,7 +130,7 @@ class Agent: NSObject {
             coordinator.reject()
         }
         private(set) var isDismissed = false
-        var pendingPresentation: NativeApprovalCoordinator.Presentation?
+        private var lastRenderedRevision: UInt64?
         private var reviewState = ReviewState.inactive
         var windowController: NSWindowController? {
             didSet {
@@ -170,15 +170,13 @@ class Agent: NSObject {
             isDismissed = false
         }
 
-        func receive(_ presentation: NativeApprovalCoordinator.Presentation) -> Bool {
-            guard !isRetired else { return false }
-            guard isDismissed else { return true }
-            switch presentation {
-            case .finished, .superseded, .interrupted: return true
-            default:
-                pendingPresentation = presentation
-                return false
-            }
+        func beginRenderingCurrentPresentation() -> NativeApprovalCoordinator.PresentationSnapshot? {
+            guard !isRetired,
+                  let snapshot = coordinator.currentPresentation,
+                  snapshot.revision != lastRenderedRevision,
+                  !isDismissed || snapshot.presentation.isTerminal else { return nil }
+            lastRenderedRevision = snapshot.revision
+            return snapshot
         }
 
         func beginReview(sharedCleanup: (() -> Void)? = nil) {
@@ -201,7 +199,6 @@ class Agent: NSObject {
             reviewState = retiring ? .retired : .inactive
             if retiring {
                 windowCloseObserver.disable()
-                pendingPresentation = nil
             }
             cleanup?()
             (windowController?.contentViewController as?
@@ -296,18 +293,14 @@ class Agent: NSObject {
                 switch event {
                 case .authenticationRequired:
                     self.handleReceiptOwnedApproval(key)
-                case .presentation(let presentation):
+                case .presentationChanged:
                     if self.approvalInbox.active(for: key) == nil {
-                        if case .finished = presentation {
-                            self.approvalInbox.remove(key)
-                        } else if case .superseded = presentation {
-                            self.approvalInbox.remove(key)
-                        } else if case .interrupted = presentation {
+                        if coordinator.currentPresentation?.presentation.isTerminal == true {
                             self.approvalInbox.remove(key)
                         }
                         return
                     }
-                    self.present(presentation, for: handle, coordinator: coordinator)
+                    self.renderCurrentPresentation(for: handle, coordinator: coordinator)
                 }
             }
             startPendingApprovals()
@@ -587,14 +580,13 @@ class Agent: NSObject {
         coordinator.resumeAfterAuthentication()
     }
 
-    func present(
-        _ presentation: NativeApprovalCoordinator.Presentation,
+    func renderCurrentPresentation(
         for handle: ExtensionBridge.Handle,
         coordinator: NativeApprovalCoordinator
     ) {
         guard let approval = activeApproval(for: handle, coordinator: coordinator),
-              approval.receive(presentation) else { return }
-        let finishedWindowAction = approval.present(presentation, using: self)
+              let snapshot = approval.beginRenderingCurrentPresentation() else { return }
+        let finishedWindowAction = approval.present(snapshot.presentation, using: self)
         if finishedWindowAction != nil {
             approvalInbox.remove(ApprovalRouteKey(
                 handle: handle,
@@ -681,9 +673,9 @@ extension Agent.ActiveApproval {
         let windowController = approvalWindow(peer: peer)
         switch action {
         case .selectAccount(let action):
-            presentAccountSelection(action, mode: .selectAccount, using: agent)
+            presentAccountSelection(action, mode: .selectAccount)
         case .switchAccount(let action):
-            presentAccountSelection(action, mode: .switchAccount, using: agent)
+            presentAccountSelection(action, mode: .switchAccount)
         case .approveMessage(let action):
             showApproveMessage(action, using: agent)
             beginReview()
@@ -751,15 +743,12 @@ extension Agent.ActiveApproval {
 
     private func presentAccountSelection(
         _ action: SelectAccountAction,
-        mode: NativeAccountSelectionMode,
-        using agent: Agent
+        mode: NativeAccountSelectionMode
     ) {
         let accountsList = instantiate(AccountsListViewController.self)
         let session = NativeAccountSelectionSession(action: action, mode: mode) {
-            [weak self, weak agent] accounts, network in
+            [weak self] accounts, network in
             guard let self, acceptsReviewActions else { return }
-            showWaiting()
-            agent?.activateOldestPresentedApproval()
             guard let accounts else {
                 coordinator.reject()
                 return
@@ -893,19 +882,11 @@ extension Agent.ActiveApproval {
     fileprivate func restorePresentation(retryPaused: Bool, using agent: Agent) {
         guard !isRetired, coordinator.canReactivate else { return }
         restorePresentation()
-        if coordinator.isPaused {
-            pendingPresentation = nil
-            if retryPaused {
-                coordinator.retryRecovery()
-            } else {
-                showFailureSurface(retry: true)
-            }
-        } else if let pending = pendingPresentation {
-            pendingPresentation = nil
-            _ = present(pending, using: agent)
-        } else if !acceptsReviewActions {
-            showWaiting()
+        if coordinator.isPaused && retryPaused {
+            coordinator.retryRecovery()
         }
+        coordinator.preparePresentationForReactivation()
+        agent.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
         activate()
     }
 

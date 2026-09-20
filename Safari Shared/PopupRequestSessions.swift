@@ -238,7 +238,7 @@ final class PopupRequestSessions {
     static let shared = PopupRequestSessions(
         store: ExtensionBridge.shared,
         requestProcessor: DappRequestProcessor(),
-        walletEnvironment: VaultPopupWalletEnvironment(
+        walletEnvironment: PopupWalletEnvironment(
             catalogAccess: { SafariApprovalVault.shared.catalogAccess() },
             unlockWalletAccess: {
                 await SafariApprovalVault.shared.unlockResult(reason: $0)
@@ -1207,7 +1207,7 @@ final class PopupRequestSessions {
         session: PopupRequestSession,
         reason: String
     ) async -> RequestScopedWalletAccess? {
-        switch await walletEnvironment.unlock(for: session, reason: reason) {
+        switch await walletEnvironment.unlock(reason) {
         case .canceled:
             return nil
         case .unavailable:

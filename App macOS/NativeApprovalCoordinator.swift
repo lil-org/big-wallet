@@ -49,11 +49,23 @@ final class NativeApprovalCoordinator {
     enum Presentation {
         case approval(request: SafariRequest, action: DappRequestAction)
         case waiting, retryRequired, rejecting, interrupted, finished, superseded
+
+        var isTerminal: Bool {
+            switch self {
+            case .interrupted, .finished, .superseded: true
+            case .approval, .waiting, .retryRequired, .rejecting: false
+            }
+        }
+    }
+
+    struct PresentationSnapshot {
+        let revision: UInt64
+        let presentation: Presentation
     }
 
     enum Event {
         case authenticationRequired
-        case presentation(Presentation)
+        case presentationChanged
     }
 
     private enum ReceiptOwnership {
@@ -246,6 +258,7 @@ final class NativeApprovalCoordinator {
     var phase: Phase { state.phase }
     private(set) var peer: PeerMeta?
     private(set) var order: Order?
+    private(set) var currentPresentation: PresentationSnapshot?
     var onEvent: ((Event) -> Void)?
 
     private let store: NativeDeliveryStore
@@ -259,7 +272,6 @@ final class NativeApprovalCoordinator {
     private var hasVerifiedReceipt = false
     private(set) var hasAuthenticated = false
     private var preauthenticationCancellationRequested = false
-    private var didPresentWaiting = false
 
     var isAwaitingAuthentication: Bool { phase == .awaitingAuthentication }
     var isFinished: Bool { phase == .finished }
@@ -300,6 +312,11 @@ final class NativeApprovalCoordinator {
         run(.loading)
     }
 
+    func preparePresentationForReactivation() {
+        guard canReactivate, currentPresentation == nil else { return }
+        presentWaiting()
+    }
+
     func retryRecovery() {
         guard case .paused(let workflow) = state else { return }
         guard environment.now() < terminalDeadline else {
@@ -313,7 +330,6 @@ final class NativeApprovalCoordinator {
                 run(.validating)
             }
         } else {
-            didPresentWaiting = false
             run(workflow.recovery)
             presentWaiting()
         }
@@ -371,11 +387,16 @@ final class NativeApprovalCoordinator {
     }
 
     func reject() {
+        beginRejection(presentation: .waiting)
+    }
+
+    private func beginRejection(presentation: Presentation) {
         guard state.canReject, !preauthenticationCancellationRequested else { return }
         if !hasAuthenticated {
             cancelBeforeAuthentication()
         } else {
             run(.rejectingOwned)
+            publishPresentation(presentation)
         }
     }
 
@@ -441,7 +462,7 @@ final class NativeApprovalCoordinator {
             return
         }
         state = .paused(workflow)
-        if hasAuthenticated { onEvent?(.presentation(.retryRequired)) }
+        if hasAuthenticated { publishPresentation(.retryRequired) }
     }
 
     private func awaitAuthentication(notify: Bool = true) {
@@ -464,9 +485,23 @@ final class NativeApprovalCoordinator {
     }
 
     private func presentWaiting() {
-        guard !didPresentWaiting else { return }
-        didPresentWaiting = true
-        onEvent?(.presentation(.waiting))
+        publishPresentation(.waiting)
+    }
+
+    private func publishPresentation(_ presentation: Presentation) {
+        switch (currentPresentation?.presentation, presentation) {
+        case (.waiting?, .waiting), (.retryRequired?, .retryRequired),
+             (.rejecting?, .rejecting), (.interrupted?, .interrupted),
+             (.finished?, .finished), (.superseded?, .superseded):
+            return
+        default:
+            break
+        }
+        currentPresentation = PresentationSnapshot(
+            revision: (currentPresentation?.revision ?? 0) + 1,
+            presentation: presentation
+        )
+        onEvent?(.presentationChanged)
     }
 
     private func enterWaiting() {
@@ -486,7 +521,7 @@ final class NativeApprovalCoordinator {
         authorization = nil
         guard !isFinished else { return }
         run(.interrupting)
-        onEvent?(.presentation(.rejecting))
+        publishPresentation(.rejecting)
     }
 
     private static func persistInterruption(_ work: Work) async {
@@ -526,12 +561,11 @@ final class NativeApprovalCoordinator {
         stopWork()
         authorization = nil
         state = .finished
-        onEvent?(.presentation(presentation))
+        publishPresentation(presentation)
     }
 
     private func failAndReject() {
-        onEvent?(.presentation(.rejecting))
-        reject()
+        beginRejection(presentation: .rejecting)
     }
 
     private func storedStatus(_ loaded: ExtensionBridge.SnapshotResult) -> StoredStatus {
@@ -651,8 +685,7 @@ final class NativeApprovalCoordinator {
                     case .approval(let action):
                         work.update {
                             $0.run(.reviewing)
-                            $0.didPresentWaiting = false
-                            $0.onEvent?(.presentation(.approval(request: request, action: action)))
+                            $0.publishPresentation(.approval(request: request, action: action))
                         }
                     case .response(let response):
                         work.update {

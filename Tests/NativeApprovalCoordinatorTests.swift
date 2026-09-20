@@ -274,7 +274,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         override func deminiaturize(_ sender: Any?) {
             deminiaturizationCount += 1
-            super.deminiaturize(sender)
         }
 
         override func makeKeyAndOrderFront(_ sender: Any?) {
@@ -562,9 +561,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         gate.resume(.found(snapshot))
         await fulfillment(of: [loadReturned], timeout: 1)
         XCTAssertEqual(fixture.coordinator.phase, .finished)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
-        guard case .finished = fixture.events.presentations.first else {
-            return XCTFail("A canceled bootstrap must only finish")
+        XCTAssertEqual(fixture.events.presentations.count, 2)
+        guard case .waiting = fixture.events.presentations.first,
+              case .finished = fixture.events.presentations.last else {
+            return XCTFail("A canceled bootstrap must wait for rejection and finish without a review")
         }
     }
 
@@ -642,8 +642,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let events = fixture.events
         let key = fixture.key
         fixture.coordinator.onEvent = { event in
-            events.record(event)
-            if case .presentation(.finished) = event {
+            events.record(event, coordinator: fixture.coordinator)
+            if case .presentationChanged = event,
+               case .finished? = fixture.coordinator.currentPresentation?.presentation {
                 inbox.remove(key)
                 finished.fulfill()
             }
@@ -676,7 +677,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let prematureFinish = expectation(description: "deadline has not elapsed")
         prematureFinish.isInverted = true
         fixture.coordinator.onEvent = { event in
-            if case .presentation(.finished) = event { prematureFinish.fulfill() }
+            if case .presentationChanged = event,
+               case .finished? = fixture.coordinator.currentPresentation?.presentation { prematureFinish.fulfill() }
         }
         start(fixture)
         await fulfillment(of: [prematureFinish], timeout: 0.1)
@@ -684,7 +686,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         let finished = expectation(description: "recorded deadline elapsed")
         fixture.coordinator.onEvent = { event in
-            if case .presentation(.finished) = event { finished.fulfill() }
+            if case .presentationChanged = event,
+               case .finished? = fixture.coordinator.currentPresentation?.presentation { finished.fulfill() }
         }
         fixture.clock.now = deadline
         await fulfillment(of: [finished], timeout: 1)
@@ -714,7 +717,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let prematureFinish = expectation(description: "rejection write still pending")
         prematureFinish.isInverted = true
         fixture.coordinator.onEvent = { event in
-            if case .presentation(.finished) = event { prematureFinish.fulfill() }
+            if case .presentationChanged = event,
+               case .finished? = fixture.coordinator.currentPresentation?.presentation { prematureFinish.fulfill() }
         }
         await fulfillment(of: [prematureFinish], timeout: 0.1)
         XCTAssertEqual(
@@ -722,7 +726,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             .rejecting
         )
 
-        fixture.coordinator.onEvent = fixture.events.record
+        fixture.coordinator.onEvent = { [weak coordinator = fixture.coordinator, events = fixture.events] in
+            events.record($0, coordinator: coordinator)
+        }
         gate.resume(.persisted)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 1)
@@ -1808,7 +1814,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 prepareWithoutWallets: { _ in .response(response) }
             )
         )
-        coordinator.onEvent = { if case .presentation(.rejecting) = $0 { failureCount += 1 } }
+        coordinator.onEvent = { [weak coordinator] event in
+            if case .presentationChanged = event,
+               case .rejecting? = coordinator?.currentPresentation?.presentation { failureCount += 1 }
+        }
 
         guard case .finished = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected immediate completion")
@@ -2484,7 +2493,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        coordinator.onEvent = { if case .presentation(.waiting) = $0 { staged.fulfill() } }
+        coordinator.onEvent = { [weak coordinator] event in
+            if case .presentationChanged = event,
+               case .waiting? = coordinator?.currentPresentation?.presentation { staged.fulfill() }
+        }
         guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
@@ -2671,7 +2683,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        coordinator.onEvent = { if case .presentation(.superseded) = $0 { finished.fulfill() } }
+        coordinator.onEvent = { [weak coordinator] event in
+            if case .presentationChanged = event,
+               case .superseded? = coordinator?.currentPresentation?.presentation { finished.fulfill() }
+        }
         guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
@@ -3115,15 +3130,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .paused)
+        let pausedRevision = try XCTUnwrap(fixture.coordinator.currentPresentation?.revision)
         available = true
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
+        let reviewRevision = try XCTUnwrap(fixture.coordinator.currentPresentation?.revision)
+        XCTAssertGreaterThan(reviewRevision, pausedRevision)
         let staged = try ownedSnapshot(fixture, staged: true)
         fixture.store.stageHandler = { _, _, _, _ in fixture.store.snapshot = staged; return .persisted }
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         guard case .waiting? = fixture.events.presentations.last else {
             return XCTFail("Approval after a recovered review must immediately fence its UI")
         }
+        XCTAssertGreaterThan(try XCTUnwrap(fixture.coordinator.currentPresentation?.revision), reviewRevision)
         await waitForState(fixture.coordinator, .waiting)
         let waitingCount = fixture.events.presentations.filter {
             if case .waiting = $0 { return true }
@@ -3187,35 +3206,236 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.interruptionCount, 1)
     }
 
-    func testDismissedWindowDefersBackgroundPresentationsUntilExplicitRestore() async throws {
+    func testDismissedWindowRendersLatestRecoverySnapshotWithoutRetrying() async throws {
+        let clock = Clock()
+        var rejecting = false
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { delay in
+                if rejecting {
+                    clock.advanceUptime(Double(delay) / 1_000_000_000)
+                    await Task.yield()
+                } else {
+                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                }
+            },
+            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+        ))
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, approval, window) = try attachApprovalWindow(to: fixture)
+        defer { fixture.coordinator.onEvent = nil; window.close() }
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        let review = window.contentViewController
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in
+            rejecting = true
+            rejections += 1
+            return .retryablePersistenceFailure
+        }
+        window.close()
+        window.resetActivationCount()
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertTrue(approval.isDismissed)
+        XCTAssertTrue(window.contentViewController === review)
+        XCTAssertFalse(window.isVisible)
+        XCTAssertEqual(window.activationCount, 0)
+        guard case .retryRequired? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("The coordinator must retain the latest hidden presentation")
+        }
+        let pausedRejections = rejections
+        XCTAssertGreaterThan(pausedRejections, 0)
+        agent.restoreOldestRecoverableApproval()
+        XCTAssertFalse(approval.isDismissed)
+        XCTAssertGreaterThan(window.activationCount, 0)
+        XCTAssertEqual(fixture.coordinator.phase, .paused)
+        XCTAssertEqual(rejections, pausedRejections)
+        let recovery = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertEqual(recovery.okButton.title, Strings.tryAgain)
+        fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+        recovery.actionButtonTapped(self)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(rejections, pausedRejections + 1)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+    }
+
+    func testRepeatedDeliveryShowsWaitingDuringInitialLoad() async throws {
         let fixture = try makeFixture()
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        XCTAssertTrue(inbox.activate(approval, for: fixture.key))
+        let agent = Agent(approvalInbox: inbox)
+        fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator] event in
+            if case .presentationChanged = event, let coordinator {
+                agent?.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
+            }
+        }
+        let snapshot = try XCTUnwrap(fixture.store.snapshot)
+        let loadGate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let loadStarted = expectation(description: "initial approval load started")
+        fixture.store.loadHandler = { _ in
+            loadStarted.fulfill()
+            return await loadGate.run()
+        }
+        defer {
+            fixture.coordinator.onEvent = nil
+            fixture.store.loadHandler = nil
+            fixture.store.snapshot = nil
+            loadGate.resume(.missing)
+            approval.windowController?.close()
+        }
+        fixture.coordinator.resumeAfterAuthentication()
+        await fulfillment(of: [loadStarted], timeout: 1)
+        XCTAssertNil(fixture.coordinator.currentPresentation)
+        XCTAssertNil(approval.windowController)
+
+        let route = NativeAgentRoute.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: fixture.key.handle,
+            nativeDeliveryNonce: fixture.key.nativeDeliveryNonce
+        )
+        agent.process(route: route)
+        let window = try XCTUnwrap(approval.windowController?.window)
+        window.isReleasedWhenClosed = false
+        XCTAssertTrue(window.isVisible)
+        let waiting = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertFalse(waiting.progressIndicator.isHidden)
+        guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Explicit reactivation must publish its waiting presentation")
+        }
+        let revision = fixture.coordinator.currentPresentation?.revision
+        agent.process(route: route)
+        XCTAssertTrue(window.contentViewController === waiting)
+        XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
+
+        fixture.store.loadHandler = nil
+        loadGate.resume(.found(snapshot))
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertTrue(approval.windowController?.window === window)
+        XCTAssertTrue(window.contentViewController is AccountsListViewController)
+    }
+
+    func testRepeatedDeliveryPreservesReviewControllerAndSheet() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, _, window) = try attachApprovalWindow(to: fixture)
+        defer { fixture.coordinator.onEvent = nil; window.close() }
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        let staged = try ownedSnapshot(fixture, staged: true)
-        fixture.store.stageHandler = { _, _, _, _ in fixture.store.snapshot = staged; return .persisted }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await waitForState(fixture.coordinator, .waiting)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
-        let window = TrackingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 300),
-            styleMask: [.titled, .closable], backing: .buffered, defer: false
-        )
-        let controller = NSWindowController(window: window)
-        approval.windowController = controller
-        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
-        XCTAssertTrue(approval.isDismissed)
-        XCTAssertFalse(approval.receive(.waiting))
-        XCTAssertFalse(approval.receive(.retryRequired))
+        let review = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
+        let selection = try XCTUnwrap(review.accountSelection)
+        let revision = fixture.coordinator.currentPresentation?.revision
+        let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+                             styleMask: [.titled], backing: .buffered, defer: false)
+        window.beginSheet(sheet, completionHandler: { _ in })
+        defer { window.endSheet(sheet); sheet.orderOut(nil) }
+        window.resetActivationCount()
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         XCTAssertEqual(window.activationCount, 0)
-        guard case .retryRequired? = approval.pendingPresentation else {
-            return XCTFail("The latest hidden recovery presentation must survive until reopening")
+        let route = NativeAgentRoute.approval(
+            workflowVersion: ExtensionBridge.workflowVersion,
+            handle: fixture.key.handle,
+            nativeDeliveryNonce: fixture.key.nativeDeliveryNonce
+        )
+        agent.process(route: route)
+        agent.process(route: route)
+        XCTAssertTrue(window.contentViewController === review)
+        XCTAssertTrue(review.accountSelection === selection)
+        XCTAssertTrue(window.sheets.contains { $0 === sheet })
+        XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
+        XCTAssertEqual(fixture.store.stagedApprovalDates.count, 0)
+    }
+
+    func testPresentationSnapshotIsPublishedBeforeNotificationAndDeduplicatesWaiting() async throws {
+        let fixture = try makeFixture()
+        XCTAssertNil(fixture.coordinator.currentPresentation)
+        var snapshots = [NativeApprovalCoordinator.PresentationSnapshot]()
+        fixture.coordinator.onEvent = { [weak coordinator = fixture.coordinator] event in
+            guard case .presentationChanged = event else { return }
+            guard let snapshot = coordinator?.currentPresentation else {
+                return XCTFail("Snapshot must be available before notification")
+            }
+            XCTAssertGreaterThan(snapshot.revision, snapshots.last?.revision ?? 0)
+            snapshots.append(snapshot)
         }
-        approval.restorePresentation()
-        XCTAssertTrue(approval.receive(try XCTUnwrap(approval.pendingPresentation)))
-        XCTAssertFalse(approval.isDismissed)
-        fixture.store.snapshot = nil
+        defer { fixture.coordinator.onEvent = nil }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        XCTAssertNil(fixture.coordinator.currentPresentation)
+        fixture.coordinator.resumeAfterAuthentication()
+        XCTAssertNil(fixture.coordinator.currentPresentation)
+        await waitForState(fixture.coordinator, .reviewing)
+        let staged = try ownedSnapshot(fixture, staged: true)
+        fixture.store.stageHandler = { [weak store = fixture.store] _, _, _, _ in
+            store?.snapshot = staged
+            return .persisted
+        }
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Accepting the review must synchronously publish waiting")
+        }
+        await waitForState(fixture.coordinator, .waiting)
+        XCTAssertEqual(snapshots.count, 2)
+        guard case .approval = snapshots[0].presentation,
+              case .waiting = snapshots[1].presentation else {
+            return XCTFail("Expected one review and one waiting presentation")
+        }
+    }
+
+    func testInterruptedPresentationRetainsOnlyVisibleErrorWindow() async throws {
+        for dismissed in [false, true] {
+            let clock = Clock()
+            let waits = ScheduledWaits()
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now }, uptime: { clock.uptime },
+                wait: { await waits.wait($0) },
+                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                finalizeNativeDecision: { _, _ in .interrupted }
+            ))
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            let (agent, approval, window) = try attachApprovalWindow(to: fixture)
+            defer {
+                fixture.coordinator.onEvent = nil
+                waits.resumeAll()
+                window.close()
+            }
+            fixture.coordinator.resumeAfterAuthentication()
+            await waitForState(fixture.coordinator, .reviewing)
+            let selection = try XCTUnwrap((window.contentViewController as? AccountsListViewController)?.accountSelection)
+            await waitForScheduledWait(waits, count: 1)
+            var rejections = 0
+            fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+            let staged = try ownedSnapshot(fixture, staged: true)
+            fixture.store.stageHandler = { _, _, _, _ in fixture.store.snapshot = staged; return .persisted }
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+            await waitForState(fixture.coordinator, .waiting)
+            await waitForScheduledWait(waits, count: 2)
+            if dismissed { window.close() }
+            let activations = window.activationCount
+            waits.resumeAll()
+            await waitForState(fixture.coordinator, .finished)
+            guard case .interrupted? = fixture.coordinator.currentPresentation?.presentation else {
+                return XCTFail("Expected a terminal interrupted presentation")
+            }
+            XCTAssertEqual(window.isVisible, !dismissed)
+            if !dismissed {
+                let error = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+                XCTAssertTrue(error.progressIndicator.isHidden)
+                XCTAssertEqual(error.titleLabel.stringValue, Strings.approvalInterrupted)
+            }
+            XCTAssertFalse(approval.acceptsReviewActions)
+            selection.complete(accounts: nil)
+            agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
+            approval.activate()
+            XCTAssertEqual(window.activationCount, activations)
+            XCTAssertEqual(rejections, 0)
+        }
     }
 
     func testRetiredApprovalFencesRetainedSelectionAndWindowCallbacks() async throws {
@@ -3235,35 +3455,37 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.windowController = WalletWindowController(window: window)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        let request = try XCTUnwrap(fixture.store.snapshot?.request)
-        agent.present(.approval(request: request, action: accountSelectionAction()),
-                      for: fixture.key.handle, coordinator: fixture.coordinator)
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         let accountsList = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
         let selection = try XCTUnwrap(accountsList.accountSelection)
         let outgoing = ReviewTeardownController()
         var teardowns = 0
-        outgoing.onInvalidate = { [weak approval] in
+        outgoing.onInvalidate = { [weak approval, weak agent] in
             guard let approval else { return XCTFail("The approval must own teardown") }
             teardowns += 1
+            agent?.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
             XCTAssertFalse(approval.acceptsReviewActions)
             approval.beginReview()
             XCTAssertFalse(approval.acceptsReviewActions)
-            XCTAssertFalse(approval.receive(.waiting))
+            XCTAssertNil(approval.beginRenderingCurrentPresentation())
         }
         window.contentViewController = outgoing
 
-        agent.present(.finished, for: fixture.key.handle, coordinator: fixture.coordinator)
+        fixture.store.snapshot = nil
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
 
         window.resetActivationCount()
         selection.complete(accounts: nil)
         NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
         approval.activate()
         approval.close()
-        agent.present(.waiting, for: fixture.key.handle, coordinator: fixture.coordinator)
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         await Task.yield()
         XCTAssertEqual(teardowns, 1)
         XCTAssertFalse(approval.acceptsReviewActions)
-        XCTAssertEqual(fixture.coordinator.phase, .reviewing)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(window.activationCount, 0)
         XCTAssertTrue(window.contentViewController === outgoing)
         fixture.store.snapshot = nil
@@ -3324,8 +3546,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.beginReview()
         await waitForScheduledWait(waits, count: 1)
         fixture.coordinator.onEvent = { [weak agent] event in
-            if case .presentation(let presentation) = event {
-                agent?.present(presentation, for: fixture.key.handle, coordinator: fixture.coordinator)
+            if case .presentationChanged = event {
+                agent?.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
             }
         }
         outage = true
@@ -3366,8 +3588,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .reviewing)
         approval.beginReview()
         fixture.coordinator.onEvent = { [weak agent] event in
-            if case .presentation(let presentation) = event {
-                agent?.present(presentation, for: fixture.key.handle, coordinator: fixture.coordinator)
+            if case .presentationChanged = event {
+                agent?.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
             }
         }
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
@@ -3479,14 +3701,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )!
     }
 
+    @MainActor
     private final class Events {
         var authenticationCount = 0
         var presentations = [NativeApprovalCoordinator.Presentation]()
 
-        func record(_ event: NativeApprovalCoordinator.Event) {
+        func record(_ event: NativeApprovalCoordinator.Event, coordinator: NativeApprovalCoordinator?) {
             switch event {
             case .authenticationRequired: authenticationCount += 1
-            case .presentation(let value): presentations.append(value)
+            case .presentationChanged:
+                if let snapshot = coordinator?.currentPresentation {
+                    presentations.append(snapshot.presentation)
+                }
             }
         }
     }
@@ -3529,7 +3755,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             )
         )
         let events = Events()
-        coordinator.onEvent = events.record
+        coordinator.onEvent = { [weak coordinator] in events.record($0, coordinator: coordinator) }
         return Fixture(
             coordinator: coordinator,
             store: store,
@@ -3538,6 +3764,28 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             clock: clock,
             events: events
         )
+    }
+
+    private func attachApprovalWindow(to fixture: Fixture) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        XCTAssertTrue(inbox.activate(approval, for: fixture.key))
+        let agent = Agent(approvalInbox: inbox)
+        let window = TrackingWindow(
+            contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.orderFront(nil)
+        approval.windowController = WalletWindowController(window: window)
+        fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator, events = fixture.events] event in
+            events.record(event, coordinator: coordinator)
+            if case .presentationChanged = event, let coordinator {
+                agent?.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
+            }
+        }
+        return (agent, approval, window)
     }
 
     private func start(_ fixture: Fixture) {
@@ -3590,9 +3838,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             switch event {
             case .authenticationRequired:
                 coordinator?.resumeAfterAuthentication()
-            case .presentation(let value):
-                if presentation == nil {
-                    presentation = value
+            case .presentationChanged:
+                if presentation == nil, let snapshot = coordinator?.currentPresentation {
+                    presentation = snapshot.presentation
                     ready.fulfill()
                 }
             }
