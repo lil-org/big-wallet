@@ -516,6 +516,7 @@ function validatedDappMessage(request, sender, state) {
         favicon: identity.configurationKey.startsWith("file:")
             ? ""
             : typeof sender?.tab?.favIconUrl === "string"
+                && sender.tab.favIconUrl.length <= 16 * 1024
                 ? sender.tab.favIconUrl
                 : "",
         host: identity.host,

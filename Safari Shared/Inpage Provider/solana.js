@@ -839,7 +839,11 @@ function dispatchOperation(provider, record) {
         );
         return false;
     }
-    const authorization = authorizationSnapshot(state);
+    const authorization = record.metadata.authorization ?? authorizationSnapshot(state);
+    if (!authorizationMatches(state, authorization)) {
+        rejectOperation(provider, record, providerReplacementError());
+        return false;
+    }
     record.metadata.authorization = authorization;
     const message = {
         accountRevision: authorization.accountRevision,
@@ -876,6 +880,9 @@ function dispatchOperation(provider, record) {
 
 function registerOperation(provider, method, params, originalId) {
     const state = getProviderState(provider);
+    const authorization = method !== "connect" && state.publicKey
+        ? authorizationSnapshot(state)
+        : null;
     if (state.runtime.phase === "retired") {
         return Promise.reject(providerReplacementError());
     }
@@ -884,6 +891,7 @@ function registerOperation(provider, method, params, originalId) {
         return Promise.reject(providerReplacementError());
     }
     const normalized = normalizeRequest(method, params);
+    normalized.metadata.authorization = authorization;
     if (state.runtime.phase === "retired" ||
         state.transport.isCurrent() !== true) {
         retire(provider, providerReplacementError());

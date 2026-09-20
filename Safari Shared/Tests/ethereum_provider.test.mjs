@@ -3859,6 +3859,68 @@ test("Solana rechecks operation currentness around response callbacks", async ()
     }
 });
 
+for (const method of ["signMessage", "signTransaction", "signAndSendTransaction"]) {
+    test(`Wallet Standard ${method} preserves queued signing authorization`, async () => {
+        const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+        const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+        const fixture = sdkTransactionFixture("legacy", wallet, cosigner);
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: wallet.publicKey.toBase58(),
+            solanaAuthorizationEpoch: 1,
+        };
+        for (const change of ["none", "account", "epoch"]) {
+            const harness = solanaHarness(authorization);
+            const account = harness.wallet.accounts[0];
+            const input = method === "signMessage"
+                ? {account, message: new Uint8Array([1, 2, 3])}
+                : {
+                    account,
+                    chain: "solana:mainnet",
+                    transaction: new Uint8Array(fixture.transaction.serialize({
+                        requireAllSignatures: false,
+                        verifySignatures: false,
+                    })),
+                };
+            const pending = harness.wallet.features[`solana:${method}`][method](input);
+            assert.equal(harness.requests.length, 0);
+            const rejected = change === "none" ? null : assert.rejects(
+                pending,
+                error => error.code === 4900
+            );
+            applySolanaConfiguration(harness, {
+                ...authorization,
+                ...(change === "account" ? {
+                    accountRevision: 2,
+                    publicKey: cosigner.publicKey.toBase58(),
+                } : {}),
+                solanaAuthorizationEpoch: change === "none" ? 1 : 2,
+            });
+            if (rejected) {
+                assert.equal(harness.requests.length, 0);
+                await rejected;
+                continue;
+            }
+            assert.equal(harness.requests.length, 1);
+            const request = harness.requests[0];
+            assert.equal(request.body.publicKey, account.address);
+            harness.applyDecodedEnvelope(harness.provider, {
+                id: request.id,
+                kind: "result",
+                name: request.name,
+                result: fixture.response,
+            });
+            const [result] = await pending;
+            if (method === "signTransaction") {
+                assert.deepEqual(Buffer.from(result.signedTransaction), fixture.expectedBytes);
+            } else {
+                assert.equal(result.signature.length, 64);
+            }
+        }
+    });
+}
+
 test("Wallet Standard signing preflights and caps every input", async () => {
     const harness = solanaHarness({
         accountRevision: 1,

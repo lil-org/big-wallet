@@ -667,6 +667,27 @@ test("stamps trusted sender identity and preserves native-owned revisions", asyn
     }]);
 });
 
+test("dapp admission omits oversized favicons and preserves ordinary favicon URLs", async () => {
+    for (const favicon of [
+        "https://wallet.example/icon.png",
+        "data:image/png;base64," + "A".repeat(300_000),
+        "data:image/svg+xml," + "\u{1F600}".repeat(80_000),
+    ]) {
+        const harness = makeHarness({native: message => {
+            assert.ok(Buffer.byteLength(JSON.stringify(message)) <= 256 * 1024);
+            return nativeAcknowledgement(message.id, message.revisions);
+        }});
+
+        const response = await harness.dispatch(
+            request(), contentSender({favIconUrl: favicon})
+        );
+
+        assert.equal(response.requestToken, requestToken);
+        assert.equal(harness.nativeMessages[0].message.favicon,
+            favicon.startsWith("https:") ? favicon : "");
+    }
+});
+
 test("broadcasts queued approvals when the popup cannot open", async () => {
     for (const options of [
         {openPopupMissing: true},
