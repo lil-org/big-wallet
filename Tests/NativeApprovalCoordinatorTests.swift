@@ -2562,7 +2562,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let fixture = try makeFixture(clock: clock, environment: .init(
                 now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
                 prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-                finalizeNativeDecision: { _, _ in finalizations += 1; return .responseReady }
+                attemptNativeDecision: { _, _ in finalizations += 1; return .responseReady }
             ))
             defer { waits.resumeAll() }
             start(fixture)
@@ -2902,7 +2902,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             uptime: { clock.uptime },
             wait: waits.wait,
             prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-            finalizeNativeDecision: { _, _ in
+            attemptNativeDecision: { _, _ in
                 finalizations += 1
                 return .pending
             }
@@ -3022,7 +3022,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             uptime: { clock.uptime },
             wait: waits.wait,
             prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-            finalizeNativeDecision: { _, _ in
+            attemptNativeDecision: { _, _ in
                 finalizations += 1
                 finalizerStarted.fulfill()
                 return await finalizer.run()
@@ -3178,7 +3178,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testSuspendedFinalizerDoesNotRetainCoordinatorOrPresentAfterRelease() async throws {
-        for result in [NativeApprovalFinalizationResult.responseReady, .unavailable] {
+        for result in [NativeApprovalFinalizationResult.responseReady, .interruptionRequired] {
             let clock = Clock()
             let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
             let started = expectation(description: "finalizer suspended")
@@ -3186,7 +3186,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-                finalizeNativeDecision: { _, _ in started.fulfill(); return await finalizer.run() }
+                attemptNativeDecision: { _, _ in started.fulfill(); return await finalizer.run() }
             ))
             weak var coordinator = fixture?.coordinator
             let events = try XCTUnwrap(fixture?.events)
@@ -3361,7 +3361,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { _ in await Task.yield() },
-            finalizeNativeDecision: { _, _ in executions += 1; return .responseReady }
+            attemptNativeDecision: { _, _ in executions += 1; return .responseReady }
         ))
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -3562,7 +3562,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { await waits.wait($0) },
                 prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-                finalizeNativeDecision: { _, _ in .interrupted }
+                attemptNativeDecision: { _, _ in .interruptionRequired }
             ))
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)

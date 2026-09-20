@@ -104,6 +104,16 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         return value
     }
 
+    func makeObserverBridge(
+        atomicWrite: @escaping ExtensionRequestFileStore.AtomicWrite =
+            ExtensionRequestFileStore.defaultAtomicWrite
+    ) -> ExtensionBridge {
+        ExtensionBridge(store: ExtensionRequestFileStore(
+            rootURL: rootURL,
+            dependencies: .init(clock: clock, atomicWrite: atomicWrite)
+        ))
+    }
+
     func holdForeignClaim(handle: ExtensionBridge.Handle) async throws {
         guard case .claimed(let claim) = await bridge.claim(handle: handle) else {
             throw CocoaError(.fileWriteUnknown)

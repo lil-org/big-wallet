@@ -856,11 +856,6 @@ protocol NativeApprovalStore: PopupRequestStore {
         runtimeInstanceIdentifier: UUID,
         approvedAt: Date
     ) async -> ExtensionBridge.NativeExecutionClaimResult
-    func interruptNativeApproval(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID
-    ) async -> ExtensionBridge.NativeInterruptionResult
 }
 
 extension ExtensionBridge: NativeApprovalStore {}

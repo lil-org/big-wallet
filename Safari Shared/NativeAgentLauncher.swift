@@ -24,11 +24,11 @@ actor NativeAgentLauncher {
             processIdentifier: Int32,
             runtimeInstanceIdentifier: UUID
         )
-        case launch(url: URL, createsNewApplicationInstance: Bool)
+        case launch(url: URL)
 
         var url: URL {
             switch self {
-            case .running(let url, _, _), .launch(let url, _):
+            case .running(let url, _, _), .launch(let url):
                 return url
             }
         }
@@ -141,7 +141,6 @@ actor NativeAgentLauncher {
             ExtensionBridge.NativeDeliveryReceipt
         ) async -> ExtensionBridge.StoreMutationResult
         let uptime: () -> UInt64
-        let wallClock: () -> Date
         let sleepUntil: (UInt64) async -> Void
 
         static var live: Self {
@@ -173,7 +172,6 @@ actor NativeAgentLauncher {
                     )
                 },
                 uptime: { DispatchTime.now().uptimeNanoseconds },
-                wallClock: Date.init,
                 sleepUntil: { deadline in
                     let now = DispatchTime.now().uptimeNanoseconds
                     guard deadline > now else { return }
@@ -415,10 +413,6 @@ actor NativeAgentLauncher {
         case page, manualRecovery
     }
 
-    enum FinalizationResult {
-        case readyToRead, pending, deliveryUnavailable
-    }
-
     @MainActor
     func ensureApprovalDelivery(
         handle: ExtensionBridge.Handle,
@@ -461,50 +455,6 @@ actor NativeAgentLauncher {
         case .unavailable:
             return false
         }
-    }
-
-    @MainActor
-    func waitForFinalization(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        initialContext: ExtensionBridge.NativeExecutionContext,
-        mode: ApprovalReadMode
-    ) async -> FinalizationResult {
-        guard await ensureApprovalDelivery(
-            handle: handle,
-            mode: mode
-        ) else { return .deliveryUnavailable }
-        let startedAt = dependencies.uptime()
-        let deadline = startedAt.addingReportingOverflow(170_000_000_000).partialValue
-        var nextDeliveryCheck = startedAt
-        if dependencies.wallClock() >= initialContext.executionDeadline { return .pending }
-        while !Task.isCancelled, dependencies.uptime() < deadline {
-            switch await dependencies.load(handle) {
-            case .found(let snapshot):
-                guard snapshot.configurationKey == configurationKey,
-                      snapshot.phase != .responded else { return .readyToRead }
-                if snapshot.phase == .queued,
-                   dependencies.wallClock() >= initialContext.executionDeadline {
-                    return .pending
-                }
-                let now = dependencies.uptime()
-                if case .queued(_, .staged) = snapshot.state,
-                   now >= nextDeliveryCheck {
-                    guard await ensureApprovalDelivery(
-                        handle: handle,
-                        mode: mode,
-                        waitDeadline: deadline
-                    ) else { return .pending }
-                    nextDeliveryCheck = now.addingReportingOverflow(1_000_000_000).partialValue
-                }
-            case .missing:
-                return .readyToRead
-            case .unavailable:
-                break
-            }
-            await dependencies.wait(250_000_000)
-        }
-        return .pending
     }
 
     func reactivate(
@@ -776,10 +726,8 @@ actor NativeAgentLauncher {
                 logger.error("Helper route delivery failed: \((error as NSError).code)")
                 completion(false)
             }
-        case .launch(let helperURL, let createsNewApplicationInstance):
-            let configuration = applicationLaunchConfiguration(
-                createsNewApplicationInstance: createsNewApplicationInstance
-            )
+        case .launch(let helperURL):
+            let configuration = applicationLaunchConfiguration()
             NSWorkspace.shared.open(
                 [routeURL],
                 withApplicationAt: helperURL,
@@ -797,15 +745,12 @@ actor NativeAgentLauncher {
     }
 
 #if os(macOS)
-    static func applicationLaunchConfiguration(
-        createsNewApplicationInstance: Bool
-    ) -> NSWorkspace.OpenConfiguration {
+    static func applicationLaunchConfiguration() -> NSWorkspace.OpenConfiguration {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         configuration.addsToRecentItems = false
         configuration.allowsRunningApplicationSubstitution = false
-        configuration.createsNewApplicationInstance =
-            createsNewApplicationInstance
+        configuration.createsNewApplicationInstance = false
         return configuration
     }
 #endif
@@ -1041,7 +986,7 @@ actor NativeAgentLauncher {
                 await dependencies.wait(min(50_000_000, deadline - now))
                 continue
             }
-            return target ?? .launch(url: expected.url, createsNewApplicationInstance: false)
+            return target ?? .launch(url: expected.url)
         }
         return nil
     }

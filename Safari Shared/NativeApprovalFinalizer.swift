@@ -3,7 +3,7 @@
 import Foundation
 
 enum NativeApprovalFinalizationResult: Equatable {
-    case responseReady, interrupted, pending, unavailable
+    case responseReady, pending, interruptionRequired
 }
 
 @MainActor
@@ -49,26 +49,17 @@ final class NativeApprovalFinalizer {
         )
     }
 
-    func finalize(
-        handle: ExtensionBridge.Handle,
+    func attempt(
+        snapshot: ExtensionBridge.Snapshot,
         authorization: ExtensionBridge.NativeApprovalAuthorization
     ) async -> NativeApprovalFinalizationResult {
-        let snapshot: ExtensionBridge.Snapshot
-        switch await store.load(handle: handle) {
-        case .found(let value):
-            snapshot = value
-        case .missing:
-            return .responseReady
-        case .unavailable:
-            return .unavailable
-        }
         switch snapshot.state {
         case .responded:
             return .responseReady
         case .approving:
             return .pending
         case .queued(let request, .staged):
-            return await claimAndFinalize(
+            return await claimAndExecute(
                 snapshot: snapshot,
                 request: request,
                 authorization: authorization
@@ -78,14 +69,14 @@ final class NativeApprovalFinalizer {
         }
     }
 
-    private func claimAndFinalize(
+    private func claimAndExecute(
         snapshot: ExtensionBridge.Snapshot,
         request: SafariRequest,
         authorization: ExtensionBridge.NativeApprovalAuthorization
     ) async -> NativeApprovalFinalizationResult {
         guard snapshot.nativeDeliveryReceipt == authorization.receipt,
               snapshot.nativeApproval?.approvedAt == authorization.approvedAt else {
-            return .unavailable
+            return .interruptionRequired
         }
         let nativeClaim: ExtensionBridge.NativeExecutionClaim
         let claimResult = await store.claimNativeExecution(
@@ -102,7 +93,7 @@ final class NativeApprovalFinalizer {
         case .responded, .missing:
             return .responseReady
         case .unavailable:
-            return .unavailable
+            return .interruptionRequired
         }
 
         defer { nativeClaim.approvalClaim.releaseLease() }
@@ -111,14 +102,13 @@ final class NativeApprovalFinalizer {
         let age = now.timeIntervalSince(executionContext.observedAt)
         guard age >= 0,
               now < executionContext.executionDeadline else {
-            return await interrupt(handle: snapshot.handle, authorization: authorization)
+            return .interruptionRequired
         }
 
         guard transactionDecisionIsFresh(nativeClaim, request: request) else {
             return await completeStaleTransactionDecision(
                 nativeClaim,
                 request: request,
-                authorization: authorization,
                 executionContext: executionContext
             )
         }
@@ -130,7 +120,6 @@ final class NativeApprovalFinalizer {
         ) else {
             return await execute(
                 claim: nativeClaim.approvalClaim,
-                authorization: authorization,
                 executionContext: executionContext
             ) {
                 .response(Self.staleResponse(for: request), approvalCommitted: false)
@@ -144,7 +133,7 @@ final class NativeApprovalFinalizer {
             walletAccess = nil
         } else {
             guard let refreshedAccess = refreshWalletAccess() else {
-                return await interrupt(handle: snapshot.handle, authorization: authorization)
+                return .interruptionRequired
             }
             CustomNetworkCache.shared.invalidate()
             walletAccess = refreshedAccess
@@ -157,13 +146,11 @@ final class NativeApprovalFinalizer {
         case .response(let response):
             return await execute(
                 claim: nativeClaim.approvalClaim,
-                authorization: authorization,
                 executionContext: executionContext
             ) { .response(response, approvalCommitted: false) }
         case .approval(let action):
             return await execute(
                 claim: nativeClaim.approvalClaim,
-                authorization: authorization,
                 executionContext: executionContext
             ) {
                 guard self.transactionDecisionIsFresh(nativeClaim, request: request) else {
@@ -239,37 +226,18 @@ final class NativeApprovalFinalizer {
     private func completeStaleTransactionDecision(
         _ nativeClaim: ExtensionBridge.NativeExecutionClaim,
         request: SafariRequest,
-        authorization: ExtensionBridge.NativeApprovalAuthorization,
         executionContext: ExtensionBridge.NativeExecutionContext
     ) async -> NativeApprovalFinalizationResult {
         await execute(
             claim: nativeClaim.approvalClaim,
-            authorization: authorization,
             executionContext: executionContext
         ) {
             .response(Self.staleResponse(for: request), approvalCommitted: false)
         }
     }
 
-    private func interrupt(
-        handle: ExtensionBridge.Handle,
-        authorization: ExtensionBridge.NativeApprovalAuthorization
-    ) async -> NativeApprovalFinalizationResult {
-        switch await store.interruptNativeApproval(
-            handle: handle,
-            nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier
-        ) {
-        case .interrupted: return .interrupted
-        case .responseReady: return .responseReady
-        case .ownershipLost: return await reconcileOwnershipLoss(handle: handle)
-        case .retryablePersistenceFailure: return .unavailable
-        }
-    }
-
     private func execute(
         claim: ExtensionBridge.ApprovalClaim,
-        authorization: ExtensionBridge.NativeApprovalAuthorization,
         executionContext: ExtensionBridge.NativeExecutionContext,
         operation: @escaping () async -> DappExecutionResult
     ) async -> NativeApprovalFinalizationResult {
@@ -283,20 +251,7 @@ final class NativeApprovalFinalizer {
             return .responseReady
         case .ownershipLost, .beginRetryablePersistenceFailure,
              .retryablePersistenceFailure, .rolledBack:
-            return await interrupt(handle: claim.handle, authorization: authorization)
-        }
-    }
-
-    private func reconcileOwnershipLoss(
-        handle: ExtensionBridge.Handle
-    ) async -> NativeApprovalFinalizationResult {
-        switch await store.load(handle: handle) {
-        case .found(let snapshot):
-            return snapshot.phase == .responded ? .responseReady : .pending
-        case .missing:
-            return .responseReady
-        case .unavailable:
-            return .unavailable
+            return .interruptionRequired
         }
     }
 

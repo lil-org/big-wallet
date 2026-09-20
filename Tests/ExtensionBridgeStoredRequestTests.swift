@@ -4636,10 +4636,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         XCTAssertEqual(
             selected,
-            .launch(
-                url: currentURL,
-                createsNewApplicationInstance: false
-            ))
+            .launch(url: currentURL))
     }
 
     func testNativeAgentUnknownRuntimePollsVerifyOnlyBeforeQuit() async throws {
@@ -4683,10 +4680,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         XCTAssertEqual(
             selected,
-            .launch(
-                url: currentURL,
-                createsNewApplicationInstance: false
-            ))
+            .launch(url: currentURL))
         XCTAssertEqual(verifications, 1)
         XCTAssertEqual(quitCount, 1)
     }
@@ -4742,10 +4736,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         XCTAssertEqual(
             selected,
-            .launch(
-                url: currentURL,
-                createsNewApplicationInstance: false
-            ))
+            .launch(url: currentURL))
         XCTAssertEqual(verifiedPasses, [0, 1])
         XCTAssertEqual(retiredProcesses, processIdentifiers)
     }
@@ -4875,10 +4866,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
 
         guard let selected,
-            case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL) = selected
         else { return XCTFail("Expected fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
-        XCTAssertFalse(createsNewInstance)
         XCTAssertEqual(requestCount, 1)
     }
 
@@ -5025,10 +5015,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
 
         guard let selected,
-            case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL) = selected
         else { return XCTFail("Expected fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
-        XCTAssertFalse(createsNewInstance)
         XCTAssertEqual(quitCount, 0)
     }
 
@@ -5083,10 +5072,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
 
         guard let selected,
-            case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL) = selected
         else { return XCTFail("Expected fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
-        XCTAssertFalse(createsNewInstance)
         XCTAssertEqual(samePathQuitCount, 1)
         XCTAssertEqual(otherPathQuitCount, 0)
     }
@@ -5129,10 +5117,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
 
         guard let selected,
-            case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL) = selected
         else { return XCTFail("Expected launch target") }
         XCTAssertEqual(selectedURL, currentURL)
-        XCTAssertFalse(createsNewInstance)
         XCTAssertEqual(quitCount, 1)
     }
 
@@ -5250,10 +5237,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
 
         guard let selected,
-            case .launch(let selectedURL, let createsNewInstance) = selected
+            case .launch(let selectedURL) = selected
         else { return XCTFail("Expected a fresh helper launch") }
         XCTAssertEqual(selectedURL, currentURL)
-        XCTAssertFalse(createsNewInstance)
         XCTAssertEqual(quitCount, 1)
     }
 

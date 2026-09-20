@@ -15,7 +15,6 @@
             @escaping (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
             ExtensionBridge.StoreMutationResult = { _, _ in .ownershipLost },
         uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
-        wallClock: @escaping () -> Date = Date.init,
         sleepUntil: @escaping (UInt64) async -> Void = { deadline in
             let now = DispatchTime.now().uptimeNanoseconds
             if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
@@ -24,7 +23,7 @@
         .init(
             helperURL: helperURL, validate: validate, helpers: helpers, helper: helper,
             identity: identity, launch: launch, load: load, clearReceipt: clearReceipt,
-            uptime: uptime, wallClock: wallClock, sleepUntil: sleepUntil)
+            uptime: uptime, sleepUntil: sleepUntil)
     }
 
     @MainActor
@@ -253,7 +252,7 @@
                     }
                     return .persisted
                 },
-                uptime: { self.clock.now }, wallClock: { self.clock.date }, sleepUntil: clock.sleepUntil
+                uptime: { self.clock.now }, sleepUntil: clock.sleepUntil
             )
         }
 

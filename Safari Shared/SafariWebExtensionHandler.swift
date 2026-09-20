@@ -28,6 +28,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static let genericRPCFailureMessage = "something went wrong"
 #if os(macOS)
     private static let nativeAgentLauncher = NativeAgentLauncher.live
+    @MainActor private static let nativeApprovalResponseWaiter = NativeApprovalResponseWaiter()
 #endif
 
     func beginRequest(with context: NSExtensionContext) {
@@ -463,7 +464,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             switch execution {
             case .acquired(let lease):
                 executionLease = lease
-                switch await Self.nativeAgentLauncher.waitForFinalization(
+                switch await Self.nativeApprovalResponseWaiter.waitForResponse(
                     handle: handle,
                     configurationKey: identity.configurationKey,
                     initialContext: lease.context,
