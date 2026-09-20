@@ -116,15 +116,68 @@ final class NativeApprovalCoordinator {
         )
     }
 
-    private enum WorkflowIntent {
-        case validateReceipt
-        case awaitAuthenticationExpiry
-        case prepareReview
-        case stage(DappApprovalDecision, approvedAt: Date)
-        case respond(ResponseToExtension)
-        case rejectBeforeAuthentication(notifyOnStaged: Bool)
-        case rejectOwned
-        case observe
+    private enum Workflow {
+        case validating, acquiringReceipt, awaitingAuthentication, loading, reviewing
+        case staging(DappApprovalDecision, approvedAt: Date)
+        case responding(ResponseToExtension)
+        case rejectingBeforeAuthentication(notifyOnStaged: Bool)
+        case rejectingOwned
+        case waiting
+
+        var phase: Phase {
+            switch self {
+            case .validating: .validating
+            case .acquiringReceipt: .acquiringReceipt
+            case .awaitingAuthentication: .awaitingAuthentication
+            case .loading: .loading
+            case .reviewing: .reviewing
+            case .staging: .staging
+            case .responding: .responding
+            case .rejectingBeforeAuthentication, .rejectingOwned: .rejecting
+            case .waiting: .waiting
+            }
+        }
+
+        var recovery: Workflow {
+            switch self {
+            case .acquiringReceipt: .validating
+            case .reviewing: .loading
+            default: self
+            }
+        }
+
+        var canReject: Bool {
+            switch self {
+            case .staging, .responding, .rejectingBeforeAuthentication, .rejectingOwned, .waiting:
+                false
+            default:
+                true
+            }
+        }
+    }
+
+    private enum State {
+        case registered
+        case active(Workflow)
+        case paused(Workflow)
+        case finished
+
+        var phase: Phase {
+            switch self {
+            case .registered: .registered
+            case .active(let workflow): workflow.phase
+            case .paused: .paused
+            case .finished: .finished
+            }
+        }
+
+        var canReject: Bool {
+            switch self {
+            case .registered: true
+            case .active(let workflow), .paused(let workflow): workflow.canReject
+            case .finished: false
+            }
+        }
     }
 
     @MainActor
@@ -182,7 +235,7 @@ final class NativeApprovalCoordinator {
 
     let handle: ExtensionBridge.Handle
     let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
-    private(set) var phase = Phase.registered
+    var phase: Phase { state.phase }
     private(set) var peer: PeerMeta?
     private(set) var order: Order?
     var onEvent: ((Event) -> Void)?
@@ -192,12 +245,11 @@ final class NativeApprovalCoordinator {
     private var runtime: ExtensionBridge.NativeDeliveryOwner?
     private var work: Work?
     private var task: Task<Void, Never>?
-    private var recovery: WorkflowIntent?
+    private var state = State.registered
     private var terminalDeadline: Date
     private var hasVerifiedReceipt = false
     private(set) var hasAuthenticated = false
-    private var decisionIsFinal = false
-    private var rejectionRequested = false
+    private var preauthenticationCancellationRequested = false
     private var didPresentWaiting = false
 
     var isAwaitingAuthentication: Bool { phase == .awaitingAuthentication }
@@ -230,30 +282,30 @@ final class NativeApprovalCoordinator {
     func start(nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner) {
         if runtime == nil { runtime = nativeDeliveryOwner }
         guard phase == .registered else { return }
-        run(.validating, intent: .validateReceipt)
+        run(.validating)
     }
 
     func resumeAfterAuthentication() {
         guard isAwaitingAuthentication else { return }
         hasAuthenticated = true
-        run(.loading, intent: .prepareReview)
+        run(.loading)
     }
 
     func retryRecovery() {
-        guard isPaused else { return }
+        guard case .paused(let workflow) = state else { return }
         guard environment.now() < terminalDeadline else {
             finish()
             return
         }
         if !hasAuthenticated {
-            if rejectionRequested {
-                run(.rejecting, intent: .rejectBeforeAuthentication(notifyOnStaged: true))
+            if preauthenticationCancellationRequested {
+                run(.rejectingBeforeAuthentication(notifyOnStaged: true))
             } else {
-                run(.validating, intent: .validateReceipt)
+                run(.validating)
             }
-        } else if let recovery {
+        } else {
             didPresentWaiting = false
-            run(.loading, intent: recovery)
+            run(workflow.recovery)
             presentWaiting()
         }
     }
@@ -263,12 +315,10 @@ final class NativeApprovalCoordinator {
     }
 
     func cancelBeforeAuthentication() {
-        guard !hasAuthenticated, !isFinished, !rejectionRequested else { return }
-        rejectionRequested = true
-        let rejection = WorkflowIntent.rejectBeforeAuthentication(notifyOnStaged: false)
-        recovery = rejection
+        guard !hasAuthenticated, !isFinished, !preauthenticationCancellationRequested else { return }
+        preauthenticationCancellationRequested = true
         guard phase != .acquiringReceipt else { return }
-        run(.rejecting, intent: rejection)
+        run(.rejectingBeforeAuthentication(notifyOnStaged: false))
     }
 
     func approveAccounts(
@@ -312,50 +362,47 @@ final class NativeApprovalCoordinator {
     }
 
     func reject() {
-        guard !isFinished, !decisionIsFinal, !rejectionRequested else { return }
+        guard state.canReject, !preauthenticationCancellationRequested else { return }
         if !hasAuthenticated {
             cancelBeforeAuthentication()
         } else {
-            rejectionRequested = true
-            run(.rejecting, intent: .rejectOwned)
+            run(.rejectingOwned)
         }
     }
 
     private func stage(_ decision: DappApprovalDecision) {
         guard phase == .reviewing, runtime != nil else { return }
-        decisionIsFinal = true
         let approvedAt = environment.now()
-        run(.staging, intent: .stage(decision, approvedAt: approvedAt))
+        run(.staging(decision, approvedAt: approvedAt))
         presentWaiting()
     }
 
-    private func run(_ phase: Phase, intent: WorkflowIntent, remembers: Bool = true) {
+    private func run(_ workflow: Workflow) {
         guard !isFinished else { return }
         stopWork()
-        self.phase = phase
-        if remembers { recovery = intent }
+        state = .active(workflow)
         let work = Work(owner: self)
         self.work = work
-        task = Task { await Self.perform(intent, work: work) }
+        task = Task { await Self.perform(workflow, work: work) }
     }
 
-    private static func perform(_ intent: WorkflowIntent, work: Work) async {
-        switch intent {
-        case .validateReceipt:
+    private static func perform(_ workflow: Workflow, work: Work) async {
+        switch workflow {
+        case .validating, .acquiringReceipt:
             await validateAndAcquireReceipt(work)
-        case .awaitAuthenticationExpiry:
+        case .awaitingAuthentication:
             await awaitAuthenticationExpiry(work)
-        case .prepareReview:
+        case .loading:
             await prepareReview(work)
-        case .stage(let decision, let approvedAt):
+        case .staging(let decision, let approvedAt):
             await persistStage(work, decision: decision, approvedAt: approvedAt)
-        case .respond(let response):
+        case .responding(let response):
             await persistResponse(work, response: response)
-        case .rejectBeforeAuthentication(let notifyOnStaged):
+        case .rejectingBeforeAuthentication(let notifyOnStaged):
             await rejectBeforeAuthentication(work, notifyOnStaged: notifyOnStaged)
-        case .rejectOwned:
+        case .rejectingOwned:
             await rejectOwned(work)
-        case .observe:
+        case .reviewing, .waiting:
             await observe(work)
         }
     }
@@ -367,17 +414,18 @@ final class NativeApprovalCoordinator {
     }
 
     private func pause() {
+        guard case .active(let workflow) = state else { return }
         stopWork()
         guard environment.now() < terminalDeadline else {
             finish()
             return
         }
-        phase = .paused
+        state = .paused(workflow)
         if hasAuthenticated { onEvent?(.presentation(.retryRequired)) }
     }
 
     private func awaitAuthentication(notify: Bool = true) {
-        run(.awaitingAuthentication, intent: .awaitAuthenticationExpiry, remembers: false)
+        run(.awaitingAuthentication)
         if notify { onEvent?(.authenticationRequired) }
     }
 
@@ -406,16 +454,14 @@ final class NativeApprovalCoordinator {
             pause()
             return
         }
-        decisionIsFinal = true
-        run(.waiting, intent: .observe)
+        run(.waiting)
         presentWaiting()
     }
 
     private func finish(_ presentation: Presentation = .finished) {
         guard !isFinished else { return }
         stopWork()
-        recovery = nil
-        phase = .finished
+        state = .finished
         onEvent?(.presentation(presentation))
     }
 
@@ -474,18 +520,18 @@ final class NativeApprovalCoordinator {
                 break
             }
             guard work.mayAttempt else { break }
-            if work.update({ $0.rejectionRequested }) == true {
+            if work.update({ $0.preauthenticationCancellationRequested }) == true {
                 await rejectBeforeAuthentication(work)
                 return
             }
-            work.update { $0.phase = .acquiringReceipt }
+            work.update { $0.state = .active(.acquiringReceipt) }
             let result = await work.store.recordNativeDeliveryReceipt(
                 handle: work.handle, nativeDeliveryNonce: work.nonce, owner: runtime
             )
             guard work.isCurrent else { return }
             if result == .persisted {
                 work.update { $0.hasVerifiedReceipt = true }
-                if work.update({ $0.rejectionRequested }) == true {
+                if work.update({ $0.preauthenticationCancellationRequested }) == true {
                     await rejectBeforeAuthentication(work)
                 } else {
                     work.update { $0.awaitAuthentication() }
@@ -496,8 +542,11 @@ final class NativeApprovalCoordinator {
             switch current {
             case .pending(_, .current), .staged(.current):
                 work.update { $0.hasVerifiedReceipt = true }
-                if work.update({ $0.rejectionRequested }) == true { await rejectBeforeAuthentication(work) }
-                else { work.update { $0.awaitAuthentication() } }
+                if work.update({ $0.preauthenticationCancellationRequested }) == true {
+                    await rejectBeforeAuthentication(work)
+                } else {
+                    work.update { $0.awaitAuthentication() }
+                }
                 return
             case .responded, .missing, .executing, .superseded,
                  .pending(_, .foreign), .staged(.foreign):
@@ -506,7 +555,7 @@ final class NativeApprovalCoordinator {
             default:
                 break
             }
-            if work.update({ $0.rejectionRequested }) == true {
+            if work.update({ $0.preauthenticationCancellationRequested }) == true {
                 await rejectBeforeAuthentication(work)
                 return
             }
@@ -534,15 +583,13 @@ final class NativeApprovalCoordinator {
                     switch preparation {
                     case .approval(let action):
                         work.update {
-                            $0.run(.reviewing, intent: .observe, remembers: false)
+                            $0.run(.reviewing)
                             $0.didPresentWaiting = false
                             $0.onEvent?(.presentation(.approval(request: request, action: action)))
                         }
                     case .response(let response):
                         work.update {
-                            $0.decisionIsFinal = true
-                            $0.phase = .responding
-                            $0.recovery = .respond(response)
+                            $0.state = .active(.responding(response))
                         }
                         await persistResponse(work, response: response)
                     }
@@ -558,7 +605,6 @@ final class NativeApprovalCoordinator {
         _ work: Work, decision: DappApprovalDecision, approvedAt: Date
     ) async {
         guard let runtime = work.runtime else { return }
-        work.update { $0.phase = .staging }
         await persistOwnedMutation(work, operation: {
             await work.store.stageNativeDecision(
                 handle: work.handle, nativeDeliveryNonce: work.nonce,
@@ -570,7 +616,6 @@ final class NativeApprovalCoordinator {
 
     private static func persistResponse(_ work: Work, response: ResponseToExtension) async {
         guard let runtime = work.runtime else { return }
-        work.update { $0.phase = .responding }
         await persistOwnedMutation(work, operation: {
             await work.store.completeNativeDelivery(
                 handle: work.handle, nativeDeliveryNonce: work.nonce,
@@ -584,7 +629,9 @@ final class NativeApprovalCoordinator {
         _ work: Work,
         notifyOnStaged: Bool = false
     ) async {
-        work.update { $0.phase = .rejecting }
+        work.update {
+            $0.state = .active(.rejectingBeforeAuthentication(notifyOnStaged: notifyOnStaged))
+        }
         while work.isCurrent {
             guard let status = await work.load() else { return }
             let owned: Bool
@@ -643,7 +690,6 @@ final class NativeApprovalCoordinator {
     }
 
     private static func rejectOwned(_ work: Work) async {
-        work.update { $0.phase = .rejecting }
         guard let runtime = work.runtime else { return }
         await persistOwnedMutation(work, operation: {
             await work.store.rejectNativeDelivery(
@@ -713,8 +759,7 @@ final class NativeApprovalCoordinator {
                 return
             case .staged, .executing:
                 work.update {
-                    $0.phase = .waiting
-                    $0.decisionIsFinal = true
+                    $0.state = .active(.waiting)
                     $0.presentWaiting()
                 }
                 let result = await work.environment.finalizeNativeDecision(work.handle)

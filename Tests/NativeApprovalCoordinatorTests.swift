@@ -1923,12 +1923,20 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             responses.append(response.json as NSDictionary)
             return responses.count == 1 ? .ownershipLost : .persisted
         }
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("A paused response must retain its accepted intent")
+            return .persisted
+        }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .paused)
         XCTAssertEqual(preparations, 1)
+        XCTAssertTrue(fixture.coordinator.canReactivate)
+        fixture.coordinator.reject()
+        XCTAssertTrue(fixture.coordinator.isPaused)
         fixture.coordinator.retryRecovery()
+        XCTAssertEqual(fixture.coordinator.phase, .responding)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(responses.count, 2)
@@ -2053,8 +2061,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let approvedAt = fixture.clock.now
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForState(fixture.coordinator, .paused)
+        XCTAssertTrue(fixture.coordinator.canReactivate)
+        fixture.coordinator.reject()
+        XCTAssertTrue(fixture.coordinator.isPaused)
         fixture.clock.now.addTimeInterval(31)
         fixture.coordinator.retryRecovery()
+        XCTAssertEqual(fixture.coordinator.phase, .staging)
         await waitForState(fixture.coordinator, .waiting)
         XCTAssertEqual(decisions.count, 2)
         XCTAssertEqual(decisions.first, decisions.last)
@@ -3266,6 +3278,76 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.recordCount, 1)
     }
 
+    func testObservedStagedDecisionResumesWaitingAfterOutage() async throws {
+        let clock = Clock()
+        let waits = ScheduledWaits()
+        var preparations = 0
+        var finalizations = 0
+        var responseReady = false
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            prepareWithoutWallets: { _ in
+                preparations += 1
+                return .approval(self.accountSelectionAction())
+            },
+            finalizeNativeDecision: { _ in
+                finalizations += 1
+                return responseReady ? .responseReady : .unavailable
+            }
+        ))
+        defer { waits.resumeAll() }
+        fixture.store.rejectHandler = { _, _, _ in
+            XCTFail("An observed staged decision cannot become a rejection")
+            return .persisted
+        }
+        fixture.store.stageHandler = { _, _, _, _ in
+            XCTFail("An observed staged decision cannot be approved again")
+            return .persisted
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        await waitForScheduledWait(waits, count: 1)
+
+        fixture.store.snapshot = try ownedSnapshot(fixture, staged: true)
+        waits.resume(0)
+        await waitForScheduledWait(waits, count: 2)
+        XCTAssertEqual(fixture.coordinator.phase, .waiting)
+        XCTAssertEqual(finalizations, 1)
+        clock.advanceUptime(10)
+        waits.resume(1)
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertTrue(fixture.coordinator.canReactivate)
+        fixture.coordinator.reject()
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        XCTAssertTrue(fixture.coordinator.isPaused)
+
+        responseReady = true
+        fixture.coordinator.retryRecovery()
+        XCTAssertEqual(fixture.coordinator.phase, .waiting)
+        fixture.coordinator.reject()
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await waitForScheduledWait(waits, count: 3)
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(finalizations, 1)
+        waits.resume(2)
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(finalizations, 2)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertTrue(fixture.store.stagedApprovalDates.isEmpty)
+        XCTAssertEqual(fixture.events.presentations.filter {
+            if case .approval = $0 { return true }
+            return false
+        }.count, 1)
+        XCTAssertEqual(fixture.events.presentations.filter {
+            if case .waiting = $0 { return true }
+            return false
+        }.count, 2)
+    }
+
     func testDismissedWindowDefersBackgroundPresentationsUntilExplicitRestore() async throws {
         let fixture = try makeFixture()
         start(fixture)
@@ -3410,6 +3492,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .paused)
         XCTAssertEqual((window.contentViewController as? WaitingViewController)?.okButton.title,
                        Strings.tryAgain)
+        XCTAssertTrue(fixture.coordinator.canReactivate)
         fixture.store.loadHandler = nil
         var rejections = 0
         fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
@@ -3499,6 +3582,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(rejections, 1)
         XCTAssertTrue(fixture.coordinator.isPaused)
         fixture.coordinator.retryRecovery()
+        XCTAssertEqual(fixture.coordinator.phase, .rejecting)
+        XCTAssertFalse(fixture.coordinator.canReactivate)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(rejections, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)

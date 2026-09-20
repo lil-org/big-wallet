@@ -456,7 +456,7 @@ class PopupRequestController {
 
     beginAction(kind) {
         this.stopRead();
-        const operation = {kind, result: null};
+        const operation = {kind};
         this.action = operation;
         this.updateInteractionControls();
         return operation;
@@ -489,19 +489,7 @@ class PopupRequestController {
     async decide(subject, payload) {
         if (!this.isActive || !canSubmitDecision(subject, this.state)) { return; }
         if (subject === "approveRequest") {
-            if (this.transportError || this.interaction?.kind === "editor" || document.getElementById("tx-editor").open) { return; }
-            if (this.interaction?.kind === "slider") {
-                ignoreSliderUntilRelease = true;
-                if (!await this.finishSliderInteraction("ended")) { return; }
-            }
-            if (this.action?.kind === "speed") {
-                const speed = this.action;
-                if (speed.approveWaiting) { return; }
-                speed.approveWaiting = true;
-                if (await speed.result) { await this.approve(payload); }
-                return;
-            }
-            if (this.action) { return; }
+            if (this.transportError || this.action || this.interaction || document.getElementById("tx-editor").open) { return; }
         } else {
             if (this.action?.kind === "approveRequest" || this.action?.kind === "rejectRequest") { return; }
             this.discardSliderGesture();
@@ -549,28 +537,24 @@ class PopupRequestController {
         this.finishAction(operation);
     }
 
-    setSpeed(payload, reviewToken) {
+    async setSpeed(payload, reviewToken) {
         if (this.action || !this.allows("setTransactionSpeed") || this.interaction || !isRequestToken(reviewToken)) { return null; }
         const operation = this.beginAction("speed");
-        operation.result = (async () => {
-            if (this.state?.review?.reviewToken !== reviewToken) {
-                this.finishAction(operation);
-                await this.readState();
-                return false;
-            }
-            const outcome = await this.sendCommand({subject: "setTransactionSpeed", payload, reviewToken});
+        const staleReview = this.state?.review?.reviewToken !== reviewToken;
+        let outcome = await this.sendCommand(staleReview
+            ? {subject: "getApprovalState"}
+            : {subject: "setTransactionSpeed", payload, reviewToken});
+        if (!this.ownsAction(operation)) { return false; }
+        const ignored = !staleReview && outcome.status === "response" &&
+            BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored";
+        if (ignored) {
+            outcome = await this.sendCommand({subject: "getApprovalState"});
             if (!this.ownsAction(operation)) { return false; }
-            if (outcome.status === "response" && BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored") {
-                this.finishAction(operation);
-                await this.readState();
-                return false;
-            }
-            const state = this.acceptState(outcome);
-            if (state) { this.adoptState(state); }
-            this.finishAction(operation);
-            return state !== null && this.isActive;
-        })();
-        return operation.result;
+        }
+        const state = this.acceptState(outcome);
+        if (state) { this.adoptState(state); }
+        this.finishAction(operation);
+        return !staleReview && !ignored && state !== null && this.isActive;
     }
 
     updateInteractionControls() {
@@ -829,7 +813,7 @@ class PopupRequestController {
         const approve = document.getElementById("button-approve");
         if (this.transportError) {
             approve.disabled = this.action !== null;
-        } else if (this.action && this.action.kind !== "speed" || this.interaction?.kind === "editor") {
+        } else if (this.action || this.interaction) {
             approve.disabled = true;
         } else if (hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)) {
             approve.disabled = false;
@@ -951,7 +935,7 @@ class PopupRequestController {
     }
 
     async approveCurrent() {
-        if (!this.isActive || this.action && this.action.kind !== "speed") { return; }
+        if (!this.isActive || this.action || this.interaction) { return; }
         if (this.transportError) {
             await this.retry();
             return;
@@ -1019,6 +1003,7 @@ class PopupRequestController {
         this.stopRead();
         ignoreSliderUntilRelease = false;
         this.interaction = {kind: "slider", reviewToken};
+        this.updateInteractionControls();
         return true;
     }
 

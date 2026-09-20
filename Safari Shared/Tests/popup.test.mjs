@@ -1527,16 +1527,20 @@ test("terminal decisions fence an older read and poll only after their native re
 });
 
 test("replacement with the same numeric id disposes old reads actions and mutations", async () => {
-    for (const operation of ["read", "approval", "mutation"]) {
+    for (const operation of ["read", "approval", "mutation", "speed", "speedRecovery"]) {
         const harness = await reviewedPopup(transactionState);
         const first = harness.controller;
         const originalTimer = harness.followUpTimerId();
         const replacement = pendingRequest(first.request.id, 2);
         const gate = deferred();
         harness.handlers.native = (message, fallback) => {
-            if (message.requestToken === first.request.requestToken &&
-                message.subject === (operation === "read" ? "getApprovalState" : "applyTransactionEdits")) {
-                return gate.promise;
+            if (message.requestToken === first.request.requestToken) {
+                if (operation === "speedRecovery" && message.subject === "setTransactionSpeed") {
+                    return {status: "ignored"};
+                }
+                const subject = operation === "read" || operation === "speedRecovery" ? "getApprovalState"
+                    : operation === "speed" ? "setTransactionSpeed" : "applyTransactionEdits";
+                if (message.subject === subject) { return gate.promise; }
             }
             return fallback(message);
         };
@@ -1545,6 +1549,8 @@ test("replacement with the same numeric id disposes old reads actions and mutati
                 ? gate.promise : fallback(message);
         const pending = operation === "read" ? first.readState({refresh: true})
             : operation === "approval" ? first.approve({})
+            : operation === "speed" || operation === "speedRecovery"
+                ? first.setSpeed({interaction: "ended", value: 145}, requestToken(101))
             : first.applyEdits();
         await flushPopup();
         harness.setState(replacement, transactionState(replacement, {
@@ -1683,11 +1689,15 @@ test("keyboard slider input stays local and one terminal command adopts its rota
     slider.emit("input");
     await flushPopup();
     assert.equal((controller.interaction?.kind === "slider"), true);
+    assert.equal(harness.get("button-approve").disabled, true);
+    await controller.approveCurrent();
+    await controller.approve({});
     assert.deepEqual(harness.nativeMessages, []);
+    assert.deepEqual(harness.workerMessages, []);
     slider.emit("change");
-    const completion = controller.action.result;
     await flushPopup();
     assert.equal(slider.disabled, true);
+    assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(controller.beginSliderInteraction(), false);
     assert.deepEqual(harness.nativeMessages, [{
         subject: "setTransactionSpeed",
@@ -1703,14 +1713,16 @@ test("keyboard slider input stays local and one terminal command adopts its rota
         reviewToken: requestToken(102),
         slider: {maximum: 200, position: 145, visible: true},
     }));
-    assert.equal(await completion, true);
+    await flushPopup();
     assert.equal(controller.action, null);
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.deepEqual(harness.workerMessages, []);
     assert.equal(controller.state.review.reviewToken, requestToken(102));
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     assert.equal(Number(slider.value), 145);
 });
 
-test("approval waits for the drag result and ignores the old gesture's late terminal events", async () => {
+test("approval requires a fresh click after the drag result is displayed", async () => {
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
     const gate = deferred();
@@ -1718,15 +1730,27 @@ test("approval waits for the drag result and ignores the old gesture's late term
         message.subject === "setTransactionSpeed" ? gate.promise : fallback(message);
     const slider = harness.get("tx-slider");
     slider.emit("pointerdown");
+    assert.equal(harness.get("button-approve").disabled, true);
     slider.value = "160";
     slider.emit("input");
-    const approval = harness.get("button-approve").emit("click");
+    await harness.get("button-approve").emit("click");
+    await controller.approve({});
+    assert.deepEqual(harness.nativeMessages, []);
+    slider.emit("pointerup");
+    slider.emit("change");
     await flushPopup();
+    assert.equal(harness.get("button-approve").disabled, true);
+    await controller.approveCurrent();
+    await controller.approve({});
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["setTransactionSpeed"]);
     assert.deepEqual(harness.workerMessages, []);
 
-    gate.resolve(transactionState(controller.request, {reviewToken: requestToken(102)}));
-    await approval;
+    gate.resolve(transactionState(controller.request, {title: "Updated fee review", reviewToken: requestToken(102)}));
+    await flushPopup();
+    assert.equal(harness.get("request-title").textContent, "Updated fee review");
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.deepEqual(harness.workerMessages, []);
+    await harness.get("button-approve").emit("click");
 
     assert.equal(harness.workerMessages[0].subject, "approveRequestWithCurrentRevisions");
     assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
@@ -1738,28 +1762,59 @@ test("approval waits for the drag result and ignores the old gesture's late term
     assert.equal(harness.workerMessages.length, 1);
 });
 
-test("stale or ignored terminal slider commands refresh and do not approve", async () => {
+test("stale or ignored terminal slider commands block approval until a fresh review is displayed", async () => {
     for (const stale of [true, false]) {
         const harness = await reviewedPopup(transactionState);
         const controller = harness.controller;
         const fresh = transactionState(controller.request, {reviewToken: requestToken(102)});
+        const gate = deferred();
         harness.setState(controller.request, fresh);
         harness.handlers.native = (message, fallback) =>
-            message.subject === "setTransactionSpeed" ? {status: "ignored"} : fallback(message);
+            message.subject === "setTransactionSpeed" ? {status: "ignored"}
+                : message.subject === "getApprovalState" ? gate.promise : fallback(message);
         const slider = harness.get("tx-slider");
         slider.emit("pointerdown");
         slider.value = "140";
         if (stale) { controller.adoptState(fresh); }
 
+        const completion = controller.finishSliderInteraction("ended");
+        await flushPopup();
+        assert.equal(harness.get("button-approve").disabled, true);
+        await controller.approveCurrent();
         await controller.approve({});
 
         assert.deepEqual(harness.nativeMessages.map(message => message.subject), stale
             ? ["getApprovalState"] : ["setTransactionSpeed", "getApprovalState"]);
         assert.deepEqual(harness.workerMessages, []);
+        gate.resolve(fresh);
+        assert.equal(await completion, false);
         assert.equal(controller.state.review.reviewToken, requestToken(102));
         assert.equal(controller.action, null);
+        assert.equal(harness.get("button-approve").disabled, false);
         assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+        assert.deepEqual(harness.workerMessages, []);
+        await harness.get("button-approve").emit("click");
+        assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
     }
+});
+
+test("failed fee-review recovery follows transport recovery without approving", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    harness.handlers.native = (message, fallback) => {
+        if (message.subject === "setTransactionSpeed") { return {status: "ignored"}; }
+        if (message.subject === "getApprovalState") { throw new Error("Native unavailable"); }
+        return fallback(message);
+    };
+
+    assert.equal(await controller.setSpeed({interaction: "ended", value: 145}, requestToken(101)), false);
+
+    assert.equal(controller.transportError, true);
+    assert.equal(controller.action, null);
+    assert.equal(harness.get("request-error").textContent, "Failed to load");
+    assert.equal(harness.get("button-approve").textContent, "Refresh");
+    await controller.approve({});
+    assert.deepEqual(harness.workerMessages, []);
 });
 
 test("replacement consumes the old drag's trailing events before accepting a new gesture", async () => {
@@ -1788,8 +1843,8 @@ test("replacement consumes the old drag's trailing events before accepting a new
     slider.emit("pointerdown");
     slider.value = "180";
     slider.emit("pointercancel");
-    const completion = harness.controller.action.result;
-    assert.equal(await completion, true);
+    await flushPopup();
+    assert.equal(harness.controller.action, null);
     assert.equal(harness.nativeMessages[0].requestToken, replacement.requestToken);
     assert.equal(harness.nativeMessages[0].reviewToken, requestToken(202));
     assert.deepEqual(harness.nativeMessages[0].payload, {interaction: "cancelled", value: 180});
@@ -2601,8 +2656,8 @@ test("stale Apply discards a draft when recovery changes the fee model or edit c
     }
 });
 
-test("Cancel supersedes hung reads edits speed and stale-edit recovery without waiting", async () => {
-    for (const kind of ["read", "edits", "speed", "recovery"]) {
+test("Cancel supersedes hung reads edits speed and mutation recovery without waiting", async () => {
+    for (const kind of ["read", "edits", "speed", "recovery", "speedRecovery"]) {
         const harness = await reviewedPopup(transactionState);
         const controller = harness.controller;
         const gate = deferred();
@@ -2610,13 +2665,14 @@ test("Cancel supersedes hung reads edits speed and stale-edit recovery without w
             if (kind === "read" && message.subject === "getApprovalState" ||
                 kind === "edits" && message.subject === "applyTransactionEdits" ||
                 kind === "speed" && message.subject === "setTransactionSpeed" ||
-                kind === "recovery" && message.subject === "getApprovalState") { return gate.promise; }
+                (kind === "recovery" || kind === "speedRecovery") && message.subject === "getApprovalState") { return gate.promise; }
             if (kind === "recovery" && message.subject === "applyTransactionEdits") { return {status: "ignored"}; }
+            if (kind === "speedRecovery" && message.subject === "setTransactionSpeed") { return {status: "ignored"}; }
             return fallback(message);
         };
         let pending;
         if (kind === "read") { pending = controller.readState(); }
-        else if (kind === "speed") { pending = controller.setSpeed({interaction: "ended", value: 130}, requestToken(101)); }
+        else if (kind === "speed" || kind === "speedRecovery") { pending = controller.setSpeed({interaction: "ended", value: 130}, requestToken(101)); }
         else {
             harness.get("tx-editor").open = true;
             harness.get("tx-editor").emit("toggle");
@@ -2671,7 +2727,7 @@ test("a hung approval disables Cancel without blocking replacement requests", as
     assert.deepEqual(harness.visibleSnapshot(), snapshot);
 });
 
-test("speed completion gates a second click on Approve and failure never approves", async () => {
+test("clicks during a pending fee update are discarded and failure never approves", async () => {
     for (const success of [true, false]) {
         const harness = await reviewedPopup(transactionState);
         const controller = harness.controller;
@@ -2680,15 +2736,24 @@ test("speed completion gates a second click on Approve and failure never approve
         harness.get("tx-slider").emit("pointerdown");
         harness.get("tx-slider").value = "155";
         harness.get("tx-slider").emit("pointerup");
-        assert.equal(harness.get("button-approve").disabled, false);
-        const approval = harness.get("button-approve").emit("click");
+        assert.equal(harness.get("button-approve").disabled, true);
         await harness.get("button-approve").emit("click");
+        await harness.get("button-approve").emit("click");
+        await controller.approve({});
         if (success) { gate.resolve(transactionState(controller.request, {reviewToken: requestToken(102)})); }
         else { gate.reject(new Error("Native unavailable")); }
-        await approval;
-        assert.equal(harness.workerMessages.length, success ? 1 : 0);
-        if (success) { assert.equal(harness.workerMessages[0].reviewToken, requestToken(102)); }
-        else { assert.equal(controller.transportError, true); }
+        await flushPopup();
+        assert.deepEqual(harness.workerMessages, []);
+        if (success) {
+            assert.equal(harness.get("button-approve").disabled, false);
+            await harness.get("button-approve").emit("click");
+            assert.equal(harness.workerMessages.length, 1);
+            assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
+        } else {
+            assert.equal(controller.transportError, true);
+            await controller.approve({});
+            assert.deepEqual(harness.workerMessages, []);
+        }
     }
 });
 
