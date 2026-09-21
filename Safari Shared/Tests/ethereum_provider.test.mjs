@@ -40,7 +40,7 @@ const ethereumSource = bundle("ethereum-harness.js", "cjs", `
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const solanaSource = bundle("solana-harness.js", "cjs", `
-    export {default, applyDecodedEnvelope, observeConfiguration, subscribeNotifications} from "./solana";
+    export {default, applyDecodedEnvelope, subscribeNotifications} from "./solana";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const base58Source = bundle("base58.js");
@@ -106,19 +106,7 @@ function normalized(value) {
 }
 
 function decodedDelivery(envelope) {
-    const configuration = envelope.kind === "configuration" && envelope.configuration !== null
-        ? Object.freeze({
-            __proto__: null,
-            reauthorizationRevision: 0,
-            ...envelope.configuration,
-        })
-        : undefined;
-    return Object.freeze({
-        __proto__: null,
-        suppressUpdate: false,
-        ...envelope,
-        ...(configuration ? {configuration} : {}),
-    });
+    return Object.freeze({__proto__: null, ...envelope});
 }
 
 function ethereumHarness(initialState = null) {
@@ -173,7 +161,12 @@ function ethereumHarness(initialState = null) {
     return {
         ...module,
         disconnects,
-        applyDecodedEnvelope: envelope => module.exports.applyDecodedEnvelope(engine, decodedDelivery(envelope)),
+        applyDecodedEnvelope: envelope => module.exports.applyDecodedEnvelope(engine, decodedDelivery({
+            ...envelope,
+            ...(envelope.kind === "configuration" ? {
+                workerRevision: envelope.workerRevision ?? (Ethereum.snapshot(engine).workerRevision ?? -1) + 1,
+            } : {}),
+        })),
         snapshot: () => Ethereum.snapshot(engine),
         retire: error => Ethereum.retire(engine, error),
         isReady: () => Ethereum.isReady(engine),
@@ -258,28 +251,27 @@ const firstSolanaKey = "11111111111111111111111111111111";
 const secondSolanaKey = "So11111111111111111111111111111111111111112";
 const validSignature = "1".repeat(64);
 
-function applySolanaConfiguration(
-    harness,
-    {
-        workerRevision = 0,
-        isConnected = false,
-        publicKey = null,
-        reauthorizationRevision = 0,
-        suppressUpdate = false,
-    } = {}
-) {
-    const envelope = decodedDelivery({
-        kind: "configuration",
-        configuration: publicKey === null ? null : {
-            isConnected,
-            publicKey,
-            reauthorizationRevision,
-        },
-        workerRevision,
-        suppressUpdate,
-    });
-    harness.exports.observeConfiguration(harness.provider, envelope);
-    return harness.applyDecodedEnvelope(harness.provider, envelope);
+function applySolanaConfiguration(harness, {
+    workerRevision = (harness.Solana.snapshot(harness.provider).workerRevision ?? -1) + 1,
+    publicKey = null,
+} = {}) {
+    return harness.applyDecodedEnvelope(harness.provider, decodedDelivery({
+        kind: "configuration", configuration: publicKey === null ? null : {publicKey}, workerRevision,
+    }));
+}
+
+function grantEthereum(harness, id, address, chainId = harness.provider.chainId) {
+    applyEthereumConfiguration(harness, address, chainId);
+    const state = {revisions: {ethereum: harness.snapshot().workerRevision, solana: 0},
+        ethereum: {address, chainId}, solana: null};
+    harness.applyDecodedEnvelope({id, name: "requestAccounts", kind: "result", result: address ? [address] : [], state});
+}
+
+function grantSolana(harness, id, publicKey) {
+    applySolanaConfiguration(harness, {publicKey});
+    const state = {revisions: {ethereum: 0, solana: harness.Solana.snapshot(harness.provider).workerRevision},
+        ethereum: {address: "", chainId: "0x1"}, solana: {publicKey}};
+    harness.applyDecodedEnvelope(harness.provider, {id, name: "connect", kind: "result", result: {publicKey}, state});
 }
 
 function publicKey(value = firstSolanaKey) {
@@ -305,18 +297,12 @@ function overrideProviderPublicKey(key, behavior) {
 }
 
 function connectedSolanaHarness(publicKey = firstSolanaKey, extraGlobals = {}) {
-    const configuration = {
-        accountRevision: 1,
-        isConnected: true,
-        publicKey,
-        solanaAuthorizationEpoch: 1,
-    };
+    const configuration = {isConnected: true, publicKey};
     const harness = solanaHarness(configuration, extraGlobals);
     applySolanaConfiguration(harness, {
         publicKey: configuration.publicKey,
         isConnected: configuration.isConnected,
-        reauthorizationRevision: configuration.reauthorizationRevision,
-        workerRevision: configuration.solanaAuthorizationEpoch,
+        workerRevision: 1,
     });
     return harness;
 }
@@ -799,12 +785,7 @@ test("Ethereum keeps the standard legacy adapters and public properties", async 
 
     const enabled = harness.provider.enable();
     assert.equal(harness.requests.at(-1).name, "requestAccounts");
-    harness.applyDecodedEnvelope({
-        id: harness.requests.at(-1).id,
-        kind: "result",
-        name: "requestAccounts",
-        result: ["0x0000000000000000000000000000000000000001"],
-    });
+    grantEthereum(harness, harness.requests.at(-1).id, "0x0000000000000000000000000000000000000001");
     assert.deepEqual(normalized(await enabled), [
         "0x0000000000000000000000000000000000000001",
     ]);
@@ -1166,8 +1147,6 @@ test("Ethereum emits authoritative deltas from copied state", () => {
     const firstAddress = "0x0000000000000000000000000000000000000001";
     const secondAddress = "0x0000000000000000000000000000000000000002";
     const harness = ethereumHarness({
-        accountRevision: 1,
-        accountRevocationTombstone: false,
         address: firstAddress,
         chainId: "0x1",
     });
@@ -1185,68 +1164,19 @@ test("Ethereum emits authoritative deltas from copied state", () => {
     ]);
 });
 
-test("Ethereum compares reentrant first-drain state to the copied baseline", async () => {
-    const firstAddress = "0x0000000000000000000000000000000000000001";
-    const secondAddress = "0x0000000000000000000000000000000000000002";
-    for (const testCase of [{
-        nestedAddress: secondAddress,
-        nestedChainId: "0x2",
-        expected: [
-            ["accountsChanged", [secondAddress]],
-            ["chainChanged", "0x2"],
-        ],
-    }, {
-        nestedAddress: firstAddress,
-        nestedChainId: "0x1",
-        expected: [],
-    }, {
-        nestedAddress: firstAddress,
-        nestedChainId: "0x1",
-        suppressUpdate: true,
-        expected: [
-            ["accountsChanged", [secondAddress]],
-            ["chainChanged", "0x2"],
-        ],
-    }]) {
-        const harness = ethereumHarness({
-            accountRevision: 1,
-            accountRevocationTombstone: false,
-            address: firstAddress,
-            chainId: "0x1",
-        });
-        const events = [];
-        harness.provider.on("accountsChanged", accounts => {
-            events.push(["accountsChanged", normalized(accounts)]);
-        });
-        harness.provider.on("chainChanged", chainId => {
-            events.push(["chainChanged", chainId]);
-        });
-        const request = harness.provider.request({
-            method: "eth_blockNumber",
-            params: [],
-        });
-        let reentered = false;
-        harness.setRPCObserver(() => {
-            if (reentered) { return; }
-            reentered = true;
-            harness.applyDecodedEnvelope({
-                configuration: {
-                    address: testCase.nestedAddress,
-                    chainId: testCase.nestedChainId,
-                },
-                kind: "configuration",
-                suppressUpdate: testCase.suppressUpdate,
-            });
-        });
-        applyEthereumConfiguration(harness, secondAddress, "0x2");
-        assert.deepEqual(events, testCase.expected);
-        harness.applyDecodedEnvelope({
-            id: harness.rpc[0].message.id,
-            kind: "result",
-            result: true,
-        });
-        assert.equal(await request, true);
-    }
+test("Ethereum configuration events precede bootstrap FIFO dispatch", async () => {
+    const first = "0x0000000000000000000000000000000000000001";
+    const second = "0x0000000000000000000000000000000000000002";
+    const h = ethereumHarness({address: first, chainId: "0x1"});
+    const order = [];
+    h.provider.on("accountsChanged", () => { order.push("accounts"); });
+    h.provider.on("chainChanged", () => { order.push("chain"); });
+    h.setRPCObserver(() => order.push("request"));
+    const pending = h.provider.request({method: "eth_blockNumber"});
+    applyEthereumConfiguration(h, second, "0x2");
+    assert.deepEqual(order, ["accounts", "chain", "request"]);
+    h.applyDecodedEnvelope({kind: "result", id: h.rpc[0].message.id, result: "0x1"});
+    assert.equal(await pending, "0x1");
 });
 
 test("malformed raw configuration cannot interrupt a copied Ethereum first drain", async () => {
@@ -1310,7 +1240,7 @@ test("Ethereum contains listener failures while emitting state changes", () => {
     });
     harness.applyDecodedEnvelope({
         kind: "configuration",
-        configuration: {address: secondAddress, chainId: "0x2", reauthorizationRevision: 1},
+        configuration: {address: secondAddress, chainId: "0x2"},
     });
     assert.equal(laterListener, 0);
     assert.equal(harness.provider.selectedAddress, secondAddress);
@@ -1352,119 +1282,31 @@ test("Ethereum posts wallet requests, settles errors, and retires with 4900", as
     }), false);
 });
 
-test("Ethereum authorization failures revoke only their captured account", async () => {
-    const harness = ethereumHarness();
+test("Ethereum error terminals cannot change authorization", async () => {
+    const h = ethereumHarness();
     const address = "0x0000000000000000000000000000000000000001";
-    applyEthereumConfiguration(harness, address);
-    const request = harness.provider.request({
-        method: "eth_blockNumber",
-        params: [],
-    });
-    harness.applyDecodedEnvelope({
-        authorizationFailure: true,
-        error: {code: 4100, message: "Unauthorized"},
-        id: harness.rpc[0].message.id,
-        kind: "error",
-    });
-    await assert.rejects(request, error => error.code === 4100);
-    assert.equal(harness.provider.selectedAddress, null);
-
-    const currentAddress = "0x0000000000000000000000000000000000000002";
-    applyEthereumConfiguration(harness, currentAddress);
-    const stale = harness.provider.request({
-        method: "eth_blockNumber",
-        params: [],
-    });
-    harness.applyDecodedEnvelope({
-        kind: "configuration",
-        configuration: {address: currentAddress, chainId: "0x2", reauthorizationRevision: 1},
-    });
-    harness.applyDecodedEnvelope({
-        authorizationFailure: true,
-        error: {code: 4100, message: "Stale unauthorized"},
-        id: harness.rpc.at(-1).message.id,
-        kind: "error",
-    });
-    await assert.rejects(stale, error => error.code === 4100);
-    assert.equal(harness.provider.selectedAddress, currentAddress);
+    applyEthereumConfiguration(h, address);
+    const pending = h.provider.request({method: "personal_sign", params: ["0x01"]});
+    h.applyDecodedEnvelope({id: h.requests[0].id, name: "signPersonalMessage", kind: "error", error: {code: 4100, message: "Unauthorized"}});
+    await assert.rejects(pending, error => error.code === 4100);
+    assert.equal(h.provider.selectedAddress, address);
+    applyEthereumConfiguration(h);
+    assert.equal(h.provider.selectedAddress, null);
 });
 
-test("Ethereum chain responses update only an already-authorized account", async () => {
-    const firstAddress = "0x0000000000000000000000000000000000000001";
-    const secondAddress = "0x0000000000000000000000000000000000000002";
-    for (const method of [
-        "wallet_switchEthereumChain",
-        "wallet_addEthereumChain",
-    ]) {
-        const harness = ethereumHarness();
-        applyEthereumConfiguration(harness, firstAddress, "0x1");
-        const events = [];
-        harness.provider.on("accountsChanged", accounts => {
-            events.push(["accountsChanged", normalized(accounts)]);
-        });
-        harness.provider.on("chainChanged", chainId => {
-            events.push(["chainChanged", chainId]);
-        });
-        const request = harness.provider.request({
-            method,
-            params: [{chainId: "0x2"}],
-        });
-        const message = harness.requests[0];
-        harness.applyDecodedEnvelope({
-            id: message.id,
-            kind: "result",
-            name: message.name,
-            result: [secondAddress],
-        });
-        assert.deepEqual(normalized(await request), [secondAddress]);
-        assert.equal(harness.provider.selectedAddress, secondAddress);
-        assert.equal(harness.provider.chainId, "0x2");
-        assert.deepEqual(events, [
-            ["accountsChanged", [secondAddress]],
-            ["chainChanged", "0x2"],
-        ]);
-
-        events.length = 0;
-        const accountlessResult = harness.provider.request({
-            method,
-            params: [{chainId: "0x3"}],
-        });
-        const accountlessMessage = harness.requests.at(-1);
-        harness.applyDecodedEnvelope({
-            id: accountlessMessage.id,
-            kind: "result",
-            name: accountlessMessage.name,
-            result: [],
-        });
-        assert.deepEqual(normalized(await accountlessResult), []);
-        assert.equal(harness.provider.selectedAddress, null);
-        assert.equal(harness.provider.chainId, "0x3");
-        assert.deepEqual(events, [
-            ["accountsChanged", []],
-            ["chainChanged", "0x3"],
-        ]);
+test("Ethereum chain results settle without modifying account or network state", async () => {
+    const address = "0x0000000000000000000000000000000000000001";
+    for (const method of ["wallet_switchEthereumChain", "wallet_addEthereumChain"]) {
+        const h = ethereumHarness();
+        applyEthereumConfiguration(h, address);
+        const pending = h.provider.request({method, params: [{chainId: "0x2"}]});
+        h.applyDecodedEnvelope({id: h.requests[0].id, name: h.requests[0].name, kind: "result", result: null});
+        assert.equal(await pending, null);
+        assert.equal(h.provider.chainId, "0x1");
+        assert.equal(h.provider.selectedAddress, address);
+        applyEthereumConfiguration(h, address, "0x2");
+        assert.equal(h.provider.chainId, "0x2");
     }
-
-    const accountless = ethereumHarness();
-    applyEthereumConfiguration(accountless, "", "0x1");
-    const accountEvents = [];
-    accountless.provider.on("accountsChanged", accounts => {
-        accountEvents.push(normalized(accounts));
-    });
-    const request = accountless.provider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{chainId: "0x2"}],
-    });
-    accountless.applyDecodedEnvelope({
-        id: accountless.requests[0].id,
-        kind: "result",
-        name: accountless.requests[0].name,
-        result: [secondAddress],
-    });
-    assert.deepEqual(normalized(await request), [secondAddress]);
-    assert.equal(accountless.provider.selectedAddress, null);
-    assert.equal(accountless.provider.chainId, "0x2");
-    assert.deepEqual(accountEvents, []);
 });
 
 test("Ethereum same-chain switches preserve pending signing without wallet transport", async () => {
@@ -1486,7 +1328,7 @@ test("Ethereum same-chain switches preserve pending signing without wallet trans
         params: [{chainId: "0x1"}],
     });
 
-    assert.deepEqual(normalized(result), [address]);
+    assert.equal(result, null);
     assert.equal(harness.requests.length, 1);
     assert.deepEqual(normalized(harness.snapshot()), before);
     assert.deepEqual(events, []);
@@ -1513,17 +1355,18 @@ test("Ethereum queued switches compare the loaded chain without granting account
 
     applyEthereumConfiguration(harness, "", "0x2");
 
-    assert.deepEqual(normalized(await sameChain), []);
+    assert.equal(await sameChain, null);
     assert.equal(harness.requests.length, 1);
     const request = harness.requests[0];
     assert.equal(request.data.chainId, "0x1");
+    applyEthereumConfiguration(harness, "", "0x1");
     harness.applyDecodedEnvelope({
         id: request.id,
         kind: "result",
         name: request.name,
-        result: [],
+        result: null,
     });
-    assert.deepEqual(normalized(await differentChain), []);
+    assert.equal(await differentChain, null);
     assert.equal(harness.provider.chainId, "0x1");
     assert.equal(harness.provider.selectedAddress, null);
 });
@@ -1541,13 +1384,14 @@ test("Ethereum normalizes external chain IDs without mutating caller data", asyn
                 chainName: input.chainName,
             });
             assert.equal(input.chainId, chainId);
+            applyEthereumConfiguration(harness, "", chainId.toLowerCase());
             harness.applyDecodedEnvelope({
                 id: request.id,
                 kind: "result",
                 name: request.name,
-                result: [],
+                result: null,
             });
-            assert.deepEqual(normalized(await pending), []);
+            assert.equal(await pending, null);
             assert.equal(harness.provider.chainId, chainId.toLowerCase());
         }
     }
@@ -1560,7 +1404,7 @@ test("Ethereum normalizes uppercase IDs before comparing the current chain", asy
         method: "wallet_switchEthereumChain",
         params: [{chainId: "0xA"}],
     });
-    assert.deepEqual(normalized(result), []);
+    assert.equal(result, null);
     assert.equal(harness.requests.length, 0);
     assert.equal(harness.provider.chainId, "0xa");
 });
@@ -1586,13 +1430,14 @@ test("Ethereum chain requests ignore later String prototype changes", async () =
                 prototype[name] = original;
             }
             const request = harness.requests[0];
+            applyEthereumConfiguration(harness, "", "0xa");
             harness.applyDecodedEnvelope({
                 id: request.id,
                 kind: "result",
                 name: request.name,
-                result: [],
+                result: null,
             });
-            assert.deepEqual(normalized(await pending), []);
+            assert.equal(await pending, null);
             assert.equal(harness.provider.chainId, "0xa");
         }
     }
@@ -1724,7 +1569,7 @@ test("late Ethereum revocation preserves newer account authorization", async () 
             applyEthereumConfiguration(harness);
             harness.applyDecodedEnvelope({
                 kind: "configuration",
-                configuration: {address, chainId: "0x1", reauthorizationRevision: 1},
+                configuration: {address, chainId: "0x1"},
             });
             const accountChanges = [];
             harness.provider.on("accountsChanged", accounts => {
@@ -1744,10 +1589,7 @@ test("late Ethereum revocation preserves newer account authorization", async () 
             await settled;
             applyEthereumConfiguration(harness, address);
             assert.equal(harness.provider.selectedAddress, address);
-            assert.equal(
-                harness.snapshot().accountRevocationTombstone,
-                false
-            );
+            assert.equal(harness.provider.selectedAddress, address);
             assert.deepEqual(accountChanges, []);
         }
     }
@@ -1770,86 +1612,32 @@ test("Ethereum revoke acknowledgement preserves a pending reconnect", async () =
         result: null,
     });
     await revocation;
-    harness.applyDecodedEnvelope({
-        id: harness.requests.at(-1).id,
-        kind: "result",
-        name: "requestAccounts",
-        result: [address],
-    });
+    grantEthereum(harness, harness.requests.at(-1).id, address);
     assert.deepEqual(normalized(await reconnect), [address]);
     assert.equal(harness.provider.selectedAddress, address);
 });
 
-test("empty requestAccounts success preserves a revocation tombstone", async () => {
-    const harness = ethereumHarness();
-    const address = "0x0000000000000000000000000000000000000001";
-    applyEthereumConfiguration(harness, address);
-    const revocation = harness.provider.request({
-        method: "wallet_revokePermissions",
-        params: [{eth_accounts: {}}],
-    });
-    harness.applyDecodedEnvelope({
-        id: harness.disconnects[0].id,
-        kind: "result",
-        name: "revokePermissions",
-        result: null,
-    });
-    await revocation;
-    assert.equal(
-        harness.snapshot()
-            .accountRevocationTombstone,
-        true
-    );
-
-    const accounts = harness.provider.request({
-        method: "eth_requestAccounts",
-        params: [],
-    });
-    harness.applyDecodedEnvelope({
-        id: harness.requests.at(-1).id,
-        kind: "result",
-        name: "requestAccounts",
-        result: [],
-    });
-    assert.deepEqual(normalized(await accounts), []);
-    assert.equal(
-        harness.snapshot()
-            .accountRevocationTombstone,
-        true
-    );
-    applyEthereumConfiguration(harness, address);
-    assert.equal(harness.provider.selectedAddress, null);
+test("empty requestAccounts success cannot restore revoked authorization", async () => {
+    const h = ethereumHarness();
+    applyEthereumConfiguration(h);
+    const pending = h.provider.request({method: "eth_requestAccounts"});
+    h.applyDecodedEnvelope({id: h.requests[0].id, name: "requestAccounts", kind: "result", result: []});
+    assert.deepEqual(normalized(await pending), []);
+    assert.equal(h.provider.selectedAddress, null);
 });
 
-test("successful requestAccounts explicitly reauthorizes a revoked account", async () => {
-    const harness = ethereumHarness();
+test("Ethereum snapshots grant and revoke the same account with increasing revisions", async () => {
+    const h = ethereumHarness();
     const address = "0x0000000000000000000000000000000000000001";
-    applyEthereumConfiguration(harness, address);
-    const revocation = harness.provider.request({
-        method: "wallet_revokePermissions",
-        params: [{eth_accounts: {}}],
-    });
-    harness.applyDecodedEnvelope({
-        id: harness.disconnects[0].id,
-        kind: "result",
-        name: "revokePermissions",
-        result: null,
-    });
-    await revocation;
-
-    const reconnect = harness.provider.request({method: "eth_requestAccounts"});
-    harness.applyDecodedEnvelope({
-        id: harness.requests.at(-1).id,
-        kind: "result",
-        name: "requestAccounts",
-        result: [address],
-    });
-    assert.deepEqual(normalized(await reconnect), [address]);
-    assert.equal(harness.provider.selectedAddress, address);
-    assert.equal(
-        harness.snapshot().accountRevocationTombstone,
-        false
-    );
+    applyEthereumConfiguration(h, address);
+    const revision = h.snapshot().workerRevision;
+    applyEthereumConfiguration(h);
+    assert.equal(h.provider.selectedAddress, null);
+    const pending = h.provider.request({method: "eth_requestAccounts"});
+    grantEthereum(h, h.requests.at(-1).id, address);
+    assert.deepEqual(normalized(await pending), [address]);
+    assert.equal(h.provider.selectedAddress, address);
+    assert.equal(h.snapshot().workerRevision, revision + 2);
 });
 
 test("Ethereum rejects signing results after account authorization drifts", async () => {
@@ -1863,7 +1651,7 @@ test("Ethereum rejects signing results after account authorization drifts", asyn
     });
     const request = harness.requests.at(-1);
     harness.applyDecodedEnvelope({
-        configuration: {address: secondAddress, chainId: "0x1", reauthorizationRevision: 1},
+        configuration: {address: secondAddress, chainId: "0x1"},
         kind: "configuration",
     });
     harness.applyDecodedEnvelope({
@@ -1887,7 +1675,7 @@ test("Ethereum rejects signing results after account authorization drifts", asyn
         name: currentRequest.name,
         result: "0xcurrent",
     });
-    assert.equal(await current, "0xcurrent");
+    await assert.rejects(current, error => error.code === 4100);
 });
 
 test("Ethereum settles a committed signature after later authorization drift", async () => {
@@ -1901,7 +1689,7 @@ test("Ethereum settles a committed signature after later authorization drift", a
     });
     const request = harness.requests.at(-1);
     harness.applyDecodedEnvelope({
-        configuration: {address: secondAddress, chainId: "0x1", reauthorizationRevision: 1},
+        configuration: {address: secondAddress, chainId: "0x1"},
         kind: "configuration",
     });
     harness.applyDecodedEnvelope({
@@ -1910,7 +1698,6 @@ test("Ethereum settles a committed signature after later authorization drift", a
         kind: "result",
         name: request.name,
         result: "0xsignature",
-        suppressUpdate: true,
     });
 
     assert.equal(await signing, "0xsignature");
@@ -1925,7 +1712,7 @@ test("Ethereum settles committed account approval without replacing newer state"
     const accounts = harness.provider.request({method: "eth_requestAccounts"});
     const request = harness.requests.at(-1);
     harness.applyDecodedEnvelope({
-        configuration: {address: newerAddress, chainId: "0x1", reauthorizationRevision: 1},
+        configuration: {address: newerAddress, chainId: "0x1"},
         kind: "configuration",
     });
     harness.applyDecodedEnvelope({
@@ -1934,42 +1721,28 @@ test("Ethereum settles committed account approval without replacing newer state"
         kind: "result",
         name: "requestAccounts",
         result: [approvedAddress],
-        suppressUpdate: true,
     });
 
     assert.deepEqual(normalized(await accounts), [approvedAddress]);
     assert.equal(harness.provider.selectedAddress, newerAddress);
 });
 
-test("suppressed initial configuration neither drains nor emits connect", async () => {
-    const harness = ethereumHarness();
+test("invalid initial Ethereum revision neither drains nor emits connect", async () => {
+    const h = ethereumHarness();
     let connects = 0;
-    harness.provider.on("connect", () => { connects += 1; });
-    const chain = harness.provider.request({method: "eth_chainId"});
-    let settled = false;
-    chain.finally(() => { settled = true; });
-    assert.equal(harness.applyDecodedEnvelope({
-        kind: "configuration",
-        suppressUpdate: true,
-        configuration: {
-            address: "0x0000000000000000000000000000000000000001",
-            chainId: "0x2",
-        },
-    }), false);
-    await Promise.resolve();
-    assert.equal(settled, false);
+    h.provider.on("connect", () => connects++);
+    const pending = h.provider.request({method: "eth_chainId"});
+    assert.equal(h.applyDecodedEnvelope({kind: "configuration", workerRevision: -1, configuration: {address: "", chainId: "0x2"}}), false);
+    assert.equal(h.isReady(), false);
     assert.equal(connects, 0);
-    assert.equal(harness.isReady(), false);
-    applyEthereumConfiguration(harness, "", "0x3");
-    assert.equal(await chain, "0x3");
-    assert.equal(connects, 1);
-    harness.runTimers();
+    applyEthereumConfiguration(h, "", "0x3");
+    assert.equal(await pending, "0x3");
     assert.equal(connects, 1);
 });
 
 test("Ethereum first connect follows current configuration events synchronously", () => {
     for (const retireDuring of [null, "accountsChanged", "chainChanged", "networkChanged"]) {
-        const harness = ethereumHarness();
+        const harness = ethereumHarness({address: "", chainId: "0x1"});
         const events = [];
         for (const name of ["accountsChanged", "chainChanged", "networkChanged", "connect"]) {
             harness.provider.on(name, value => {
@@ -1986,7 +1759,6 @@ test("Ethereum first connect follows current configuration events synchronously"
             configuration: {
                 address: "0x0000000000000000000000000000000000000001",
                 chainId: "0x2",
-                reauthorizationRevision: 1,
             },
         });
         if (retireDuring === null) {
@@ -2251,37 +2023,14 @@ test("Ethereum connect replay waits for raw bootstrap failure recovery", async (
     assert.deepEqual(connects, [{chainId: "0x7"}]);
 });
 
-test("suppressed initial Solana configuration preserves the loading queue", async () => {
-    const harness = solanaHarness();
-    const events = [];
-    for (const eventName of ["accountChanged", "connect", "disconnect"]) {
-        harness.standardProvider.on(eventName, () => { events.push(eventName); });
-    }
-    harness.standardProvider.standardOn("change", () => { events.push("change"); });
-    const connection = harness.provider.connect();
-    let settled = false;
-    connection.finally(() => { settled = true; });
-
-    assert.equal(applySolanaConfiguration(harness, {
-        suppressUpdate: true,
-    }), false);
-    await Promise.resolve();
-    assert.equal(harness.Solana.isReady(harness.provider), false);
-    assert.equal(harness.requests.length, 0);
-    assert.equal(settled, false);
-    assert.deepEqual(events, []);
-
-    assert.equal(applySolanaConfiguration(harness), true);
-    assert.equal(harness.Solana.isReady(harness.provider), true);
-    assert.equal(harness.requests.length, 1);
-    assert.deepEqual(events, []);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
-    assert.equal((await connection).publicKey.toString(), firstSolanaKey);
+test("invalid initial Solana revision preserves the loading queue", async () => {
+    const h = solanaHarness();
+    const pending = h.provider.connect();
+    assert.equal(applySolanaConfiguration(h, {workerRevision: -1}), false);
+    assert.equal(h.requests.length, 0);
+    applySolanaConfiguration(h);
+    grantSolana(h, h.requests[0].id, firstSolanaKey);
+    assert.equal((await pending).publicKey.toString(), firstSolanaKey);
 });
 
 test("Solana bounds loading work without retiring the ready provider", async () => {
@@ -2319,12 +2068,7 @@ test("Solana ignores terminal envelopes until an operation is dispatched", async
     assert.equal(harness.requests.length, 0);
     applySolanaConfiguration(harness);
     assert.equal(harness.requests.length, 1);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
+    grantSolana(harness, harness.requests[0].id, firstSolanaKey);
     assert.equal((await connection).publicKey.toString(), firstSolanaKey);
 });
 
@@ -2343,25 +2087,17 @@ test("Solana late connect cannot overwrite newer authorization", async () => {
         name: "connect",
         result: {publicKey: firstSolanaKey},
     });
-    await assert.rejects(connection, error => error.code === 4900);
+    await assert.rejects(connection, error => error.code === 4100);
     assert.equal(harness.provider.publicKey.toString(), secondSolanaKey);
 });
 
-test("Solana current connect baseline remains authoritative when suppressed", async () => {
-    const harness = solanaHarness();
-    applySolanaConfiguration(harness);
-    const connection = harness.provider.connect();
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-        suppressUpdate: true,
-    });
-
-    assert.equal((await connection).publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.provider.publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.provider.isConnected, true);
+test("Solana connect without a snapshot cannot authorize an account", async () => {
+    const h = solanaHarness();
+    applySolanaConfiguration(h);
+    const pending = h.provider.connect();
+    h.applyDecodedEnvelope(h.provider, {kind: "result", id: h.requests[0].id, name: "connect", result: {publicKey: firstSolanaKey}});
+    await assert.rejects(pending, error => error.code === 4100);
+    assert.equal(h.provider.publicKey, null);
 });
 
 test("Solana silent connect never posts without a trusted account", async () => {
@@ -2373,139 +2109,50 @@ test("Solana silent connect never posts without a trusted account", async () => 
     assert.equal(harness.requests.length, 0);
 });
 
-test("Solana local reconnect emits connect after settlement", async () => {
-    const harness = solanaHarness({
-        accountRevision: 1,
-        isConnected: false,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: false,
-        publicKey: firstSolanaKey,
-        workerRevision: 1,
-    });
-    let connects = 0;
-    harness.standardProvider.on("connect", () => { connects += 1; });
-    assert.equal((await harness.provider.connect()).publicKey.toString(), firstSolanaKey);
-    assert.equal(connects, 1);
-    assert.equal(harness.requests.length, 0);
-    await harness.provider.connect();
-    assert.equal(connects, 1);
-
-    const loading = solanaHarness({
-        accountRevision: 1,
-        isConnected: false,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    let loadingConnects = 0;
-    loading.standardProvider.on("connect", () => { loadingConnects += 1; });
-    const queued = loading.provider.connect();
-    applySolanaConfiguration(loading, {
-        isConnected: false,
-        publicKey: firstSolanaKey,
-        workerRevision: 1,
-    });
-    assert.equal((await queued).publicKey.toString(), firstSolanaKey);
-    assert.equal(loadingConnects, 1);
-
-    const ordered = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    const events = [];
-    ordered.standardProvider.on("connect", () => { events.push("connect"); });
-    ordered.standardProvider.on("disconnect", () => { events.push("disconnect"); });
-    const reconnect = ordered.provider.connect();
-    applySolanaConfiguration(ordered, {
-        isConnected: false,
-        publicKey: firstSolanaKey,
-        workerRevision: 1,
-    });
-    assert.equal((await reconnect).publicKey.toString(), firstSolanaKey);
-    assert.deepEqual(events, ["disconnect", "connect"]);
-    assert.equal(ordered.provider.isConnected, true);
+test("Solana connect uses an existing authoritative account without another event", async () => {
+    const h = connectedSolanaHarness();
+    let events = 0;
+    h.standardProvider.on("connect", () => events++);
+    const result = await h.provider.connect();
+    assert.equal(result.publicKey.toString(), firstSolanaKey);
+    assert.equal(h.requests.length, 0);
+    assert.equal(events, 0);
 });
 
-test("Solana drains loading connects FIFO and fences stale completion", async () => {
-    const harness = solanaHarness();
-    const first = harness.provider.connect();
-    const second = harness.provider.connect();
-    const secondRejected = assert.rejects(
-        second,
-        error => error.code === 4900
-    );
-    assert.equal(harness.requests.length, 0);
-    applySolanaConfiguration(harness);
-    assert.deepEqual(harness.requests.map(message => message.id), [2, 4]);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: 2,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: 4,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
+test("Solana drains loading connects FIFO and rejects a stale grant", async () => {
+    const h = solanaHarness();
+    const first = h.provider.connect();
+    const second = h.provider.connect();
+    applySolanaConfiguration(h);
+    assert.deepEqual(h.requests.map(x => x.id), [2, 4]);
+    grantSolana(h, 2, firstSolanaKey);
     assert.equal((await first).publicKey.toString(), firstSolanaKey);
-    await secondRejected;
-    assert.equal(harness.provider.publicKey.toString(), firstSolanaKey);
+    applySolanaConfiguration(h);
+    h.applyDecodedEnvelope(h.provider, {id: 4, name: "connect", kind: "result", result: {publicKey: firstSolanaKey}});
+    await assert.rejects(second, error => error.code === 4100);
+    assert.equal(h.provider.publicKey, null);
 });
 
-test("Solana shares disconnect work and manual switch clears its tombstone", async () => {
-    const harness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 0,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-    });
-    const first = harness.provider.disconnect();
-    const second = harness.provider.disconnect();
+test("Solana shares disconnect work and waits for authoritative revocation", async () => {
+    const h = connectedSolanaHarness();
+    const first = h.provider.disconnect();
+    const second = h.provider.externalDisconnect();
     assert.equal(first, second);
-    assert.equal(harness.disconnects.length, 1);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 0);
-    assert.equal(harness.provider.publicKey.toString(), firstSolanaKey);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.disconnects[0].id,
-        kind: "result",
-        name: "disconnect",
-        result: true,
-    });
+    assert.equal(h.disconnects.length, 1);
+    assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
+    applySolanaConfiguration(h);
+    h.applyDecodedEnvelope(h.provider, {id: h.disconnects[0].id, name: "revokePermissions", kind: "result", result: null});
     assert.equal(await first, true);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 1);
-    assert.equal(harness.provider.publicKey, null);
-    const state = harness.Solana.snapshot(harness.provider);
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        workerRevision: state.solanaAuthorizationEpoch,
-    });
-    assert.equal(harness.provider.publicKey, null);
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        workerRevision: state.solanaAuthorizationEpoch,
-        reauthorizationRevision: 1,
-    });
-    assert.equal(harness.provider.publicKey.toString(), firstSolanaKey);
+    assert.equal(h.provider.publicKey, null);
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey});
+    assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
 });
 
 test("Solana starts a new disconnect after authorization changes", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 0,
+        workerRevision: 0,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -2517,7 +2164,6 @@ test("Solana starts a new disconnect after authorization changes", async () => {
         isConnected: true,
         publicKey: secondSolanaKey,
         workerRevision: 1,
-        reauthorizationRevision: 1,
     });
     const second = harness.provider.disconnect();
 
@@ -2532,6 +2178,7 @@ test("Solana starts a new disconnect after authorization changes", async () => {
     assert.equal(await first, true);
     assert.equal(harness.provider.publicKey.toString(), secondSolanaKey);
 
+    applySolanaConfiguration(harness);
     harness.applyDecodedEnvelope(harness.provider, {
         id: harness.disconnects[1].id,
         kind: "result",
@@ -2544,10 +2191,9 @@ test("Solana starts a new disconnect after authorization changes", async () => {
 
 test("Solana failed disconnect preserves authorization and concurrent signing", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 4,
+        workerRevision: 4,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -2582,8 +2228,7 @@ test("Solana failed disconnect preserves authorization and concurrent signing", 
     applySolanaConfiguration(transportFailure, {
         publicKey: before.publicKey,
         isConnected: before.isConnected,
-        reauthorizationRevision: before.reauthorizationRevision,
-        workerRevision: before.solanaAuthorizationEpoch,
+        workerRevision: before.workerRevision,
     });
     transportFailure.setDisconnectPost(false);
     await assert.rejects(
@@ -2599,10 +2244,9 @@ test("Solana failed disconnect preserves authorization and concurrent signing", 
 
 test("successful Solana disconnect fences concurrent uncommitted signing", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 2,
+        workerRevision: 2,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -2613,10 +2257,11 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
     const signing = harness.provider.signMessage(new Uint8Array([1]));
     const signingRejected = assert.rejects(
         signing,
-        error => error.code === 4900
+        error => error.code === 4100
     );
     const signingRequest = harness.requests.at(-1);
 
+    applySolanaConfiguration(harness);
     harness.applyDecodedEnvelope(harness.provider, {
         id: harness.disconnects[0].id,
         kind: "result",
@@ -2624,7 +2269,7 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
         result: null,
     });
     assert.equal(await disconnect, true);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 3);
+    assert.equal(harness.Solana.snapshot(harness.provider).workerRevision, 3);
     assert.equal(harness.provider.publicKey, null);
 
     harness.applyDecodedEnvelope(harness.provider, {
@@ -2636,204 +2281,70 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
     await signingRejected;
 });
 
-test("ordinary Solana configuration preserves a copied revocation tombstone", () => {
-    const harness = solanaHarness({
-        accountRevision: 3,
-        accountRevocationTombstone: true,
-        isConnected: false,
-        publicKey: null,
-        solanaAuthorizationEpoch: 4,
-    });
-    const before = harness.Solana.snapshot(harness.provider);
-
-    assert.equal(applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: secondSolanaKey,
-        workerRevision: 9,
-    }), true);
-    assert.equal(harness.Solana.isReady(harness.provider), true);
-    assert.deepEqual(harness.Solana.snapshot(harness.provider), before);
-
-    assert.equal(applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: secondSolanaKey,
-        workerRevision: 9,
-        reauthorizationRevision: 1,
-    }), true);
-    assert.deepEqual(normalized(harness.Solana.snapshot(harness.provider)), {
-        accountRevision: 9,
-        accountRevocationTombstone: false,
-        isConnected: true,
-        publicKey: secondSolanaKey,
-        reauthorizationRevision: 1,
-        solanaAuthorizationEpoch: 9,
-    });
+test("a fresh generation accepts a lower authoritative revision than its copied baseline", () => {
+    const h = solanaHarness({publicKey: firstSolanaKey, isConnected: true, workerRevision: 10});
+    applySolanaConfiguration(h, {publicKey: secondSolanaKey, workerRevision: 0});
+    assert.equal(h.provider.publicKey.toString(), secondSolanaKey);
+    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 0);
 });
 
-test("stale Solana configurations do not consume reauthorization revisions", () => {
-    const harness = solanaHarness({
-        accountRevision: 7,
-        accountRevocationTombstone: true,
-        isConnected: false,
-        publicKey: null,
-        reauthorizationRevision: 3,
-        solanaAuthorizationEpoch: 8,
-    });
-    const before = harness.Solana.snapshot(harness.provider);
-    const configuration = {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        reauthorizationRevision: 4,
-        workerRevision: 8,
-    };
-
-    applySolanaConfiguration(harness, {...configuration, workerRevision: 7});
-    assert.deepEqual(harness.Solana.snapshot(harness.provider), before);
-    assert.equal(harness.Solana.isReady(harness.provider), true);
-
-    applySolanaConfiguration(harness, configuration);
-    const after = harness.Solana.snapshot(harness.provider);
-    assert.equal(after.publicKey, firstSolanaKey);
-    assert.equal(after.isConnected, true);
-    assert.equal(after.accountRevocationTombstone, false);
-    assert.equal(after.reauthorizationRevision, 4);
-    assert.equal(after.accountRevision, 8);
+test("stale Solana snapshots cannot restore a revoked account", () => {
+    const h = connectedSolanaHarness();
+    applySolanaConfiguration(h, {workerRevision: 3});
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 2});
+    assert.equal(h.provider.publicKey, null);
+    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 3);
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+    assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
 });
 
-test("Solana derives local account revisions independently of worker revisions", () => {
-    const harness = solanaHarness({
-        accountRevision: 10,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 3,
-    });
-    const changes = [];
-    harness.standardProvider.on("accountChanged", key => changes.push(key.toString()));
-    const configuration = {
-        publicKey: secondSolanaKey,
-        isConnected: true,
-        workerRevision: 4,
-    };
-
-    applySolanaConfiguration(harness, configuration);
-    assert.equal(harness.provider.accountRevision, 11);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 4);
-    applySolanaConfiguration(harness, configuration);
-    assert.equal(harness.provider.accountRevision, 11);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 4);
-    assert.deepEqual(changes, [secondSolanaKey]);
+test("same-account Solana revisions fence operations without duplicate account events", async () => {
+    const h = connectedSolanaHarness();
+    let events = 0;
+    h.standardProvider.on("accountChanged", () => events++);
+    const signing = h.provider.signMessage(new Uint8Array([1]));
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+    h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature});
+    await assert.rejects(signing, error => error.code === 4100);
+    assert.equal(events, 0);
+    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 4);
 });
 
-test("Solana observes disconnected revisions without changing local authorization", async () => {
-    for (const newerObservation of [false, true]) {
-        const harness = solanaHarness();
-        applySolanaConfiguration(harness);
-        const before = harness.Solana.snapshot(harness.provider);
-        const envelope = decodedDelivery({
-            kind: "configuration",
-            configuration: null,
-            workerRevision: 6,
-        });
-        harness.exports.observeConfiguration(harness.provider, envelope);
-        const connecting = harness.provider.connect();
-        harness.applyDecodedEnvelope(harness.provider, envelope);
-        harness.applyDecodedEnvelope(harness.provider, envelope);
-        if (newerObservation) {
-            harness.exports.observeConfiguration(harness.provider, {
-                ...envelope,
-                workerRevision: 7,
-            });
-        }
-        assert.deepEqual(harness.Solana.snapshot(harness.provider), before);
+test("disconnected Solana snapshots advance authority without reconnecting from terminals", async () => {
+    const h = solanaHarness();
+    applySolanaConfiguration(h);
+    const connecting = h.provider.connect();
+    applySolanaConfiguration(h, {workerRevision: 7});
+    h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "connect", kind: "result", result: {publicKey: firstSolanaKey}, approvalCommitted: true});
+    assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
+    assert.equal(h.provider.publicKey, null);
+    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 7);
+});
 
-        harness.applyDecodedEnvelope(harness.provider, {
-            kind: "result",
-            id: harness.requests[0].id,
-            name: "connect",
-            result: {publicKey: firstSolanaKey},
-            approvalCommitted: true,
-        });
-        assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
-        assert.equal(
-            harness.provider.publicKey?.toString() ?? null,
-            newerObservation ? null : firstSolanaKey
-        );
+test("Solana rejects invalid worker revisions without changing authorization", () => {
+    const h = connectedSolanaHarness();
+    const before = h.Solana.snapshot(h.provider);
+    for (const revision of [-1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        assert.equal(applySolanaConfiguration(h, {workerRevision: revision}), false);
+        assert.deepEqual(h.Solana.snapshot(h.provider), before);
     }
 });
 
-test("Solana configuration disconnects without wrapping an exhausted local revision", async () => {
-    const harness = solanaHarness({
-        accountRevision: Number.MAX_SAFE_INTEGER,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 3,
-    });
-    applySolanaConfiguration(harness, {
-        publicKey: firstSolanaKey,
-        isConnected: true,
-        workerRevision: 3,
-    });
-    const signing = harness.provider.signMessage(new Uint8Array([1]));
-    const rejected = assert.rejects(signing, error => error.code === 4900);
-
-    applySolanaConfiguration(harness, {
-        publicKey: secondSolanaKey,
-        isConnected: true,
-        reauthorizationRevision: 1,
-        workerRevision: 4,
-    });
-    assert.equal(harness.provider.accountRevision, Number.MAX_SAFE_INTEGER);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 4);
-    assert.equal(harness.provider.publicKey, null);
-    assert.equal(harness.provider.accountRevocationTombstone, true);
-    assert.equal(harness.provider.retired, false);
-    harness.applyDecodedEnvelope(harness.provider, {
-        kind: "result",
-        id: harness.requests[0].id,
-        name: "signMessage",
-        result: validSignature,
-    });
-    await rejected;
-});
-
-test("successful Solana connect explicitly reauthorizes a revoked account", async () => {
-    const harness = solanaHarness({
-        accountRevision: 1,
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        workerRevision: 1,
-    });
-    const disconnect = harness.provider.disconnect();
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.disconnects[0].id,
-        kind: "result",
-        name: "disconnect",
-        result: true,
-    });
-    await disconnect;
-
-    const reconnect = harness.provider.connect();
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests.at(-1).id,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
-    assert.equal((await reconnect).publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.provider.accountRevocationTombstone, false);
+test("Solana reconnect is authorized by its snapshot before settlement", async () => {
+    const h = connectedSolanaHarness();
+    applySolanaConfiguration(h);
+    const pending = h.provider.connect();
+    grantSolana(h, h.requests[0].id, firstSolanaKey);
+    assert.equal((await pending).publicKey.toString(), firstSolanaKey);
+    assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
 });
 
 test("Solana accepts raw ArrayBuffer messages", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -2990,10 +2501,9 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
     ];
     for (const {method, params, expected} of cases) {
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const pending = harness.provider.request({method, params});
@@ -3016,8 +2526,7 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
                 isConnected: authorization.isConnected,
-                reauthorizationRevision: authorization.reauthorizationRevision,
-                workerRevision: authorization.solanaAuthorizationEpoch,
+                workerRevision: authorization.workerRevision,
             });
             assert.equal(harness.requests.length, 1, method);
             assert.deepEqual(normalized(harness.requests[0].body.object.params), expected);
@@ -3043,10 +2552,9 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
 test("Solana send options remain private when generated fields have inherited setters", async () => {
     for (const field of ["transaction", "message", "options"]) {
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const prototype = vm.runInContext("Object.prototype", harness.context);
@@ -3078,8 +2586,7 @@ test("Solana send options remain private when generated fields have inherited se
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            reauthorizationRevision: authorization.reauthorizationRevision,
-            workerRevision: authorization.solanaAuthorizationEpoch,
+            workerRevision: authorization.workerRevision,
         });
         assert.equal(harness.requests[0].body.object.params.options.skipPreflight, false, field);
         harness.applyDecodedEnvelope(harness.provider, {
@@ -3095,10 +2602,9 @@ test("Solana send options remain private when generated fields have inherited se
 test("Solana batch construction preserves messages with inherited array accessors", async () => {
     for (const objectTransactions of [false, true]) {
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const prototype = vm.runInContext("Array.prototype", harness.context);
@@ -3122,8 +2628,7 @@ test("Solana batch construction preserves messages with inherited array accessor
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
                 isConnected: authorization.isConnected,
-                reauthorizationRevision: authorization.reauthorizationRevision,
-                workerRevision: authorization.solanaAuthorizationEpoch,
+                workerRevision: authorization.workerRevision,
             });
             assert.deepEqual(structuredClone(harness.requests[0].body.object.params), {
                 messages: ["2"],
@@ -3146,10 +2651,9 @@ test("Solana rejects adapter messages corrupted by inherited setters before disp
     for (const versioned of [false, true]) {
         for (const field of ["message", "signatures"]) {
             const authorization = {
-                accountRevision: 1,
                 isConnected: true,
                 publicKey: firstSolanaKey,
-                solanaAuthorizationEpoch: 1,
+                workerRevision: 1,
             };
             const harness = solanaHarness(authorization);
             const transaction = versioned
@@ -3179,8 +2683,7 @@ test("Solana rejects adapter messages corrupted by inherited setters before disp
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
                 isConnected: authorization.isConnected,
-                reauthorizationRevision: authorization.reauthorizationRevision,
-                workerRevision: authorization.solanaAuthorizationEpoch,
+                workerRevision: authorization.workerRevision,
             });
             assert.equal(harness.requests.length, 0);
         }
@@ -3197,10 +2700,9 @@ test("Solana rejects non-string encoder results before dispatch", async () => {
     ];
     for (const {method, params} of cases) {
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const prototype = vm.runInContext("String.prototype", harness.context);
@@ -3219,8 +2721,7 @@ test("Solana rejects non-string encoder results before dispatch", async () => {
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            reauthorizationRevision: authorization.reauthorizationRevision,
-            workerRevision: authorization.solanaAuthorizationEpoch,
+            workerRevision: authorization.workerRevision,
         });
         assert.equal(harness.requests.length, 0, method);
     }
@@ -3229,10 +2730,9 @@ test("Solana rejects non-string encoder results before dispatch", async () => {
 test("Solana rejects a falsy transaction encoding instead of falling back to a message", async () => {
     for (const encoded of [0, false, null, undefined]) {
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const transaction = legacyTransaction(1).transaction;
@@ -3257,8 +2757,7 @@ test("Solana rejects a falsy transaction encoding instead of falling back to a m
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            reauthorizationRevision: authorization.reauthorizationRevision,
-            workerRevision: authorization.solanaAuthorizationEpoch,
+            workerRevision: authorization.workerRevision,
         });
         assert.equal(harness.requests.length, 0);
     }
@@ -3267,17 +2766,15 @@ test("Solana rejects a falsy transaction encoding instead of falling back to a m
 test("Wallet Standard rejects non-string encoder results before dispatch", async () => {
     for (const method of ["standardSignTransaction", "standardSignAndSendTransaction"]) {
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         const harness = solanaHarness(authorization);
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            reauthorizationRevision: authorization.reauthorizationRevision,
-            workerRevision: authorization.solanaAuthorizationEpoch,
+            workerRevision: authorization.workerRevision,
         });
         const account = harness.standardProvider.standardAccounts()[0];
         harness.provider.preparedStandardTransaction = () => ({
@@ -3307,10 +2804,9 @@ test("Wallet Standard rejects non-string encoder results before dispatch", async
 
 test("Solana settles a committed signature after later authorization drift", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -3330,7 +2826,6 @@ test("Solana settles a committed signature after later authorization drift", asy
         kind: "result",
         name: "signMessage",
         result: validSignature,
-        suppressUpdate: true,
     });
 
     const result = await signing;
@@ -3341,10 +2836,9 @@ test("Solana settles a committed signature after later authorization drift", asy
 
 test("Solana applies a committed transaction signature after authorization drift", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -3365,7 +2859,6 @@ test("Solana applies a committed transaction signature after authorization drift
         kind: "result",
         name: "signTransaction",
         result: validSignature,
-        suppressUpdate: true,
     });
 
     assert.equal(await signing, transaction.transaction);
@@ -3376,10 +2869,9 @@ test("Solana applies a committed transaction signature after authorization drift
 test("Wallet Standard settles committed single-item signing after authorization drift", async () => {
     for (const variant of ["message", "transaction", "send"]) {
         const harness = solanaHarness({
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
@@ -3423,7 +2915,6 @@ test("Wallet Standard settles committed single-item signing after authorization 
             kind: "result",
             name: request.name,
             result: validSignature,
-            suppressUpdate: true,
         });
 
         const [result] = await signing;
@@ -3458,7 +2949,6 @@ test("Solana settles committed connect without replacing newer state", async () 
         kind: "result",
         name: "connect",
         result: {publicKey: firstSolanaKey},
-        suppressUpdate: true,
     });
 
     assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
@@ -3478,16 +2968,14 @@ test("Wallet Standard committed connect returns current authorization", async ()
                 workerRevision: 1,
             });
         } else {
-            await harness.provider.externalDisconnect();
+            applySolanaConfiguration(harness);
         }
         harness.applyDecodedEnvelope(harness.provider, {
             approvalCommitted: true,
-            configurationMatch: false,
             id: request.id,
             kind: "result",
             name: "connect",
             result: {publicKey: firstSolanaKey},
-            suppressUpdate: true,
         });
 
         const result = await connecting;
@@ -3501,10 +2989,9 @@ test("Wallet Standard committed connect returns current authorization", async ()
 test("Solana signs explicit legacy and versioned transactions", async () => {
     for (const transaction of [legacyTransaction(1), versionedTransaction(1)]) {
         const harness = solanaHarness({
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
@@ -3655,10 +3142,9 @@ test("Solana supports legacy messages wrapped in versioned transactions", async 
 
 test("Solana rejects replacement of a versioned transaction message", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -3706,10 +3192,9 @@ test("Solana rejects replacement of a versioned transaction message", async () =
 test("Solana rejects transaction serializer replacement", async () => {
     for (const transaction of [legacyTransaction(1), versionedTransaction(1)]) {
         const harness = solanaHarness({
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
@@ -3738,10 +3223,9 @@ test("Solana rejects transaction serializer replacement", async () => {
 
 test("Solana final message validation rechecks authorization", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -3775,10 +3259,9 @@ test("Solana final message validation rechecks authorization", async () => {
 
 test("Solana rejects invalid signatures, mutation, custom shapes, and oversized batches", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -3931,10 +3414,9 @@ test("Solana stops failed signature application without undoing completed writes
 
 test("Solana rejects a later batch setter that mutates an earlier message", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -4031,10 +3513,9 @@ test("Solana preflight leaves a caller-replaced signature array untouched", asyn
 
 test("Solana preflights a whole batch before applying signatures", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -4163,10 +3644,9 @@ for (const method of ["signMessage", "signTransaction", "signAndSendTransaction"
         const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
         const fixture = sdkTransactionFixture("legacy", wallet, cosigner);
         const authorization = {
-            accountRevision: 1,
             isConnected: true,
             publicKey: wallet.publicKey.toBase58(),
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         };
         for (const change of ["none", "account", "revision"]) {
             const harness = solanaHarness(authorization);
@@ -4183,9 +3663,9 @@ for (const method of ["signMessage", "signTransaction", "signAndSendTransaction"
                 };
             const pending = harness.wallet.features[`solana:${method}`][method](input);
             assert.equal(harness.requests.length, 0);
-            const rejected = change === "none" ? null : assert.rejects(
+            const rejected = change !== "account" ? null : assert.rejects(
                 pending,
-                error => error.code === 4900
+                error => error.code === 4100
             );
             applySolanaConfiguration(harness, {
                 isConnected: true,
@@ -4194,6 +3674,7 @@ for (const method of ["signMessage", "signTransaction", "signAndSendTransaction"
                     : authorization.publicKey,
                 workerRevision: change === "none" ? 1 : 2,
             });
+            for (let turn = 0; turn < 5; turn++) { await Promise.resolve(); }
             if (rejected) {
                 assert.equal(harness.requests.length, 0);
                 await rejected;
@@ -4306,10 +3787,9 @@ test("Wallet Standard signing ignores mutable provider public key identity and b
 
 test("Wallet Standard signing preflights and caps every input", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -4363,10 +3843,9 @@ test("Wallet Standard signing preflights and caps every input", async () => {
 test("Wallet Standard signing rejects authorization drift between awaits", async () => {
     for (const variant of ["message", "transaction", "send"]) {
         const harness = solanaHarness({
-            accountRevision: 1,
             isConnected: true,
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
+            workerRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
@@ -4419,17 +3898,16 @@ test("Wallet Standard signing rejects authorization drift between awaits", async
                 input
             );
         }
-        await assert.rejects(request, error => error.code === 4900);
+        await assert.rejects(request, error => error.code === 4100);
         assert.equal(calls, 1);
     }
 });
 
 test("Solana retires all work when a generation transport returns false", async () => {
     const requestHarness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(requestHarness, {
         isConnected: true,
@@ -4447,106 +3925,39 @@ test("Solana retires all work when a generation transport returns false", async 
     assert.equal(requestHarness.provider.retired, true);
 });
 
-test("Solana revocation retires pending work after its transport loses ownership", async () => {
-    for (const kind of ["disconnect", "externalDisconnect", "authorizationFailure"]) {
-        const harness = connectedSolanaHarness();
-        const pending = harness.provider.signMessage(new Uint8Array([1]));
-        const rejected = assert.rejects(pending, error => error.code === 4900);
-        const unrelated = harness.provider.signMessage(new Uint8Array([2]));
-        const unrelatedRejected = assert.rejects(unrelated, error => error.code === 4900);
-        if (kind === "externalDisconnect") {
-            harness.setCurrent(false);
-            assert.equal(await harness.provider.externalDisconnect(), true);
-        } else {
-            const disconnect = kind === "disconnect"
-                ? harness.provider.disconnect()
-                : null;
-            const disconnected = disconnect && assert.rejects(
-                disconnect,
-                error => error.code === 4900
-            );
-            const response = disconnect ? {
-                id: harness.disconnects[0].id,
-                kind: "result",
-                name: "revokePermissions",
-                result: null,
-            } : {
-                authorizationFailure: true,
-                error: {code: 4100, message: "Unauthorized"},
-                id: harness.requests[0].id,
-                kind: "error",
-                name: "signMessage",
-            };
-            harness.setCurrent(false);
-            assert.equal(harness.applyDecodedEnvelope(harness.provider, response), false);
-            await disconnected;
-        }
-        await Promise.all([rejected, unrelatedRejected]);
-        assert.equal(harness.provider.retired, true);
-        assert.equal(harness.provider.publicKey, null);
-        assert.equal(harness.provider.solanaAuthorizationEpoch, kind === "externalDisconnect" ? 2 : 1);
-    }
+test("Solana ignores a disconnect response after transport retirement", async () => {
+    const h = connectedSolanaHarness();
+    const signing = h.provider.signMessage(new Uint8Array([1]));
+    const disconnect = h.provider.disconnect();
+    h.setCurrent(false);
+    assert.equal(h.applyDecodedEnvelope(h.provider, {id: h.disconnects[0].id, name: "revokePermissions", kind: "result", result: null}), false);
+    await assert.rejects(signing, error => error.code === 4900);
+    await assert.rejects(disconnect, error => error.code === 4900);
+    assert.equal(h.provider.retired, true);
 });
 
-test("Solana external disconnect retires work when currentness checking throws", async () => {
-    const harness = connectedSolanaHarness();
-    const pending = harness.provider.signMessage(new Uint8Array([1]));
-    const rejected = assert.rejects(pending, error => error.code === 4900);
-    harness.setCurrentError(new Error("Currentness unavailable"));
-    assert.equal(await harness.provider.externalDisconnect(), true);
-    await rejected;
-    assert.equal(harness.provider.retired, true);
-    assert.equal(harness.provider.publicKey, null);
-    assert.equal(harness.provider.solanaAuthorizationEpoch, 2);
+test("Solana external disconnect transport failure leaves authorization unchanged", async () => {
+    const h = connectedSolanaHarness();
+    h.setDisconnectPost(false);
+    await assert.rejects(h.provider.externalDisconnect(), error => error.code === 4900);
+    assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
+    assert.equal(h.provider.retired, false);
 });
 
-test("Solana retires work when its authorization epoch cannot advance", async () => {
-    for (const kind of ["disconnect", "externalDisconnect", "authorizationFailure"]) {
-        const configuration = {
-            accountRevision: 1,
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: Number.MAX_SAFE_INTEGER,
-        };
-        const harness = solanaHarness(configuration);
-        applySolanaConfiguration(harness, {
-            publicKey: configuration.publicKey,
-            isConnected: configuration.isConnected,
-            reauthorizationRevision: configuration.reauthorizationRevision,
-            workerRevision: configuration.solanaAuthorizationEpoch,
-        });
-        const pending = harness.provider.signMessage(new Uint8Array([1]));
-        const rejected = assert.rejects(pending, error => error.code === 4900);
-        if (kind === "disconnect") {
-            await assert.rejects(
-                harness.provider.disconnect(),
-                error => error.code === 4900
-            );
-            assert.equal(harness.disconnects.length, 0);
-        } else if (kind === "externalDisconnect") {
-            assert.equal(await harness.provider.externalDisconnect(), true);
-        } else {
-            assert.equal(harness.applyDecodedEnvelope(harness.provider, {
-                authorizationFailure: true,
-                error: {code: 4100, message: "Unauthorized"},
-                id: harness.requests[0].id,
-                kind: "error",
-                name: "signMessage",
-            }), false);
-        }
-        await rejected;
-        assert.equal(harness.provider.retired, true);
-        assert.equal(harness.provider.publicKey, null);
-        assert.equal(harness.provider.solanaAuthorizationEpoch, Number.MAX_SAFE_INTEGER);
-    }
+test("Solana accepts the maximum authoritative revision without a local counter", async () => {
+    const h = connectedSolanaHarness();
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: Number.MAX_SAFE_INTEGER});
+    const pending = h.provider.signMessage(new Uint8Array([1]));
+    h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature});
+    assert.equal((await pending).signature.length, 64);
+    assert.equal(h.Solana.snapshot(h.provider).workerRevision, Number.MAX_SAFE_INTEGER);
 });
 
 test("Solana fences stale authorization and retires pending work", async () => {
     const harness = solanaHarness({
-        accountRevision: 1,
         isConnected: true,
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
+        workerRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -4652,8 +4063,6 @@ function ethereumFacadeTarget(name) {
         retired() { return retired; },
         snapshot() {
             return {
-                accountRevision: 0,
-                accountRevocationTombstone: false,
                 address: provider.address,
                 chainId: provider.chainId,
             };
@@ -4687,11 +4096,9 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
         retired() { return retired; },
         snapshot() {
             return {
-                accountRevision: 0,
-                accountRevocationTombstone: false,
                 isConnected: true,
                 publicKey: address,
-                solanaAuthorizationEpoch: 0,
+                workerRevision: 0,
             };
         },
     };
@@ -4705,12 +4112,7 @@ test("Wallet Standard public entry points share accounts and features", async ()
     const changes = [];
     wallet.features["standard:events"].on("change", value => changes.push(value));
     const connecting = wallet.features["standard:connect"].connect();
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests.at(-1).id,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
+    grantSolana(harness, harness.requests.at(-1).id, firstSolanaKey);
     const account = (await connecting).accounts[0];
     assert.equal(wallet.accounts[0], account);
     assert.equal(standardProvider.standardAccounts()[0], account);
@@ -4841,7 +4243,7 @@ test("Wallet Standard subscriber revocation cannot deliver stale accounts to lat
     const harness = solanaHarness();
     const on = harness.wallet.features["standard:events"].on;
     on("change", value => {
-        if (value.accounts.length > 0) { void harness.provider.externalDisconnect(); }
+        if (value.accounts.length > 0) { applySolanaConfiguration(harness); }
     });
     const changes = [];
     on("change", value => changes.push(value.accounts.map(account => account.address)));
@@ -4911,7 +4313,7 @@ test("Wallet Standard account reads do not invoke mutable public-key byte method
         let calls = 0;
         publicKey[method] = () => {
             calls += 1;
-            void harness.provider.externalDisconnect();
+            applySolanaConfiguration(harness);
             return original();
         };
         assert.equal(harness.wallet.accounts[0], account);
@@ -5481,58 +4883,41 @@ test("inpage transport survives Object.freeze replacement during initialization"
     assert.equal(await result, "0x10");
 });
 
-function configurationSnapshot(configurations, revisions) {
+function configurationSnapshot(configurations, revisions = {ethereum: 0, solana: 0}) {
     const ethereum = configurations.find(item => item.provider === "ethereum");
     const solana = configurations.find(item => item.provider === "solana");
     return {
-        revisions: revisions || {ethereum: ethereum?.accountRevision || 0, solana: solana?.solanaAuthorizationEpoch || solana?.accountRevision || 0},
-        ethereum: ethereum ? {
-            address: ethereum.address ?? "",
-            chainId: ethereum.chainId,
-            reauthorizationRevision: ethereum.reauthorizationRevision || 0,
-        } : null,
-        solana: solana ? {
-            publicKey: solana.publicKey,
-            isConnected: solana.isConnected ?? true,
-            reauthorizationRevision: solana.reauthorizationRevision || 0,
-        } : null,
+        revisions,
+        ethereum: {address: ethereum?.address ?? "", chainId: ethereum?.chainId ?? "0x1"},
+        solana: solana ? {publicKey: solana.publicKey} : null,
     };
 }
 
 function dispatchConfigurations(
     harness,
     {address = "", chainId = "0x1", publicKey = null,
-        solanaAuthorizationEpoch = 1, reauthorizationRevision = 0} = {},
+        ethereumRevision, solanaRevision} = {},
     generation
 ) {
+    const current = harness.window.bigWalletInpageStableFacadeRecord.snapshots();
     harness.dispatch({
         generation, kind: "response",
         response: {kind: "configuration", state: {
-            revisions: {ethereum: 0, solana: solanaAuthorizationEpoch},
-            ethereum: {address, chainId, reauthorizationRevision},
-            solana: publicKey ? {publicKey, isConnected: true, reauthorizationRevision} : null,
+            revisions: {
+                ethereum: ethereumRevision ?? (current.ethereum.workerRevision ?? -1) + 1,
+                solana: solanaRevision ?? (current.solana.workerRevision ?? -1) + 1,
+            },
+            ethereum: {address, chainId},
+            solana: publicKey ? {publicKey} : null,
         }},
     });
 }
 
 function terminalResponse({id, provider, name, ...response}) {
     const kind = Object.hasOwn(response, "error") ? "error" : "result";
-    let configurationMatch = null;
-    if (response.state) {
-        configurationMatch = false;
-        if (provider === "ethereum" && name === "requestAccounts") {
-            configurationMatch = !!response.state.ethereum &&
-                (response.result?.[0] || "").toLowerCase() === response.state.ethereum.address.toLowerCase();
-        } else if (provider === "ethereum" && (name === "switchEthereumChain" || name === "addEthereumChain")) {
-            configurationMatch = response.state.ethereum?.chainId === response.chainId;
-        } else if (provider === "solana" && name === "connect") {
-            configurationMatch = response.state.solana?.publicKey === response.result?.publicKey;
-        }
-    }
     delete response.chainId;
-    return {kind, id, provider, name, state: null, configurationMatch,
-        ...(kind === "result" ? {approvalCommitted: false} : {authorizationFailure: false}),
-        ...response};
+    return {kind, id, provider, name, state: null,
+        ...(kind === "result" ? {approvalCommitted: false} : {}), ...response};
 }
 
 function dispatchProviderResponse(harness, {generation, ...response}) {
@@ -5559,24 +4944,20 @@ for (const timing of ["before installation", "after configuration"]) {
                 dispatchConfigurations(harness, {
                     address: firstAddress,
                     publicKey: firstSolanaKey,
-                    reauthorizationRevision: 1,
                 });
                 if (timing === "after configuration") { poison(harness.context); }
                 dispatchConfigurations(harness, {
                     address: secondAddress,
                     chainId: "0x2",
                     publicKey: secondSolanaKey,
-                    solanaAuthorizationEpoch: 4,
-                    reauthorizationRevision: 3,
+                    solanaRevision: 4,
                 });
                 const snapshots = harness.window.bigWalletInpageStableFacadeAnchorV1.record.snapshots();
                 assert.equal(snapshots.ethereum.address, secondAddress);
                 assert.equal(snapshots.ethereum.chainId, "0x2");
-                assert.equal(snapshots.ethereum.reauthorizationRevision, 3);
+                assert.equal(snapshots.ethereum.workerRevision, 1);
                 assert.equal(snapshots.solana.publicKey, secondSolanaKey);
-                assert.equal(snapshots.solana.accountRevision, 4);
-                assert.equal(snapshots.solana.solanaAuthorizationEpoch, 4);
-                assert.equal(snapshots.solana.reauthorizationRevision, 3);
+                assert.equal(snapshots.solana.workerRevision, 4);
                 assert.deepEqual(normalized(await harness.window.ethereum.request({method: "eth_accounts"})), [secondAddress]);
                 assert.equal(await harness.window.ethereum.request({method: "eth_chainId"}), "0x2");
 
@@ -5642,7 +5023,7 @@ test("raw ingress rejects custom serializers without executing them or revoking 
     let serializerCalls = 0;
     const toJSON = () => { serializerCalls += 1; throw new Error("raw serializer invoked"); };
     const state = configurationSnapshot([], {ethereum: 0, solana: 1});
-    state.ethereum = {address: "", chainId: "0x2", reauthorizationRevision: 0, toJSON};
+    state.ethereum = {address: "", chainId: "0x2", toJSON};
     harness.dispatch({kind: "response", response: {kind: "configuration", state}});
     assert.equal(harness.window.ethereum.selectedAddress, address);
     assert.equal(harness.window.ethereum.chainId, "0x1");
@@ -5766,7 +5147,8 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
         id: solanaRequest.message.id,
         name: "connect",
         provider: "solana",
-        result: {publicKey: firstSolanaKey}
+        result: {publicKey: firstSolanaKey},
+        state: pageSnapshot({publicKey: firstSolanaKey, solana: 1}),
     });
     assert.equal(await transaction, "0xhash");
     assert.equal((await connection).publicKey.toString(), firstSolanaKey);
@@ -5803,16 +5185,17 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
     assert.deepEqual(Object.keys(disconnectRequest).sort(), [
         "direction", "kind", "message", "providerGeneration",
     ]);
-    const beforeEpoch = window.solana.solanaAuthorizationEpoch;
+    const beforeRevision = window.bigWalletInpageStableFacadeRecord.snapshots().solana.workerRevision;
     const postedCount = harness.postedMessages.length;
     dispatchProviderResponse(harness, {
         id: disconnectRequest.message.id,
         name: "revokePermissions",
         provider: "solana",
-        result: null
+        result: null,
+        state: pageSnapshot({solana: beforeRevision + 1}),
     });
     assert.equal(await disconnect, true);
-    assert.equal(window.solana.solanaAuthorizationEpoch, beforeEpoch + 1);
+    assert.equal(window.bigWalletInpageStableFacadeRecord.snapshots().solana.workerRevision, beforeRevision + 1);
     assert.equal(harness.postedMessages.length, postedCount);
     assert.deepEqual(harness.listenerErrors, []);
 });
@@ -5922,918 +5305,218 @@ test("an unwritable Phantom namespace cannot abort provider activation", async (
     }
 });
 
-test("configuration-changing terminal responses update state and settle", async () => {
-    const harness = inpageHarness();
-    const address = "0x0000000000000000000000000000000000000001";
-    dispatchConfigurations(harness);
-    const request = harness.window.ethereum.request({
-        method: "eth_requestAccounts",
-    });
-    const message = pageMessages(harness, "request", "ethereum").at(-1);
-    dispatchProviderResponse(harness, {
-        id: message.message.id,
-        name: message.message.name,
-        provider: "ethereum",
-        chainId: "0x2",
-        result: [address],
-        state: configurationSnapshot([{
-            provider: "ethereum",
-            chainId: "0x2",
-            address: address,
-        }], undefined)
-    });
-    assert.deepEqual(normalized(await request), [address]);
-    assert.equal(harness.window.ethereum.selectedAddress, address);
-    assert.equal(harness.window.ethereum.chainId, "0x2");
-    assert.equal(
-        harness.window.bigWalletInpageStableFacadeRecord.snapshots()
-            .ethereum.accountRevision,
-        1
-    );
+function pageSnapshot({address = "", chainId = "0x1", publicKey = null, ethereum = 0, solana = 0} = {}) {
+    return {revisions: {ethereum, solana}, ethereum: {address, chainId}, solana: publicKey ? {publicKey} : null};
+}
+
+function publishSnapshot(harness, state) {
+    harness.dispatch({kind: "response", response: {kind: "configuration", state}});
+}
+
+const firstEthereumAddress = "0x0000000000000000000000000000000000000001";
+const secondEthereumAddress = "0x0000000000000000000000000000000000000002";
+
+test("combined configuration commits both providers before any callback", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    const observations = [];
+    const observe = name => observations.push([name, h.window.ethereum.selectedAddress, h.window.solana.publicKey?.toString()]);
+    h.window.ethereum.on("accountsChanged", () => observe("ethereum"));
+    h.window.solana.on("accountChanged", () => observe("solana"));
+    h.registeredWallets[0].features["standard:events"].on("change", () => observe("standard"));
+    publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1}));
+    assert.deepEqual(observations, ["ethereum", "solana", "standard"].map(name => [name, firstEthereumAddress, firstSolanaKey]));
 });
 
-test("combined requestAccounts response reauthorizes a revoked account", async () => {
-    const harness = inpageHarness();
-    const address = "0x0000000000000000000000000000000000000001";
-    dispatchConfigurations(harness, {address});
-    const revocation = harness.window.ethereum.request({
-        method: "wallet_revokePermissions",
-        params: [{eth_accounts: {}}],
-    });
-    const disconnect = pageMessages(harness, "disconnect", "ethereum").at(-1);
-    dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "ethereum",
-        result: null
-    });
-    await revocation;
-
-    const reconnect = harness.window.ethereum.request({
-        method: "eth_requestAccounts",
-    });
-    const request = pageMessages(harness, "request", "ethereum").at(-1);
-    dispatchProviderResponse(harness, {
-        id: request.message.id,
-        name: "requestAccounts",
-        provider: "ethereum",
-        result: [address],
-        state: configurationSnapshot([{
-            chainId: "0x1",
-            provider: "ethereum",
-            address: address,
-        }], undefined)
-    });
-    assert.deepEqual(normalized(await reconnect), [address]);
-    assert.equal(harness.window.ethereum.selectedAddress, address);
+test("provider halves independently accept newer revisions in a mixed snapshot", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, ethereum: 4, solana: 1}));
+    publishSnapshot(h, pageSnapshot({address: secondEthereumAddress, publicKey: firstSolanaKey, ethereum: 3, solana: 2}));
+    assert.equal(h.window.ethereum.selectedAddress, firstEthereumAddress);
+    assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
+    publishSnapshot(h, pageSnapshot({address: secondEthereumAddress, publicKey: secondSolanaKey, ethereum: 5, solana: 1}));
+    assert.equal(h.window.ethereum.selectedAddress, secondEthereumAddress);
+    assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
 });
 
-test("committed requestAccounts preserves a tombstone on configuration drift", async () => {
-    const harness = inpageHarness();
-    const approvedAddress =
-        "0x0000000000000000000000000000000000000001";
-    const authoritativeAddress =
-        "0x0000000000000000000000000000000000000002";
-    dispatchConfigurations(harness, {address: approvedAddress});
-    const revocation = harness.window.ethereum.request({
-        method: "wallet_revokePermissions",
-        params: [{eth_accounts: {}}],
-    });
-    const disconnect = pageMessages(harness, "disconnect", "ethereum").at(-1);
-    dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "ethereum",
-        result: null
-    });
-    await revocation;
-
-    const before = harness.window.bigWalletInpageStableFacadeRecord
-        .snapshots().ethereum;
-    let accountChanges = 0;
-    harness.window.ethereum.on("accountsChanged", () => {
-        accountChanges += 1;
-    });
-    const reconnect = harness.window.ethereum.request({
-        method: "eth_requestAccounts",
-    });
-    const request = pageMessages(harness, "request", "ethereum").at(-1);
-    dispatchProviderResponse(harness, {
-        approvalCommitted: true,
-        id: request.message.id,
-        state: configurationSnapshot([{
-            chainId: "0x1",
-            provider: "ethereum",
-            address: authoritativeAddress,
-        }], undefined),
-        name: "requestAccounts",
-        provider: "ethereum",
-        result: [approvedAddress]
-    });
-
-    assert.deepEqual(normalized(await reconnect), [approvedAddress]);
-    assert.deepEqual(
-        harness.window.bigWalletInpageStableFacadeRecord.snapshots().ethereum,
-        before
-    );
-    assert.equal(harness.window.ethereum.selectedAddress, null);
-    assert.equal(accountChanges, 0);
+test("conflicting equal revisions reject the whole snapshot atomically", () => {
+    const h = inpageHarness();
+    const baseline = pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+    publishSnapshot(h, baseline);
+    const before = normalized(h.window.bigWalletInpageStableFacadeRecord.snapshots());
+    for (const invalid of [
+        pageSnapshot({address: secondEthereumAddress, publicKey: secondSolanaKey, ethereum: 1, solana: 2}),
+        pageSnapshot({address: secondEthereumAddress, publicKey: secondSolanaKey, ethereum: 2, solana: 1}),
+    ]) {
+        publishSnapshot(h, invalid);
+        assert.deepEqual(normalized(h.window.bigWalletInpageStableFacadeRecord.snapshots()), before);
+    }
 });
 
-test("combined Solana connect settles initial and revoked connections once", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness);
-    let connects = 0;
-    harness.window.solana.on("connect", () => { connects += 1; });
-    const initial = harness.window.solana.connect();
-    const initialRequest = pageMessages(harness, "request", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        id: initialRequest.message.id,
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey},
-        state: configurationSnapshot([{
-            provider: "solana",
-            publicKey: firstSolanaKey,
-        }], undefined)
-    });
-    assert.equal((await initial).publicKey.toString(), firstSolanaKey);
-    assert.equal(connects, 1);
+test("duplicate snapshots are idempotent while same-account grants fence pending signing", async () => {
+    const h = inpageHarness();
+    const baseline = pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+    publishSnapshot(h, baseline);
+    let changes = 0;
+    h.window.ethereum.on("accountsChanged", () => changes++);
+    h.window.solana.on("accountChanged", () => changes++);
+    const pending = h.window.solana.signMessage(new Uint8Array([1]));
+    const request = pageMessages(h, "request", "solana").at(-1).message;
+    publishSnapshot(h, baseline);
+    publishSnapshot(h, {...baseline, revisions: {ethereum: 1, solana: 2}});
+    dispatchProviderResponse(h, {id: request.id, provider: "solana", name: "signMessage", result: validSignature});
+    await assert.rejects(pending, error => error.code === 4100);
+    assert.equal(changes, 0);
+});
 
-    const disconnecting = harness.window.solana.disconnect();
-    const disconnect = pageMessages(harness, "disconnect", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: true
+for (const order of ["broadcast-first", "terminal-first"]) {
+    test(`account grants settle exactly once with ${order} delivery`, async () => {
+        const h = inpageHarness();
+        publishSnapshot(h, pageSnapshot());
+        const eth = h.window.ethereum.request({method: "eth_requestAccounts"});
+        const sol = h.window.solana.connect();
+        const ethID = pageMessages(h, "request", "ethereum").at(-1).message.id;
+        const solID = pageMessages(h, "request", "solana").at(-1).message.id;
+        const state = pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+        const events = [];
+        h.window.ethereum.on("accountsChanged", () => events.push("ethereum"));
+        h.window.solana.on("accountChanged", () => events.push("solana"));
+        if (order === "broadcast-first") { publishSnapshot(h, state); }
+        dispatchProviderResponse(h, {id: ethID, provider: "ethereum", name: "requestAccounts", state, result: [firstEthereumAddress]});
+        dispatchProviderResponse(h, {id: solID, provider: "solana", name: "connect", state, result: {publicKey: firstSolanaKey}});
+        if (order === "terminal-first") { publishSnapshot(h, state); }
+        assert.deepEqual(normalized(await eth), [firstEthereumAddress]);
+        assert.equal((await sol).publicKey.toString(), firstSolanaKey);
+        assert.deepEqual(events, ["ethereum", "solana"]);
     });
-    await disconnecting;
-    const reconnect = harness.window.solana.connect();
-    const reconnectRequest = pageMessages(harness, "request", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        id: reconnectRequest.message.id,
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey},
-        state: configurationSnapshot([{
-            provider: "solana",
-            publicKey: firstSolanaKey,
-        }], undefined)
-    });
+}
+
+for (const provider of ["ethereum", "solana"]) {
+    for (const committed of [false, true]) {
+        test(`${provider} stale connect committed=${committed} cannot undo disconnect and same-account regrant`, async () => {
+            const h = inpageHarness();
+            publishSnapshot(h, pageSnapshot());
+            const pending = provider === "ethereum" ? h.window.ethereum.request({method: "eth_requestAccounts"}) : h.window.solana.connect();
+            const message = pageMessages(h, "request", provider).at(-1).message;
+            const granted = pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+            publishSnapshot(h, granted);
+            publishSnapshot(h, pageSnapshot({ethereum: 2, solana: 2}));
+            publishSnapshot(h, {...granted, revisions: {ethereum: 3, solana: 3}});
+            dispatchProviderResponse(h, {
+                id: message.id, provider, name: message.name, state: granted, approvalCommitted: committed,
+                result: provider === "ethereum" ? [firstEthereumAddress] : {publicKey: firstSolanaKey},
+            });
+            if (committed) {
+                const result = await pending;
+                assert.deepEqual(provider === "ethereum" ? normalized(result) : result.publicKey.toString(), provider === "ethereum" ? [firstEthereumAddress] : firstSolanaKey);
+            } else { await assert.rejects(pending, error => error.code === 4100); }
+            assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots()[provider].workerRevision, 3);
+        });
+    }
+}
+
+test("committed connect and signing settle after a newer disconnect without restoring authority", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    const connect = h.window.solana.connect();
+    const connectID = pageMessages(h, "request", "solana").at(-1).message.id;
+    const granted = pageSnapshot({publicKey: firstSolanaKey, solana: 1});
+    publishSnapshot(h, granted);
+    const signing = h.window.solana.signMessage(new Uint8Array([1]));
+    const signID = pageMessages(h, "request", "solana").at(-1).message.id;
+    publishSnapshot(h, pageSnapshot({solana: 2}));
+    dispatchProviderResponse(h, {id: connectID, provider: "solana", name: "connect", state: granted, approvalCommitted: true, result: {publicKey: firstSolanaKey}});
+    dispatchProviderResponse(h, {id: signID, provider: "solana", name: "signMessage", approvalCommitted: true, result: validSignature});
+    assert.equal((await connect).publicKey.toString(), firstSolanaKey);
+    assert.equal((await signing).signature.length, 64);
+    assert.equal(h.window.solana.publicKey, null);
+    assert.deepEqual(normalized(h.registeredWallets[0].accounts), []);
+});
+
+test("disconnect acknowledgement carries state and preserves a reentrant reconnect", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({publicKey: firstSolanaKey, solana: 1}));
+    let reconnect;
+    h.window.solana.on("disconnect", () => { reconnect = h.window.solana.connect(); });
+    const disconnect = h.window.solana.externalDisconnect();
+    const id = pageMessages(h, "disconnect", "solana").at(-1).message.id;
+    assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
+    dispatchProviderResponse(h, {id, provider: "solana", name: "revokePermissions", state: pageSnapshot({solana: 2}), result: null});
+    assert.equal(await disconnect, true);
+    assert.ok(reconnect);
+    const next = pageMessages(h, "request", "solana").at(-1).message;
+    dispatchProviderResponse(h, {id: next.id, provider: "solana", name: "connect", state: pageSnapshot({publicKey: firstSolanaKey, solana: 3}), result: {publicKey: firstSolanaKey}});
     assert.equal((await reconnect).publicKey.toString(), firstSolanaKey);
-    assert.equal(connects, 2);
-    assert.equal(harness.window.solana.accountRevocationTombstone, false);
 });
 
-test("committed Solana connect preserves a tombstone on configuration drift", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    const disconnecting = harness.window.solana.disconnect();
-    const disconnect = pageMessages(harness, "disconnect", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: true
+test("nested other-provider updates do not suppress valid remaining notifications", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    const events = [];
+    h.window.ethereum.on("accountsChanged", () => {
+        events.push("accounts");
+        publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, chainId: "0x2", publicKey: secondSolanaKey, ethereum: 1, solana: 2}));
     });
-    await disconnecting;
+    h.window.ethereum.on("chainChanged", () => events.push("chain"));
+    h.window.ethereum.on("networkChanged", () => events.push("network"));
+    h.window.solana.on("accountChanged", key => events.push(key.toString()));
+    publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1}));
+    assert.deepEqual(events, ["accounts", secondSolanaKey, "chain", "network"]);
+});
 
-    const before = harness.window.bigWalletInpageStableFacadeRecord
-        .snapshots().solana;
-    let accountChanges = 0;
-    let connects = 0;
-    harness.window.solana.on("accountChanged", () => {
-        accountChanges += 1;
+test("nested same-provider snapshots suppress obsolete remaining notifications", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    const events = [];
+    h.window.ethereum.on("accountsChanged", () => {
+        events.push("accounts");
+        publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, chainId: "0x3", ethereum: 2}));
     });
-    harness.window.solana.on("connect", () => {
-        connects += 1;
-    });
-    const connecting = harness.window.solana.connect();
-    const request = pageMessages(harness, "request", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        approvalCommitted: true,
-        id: request.message.id,
-        state: configurationSnapshot([{
-            provider: "solana",
-            publicKey: secondSolanaKey,
-        }], undefined),
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey}
-    });
+    h.window.ethereum.on("chainChanged", chain => events.push(chain));
+    publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, chainId: "0x2", ethereum: 1}));
+    assert.deepEqual(events, ["accounts", "0x3"]);
+});
 
+test("Ethereum callbacks see disconnected Solana and may initiate its reconnect", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1}));
+    let connecting;
+    h.window.ethereum.on("accountsChanged", () => {
+        assert.equal(h.window.solana.publicKey, null);
+        connecting = h.window.solana.connect();
+    });
+    publishSnapshot(h, pageSnapshot({ethereum: 2, solana: 2}));
+    assert.ok(connecting);
+    const request = pageMessages(h, "request", "solana").at(-1).message;
+    dispatchProviderResponse(h, {id: request.id, provider: "solana", name: "connect", state: pageSnapshot({publicKey: firstSolanaKey, ethereum: 2, solana: 3}), result: {publicKey: firstSolanaKey}});
     assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
-    assert.deepEqual(
-        harness.window.bigWalletInpageStableFacadeRecord.snapshots().solana,
-        before
-    );
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    assert.equal(accountChanges, 0);
-    assert.equal(connects, 0);
 });
 
-test("late combined Solana connect never undoes a newer disconnect", async () => {
-    for (const approvalCommitted of [false, true]) {
-        const harness = inpageHarness();
-        dispatchConfigurations(harness);
-        const connecting = harness.window.solana.connect();
-        const connect = pageMessages(harness, "request", "solana").at(-1);
-        const rejected = approvalCommitted
-            ? null
-            : assert.rejects(connecting, error => error.code === 4900);
-        const disconnecting = harness.window.solana.disconnect();
-        const disconnect = pageMessages(harness, "disconnect", "solana").at(-1);
-        dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: true
-    });
-        await disconnecting;
-        const disconnected = harness.window.bigWalletInpageStableFacadeRecord
-            .snapshots().solana;
-
-        dispatchProviderResponse(harness, {
-        ...(approvalCommitted ? {approvalCommitted: true} : {}),
-        id: connect.message.id,
-        state: configurationSnapshot([{
-                provider: "solana",
-                publicKey: firstSolanaKey,
-            }], undefined),
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey}
-    });
-
-        if (approvalCommitted) {
-            assert.equal(
-                (await connecting).publicKey.toString(),
-                firstSolanaKey
-            );
-        } else {
-            await rejected;
-        }
-        assert.deepEqual(
-            harness.window.bigWalletInpageStableFacadeRecord
-                .snapshots().solana,
-            disconnected
-        );
-        assert.equal(harness.window.solana.publicKey, null);
-        assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    }
+test("replacement keeps public identities and establishes a fresh lower revision baseline", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 8, solana: 9}));
+    const ethereum = h.window.ethereum;
+    const solana = h.window.solana;
+    h.evaluate();
+    publishSnapshot(h, pageSnapshot({address: secondEthereumAddress, publicKey: secondSolanaKey, ethereum: 0, solana: 0}));
+    assert.equal(h.window.ethereum, ethereum);
+    assert.equal(h.window.solana, solana);
+    assert.equal(ethereum.selectedAddress, secondEthereumAddress);
+    assert.equal(solana.publicKey.toString(), secondSolanaKey);
+    assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().ethereum.workerRevision, 0);
 });
 
-test("Solana disconnect records revocation despite its own configuration revision", async () => {
-    for (const broadcastFirst of [false, true]) {
-        const harness = inpageHarness();
-        dispatchConfigurations(harness);
-        const disconnecting = harness.window.solana.disconnect();
-        const request = pageMessages(harness, "disconnect", "solana").at(-1);
-        const state = {ethereum: null, solana: null, revisions: {ethereum: 0, solana: 1}};
-        const configuration = {kind: "configuration", state};
-        if (broadcastFirst) {
-            harness.dispatch({kind: "response", response: configuration});
-        }
-        dispatchProviderResponse(harness, {
-        state,
-        id: request.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: null
-    });
-
-        assert.equal(await disconnecting, true);
-        assert.equal(harness.window.solana.accountRevocationTombstone, true);
-        dispatchConfigurations(harness, {
-            publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 2,
-        });
-        assert.equal(harness.window.solana.publicKey, null);
-        assert.equal(harness.window.solana.isConnected, false);
-        assert.deepEqual(normalized(harness.registeredWallets[0].accounts), []);
-    }
+test("committed chain terminal settles null without rolling back a newer network", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    const pending = h.window.ethereum.request({method: "wallet_switchEthereumChain", params: [{chainId: "0x2"}]});
+    const request = pageMessages(h, "request", "ethereum").at(-1).message;
+    publishSnapshot(h, pageSnapshot({chainId: "0x3", ethereum: 2}));
+    dispatchProviderResponse(h, {id: request.id, provider: "ethereum", name: request.name, result: null, approvalCommitted: true, state: pageSnapshot({chainId: "0x2", ethereum: 1})});
+    assert.equal(await pending, null);
+    assert.equal(h.window.ethereum.chainId, "0x3");
 });
 
-test("newer disconnected Solana revisions fence stale committed connects", async () => {
-    for (const initiallyConnected of [false, true]) {
-        for (const standard of [false, true]) {
-            const harness = inpageHarness();
-            dispatchConfigurations(harness, initiallyConnected ? {
-                publicKey: firstSolanaKey,
-                solanaAuthorizationEpoch: 1,
-            } : {});
-            const dispatchDisconnected = solana => harness.dispatch({
-                kind: "response",
-                response: {kind: "configuration", state: configurationSnapshot([], {ethereum: 0, solana})},
-            });
-            dispatchDisconnected(3);
-            const wallet = harness.registeredWallets[0];
-            const changes = [];
-            const accountChanges = [];
-            let connects = 0;
-            wallet.features["standard:events"].on("change", change => {
-                changes.push(change);
-            });
-            harness.window.solana.on("accountChanged", key => {
-                accountChanges.push(key);
-            });
-            harness.window.solana.on("connect", () => { connects += 1; });
-            const connecting = standard
-                ? wallet.features["standard:connect"].connect()
-                : harness.window.solana.connect();
-            const request = pageMessages(harness, "request", "solana").at(-1);
-            const before = harness.window.bigWalletInpageStableFacadeRecord
-                .snapshots().solana;
-
-            dispatchDisconnected(6);
-            const disconnected = harness.window.bigWalletInpageStableFacadeRecord
-                .snapshots().solana;
-            harness.dispatch({
-                id: request.message.id,
-                kind: "response",
-                suppressProviderUpdate: true,
-                response: terminalResponse({id: request.message.id,
-            approvalCommitted: true,
-            name: "connect",
-            provider: "solana",
-            result: {publicKey: firstSolanaKey}}),
-            });
-
-            const result = await connecting;
-            if (standard) {
-                assert.deepEqual(normalized(result), {accounts: []});
-            } else {
-                assert.equal(result.publicKey.toString(), firstSolanaKey);
-            }
-            assert.deepEqual(
-                harness.window.bigWalletInpageStableFacadeRecord.snapshots().solana,
-                disconnected
-            );
-            assert.equal(disconnected.accountRevision, before.accountRevision);
-            assert.equal(
-                disconnected.solanaAuthorizationEpoch,
-                before.solanaAuthorizationEpoch
-            );
-            assert.equal(disconnected.accountRevocationTombstone, initiallyConnected);
-            assert.equal(harness.window.solana.publicKey, null);
-            assert.equal(harness.window.solana.isConnected, false);
-            assert.deepEqual(normalized(wallet.accounts), []);
-            assert.equal(connects, 0);
-            assert.deepEqual(accountChanges, []);
-            assert.deepEqual(changes, []);
-        }
-    }
-});
-
-test("Solana disconnect callbacks can start an authoritative reconnect", async () => {
-    for (const event of ["accountChanged", "disconnect", "standard:change"]) {
-        const harness = inpageHarness();
-        dispatchConfigurations(harness, {
-            publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 1,
-        });
-        const wallet = harness.registeredWallets[0];
-        const standard = event === "standard:change";
-        const changes = [];
-        const accountChanges = [];
-        let connects = 0;
-        let disconnects = 0;
-        let connecting = null;
-        const reconnect = () => {
-            if (connecting !== null) { return; }
-            connecting = standard
-                ? wallet.features["standard:connect"].connect()
-                : harness.window.solana.connect();
-        };
-        wallet.features["standard:events"].on("change", change => {
-            changes.push(change.accounts.map(account => account.address));
-            if (standard && change.accounts.length === 0) { reconnect(); }
-        });
-        harness.window.solana.on("accountChanged", key => {
-            accountChanges.push(key?.toString() || null);
-            if (event === "accountChanged" && key === null) { reconnect(); }
-        });
-        harness.window.solana.on("disconnect", () => {
-            disconnects += 1;
-            if (event === "disconnect") { reconnect(); }
-        });
-        harness.window.solana.on("connect", () => { connects += 1; });
-        harness.dispatch({
-            kind: "response",
-            response: {kind: "configuration", state: configurationSnapshot([], {ethereum: 0, solana: 6})},
-        });
-        const request = pageMessages(harness, "request", "solana").at(-1);
-        assert.ok(request);
-        dispatchProviderResponse(harness, {
-        approvalCommitted: true,
-        id: request.message.id,
-        state: configurationSnapshot([{
-                accountRevision: 7,
-                provider: "solana",
-                publicKey: firstSolanaKey,
-                solanaAuthorizationEpoch: 7,
-            }], {ethereum: 0, solana: 7}),
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey}
-    });
-
-        const result = await connecting;
-        if (standard) {
-            assert.deepEqual(
-                normalized(result.accounts.map(account => account.address)),
-                [firstSolanaKey]
-            );
-        } else {
-            assert.equal(result.publicKey.toString(), firstSolanaKey);
-        }
-        assert.equal(harness.window.solana.publicKey?.toString(), firstSolanaKey);
-        assert.equal(harness.window.solana.isConnected, true);
-        assert.equal(harness.window.solana.accountRevocationTombstone, false);
-        assert.deepEqual(
-            normalized(wallet.accounts.map(account => account.address)),
-            [firstSolanaKey]
-        );
-        assert.equal(connects, 1);
-        assert.equal(disconnects, 1);
-        assert.deepEqual(accountChanges, [null, firstSolanaKey]);
-        assert.deepEqual(normalized(changes), [[], [firstSolanaKey]]);
-    }
-});
-
-test("Ethereum account callbacks can reconnect Solana during a combined disconnected snapshot", async () => {
-    for (const disconnectInCallback of [false, true]) {
-        for (const standard of [false, true]) {
-            const harness = inpageHarness();
-            dispatchConfigurations(harness, {
-                publicKey: firstSolanaKey,
-                solanaAuthorizationEpoch: 1,
-            });
-            if (!disconnectInCallback) {
-                harness.dispatch({
-                    kind: "response",
-                    response: {kind: "configuration", state: configurationSnapshot([], {ethereum: 0, solana: 3})},
-                });
-            }
-            const wallet = harness.registeredWallets[0];
-            const changes = [];
-            const accountChanges = [];
-            let connects = 0;
-            let disconnects = 0;
-            let connecting = null;
-            wallet.features["standard:events"].on("change", change => {
-                changes.push(change.accounts.map(account => account.address));
-            });
-            harness.window.solana.on("accountChanged", key => {
-                accountChanges.push(key?.toString() || null);
-            });
-            harness.window.solana.on("connect", () => { connects += 1; });
-            harness.window.solana.on("disconnect", () => { disconnects += 1; });
-            harness.window.ethereum.on("accountsChanged", accounts => {
-                if (connecting !== null || accounts.length === 0) { return; }
-                if (disconnectInCallback) {
-                    harness.window.solana.externalDisconnect();
-                }
-                connecting = standard
-                    ? wallet.features["standard:connect"].connect()
-                    : harness.window.solana.connect();
-            });
-            const ethereumConfiguration = {
-                chainId: "0x1",
-                provider: "ethereum",
-                address: "0x1111111111111111111111111111111111111111",
-            };
-            harness.dispatch({
-                kind: "response",
-                response: {kind: "configuration", state: configurationSnapshot([ethereumConfiguration], {ethereum: 1, solana: 6})},
-            });
-            const request = pageMessages(harness, "request", "solana").at(-1);
-            assert.ok(request);
-            dispatchProviderResponse(harness, {
-        approvalCommitted: true,
-        id: request.message.id,
-        state: configurationSnapshot([ethereumConfiguration, {
-                    accountRevision: 7,
-                    provider: "solana",
-                    publicKey: firstSolanaKey,
-                    solanaAuthorizationEpoch: 7,
-                }], {ethereum: 1, solana: 7}),
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey}
-    });
-
-            const result = await connecting;
-            if (standard) {
-                assert.deepEqual(
-                    normalized(result.accounts.map(account => account.address)),
-                    [firstSolanaKey]
-                );
-            } else {
-                assert.equal(result.publicKey.toString(), firstSolanaKey);
-            }
-            assert.equal(harness.window.solana.publicKey?.toString(), firstSolanaKey);
-            assert.equal(harness.window.solana.isConnected, true);
-            assert.equal(harness.window.solana.accountRevocationTombstone, false);
-            assert.deepEqual(
-                normalized(wallet.accounts.map(account => account.address)),
-                [firstSolanaKey]
-            );
-            assert.equal(connects, 1);
-            assert.equal(disconnects, disconnectInCallback ? 1 : 0);
-            assert.deepEqual(accountChanges, disconnectInCallback
-                ? [null, firstSolanaKey] : [firstSolanaKey]);
-            assert.deepEqual(normalized(changes), disconnectInCallback
-                ? [[], [firstSolanaKey]] : [[firstSolanaKey]]);
-        }
-    }
-});
-
-test("Ethereum revision drift leaves a current suppressed Solana connect authoritative", async () => {
-    const harness = inpageHarness();
-    const dispatchDisconnected = ethereum => harness.dispatch({
-        kind: "response",
-        response: {kind: "configuration", state: configurationSnapshot([], {ethereum, solana: 3})},
-    });
-    dispatchDisconnected(0);
-    const connecting = harness.window.solana.connect();
-    const request = pageMessages(harness, "request", "solana").at(-1);
-    dispatchDisconnected(2);
-    harness.dispatch({
-        id: request.message.id,
-        kind: "response",
-        suppressProviderUpdate: true,
-        response: terminalResponse({id: request.message.id,
-            approvalCommitted: true,
-            name: "connect",
-            provider: "solana",
-            result: {publicKey: firstSolanaKey}}),
-    });
-
-    assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.window.solana.isConnected, true);
-});
-
-test("committed combined Solana connect preserves a reentrant disconnect", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness);
-    let disconnecting = null;
-    const changes = [];
-    harness.window.solana.on("accountChanged", publicKey => {
-        changes.push(publicKey?.toString() || null);
-        if (publicKey && disconnecting === null) {
-            disconnecting = harness.window.solana.disconnect();
-            const disconnect = pageMessages(
-                harness,
-                "disconnect",
-                "solana"
-            ).at(-1);
-            dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: true
-    });
-        }
-    });
-    const connecting = harness.window.solana.connect();
-    const request = pageMessages(harness, "request", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        approvalCommitted: true,
-        id: request.message.id,
-        state: configurationSnapshot([{
-            provider: "solana",
-            publicKey: firstSolanaKey,
-        }], undefined),
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey}
-    });
-
-    assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
-    assert.deepEqual(changes, [firstSolanaKey, null]);
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    await disconnecting;
-    assert.equal(harness.window.solana.publicKey, null);
-});
-
-test("uncommitted combined Solana connect rejects after a reentrant disconnect", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness);
-    let disconnecting = null;
-    harness.window.solana.on("accountChanged", publicKey => {
-        if (publicKey && disconnecting === null) {
-            disconnecting = harness.window.solana.disconnect();
-            const disconnect = pageMessages(
-                harness,
-                "disconnect",
-                "solana"
-            ).at(-1);
-            dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: true
-    });
-        }
-    });
-    const connecting = harness.window.solana.connect();
-    const rejected = assert.rejects(connecting, error => error.code === 4900);
-    const request = pageMessages(harness, "request", "solana").at(-1);
-    dispatchProviderResponse(harness, {
-        id: request.message.id,
-        state: configurationSnapshot([{
-            provider: "solana",
-            publicKey: firstSolanaKey,
-        }], undefined),
-        name: "connect",
-        provider: "solana",
-        result: {publicKey: firstSolanaKey}
-    });
-
-    await rejected;
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    await disconnecting;
-    assert.equal(harness.window.solana.publicKey, null);
-});
-
-test("combined manual switch applies its authoritative configuration once", () => {
-    const harness = inpageHarness();
-    const firstAddress = "0x0000000000000000000000000000000000000001";
-    const secondAddress = "0x0000000000000000000000000000000000000002";
-    dispatchConfigurations(harness, {
-        address: firstAddress,
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    });
-    const before = harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    let ethereumChanges = 0;
-    let solanaChanges = 0;
-    harness.window.ethereum.on("accountsChanged", () => {
-        ethereumChanges += 1;
-    });
-    harness.window.solana.on("accountChanged", () => {
-        solanaChanges += 1;
-    });
-    const ethereumConfiguration = {
-        chainId: "0x2",
-        provider: "ethereum",
-        address: secondAddress,
-    };
-    const solanaConfiguration = {
-        accountRevision: before.solana.accountRevision + 1,
-        isConnected: true,
-        provider: "solana",
-        publicKey: secondSolanaKey,
-        solanaAuthorizationEpoch: before.solana.solanaAuthorizationEpoch + 1,
-    };
-
-    harness.dispatch({
-        id: 101,
-        kind: "response",
-        response: {kind: "configuration", state: configurationSnapshot([ethereumConfiguration, solanaConfiguration], undefined)},
-    });
-
-    const after = harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    assert.equal(after.ethereum.accountRevision, before.ethereum.accountRevision + 1);
-    assert.equal(after.solana.accountRevision, before.solana.accountRevision + 1);
-    assert.equal(harness.window.ethereum.selectedAddress, secondAddress);
-    assert.equal(harness.window.solana.publicKey.toString(), secondSolanaKey);
-    assert.equal(ethereumChanges, 1);
-    assert.equal(solanaChanges, 1);
-});
-
-async function disconnectInpageAccounts(harness) {
-    const ethereum = harness.window.ethereum.request({
-        method: "wallet_revokePermissions",
-        params: [{eth_accounts: {}}],
-    });
-    const solana = harness.window.solana.disconnect();
-    for (const provider of ["ethereum", "solana"]) {
-        const request = pageMessages(harness, "disconnect", provider).at(-1);
-        dispatchProviderResponse(harness, {
-        id: request.message.id,
-        name: "revokePermissions",
-        provider,
-        result: null
-    });
-    }
-    await Promise.all([ethereum, solana]);
-}
-
-function dispatchReauthorization(harness, revision) {
-    const current = harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    dispatchConfigurations(harness, {
-        address: "0x0000000000000000000000000000000000000001",
-        publicKey: firstSolanaKey,
-        reauthorizationRevision: revision,
-        solanaAuthorizationEpoch: current.solana.solanaAuthorizationEpoch,
-    });
-}
-
-test("durable reauthorization reconnects each provider once and preserves later disconnects", async () => {
-    const harness = inpageHarness();
-    const snapshots = () => harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    dispatchReauthorization(harness, 1);
-    await disconnectInpageAccounts(harness);
-    assert.equal(harness.window.ethereum.selectedAddress, null);
-    assert.equal(harness.window.solana.publicKey, null);
-
-    dispatchReauthorization(harness, 2);
-    assert.equal(harness.window.ethereum.selectedAddress,
-        "0x0000000000000000000000000000000000000001");
-    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-    const connected = snapshots();
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(connected[provider].reauthorizationRevision, 2);
-        assert.equal(connected[provider].accountRevocationTombstone, false);
-    }
-
-    dispatchReauthorization(harness, 2);
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(snapshots()[provider].accountRevision,
-            connected[provider].accountRevision);
-    }
-
-    await disconnectInpageAccounts(harness);
-    const disconnected = snapshots();
-    dispatchReauthorization(harness, 2);
-    dispatchReauthorization(harness, 1);
-    assert.equal(harness.window.ethereum.selectedAddress, null);
-    assert.equal(harness.window.solana.publicKey, null);
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(snapshots()[provider].accountRevision,
-            disconnected[provider].accountRevision);
-        assert.equal(snapshots()[provider].reauthorizationRevision, 2);
-        assert.equal(snapshots()[provider].accountRevocationTombstone, true);
-    }
-});
-
-test("null configurations preserve consumed reauthorization revisions from bootstrap onward", async () => {
-    const harness = inpageHarness();
-    const snapshots = () => harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    const disconnect = () => harness.dispatch({
-        kind: "response",
-        response: {
-            kind: "configuration",
-            state: {revisions: {ethereum: 0, solana: 0}, ethereum: null, solana: null},
-        },
-    });
-
-    disconnect();
-    assert.deepEqual(normalized(await harness.window.ethereum.request({method: "eth_accounts"})), []);
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(snapshots()[provider].reauthorizationRevision, 0);
-    }
-
-    dispatchReauthorization(harness, 5);
-    disconnect();
-    assert.equal(harness.window.ethereum.selectedAddress, null);
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(snapshots().solana.accountRevocationTombstone, true);
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(snapshots()[provider].reauthorizationRevision, 5);
-    }
-
-    harness.evaluate();
-    disconnect();
-    dispatchReauthorization(harness, 5);
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(snapshots().solana.reauthorizationRevision, 5);
-    dispatchReauthorization(harness, 6);
-    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-});
-
-test("suppressed configurations do not consume provider reauthorization revisions", async () => {
-    const harness = inpageHarness();
-    dispatchReauthorization(harness, 5);
-    await disconnectInpageAccounts(harness);
-    const snapshots = () => harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    const before = normalized(snapshots());
-    harness.dispatch({
-        kind: "response",
-        suppressProviderUpdate: true,
-        response: {
-            kind: "configuration",
-            state: {
-                revisions: {ethereum: 0, solana: before.solana.solanaAuthorizationEpoch + 1},
-                ethereum: {
-                    address: "0x0000000000000000000000000000000000000001",
-                    chainId: "0x2",
-                    reauthorizationRevision: 6,
-                },
-                solana: {publicKey: firstSolanaKey, isConnected: true, reauthorizationRevision: 6},
-            },
-        },
-    });
-    assert.deepEqual(normalized(snapshots()), before);
-
-    dispatchReauthorization(harness, 6);
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(snapshots()[provider].reauthorizationRevision, 6);
-        assert.equal(snapshots()[provider].accountRevocationTombstone, false);
-    }
-});
-
-test("reinjection preserves consumed reauthorization markers for both providers", async () => {
-    const harness = inpageHarness();
-    dispatchReauthorization(harness, 5);
-    await disconnectInpageAccounts(harness);
-    const before = harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-
-    harness.evaluate();
-    dispatchReauthorization(harness, 5);
-    const after = harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    assert.equal(harness.window.ethereum.selectedAddress, null);
-    assert.equal(harness.window.solana.publicKey, null);
-    for (const provider of ["ethereum", "solana"]) {
-        assert.equal(after[provider].reauthorizationRevision, 5);
-        assert.equal(after[provider].accountRevocationTombstone, true);
-        assert.equal(after[provider].accountRevision,
-            before[provider].accountRevision);
-    }
-
-    dispatchReauthorization(harness, 6);
-    assert.equal(harness.window.ethereum.selectedAddress,
-        "0x0000000000000000000000000000000000000001");
-    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-});
-
-test("manual switch does not undo a reentrant Solana disconnect", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness);
-    let disconnecting = null;
-    harness.window.solana.on("accountChanged", publicKey => {
-        if (publicKey && disconnecting === null) {
-            disconnecting = harness.window.solana.disconnect();
-            const disconnect = pageMessages(
-                harness,
-                "disconnect",
-                "solana"
-            ).at(-1);
-            dispatchProviderResponse(harness, {
-        id: disconnect.message.id,
-        name: "revokePermissions",
-        provider: "solana",
-        result: true
-    });
-        }
-    });
-    const ethereumConfiguration = {
-        chainId: "0x1",
-        provider: "ethereum",
-        address: "",
-    };
-    const solanaConfiguration = {
-        accountRevision: 1,
-        isConnected: true,
-        provider: "solana",
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-    };
-    harness.dispatch({
-        id: 103,
-        kind: "response",
-        response: {kind: "configuration", state: configurationSnapshot([ethereumConfiguration, solanaConfiguration], undefined)},
-    });
-
-    assert.ok(disconnecting);
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    await disconnecting;
-    assert.equal(harness.window.solana.publicKey, null);
-});
-
-test("committed chain result preserves a newer authoritative chain", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness, {chainId: "0x1"});
-    const switching = harness.window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{chainId: "0x2"}],
-    });
-    const request = pageMessages(harness, "request", "ethereum").at(-1);
-    dispatchProviderResponse(harness, {
-        approvalCommitted: true,
-        chainId: "0x2",
-        id: request.message.id,
-        state: configurationSnapshot([{
-            chainId: "0x3",
-            provider: "ethereum",
-            address: "",
-        }], undefined),
-        name: "switchEthereumChain",
-        provider: "ethereum",
-        result: null
-    });
-
-    assert.equal(await switching, null);
-    assert.equal(harness.window.ethereum.chainId, "0x3");
-});
 
 test("bootstrap failure rejects work and recovers the same providers", async () => {
     const harness = inpageHarness();
@@ -6884,7 +5567,6 @@ test("bootstrap failure rejects work and recovers the same providers", async () 
     dispatchConfigurations(harness, {
         address: "0x1234",
         publicKey: firstSolanaKey,
-        reauthorizationRevision: 0,
     });
     assert.equal(harness.window.ethereum, ethereumProvider);
     assert.equal(harness.window.solana, solanaProvider);
@@ -6956,14 +5638,12 @@ test("bootstrap recovery reconnects copied connections without revoking accounts
     const configuration = {
         address: "0x1234",
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 5,
-        reauthorizationRevision: 0,
+        solanaRevision: 5,
     };
     dispatchConfigurations(harness, configuration);
     harness.runTimers();
     const account = wallet.accounts[0];
     const snapshots = () => harness.window.bigWalletInpageStableFacadeRecord.snapshots();
-    const connected = snapshots();
     ethereum.on("accountsChanged", value => accountChanges.push(value));
     solana.on("accountChanged", value => accountChanges.push(value));
     wallet.features["standard:events"].on("change", value => accountChanges.push(value));
@@ -6981,11 +5661,8 @@ test("bootstrap recovery reconnects copied connections without revoking accounts
     assert.equal(solana.publicKey.toString(), firstSolanaKey);
     assert.equal(wallet.accounts[0], account);
     for (const provider of ["ethereum", "solana"]) {
-        assert.equal(failed[provider].accountRevision, connected[provider].accountRevision);
-        assert.equal(failed[provider].accountRevocationTombstone, false);
-        assert.equal(failed[provider].reauthorizationRevision, connected[provider].reauthorizationRevision);
+        assert.equal(failed[provider].workerRevision, null);
     }
-    assert.equal(failed.solana.solanaAuthorizationEpoch, connected.solana.solanaAuthorizationEpoch);
     harness.dispatch({kind: "response", response: {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}}});
     dispatchConfigurations(harness, configuration);
     harness.runTimers();
@@ -7169,7 +5846,7 @@ test("inpage configuration descriptor reentry preserves the newer configuration"
             }
             return Reflect.getOwnPropertyDescriptor(target, name);
         };
-        const ethereum = {address: staleAddress, chainId: "0x2", reauthorizationRevision: 0};
+        const ethereum = {address: staleAddress, chainId: "0x2"};
         let response = {kind: "configuration", state: {
             ethereum: surface === "address" ? new Proxy(ethereum, {getOwnPropertyDescriptor: trap}) : ethereum,
             solana: null, revisions: {ethereum: 0, solana: 0},
@@ -7196,7 +5873,7 @@ test("Solana configuration ignores public key overrides and preserves wrapper re
 
         dispatchConfigurations(harness, {
             publicKey: firstSolanaKey,
-            solanaAuthorizationEpoch: 2,
+            solanaRevision: 2,
         });
         const refreshedKey = provider.publicKey;
         assert.notEqual(refreshedKey, firstKey);
@@ -7208,7 +5885,7 @@ test("Solana configuration ignores public key overrides and preserves wrapper re
 
         dispatchConfigurations(harness, {
             publicKey: secondSolanaKey,
-            solanaAuthorizationEpoch: 3,
+            solanaRevision: 3,
         });
         assert.notEqual(provider.publicKey, refreshedKey);
         assert.equal(provider.publicKey.toString(), secondSolanaKey);
@@ -7230,11 +5907,12 @@ test("Solana clearing authorization does not read the public key wrapper", async
             if (trigger === "configuration") {
                 applySolanaConfiguration(harness, {workerRevision: 2});
             } else if (trigger === "external") {
-                await harness.provider.externalDisconnect();
+                applySolanaConfiguration(harness);
             } else if (trigger === "retirement") {
                 harness.Solana.retire(harness.provider);
             } else {
                 const disconnecting = harness.provider.disconnect();
+                applySolanaConfiguration(harness);
                 harness.applyDecodedEnvelope(harness.provider, {
                     id: harness.disconnects[0].id,
                     kind: "result",
@@ -7246,7 +5924,7 @@ test("Solana clearing authorization does not read the public key wrapper", async
             assert.equal(reads(), 0);
             assert.equal(harness.provider.publicKey, null);
             assert.equal(harness.provider.isConnected, false);
-            assert.equal(harness.provider.accountRevocationTombstone, true);
+
             assert.equal(harness.Solana.snapshot(harness.provider).publicKey, null);
             assert.deepEqual(normalized(harness.wallet.accounts), []);
             assert.deepEqual(events, [["accountChanged", null], ["disconnect"]]);
@@ -7261,17 +5939,12 @@ test("Solana accepted connections preserve public wrapper identity", async () =>
     harness.standardProvider.on("connect", key => events.push(["connect", key]));
     harness.standardProvider.on("accountChanged", key => events.push(["accountChanged", key]));
     const connecting = harness.provider.connect();
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "connect",
-        result: {publicKey: firstSolanaKey},
-    });
+    grantSolana(harness, harness.requests.at(-1).id, firstSolanaKey);
     const {publicKey: key} = await connecting;
     assert.equal(harness.provider.publicKey, key);
     assert.equal(harness.standardProvider.publicKey, key);
     assert.equal((await harness.provider.connect()).publicKey, key);
-    assert.deepEqual(events, [["connect", key], ["accountChanged", key]]);
+    assert.deepEqual(events, [["accountChanged", key], ["connect", key]]);
     assert.equal(key.toString(), firstSolanaKey);
     assert.equal(key.toBase58(), firstSolanaKey);
     assert.equal(key.toJSON(), firstSolanaKey);
@@ -7289,7 +5962,6 @@ test("Solana facade snapshots and reinjection retain canonical identity after wr
         const harness = inpageHarness();
         dispatchConfigurations(harness, {
             publicKey: firstSolanaKey,
-            reauthorizationRevision: 3,
         });
         const record = harness.window.bigWalletInpageStableFacadeRecord;
         const before = normalized(record.snapshots().solana);
@@ -7306,7 +5978,7 @@ test("Solana facade snapshots and reinjection retain canonical identity after wr
         assert.notEqual(provider.publicKey, key);
         assert.equal(provider.publicKey.toString(), firstSolanaKey);
         assert.equal(record.wallet.accounts[0], account);
-        assert.deepEqual(normalized(record.snapshots().solana), before);
+        assert.deepEqual(normalized(record.snapshots().solana), {...before, workerRevision: null});
         assert.equal(reads(), 0);
     }
 });
@@ -7316,7 +5988,7 @@ test("invalid nested ingress cannot suppress a valid outer configuration", () =>
     let didReenter = false;
     const response = new Proxy({
         kind: "configuration", state: {
-            ethereum: {address: "", chainId: "0x2", reauthorizationRevision: 0},
+            ethereum: {address: "", chainId: "0x2"},
             solana: null, revisions: {ethereum: 0, solana: 0},
         },
     }, {
@@ -7477,8 +6149,8 @@ test("the RPC route cannot deliver provider configuration or configuration failu
         const id = pageMessages(harness, "rpc").at(-1).message.id;
         const state = {
             revisions: {ethereum: 99, solana: 99},
-            ethereum: {address: injectedAddress, chainId: "0x2", reauthorizationRevision: 99},
-            solana: {publicKey: secondSolanaKey, isConnected: true, reauthorizationRevision: 99},
+            ethereum: {address: injectedAddress, chainId: "0x2"},
+            solana: {publicKey: secondSolanaKey},
         };
         const error = {code: 4900, message: "Injected configuration failure"};
         const response = kind === "configuration" ? {kind, state}
@@ -7506,7 +6178,7 @@ test("RPC errors cannot revoke the page wallet through authorization metadata", 
         id, provider: "ethereum", name: null, authorizationFailure: true,
         error: {code: 4100, message: "RPC denied", data: {reason: "endpoint"}},
     })});
-    await assert.rejects(pending, error => error.code === 4100 && error.data.reason === "endpoint");
+    await assert.rejects(pending, error => error.code === -32603);
     assert.equal(harness.window.ethereum.selectedAddress, address);
     assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
 });
@@ -7562,33 +6234,15 @@ test("inpage derives terminal ownership from provider-distinct wire IDs", async 
     await assert.rejects(wrongKind, error => error.code === -32603);
 });
 
-test("Solana 4100 ingress revokes authorization and advances its epoch", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    const beforeRevision = harness.window.solana.accountRevision;
-    const beforeEpoch = harness.window.solana.solanaAuthorizationEpoch;
-    const request = harness.window.solana.signMessage(new Uint8Array([1]));
-    const message = pageMessages(harness, "request", "solana").at(-1);
-    const postedCount = harness.postedMessages.length;
-    dispatchProviderResponse(harness, {
-        error: {code: 4100, message: "Unauthorized"},
-        id: message.message.id,
-        name: message.message.name,
-        provider: "solana",
-        authorizationFailure: true
-    });
-    await assert.rejects(request, error => error.code === 4100);
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    assert.equal(
-        harness.window.solana.accountRevision > beforeRevision,
-        true
-    );
-    assert.equal(
-        harness.window.solana.solanaAuthorizationEpoch > beforeEpoch,
-        true
-    );
-    assert.equal(harness.postedMessages.length, postedCount);
+test("Solana unauthorized response changes accounts only through its authoritative snapshot", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({publicKey: firstSolanaKey, solana: 1}));
+    const pending = h.window.solana.signMessage(new Uint8Array([1]));
+    const id = pageMessages(h, "request", "solana").at(-1).message.id;
+    dispatchProviderResponse(h, {id, provider: "solana", name: "signMessage", error: {code: 4100, message: "Unauthorized"}, state: pageSnapshot({solana: 2})});
+    await assert.rejects(pending, error => error.code === 4100);
+    assert.equal(h.window.solana.publicKey, null);
+    assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().solana.workerRevision, 2);
 });
 
 test("Solana 4100 without an account marker leaves authorization intact", async () => {
@@ -7605,29 +6259,17 @@ test("Solana 4100 without an account marker leaves authorization intact", async 
 
     await assert.rejects(request, error => error.code === 4100);
     assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.window.solana.accountRevocationTombstone, false);
+    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
 });
 
-test("Solana omission disconnects externally", () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    const beforeEpoch = harness.window.solana.solanaAuthorizationEpoch;
-    const postedCount = harness.postedMessages.length;
-    harness.dispatch({
-        kind: "response",
-        response: {kind: "configuration", state: configurationSnapshot([{
-                chainId: "0x1",
-                provider: "ethereum",
-                address: "",
-            }], undefined)},
-    });
-    assert.equal(harness.window.solana.publicKey, null);
-    assert.equal(harness.window.solana.accountRevocationTombstone, true);
-    assert.equal(
-        harness.window.solana.solanaAuthorizationEpoch,
-        beforeEpoch + 1
-    );
-    assert.equal(harness.postedMessages.length, postedCount);
+test("a newer null Solana snapshot disconnects without an outbound request", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({publicKey: firstSolanaKey, solana: 1}));
+    const count = h.postedMessages.length;
+    publishSnapshot(h, pageSnapshot({solana: 2}));
+    assert.equal(h.window.solana.publicKey, null);
+    assert.equal(h.window.solana.isConnected, false);
+    assert.equal(h.postedMessages.length, count);
 });
 
 test("Solana omission makes a copied loading provider ready", async () => {
@@ -7654,39 +6296,25 @@ test("Solana omission makes a copied loading provider ready", async () => {
     assert.equal(harness.window.solana.publicKey, null);
 });
 
-test("same-key Solana switch reauthorization fences a late 4100", async () => {
-    const harness = inpageHarness();
-    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    const beforeRevision = harness.window.solana.accountRevision;
-    const pending = harness.window.solana.signMessage(new Uint8Array([1]));
-    const pendingMessage = pageMessages(harness, "request", "solana").at(-1);
-    dispatchConfigurations(harness, {
-        publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 2, reauthorizationRevision: 2,
-    });
-    assert.equal(
-        harness.window.solana.accountRevision > beforeRevision,
-        true
-    );
-    dispatchProviderResponse(harness, {
-        error: {code: 4100, message: "Late unauthorized"},
-        id: pendingMessage.message.id,
-        name: pendingMessage.message.name,
-        provider: "solana"
-    });
+test("same-key Solana regrant survives a late unauthorized response snapshot", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot({publicKey: firstSolanaKey, solana: 1}));
+    const pending = h.window.solana.signMessage(new Uint8Array([1]));
+    const id = pageMessages(h, "request", "solana").at(-1).message.id;
+    publishSnapshot(h, pageSnapshot({solana: 2}));
+    publishSnapshot(h, pageSnapshot({publicKey: firstSolanaKey, solana: 3}));
+    dispatchProviderResponse(h, {id, provider: "solana", name: "signMessage", error: {code: 4100, message: "Old authorization"}, state: pageSnapshot({solana: 2})});
     await assert.rejects(pending, error => error.code === 4100);
-    assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.window.solana.accountRevocationTombstone, false);
+    assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
 });
 
 test("missing, extra, and malformed configuration entries are ignored atomically", async () => {
     const harness = inpageHarness();
     dispatchConfigurations(harness, {publicKey: firstSolanaKey});
-    const revision = harness.window.solana.accountRevision;
-    const epoch = harness.window.solana.solanaAuthorizationEpoch;
+    const before = normalized(harness.window.bigWalletInpageStableFacadeRecord.snapshots());
     const state = {
-        ethereum: {address: "", chainId: "0x2", reauthorizationRevision: 0},
-        solana: {publicKey: secondSolanaKey, isConnected: true, reauthorizationRevision: 0},
+        ethereum: {address: "", chainId: "0x2"},
+        solana: {publicKey: secondSolanaKey},
         revisions: {ethereum: 1, solana: 2},
     };
     const missing = {...state};
@@ -7701,8 +6329,7 @@ test("missing, extra, and malformed configuration entries are ignored atomically
         harness.dispatch({kind: "response", response: {kind: "configuration", state}});
     }
     assert.equal(harness.window.solana.publicKey.toString(), firstSolanaKey);
-    assert.equal(harness.window.solana.accountRevision, revision);
-    assert.equal(harness.window.solana.solanaAuthorizationEpoch, epoch);
+    assert.deepEqual(normalized(harness.window.bigWalletInpageStableFacadeRecord.snapshots()), before);
     assert.equal(await harness.window.ethereum.request({method: "eth_chainId"}), "0x1");
 });
 
@@ -7794,8 +6421,7 @@ test("exact reinjection preserves facades and rejects all old generation work", 
         harness.window.bigWalletInpageProviderGenerationToken;
     dispatchConfigurations(harness, {
         publicKey: firstSolanaKey,
-        solanaAuthorizationEpoch: 1,
-        reauthorizationRevision: 1,
+        solanaRevision: 1,
     });
     const oldRPC = secondEthereum.request({
         method: "eth_blockNumber",
@@ -7881,6 +6507,7 @@ test("Ethereum readiness preserves a replacement observer and reads state withou
     });
     module.exports.applyDecodedEnvelope(engine, {
         kind: "configuration",
+        workerRevision: 2,
         configuration: {address: "", chainId: "0x2"},
     });
     assert.deepEqual(deliveries, [["first", "0x2"]]);
@@ -7889,6 +6516,7 @@ test("Ethereum readiness preserves a replacement observer and reads state withou
     assert.deepEqual(deliveries, [["first", "0x2"]]);
     module.exports.applyDecodedEnvelope(engine, {
         kind: "configuration",
+        workerRevision: 3,
         configuration: {address: "", chainId: "0x3"},
     });
     module.runTimers();
@@ -7896,6 +6524,7 @@ test("Ethereum readiness preserves a replacement observer and reads state withou
     disposeSecond();
     module.exports.applyDecodedEnvelope(engine, {
         kind: "configuration",
+        workerRevision: 4,
         configuration: {address: "", chainId: "0x4"},
     });
     module.runTimers();
@@ -7977,5 +6606,146 @@ for (const consumedConnect of [false, true]) {
         assert.equal(harness.listenerCount("message"), 1);
         assert.equal(harness.listenerCount("eip6963:requestProvider"), 1);
         assert.equal(await provider.request({method: "eth_chainId"}), "0x3");
+    });
+}
+
+for (const changeAfterFirst of [false, true]) {
+    test(`queued Wallet Standard batches bind initial revision and fence subsequent items changed=${changeAfterFirst}`, async () => {
+        const h = solanaHarness({publicKey: firstSolanaKey, isConnected: true});
+        const account = h.wallet.accounts[0];
+        const input = {account, message: new Uint8Array([1])};
+        const pending = h.provider.standardSignMessage(input, input);
+        const result = pending.then(value => ({value}), error => ({error}));
+        assert.equal(h.requests.length, 0);
+        applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 3});
+        for (let i = 0; i < 5; i++) { await Promise.resolve(); }
+        assert.equal(h.requests.length, 1);
+        if (changeAfterFirst) {
+            applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+        }
+        h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature, approvalCommitted: true});
+        for (let i = 0; i < 5; i++) { await Promise.resolve(); }
+        if (changeAfterFirst) {
+            assert.equal((await result).error.code, 4100);
+            assert.equal(h.requests.length, 1);
+        } else {
+            assert.equal(h.requests.length, 2);
+            h.applyDecodedEnvelope(h.provider, {id: h.requests[1].id, name: "signMessage", kind: "result", result: validSignature});
+            assert.equal((await result).value.length, 2);
+        }
+    });
+}
+
+test("bootstrap callbacks enqueue behind earlier pending requests", async () => {
+    const h = ethereumHarness({address: "", chainId: "0x1"});
+    const order = [];
+    h.setRPCObserver(message => order.push(JSON.parse(message.body).method));
+    const first = h.provider.request({method: "eth_blockNumber"});
+    let second;
+    h.provider.on("chainChanged", () => { second = h.provider.request({method: "eth_gasPrice"}); });
+    applyEthereumConfiguration(h, "", "0x2");
+    assert.deepEqual(order, ["eth_blockNumber", "eth_gasPrice"]);
+    for (const request of h.rpc) { h.applyDecodedEnvelope({id: request.message.id, kind: "result", result: "0x1"}); }
+    await Promise.all([first, second]);
+});
+
+test("configuration preparation cannot overwrite a reentrant newer snapshot", () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    h.context.publishNewer = () => publishSnapshot(h, pageSnapshot({chainId: "0x3", publicKey: secondSolanaKey, ethereum: 2, solana: 2}));
+    vm.runInContext(`
+        const OriginalUint8Array = Uint8Array;
+        let triggered = false;
+        globalThis.Uint8Array = new Proxy(OriginalUint8Array, {
+            construct(target, args) {
+                if (!triggered) { triggered = true; publishNewer(); }
+                return Reflect.construct(target, args);
+            },
+        });
+    `, h.context);
+    publishSnapshot(h, pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1}));
+    assert.equal(h.window.ethereum.chainId, "0x3");
+    assert.equal(h.window.solana.publicKey.toString(), secondSolanaKey);
+});
+
+test("reentrant Ethereum preparation preserves an independent Solana connect", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    const connecting = h.window.solana.connect();
+    const request = pageMessages(h, "request", "solana").at(-1).message;
+    h.context.publishNewerEthereum = () => publishSnapshot(h,
+        pageSnapshot({chainId: "0x3", ethereum: 2}));
+    vm.runInContext(`
+        const OriginalUint8Array = Uint8Array;
+        let triggered = false;
+        globalThis.Uint8Array = new Proxy(OriginalUint8Array, {
+            construct(target, args) {
+                if (!triggered) { triggered = true; publishNewerEthereum(); }
+                return Reflect.construct(target, args);
+            },
+        });
+    `, h.context);
+    dispatchProviderResponse(h, {
+        id: request.id, provider: "solana", name: "connect",
+        result: {publicKey: firstSolanaKey}, approvalCommitted: true,
+        state: pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1}),
+    });
+    assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
+    assert.equal(h.window.ethereum.chainId, "0x3");
+    assert.equal(h.window.solana.publicKey?.toString(), firstSolanaKey);
+    assert.equal(h.window.solana.isConnected, true);
+    const snapshots = h.window.bigWalletInpageStableFacadeRecord.snapshots();
+    assert.equal(snapshots.ethereum.workerRevision, 2);
+    assert.equal(snapshots.solana.workerRevision, 1);
+});
+
+test("configuration preparation errors settle correlated requests without partial updates", async () => {
+    const h = inpageHarness();
+    publishSnapshot(h, pageSnapshot());
+    let outcome;
+    const switching = h.window.ethereum.request({method: "wallet_switchEthereumChain", params: [{chainId: "0x2"}]});
+    switching.then(value => { outcome = {value}; }, error => { outcome = {error}; });
+    const request = pageMessages(h, "request", "ethereum").at(-1).message;
+    vm.runInContext(`
+        const OriginalUint8Array = Uint8Array;
+        let constructions = 0;
+        globalThis.Uint8Array = new Proxy(OriginalUint8Array, {
+            construct(target, args) {
+                if (++constructions === 3) { throw new Error("Public key construction failed"); }
+                return Reflect.construct(target, args);
+            },
+        });
+    `, h.context);
+    const state = pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+    dispatchProviderResponse(h, {
+        id: request.id, provider: "ethereum", name: request.name,
+        result: null, approvalCommitted: true, state,
+    });
+    await Promise.resolve();
+    assert.equal(outcome?.error?.code, -32603);
+    assert.equal(h.window.ethereum.chainId, "0x1");
+    assert.equal(h.window.solana.publicKey, null);
+    vm.runInContext("globalThis.Uint8Array = OriginalUint8Array", h.context);
+    publishSnapshot(h, state);
+    assert.equal(h.window.ethereum.chainId, "0x2");
+    assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
+});
+
+for (const inheritedFlag of ["true", "throwing getter"]) {
+    test(`prepared snapshots ignore an inherited ignored ${inheritedFlag}`, async () => {
+        const h = inpageHarness();
+        vm.runInContext(inheritedFlag === "true"
+            ? "Object.prototype.ignored = true"
+            : `Object.defineProperty(Object.prototype, "ignored", {
+                get() { throw new Error("Inherited ignored accessed"); },
+            })`, h.context);
+        const state = pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+        publishSnapshot(h, state);
+        assert.equal(h.window.ethereum.chainId, "0x2");
+        assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
+        assert.equal(await h.window.ethereum.request({method: "eth_chainId"}), "0x2");
+        publishSnapshot(h, pageSnapshot());
+        assert.equal(h.window.ethereum.chainId, "0x2");
+        assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
     });
 }

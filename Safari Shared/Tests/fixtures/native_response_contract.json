@@ -576,7 +576,7 @@
       }
     },
     {
-      "name": "injected-reauthorization",
+      "name": "injected-worker-revision",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -589,7 +589,7 @@
             "ethereum": {
               "address": "0x0000000000000000000000000000000000000001",
               "chainId": "0x1",
-              "reauthorizationRevision": 99
+              "revision": 99
             }
           }
         },

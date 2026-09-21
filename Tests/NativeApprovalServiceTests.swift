@@ -4,9 +4,9 @@
     @testable import Big_Wallet
 
     @MainActor
-    final class NativeAgentLauncherTests: XCTestCase {
-        private func fixture() throws -> NativeAgentLauncherTestFixture {
-            let fixture = try NativeAgentLauncherTestFixture()
+    final class NativeApprovalServiceTests: XCTestCase {
+        private func fixture() throws -> NativeApprovalServiceTestFixture {
+            let fixture = try NativeApprovalServiceTestFixture()
             addTeardownBlock { @MainActor in
                 fixture.onValidate = nil
                 fixture.onLoad = nil
@@ -34,9 +34,9 @@
                     }
                     completion(false)
                 }
-                let launcher = f.launcher()
+                let service = f.service()
                 let result = try await f.finish {
-                    await launcher.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+                    await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
                 }
                 XCTAssertEqual(result, outcome == "delivered" ? .pending : outcome == "completed" ? .responseReady : .unavailable)
                 XCTAssertEqual(f.launches.count, 1)
@@ -54,9 +54,9 @@
                 return .found(snapshot)
             }
             f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
-            let launcher = f.launcher()
+            let service = f.service()
             let result = try await f.finish {
-                await launcher.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+                await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
             }
             XCTAssertEqual(result, .pending)
             XCTAssertTrue(confirmed)
@@ -67,17 +67,17 @@
             let f = try fixture()
             let request = try f.request()
             f.deliver(request, staged: true)
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             var firstValidation = true
             f.onValidate = { _ in
                 if firstValidation { firstValidation = false; await gate.wait() }
                 return true
             }
             f.onLaunch = { _, _, completion in completion(true) }
-            let launcher = f.launcher()
-            let wallet = Task { await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion)) }
+            let service = f.service()
+            let wallet = Task { await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion)) }
             try await f.eventually { !f.validations.isEmpty }
-            let result = await launcher.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+            let result = await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
             XCTAssertEqual(result, .pending)
             XCTAssertTrue(f.launches.isEmpty)
             gate.open()
@@ -89,14 +89,14 @@
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
-            let launcher = f.launcher()
+            let service = f.service()
             for _ in 0..<3 {
-                guard case .pending = await f.read(launcher, request) else { return XCTFail("Expected pending") }
+                guard case .pending = await f.read(service, request) else { return XCTFail("Expected pending") }
             }
             XCTAssertTrue(f.validations.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
             f.deliver(request, staged: true)
-            _ = try await f.finish { await f.read(launcher, request, duration: 0.25) }
+            _ = try await f.finish { await f.read(service, request, duration: 0.25) }
             XCTAssertEqual(f.validations.count, 1)
         }
 
@@ -106,8 +106,8 @@
             f.deliver(request)
             f.processes.removeAll()
             f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
-            let launcher = f.launcher()
-            let result = try await f.finish { await f.read(launcher, request) }
+            let service = f.service()
+            let result = try await f.finish { await f.read(service, request) }
             guard case .pending = result else { return XCTFail("Expected pending review") }
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertEqual(f.launches.count, 1)
@@ -118,7 +118,7 @@
             let request = try f.request()
             f.deliver(request)
             f.processes[42] = f.runtime(instance: UUID())
-            let result = await f.read(f.launcher(), request)
+            let result = await f.read(f.service(), request)
             guard case .unavailable = result else { return XCTFail("Expected unverified owner") }
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
@@ -133,7 +133,7 @@
             f.unidentifiedProcesses[42] = .init(
                 processIdentifier: 42, bundleURL: f.bundleURL,
                 processStartDate: runtime.launchedAt, isRunning: { true })
-            let result = await f.read(f.launcher(), request)
+            let result = await f.read(f.service(), request)
             guard case .unavailable = result else { return XCTFail("Expected unavailable") }
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.quits.isEmpty)
@@ -143,7 +143,7 @@
             let f = try fixture()
             let request = try f.request()
             f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
-            let result = await f.read(f.launcher(), request, mode: .manualRecovery)
+            let result = await f.read(f.service(), request, mode: .manualRecovery)
             guard case .pending = result else { return XCTFail("Expected quiet pending") }
             XCTAssertTrue(f.executionReads.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
@@ -152,7 +152,7 @@
         }
 
         func testReceiptReplacementAfterClearCannotConfirmOldDelivery() async throws {
-            for mode in [NativeAgentLauncher.ApprovalReadMode.page, .manualRecovery] {
+            for mode in [NativeApprovalService.ApprovalReadMode.page, .manualRecovery] {
                 let f = try fixture()
                 let request = try f.request()
                 f.deliver(request, staged: true)
@@ -162,7 +162,7 @@
                     f.snapshots[request.handle] = replacement
                     return .persisted
                 }
-                let result = await f.read(f.launcher(), request, mode: mode)
+                let result = await f.read(f.service(), request, mode: mode)
                 if mode == .manualRecovery {
                     guard case .pending = result else { return XCTFail("Expected pending") }
                 } else {
@@ -179,8 +179,8 @@
             let request = try f.request()
             f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
             f.onQuit = { _ in true }
-            let launcher = f.launcher()
-            let task = Task { await f.read(launcher, request) }
+            let service = f.service()
+            let task = Task { await f.read(service, request) }
             try await f.eventually { f.quits == [42] && !f.clock.deadlines.isEmpty }
             XCTAssertTrue(f.clears.isEmpty)
             f.processes.removeAll()
@@ -209,8 +209,8 @@
                         return .found(f.snapshots[handle]!)
                     }
                 }
-                let launcher = f.launcher()
-                _ = try await f.finish { await f.read(launcher, request, duration: 0.25) }
+                let service = f.service()
+                _ = try await f.finish { await f.read(service, request, duration: 0.25) }
                 XCTAssertTrue(f.quits.isEmpty)
                 XCTAssertTrue(f.clears.isEmpty)
                 XCTAssertTrue(f.launches.isEmpty)
@@ -227,7 +227,7 @@
                     else { f.processes[42] = f.runtime(instance: UUID()) }
                     return true
                 }
-                let result = await f.read(f.launcher(), request)
+                let result = await f.read(f.service(), request)
                 guard case .unavailable = result else { return XCTFail("Expected unavailable") }
                 XCTAssertTrue(f.quits.isEmpty)
                 XCTAssertTrue(f.clears.isEmpty)
@@ -235,15 +235,15 @@
         }
 
         func testCancelledReadCannotRepairAfterSuspension() async throws {
-            for mode in [NativeAgentLauncher.ApprovalReadMode.page, .manualRecovery] {
+            for mode in [NativeApprovalService.ApprovalReadMode.page, .manualRecovery] {
                 let f = try fixture()
                 let request = try f.request()
                 f.deliver(request, staged: true)
                 f.processes.removeAll()
-                let gate = NativeAgentLauncherTestFixture.Gate()
+                let gate = NativeApprovalServiceTestFixture.Gate()
                 f.onLoad = { handle in await gate.wait(); return .found(f.snapshots[handle]!) }
-                let launcher = f.launcher()
-                let task = Task { await f.read(launcher, request, mode: mode) }
+                let service = f.service()
+                let task = Task { await f.read(service, request, mode: mode) }
                 try await f.eventually { !f.loads.isEmpty }
                 task.cancel()
                 guard case .pending = await task.value else { return XCTFail("Expected cancellation") }
@@ -258,9 +258,9 @@
         func testCancelledReadDoesNotStartWork() async throws {
             let f = try fixture()
             let request = try f.request()
-            let gate = NativeAgentLauncherTestFixture.Gate()
-            let launcher = f.launcher()
-            let task = Task { await gate.wait(); return await f.read(launcher, request) }
+            let gate = NativeApprovalServiceTestFixture.Gate()
+            let service = f.service()
+            let task = Task { await gate.wait(); return await f.read(service, request) }
             task.cancel()
             gate.open()
             guard case .pending = await task.value else { return XCTFail("Expected pending") }
@@ -278,15 +278,15 @@
                 approval: .staged(.init(receipt: delivered.nativeDeliveryReceipt!, approvedAt: f.clock.date, executionContext: nil))
             ), for: request)
             f.onLaunch = { _, _, completion in completion(true) }
-            let launcher = f.launcher()
-            let result = try await f.finish { await launcher.reactivate(f.route(request)) }
+            let service = f.service()
+            let result = try await f.finish { await service.reactivate(f.route(request)) }
             XCTAssertTrue(result)
             XCTAssertEqual(f.launches.count, 1)
             f.setState(.approving(
                 request: request.request!,
                 nativeApproval: .init(receipt: delivered.nativeDeliveryReceipt!, approvedAt: f.clock.date, executionContext: nil)
             ), for: request)
-            let executing = await launcher.reactivate(f.route(request))
+            let executing = await service.reactivate(f.route(request))
             XCTAssertFalse(executing)
             XCTAssertEqual(f.launches.count, 1)
         }
@@ -297,12 +297,12 @@
             let owner = f.runtime(pid: 43)
             f.deliver(request, runtime: owner)
             f.processes[42] = f.runtime()
-            let launcher = f.launcher()
-            let opened = try await f.finish { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let opened = try await f.finish { await service.open(f.route(request)) }
             XCTAssertTrue(opened)
             XCTAssertTrue(f.launches.isEmpty)
             f.onLaunch = { _, _, completion in completion(true) }
-            let reactivated = try await f.finish { await launcher.reactivate(f.route(request)) }
+            let reactivated = try await f.finish { await service.reactivate(f.route(request)) }
             XCTAssertTrue(reactivated)
             XCTAssertEqual(
                 f.launches.map(\.target),
@@ -311,14 +311,14 @@
                         url: f.bundleURL.standardizedFileURL, processIdentifier: 43,
                         runtimeInstanceIdentifier: owner.instanceIdentifier)
                 ])
-            let wrongNonce = await launcher.reactivate(
+            let wrongNonce = await service.reactivate(
                 .approval(
                     workflowVersion: ExtensionBridge.workflowVersion,
                     handle: request.handle, nativeDeliveryNonce: .init(value: UUID())))
             XCTAssertFalse(wrongNonce)
             XCTAssertEqual(f.launches.count, 1)
             f.setState(.responded, for: request)
-            let terminal = await launcher.reactivate(f.route(request))
+            let terminal = await service.reactivate(f.route(request))
             XCTAssertFalse(terminal)
             XCTAssertEqual(f.launches.count, 1)
         }
@@ -331,8 +331,8 @@
                     if publish { f.deliver(request) }
                     completion(true)
                 }
-                let launcher = f.launcher()
-                let result = try await f.finish { await launcher.reactivate(f.route(request)) }
+                let service = f.service()
+                let result = try await f.finish { await service.reactivate(f.route(request)) }
                 XCTAssertEqual(result, publish)
                 XCTAssertEqual(f.launches.count, 1)
             }
@@ -342,9 +342,9 @@
             let f = try fixture()
             let request = try f.request()
             f.onLaunch = { _, _, completion in completion(true) }
-            let launcher = f.launcher(timeout: 1_000_000_000)
+            let service = f.service(timeout: 1_000_000_000)
             let started = f.clock.now
-            let result = try await f.finish { await launcher.open(f.route(request)) }
+            let result = try await f.finish { await service.open(f.route(request)) }
             XCTAssertFalse(result)
             XCTAssertEqual(f.launches.map { $0.time - started }, [0])
             XCTAssertEqual(f.launches.map(\.route), [f.route(request)])
@@ -358,11 +358,11 @@
                 if f.launches.count == 2 { f.deliver(request) }
                 completion(true)
             }
-            let launcher = f.launcher()
-            let first = try await f.finish { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let first = try await f.finish { await service.open(f.route(request)) }
             XCTAssertFalse(first)
             XCTAssertEqual(f.launches.count, 1)
-            let result = try await f.finish { await launcher.open(f.route(request)) }
+            let result = try await f.finish { await service.open(f.route(request)) }
             XCTAssertTrue(result)
             XCTAssertEqual(f.launches.map(\.route), [f.route(request), f.route(request)])
         }
@@ -376,8 +376,8 @@
                     return .found(request)
                 }
                 f.onLaunch = { _, _, completion in completion(true) }
-                let launcher = f.launcher(timeout: 800_000_000)
-                let result = try await f.finish { await launcher.open(f.route(request)) }
+                let service = f.service(timeout: 800_000_000)
+                let result = try await f.finish { await service.open(f.route(request)) }
                 XCTAssertFalse(result)
                 XCTAssertEqual(f.launches.count, afterLaunch ? 1 : 0)
                 if afterLaunch { XCTAssertGreaterThan(f.loads.count, 3) }
@@ -393,8 +393,8 @@
                 completion(true)
             }
             f.onQuit = { _ in true }
-            let launcher = f.launcher()
-            let task = Task { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let task = Task { await service.open(f.route(request)) }
             try await f.eventually { f.quits.count == 1 && !f.clock.deadlines.isEmpty }
             XCTAssertTrue(f.launches.isEmpty)
             f.clock.advance(to: f.clock.now + 350_000_000)
@@ -413,8 +413,8 @@
                 f.snapshots[request.handle] = other
                 completion(true)
             }
-            let launcher = f.launcher()
-            let result = try await f.finish { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let result = try await f.finish { await service.open(f.route(request)) }
             XCTAssertFalse(result)
             XCTAssertEqual(f.launches.count, 1)
         }
@@ -427,9 +427,9 @@
                     f.clock.advance(to: f.clock.now + 300_000_000)
                     completion(true)
                 }
-                let launcher = f.launcher()
+                let service = f.service()
                 let result = try await f.finish {
-                    await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                    await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
                 }
                 XCTAssertEqual(result, publish)
                 XCTAssertEqual(f.launches.count, 1)
@@ -439,9 +439,9 @@
         func testWalletConfirmationAcceptsDelayedRuntimePublication() async throws {
             let f = try fixture()
             f.onLaunch = { _, _, completion in completion(true) }
-            let launcher = f.launcher()
+            let service = f.service()
             let task = Task {
-                await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
             }
             try await f.eventually { f.launches.count == 1 && f.clock.deadlines.count > 1 }
             f.clock.advance(to: f.clock.now + 350_000_000)
@@ -464,7 +464,7 @@
                     "body": ["address": ""],
                 ], revisions: ExtensionBridge.ProviderRevisions(rawValue: ["ethereum": 0, "solana": 0])!)
             let bridge = store.bridge
-            let boundary = f.dependencies
+            let boundary = f.launcherDependencies
             let runtime = f.runtime()
             f.onLaunch = { _, _, completion in
                 f.processes[42] = runtime
@@ -476,10 +476,8 @@
                     completion(result == .persisted)
                 }
             }
-            let dependencies = launcherTestDependencies(
-                helperURL: boundary.helperURL, validate: boundary.validate,
-                helpers: boundary.helpers, helper: boundary.helper, identity: boundary.identity,
-                launch: boundary.launch, load: { await bridge.load(handle: $0) },
+            let dependencies = approvalServiceTestDependencies(
+                launcher: NativeAgentLauncher(dependencies: boundary), load: { await bridge.load(handle: $0) },
                 clearReceipt: { handle, receipt in
                     await bridge.clearNativeDeliveryReceipt(
                         handle: handle,
@@ -487,12 +485,12 @@
                         runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier)
                 }
             )
-            let launcher = NativeAgentLauncher(dependencies: dependencies)
-            let reactivated = await launcher.reactivate(f.route(snapshot))
+            let service = NativeApprovalService(dependencies: dependencies)
+            let reactivated = await service.reactivate(f.route(snapshot))
             XCTAssertTrue(reactivated)
             let stored = try await store.snapshot(handle: snapshot.handle)
             XCTAssertEqual(stored.nativeDeliveryReceipt?.owner, runtime.nativeDeliveryOwner)
-            let delivered = await launcher.open(f.route(snapshot))
+            let delivered = await service.open(f.route(snapshot))
             XCTAssertTrue(delivered)
             XCTAssertEqual(f.launches.count, 1)
         }
@@ -501,9 +499,9 @@
             let f = try fixture()
             var callback: ((Bool) -> Void)?
             f.onLaunch = { _, _, completion in callback = completion }
-            let launcher = f.launcher(timeout: 100_000_000)
+            let service = f.service(timeout: 100_000_000)
             let result = try await f.finish {
-                await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
             }
             XCTAssertFalse(result)
             XCTAssertEqual(f.launches.count, 1)
@@ -516,7 +514,7 @@
             let f = try fixture()
             let clock = f.clock
             let deadline = clock.now + 100_000_000
-            let launcher = f.launcher(timeout: 100_000_000)
+            let service = f.service(timeout: 100_000_000)
             let route = NativeAgentRoute.showWallet(
                 workflowVersion: ExtensionBridge.workflowVersion
             )
@@ -524,7 +522,7 @@
             f.onLaunch = { _, _, completion in callback = completion }
             let completed = DispatchSemaphore(value: 0)
             let delivery = Task.detached {
-                let result = await launcher.open(route)
+                let result = await service.open(route)
                 completed.signal()
                 return result
             }
@@ -558,9 +556,9 @@
                     XCTFail("Grace has not elapsed")
                     return true
                 })
-            let launcher = f.launcher(timeout: 100_000_000)
+            let service = f.service(timeout: 100_000_000)
             let result = try await f.finish {
-                await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
             }
             XCTAssertFalse(result)
             XCTAssertTrue(f.launches.isEmpty)
@@ -568,7 +566,7 @@
 
         func testConcurrentWalletOpensShareOneDelivery() async throws {
             let f = try fixture()
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             defer { gate.open() }
             f.onValidate = { _ in
                 await gate.wait()
@@ -579,11 +577,11 @@
                 completion(true)
             }
             let route = NativeAgentRoute.showWallet(workflowVersion: ExtensionBridge.workflowVersion)
-            let launcher = f.launcher()
-            let first = Task { await launcher.open(route) }
+            let service = f.service()
+            let first = Task { await service.open(route) }
             try await f.eventually { !f.validations.isEmpty }
             let secondDeadline = f.clock.now + 4_000_000_000
-            let second = Task { await launcher.open(route, waitDeadline: secondDeadline) }
+            let second = Task { await service.open(route, waitDeadline: secondDeadline) }
             try await f.eventually { f.clock.deadlines.contains(secondDeadline) }
             gate.open()
 
@@ -597,14 +595,14 @@
         func testSharedDeliveryOwnsOneTimeoutWithoutEarlierCallerDeadlines() async throws {
             let f = try fixture()
             let request = try f.request()
-            let launcher = f.launcher()
+            let service = f.service()
             var completion: ((Bool) -> Void)?
             f.onLaunch = { _, _, callback in completion = callback }
             let deadline = f.clock.now + 5_000_000_000
-            let first = Task { await launcher.open(f.route(request)) }
+            let first = Task { await service.open(f.route(request)) }
             try await f.eventually { completion != nil && f.clock.deadlines == [deadline] }
-            let second = Task { await launcher.open(f.route(request)) }
-            let third = Task { await launcher.open(f.route(request)) }
+            let second = Task { await service.open(f.route(request)) }
+            let third = Task { await service.open(f.route(request)) }
             for _ in 0..<30 { await Task.yield() }
             XCTAssertEqual(f.clock.deadlines, [deadline])
             f.deliver(request)
@@ -618,7 +616,7 @@
         func testIdenticalRoutesShareDeliveryDespiteCancelledWaiter() async throws {
             let f = try fixture()
             let request = try f.request()
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             f.onValidate = { _ in
                 await gate.wait()
                 return true
@@ -627,10 +625,10 @@
                 f.deliver(request)
                 completion(true)
             }
-            let launcher = f.launcher()
-            let first = Task { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let first = Task { await service.open(f.route(request)) }
             try await f.eventually { !f.validations.isEmpty }
-            let second = Task { await launcher.open(f.route(request)) }
+            let second = Task { await service.open(f.route(request)) }
             first.cancel()
             gate.open()
             let result = try await f.finish { await second.value }
@@ -653,11 +651,11 @@
                     completion(true)
                 }
             }
-            let launcher = f.launcher(timeout: 500_000_000)
-            let first = Task { await launcher.open(f.route(firstRequest)) }
+            let service = f.service(timeout: 500_000_000)
+            let first = Task { await service.open(f.route(firstRequest)) }
             try await f.eventually { firstCallback != nil }
             let second = Task {
-                await launcher.open(f.route(secondRequest), waitDeadline: f.clock.now + 50_000_000)
+                await service.open(f.route(secondRequest), waitDeadline: f.clock.now + 50_000_000)
             }
             try await f.eventually { f.clock.deadlines.contains(f.clock.now + 50_000_000) }
             f.clock.advance(to: f.clock.now + 50_000_000)
@@ -669,24 +667,24 @@
             firstCallback?(true)
             for _ in 0..<50 { await Task.yield() }
             XCTAssertEqual(f.launches.map(\.route), [f.route(firstRequest)])
-            let later = try await f.finish { await launcher.open(f.route(secondRequest)) }
+            let later = try await f.finish { await service.open(f.route(secondRequest)) }
             XCTAssertTrue(later)
         }
 
         func testFailedSharedDeliveryAllowsLaterRetry() async throws {
             let f = try fixture()
             let request = try f.request()
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             defer { gate.open() }
             f.onValidate = { _ in
                 await gate.wait()
                 return false
             }
-            let launcher = f.launcher()
-            let first = Task { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let first = Task { await service.open(f.route(request)) }
             try await f.eventually { !f.validations.isEmpty }
             let secondDeadline = f.clock.now + 4_000_000_000
-            let second = Task { await launcher.open(f.route(request), waitDeadline: secondDeadline) }
+            let second = Task { await service.open(f.route(request), waitDeadline: secondDeadline) }
             try await f.eventually { f.clock.deadlines.contains(secondDeadline) }
             gate.open()
             let firstResult = try await f.finish { await first.value }
@@ -700,7 +698,7 @@
                 f.deliver(request)
                 completion(true)
             }
-            let retried = try await f.finish { await launcher.open(f.route(request)) }
+            let retried = try await f.finish { await service.open(f.route(request)) }
             XCTAssertTrue(retried)
             XCTAssertEqual(f.launches.count, 1)
         }
@@ -708,7 +706,7 @@
         func testCallerDeadlineDoesNotCancelSharedDelivery() async throws {
             let f = try fixture()
             let request = try f.request()
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             f.onValidate = { _ in
                 await gate.wait()
                 return true
@@ -717,10 +715,10 @@
                 f.deliver(request)
                 completion(true)
             }
-            let launcher = f.launcher()
-            let first = Task { await launcher.open(f.route(request), waitDeadline: f.clock.now + 50_000_000) }
+            let service = f.service()
+            let first = Task { await service.open(f.route(request), waitDeadline: f.clock.now + 50_000_000) }
             try await f.eventually { !f.validations.isEmpty }
-            let second = Task { await launcher.open(f.route(request)) }
+            let second = Task { await service.open(f.route(request)) }
             f.clock.advance(to: f.clock.now + 50_000_000)
             let timedOut = await first.value
             XCTAssertFalse(timedOut)
@@ -733,19 +731,19 @@
         func testExpiredSuspendedDeliveryDoesNotBlockExplicitRetry() async throws {
             let f = try fixture()
             let request = try f.request()
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             f.onValidate = { _ in
                 if f.validations.count == 1 { await gate.wait() }
                 return true
             }
             f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
-            let launcher = f.launcher()
-            let first = Task { await launcher.open(f.route(request)) }
+            let service = f.service()
+            let first = Task { await service.open(f.route(request)) }
             try await f.eventually { f.validations.count == 1 }
             f.clock.advance(to: f.clock.now + 5_000_000_000)
             let expired = await first.value
             XCTAssertFalse(expired)
-            let retried = try await f.finish { await launcher.open(f.route(request)) }
+            let retried = try await f.finish { await service.open(f.route(request)) }
             XCTAssertTrue(retried)
             gate.open()
             for _ in 0..<30 { await Task.yield() }
@@ -755,9 +753,9 @@
         func testExpiredCallerDoesNotStartWork() async throws {
             let f = try fixture()
             let request = try f.request()
-            let result = await f.launcher().open(f.route(request), waitDeadline: f.clock.now)
+            let result = await f.service().open(f.route(request), waitDeadline: f.clock.now)
             XCTAssertFalse(result)
-            let reactivated = await f.launcher().reactivate(f.route(request), waitDeadline: f.clock.now)
+            let reactivated = await f.service().reactivate(f.route(request), waitDeadline: f.clock.now)
             XCTAssertFalse(reactivated)
             XCTAssertTrue(f.loads.isEmpty)
             XCTAssertTrue(f.validations.isEmpty)
@@ -768,20 +766,20 @@
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
-            let gate = NativeAgentLauncherTestFixture.Gate()
+            let gate = NativeApprovalServiceTestFixture.Gate()
             defer { gate.open() }
             f.onValidate = { _ in
                 if f.validations.count == 1 { await gate.wait() }
                 return true
             }
             f.onLaunch = { _, _, completion in completion(true) }
-            let launcher = f.launcher(timeout: 100_000_000)
+            let service = f.service(timeout: 100_000_000)
             let start = f.clock.now
-            let expired = try await f.finish { await launcher.reactivate(f.route(request)) }
+            let expired = try await f.finish { await service.reactivate(f.route(request)) }
             XCTAssertFalse(expired)
             XCTAssertEqual(f.clock.now, start + 100_000_000)
             XCTAssertTrue(f.launches.isEmpty)
-            let retried = try await f.finish { await launcher.reactivate(f.route(request)) }
+            let retried = try await f.finish { await service.reactivate(f.route(request)) }
             XCTAssertTrue(retried)
             gate.open()
             for _ in 0..<30 { await Task.yield() }
@@ -795,17 +793,17 @@
                 let f = try fixture()
                 let request = try f.request()
                 f.deliver(request, runtime: f.runtime(build: build))
-                let gate = NativeAgentLauncherTestFixture.Gate()
+                let gate = NativeApprovalServiceTestFixture.Gate()
                 defer { gate.open() }
                 f.onValidate = { _ in
                     await gate.wait()
                     return true
                 }
                 f.onLaunch = { _, _, completion in completion(true) }
-                let launcher = f.launcher()
+                let service = f.service()
                 let started = f.clock.now
                 var result: Bool?
-                let task = Task { result = await launcher.reactivate(f.route(request)) }
+                let task = Task { result = await service.reactivate(f.route(request)) }
                 try await f.eventually { !f.validations.isEmpty }
                 task.cancel()
                 try await f.eventually { result != nil }
@@ -832,9 +830,9 @@
             }
             f.onLaunch = { _, _, _ in }
             let started = f.clock.now
-            let launcher = f.launcher()
+            let service = f.service()
             let result = try await f.finish {
-                await launcher.reactivate(f.route(request), waitDeadline: started + 100_000_000)
+                await service.reactivate(f.route(request), waitDeadline: started + 100_000_000)
             }
             XCTAssertFalse(result)
             XCTAssertEqual(f.clock.now, started + 100_000_000)

@@ -65,21 +65,21 @@ function clone(value) {
     return typeof value === "undefined" ? undefined : JSON.parse(JSON.stringify(value));
 }
 
-function snapshot({ethereum = null, solana = null, revisions = {ethereum: 0, solana: 0}} = {}) {
+function snapshot({ethereum = {address: "", chainId: "0x1"}, solana = null, revisions = {ethereum: 0, solana: 0}} = {}) {
     return {revisions, ethereum, solana};
 }
 
-function ethereumState(address, chainId = "0x1", reauthorizationRevision = 0) {
-    return {address, chainId, reauthorizationRevision};
+function ethereumState(address, chainId = "0x1") {
+    return {address, chainId};
 }
 
-function solanaState(publicKey, reauthorizationRevision = 0) {
-    return {publicKey, isConnected: true, reauthorizationRevision};
+function solanaState(publicKey) {
+    return {publicKey};
 }
 
 function errorResponse(id, provider, name, code, message) {
-    return {kind: "error", id, provider, name, state: null, configurationMatch: null,
-        error: {code, message}, authorizationFailure: false};
+    return {kind: "error", id, provider, name, state: null,
+        error: {code, message}};
 }
 
 function providerStateWrites(harness) {
@@ -1341,7 +1341,7 @@ test("a switch completed before admission expiry survives a delayed completion h
     }, {});
 
     assert.deepEqual(harness.storage.get("https://wallet.example"), {
-        latestConfigurations: [{...selected, reauthorizationRevision: 1}],
+        latestConfigurations: [selected],
         revisions: {ethereum: 1, solana: 0},
         workflowVersion: 3,
     });
@@ -1476,7 +1476,6 @@ test("recovery rebroadcasts the current stored configuration before acknowledgin
         const current = {
             ...approved,
             results: [revision === 1 ? approved.results[0] : "0x0000000000000000000000000000000000000002"],
-            reauthorizationRevision: revision,
         };
         const stored = {
             latestConfigurations: [current],
@@ -1818,7 +1817,7 @@ test("worker-private recovery stays silent and native discovery is not a page me
     assert.equal(harness.recoveryMessages.length, 1);
 });
 
-test("manual reauthorization survives missed delivery, unrelated updates, and restart", async () => {
+test("same-account grants advance revisions through missed delivery, replay, and restart", async () => {
     const configurations = [
         {
             provider: "ethereum",
@@ -1865,15 +1864,15 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
             workflowVersion: 3,
         }, {});
 
-        const reauthorizationRevision = revisions[selected.provider] + 1;
+        const acceptedRevision = revisions[selected.provider] + 1;
         assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
-            {...selected, reauthorizationRevision},
+            selected,
         ]);
         const manualResult = harness.tabMessages.find(value =>
             value.message.subject === "configurationChanged"
         ).message;
-        assert.equal(manualResult.state[selected.provider].reauthorizationRevision,
-            reauthorizationRevision);
+        assert.equal(manualResult.state.revisions[selected.provider],
+            acceptedRevision);
 
         const afterManual = clone(storage.get("https://wallet.example").revisions);
         const replay = await harness.dispatch({
@@ -1885,8 +1884,8 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
             workflowVersion: 3,
         });
         assert.equal(replay.kind, "configuration");
-        assert.equal(replay.state[selected.provider].reauthorizationRevision,
-            reauthorizationRevision);
+        assert.equal(replay.state.revisions[selected.provider],
+            acceptedRevision);
         assert.deepEqual(storage.get("https://wallet.example").revisions, afterManual);
 
         terminal = nativeResult({
@@ -1914,8 +1913,8 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
         const broadcast = harness.tabMessages.filter(value =>
             value.message.subject === "configurationChanged"
         ).at(-1).message;
-        assert.equal(broadcast.state[selected.provider].reauthorizationRevision, reauthorizationRevision);
-        assert.equal(broadcast.state[other.provider].reauthorizationRevision, 0);
+        assert.equal(broadcast.state.revisions[selected.provider], acceptedRevision);
+        assert.equal(broadcast.state.revisions[other.provider], afterManual[other.provider] + 1);
 
         const restarted = makeHarness({storage});
         const focused = await restarted.dispatch({
@@ -1924,18 +1923,17 @@ test("manual reauthorization survives missed delivery, unrelated updates, and re
             configurationKey: "https://wallet.example",
             workflowVersion: 3,
         });
-        assert.equal(focused.state[selected.provider].reauthorizationRevision, reauthorizationRevision);
+        assert.equal(focused.state.revisions[selected.provider], acceptedRevision);
         assert.deepEqual(clone(focused.state.revisions), broadcast.state.revisions);
         assert.equal(restarted.nativeMessages.length, 0);
     }
 });
 
-test("Ethereum chain changes preserve reauthorization until the account disconnects", async () => {
+test("Ethereum disconnect retains the selected chain and advances its revision", async () => {
     const configuration = {
         provider: "ethereum",
         chainId: "0x1",
         results: ["0x0000000000000000000000000000000000000001"],
-        reauthorizationRevision: 3,
     };
     const storage = new Map([["https://wallet.example", {
         latestConfigurations: [configuration],
@@ -1953,7 +1951,7 @@ test("Ethereum chain changes preserve reauthorization until the account disconne
         name: "switchEthereumChain",
         body: {address: configuration.results[0], chainId: "0x1", object: {chainId: "0x2"}},
     }}));
-    assert.equal(switched.state.ethereum.reauthorizationRevision, 3);
+    assert.equal(switched.result, null);
     assert.equal(switched.state.ethereum.chainId, "0x2");
     assert.equal(switched.state.revisions.ethereum, 4);
     assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
@@ -1968,12 +1966,50 @@ test("Ethereum chain changes preserve reauthorization until the account disconne
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
     });
-    assert.deepEqual([disconnected.state.ethereum, disconnected.state.solana], [null, null]);
-    assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, []);
+    assert.deepEqual(clone([disconnected.state.ethereum, disconnected.state.solana]), [ethereumState("", "0x2"), null]);
+    assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
+        {provider: "ethereum", chainId: "0x2", results: []},
+    ]);
     assert.equal(disconnected.state.revisions.ethereum, 5);
 });
 
-test("native configurations and manual replays cannot invent reauthorization", async () => {
+test("manual revocation retains the Ethereum chain across replay and restart", async () => {
+    const storage = new Map([["https://wallet.example", {
+        latestConfigurations: [{
+            provider: "ethereum", chainId: "0xa", results: ["0x0000000000000000000000000000000000000001"],
+        }],
+        revisions: {ethereum: 4, solana: 0},
+        workflowVersion: 3,
+    }]]);
+    const read = {
+        subject: "getResponse", id: 74, configurationKey: "https://wallet.example",
+        requestToken, revisions: {ethereum: 4, solana: 0}, workflowVersion: 3,
+    };
+    const native = () => nativeResult({
+        id: read.id, provider: "multiple", name: "switchAccount", result: null,
+        mutation: {kind: "accounts", updates: {ethereum: null}},
+    });
+    const first = makeHarness({storage, native});
+    const revoked = await first.dispatch(read);
+    assert.deepEqual(clone(revoked.state), snapshot({
+        ethereum: ethereumState("", "0xa"), revisions: {ethereum: 5, solana: 0},
+    }));
+    assert.deepEqual(storage.get(read.configurationKey).latestConfigurations, [
+        {provider: "ethereum", chainId: "0xa", results: []},
+    ]);
+
+    const restarted = makeHarness({storage, native});
+    const replay = await restarted.dispatch(read);
+    assert.deepEqual(clone(replay), clone(revoked));
+    assert.deepEqual(providerStateWrites(restarted), []);
+    const refreshed = await restarted.dispatch({
+        subject: "getLatestConfiguration", host: "wallet.example",
+        configurationKey: read.configurationKey, workflowVersion: 3,
+    });
+    assert.deepEqual(clone(refreshed), clone(revoked));
+});
+
+test("native configurations and manual replays cannot invent worker revisions", async () => {
     const configurations = [
         {
             provider: "ethereum",
@@ -1997,9 +2033,9 @@ test("native configurations and manual replays cannot invent reauthorization", a
                         ? {
                             address: configuration.results[0],
                             chainId: configuration.chainId,
-                            reauthorizationRevision: 99,
+                            revision: 99,
                         }
-                        : {publicKey: configuration.publicKey, reauthorizationRevision: 99},
+                        : {publicKey: configuration.publicKey, revision: 99},
                 },
             },
         });
@@ -2027,9 +2063,9 @@ test("native configurations and manual replays cannot invent reauthorization", a
                         ? {
                             address: configuration.results[0],
                             chainId: configuration.chainId,
-                            reauthorizationRevision: 99,
+                            revision: 99,
                         }
-                        : {publicKey: configuration.publicKey, reauthorizationRevision: 99},
+                        : {publicKey: configuration.publicKey, revision: 99},
                 },
             },
         });
@@ -2076,7 +2112,7 @@ test("rejects stale account-bound operations when native has no matching attempt
     assert.equal(response.name, "signMessage");
     assert.equal(response.provider, "ethereum");
     assert.equal(response.error?.code, 4100);
-    assert.deepEqual([response.state.ethereum, response.state.solana], [null, null]);
+    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
     assert.equal(harness.nativeMessages.length, 1);
 });
 
@@ -2145,7 +2181,7 @@ test("rejects account-bearing chain mutations without stored authorization", asy
         }}));
 
         assert.equal(response.error?.code, 4100, name);
-        assert.deepEqual([response.state.ethereum, response.state.solana], [null, null], name);
+        assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null], name);
         assert.equal(harness.nativeMessages.length, 1, name);
         assert.deepEqual(harness.storageWrites, [], name);
     }
@@ -2243,7 +2279,7 @@ test("chain responses preserve only previously trusted Ethereum accounts", async
             expectedResults[0] || "",
             item.name
         );
-        assert.deepEqual(clone(response.result), expectedResults, item.name);
+        assert.equal(response.result, null, item.name);
         assert.deepEqual(
             storage.get("https://wallet.example").latestConfigurations[0].results,
             expectedResults,
@@ -2261,7 +2297,7 @@ test("chain replays use current accounts and stale terminal results expose none"
     const nativeAddress = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const currentAddress = "0xcccccccccccccccccccccccccccccccccccccccc";
     for (const item of [
-        {chainId: "0x2", expectedError: undefined, expectedResults: [currentAddress]},
+        {chainId: "0x2", expectedError: undefined, expectedResults: null},
         {chainId: "0x3", expectedError: 4100, expectedResults: undefined},
     ]) {
         const storage = new Map([["https://wallet.example", {
@@ -2370,7 +2406,9 @@ test("manual switch snapshots one current configuration lineage", async () => {
     const admitted = harness.nativeMessages.at(-1).message;
 
     assert.equal(response.subject, "manualSwitchAcknowledged");
-    assert.deepEqual(admitted.body, {latestConfigurations: []});
+    assert.deepEqual(admitted.body, {latestConfigurations: [
+        {provider: "ethereum", chainId: "0x1", results: []},
+    ]});
     assert.deepEqual(admitted.revisions, {ethereum: 1, solana: 0});
 });
 
@@ -2495,7 +2533,8 @@ test("lost signing acknowledgments recover committed results after disconnect an
         });
         assert.equal(response.result, "committed-transaction");
         assert.equal(response.approvalCommitted, true);
-        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, []);
+        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations,
+            provider === "ethereum" ? [{provider: "ethereum", chainId: "0x1", results: []}] : []);
         assert.deepEqual(restarted.popupCalls, []);
     }
 });
@@ -2579,7 +2618,7 @@ test("lost enqueue acknowledgement keeps native revisions across disconnect drif
         {ethereum: 1, solana: 0}
     );
     assert.equal(response.error?.code, 4100);
-    assert.deepEqual([response.state.ethereum, response.state.solana], [null, null]);
+    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
 });
 
 test("reads, applies, and retains a native response", async () => {
@@ -2617,7 +2656,6 @@ test("reads, applies, and retains a native response", async () => {
             ethereum: ethereumState("0x0000000000000000000000000000000000000001"),
             revisions: {ethereum: 1, solana: 0},
         }),
-        configurationMatch: true,
         result: ["0x0000000000000000000000000000000000000001"],
         approvalCommitted: false,
     });
@@ -2904,7 +2942,7 @@ test("delayed acknowledgement does not replay configuration from before a discon
     assert.equal(harness.tabMessages.at(-1).message.state.revisions.ethereum, 2);
 
     const replay = await harness.dispatch(fixture.read);
-    assert.deepEqual([replay.state.ethereum, replay.state.solana], [null, null]);
+    assert.deepEqual(clone([replay.state.ethereum, replay.state.solana]), [ethereumState(""), null]);
     assert.deepEqual(clone(replay.state.revisions), {ethereum: 2, solana: 0});
     assert.deepEqual(clone(replay.result), fixture.configuration.results);
     assert.equal(harness.nativeMessages.filter(value =>
@@ -2963,7 +3001,7 @@ test("full popup and worker recover interrupted durable batches without reviving
     assert.equal(reopened.element("idle-check-status").classList.contains("hidden"), false);
     assert.equal(reopened.element("idle-check-status").disabled, false);
     assert.equal(reopened.element("idle-switch-account").disabled, true);
-    assert.deepEqual(storage.get(configurationKey).latestConfigurations, []);
+    assert.deepEqual(storage.get(configurationKey).latestConfigurations, [{provider: "ethereum", chainId: "0x1", results: []}]);
     assert.equal(storage.get(configurationKey).revisions.ethereum, 2);
 
     failingAcknowledgment = null;
@@ -2974,9 +3012,9 @@ test("full popup and worker recover interrupted durable batches without reviving
     assert.ok([...nativeStore.records.values()].every(record => record.acknowledged));
     assert.equal(nativeStore.records.size, 33);
     const replay = await restarted.dispatch(firstRecord.read);
-    assert.deepEqual([replay.state.ethereum, replay.state.solana], [null, null]);
+    assert.deepEqual(clone([replay.state.ethereum, replay.state.solana]), [ethereumState(""), null]);
     assert.deepEqual(clone(replay.state.revisions), {ethereum: 2, solana: 0});
-    assert.deepEqual(storage.get(configurationKey).latestConfigurations, []);
+    assert.deepEqual(storage.get(configurationKey).latestConfigurations, [{provider: "ethereum", chainId: "0x1", results: []}]);
     assert.equal(storage.get(configurationKey).revisions.ethereum, 2);
     reopened.close();
 });
@@ -3178,10 +3216,10 @@ test("disconnect revisions fence a stale authorization response", async () => {
     );
     assert.equal(response.error?.code, 4100);
     assert.equal(response.__bigWalletSuppressProviderUpdate, undefined);
-    assert.deepEqual([response.state.ethereum, response.state.solana], [null, null]);
+    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
     assert.deepEqual(
         harness.storage.get("https://wallet.example").latestConfigurations,
-        []
+        [{provider: "ethereum", chainId: "0x1", results: []}]
     );
 });
 
@@ -3285,10 +3323,10 @@ test("a committed approval settles without overwriting a later disconnect", asyn
     assert.deepEqual(clone(response.result), [address]);
     assert.equal(response.approvalCommitted, true);
     assert.equal(response.__bigWalletSuppressProviderUpdate, undefined);
-    assert.deepEqual([response.state.ethereum, response.state.solana], [null, null]);
+    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
     assert.deepEqual(clone(response.state.revisions), {ethereum: 1, solana: 0});
     assert.deepEqual(storage.get("https://wallet.example"), {
-        latestConfigurations: [],
+        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}],
         revisions: {ethereum: 1, solana: 0},
         workflowVersion: 3,
     });
@@ -3350,10 +3388,9 @@ test("committed multi-provider drift preserves only the drifted provider", async
     assert.equal(applied.bodies, undefined);
     assert.equal(applied.providersToDisconnect, undefined);
     assert.deepEqual(storage.get("https://wallet.example"), {
-        latestConfigurations: [{
+        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}, {
             provider: "solana",
             publicKey: secondSolanaPublicKey,
-            reauthorizationRevision: 1,
         }],
         revisions: {ethereum: 1, solana: 1},
         workflowVersion: 3,
@@ -3462,9 +3499,9 @@ test("one storage lineage serializes a disconnect against response application",
     ]);
     assert.equal(disconnectResponse.result, null);
     assert.equal(staleResponse.error?.code, 4100);
-    assert.deepEqual([staleResponse.state.ethereum, staleResponse.state.solana], [null, null]);
+    assert.deepEqual(clone([staleResponse.state.ethereum, staleResponse.state.solana]), [ethereumState(""), null]);
     assert.deepEqual(storage.get("https://wallet.example"), {
-        latestConfigurations: [],
+        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}],
         revisions: {ethereum: 1, solana: 0},
         workflowVersion: 3,
     });
@@ -3613,7 +3650,7 @@ test("native finalization rejects mutations while new tabs read committed config
     });
     assert.equal(disconnected.result, null);
     assert.deepEqual(harness.storage.get("https://wallet.example"), {
-        latestConfigurations: [],
+        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}],
         revisions: {ethereum: 4, solana: 4},
         workflowVersion: 3,
     });
@@ -3828,7 +3865,7 @@ test("reads main host configurations without writes and migrates on the next ope
         assert.equal(disconnected.result, null);
         assert.equal(storage.has("wallet.example"), false);
         assert.deepEqual(storage.get("https://wallet.example"), {
-            latestConfigurations: [configuration],
+            latestConfigurations: [configuration, {provider: "ethereum", chainId: "0x1", results: []}],
             revisions: {ethereum: 1, solana: 0},
             workflowVersion: 3,
         });
@@ -4816,7 +4853,7 @@ test("a blocked tab query keeps its event alive without blocking later storage",
     releaseFirstQuery(matchingTabs);
     const firstResponse = await first;
     assert.equal(firstResponse.result, null);
-    assert.deepEqual([firstResponse.state.ethereum, firstResponse.state.solana], [null, null]);
+    assert.deepEqual(clone([firstResponse.state.ethereum, firstResponse.state.solana]), [ethereumState(""), null]);
     assert.deepEqual(clone(firstResponse.state.revisions), {ethereum: 1, solana: 0});
     assert.equal(firstSettled, true);
 });
@@ -4984,7 +5021,7 @@ test("explicit Solana revocation only removes the matching authorized key", asyn
             subject: "getResponse", id: 44, configurationKey: "https://wallet.example", requestToken,
             revisions: {ethereum: 0, solana: 3}, workflowVersion: 3,
         });
-        assert.equal(response.authorizationFailure, true);
+        assert.equal(response.authorizationFailure, undefined);
         assert.equal(response.error.code, 4100);
         assert.deepEqual(storage.get("https://wallet.example").latestConfigurations,
             currentPublicKey === firstSolanaPublicKey ? [] : [configuration]);
@@ -5046,7 +5083,7 @@ test("RPC native responses cross one canonical result or error boundary", async 
         const harness = makeHarness({native: () => ({id, result})});
         assert.deepEqual(clone(await harness.dispatch(rpc)), {
             kind: "result", id, provider: "ethereum", name: null,
-            state: null, configurationMatch: null, result, approvalCommitted: false,
+            state: null, result, approvalCommitted: false,
         });
     }
     for (const [response, message] of [
@@ -5076,8 +5113,8 @@ test("RPC ignores wallet metadata and leaves stored configuration unchanged", as
     const initial = {latestConfigurations: [], revisions: {ethereum: 0, solana: 0}, workflowVersion: 3};
     const configurations = [
         {provider: "ethereum", results: ["0x0000000000000000000000000000000000000001"],
-            chainId: "0x2", reauthorizationRevision: 99},
-        {provider: "solana", publicKey: secondSolanaPublicKey, reauthorizationRevision: 99},
+            chainId: "0x2", revision: 99},
+        {provider: "solana", publicKey: secondSolanaPublicKey, revision: 99},
     ];
     for (const metadata of [
         {latestConfigurations: configurations, revisions: {ethereum: 99, solana: 99}},
@@ -5097,9 +5134,9 @@ test("RPC ignores wallet metadata and leaves stored configuration unchanged", as
                 configurationMatch: true, approvalCommitted: true, authorizationFailure: true,
             })});
             assert.deepEqual(clone(await harness.dispatch(rpc)), {
-                id, provider: "ethereum", name: null, state: null, configurationMatch: null,
+                id, provider: "ethereum", name: null, state: null,
                 ...(terminal.error
-                    ? {kind: "error", error: terminal.error, authorizationFailure: false}
+                    ? {kind: "error", error: terminal.error}
                     : {kind: "result", result: terminal.result, approvalCommitted: false}),
             });
             assert.deepEqual(storage.get("https://wallet.example"), initial);

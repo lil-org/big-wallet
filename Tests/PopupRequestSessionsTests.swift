@@ -6034,21 +6034,25 @@ extension PopupRequestSessionsTests {
             isRunning: { true }
         )
 
-        let confirmed = await NativeAgentLauncher.isConfirmedRuntimeHelper(
-            validRuntime,
-            expectedURL: bundleURL,
-            identity: { _ in identity },
-            validate: { $0 == bundleURL.standardizedFileURL }
+        let confirmed = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+            validate: { $0 == bundleURL.standardizedFileURL },
+            helpers: { [validRuntime] },
+            identity: { _ in identity }
+        )).isConfirmed(
+            try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL)),
+            deadline: UInt64.max
         )
         XCTAssertTrue(confirmed)
-        let replaced = await NativeAgentLauncher.isConfirmedRuntimeHelper(
-            reusedPIDRuntime,
-            expectedURL: bundleURL,
-            identity: { _ in identity },
+        let replaced = await NativeAgentLauncher(dependencies: launcherTestDependencies(
             validate: { _ in
                 XCTFail("A replaced process must not reach code verification")
                 return true
-            }
+            },
+            helpers: { [reusedPIDRuntime] },
+            identity: { _ in identity }
+        )).isConfirmed(
+            try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL)),
+            deadline: UInt64.max
         )
         XCTAssertFalse(replaced)
     }

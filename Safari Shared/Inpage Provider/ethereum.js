@@ -77,7 +77,7 @@ function normalizedNetworkVersion(chainId) {
 }
 
 function normalizedAddress(address) {
-    return typeof address === "string" ? address.toLowerCase() : "";
+    return typeof address === "string" ? applyFunction(stringToLowerCaseNormally, address, []) : "";
 }
 
 function validChainId(chainId) {
@@ -151,13 +151,13 @@ function notifyReadiness(provider, flushed) {
 
 function authorizationSnapshot(state) {
     return {
-        accountRevision: state.accountRevision,
+        revision: state.workerRevision,
         address: state.address,
     };
 }
 
 function authorizationIsCurrent(state, authorization) {
-    return authorization?.accountRevision === state.accountRevision &&
+    return authorization?.revision === state.workerRevision &&
         authorization.address === state.address;
 }
 
@@ -221,6 +221,7 @@ function normalizeRequestPayload(payload) {
 function operationMetadata(method, wrapResult) {
     return {
         authorization: null,
+        expectedAddress: null,
         dispatched: false,
         method,
         requestedChainId: null,
@@ -244,8 +245,10 @@ function providerForOperation(provider) {
 function registerOperation(provider, payload, wrapResult) {
     let normalized;
     let state;
+    let expectedAddress;
     try {
         state = providerForOperation(provider);
+        expectedAddress = state.address || null;
         normalized = normalizeRequestPayload(payload);
     } catch (error) {
         return Promise.reject(error);
@@ -271,6 +274,7 @@ function registerOperation(provider, payload, wrapResult) {
     } catch (error) {
         return Promise.reject(error);
     }
+    record.metadata.expectedAddress = expectedAddress;
     if (state.runtime.phase === "ready") {
         dispatchSafely(provider, record);
     } else if (!state.runtime.enqueue(record)) {
@@ -313,7 +317,6 @@ function walletMessage(state, record, name, data) {
         typeof data.data !== "string") ||
         name === "switchEthereumChain" || name === "addEthereumChain";
     return {
-        accountRevision: state.accountRevision,
         address: state.address,
         chainId: state.chainId,
         data: requiresSnapshot
@@ -369,7 +372,6 @@ function postPermissionRevocation(provider, state, record) {
     setDispatchAuthorization(state, record);
     record.metadata.responseName = "revokePermissions";
     const message = {
-        accountRevision: state.accountRevision,
         address: state.address,
         generation: state.runtime.generation,
         id: record.wireId,
@@ -431,6 +433,12 @@ function dispatchOperation(provider, record) {
     }
     const method = record.payload.method;
     const params = paramsFor(record);
+    if (record.metadata.expectedAddress &&
+        record.metadata.expectedAddress !== state.address &&
+        (method === "eth_sign" || method === "personal_sign" ||
+            applyFunction(stringStartsWithNormally, method, ["eth_signTypedData"]) || method === "eth_sendTransaction")) {
+        throw authorizationChangedError();
+    }
     switch (method) {
         case "eth_accounts":
             return settleResult(state, record, localAccounts(state));
@@ -524,7 +532,7 @@ function dispatchOperation(provider, record) {
                 ? "switchEthereumChain"
                 : "addEthereumChain";
             if (name === "switchEthereumChain" && request.chainId === state.chainId) {
-                return settleResult(state, record, localAccounts(state));
+                return settleResult(state, record, null);
             }
             record.metadata.requestedChainId = request.chainId;
             return postWalletRequest(
@@ -578,108 +586,85 @@ function createRPCServer(state) {
     );
 }
 
-function commitAccount(state, address, forceRevision = false) {
-    const nextAddress = normalizedAddress(address);
-    const changed = state.address !== nextAddress;
-    if (changed || forceRevision) { state.accountRevision += 1; }
-    state.address = nextAddress;
-    return changed;
-}
-
-function commitChain(state, chainId) {
-    if (state.chainId === chainId) { return false; }
-    state.chainId = chainId;
-    state.networkVersion = normalizedNetworkVersion(chainId);
-    state.rpc = createRPCServer(state);
-    return true;
-}
-
-function revokeAccount(state) {
-    state.accountRevocationTombstone = true;
-    return commitAccount(state, "", true);
-}
-
-function flushConfigurationEvents(provider) {
+function prepareConfiguration(provider, configuration, revision) {
     const state = stateFor(provider);
-    const pending = state?.pendingConfigurationEvent;
-    if (!state || !pending || state.runtime.phase !== "ready" ||
-        state.retired || pending.epoch !== state.stateEpoch) {
-        return false;
+    if (!state || state.retired || !isSafeIntegerNormally(revision) || revision < 0) {
+        return null;
     }
-    state.pendingConfigurationEvent = null;
-    state.copiedStateBaseline = null;
-    const current = () => {
-        const latest = stateFor(provider);
-        return latest === state && !state.retired &&
-            state.stateEpoch === pending.epoch;
+    const address = normalizedAddress(configuration.address);
+    const chainId = configuration.chainId;
+    if (!validChainId(chainId)) { return null; }
+    if (state.workerRevision !== null && revision < state.workerRevision) {
+        return {__proto__: null, ignored: true};
+    }
+    if (revision === state.workerRevision &&
+        (address !== state.address || chainId !== state.chainId)) {
+        return null;
+    }
+    return {
+        __proto__: null,
+        address, chainId, revision, baseline: state.stateEpoch,
+        networkVersion: normalizedNetworkVersion(chainId),
+        rpc: state.chainId === chainId ? state.rpc : new RPCServer(
+            chainId, state.runtime.generation,
+            (message, generation) => {
+                const posted = state.transport.postRPC(message, generation);
+                if (posted === false) { retire(provider, providerReplacementError()); }
+                return posted;
+            }
+        ),
     };
-    if (pending.accountsChanged && current()) {
+}
+
+function configurationIsCurrent(provider, prepared) {
+    const state = stateFor(provider);
+    return !!state && !state.retired && (!prepared || prepared.ignored || prepared.baseline === state.stateEpoch);
+}
+
+function commitConfiguration(provider, prepared) {
+    const state = stateFor(provider);
+    if (!state || state.retired || !prepared || prepared.ignored) { return null; }
+    const wasReady = state.runtime.phase === "ready";
+    const accountsChanged = state.address !== prepared.address;
+    const chainChanged = state.chainId !== prepared.chainId;
+    state.address = prepared.address;
+    state.chainId = prepared.chainId;
+    state.networkVersion = prepared.networkVersion;
+    state.rpc = prepared.rpc;
+    if (state.workerRevision !== prepared.revision) { state.stateEpoch += 1; }
+    state.workerRevision = prepared.revision;
+    state.runtime.activate();
+    return {
+        epoch: state.stateEpoch,
+        accountsChanged: (wasReady || state.copiedStateBaseline !== null) && accountsChanged,
+        chainChanged: (wasReady || state.copiedStateBaseline !== null) && chainChanged,
+    };
+}
+
+function emitConfiguration(provider, change) {
+    const state = stateFor(provider);
+    if (!state || !change) { return; }
+    const current = () => stateFor(provider) === state && !state.retired &&
+        state.stateEpoch === change.epoch && transportIsCurrent(state);
+    if (change.accountsChanged && current()) {
         emitSafely(provider, "accountsChanged", [localAccounts(state)], current);
     }
-    if (pending.chainChanged && current()) {
+    if (change.chainChanged && current()) {
         emitSafely(provider, "chainChanged", [state.chainId], current);
         if (current()) {
-            emitSafely(
-                provider,
-                "networkChanged",
-                [state.networkVersion],
-                current
-            );
+            emitSafely(provider, "networkChanged", [state.networkVersion], current);
         }
     }
-    return current();
 }
 
-function applyConfiguration(provider, envelope) {
+function finishConfiguration(provider, change) {
     const state = stateFor(provider);
-    if (!state || state.retired) { return false; }
-    if (dataProperty(envelope, "suppressUpdate") === true) {
-        return state.runtime.phase === "ready";
-    }
-    const epoch = state.stateEpoch + 1;
-    state.stateEpoch = epoch;
-    const {address, chainId, reauthorizationRevision} = envelope.configuration;
-    const reauthorizes = isSafeIntegerNormally(reauthorizationRevision) &&
-        reauthorizationRevision > state.reauthorizationRevision;
-    if (reauthorizes) {
-        state.reauthorizationRevision = reauthorizationRevision;
-    }
-    const wasReady = state.runtime.phase === "ready";
-    const copiedStateBaseline = state.copiedStateBaseline;
-    let accountsChanged = false;
-    let chainChanged = false;
-    if (reauthorizes && normalizedAddress(address)) {
-        state.accountRevocationTombstone = false;
-    }
-    const configuredAddress = state.accountRevocationTombstone
-        ? ""
-        : address;
-    accountsChanged = commitAccount(
-        state,
-        configuredAddress,
-        reauthorizes
-    );
-    chainChanged = commitChain(state, chainId);
-    state.pendingConfigurationEvent = {
-        accountsChanged: copiedStateBaseline
-            ? state.address !== copiedStateBaseline.address
-            : (wasReady || reauthorizes) && accountsChanged,
-        chainChanged: copiedStateBaseline
-            ? state.chainId !== copiedStateBaseline.chainId
-            : (wasReady || reauthorizes) && chainChanged,
-        epoch,
-    };
+    if (!state || !change || state.retired || state.stateEpoch !== change.epoch) { return; }
+    state.copiedStateBaseline = null;
     state.runtime.drain(record => dispatchOperation(provider, record));
-    notifyReadiness(provider, flushConfigurationEvents(provider));
-    return true;
-}
-
-function statefulResponse(name, authorizationFailure) {
-    return name === "requestAccounts" ||
-        name === "switchEthereumChain" ||
-        name === "addEthereumChain" ||
-        name === "revokePermissions" ||
-        authorizationFailure;
+    if (state.stateEpoch === change.epoch && !state.retired) {
+        notifyReadiness(provider, true);
+    }
 }
 
 function responseRecord(state, envelope) {
@@ -694,31 +679,9 @@ function matchingResponseName(record, name) {
     return record.metadata.responseName === name;
 }
 
-function emitResponseDeltas(provider, state, epoch, deltas) {
-    const current = () => {
-        return stateFor(provider) === state && !state.retired &&
-            state.stateEpoch === epoch;
-    };
-    if (deltas.accountsChanged && current()) {
-        emitSafely(provider, "accountsChanged", [localAccounts(state)], current);
-    }
-    if (deltas.chainChanged && current()) {
-        emitSafely(provider, "chainChanged", [state.chainId], current);
-        if (current()) {
-            emitSafely(
-                provider,
-                "networkChanged",
-                [state.networkVersion],
-                current
-            );
-        }
-    }
-}
-
 function applyResultEnvelope(provider, state, envelope) {
     const record = responseRecord(state, envelope);
-    if (!record) { return false; }
-    if (!record.metadata.dispatched) { return false; }
+    if (!record || !record.metadata.dispatched) { return false; }
     const name = dataProperty(envelope, "name");
     if (!matchingResponseName(record, name)) {
         return settleError(state, record, providerStateError());
@@ -730,121 +693,28 @@ function applyResultEnvelope(provider, state, envelope) {
         return settleError(state, record, providerStateError());
     }
     if (!state.runtime.owns(record)) { return false; }
-    if ((name === "requestAccounts" && !validAccountResult(result)) ||
-        ((name === "switchEthereumChain" ||
-            name === "addEthereumChain") && result !== null &&
-            !validAccountResult(result))) {
+    if (name === "requestAccounts" && !validAccountResult(result) ||
+        (name === "switchEthereumChain" || name === "addEthereumChain") && result !== null) {
         return settleError(state, record, providerStateError());
     }
-    if (signingResponse(name) && envelope.approvalCommitted !== true &&
-        !authorizationIsCurrent(state, record.metadata.authorization)) {
+    if (envelope.approvalCommitted !== true && (
+        signingResponse(name) && !authorizationIsCurrent(state, record.metadata.authorization) ||
+        name === "requestAccounts" && (normalizedAddress(result[0]) !== state.address ||
+            (envelope.state ? envelope.state.revisions.ethereum !== state.workerRevision :
+                !authorizationIsCurrent(state, record.metadata.authorization)))
+    )) {
         return settleError(state, record, authorizationChangedError());
     }
-    if (name === "requestAccounts" &&
-        dataProperty(envelope, "configurationMatch") === false) {
-        return settleResult(
-            state,
-            record,
-            envelope.approvalCommitted === true ? result : []
-        );
-    }
-    const changesState = dataProperty(envelope, "suppressUpdate") !== true &&
-        statefulResponse(name, false);
-    const epoch = changesState ? state.stateEpoch + 1 : null;
-    if (changesState) { state.stateEpoch = epoch; }
-    const deltas = {accountsChanged: false, chainChanged: false};
-    let settlementResult = result;
-    if (changesState && state.stateEpoch === epoch) {
-        if (name === "requestAccounts") {
-            const address = isArrayNormally(result) &&
-                typeof result[0] === "string"
-                ? result[0]
-                : "";
-            const currentAuthorization = authorizationIsCurrent(
-                state,
-                record.metadata.authorization
-            );
-            const appliedConfigurationMatches =
-                dataProperty(envelope, "configurationMatch") === true &&
-                normalizedAddress(state.address) === normalizedAddress(address);
-            if (currentAuthorization || appliedConfigurationMatches) {
-                if (address) {
-                    state.accountRevocationTombstone = false;
-                }
-                deltas.accountsChanged = commitAccount(
-                    state,
-                    address,
-                    !appliedConfigurationMatches
-                );
-            } else if (envelope.approvalCommitted !== true) {
-                settlementResult = [];
-            }
-        } else if (name === "switchEthereumChain" ||
-            name === "addEthereumChain") {
-            const shouldApplyChain = envelope.approvalCommitted !== true ||
-                dataProperty(envelope, "configurationMatch") === true;
-            if (shouldApplyChain &&
-                validChainId(record.metadata.requestedChainId)) {
-                deltas.chainChanged = commitChain(
-                    state,
-                    record.metadata.requestedChainId
-                );
-            }
-            if (record.metadata.authorization?.address &&
-                authorizationIsCurrent(
-                    state,
-                    record.metadata.authorization
-                ) &&
-                isArrayNormally(result) &&
-                (result.length === 0 || typeof result[0] === "string")) {
-                deltas.accountsChanged = commitAccount(
-                    state,
-                    typeof result[0] === "string" ? result[0] : ""
-                );
-            }
-        } else if (name === "revokePermissions" && authorizationIsCurrent(
-            state,
-            record.metadata.authorization
-        )) {
-            deltas.accountsChanged = revokeAccount(state);
-        }
-    }
-    const settled = settleResult(state, record, settlementResult);
-    if (changesState && settled) {
-        emitResponseDeltas(provider, state, epoch, deltas);
-    }
-    return settled;
+    return settleResult(state, record,
+        name === "switchEthereumChain" || name === "addEthereumChain" ? null : result);
 }
 
 function applyErrorEnvelope(provider, state, envelope) {
     const record = responseRecord(state, envelope);
-    if (!record) { return false; }
-    if (!record.metadata.dispatched) { return false; }
+    if (!record || !record.metadata.dispatched) { return false; }
     const name = dataProperty(envelope, "name");
-    if (!matchingResponseName(record, name)) {
-        return settleError(state, record, providerStateError());
-    }
-    const authorizationFailure =
-        dataProperty(envelope, "authorizationFailure") === true;
-    const changesState = dataProperty(envelope, "suppressUpdate") !== true &&
-        statefulResponse(name, authorizationFailure);
-    const epoch = changesState ? state.stateEpoch + 1 : null;
-    if (changesState) { state.stateEpoch = epoch; }
-    const error = dataProperty(envelope, "error");
-    if (!state.runtime.owns(record)) { return false; }
-    const deltas = {accountsChanged: false, chainChanged: false};
-    if (changesState && state.stateEpoch === epoch &&
-        authorizationFailure && authorizationIsCurrent(
-            state,
-            record.metadata.authorization
-        )) {
-        deltas.accountsChanged = revokeAccount(state);
-    }
-    const settled = settleError(state, record, error);
-    if (changesState && settled) {
-        emitResponseDeltas(provider, state, epoch, deltas);
-    }
-    return settled;
+    return settleError(state, record, matchingResponseName(record, name)
+        ? dataProperty(envelope, "error") : providerStateError());
 }
 
 function applyDecodedEnvelope(provider, envelope) {
@@ -858,13 +728,17 @@ function applyDecodedEnvelope(provider, envelope) {
     }
     const kind = dataProperty(envelope, "kind");
     if (kind === "configuration") {
-        return applyConfiguration(provider, envelope);
+        const prepared = prepareConfiguration(provider, envelope.configuration, envelope.workerRevision);
+        if (!prepared || !configurationIsCurrent(provider, prepared)) { return false; }
+        const change = commitConfiguration(provider, prepared);
+        emitConfiguration(provider, change);
+        finishConfiguration(provider, change);
+        return true;
     }
     if (kind === "configurationError") {
         const error = normalizeEthereumProviderError(dataProperty(envelope, "error"));
         if (!state.runtime.failLoading(error)) { return false; }
         state.stateEpoch += 1;
-        state.pendingConfigurationEvent = null;
         emitSafely(provider, "disconnect", [error]);
         return true;
     }
@@ -882,10 +756,8 @@ function retire(provider, error = providerReplacementError()) {
     if (!state || state.retired) { return false; }
     state.retired = true;
     state.stateEpoch += 1;
-    state.pendingConfigurationEvent = null;
     const hadAccount = state.address.length > 0;
     state.address = "";
-    state.accountRevision += 1;
     state.runtime.retire(error);
     emitSafely(provider, "disconnect", [error]);
     if (hadAccount) { emitSafely(provider, "accountsChanged", [[]]); }
@@ -897,9 +769,7 @@ function snapshot(provider) {
     const state = stateFor(provider);
     if (!state) { return null; }
     return freezeObjectNormally({
-        accountRevision: state.accountRevision,
-        accountRevocationTombstone: state.accountRevocationTombstone,
-        reauthorizationRevision: state.reauthorizationRevision,
+        workerRevision: state.workerRevision,
         address: state.address,
         chainId: state.chainId,
         generation: state.runtime.generation,
@@ -930,33 +800,18 @@ class BigWalletEthereum {
         }
         const copiedInitialState = !!initial &&
             typeof initial.address === "string" &&
-            validChainId(initial.chainId) &&
-            isSafeIntegerNormally(initial.accountRevision) &&
-            initial.accountRevision >= 0 &&
-            typeof initial.accountRevocationTombstone === "boolean";
+            validChainId(initial.chainId);
         const chainId = validChainId(initial?.chainId)
             ? initial.chainId
             : "0x1";
         const state = {
-            accountRevision:
-                isSafeIntegerNormally(initial?.accountRevision) &&
-                initial.accountRevision >= 0
-                    ? initial.accountRevision
-                    : 0,
-            accountRevocationTombstone:
-                initial?.accountRevocationTombstone === true,
-            reauthorizationRevision:
-                isSafeIntegerNormally(initial?.reauthorizationRevision) &&
-                initial.reauthorizationRevision >= 0
-                    ? initial.reauthorizationRevision
-                    : 0,
+            workerRevision: null,
             address: normalizedAddress(initial?.address),
             chainId,
             copiedStateBaseline: null,
             notificationListener: null,
             initialized: true,
             networkVersion: normalizedNetworkVersion(chainId),
-            pendingConfigurationEvent: null,
             provider: this,
             retired: false,
             rpc: null,
@@ -967,7 +822,6 @@ class BigWalletEthereum {
             stateEpoch: 0,
             transport,
         };
-        if (state.accountRevocationTombstone) { state.address = ""; }
         if (copiedInitialState) {
             state.copiedStateBaseline = {
                 address: state.address,
@@ -1057,6 +911,11 @@ BigWalletEthereum.snapshot = snapshot;
 
 export {
     applyDecodedEnvelope,
+    prepareConfiguration,
+    configurationIsCurrent,
+    commitConfiguration,
+    emitConfiguration,
+    finishConfiguration,
     isReady,
     subscribeNotifications,
     withReadyState,

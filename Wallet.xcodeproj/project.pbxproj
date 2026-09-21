@@ -37,6 +37,7 @@
 		A8B101022FC3000000000001 /* AmbientRuntimeIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B100002FC3000000000001 /* AmbientRuntimeIdentity.swift */; };
 		A8B101032FC3000000000001 /* AmbientRuntimeIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B100002FC3000000000001 /* AmbientRuntimeIdentity.swift */; };
 		A8B102012FC3000000000001 /* NativeAgentLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */; };
+		A7D401012FFE000000000001 /* NativeApprovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D400002FFE000000000001 /* NativeApprovalService.swift */; };
 		A8B201012FC3000000000001 /* NativeApprovalCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B200002FC3000000000001 /* NativeApprovalCoordinatorTests.swift */; };
 		0116FE5F2C90433188343E29 /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		05250C3E4C747AA2FC37ECFE /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
@@ -549,6 +550,7 @@
 		B579A54923D3D0CD2900CC2E /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
 		B70495D44BC0EE725EAB4271 /* WalletCoreProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00002FA8000000000000 /* WalletCoreProxy.swift */; };
 		B7582E561DBD6717675B43CE /* NativeAgentLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */; };
+		A7D401022FFE000000000001 /* NativeApprovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D400002FFE000000000001 /* NativeApprovalService.swift */; };
 		B76FA58F2B4935860F07090D /* WalletCoreProxyEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */; };
 		B780EB4DB6159518E564BF46 /* NSTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB4031C281D745D00BAEBEE /* NSTableView.swift */; };
 		B8D5828F503448E2A147283E /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
@@ -760,14 +762,14 @@
 		C1D002062FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
 		429165182739973D447D737D /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
 		C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
-		C2D200012FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */; };
-		C2D300012FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */; };
+		C2D200012FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeApprovalServiceTestFixture.swift */; };
+		C2D300012FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeApprovalServiceTests.swift */; };
 		C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
-		C2D200022FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */; };
-		C2D300022FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */; };
+		C2D200022FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeApprovalServiceTestFixture.swift */; };
+		C2D300022FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeApprovalServiceTests.swift */; };
 		C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
-		C2D200032FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */; };
-		C2D300032FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */; };
+		C2D200032FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D200002FC2000000000001 /* NativeApprovalServiceTestFixture.swift */; };
+		C2D300032FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D300002FC2000000000001 /* NativeApprovalServiceTests.swift */; };
 		C2E85F200AE9A68DAAA48CAA /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
 		C3D101012FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
 		C3D101022FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */; };
@@ -1100,6 +1102,7 @@
 		2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlchemyJWTProductionContractTests.swift; sourceTree = "<group>"; };
 		91FA19F180DFA7F9B54883C7 /* Browser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
 		923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeAgentLauncher.swift; sourceTree = "<group>"; };
+		A7D400002FFE000000000001 /* NativeApprovalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalService.swift; sourceTree = "<group>"; };
 		936244F4B9DCEB281FECE8A6 /* WaitingViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRequestFileStore.swift; sourceTree = "<group>"; };
 		A2F100022FC1000000000001 /* PopupTransactionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupTransactionSession.swift; sourceTree = "<group>"; };
@@ -1124,8 +1127,8 @@
 		C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupApprovalStatePresenter.swift; sourceTree = "<group>"; };
 		604D89B5F048A38733D60AEF /* PopupResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupResponse.swift; sourceTree = "<group>"; };
 		C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossProcessLockTestFixture.swift; sourceTree = "<group>"; };
-		C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentLauncherTestFixture.swift; sourceTree = "<group>"; };
-		C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentLauncherTests.swift; sourceTree = "<group>"; };
+		C2D200002FC2000000000001 /* NativeApprovalServiceTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalServiceTestFixture.swift; sourceTree = "<group>"; };
+		C2D300002FC2000000000001 /* NativeApprovalServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalServiceTests.swift; sourceTree = "<group>"; };
 		C3D100012FD0000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DappApprovalDecision.swift; sourceTree = "<group>"; };
 		CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeApprovalFinalizer.swift; sourceTree = "<group>"; };
@@ -1225,8 +1228,8 @@
 				C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */,
 				D0A300012FD1000000000001 /* SafariApprovalVaultTests.swift */,
 				C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */,
-				C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */,
-				C2D300002FC2000000000001 /* NativeAgentLauncherTests.swift */,
+				C2D200002FC2000000000001 /* NativeApprovalServiceTestFixture.swift */,
+				C2D300002FC2000000000001 /* NativeApprovalServiceTests.swift */,
 				2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */,
 				2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */,
 				019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */,
@@ -1608,6 +1611,7 @@
 				C0DE00900000000000000001 /* ApprovalResolution.swift */,
 				CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */,
 				923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */,
+				A7D400002FFE000000000001 /* NativeApprovalService.swift */,
 				A8B100002FC3000000000001 /* AmbientRuntimeIdentity.swift */,
 			);
 			path = "Safari Shared";
@@ -2768,6 +2772,7 @@
 				C0DE00900000000000000011 /* ApprovalResolution.swift in Sources */,
 				40FB4F91F97B18196FB868FA /* NativeAgentRoute.swift in Sources */,
 				B7582E561DBD6717675B43CE /* NativeAgentLauncher.swift in Sources */,
+				A7D401022FFE000000000001 /* NativeApprovalService.swift in Sources */,
 				A8B101032FC3000000000001 /* AmbientRuntimeIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2988,6 +2993,7 @@
 				C0DE00900000000000000013 /* ApprovalResolution.swift in Sources */,
 				C7C2E11CE19948DE81D1D989 /* NativeApprovalFinalizer.swift in Sources */,
 				A8B102012FC3000000000001 /* NativeAgentLauncher.swift in Sources */,
+				A7D401012FFE000000000001 /* NativeApprovalService.swift in Sources */,
 				A8B101012FC3000000000001 /* AmbientRuntimeIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3197,8 +3203,8 @@
 				2FA802012FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */,
 				C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
-				C2D200012FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */,
-				C2D300012FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */,
+				C2D200012FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */,
+				C2D300012FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */,
 				2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000A /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
 				2F2A0000000000000000000E /* SolanaPreparedTransactionTests.swift in Sources */,
@@ -3435,8 +3441,8 @@
 				2FA802022FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000003 /* SolanaTestFixtures.swift in Sources */,
 				C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
-				C2D200022FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */,
-				C2D300022FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */,
+				C2D200022FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */,
+				C2D300022FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */,
 				2F2A00000000000000000007 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000B /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
 				2F2A0000000000000000000F /* SolanaPreparedTransactionTests.swift in Sources */,
@@ -3474,8 +3480,8 @@
 				2FA802032FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */,
 				C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
-				C2D200032FC2000000000001 /* NativeAgentLauncherTestFixture.swift in Sources */,
-				C2D300032FC2000000000001 /* NativeAgentLauncherTests.swift in Sources */,
+				C2D200032FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */,
+				C2D300032FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */,
 				2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000C /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
 				2F2A00000000000000000010 /* SolanaPreparedTransactionTests.swift in Sources */,

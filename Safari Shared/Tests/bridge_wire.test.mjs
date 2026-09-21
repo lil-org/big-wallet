@@ -33,25 +33,23 @@ const pageState = {
     ethereum: {
         address: "0x0000000000000000000000000000000000000001",
         chainId: "0x1",
-        reauthorizationRevision: 0,
     },
-    solana: {publicKey: solanaPublicKey, isConnected: true, reauthorizationRevision: 3},
+    solana: {publicKey: solanaPublicKey},
 };
 
 test("decodes one canonical page contract without native response aliases", () => {
     const terminal = {
         id: 7, provider: "ethereum", name: "requestAccounts",
-        state: pageState, configurationMatch: true,
+        state: pageState,
     };
     const responses = [
         {kind: "configuration", state: pageState},
         {kind: "configurationError", error: {code: 4900, message: "Unavailable"}},
         {...terminal, kind: "result", result: [pageState.ethereum.address], approvalCommitted: true},
-        {...terminal, kind: "error", error: {code: 4100, message: "Changed", data: {reason: [1, null]}}, authorizationFailure: false},
+        {...terminal, kind: "error", error: {code: 4100, message: "Changed", data: {reason: [1, null]}}},
         {...terminal, id: 8, provider: "solana", name: "signAllTransactions", state: null,
-            configurationMatch: null, kind: "result", result: ["signature"], approvalCommitted: false},
-        {...terminal, name: null, state: null, configurationMatch: null,
-            kind: "result", result: {blocks: [1, 2]}, approvalCommitted: false},
+            kind: "result", result: ["signature"], approvalCommitted: false},
+        {...terminal, name: null, state: null, kind: "result", result: {blocks: [1, 2]}, approvalCommitted: false},
     ];
     for (const response of responses) {
         const decoded = wire.decodePageResponse(response);
@@ -64,8 +62,11 @@ test("decodes one canonical page contract without native response aliases", () =
         {kind: "batchResult", ...terminal, results: []},
         {...responses[2], results: []},
         {...responses[2], approvalCommitted: undefined},
-        {...responses[2], configurationMatch: null},
-        {...responses[2], state: null},
+        {...responses[2], configurationMatch: true},
+        {...responses[2], state: undefined},
+        {...responses[3], authorizationFailure: false},
+        {kind: "configuration", state: {...pageState, ethereum: null}},
+        {kind: "configuration", state: {...pageState, solana: {...pageState.solana, isConnected: true}}},
         {...responses[3], error: {code: 4100, message: "Changed", errorCode: 4100}},
         {kind: "configuration", state: {...pageState, revisions: {ethereum: -1, solana: 3}}},
     ]) {
@@ -77,7 +78,7 @@ test("decodes one canonical page contract without native response aliases", () =
 
 test("page decoding snapshots data and rejects accessors without invoking them", () => {
     const raw = {
-        id: 7, provider: "ethereum", name: null, state: null, configurationMatch: null,
+        id: 7, provider: "ethereum", name: null, state: null,
         kind: "result", result: {items: [1, 2]}, approvalCommitted: false,
     };
     const decoded = wire.decodePageResponse(raw);
@@ -99,7 +100,7 @@ test("page decoding retains captured reflection and avoids mutable array helpers
     new vm.Script(source).runInContext(local);
     local.input = {
         kind: "result", id: 7, provider: "ethereum", name: null, state: null,
-        configurationMatch: null, result: {values: [1, 2]}, approvalCommitted: false,
+        result: {values: [1, 2]}, approvalCommitted: false,
     };
     const decoded = vm.runInContext(`
         const fail = () => { throw new Error("mutated intrinsic"); };

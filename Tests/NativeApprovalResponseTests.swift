@@ -5,8 +5,8 @@ import XCTest
 
 @MainActor
 final class NativeApprovalResponseTests: XCTestCase {
-    private func fixture() throws -> NativeAgentLauncherTestFixture {
-        let fixture = try NativeAgentLauncherTestFixture()
+    private func fixture() throws -> NativeApprovalServiceTestFixture {
+        let fixture = try NativeApprovalServiceTestFixture()
         addTeardownBlock { @MainActor in
             fixture.onValidate = nil
             fixture.onLoad = nil
@@ -34,8 +34,8 @@ final class NativeApprovalResponseTests: XCTestCase {
                 validationTimes.append(f.clock.now - start)
                 return true
             }
-            let launcher = f.launcher()
-            let result = try await f.finish { await f.read(launcher, request, duration: duration) }
+            let service = f.service()
+            let result = try await f.finish { await f.read(service, request, duration: duration) }
             guard case .pending = result else { return XCTFail("Expected pending at expiry") }
             XCTAssertEqual(f.clock.now - start, UInt64(min(duration, 170) * 1_000_000_000))
             let times = Array(Set(f.loads.map { $0.1 - start })).sorted()
@@ -56,8 +56,8 @@ final class NativeApprovalResponseTests: XCTestCase {
             return true
         }
         let start = f.clock.now
-        let launcher = f.launcher()
-        let result = try await f.finish { await f.read(launcher, request, duration: 1) }
+        let service = f.service()
+        let result = try await f.finish { await f.read(service, request, duration: 1) }
         guard case .pending = result else { return XCTFail("Expected executing work to remain pending") }
         XCTAssertEqual(f.clock.now - start, 170_000_000_000)
         XCTAssertEqual(f.validations.count, 1)
@@ -72,8 +72,8 @@ final class NativeApprovalResponseTests: XCTestCase {
             f.deliver(request, staged: true)
             let start = f.clock.now
             f.onValidate = { _ in later && f.clock.now - start < 1_000_000_000 }
-            let launcher = f.launcher()
-            let result = try await f.finish { await f.read(launcher, request) }
+            let service = f.service()
+            let result = try await f.finish { await f.read(service, request) }
             if later {
                 guard case .pending = result else { return XCTFail("Expected pending") }
             } else {
@@ -90,14 +90,14 @@ final class NativeApprovalResponseTests: XCTestCase {
         let second = try f.request(id: 2)
         f.deliver(first, staged: true)
         f.deliver(second, runtime: f.processes[42]!, staged: true)
-        let launcher = f.launcher()
+        let service = f.service()
         let start = f.clock.now
-        let short = Task { await f.read(launcher, first, duration: 0.5) }
-        let long = Task { await f.read(launcher, second, duration: 1.5) }
+        let short = Task { await f.read(service, first, duration: 0.5) }
+        let long = Task { await f.read(service, second, duration: 1.5) }
         try await f.eventually { f.activeReads.count == 2 }
         f.onLaunch = { _, _, completion in completion(true) }
         let shown = try await f.finish {
-            await launcher.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+            await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
         }
         XCTAssertTrue(shown)
         _ = try await f.finish { await short.value }
@@ -112,10 +112,10 @@ final class NativeApprovalResponseTests: XCTestCase {
         let f = try fixture()
         let request = try f.request()
         f.deliver(request, staged: true)
-        let launcher = f.launcher()
-        let first = Task { await f.read(launcher, request) }
+        let service = f.service()
+        let first = Task { await f.read(service, request) }
         try await f.eventually { f.activeReads.contains(request.handle) }
-        let second = await f.read(launcher, request)
+        let second = await f.read(service, request)
         guard case .pending = second else { return XCTFail("Expected contention") }
         XCTAssertTrue(f.releasedReads.isEmpty)
         XCTAssertEqual(f.activeReads, [request.handle])
@@ -127,13 +127,13 @@ final class NativeApprovalResponseTests: XCTestCase {
     func testQuietReadNeverJoinsAnActiveForegroundLaunch() async throws {
         let f = try fixture()
         let request = try f.request()
-        let gate = NativeAgentLauncherTestFixture.Gate()
+        let gate = NativeApprovalServiceTestFixture.Gate()
         f.onValidate = { _ in await gate.wait(); return true }
         f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
-        let launcher = f.launcher()
-        let page = Task { await launcher.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce) }
+        let service = f.service()
+        let page = Task { await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce) }
         try await f.eventually { !f.validations.isEmpty }
-        let result = await f.read(launcher, request, mode: .manualRecovery)
+        let result = await f.read(service, request, mode: .manualRecovery)
         guard case .pending = result else { return XCTFail("Quiet recovery must remain pending") }
         XCTAssertTrue(f.executionReads.isEmpty)
         XCTAssertTrue(f.launches.isEmpty)
@@ -151,8 +151,8 @@ final class NativeApprovalResponseTests: XCTestCase {
             if f.clock.now - start >= 1_000_000_000 { f.processes.removeAll() }
             return .found(f.snapshots[handle]!)
         }
-        let launcher = f.launcher()
-        let result = try await f.finish { await f.read(launcher, request) }
+        let service = f.service()
+        let result = try await f.finish { await f.read(service, request) }
         guard case .response(let json) = result,
               case .error(let error) = ResponseToExtension(json: json)?.payload else {
             return XCTFail("Expected interruption response")
@@ -168,15 +168,15 @@ final class NativeApprovalResponseTests: XCTestCase {
         let request = try f.request()
         f.deliver(request, staged: true)
         f.onValidate = { _ in f.setState(.responded, for: request); return true }
-        let gate = NativeAgentLauncherTestFixture.Gate()
+        let gate = NativeApprovalServiceTestFixture.Gate()
         f.onReadResponse = { handle, _ in
             XCTAssertTrue(f.activeReads.contains(handle))
             await gate.wait()
             XCTAssertTrue(f.activeReads.contains(handle))
             return .response(["id": handle.id])
         }
-        let launcher = f.launcher()
-        let task = Task { await f.read(launcher, request) }
+        let service = f.service()
+        let task = Task { await f.read(service, request) }
         try await f.eventually { !f.responseReads.isEmpty }
         XCTAssertTrue(f.releasedReads.isEmpty)
         gate.open()
@@ -189,8 +189,8 @@ final class NativeApprovalResponseTests: XCTestCase {
         let request = try f.request()
         f.deliver(request, staged: true)
         f.onValidate = { _ in f.deliver(request, runtime: f.processes[42]!, staged: true, executing: true); return true }
-        let launcher = f.launcher()
-        let task = Task { await f.read(launcher, request) }
+        let service = f.service()
+        let task = Task { await f.read(service, request) }
         try await f.eventually { f.clock.deadlines.contains(f.clock.now + 250_000_000) }
         let loads = f.loads.count
         task.cancel()
@@ -205,7 +205,7 @@ final class NativeApprovalResponseTests: XCTestCase {
     func testCancellationDuringLeaseAcquisitionStillReleasesLease() async throws {
         let f = try fixture()
         let request = try f.request()
-        let gate = NativeAgentLauncherTestFixture.Gate()
+        let gate = NativeApprovalServiceTestFixture.Gate()
         var releases = 0
         f.onBeginRead = { handle, _, revisions, deadline in
             await gate.wait()
@@ -216,8 +216,8 @@ final class NativeApprovalResponseTests: XCTestCase {
                 finish: { releases += 1 }
             ))
         }
-        let launcher = f.launcher()
-        let task = Task { await f.read(launcher, request) }
+        let service = f.service()
+        let task = Task { await f.read(service, request) }
         try await f.eventually { !f.executionReads.isEmpty }
         task.cancel()
         gate.open()
@@ -243,7 +243,7 @@ final class NativeApprovalResponseTests: XCTestCase {
                 if scenario == "readFailure" { f.onReadResponse = { _, _ in .unavailable } }
             default: break
             }
-            let result = await f.read(f.launcher(), request, mode: .manualRecovery)
+            let result = await f.read(f.service(), request, mode: .manualRecovery)
             switch (scenario, result) {
             case ("missing", .missing), ("unavailable", .unavailable), ("readFailure", .unavailable),
                  ("unowned", .pending), ("delivered", .pending), ("invalid", .pending), ("completed", .response): break
@@ -256,7 +256,7 @@ final class NativeApprovalResponseTests: XCTestCase {
     }
 
     func testFinalReadFailureReleasesLeaseInBothModes() async throws {
-        for mode in [NativeAgentLauncher.ApprovalReadMode.page, .manualRecovery] {
+        for mode in [NativeApprovalService.ApprovalReadMode.page, .manualRecovery] {
             let f = try fixture()
             let request = try f.request()
             f.deliver(request, staged: true)
@@ -268,7 +268,7 @@ final class NativeApprovalResponseTests: XCTestCase {
                 XCTAssertTrue(f.activeReads.contains(handle))
                 return .unavailable
             }
-            let result = await f.read(f.launcher(), request, mode: mode)
+            let result = await f.read(f.service(), request, mode: mode)
             guard case .unavailable = result else { return XCTFail("Expected store failure") }
             XCTAssertEqual(f.releasedReads, [request.handle])
         }
@@ -296,14 +296,12 @@ final class NativeApprovalResponseTests: XCTestCase {
                 handle: snapshot.handle
             )
             _ = try await store.prepareNativeApproval(handle: snapshot.handle, decision: .addEthereumChain)
-            let boundary = f.dependencies
+            let boundary = f.launcherDependencies
             var held = false
             var releases = 0
             var finalReads = 0
-            let dependencies = launcherTestDependencies(
-                helperURL: boundary.helperURL, validate: boundary.validate,
-                helpers: boundary.helpers, helper: boundary.helper, identity: boundary.identity,
-                launch: boundary.launch,
+            let dependencies = approvalServiceTestDependencies(
+                launcher: NativeAgentLauncher(dependencies: boundary),
                 load: { handle in
                     if held && completes {
                         _ = await bridge.interruptNativeApproval(
@@ -344,8 +342,8 @@ final class NativeApprovalResponseTests: XCTestCase {
                 },
                 uptime: { f.clock.now }, wallClock: { f.clock.date }, sleepUntil: f.clock.sleepUntil
             )
-            let launcher = NativeAgentLauncher(dependencies: dependencies)
-            let result = try await f.finish { await f.read(launcher, snapshot, duration: 0.25) }
+            let service = NativeApprovalService(dependencies: dependencies)
+            let result = try await f.finish { await f.read(service, snapshot, duration: 0.25) }
             if completes {
                 guard case .response = result else { return XCTFail("Expected interruption") }
             } else {
@@ -371,10 +369,10 @@ final class NativeApprovalResponseTests: XCTestCase {
         let f = try fixture()
         let request = try f.request()
         f.deliver(request, staged: true)
-        let gate = NativeAgentLauncherTestFixture.Gate()
+        let gate = NativeApprovalServiceTestFixture.Gate()
         f.onValidate = { _ in await gate.wait(); return true }
-        let launcher = f.launcher()
-        let result = try await f.finish { await f.read(launcher, request) }
+        let service = f.service()
+        let result = try await f.finish { await f.read(service, request) }
         guard case .unavailable = result else { return XCTFail("Expected bounded initial validation") }
         XCTAssertEqual(f.releasedReads, [request.handle])
         gate.open()

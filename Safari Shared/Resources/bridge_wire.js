@@ -137,34 +137,21 @@
             !isSafeInteger(revisions.solana) || revisions.solana < 0) {
             throw new Error("Invalid page revisions");
         }
-        let ethereum = pageValue(value, "ethereum");
-        if (ethereum !== null) {
-            pageRecord(ethereum, ["address", "chainId", "reauthorizationRevision"]);
-            ethereum = {
-                address: pageValue(ethereum, "address"),
-                chainId: pageValue(ethereum, "chainId"),
-                reauthorizationRevision: pageValue(ethereum, "reauthorizationRevision"),
-            };
-            if (typeof ethereum.address !== "string" ||
-                !isCanonicalEthereumChainId(ethereum.chainId) ||
-                !isSafeInteger(ethereum.reauthorizationRevision) ||
-                ethereum.reauthorizationRevision < 0) {
-                throw new Error("Invalid Ethereum page configuration");
-            }
-            freeze(ethereum);
+        const rawEthereum = pageRecord(pageValue(value, "ethereum"), ["address", "chainId"]);
+        const ethereum = {
+            address: pageValue(rawEthereum, "address"),
+            chainId: pageValue(rawEthereum, "chainId"),
+        };
+        if (typeof ethereum.address !== "string" ||
+            !isCanonicalEthereumChainId(ethereum.chainId)) {
+            throw new Error("Invalid Ethereum page configuration");
         }
+        freeze(ethereum);
         let solana = pageValue(value, "solana");
         if (solana !== null) {
-            pageRecord(solana, ["publicKey", "isConnected", "reauthorizationRevision"]);
-            solana = {
-                publicKey: pageValue(solana, "publicKey"),
-                isConnected: pageValue(solana, "isConnected"),
-                reauthorizationRevision: pageValue(solana, "reauthorizationRevision"),
-            };
-            if (!isSolanaPublicKey(solana.publicKey) ||
-                typeof solana.isConnected !== "boolean" ||
-                !isSafeInteger(solana.reauthorizationRevision) ||
-                solana.reauthorizationRevision < 0) {
+            pageRecord(solana, ["publicKey"]);
+            solana = {publicKey: pageValue(solana, "publicKey")};
+            if (!isSolanaPublicKey(solana.publicKey)) {
                 throw new Error("Invalid Solana page configuration");
             }
             freeze(solana);
@@ -190,36 +177,31 @@
             }
             if (kind !== "result" && kind !== "error") { return null; }
             pageRecord(value, kind === "result" ? [
-                "kind", "id", "provider", "name", "state", "configurationMatch",
+                "kind", "id", "provider", "name", "state",
                 "result", "approvalCommitted",
             ] : [
-                "kind", "id", "provider", "name", "state", "configurationMatch",
-                "error", "authorizationFailure",
+                "kind", "id", "provider", "name", "state",
+                "error",
             ]);
             const id = pageValue(value, "id");
             const provider = pageValue(value, "provider");
             const name = pageValue(value, "name");
             const rawState = pageValue(value, "state");
-            const configurationMatch = pageValue(value, "configurationMatch");
             if (!isSafeInteger(id) || typeof correlationId !== "undefined" && id !== correlationId ||
                 (provider !== "ethereum" && provider !== "solana") ||
-                (name !== null && typeof name !== "string") ||
-                (rawState === null ? configurationMatch !== null : typeof configurationMatch !== "boolean")) {
+                (name !== null && typeof name !== "string")) {
                 return null;
             }
             const terminal = {
                 kind, id, provider, name,
                 state: rawState === null ? null : configurationSnapshot(rawState),
-                configurationMatch,
             };
             if (kind === "result") {
                 const approvalCommitted = pageValue(value, "approvalCommitted");
                 if (typeof approvalCommitted !== "boolean") { return null; }
                 return freeze({...terminal, result: pageJSON(pageValue(value, "result")), approvalCommitted});
             }
-            const authorizationFailure = pageValue(value, "authorizationFailure");
-            if (typeof authorizationFailure !== "boolean") { return null; }
-            return freeze({...terminal, error: pageError(pageValue(value, "error")), authorizationFailure});
+            return freeze({...terminal, error: pageError(pageValue(value, "error"))});
         } catch {
             return null;
         }

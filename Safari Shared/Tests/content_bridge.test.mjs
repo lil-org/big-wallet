@@ -113,7 +113,7 @@ function makeHarness({
                             ? configurationResponse(message)
                             : configurationResponse || {
                                 kind: "configuration",
-                                state: {revisions: {ethereum: 0, solana: 0}, ethereum: null, solana: null},
+                                state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
                             }
                     );
                 }
@@ -234,7 +234,7 @@ test("content reevaluation keeps one provider lifecycle and request bridge", asy
     assert.equal(typeof firstGeneration, "string");
     assert.equal(harness.runtimeMessages[0].subject, "getLatestConfiguration");
     assert.equal(harness.runtimeMessages[0].workflowVersion, 3);
-    assert.equal(harness.postedMessages[0].message.response.state.ethereum, null);
+    assert.deepEqual(harness.postedMessages[0].message.response.state.ethereum, {address: "", chainId: "0x1"});
     harness.reevaluate();
     await settle();
     assert.equal(harness.generation(), firstGeneration);
@@ -371,7 +371,7 @@ test("failed bootstrap retries on focus or visibility without reinjection", asyn
 
         const configuration = {
             kind: "configuration",
-            state: {revisions: {ethereum: 0, solana: 0}, ethereum: null, solana: null},
+            state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         };
         resolveRecovery(configuration);
         await settle();
@@ -393,7 +393,7 @@ test("a configuration broadcast recovers an exhausted bootstrap", async () => {
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 0, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     });
     assert.equal(harness.postedMessages.at(-1).message.kind, "response");
     assert.equal(harness.postedMessages.at(-1).message.providerGeneration, harness.generation());
@@ -445,7 +445,7 @@ test("a passive configuration cancels a scheduled bootstrap retry", async () => 
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     });
     assert.equal(await harness.runTimer(), true);
 
@@ -474,7 +474,7 @@ test("a passive configuration satisfies an in-flight bootstrap retry", async () 
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     });
     resolveRetry({kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}});
     await settle();
@@ -492,7 +492,7 @@ test("an explicit attempt-zero refresh still reads accepted configuration", asyn
         readCount += 1;
         return {
             kind: "configuration",
-            state: {revisions: {ethereum: readCount - 1, solana: 0}, ethereum: null, solana: null},
+            state: {revisions: {ethereum: readCount - 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         };
     }});
     await settle();
@@ -512,7 +512,7 @@ test("focus and visibility reconcile configuration after a missed broadcast", as
     let ethereumRevision = 0;
     const harness = makeHarness({configurationResponse: () => ({
         kind: "configuration",
-        state: {revisions: {ethereum: ethereumRevision, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: ethereumRevision, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     })});
     await settle();
 
@@ -555,7 +555,7 @@ test("a replacement generation accepts its own lower revision baseline", async (
         readCount += 1;
         return {
             kind: "configuration",
-            state: {revisions: {ethereum: readCount === 1 ? 5 : 1, solana: 0}, ethereum: null, solana: null},
+            state: {revisions: {ethereum: readCount === 1 ? 5 : 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         };
     }});
     await settle();
@@ -569,7 +569,7 @@ test("a replacement generation accepts its own lower revision baseline", async (
         kind: "response",
         response: {
             kind: "configuration",
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: null, solana: null},
+            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         },
         id: harness.postedMessages.at(-1).message.id,
         providerGeneration: replacementGeneration,
@@ -590,7 +590,7 @@ test("matching passive configuration notifications update the current page", asy
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1", reauthorizationRevision: 0}, solana: null},
+        state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
     });
     assert.equal(harness.postedMessages.length, before + 1);
     assert.deepEqual(harness.postedMessages.at(-1), {
@@ -599,7 +599,7 @@ test("matching passive configuration notifications update the current page", asy
             kind: "response",
             response: {
                 kind: "configuration",
-                state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1", reauthorizationRevision: 0}, solana: null},
+                state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
             },
             id: harness.postedMessages.at(-1).message.id,
             providerGeneration: harness.generation(),
@@ -611,7 +611,7 @@ test("matching passive configuration notifications update the current page", asy
         subject: "configurationChanged",
         configurationKey: "http://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 3, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 3, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     });
     assert.equal(harness.postedMessages.length, before + 1);
 
@@ -619,12 +619,12 @@ test("matching passive configuration notifications update the current page", asy
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     });
-    assert.equal(harness.postedMessages.length, before + 1);
+    assert.equal(harness.postedMessages.length, before + 2);
 });
 
-test("a stale terminal snapshot settles without rolling provider state back", async () => {
+test("stale terminal snapshots reach the provider with their original revisions", async () => {
     const address = "0x0000000000000000000000000000000000000001";
     const harness = makeHarness({sendMessage: message => {
         if (message.subject !== "message-to-wallet") { return undefined; }
@@ -633,8 +633,7 @@ test("a stale terminal snapshot settles without rolling provider state back", as
             id: 7,
             name: "requestAccounts",
             provider: "ethereum",
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: address, chainId: "0x1", reauthorizationRevision: 0}, solana: null},
-            configurationMatch: true,
+            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: address, chainId: "0x1"}, solana: null},
             result: [address],
             approvalCommitted: false,
         };
@@ -644,16 +643,46 @@ test("a stale terminal snapshot settles without rolling provider state back", as
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 2, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     });
     harness.dispatchPage("request", dappRequest(7));
     await settle();
 
     const terminal = harness.postedMessages.at(-1).message;
     assert.equal(terminal.response.id, 7);
-    assert.equal(terminal.response.state, null);
-    assert.equal(terminal.response.configurationMatch, null);
-    assert.equal(terminal.suppressProviderUpdate, true);
+    assert.deepEqual(terminal.response.state, {
+        revisions: {ethereum: 1, solana: 0},
+        ethereum: {address, chainId: "0x1"}, solana: null,
+    });
+    assert.equal(terminal.response.configurationMatch, undefined);
+    assert.equal(terminal.suppressProviderUpdate, undefined);
+});
+
+test("mixed provider revisions cross the content relay unchanged", async () => {
+    const harness = makeHarness({configurationResponse: {
+        kind: "configuration",
+        state: {
+            revisions: {ethereum: 5, solana: 2},
+            ethereum: {address: "", chainId: "0x2"},
+            solana: null,
+        },
+    }});
+    await settle();
+    const state = {
+        revisions: {ethereum: 4, solana: 3},
+        ethereum: {address: "", chainId: "0x1"},
+        solana: {publicKey: "11111111111111111111111111111111"},
+    };
+    await harness.dispatchRuntime({
+        subject: "configurationChanged",
+        configurationKey: "https://wallet.example",
+        workflowVersion: 3,
+        state,
+    });
+    assert.deepEqual(harness.postedMessages.at(-1).message.response, {
+        kind: "configuration", state,
+    });
+    assert.equal(harness.postedMessages.length, 2);
 });
 
 test("a malformed revisioned terminal fails closed", async () => {
@@ -663,8 +692,7 @@ test("a malformed revisioned terminal fails closed", async () => {
             id: 7,
             name: "requestAccounts",
             provider: "ethereum",
-            state: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1", reauthorizationRevision: 0}, solana: null},
-            configurationMatch: true,
+            state: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
             result: ["0x0000000000000000000000000000000000000001"],
             approvalCommitted: false,
         };
@@ -689,7 +717,7 @@ test("a malformed revisioned terminal fails closed", async () => {
         assert.equal(terminal.response.error?.code, -32603);
         assert.equal(terminal.response.result, undefined);
         assert.equal(terminal.response.state, null);
-        assert.equal(terminal.response.configurationMatch, null);
+        assert.equal(terminal.response.configurationMatch, undefined);
         assert.equal(terminal.suppressProviderUpdate, undefined);
         assert.equal(harness.context.bigWalletRequests.size, 0);
         assert.equal(harness.pendingTimers(), 0);
@@ -705,7 +733,7 @@ test("page-authored unknown provider requests never enter the relay", async () =
         provider: "unknown",
         body: {
             kind: "configuration",
-            state: {ethereum: null, solana: null},
+            state: {ethereum: {address: "", chainId: "0x1"}, solana: null},
         },
     });
     await settle();
@@ -897,7 +925,6 @@ test("enqueue results arriving at the recovery deadline fail closed", async () =
                 name: "requestAccounts",
                 provider: "ethereum",
                 state: null,
-                configurationMatch: null,
                 result: [],
                 approvalCommitted: false,
             },
@@ -989,7 +1016,6 @@ test("persistent failed response reads release acknowledged request slots", asyn
         name: "requestAccounts",
         provider: "ethereum",
         state: null,
-        configurationMatch: null,
         result: [],
         approvalCommitted: false,
     });
@@ -1040,9 +1066,7 @@ test("new content attempts fail without allocation at the per-host limit", async
         name: "requestAccounts",
         provider: "ethereum",
         state: null,
-        configurationMatch: null,
         error: {code: -32603, message: "Failed to communicate with Big Wallet"},
-        authorizationFailure: false,
     });
 
     harness.dispatchPage("request", dappRequest(30));
@@ -1085,7 +1109,6 @@ test("reads and delivers one retained response", async () => {
                 name: "requestAccounts",
                 provider: "ethereum",
                 state: null,
-                configurationMatch: null,
                 result: [],
                 approvalCommitted: false,
             };
@@ -1147,7 +1170,6 @@ test("response-ready hints wake a waiting request", async () => {
                 name: "requestAccounts",
                 provider: "ethereum",
                 state: null,
-                configurationMatch: null,
                 result: [],
                 approvalCommitted: false,
             };
@@ -1213,7 +1235,6 @@ test("response-ready hints rerun an active response read", async () => {
         name: "requestAccounts",
         provider: "ethereum",
         state: null,
-        configurationMatch: null,
         result: [],
         approvalCommitted: false,
     });
@@ -1246,7 +1267,6 @@ test("late enqueue acknowledgement preserves native-owned work past the recovery
                     name: "requestAccounts",
                     provider: "ethereum",
                     state: null,
-                    configurationMatch: null,
                     result: [],
                     approvalCommitted: false,
                 }
@@ -1285,7 +1305,6 @@ test("native results survive suspension past the recovery horizon", async () => 
             name: "signTransaction",
             provider: "ethereum",
             state: null,
-            configurationMatch: null,
             result: ["0xtransactionHash"],
             approvalCommitted: false,
         };
@@ -1383,7 +1402,6 @@ test("an unresolved response read cannot end a native-owned request", async () =
                 name: "requestAccounts",
                 provider: "ethereum",
                 state: null,
-                configurationMatch: null,
                 result: [],
                 approvalCommitted: false,
             };
@@ -1408,7 +1426,6 @@ test("an unresolved response read cannot end a native-owned request", async () =
         name: "requestAccounts",
         provider: "ethereum",
         state: null,
-        configurationMatch: null,
         result: [],
         approvalCommitted: false,
     });
@@ -1452,9 +1469,7 @@ test("ordinary RPC fails after the long content relay timeout", async () => {
         provider: "ethereum",
         name: null,
         state: null,
-        configurationMatch: null,
         error: {code: -32603, message: "Failed to communicate with Big Wallet"},
-        authorizationFailure: false,
     });
 
     resolveRPC({
@@ -1464,7 +1479,6 @@ test("ordinary RPC fails after the long content relay timeout", async () => {
         provider: "ethereum",
         name: null,
         state: null,
-        configurationMatch: null,
         approvalCommitted: false,
     });
     await settle();
@@ -1474,9 +1488,7 @@ test("ordinary RPC fails after the long content relay timeout", async () => {
         provider: "ethereum",
         name: null,
         state: null,
-        configurationMatch: null,
         error: {code: -32603, message: "Failed to communicate with Big Wallet"},
-        authorizationFailure: false,
     });
 });
 
@@ -1488,8 +1500,7 @@ test("relays correlated disconnects with trusted page identity", async () => {
             name: "revokePermissions",
             provider: "ethereum",
             result: null,
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: null, solana: null},
-            configurationMatch: false,
+            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
             approvalCommitted: false,
         }
         : undefined});
@@ -1507,16 +1518,16 @@ test("relays correlated disconnects with trusted page identity", async () => {
         subject: "configurationChanged",
         configurationKey: "https://wallet.example",
         workflowVersion: 3,
-        state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1", reauthorizationRevision: 0}, solana: null},
+        state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
     });
-    assert.equal(harness.postedMessages.length, before);
+    assert.equal(harness.postedMessages.length, before + 1);
 });
 
-test("a delayed disconnect cannot overwrite same-address reauthorization", async () => {
+test("delayed disconnect snapshots reach the provider for ordered reconciliation", async () => {
     const address = "0x0000000000000000000000000000000000000001";
     const configuration = revision => ({
         kind: "configuration",
-        state: {revisions: {ethereum: revision, solana: 0}, ethereum: {address: address, chainId: "0x1", reauthorizationRevision: 0}, solana: null},
+        state: {revisions: {ethereum: revision, solana: 0}, ethereum: {address: address, chainId: "0x1"}, solana: null},
     });
     let resolveDisconnect;
     const harness = makeHarness({
@@ -1537,7 +1548,7 @@ test("a delayed disconnect cannot overwrite same-address reauthorization", async
     const before = harness.postedMessages.length;
     const revokedState = {
         kind: "configuration",
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: null, solana: null},
+        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     };
     await harness.dispatchRuntime({
         subject: "configurationChanged",
@@ -1545,7 +1556,7 @@ test("a delayed disconnect cannot overwrite same-address reauthorization", async
         workflowVersion: 3,
         state: revokedState.state,
     });
-    assert.equal(harness.postedMessages.length, before);
+    assert.equal(harness.postedMessages.length, before + 1);
     resolveDisconnect({
         kind: "result",
         id: 12,
@@ -1553,15 +1564,14 @@ test("a delayed disconnect cannot overwrite same-address reauthorization", async
         provider: "ethereum",
         result: null,
         state: revokedState.state,
-        configurationMatch: false,
         approvalCommitted: false,
     });
     await settle();
     const terminal = harness.postedMessages.at(-1).message;
     assert.equal(terminal.response.result, null);
-    assert.equal(terminal.response.state, null);
-    assert.equal(terminal.response.configurationMatch, null);
-    assert.equal(terminal.suppressProviderUpdate, true);
+    assert.deepEqual(terminal.response.state, revokedState.state);
+    assert.equal(terminal.response.configurationMatch, undefined);
+    assert.equal(terminal.suppressProviderUpdate, undefined);
 });
 
 test("disconnect failures do not revoke local authorization", async () => {
@@ -1574,7 +1584,6 @@ test("disconnect failures do not revoke local authorization", async () => {
                     ethereum: {
                         address: "0x0000000000000000000000000000000000000001",
                         chainId: "0x1",
-                        reauthorizationRevision: 0,
                     },
                     solana: null,
                 },
@@ -1586,8 +1595,7 @@ test("disconnect failures do not revoke local authorization", async () => {
                     id: 14,
                     name: "revokePermissions",
                     provider: "ethereum",
-                    state: {ethereum: null, solana: null},
-                    configurationMatch: false,
+                    state: {ethereum: {address: "", chainId: "0x1"}, solana: null},
                     result: null,
                     approvalCommitted: false,
                 };
@@ -1606,14 +1614,12 @@ test("disconnect failures do not revoke local authorization", async () => {
             name: "revokePermissions",
             provider: "ethereum",
             state: null,
-            configurationMatch: null,
             error: {
                 code: -32603,
                 message: failure === "timeout"
                     ? "Failed to revoke permissions"
                     : "Failed to process provider response",
             },
-            authorizationFailure: false,
         });
         assert.deepEqual(clone(harness.context.bigWalletConfigurationState), configuration);
     }

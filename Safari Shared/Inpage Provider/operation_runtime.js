@@ -130,6 +130,13 @@ class OperationRuntime {
         return true;
     }
 
+    activate() {
+        if (this.#phase === "failed") {
+            this.#phase = "loading";
+            this.#loadingError = undefined;
+        }
+    }
+
     drain(dispatch) {
         if (typeof dispatch !== "function") {
             throw new TypeErrorConstructor("Operation dispatch must be a function");

@@ -276,11 +276,9 @@ function validPopupApprovalPayload(payload) {
 }
 
 function cleanConfiguration(configuration) {
-    const clean = {...configuration};
-    delete clean.__bwEthereumAuthorization;
-    delete clean.accountRevision;
-    delete clean.solanaAuthorizationEpoch;
-    return clean;
+    return configuration.provider === "ethereum"
+        ? {provider: "ethereum", chainId: configuration.chainId, results: [...configuration.results]}
+        : {provider: "solana", publicKey: configuration.publicKey};
 }
 
 function normalizedReleasedEthereumConfiguration(configuration) {
@@ -317,7 +315,11 @@ function decodeCurrentConfigurationState(value) {
     if (!WIRE.hasExactKeys(value, [
             "latestConfigurations", "revisions", "workflowVersion",
         ]) || value.workflowVersion !== STORAGE_VERSION ||
-        !Array.isArray(value.latestConfigurations)) {
+        !Array.isArray(value.latestConfigurations) ||
+        !value.latestConfigurations.every(configuration => WIRE.hasExactKeys(
+            configuration, configuration?.provider === "ethereum"
+                ? ["provider", "chainId", "results"] : ["provider", "publicKey"]
+        ))) {
         throw new Error("Invalid stored configuration");
     }
     const parsed = WIRE.parseLatestConfigurations(value.latestConfigurations);
@@ -449,14 +451,7 @@ function publicConfigurationState(state) {
 }
 
 function publicConfigurations(state) {
-    return state.configurations.map(configuration => {
-        const value = cleanConfiguration(configuration);
-        value.accountRevision = state.revisions[configuration.provider];
-        if (configuration.provider === "solana") {
-            value.solanaAuthorizationEpoch = state.revisions.solana;
-        }
-        return value;
-    });
+    return state.configurations.map(cleanConfiguration);
 }
 
 function configurationFor(state, provider) {
@@ -554,17 +549,19 @@ function replacingProviderConfiguration(configurations, provider, replacement) {
     return next;
 }
 
-function configurationAccount(configuration) {
-    return configuration?.provider === "ethereum"
-        ? normalizedEthereumAddress(configuration.results?.[0])
-        : configuration?.publicKey || null;
+function disconnectedConfiguration(state, provider) {
+    return provider === "ethereum" ? {
+        provider,
+        chainId: configurationFor(state, provider)?.chainId || "0x1",
+        results: [],
+    } : null;
 }
 
 function configurationsAfterResponse(state, mutation) {
     let configurations = state.configurations;
     if (mutation?.kind === "accounts") {
         for (const [provider, update] of Object.entries(mutation.updates)) {
-            const configuration = update === null ? null : provider === "ethereum"
+            const configuration = update === null ? disconnectedConfiguration(state, provider) : provider === "ethereum"
                 ? {provider, results: [update.address], chainId: update.chainId}
                 : {provider, publicKey: update.publicKey};
             configurations = replacingProviderConfiguration(configurations, provider, configuration);
@@ -621,25 +618,10 @@ function applyResponseToState(
     }
     for (const plan of plans) {
         if (plan.mode === "apply") {
-            let desired = plan.desired;
-            if (desired) {
-                desired = {...desired};
-                delete desired.reauthorizationRevision;
-                const current = configurationFor(state, plan.provider);
-                const account = configurationAccount(desired);
-                if (account && response.name === "switchAccount" &&
-                    response.provider === "multiple" && response.kind === "result") {
-                    desired.reauthorizationRevision = state.revisions[plan.provider] + 1;
-                } else if (account && account === configurationAccount(current) &&
-                    Number.isSafeInteger(current?.reauthorizationRevision) &&
-                    current.reauthorizationRevision > 0) {
-                    desired.reauthorizationRevision = current.reauthorizationRevision;
-                }
-            }
             state.configurations = replacingProviderConfiguration(
                 state.configurations,
                 plan.provider,
-                desired
+                plan.desired
             );
             state.revisions[plan.provider] += 1;
             changed = true;
@@ -656,27 +638,20 @@ function pageConfigurationState(configurationState) {
     const configuration = provider => configurationState.latestConfigurations.find(item => item.provider === provider);
     const ethereum = configuration("ethereum");
     const solana = configuration("solana");
-    const reauthorizationRevision = value => Number.isSafeInteger(value?.reauthorizationRevision) &&
-        value.reauthorizationRevision >= 0 ? value.reauthorizationRevision : 0;
     return WIRE.decodeConfigurationSnapshot({
         revisions: {...configurationState.revisions},
-        ethereum: ethereum ? {
-            address: ethereum.results[0] || "",
-            chainId: ethereum.chainId,
-            reauthorizationRevision: reauthorizationRevision(ethereum),
-        } : null,
-        solana: solana ? {
-            publicKey: solana.publicKey,
-            isConnected: typeof solana.isConnected === "undefined" ? true : solana.isConnected,
-            reauthorizationRevision: reauthorizationRevision(solana),
-        } : null,
+        ethereum: {
+            address: ethereum?.results[0] || "",
+            chainId: ethereum?.chainId || "0x1",
+        },
+        solana: solana ? {publicKey: solana.publicKey} : null,
     });
 }
 
 function pageFailure(id, provider, name, message = "Failed to communicate with Big Wallet", code = -32603) {
     return {
-        kind: "error", id, provider, name, state: null, configurationMatch: null,
-        error: {code, message}, authorizationFailure: false,
+        kind: "error", id, provider, name, state: null,
+        error: {code, message},
     };
 }
 
@@ -690,7 +665,7 @@ function rpcPageResponse(response, id) {
     if (!WIRE.isRecord(response) || response.id !== id) {
         return pageFailure(id, "ethereum", null, "Failed to process RPC response");
     }
-    const base = {id, provider: "ethereum", name: null, state: null, configurationMatch: null};
+    const base = {id, provider: "ethereum", name: null, state: null};
     if (Object.prototype.hasOwnProperty.call(response, "error")) {
         if (Object.prototype.hasOwnProperty.call(response, "result")) {
             return pageFailure(id, "ethereum", null, "Failed to process RPC response");
@@ -703,7 +678,7 @@ function rpcPageResponse(response, id) {
             ...(raw && typeof raw === "object" && Object.prototype.hasOwnProperty.call(raw, "data")
                 ? {data: raw.data} : {}),
         };
-        return WIRE.decodePageResponse({...base, kind: "error", error, authorizationFailure: false}, id) ||
+        return WIRE.decodePageResponse({...base, kind: "error", error}, id) ||
             pageFailure(id, "ethereum", null, "Failed to process RPC response");
     }
     return WIRE.decodePageResponse({...base, kind: "result", result: response.result, approvalCommitted: false}, id) ||
@@ -733,23 +708,10 @@ function pageResponse(terminal, configurationState = null) {
             ? {kind: "configurationError", error: terminal.error}
             : {kind: "configuration", state};
     }
-    let configurationMatch = state ? false : null;
-    let result = terminal.result;
-    if (state && terminal.kind === "result") {
-        if (terminal.name === "requestAccounts") {
-            configurationMatch = !!state.ethereum && Array.isArray(result) &&
-                (typeof result[0] === "string" ? result[0].toLowerCase() : "") === state.ethereum.address.toLowerCase();
-        } else if (terminal.provider === "solana" && terminal.name === "connect") {
-            configurationMatch = state.solana?.publicKey === result?.publicKey;
-        } else if (terminal.mutation?.kind === "ethereumChain") {
-            configurationMatch = state.ethereum?.chainId === terminal.mutation.chainId;
-            const ethereum = configurationState.latestConfigurations.find(item => item.provider === "ethereum");
-            result = [...(ethereum?.results || [])];
-        }
-    }
-    const base = {id: terminal.id, provider: terminal.provider, name: terminal.name, state, configurationMatch};
+    const base = {id: terminal.id, provider: terminal.provider, name: terminal.name, state};
+    const result = terminal.mutation?.kind === "ethereumChain" ? null : terminal.result;
     return terminal.kind === "error"
-        ? {...base, kind: "error", error: terminal.error, authorizationFailure: terminal.authorizationFailure}
+        ? {...base, kind: "error", error: terminal.error}
         : {...base, kind: "result", result, approvalCommitted: terminal.approvalCommitted};
 }
 
@@ -1347,7 +1309,7 @@ async function applyCompletedResponse(request, sender) {
 async function latestConfiguration(request, sender) {
     if (privateBrowsing(sender)) {
         return {kind: "configuration", state: {
-            ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0},
+            ethereum: {address: "", chainId: "0x1"}, solana: null, revisions: {ethereum: 0, solana: 0},
         }};
     }
     const identity = trustedIdentity(request, sender) ||
@@ -1384,9 +1346,9 @@ async function disconnect(request, sender) {
         if (!canAdvanceProviderRevision(state, request.provider)) {
             return {value: disconnectFailure(request)};
         }
-        state.configurations = state.configurations.filter(item => {
-            return item.provider !== request.provider;
-        });
+        state.configurations = replacingProviderConfiguration(
+            state.configurations, request.provider, disconnectedConfiguration(state, request.provider)
+        );
         state.revisions[request.provider] += 1;
         return {changed: true, value: pageResponse({
             id: request.id,

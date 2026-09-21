@@ -895,7 +895,7 @@ function popupHarness(options = {}) {
     };
     const defaultWorker = message => {
         if (message.subject === "getLatestConfiguration") {
-            return {kind: "configuration", state: {ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0}}};
+            return {kind: "configuration", state: {ethereum: {address: "", chainId: "0x1"}, solana: null, revisions: {ethereum: 0, solana: 0}}};
         }
         if (message.subject === "applyCompletedResponse") {
             model.completed = model.completed.filter(item => item.requestToken !== message.requestToken);
@@ -2717,8 +2717,8 @@ test("idle connection text uses only the canonical decoded provider snapshot", a
         kind: "configuration",
         state: {
             revisions: {ethereum: 1, solana: 2},
-            ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1", reauthorizationRevision: 0},
-            solana: {publicKey: "11111111111111111111111111111111", isConnected: true, reauthorizationRevision: 0},
+            ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+            solana: {publicKey: "11111111111111111111111111111111"},
         },
     } : fallback(message)});
     await harness.boot();
@@ -2728,12 +2728,12 @@ test("idle connection text uses only the canonical decoded provider snapshot", a
 
 test("idle connection text ignores a chain-only Ethereum configuration", async () => {
     const publicKey = "11111111111111111111111111111111";
-    for (const solana of [null, {publicKey, isConnected: true, reauthorizationRevision: 0}]) {
+    for (const solana of [null, {publicKey}]) {
         const harness = popupHarness({worker: (message, fallback) => message.subject === "getLatestConfiguration" ? {
             kind: "configuration",
             state: {
                 revisions: {ethereum: 1, solana: solana ? 1 : 0},
-                ethereum: {address: "", chainId: "0x2", reauthorizationRevision: 0},
+                ethereum: {address: "", chainId: "0x2"},
                 solana,
             },
         } : fallback(message)});

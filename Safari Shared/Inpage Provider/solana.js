@@ -58,7 +58,6 @@ const solanaSignatureApplicationError =
 const unsupportedSolanaChain = "Big Wallet does not support this Solana chain";
 const malformedSolanaResponse = "Failed to process Solana response";
 const maximumTransactionBatchSize = 64;
-const maximumCounter = Number.MAX_SAFE_INTEGER;
 const arrayBufferByteLengthNormally = getOwnPropertyDescriptorNormally(
     ArrayBuffer.prototype,
     "byteLength"
@@ -203,7 +202,7 @@ class PublicKey {
         if (!validPublicKeyString(value)) {
             throw new ProviderRpcError(4200, providerNotReadyMessage);
         }
-        this.stringValue = value;
+        definePropertyNormally(this, "stringValue", {__proto__: null, configurable: true, enumerable: true, value, writable: true});
     }
 
     equals(publicKey) {
@@ -238,103 +237,36 @@ function commitPublicKey(state, publicKeyString, publicKey = publicKeyString ===
 }
 
 function authorizationSnapshot(state) {
-    return {
-        accountRevision: state.accountRevision,
-        disconnectedConfigurationRevision: state.disconnectedConfigurationRevision,
-        publicKey: state.publicKeyString,
-        solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
-    };
+    return {revision: state.workerRevision, publicKey: state.publicKeyString};
 }
 
 function authorizationMatches(state, authorization) {
-    return !!authorization &&
-        authorization.accountRevision === state.accountRevision &&
-        authorization.publicKey === state.publicKeyString &&
-        authorization.solanaAuthorizationEpoch === state.solanaAuthorizationEpoch;
-}
-
-function observeConfiguration(provider, envelope) {
-    const state = providerState(provider);
-    const revision = envelope.workerRevision;
-    if (!state || state.runtime.phase === "retired" ||
-        envelope.suppressUpdate === true || envelope.configuration !== null ||
-        !isSafeIntegerNormally(revision) || revision < 0) {
-        return false;
-    }
-    if (revision > state.disconnectedConfigurationRevision) {
-        state.disconnectedConfigurationRevision = revision;
-    }
-    return true;
-}
-
-function incrementRevision(state) {
-    if (state.accountRevision === maximumCounter) {
-        throw new ProviderRpcError(-32603, "Solana account revision exhausted");
-    }
-    state.accountRevision += 1;
-}
-
-function advanceEpoch(state) {
-    if (state.solanaAuthorizationEpoch === maximumCounter) {
-        throw new ProviderRpcError(-32603, "Solana authorization epoch exhausted");
-    }
-    state.solanaAuthorizationEpoch += 1;
-    return state.solanaAuthorizationEpoch;
-}
-
-function advanceAuthorizationEpoch(provider) {
-    const state = getProviderState(provider);
-    try {
-        advanceEpoch(state);
-        if (state.transport.isCurrent() === true) { return true; }
-    } catch {
-    }
-    retire(provider, providerReplacementError());
-    return false;
-}
-
-function clearAuthorization(provider, tombstone, emitChanges = true) {
-    const state = getProviderState(provider);
-    const previousPublicKey = state.publicKeyString;
-    const wasConnected = state.isConnected;
-    if (previousPublicKey !== null && state.accountRevision < maximumCounter) {
-        state.accountRevision += 1;
-    }
-    commitPublicKey(state, null);
-    state.isConnected = false;
-    state.accountRevocationTombstone = tombstone === true;
-    if (!emitChanges) { return; }
-    if (previousPublicKey !== null) {
-        emitProvider(provider, "accountChanged", null);
-        notifyAccountChange(provider);
-    }
-    if (wasConnected || previousPublicKey !== null) {
-        emitProvider(provider, "disconnect");
-    }
-}
-
-function externalDisconnect(provider) {
-    const state = getProviderState(provider);
-    if (state.runtime.phase === "retired" || !advanceAuthorizationEpoch(provider)) {
-        return;
-    }
-    clearAuthorization(provider, true);
+    return !!authorization && authorization.revision === state.workerRevision &&
+        authorization.publicKey === state.publicKeyString;
 }
 
 function operationIsCurrent(provider, record, approvalCommitted = false) {
     const state = getProviderState(provider);
-    return state.runtime.owns(record) &&
-        state.transport.isCurrent() === true &&
-        (approvalCommitted ||
-            authorizationMatches(state, record.metadata.authorization));
+    return state.runtime.owns(record) && state.transport.isCurrent() === true &&
+        (approvalCommitted || authorizationMatches(state, record.metadata.authorization));
 }
 
 function requireAuthorization(provider, authorization) {
     const state = getProviderState(provider);
     if (state.runtime.phase === "retired" ||
         !authorizationMatches(state, authorization)) {
-        throw providerReplacementError();
+        throw new ProviderRpcError(4100, providerNotReadyMessage);
     }
+}
+
+async function bootstrapAuthorization(provider, expected) {
+    await registerOperation(provider, "connect", {onlyIfTrusted: true});
+    const state = getProviderState(provider);
+    if (state.publicKeyString !== expected.publicKey ||
+        state.runtime.phase === "retired" || state.transport.isCurrent() !== true) {
+        throw new ProviderRpcError(4100, providerNotReadyMessage);
+    }
+    return authorizationSnapshot(state);
 }
 
 function rejectOperation(provider, record, error) {
@@ -859,10 +791,8 @@ function dispatchOperation(provider, record) {
         );
         return false;
     }
-    if (method === "connect" && state.publicKeyString &&
-        !state.accountRevocationTombstone) {
+    if (method === "connect" && state.publicKeyString) {
         const wasConnected = state.isConnected;
-        state.isConnected = true;
         const settled = state.runtime.resolve(
             record,
             {publicKey: state.publicKey}
@@ -881,14 +811,15 @@ function dispatchOperation(provider, record) {
         );
         return false;
     }
-    const authorization = record.metadata.authorization ?? authorizationSnapshot(state);
-    if (!authorizationMatches(state, authorization)) {
-        rejectOperation(provider, record, providerReplacementError());
+    const previousAuthorization = record.metadata.authorization;
+    if (previousAuthorization && (previousAuthorization.publicKey !== state.publicKeyString ||
+        previousAuthorization.revision !== null && previousAuthorization.revision !== state.workerRevision)) {
+        rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
         return false;
     }
+    const authorization = authorizationSnapshot(state);
     record.metadata.authorization = authorization;
     const message = {
-        accountRevision: authorization.accountRevision,
         body: {
             object: wirePayload(record),
             publicKey: authorization.publicKey || "",
@@ -961,7 +892,7 @@ function signedResult(
     const state = getProviderState(provider);
     const metadata = record.metadata;
     if (!operationIsCurrent(provider, record, approvalCommitted)) {
-        rejectOperation(provider, record, providerReplacementError());
+        rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
         return false;
     }
     if (!metadata.messages ||
@@ -1047,72 +978,72 @@ function signedResult(
     }
 }
 
-function applyConfiguration(provider, envelope, configurationIsCurrent) {
-    const state = getProviderState(provider);
-    if (envelope.suppressUpdate === true) {
-        return state.runtime.phase === "ready";
+function prepareConfiguration(provider, configuration, revision) {
+    const state = providerState(provider);
+    if (!state || state.runtime.phase === "retired" ||
+        !isSafeIntegerNormally(revision) || revision < 0) { return null; }
+    const publicKey = configuration?.publicKey ?? null;
+    if (publicKey !== null && !validPublicKeyString(publicKey)) { return null; }
+    if (state.workerRevision !== null && revision < state.workerRevision) {
+        return {__proto__: null, ignored: true};
     }
-    const incoming = envelope.configuration;
-    let previousPublicKey = state.publicKeyString;
-    if (!configurationIsCurrent()) { return false; }
-    const hadAccount = previousPublicKey !== null || state.isConnected;
-    let previousConnected = state.isConnected;
-    const reauthorizationRevision = incoming?.reauthorizationRevision ??
-        state.reauthorizationRevision;
-    const changesAccount = reauthorizationRevision > state.reauthorizationRevision ||
-        (incoming?.publicKey ?? null) !== previousPublicKey;
-    const revisionExhausted = changesAccount && state.accountRevision === maximumCounter;
-    const needsDisconnect = revisionExhausted ||
-        (incoming === null && hadAccount);
-    if (needsDisconnect) {
-        try { externalDisconnect(provider); } catch {}
-        if (!configurationIsCurrent()) { return true; }
-        if (state.runtime.phase === "retired") { return false; }
-        previousPublicKey = state.publicKeyString;
-        previousConnected = state.isConnected;
+    if (revision === state.workerRevision && publicKey !== state.publicKeyString) {
+        return null;
     }
-    if (!currentProviderState(provider)) { return false; }
-    if (needsDisconnect) {
-        if (!state.accountRevocationTombstone) {
-            commitPublicKey(state, null);
-            state.isConnected = false;
-        }
-    } else if (incoming && envelope.workerRevision >= state.solanaAuthorizationEpoch) {
-        const reauthorizes = reauthorizationRevision > state.reauthorizationRevision;
-        if (reauthorizes) {
-            state.reauthorizationRevision = reauthorizationRevision;
-        }
-        if (!state.accountRevocationTombstone || reauthorizes) {
-            const minimumRevision = changesAccount
-                ? state.accountRevision + 1
-                : state.accountRevision;
-            state.accountRevision = envelope.workerRevision > minimumRevision
-                ? envelope.workerRevision
-                : minimumRevision;
-            state.solanaAuthorizationEpoch = envelope.workerRevision;
-            state.accountRevocationTombstone = false;
-            commitPublicKey(state, incoming.publicKey);
-            state.isConnected = incoming.isConnected;
-        }
-    }
-    if (state.runtime.phase === "failed") {
-        state.runtime.drain(record => dispatchOperation(provider, record));
-    }
-    const configuredConnected = state.isConnected;
-    const nextPublicKey = state.publicKeyString;
-    if (previousPublicKey !== nextPublicKey) {
-        emitProvider(provider, "accountChanged", state.publicKey);
-        notifyAccountChange(provider);
-    }
-    if (!previousConnected && configuredConnected && state.publicKeyString) {
-        emitProvider(provider, "connect", state.publicKey);
-    } else if (previousConnected && !configuredConnected) {
-        emitProvider(provider, "disconnect");
-    }
-    state.runtime.drain(record => dispatchOperation(provider, record));
-    return true;
+    return {
+        __proto__: null,
+        publicKey, revision, baseline: state.notificationEpoch,
+        wrapper: publicKey === state.publicKeyString && revision === state.workerRevision ? state.publicKey :
+            publicKey === null ? null : new PublicKey(publicKey),
+    };
 }
 
+function configurationIsCurrent(provider, prepared) {
+    const state = providerState(provider);
+    return !!state && state.runtime.phase !== "retired" &&
+        (!prepared || prepared.ignored || prepared.baseline === state.notificationEpoch);
+}
+
+function commitConfiguration(provider, prepared) {
+    const state = providerState(provider);
+    if (!state || !prepared || prepared.ignored || state.runtime.phase === "retired") {
+        return null;
+    }
+    const previousKey = state.publicKeyString;
+    const wasConnected = state.isConnected;
+    state.publicKeyString = prepared.publicKey;
+    state.publicKey = prepared.wrapper;
+    state.isConnected = prepared.publicKey !== null;
+    if (state.workerRevision !== prepared.revision) { state.notificationEpoch += 1; }
+    state.workerRevision = prepared.revision;
+    state.runtime.activate();
+    return {
+        epoch: state.notificationEpoch,
+        accountChanged: previousKey !== state.publicKeyString,
+        connected: !wasConnected && state.isConnected,
+        disconnected: wasConnected && !state.isConnected,
+    };
+}
+
+function emitConfiguration(provider, change) {
+    const state = providerState(provider);
+    if (!state || !change) { return; }
+    const current = () => state.runtime.phase !== "retired" &&
+        state.notificationEpoch === change.epoch && state.transport.isCurrent() === true;
+    if (change.accountChanged && current()) {
+        emitProvider(provider, "accountChanged", state.publicKey);
+        if (current()) { notifyAccountChange(provider); }
+    }
+    if (change.connected && current()) { emitProvider(provider, "connect", state.publicKey); }
+    if (change.disconnected && current()) { emitProvider(provider, "disconnect"); }
+}
+
+function finishConfiguration(provider, change) {
+    const state = providerState(provider);
+    if (!state || !change || state.runtime.phase === "retired" ||
+        state.notificationEpoch !== change.epoch) { return; }
+    state.runtime.drain(record => dispatchOperation(provider, record));
+}
 
 function currentProviderState(provider) {
     const state = providerState(provider);
@@ -1126,11 +1057,16 @@ function currentProviderState(provider) {
     return state;
 }
 
-function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () => true) {
+function applyDecodedEnvelope(provider, envelope) {
     const state = currentProviderState(provider);
     if (!state) { return false; }
     if (envelope.kind === "configuration") {
-        return applyConfiguration(provider, envelope, configurationIsCurrent);
+        const prepared = prepareConfiguration(provider, envelope.configuration, envelope.workerRevision);
+        if (!prepared || !configurationIsCurrent(provider, prepared)) { return false; }
+        const change = commitConfiguration(provider, prepared);
+        emitConfiguration(provider, change);
+        finishConfiguration(provider, change);
+        return true;
     }
     if (envelope.kind === "configurationError") {
         const error = normalizeSolanaProviderError(envelope.error);
@@ -1156,11 +1092,6 @@ function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () =>
         );
     }
     if (envelope.kind === "error") {
-        if (envelope.suppressUpdate !== true && envelope.authorizationFailure &&
-            authorizationMatches(state, record.metadata.authorization)) {
-            if (!advanceAuthorizationEpoch(provider)) { return false; }
-            clearAuthorization(provider, true);
-        }
         return state.runtime.reject(
             record,
             normalizeSolanaProviderError(
@@ -1178,10 +1109,6 @@ function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () =>
                 record,
                 new ProviderRpcError(-32603, malformedSolanaResponse)
             );
-        }
-        if (authorizationMatches(state, record.metadata.authorization)) {
-            if (!advanceAuthorizationEpoch(provider)) { return false; }
-            clearAuthorization(provider, true);
         }
         return state.runtime.resolve(record, true);
     }
@@ -1218,68 +1145,14 @@ function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () =>
             );
         }
         const resultPublicKey = new PublicKey(publicKeyValue);
-        if (envelope.configurationMatch === false) {
-            if (envelope.approvalCommitted === true) {
-                return state.runtime.resolve(record, {
-                    publicKey: resultPublicKey,
-                });
-            }
-            return rejectOperation(
-                provider,
-                record,
-                providerReplacementError()
-            );
+        if (envelope.approvalCommitted !== true && (state.publicKeyString !== publicKeyValue ||
+            (envelope.state ? envelope.state.revisions.solana !== state.workerRevision :
+                !authorizationMatches(state, record.metadata.authorization)))) {
+            return rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
         }
-        const previousPublicKey = state.publicKeyString;
-        const appliedConfigurationMatches =
-            envelope.configurationMatch === true &&
-            state.accountRevocationTombstone !== true &&
-            state.isConnected === true &&
-            previousPublicKey === publicKeyValue;
-        if (appliedConfigurationMatches) {
-            return state.runtime.resolve(record, {
-                publicKey: state.publicKey,
-            });
-        }
-        if (!authorizationMatches(state, record.metadata.authorization) ||
-            record.metadata.authorization.disconnectedConfigurationRevision !==
-                state.disconnectedConfigurationRevision) {
-            if (envelope.approvalCommitted === true) {
-                return state.runtime.resolve(record, {
-                    publicKey: resultPublicKey,
-                });
-            }
-            return rejectOperation(
-                provider,
-                record,
-                providerReplacementError()
-            );
-        }
-        const wasConnected = state.isConnected;
-        state.accountRevocationTombstone = false;
-        if (previousPublicKey !== publicKeyValue) {
-            try {
-                incrementRevision(state);
-            } catch (error) {
-                clearAuthorization(provider, true);
-                state.runtime.reject(record, error);
-                return false;
-            }
-        }
-        commitPublicKey(state, publicKeyValue, resultPublicKey);
-        state.isConnected = true;
-        const settled = state.runtime.resolve(
-            record,
-            {publicKey: state.publicKey}
-        );
-        if (settled && !wasConnected) {
-            emitProvider(provider, "connect", state.publicKey);
-        }
-        if (previousPublicKey !== publicKeyValue) {
-            emitProvider(provider, "accountChanged", state.publicKey);
-            notifyAccountChange(provider);
-        }
-        return settled;
+        return state.runtime.resolve(record, {
+            publicKey: state.publicKeyString === publicKeyValue ? state.publicKey : resultPublicKey,
+        });
     }
     const value = envelope.result;
     if (record.metadata.method === "signMessage" ||
@@ -1306,9 +1179,18 @@ function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () =>
 function retire(provider, error = providerReplacementError()) {
     const state = providerState(provider);
     if (!state || state.runtime.phase === "retired") { return 0; }
+    const hadAccount = state.publicKeyString !== null;
+    const wasConnected = state.isConnected;
     const count = state.runtime.retire(error);
     state.activeDisconnect = null;
-    clearAuthorization(provider, true);
+    state.notificationEpoch += 1;
+    commitPublicKey(state, null);
+    state.isConnected = false;
+    if (hadAccount) {
+        emitProvider(provider, "accountChanged", null);
+        notifyAccountChange(provider);
+    }
+    if (wasConnected) { emitProvider(provider, "disconnect"); }
     state.notificationListener = null;
     return count;
 }
@@ -1317,21 +1199,11 @@ function snapshot(provider) {
     const state = providerState(provider);
     if (!state) { return null; }
     const publicKey = state.publicKeyString;
-    if ((publicKey !== null && !validPublicKeyString(publicKey)) ||
-        !Number.isSafeInteger(state.accountRevision) ||
-        state.accountRevision < 0 ||
-        !Number.isSafeInteger(state.solanaAuthorizationEpoch) ||
-        state.solanaAuthorizationEpoch < 0) {
-        return null;
-    }
+    if (publicKey !== null && !validPublicKeyString(publicKey)) { return null; }
     return freezeObjectNormally({
-        accountRevocationTombstone:
-            state.accountRevocationTombstone === true,
-        accountRevision: state.accountRevision,
+        workerRevision: state.workerRevision,
         isConnected: state.isConnected === true && publicKey !== null,
         publicKey,
-        reauthorizationRevision: state.reauthorizationRevision,
-        solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
     });
 }
 
@@ -1347,31 +1219,12 @@ function initialAuthorization(initialState) {
         } catch {
         }
     }
-    const accountRevision = Number.isSafeInteger(initial.accountRevision) &&
-        initial.accountRevision >= 0
-        ? initial.accountRevision
-        : 0;
-    const solanaAuthorizationEpoch = Number.isSafeInteger(
-        initial.solanaAuthorizationEpoch
-    ) && initial.solanaAuthorizationEpoch >= 0
-        ? initial.solanaAuthorizationEpoch
-        : 0;
-    const tombstone = initial.accountRevocationTombstone === true;
-    const publicKeyString = !tombstone && validPublicKeyString(initial.publicKey)
-        ? initial.publicKey
-        : null;
+    const publicKeyString = validPublicKeyString(initial.publicKey) ? initial.publicKey : null;
     return {
-        accountRevision,
-        accountRevocationTombstone: tombstone,
+        workerRevision: null,
         isConnected: publicKeyString !== null && initial.isConnected === true,
         publicKey: publicKeyString === null ? null : new PublicKey(publicKeyString),
         publicKeyString,
-        reauthorizationRevision:
-            Number.isSafeInteger(initial.reauthorizationRevision) &&
-            initial.reauthorizationRevision >= 0
-                ? initial.reauthorizationRevision
-                : 0,
-        solanaAuthorizationEpoch,
     };
 }
 
@@ -1385,7 +1238,7 @@ class BigWalletSolana {
         const authorization = initialAuthorization(initialState);
         setProviderState(this, {
             activeDisconnect: null,
-            disconnectedConfigurationRevision: 0,
+            notificationEpoch: 0,
             generation: providerGeneration,
             runtime: new OperationRuntime(providerGeneration, {
                 firstWireId: 2,
@@ -1442,18 +1295,6 @@ class BigWalletSolana {
 
     set didGetLatestConfiguration(_) {}
 
-    get accountRevision() {
-        return getProviderState(this).accountRevision;
-    }
-
-    get accountRevocationTombstone() {
-        return getProviderState(this).accountRevocationTombstone;
-    }
-
-    get solanaAuthorizationEpoch() {
-        return getProviderState(this).solanaAuthorizationEpoch;
-    }
-
     get retired() {
         return getProviderState(this).runtime.phase === "retired";
     }
@@ -1499,11 +1340,6 @@ class BigWalletSolana {
             )) {
             return state.activeDisconnect.promise;
         }
-        if (state.solanaAuthorizationEpoch === maximumCounter) {
-            const error = providerReplacementError();
-            retire(this, error);
-            return Promise.reject(error);
-        }
         const metadata = createMetadata("disconnect");
         let record;
         try {
@@ -1547,8 +1383,7 @@ class BigWalletSolana {
     }
 
     externalDisconnect() {
-        externalDisconnect(this);
-        return Promise.resolve(true);
+        return this.disconnect();
     }
 
     retire(error) {
@@ -1587,11 +1422,10 @@ class BigWalletSolana {
 
     accountState() {
         const state = getProviderState(this);
-        const {publicKeyString: address, accountRevision, solanaAuthorizationEpoch} = state;
+        const {publicKeyString: address, workerRevision} = state;
         if (address === null) { return null; }
         const bytes = new Uint8Array(Base58.decode(address));
-        if (state.publicKeyString !== address || state.accountRevision !== accountRevision ||
-            state.solanaAuthorizationEpoch !== solanaAuthorizationEpoch) {
+        if (state.publicKeyString !== address || state.workerRevision !== workerRevision) {
             throw providerReplacementError();
         }
         return {address, publicKey: bytes};
@@ -1738,7 +1572,7 @@ class BigWalletSolana {
         if (inputs.length > maximumTransactionBatchSize) {
             throw new ProviderRpcError(4200, invalidSolanaMessageRequest);
         }
-        const authorization = authorizationSnapshot(getProviderState(this));
+        let authorization = authorizationSnapshot(getProviderState(this));
         const prepared = [];
         for (let index = 0; index < inputs.length; index += 1) {
             const input = inputs[index];
@@ -1747,6 +1581,9 @@ class BigWalletSolana {
                 input?.message,
                 invalidSolanaMessageRequest
             );
+        }
+        if (prepared.length > 0 && authorization.revision === null) {
+            authorization = await bootstrapAuthorization(this, authorization);
         }
         const outputs = [];
         for (let index = 0; index < prepared.length; index += 1) {
@@ -1765,7 +1602,7 @@ class BigWalletSolana {
         if (inputs.length > maximumTransactionBatchSize) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionBatchRequest);
         }
-        const authorization = authorizationSnapshot(getProviderState(this));
+        let authorization = authorizationSnapshot(getProviderState(this));
         const prepared = [];
         for (let index = 0; index < inputs.length; index += 1) {
             const input = inputs[index];
@@ -1774,6 +1611,9 @@ class BigWalletSolana {
             prepared[index] = this.preparedStandardTransaction(
                 input?.transaction
             );
+        }
+        if (prepared.length > 0 && authorization.revision === null) {
+            authorization = await bootstrapAuthorization(this, authorization);
         }
         const outputs = [];
         for (let index = 0; index < prepared.length; index += 1) {
@@ -1798,7 +1638,7 @@ class BigWalletSolana {
         if (inputs.length > maximumTransactionBatchSize) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionBatchRequest);
         }
-        const authorization = authorizationSnapshot(getProviderState(this));
+        let authorization = authorizationSnapshot(getProviderState(this));
         const prepared = [];
         for (let index = 0; index < inputs.length; index += 1) {
             const input = inputs[index];
@@ -1811,6 +1651,9 @@ class BigWalletSolana {
                     invalidSolanaTransactionRequest
                 ),
             };
+        }
+        if (prepared.length > 0 && authorization.revision === null) {
+            authorization = await bootstrapAuthorization(this, authorization);
         }
         const outputs = [];
         for (let index = 0; index < prepared.length; index += 1) {
@@ -1831,5 +1674,5 @@ BigWalletSolana.retire = retire;
 BigWalletSolana.snapshot = snapshot;
 BigWalletSolana.isReady = isReady;
 
-export { applyDecodedEnvelope, isReady, observeConfiguration, retire, snapshot, subscribeNotifications };
+export { applyDecodedEnvelope, prepareConfiguration, configurationIsCurrent, commitConfiguration, emitConfiguration, finishConfiguration, isReady, retire, snapshot, subscribeNotifications };
 export default BigWalletSolana;

@@ -12,12 +12,21 @@ import {
 
 import BigWalletEthereum, {
     applyDecodedEnvelope as applyEthereumDecodedEnvelope,
+    prepareConfiguration as prepareEthereumConfiguration,
+    configurationIsCurrent as ethereumConfigurationIsCurrent,
+    commitConfiguration as commitEthereumConfiguration,
+    emitConfiguration as emitEthereumConfiguration,
+    finishConfiguration as finishEthereumConfiguration,
     subscribeNotifications as ethereumSubscribeNotifications,
     withReadyState as ethereumWithReadyState,
 } from "./ethereum";
 import BigWalletSolana, {
     applyDecodedEnvelope as applySolanaDecodedEnvelope,
-    observeConfiguration as observeSolanaConfiguration,
+    prepareConfiguration as prepareSolanaConfiguration,
+    configurationIsCurrent as solanaConfigurationIsCurrent,
+    commitConfiguration as commitSolanaConfiguration,
+    emitConfiguration as emitSolanaConfiguration,
+    finishConfiguration as finishSolanaConfiguration,
     subscribeNotifications as solanaSubscribeNotifications,
 } from "./solana";
 import {providerReplacementError} from "./error";
@@ -176,12 +185,6 @@ const previousPhantom = ownValue(window, "phantom");
 let committed = false;
 let ethereumProvider;
 let solanaProvider;
-let responseIngressEpoch = 0;
-
-function ingressIsCurrent(epoch) {
-    return epoch === responseIngressEpoch;
-}
-
 function isCurrentInstallation() {
     return committed &&
         ownValue(window, "bigWalletInpageProviderGenerationToken") === generation &&
@@ -204,7 +207,6 @@ const transport = freezeObjectNormally({
         let body;
         if (provider === "ethereum") {
             body = {
-                accountRevision: ownValue(message, "accountRevision"),
                 address: ownValue(message, "address"),
                 chainId: ownValue(message, "chainId"),
                 object: ownValue(message, "data"),
@@ -253,72 +255,30 @@ function malformedError() {
 }
 
 
-function applyDecoded(providerName, envelope, configurationIsCurrent) {
-    const delivery = freezeObjectNormally({
-        __proto__: null,
-        suppressUpdate: false,
-        ...envelope,
-    });
+function applyDecoded(providerName, envelope) {
+    const delivery = freezeObjectNormally({__proto__: null, ...envelope});
     try {
         return providerName === "ethereum"
             ? applyEthereumDecodedEnvelope(ethereumProvider, delivery)
-            : applySolanaDecodedEnvelope(solanaProvider, delivery, configurationIsCurrent);
+            : applySolanaDecodedEnvelope(solanaProvider, delivery);
     } catch {
         return false;
     }
 }
 
-function ethereumConfiguration(value) {
-    const current = BigWalletEthereum.snapshot(ethereumProvider) || {__proto__: null};
-    const reauthorizationRevision = value?.reauthorizationRevision ??
-        current.reauthorizationRevision ?? 0;
-    return freezeObjectNormally({
-        __proto__: null,
-        reauthorizationRevision,
-        address: value?.address ?? "",
-        chainId: value?.chainId ?? current.chainId ?? "0x1",
-    });
-}
-
-function deliverEthereumConfiguration(
-    value,
-    suppressUpdate,
-    ingressEpoch
-) {
-    if (!ingressIsCurrent(ingressEpoch)) {
-        return false;
+function prepareConfigurations(snapshot) {
+    if (!snapshot) { return {ethereum: null, solana: null}; }
+    try {
+        const ethereum = prepareEthereumConfiguration(
+            ethereumProvider, snapshot.ethereum, snapshot.revisions.ethereum
+        );
+        const solana = prepareSolanaConfiguration(
+            solanaProvider, snapshot.solana, snapshot.revisions.solana
+        );
+        return ethereum && solana ? {ethereum, solana} : null;
+    } catch {
+        return null;
     }
-    const configuration = ethereumConfiguration(value);
-    if (!ingressIsCurrent(ingressEpoch)) {
-        return false;
-    }
-    return applyDecoded("ethereum", {
-        configuration,
-        kind: "configuration",
-        suppressUpdate,
-    });
-}
-
-function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
-    const state = response.state;
-    if (!state) { return false; }
-    if (!ingressIsCurrent(ingressEpoch)) { return false; }
-    const solana = freezeObjectNormally({
-        __proto__: null,
-        kind: "configuration",
-        configuration: state.solana,
-        workerRevision: state.revisions.solana,
-        suppressUpdate,
-    });
-    observeSolanaConfiguration(solanaProvider, solana);
-    let delivered = deliverEthereumConfiguration(
-        state.ethereum, suppressUpdate, ingressEpoch
-    );
-    if (!ingressIsCurrent(ingressEpoch)) { return delivered; }
-    delivered = applyDecoded(
-        "solana", solana, () => ingressIsCurrent(ingressEpoch)
-    ) || delivered;
-    return delivered;
 }
 
 function providerForWireId(id) {
@@ -326,96 +286,68 @@ function providerForWireId(id) {
     return id % 2 === 1 ? "ethereum" : "solana";
 }
 
-function rejectMalformedCorrelation(id, name, suppressUpdate, ingressEpoch) {
+function rejectMalformedCorrelation(id, name) {
     const providerName = providerForWireId(id);
     if (!providerName) { return false; }
     return applyDecoded(providerName, {
-        error: malformedError(),
-        id,
-        kind: "error",
-        name,
-        suppressUpdate: suppressUpdate || !ingressIsCurrent(ingressEpoch),
+        error: malformedError(), id, kind: "error", name,
     });
 }
 
 function handleContentBridgeMessage(event) {
-    const previousIngressEpoch = responseIngressEpoch;
     let data;
     let source;
     try {
         data = event.data;
         source = event.source;
-    } catch {
-        return;
-    }
+    } catch { return; }
     if (source !== window || !data ||
         ownValue(data, "direction") !== CONTENT_TO_PAGE_DIRECTION ||
         ownValue(data, "providerGeneration") !== generation ||
-        !isCurrentInstallation()) {
-        return;
-    }
+        !isCurrentInstallation()) { return; }
     const kind = ownValue(data, "kind");
     if (kind !== "response" && kind !== "rpc") { return; }
     const raw = ownValue(data, "response");
     const id = ownValue(data, "id");
     const response = BigWalletBridgeWire.decodePageResponse(raw, id);
-    const suppressUpdate = ownValue(data, "suppressProviderUpdate") === true;
-    if (!response && !isSafeIntegerNormally(id)) { return; }
-    let ingressEpoch = previousIngressEpoch;
-    let reservedIngress = false;
-    if (responseIngressEpoch === previousIngressEpoch) {
-        if (previousIngressEpoch === Number.MAX_SAFE_INTEGER) { return; }
-        ingressEpoch = previousIngressEpoch + 1;
-        responseIngressEpoch = ingressEpoch;
-        reservedIngress = true;
+    if (!response) {
+        rejectMalformedCorrelation(id, raw && typeof raw === "object" ? ownValue(raw, "name") : null);
+        return;
     }
-    let delivered = false;
-    try {
-        if (!response) {
-            delivered = rejectMalformedCorrelation(
-                id, raw && typeof raw === "object" ? ownValue(raw, "name") : null,
-                suppressUpdate, ingressEpoch
-            );
-            return;
+    if (kind === "rpc") {
+        if ((response.kind !== "result" && response.kind !== "error") ||
+            response.provider !== "ethereum" || response.name !== null ||
+            providerForWireId(response.id) !== "ethereum" || response.state !== null) {
+            rejectMalformedCorrelation(id, null);
+        } else {
+            applyDecoded("ethereum", {...response, approvalCommitted: false});
         }
-        if (kind === "rpc") {
-            if ((response.kind !== "result" && response.kind !== "error") ||
-                response.provider !== "ethereum" || response.name !== null ||
-                providerForWireId(response.id) !== "ethereum" ||
-                response.state !== null || response.configurationMatch !== null) {
-                delivered = rejectMalformedCorrelation(id, null, true, ingressEpoch);
-            } else {
-                delivered = applyDecoded("ethereum", {
-                    ...response,
-                    suppressUpdate: true,
-                    authorizationFailure: false,
-                    approvalCommitted: false,
-                });
-            }
-            return;
-        }
-        if (response.kind === "configurationError") {
-            delivered = applyDecoded("ethereum", response);
-            delivered = applyDecoded("solana", response) || delivered;
-            return;
-        }
-        delivered = deliverConfigurations(response, suppressUpdate, ingressEpoch);
-        if (response.kind === "configuration") { return; }
-        if (providerForWireId(response.id) !== response.provider) {
-            delivered = rejectMalformedCorrelation(
-                response.id, response.name, suppressUpdate, ingressEpoch
-            ) || delivered;
-            return;
-        }
-        delivered = applyDecoded(response.provider, {
-            ...response,
-            suppressUpdate: suppressUpdate || !ingressIsCurrent(ingressEpoch),
-        }) || delivered;
-    } finally {
-        if (reservedIngress && !delivered && responseIngressEpoch === ingressEpoch) {
-            responseIngressEpoch = previousIngressEpoch;
-        }
+        return;
     }
+    if (response.kind === "configurationError") {
+        applyDecoded("ethereum", response);
+        applyDecoded("solana", response);
+        return;
+    }
+    if (response.kind !== "configuration" &&
+        providerForWireId(response.id) !== response.provider) {
+        rejectMalformedCorrelation(response.id, response.name);
+        return;
+    }
+    const prepared = prepareConfigurations(response.state);
+    if (!prepared || !isCurrentInstallation()) {
+        if (response.kind !== "configuration") { rejectMalformedCorrelation(response.id, response.name); }
+        return;
+    }
+    const ethereumChange = ethereumConfigurationIsCurrent(ethereumProvider, prepared.ethereum)
+        ? commitEthereumConfiguration(ethereumProvider, prepared.ethereum) : null;
+    const solanaChange = solanaConfigurationIsCurrent(solanaProvider, prepared.solana)
+        ? commitSolanaConfiguration(solanaProvider, prepared.solana) : null;
+    if (response.kind !== "configuration") { applyDecoded(response.provider, response); }
+    emitEthereumConfiguration(ethereumProvider, ethereumChange);
+    emitSolanaConfiguration(solanaProvider, solanaChange);
+    finishEthereumConfiguration(ethereumProvider, ethereumChange);
+    finishSolanaConfiguration(solanaProvider, solanaChange);
 }
 
 function contentMessageTrampoline(event) {

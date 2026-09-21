@@ -4879,20 +4879,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testNativeAgentResolutionDoesNotVerifyBeforeAProcessAction() async throws {
         let currentURL = try makeAmbientBundle(name: "Unlaunched", build: "149")
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in
                     XCTFail("Selecting a candidate must leave verification to launch")
                     return false
                 },
                 helpers: { [] },
                 identity: { _ in nil }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         XCTAssertEqual(
@@ -4900,17 +4899,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             .launch(url: currentURL))
     }
 
+    @MainActor
     func testNativeAgentUnknownRuntimePollsVerifyOnlyBeforeQuit() async throws {
         let currentURL = try makeAmbientBundle(name: "Starting", build: "149")
         var uptime: UInt64 = 0
         var isRunning = true
         var verifications = 0
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in
                     XCTAssertGreaterThanOrEqual(uptime, 1_000_000_000)
                     verifications += 1
@@ -4936,7 +4932,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 identity: { _ in nil },
                 uptime: { uptime },
                 sleepUntil: { deadline in uptime = max(uptime, deadline) }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         XCTAssertEqual(
@@ -4946,6 +4944,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 1)
     }
 
+    @MainActor
     func testNativeAgentResolutionRevalidatesRetirementAfterSuspension() async throws {
         let currentURL = try makeAmbientBundle(name: "Retirement Passes", build: "149")
         let launchDate = Date(timeIntervalSince1970: 9_500)
@@ -4965,11 +4964,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var pass = 0
         var verifiedPasses = [Int]()
         var retiredProcesses = [Int32]()
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { url in
                     XCTAssertEqual(url, currentURL)
                     verifiedPasses.append(pass)
@@ -4992,7 +4987,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 },
                 identity: { identities[$0] },
                 sleepUntil: { _ in pass += 1 }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         XCTAssertEqual(
@@ -5002,6 +4999,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(retiredProcesses, processIdentifiers)
     }
 
+    @MainActor
     func testNativeAgentResolutionIgnoresOtherPaths() async throws {
         let currentURL = try makeAmbientBundle(name: "Current", build: "148")
         let otherURL = try makeAmbientBundle(name: "Other", build: "149")
@@ -5018,11 +5016,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 launchDate: launchDate
             ),
         ]
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { $0 == currentURL },
                 helpers: {
                     [
@@ -5039,7 +5033,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     ]
                 },
                 identity: { identities[$0] }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5057,17 +5053,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testNativeAgentResolutionFailsClosedWhenUnknownRetirementIsRefused()
         async throws
     {
         let currentURL = try makeAmbientBundle(name: "Unknown", build: "148")
         var uptime: UInt64 = 0
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     [
@@ -5085,24 +5078,23 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 identity: { _ in nil },
                 uptime: { uptime },
                 sleepUntil: { deadline in uptime = max(uptime, deadline) }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         XCTAssertNil(selected)
         XCTAssertEqual(quitCount, 1)
     }
 
+    @MainActor
     func testNativeAgentResolutionLaunchesAfterLegacyRuntimeExits() async throws {
         let currentURL = try makeAmbientBundle(name: "Legacy", build: "149")
         let launchDate = Date(timeIntervalSince1970: 11_500)
         var uptime: UInt64 = 0
         var isLegacyRunning = true
         var requestCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     guard isLegacyRunning else { return [] }
@@ -5123,7 +5115,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 identity: { _ in nil },
                 uptime: { uptime },
                 sleepUntil: { deadline in uptime = max(uptime, deadline) }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5133,6 +5127,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(requestCount, 1)
     }
 
+    @MainActor
     func testNativeAgentResolutionAllowsNewRuntimeToPublishIdentity() async throws {
         let currentURL = try makeAmbientBundle(name: "Starting", build: "149")
         let launchDate = Date(timeIntervalSince1970: 11_600)
@@ -5146,11 +5141,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var isRunning = true
         var identityReadCount = 0
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     guard isRunning else { return [] }
@@ -5176,7 +5167,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 },
                 uptime: { uptime },
                 sleepUntil: { deadline in uptime = max(uptime, deadline) }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5193,6 +5186,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 0)
     }
 
+    @MainActor
     func testNativeAgentResolutionRechecksIdentityBeforeUnknownRetirement()
         async throws
     {
@@ -5206,11 +5200,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var uptime: UInt64 = 0
         var boundaryReadCount = 0
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     [
@@ -5232,7 +5222,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 },
                 uptime: { uptime },
                 sleepUntil: { deadline in uptime = max(uptime, deadline) }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5248,15 +5240,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 0)
     }
 
+    @MainActor
     func testNativeAgentResolutionPreservesUnknownOtherPath() async throws {
         let currentURL = try makeAmbientBundle(name: "Current", build: "149")
         let otherURL = try makeAmbientBundle(name: "Other Legacy", build: "148")
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     [
@@ -5272,7 +5261,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     ]
                 },
                 identity: { _ in nil }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5282,6 +5273,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 0)
     }
 
+    @MainActor
     func testUnknownSamePathRetirementPreservesUnknownOtherPath()
         async throws
     {
@@ -5292,11 +5284,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var samePathIsRunning = true
         var samePathQuitCount = 0
         var otherPathQuitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     var result = [
@@ -5329,7 +5317,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 identity: { _ in nil },
                 uptime: { uptime },
                 sleepUntil: { deadline in uptime = max(uptime, deadline) }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5340,6 +5330,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(otherPathQuitCount, 0)
     }
 
+    @MainActor
     func testNativeAgentResolutionRetiresIncompatibleRuntimeBeforeLaunch() async throws {
         let currentURL = try makeAmbientBundle(name: "Incompatible", build: "148")
         let launchDate = Date(timeIntervalSince1970: 12_000)
@@ -5351,11 +5342,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         var isRunning = true
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     guard isRunning else { return [] }
@@ -5374,7 +5361,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 },
                 identity: { _ in identity },
                 sleepUntil: { _ in isRunning = false }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5384,6 +5373,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 1)
     }
 
+    @MainActor
     func testNativeAgentResolutionTargetsCompatibleSamePathRuntime() async throws {
         let currentURL = try makeAmbientBundle(name: "Mixed", build: "148")
         let launchDate = Date(timeIntervalSince1970: 13_000)
@@ -5400,11 +5390,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         var incompatibleIsRunning = true
         var quitCount = 0
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     var result = [
@@ -5433,7 +5419,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     processIdentifier == 831 ? compatible : incompatible
                 },
                 sleepUntil: { _ in incompatibleIsRunning = false }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5452,6 +5440,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 1)
     }
 
+    @MainActor
     func testNativeAgentResolutionRejectsOldBuildAtCurrentPath() async throws {
         let currentURL = try makeAmbientBundle(name: "Current", build: "149")
         let oldURL = try makeAmbientBundle(name: "Old", build: "148")
@@ -5471,11 +5460,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var isRunning = true
         var quitCount = 0
 
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     guard isRunning else { return [] }
@@ -5494,7 +5479,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 },
                 identity: { _ in identity },
                 sleepUntil: { _ in isRunning = false }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         guard let selected,
@@ -5504,6 +5491,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(quitCount, 1)
     }
 
+    @MainActor
     func testNativeAgentResolutionFailsClosedWhenRetirementIsRefused()
         async throws
     {
@@ -5517,11 +5505,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         var quitCount = 0
 
-        let selected = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: currentURL,
-            deadline: UInt64.max,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let selected = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in true },
                 helpers: {
                     [
@@ -5537,7 +5521,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     ]
                 },
                 identity: { _ in identity }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: currentURL)),
+            deadline: UInt64.max
         )
 
         XCTAssertNil(selected)
@@ -5554,15 +5540,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             launchDate: Date(timeIntervalSince1970: 13_600)
         )
 
-        XCTAssertFalse(NativeAgentLauncher.isCompatibleRuntimeIdentity(
-            identity,
-            runtimeURL: otherURL,
-            expectedURL: expectedURL
+        XCTAssertFalse(try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: expectedURL)).isCompatible(
+            identity, runtimeURL: otherURL
         ))
-        XCTAssertTrue(NativeAgentLauncher.isCompatibleRuntimeIdentity(
-            identity,
-            runtimeURL: otherURL,
-            expectedURL: otherURL
+        XCTAssertTrue(try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: otherURL)).isCompatible(
+            identity, runtimeURL: otherURL
         ))
     }
 
@@ -5579,8 +5561,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         for scenario in ["missing", "terminated", "reused", "unreadableStart", "unreadableIdentity", "differentIdentity"] {
             var lookups = [Int32]()
-            let status = await NativeAgentLauncher.runtimeStatus(
-                receipt: receipt, expectedURL: url, expectedVersion: original.version,
+            let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+                validate: { _ in XCTFail("Unconfirmed owners must not verify signatures"); return false },
                 helper: { pid in
                     lookups.append(pid)
                     guard scenario != "missing" else { return nil }
@@ -5603,8 +5585,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         supportedWorkflowVersions: original.supportedWorkflowVersions,
                         launchedAt: original.launchedAt
                     )
-                },
-                validate: { _ in XCTFail("Unconfirmed owners must not verify signatures"); return false }
+                }
+            )).status(
+                owner: receipt.owner,
+                expected: .init(url: url, version: original.version)
             )
             XCTAssertEqual(lookups, [original.processIdentifier])
             if ["missing", "terminated", "reused"].contains(scenario) {
@@ -5636,41 +5620,40 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         var identity = original
         var verifications = 0
-        let confirmed = await NativeAgentLauncher.isConfirmedRuntimeHelper(
-            helper,
-            expectedURL: bundleURL,
-            identity: { _ in identity },
+        let confirmed = await NativeAgentLauncher(dependencies: launcherTestDependencies(
             validate: { _ in
                 verifications += 1
                 await Task.yield()
                 identity = replacement
                 return true
-            }
+            },
+            helpers: { [helper] },
+            identity: { _ in identity }
+        )).isConfirmed(
+            try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL)),
+            deadline: UInt64.max
         )
 
         XCTAssertFalse(confirmed)
         XCTAssertEqual(verifications, 1)
 
         identity = original
-        let status = await NativeAgentLauncher.runtimeStatus(
-            receipt: .init(
-                nativeDeliveryNonce: .init(value: UUID()),
-                owner: try XCTUnwrap(original.nativeDeliveryOwner)
-            ),
-            expectedURL: bundleURL,
-            expectedVersion: original.version,
-            helper: { pid in
-                XCTAssertEqual(pid, original.processIdentifier)
-                return helper
-            },
-            identity: { _ in identity },
-            validate: { _ in
+        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+                validate: { _ in
                 verifications += 1
                 await Task.yield()
                 identity = replacement
                 return true
-            }
-        )
+            },
+                helper: { pid in
+                XCTAssertEqual(pid, original.processIdentifier)
+                return helper
+            },
+                identity: { _ in identity }
+            )).status(
+                owner: try XCTUnwrap(original.nativeDeliveryOwner),
+                expected: .init(url: bundleURL, version: original.version)
+            )
         guard case .unidentified = status else {
             return XCTFail("Changed receipt owner must not receive delivery")
         }
@@ -5701,29 +5684,27 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             verifications += 1
             return true
         }
-        let confirmed = await NativeAgentLauncher.isConfirmedRuntimeHelper(
-            helper,
-            expectedURL: bundleURL,
-            expectedVersion: identity.version,
-            identity: { _ in identity },
-            validate: validate
+        let confirmed = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+            validate: validate,
+            helpers: { [helper] },
+            identity: { _ in identity }
+        )).isConfirmed(
+            .init(url: bundleURL, version: identity.version),
+            deadline: UInt64.max
         )
         XCTAssertFalse(confirmed)
         XCTAssertEqual(verifications, 1)
 
-        let status = await NativeAgentLauncher.runtimeStatus(
-            receipt: .init(
-                nativeDeliveryNonce: .init(value: UUID()),
-                owner: try XCTUnwrap(identity.nativeDeliveryOwner)
-            ),
-            expectedURL: bundleURL,
-            expectedVersion: identity.version,
-            helper: { pid in
+        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+                validate: validate,
+                helper: { pid in
                 ([helper]).first { $0.processIdentifier == pid }
             },
-            identity: { _ in identity },
-            validate: validate
-        )
+                identity: { _ in identity }
+            )).status(
+                owner: try XCTUnwrap(identity.nativeDeliveryOwner),
+                expected: .init(url: bundleURL, version: identity.version)
+            )
         guard case .unidentified = status else {
             return XCTFail("An updated installed bundle must invalidate captured compatibility")
         }
@@ -5742,20 +5723,20 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(runtime: UUID(), bundleURL: expectedURL)
         )
 
-        let status = await NativeAgentLauncher.runtimeStatus(
-            receipt: receipt,
-            expectedURL: expectedURL,
-            expectedVersion: version,
-            helper: { pid in
+        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+                validate: { $0 == expectedURL },
+                helper: { pid in
                 ([self.runtimeHelper(
                     processIdentifier: 836,
                     bundleURL: otherURL,
                     launchDate: Date(timeIntervalSince1970: 13_700)
                 )]).first { $0.processIdentifier == pid }
             },
-            identity: { _ in nil },
-            validate: { $0 == expectedURL }
-        )
+                identity: { _ in nil }
+            )).status(
+                owner: receipt.owner,
+                expected: .init(url: expectedURL, version: version)
+            )
 
         guard case .absent = status else {
             return XCTFail("Unrelated helper must not fence recovery")
@@ -5773,20 +5754,20 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(runtime: UUID(), bundleURL: expectedURL)
         )
 
-        let status = await NativeAgentLauncher.runtimeStatus(
-            receipt: receipt,
-            expectedURL: expectedURL,
-            expectedVersion: version,
-            helper: { pid in
+        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+                validate: { $0 == expectedURL },
+                helper: { pid in
                 ([self.runtimeHelper(
                     processIdentifier: receipt.owner.processIdentifier,
                     bundleURL: expectedURL,
                     launchDate: receipt.owner.processStartDate
                 )]).first { $0.processIdentifier == pid }
             },
-            identity: { _ in nil },
-            validate: { $0 == expectedURL }
-        )
+                identity: { _ in nil }
+            )).status(
+                owner: receipt.owner,
+                expected: .init(url: expectedURL, version: version)
+            )
 
         guard case .unidentified = status else {
             return XCTFail("Possible owner must remain ambiguous")
@@ -5798,11 +5779,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let helperURL = try makeAmbientBundle(name: "Resolution Deadline Boundary", build: "148")
         var uptime: UInt64 = 0
         var helperReads = 0
-        let target = await NativeAgentLauncher.resolveTargetHelper(
-            currentURL: helperURL,
-            deadline: 50_000_000,
-            isPending: { true },
-            dependencies: launcherTestDependencies(
+        let target = await NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in
                     XCTFail("An expired resolution must not validate a helper")
                     return false
@@ -5817,7 +5794,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     uptime
                 },
                 sleepUntil: { _ in XCTFail("An expired resolution must not sleep") }
-            )
+            )).resolveTarget(
+            expected: try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: helperURL)),
+            deadline: 50_000_000
         )
         XCTAssertNil(target)
         XCTAssertEqual(helperReads, 1)

@@ -10,6 +10,21 @@
         helper: @escaping @MainActor (Int32) -> NativeAgentLauncher.RuntimeHelper? = { _ in nil },
         identity: @escaping (Int32) -> AmbientRuntimeIdentity? = { _ in nil },
         launch: @escaping NativeAgentLauncher.Launch = { _, _, completion in completion(false) },
+        uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+        sleepUntil: @escaping (UInt64) async -> Void = { deadline in
+            let now = DispatchTime.now().uptimeNanoseconds
+            if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
+        }
+    ) -> NativeAgentLauncher.Dependencies {
+        .init(
+            helperURL: helperURL, validate: validate, helpers: helpers, helper: helper,
+            identity: identity, launch: launch,
+            uptime: uptime, sleepUntil: sleepUntil)
+    }
+
+    @MainActor
+    func approvalServiceTestDependencies(
+        launcher: NativeAgentLauncher? = nil,
         load: @escaping (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult = { _ in .missing },
         loadManualSwitch: @escaping (ExtensionBridge.Handle, String) async -> ExtensionBridge.SnapshotResult = { _, _ in .missing },
         beginExecutionRead: @escaping (ExtensionBridge.Handle, String, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionReadResult = { _, _, _, _ in .missing },
@@ -23,17 +38,16 @@
             let now = DispatchTime.now().uptimeNanoseconds
             if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
         }
-    ) -> NativeAgentLauncher.Dependencies {
+    ) -> NativeApprovalService.Dependencies {
         .init(
-            helperURL: helperURL, validate: validate, helpers: helpers, helper: helper,
-            identity: identity, launch: launch, load: load,
+            launcher: launcher ?? NativeAgentLauncher(dependencies: launcherTestDependencies()), load: load,
             loadManualSwitch: loadManualSwitch, beginExecutionRead: beginExecutionRead,
             readResponse: readResponse, clearReceipt: clearReceipt,
             uptime: uptime, wallClock: wallClock, sleepUntil: sleepUntil)
     }
 
     @MainActor
-    final class NativeAgentLauncherTestFixture {
+    final class NativeApprovalServiceTestFixture {
         final class Clock: @unchecked Sendable {
             private let lock = NSLock()
             private var uptime: UInt64 = 1_000_000_000
@@ -223,7 +237,7 @@
                 for: snapshot)
         }
 
-        var dependencies: NativeAgentLauncher.Dependencies {
+        var launcherDependencies: NativeAgentLauncher.Dependencies {
             launcherTestDependencies(
                 helperURL: { self.bundleURL },
                 validate: { url in
@@ -249,6 +263,13 @@
                         completion(false)
                     }
                 },
+                uptime: { self.clock.now }, sleepUntil: clock.sleepUntil
+            )
+        }
+
+        var dependencies: NativeApprovalService.Dependencies {
+            approvalServiceTestDependencies(
+                launcher: NativeAgentLauncher(dependencies: launcherDependencies),
                 load: { handle in
                     self.loads.append((handle, self.clock.now))
                     if let onLoad = self.onLoad { return await onLoad(handle) }
@@ -309,17 +330,17 @@
             )
         }
 
-        func launcher(timeout: UInt64 = 5_000_000_000) -> NativeAgentLauncher {
+        func service(timeout: UInt64 = 5_000_000_000) -> NativeApprovalService {
             .init(dependencies: dependencies, launchTimeoutNanoseconds: timeout)
         }
 
         func read(
-            _ launcher: NativeAgentLauncher,
+            _ service: NativeApprovalService,
             _ snapshot: ExtensionBridge.Snapshot,
-            mode: NativeAgentLauncher.ApprovalReadMode = .page,
+            mode: NativeApprovalService.ApprovalReadMode = .page,
             duration: TimeInterval = 2.25
         ) async -> ExtensionBridge.ResponseReadResult {
-            await launcher.readApprovalResponse(
+            await service.readApprovalResponse(
                 handle: snapshot.handle, configurationKey: snapshot.configurationKey,
                 revisions: snapshot.revisions,
                 executionDeadline: clock.date.addingTimeInterval(duration), mode: mode
@@ -365,7 +386,7 @@
                 if condition() { return }
                 try await Task.sleep(for: .milliseconds(1))
             }
-            XCTFail("Launcher condition did not become true")
+            XCTFail("Approval service condition did not become true")
             throw CocoaError(.coderInvalidValue)
         }
     }

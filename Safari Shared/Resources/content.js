@@ -74,34 +74,17 @@ function bigWalletConfigurationDelivery(
         : decoded.kind !== "configuration")) {
         return null;
     }
-    if (!decoded.state) {
-        return {response: decoded, suppressProviderUpdate: false};
+    if (decoded.state) {
+        bigWalletConfigurationState = {configurationKey, providerGeneration};
+        bigWalletFailedConfigurationGeneration = undefined;
     }
-    const revisions = decoded.state.revisions;
-    const current = bigWalletConfigurationState?.configurationKey === configurationKey &&
-        bigWalletConfigurationState.providerGeneration === providerGeneration
-        ? bigWalletConfigurationState.revisions
-        : null;
-    if (current && (revisions.ethereum < current.ethereum || revisions.solana < current.solana)) {
-        if (!terminal) { return {ignored: true}; }
-        return {
-            response: {...decoded, state: null, configurationMatch: null},
-            suppressProviderUpdate: true,
-        };
-    }
-    bigWalletConfigurationState = {
-        configurationKey,
-        providerGeneration,
-        revisions: {...revisions},
-    };
-    bigWalletFailedConfigurationGeneration = undefined;
-    return {response: decoded, suppressProviderUpdate: false};
+    return {response: decoded};
 }
 
 function bigWalletErrorResponse(id, provider, name, message = "Failed to communicate with Big Wallet") {
     return {
-        kind: "error", id, provider, name, state: null, configurationMatch: null,
-        error: {code: -32603, message}, authorizationFailure: false,
+        kind: "error", id, provider, name, state: null,
+        error: {code: -32603, message},
     };
 }
 
@@ -402,25 +385,12 @@ function bigWalletDeliver(state, response) {
     state.delivered = true;
     state.phase = "delivered";
     clearTimeout(state.timer);
-    const generationMismatch = state.generation !== bigWalletProviderGeneration;
-    let delivery;
-    if (generationMismatch) {
-        delivery = {
-            response: {...response, state: null, configurationMatch: null},
-            suppressProviderUpdate: true,
-        };
-    } else {
-        delivery = bigWalletConfigurationDelivery(
-            response,
-            state.configurationKey,
-            state.generation,
-            true
-        );
-    }
+    const delivery = state.generation === bigWalletProviderGeneration
+        ? bigWalletConfigurationDelivery(response, state.configurationKey, state.generation, true)
+        : {response};
     const prepared = delivery?.response || bigWalletErrorResponse(
         state.message.id, state.message.provider, state.message.name
     );
-    const suppress = generationMismatch || delivery?.suppressProviderUpdate === true;
     const envelope = {
         direction: bigWalletContentDirection,
         kind: "response",
@@ -428,7 +398,6 @@ function bigWalletDeliver(state, response) {
         id: state.message.id,
         providerGeneration: state.generation,
     };
-    if (suppress) { envelope.suppressProviderUpdate = true; }
     window.postMessage(envelope, "*");
     bigWalletRequests.delete(state.key);
 }
@@ -451,7 +420,6 @@ function bigWalletDeliverFailure(message, generation) {
         response,
         id: message.id,
         providerGeneration: generation,
-        suppressProviderUpdate: generation !== bigWalletProviderGeneration,
     }, "*");
 }
 
@@ -488,7 +456,7 @@ function bigWalletPostDisconnect(message, response, generation, configurationKey
         message.id, message.provider, "revokePermissions", "Failed to revoke permissions"
     );
     const delivery = generation !== bigWalletProviderGeneration
-        ? {response: prepared, suppressProviderUpdate: true}
+        ? {response: prepared}
         : bigWalletConfigurationDelivery(
             prepared, configurationKey, generation, true
         );
@@ -498,7 +466,6 @@ function bigWalletPostDisconnect(message, response, generation, configurationKey
         response: delivery.response,
         id: message.id,
         providerGeneration: generation,
-        suppressProviderUpdate: delivery.suppressProviderUpdate,
     }, "*");
 }
 
@@ -538,7 +505,7 @@ async function bigWalletLoadConfiguration(generation, attempt) {
             id: bigWalletWire.genId(),
             providerGeneration: generation,
         }, "*");
-    } else if (delivery?.ignored || bigWalletHasAcceptedConfiguration(
+    } else if (bigWalletHasAcceptedConfiguration(
         generation,
         identity?.configurationKey
     )) {

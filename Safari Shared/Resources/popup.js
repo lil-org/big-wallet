@@ -226,7 +226,7 @@ class PopupQueueController {
         if (configuration) {
             const lines = [];
             if (configuration.ethereum?.address) { lines.push(configuration.ethereum.address); }
-            if (configuration.solana?.isConnected) { lines.push(configuration.solana.publicKey); }
+            if (configuration.solana) { lines.push(configuration.solana.publicKey); }
             connectionText = lines.length > 0 ? lines.join("\n") : localized("notConnected", "Not connected");
         }
         setText("idle-connection", connectionText);

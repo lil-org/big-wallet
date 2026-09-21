@@ -27,7 +27,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static let bridge = ExtensionBridge.shared
     private static let genericRPCFailureMessage = "something went wrong"
 #if os(macOS)
-    private static let nativeAgentLauncher = NativeAgentLauncher.live
+    @MainActor private static let nativeApprovalService = NativeApprovalService.live
 #endif
 
     func beginRequest(with context: NSExtensionContext) {
@@ -240,7 +240,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 switch await DappRequestAdmission.shared.materialize(handle: handle) {
                 case .approvalRequired:
 #if os(macOS)
-                    switch await Self.nativeAgentLauncher.deliverApproval(
+                    switch await Self.nativeApprovalService.deliverApproval(
                         handle: handle, nativeDeliveryNonce: nativeDeliveryNonce
                     ) {
                     case .pending:
@@ -344,7 +344,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     context.cancelRequest(withError: HandlerError.invalidMessage)
                     return
                 }
-                let opened = await Self.nativeAgentLauncher.reactivate(.approval(
+                let opened = await Self.nativeApprovalService.reactivate(.approval(
                     workflowVersion: ExtensionBridge.workflowVersion,
                     handle: handle,
                     nativeDeliveryNonce: snapshot.nativeDeliveryNonce
@@ -399,7 +399,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         case page, manualRecovery
 
 #if os(macOS)
-        var nativeMode: NativeAgentLauncher.ApprovalReadMode {
+        var nativeMode: NativeApprovalService.ApprovalReadMode {
             self == .page ? .page : .manualRecovery
         }
 #endif
@@ -424,7 +424,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 profileIdentifier: profileIdentifier
             )
 #if os(macOS)
-            let result = await Self.nativeAgentLauncher.readApprovalResponse(
+            let result = await Self.nativeApprovalService.readApprovalResponse(
                 handle: handle,
                 configurationKey: identity.configurationKey,
                 revisions: identity.revisions,
@@ -549,7 +549,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #if os(macOS)
     private func openNativeAgent(id: Int, context: NSExtensionContext) {
         Task {
-            let opened = await Self.nativeAgentLauncher.open(
+            let opened = await Self.nativeApprovalService.open(
                 .showWallet(workflowVersion: ExtensionBridge.workflowVersion)
             )
             guard opened else {
