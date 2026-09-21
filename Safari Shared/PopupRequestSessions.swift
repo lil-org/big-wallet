@@ -437,9 +437,9 @@ final class PopupRequestSessions {
         return presenter.state(id: id, state: state, host: host)
     }
 
-    private func refreshWalletsAndNetworks() -> Bool {
+    private func refreshWalletsAndNetworks() -> WalletAccess? {
         invalidateNetworkCache()
-        return walletEnvironment.currentReviewAccess() != nil
+        return walletEnvironment.currentReviewAccess()
     }
 
     private func pendingRequestsResponse(
@@ -884,7 +884,7 @@ final class PopupRequestSessions {
         )
         guard session.replaceSelectionAction(updatedAction) else { return false }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
-        guard refreshWalletsAndNetworks() else {
+        guard let refreshedWalletAccess = refreshWalletsAndNetworks() else {
             session.setFeedback(Strings.somethingWentWrong)
             await releaseApproval(
                 approval.claim,
@@ -893,8 +893,7 @@ final class PopupRequestSessions {
             )
             return true
         }
-        guard let refreshedWalletAccess = walletEnvironment.currentReviewAccess(),
-              refreshedWalletAccess.catalogIdentity == reviewedWalletAccess.catalogIdentity else {
+        guard refreshedWalletAccess.catalogIdentity == reviewedWalletAccess.catalogIdentity else {
             await releaseApproval(
                 approval.claim,
                 for: session,
@@ -932,17 +931,6 @@ final class PopupRequestSessions {
         )
         guard session.replaceSelectionAction(refreshedAction) else { return false }
         let approvedAction = session.approvalAction
-        let decision = DappApprovalDecision.accountSelection(.init(
-            accounts: refreshed.accounts.map {
-                .init(
-                    walletID: $0.walletId,
-                    address: $0.account.address,
-                    provider: $0.account.coin == .ethereum ? .ethereum : .solana,
-                    derivationPath: $0.account.derivationPath
-                )
-            },
-            ethereumChainID: refreshed.network?.chainIdHexString
-        ))
         await beginExecution(
             claim: approval.claim,
             for: session,
@@ -951,7 +939,7 @@ final class PopupRequestSessions {
             await self.executeDecision(
                 request: session.request,
                 action: approvedAction,
-                decision: decision,
+                decision: .accountSelection(selection),
                 walletAccess: refreshedWalletAccess
             )
         }
@@ -1094,7 +1082,7 @@ final class PopupRequestSessions {
             expectedRevisions: expectedRevisions,
             executionDeadline: executionDeadline
         )
-        let walletsAvailable = refreshWalletsAndNetworks()
+        let walletsAvailable = refreshWalletsAndNetworks() != nil
         let networkMatches: Bool
         if case .approveTransaction(let action) = reviewedAction {
             if let current = signingNetworkResolver(action.chain.chainId) {

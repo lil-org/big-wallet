@@ -688,7 +688,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let underlying = DerivationRaceWalletAccess(account: fixture.account) {
             isCurrent = false
         }
-        let scoped = RequestScopedWalletAccess(underlying) { isCurrent }
+        let scoped = makeRequestScopedWalletAccessForTesting(underlying, isCurrent: { isCurrent })
 
         XCTAssertNil(scoped.privateKey(
             walletID: "wallet",
@@ -774,7 +774,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         for cancel in [false, true] {
             let started = expectation(description: "Lease acquisition started")
             var continuation: CheckedContinuation<WalletExecutionLease?, Never>?
-            let access = RequestScopedWalletAccess(
+            let access = makeRequestScopedWalletAccessForTesting(
                 DerivationRaceWalletAccess(account: account) {},
                 acquireExecutionLease: {
                     await withCheckedContinuation {

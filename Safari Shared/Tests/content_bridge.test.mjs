@@ -657,9 +657,8 @@ test("a stale terminal snapshot settles without rolling provider state back", as
 });
 
 test("a malformed revisioned terminal fails closed", async () => {
-    const harness = makeHarness({sendMessage: message => {
-        if (message.subject !== "message-to-wallet") { return undefined; }
-        return {
+    for (const delivery of ["immediate", "retained"]) {
+        const response = {
             kind: "result",
             id: 7,
             name: "requestAccounts",
@@ -669,15 +668,32 @@ test("a malformed revisioned terminal fails closed", async () => {
             result: ["0x0000000000000000000000000000000000000001"],
             approvalCommitted: false,
         };
-    }});
-    await settle();
-    harness.dispatchPage("request", dappRequest(7));
-    await settle();
+        const harness = makeHarness({sendMessage: message => {
+            if (message.subject === "message-to-wallet") {
+                return delivery === "immediate" ? response : {
+                    id: 7,
+                    requestToken,
+                    approvalRequired: false,
+                    revisions: {ethereum: 0, solana: 0},
+                };
+            }
+            return message.subject === "getResponse" ? response : undefined;
+        }});
+        await settle();
+        harness.dispatchPage("request", dappRequest(7));
+        await settle();
+        if (delivery === "retained") { await harness.runTimer(); }
 
-    const terminal = harness.postedMessages.at(-1).message;
-    assert.equal(terminal.response.error?.code, -32603);
-    assert.equal(terminal.response.result, undefined);
-    assert.equal(terminal.suppressProviderUpdate, undefined);
+        const terminal = harness.postedMessages.at(-1).message;
+        assert.equal(terminal.response.id, 7);
+        assert.equal(terminal.response.error?.code, -32603);
+        assert.equal(terminal.response.result, undefined);
+        assert.equal(terminal.response.state, null);
+        assert.equal(terminal.response.configurationMatch, null);
+        assert.equal(terminal.suppressProviderUpdate, undefined);
+        assert.equal(harness.context.bigWalletRequests.size, 0);
+        assert.equal(harness.pendingTimers(), 0);
+    }
 });
 
 test("page-authored unknown provider requests never enter the relay", async () => {
@@ -1548,26 +1564,59 @@ test("a delayed disconnect cannot overwrite same-address reauthorization", async
     assert.equal(terminal.suppressProviderUpdate, true);
 });
 
-test("a disconnect transport failure does not revoke local authorization", async () => {
-    const harness = makeHarness({sendMessage: message =>
-        message.subject === "disconnect" ? new Promise(() => {}) : undefined
-    });
-    await settle();
+test("disconnect failures do not revoke local authorization", async () => {
+    for (const failure of ["timeout", "malformed"]) {
+        const harness = makeHarness({
+            configurationResponse: {
+                kind: "configuration",
+                state: {
+                    revisions: {ethereum: 2, solana: 0},
+                    ethereum: {
+                        address: "0x0000000000000000000000000000000000000001",
+                        chainId: "0x1",
+                        reauthorizationRevision: 0,
+                    },
+                    solana: null,
+                },
+            },
+            sendMessage: message => {
+                if (message.subject !== "disconnect") { return undefined; }
+                return failure === "timeout" ? new Promise(() => {}) : {
+                    kind: "result",
+                    id: 14,
+                    name: "revokePermissions",
+                    provider: "ethereum",
+                    state: {ethereum: null, solana: null},
+                    configurationMatch: false,
+                    result: null,
+                    approvalCommitted: false,
+                };
+            },
+        });
+        await settle();
+        const configuration = clone(harness.context.bigWalletConfigurationState);
 
-    harness.dispatchPage("disconnect", {id: 14, provider: "ethereum"});
-    await settle();
-    assert.equal(await harness.runTimer(), true);
+        harness.dispatchPage("disconnect", {id: 14, provider: "ethereum"});
+        await settle();
+        if (failure === "timeout") { assert.equal(await harness.runTimer(), true); }
 
-    assert.deepEqual(harness.postedMessages.at(-1).message.response, {
-        kind: "error",
-        id: 14,
-        name: "revokePermissions",
-        provider: "ethereum",
-        state: null,
-        configurationMatch: null,
-        error: {code: -32603, message: "Failed to revoke permissions"},
-        authorizationFailure: false,
-    });
+        assert.deepEqual(harness.postedMessages.at(-1).message.response, {
+            kind: "error",
+            id: 14,
+            name: "revokePermissions",
+            provider: "ethereum",
+            state: null,
+            configurationMatch: null,
+            error: {
+                code: -32603,
+                message: failure === "timeout"
+                    ? "Failed to revoke permissions"
+                    : "Failed to process provider response",
+            },
+            authorizationFailure: false,
+        });
+        assert.deepEqual(clone(harness.context.bigWalletConfigurationState), configuration);
+    }
 });
 
 test("manual switch intent forwards exact trusted identity and worker status", async () => {

@@ -538,7 +538,7 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: overrideKey), "http://10.0.0.4:8545")
     }
 
-    func testExactMatchIsIdempotentAndConflictingDefinitionIsRejected() throws {
+    func testNormalizedRPCMatchIgnoresChainNameAndRejectsDecimalChanges() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let first = customNetwork(
@@ -551,7 +551,7 @@ final class CustomNetworkStorageTests: XCTestCase {
             name: "First",
             rpcURLs: ["https://rpc.example/"]
         )
-        let conflict = customNetwork(
+        let renamed = customNetwork(
             chainId: 64_240,
             name: "Different",
             rpcURLs: ["https://rpc.example/"]
@@ -562,13 +562,44 @@ final class CustomNetworkStorageTests: XCTestCase {
         XCTAssertEqual(SharedDefaults.insertNetwork(first, to: defaults), .inserted)
         let archive = defaults.data(forKey: SharedDefaults.customEthereumNetworksKey)
         XCTAssertEqual(SharedDefaults.insertNetwork(matching, to: defaults), .matching)
-        XCTAssertEqual(SharedDefaults.insertNetwork(conflict, to: defaults), .conflict)
+        XCTAssertEqual(SharedDefaults.insertNetwork(renamed, to: defaults), .matching)
         XCTAssertEqual(
             SharedDefaults.insertNetwork(currencyConflict, to: defaults),
             .conflict
         )
         XCTAssertEqual(defaults.data(forKey: SharedDefaults.customEthereumNetworksKey), archive)
         XCTAssertEqual(try storedNetworks(in: defaults).count, 1)
+    }
+
+    func testDisplayNamesMatchWithoutChangingStoredDefinitionOrLegacyOverride() throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let existing = customNetwork(
+            chainId: 64_240,
+            name: "Saved Network",
+            rpcURLs: ["https://archived.example"]
+        )
+        let archive = try JSONEncoder().encode([existing])
+        let overrideKey = SharedDefaults.customEthereumNetworkNodeKey(chainId: 64_240)
+        let legacyOverride = "https://RPC.EXAMPLE:443"
+        defaults.set(archive, forKey: SharedDefaults.customEthereumNetworksKey)
+        defaults.set(legacyOverride, forKey: overrideKey)
+
+        var renamedChain = existing
+        renamedChain.chainName = "Localized Network"
+        renamedChain.rpcUrls = ["https://rpc.example/"]
+        var renamedCurrency = existing
+        renamedCurrency.nativeCurrency.name = "Localized Coin"
+        renamedCurrency.rpcUrls = ["https://rpc.example/"]
+
+        for requested in [renamedChain, renamedCurrency] {
+            XCTAssertEqual(SharedDefaults.insertNetwork(requested, to: defaults), .matching)
+            XCTAssertEqual(
+                defaults.data(forKey: SharedDefaults.customEthereumNetworksKey),
+                archive
+            )
+            XCTAssertEqual(defaults.string(forKey: overrideKey), legacyOverride)
+        }
     }
 
     func testLocalAndPublicHTTPSEndpointsRoundTrip() throws {

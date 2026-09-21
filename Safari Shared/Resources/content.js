@@ -64,12 +64,11 @@ function bigWalletHasAcceptedConfiguration(generation, configurationKey) {
 }
 
 function bigWalletConfigurationDelivery(
-    response,
+    decoded,
     configurationKey,
     providerGeneration,
     terminal
 ) {
-    const decoded = bigWalletWire.decodePageResponse(response);
     if (!decoded || (terminal
         ? decoded.kind !== "result" && decoded.kind !== "error"
         : decoded.kind !== "configuration")) {
@@ -525,7 +524,7 @@ async function bigWalletLoadConfiguration(generation, attempt) {
     if (!bigWalletMatchesGeneration(generation)) { return; }
     const delivery = identity
         ? bigWalletConfigurationDelivery(
-            response,
+            bigWalletWire.decodePageResponse(response),
             identity.configurationKey,
             generation,
             false
@@ -587,7 +586,7 @@ function bigWalletRuntimeMessage(
         if (identity?.configurationKey === request.configurationKey &&
             typeof bigWalletProviderGeneration === "string") {
             const delivery = bigWalletConfigurationDelivery(
-                {kind: "configuration", state: request.state},
+                bigWalletWire.decodePageResponse({kind: "configuration", state: request.state}),
                 identity.configurationKey,
                 bigWalletProviderGeneration,
                 false

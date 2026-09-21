@@ -2,6 +2,52 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
+func makeRequestScopedWalletAccessForTesting(
+    _ access: WalletAccess,
+    isCurrent: @escaping () -> Bool = { true },
+    acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil
+) -> RequestScopedWalletAccess {
+    RequestScopedWalletAccess(
+        BorrowedWalletAccessForTesting(access),
+        isCurrent: isCurrent,
+        acquireExecutionLease: acquireExecutionLease ?? {
+            isCurrent() ? WalletExecutionLease(release: {}) : nil
+        }
+    )
+}
+
+final class BorrowedWalletAccessForTesting: OwnedWalletAccess {
+    private var access: WalletAccess?
+    private(set) var invalidationCount = 0
+
+    init(_ access: WalletAccess) {
+        self.access = access
+    }
+
+    var catalogIdentity: WalletCatalogIdentity {
+        access?.catalogIdentity ?? WalletCatalogIdentity(
+            generation: nil,
+            catalogData: Data()
+        )
+    }
+
+    var orderedAccounts: [SpecificWalletAccount] {
+        access?.orderedAccounts ?? []
+    }
+
+    func privateKey(
+        walletID: String,
+        account: WalletAccount
+    ) -> WalletPrivateKey? {
+        access?.privateKey(walletID: walletID, account: account)
+    }
+
+    func invalidate() {
+        invalidationCount += 1
+        access = nil
+    }
+}
+
 private final class ApprovalStoreWrites: @unchecked Sendable {
     private let lock = NSLock()
     private var failures = [Bool]()

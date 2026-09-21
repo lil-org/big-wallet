@@ -179,8 +179,6 @@ enum CustomNetworkDefinition {
     ) -> Bool {
         return normalizedRPCURL(requestedRPCURL)
             == normalizedRPCURL(existingRPCURL)
-            && requested.chainName == existing.chainName
-            && requested.nativeCurrency.name == existing.nativeCurrency.name
             && requested.nativeCurrency.symbol == existing.nativeCurrency.symbol
             && requested.nativeCurrency.decimals == existing.nativeCurrency.decimals
     }

@@ -138,7 +138,7 @@ final class WalletExecutionLease: @unchecked Sendable {
     private let lock = NSLock()
     private var releaseOperation: (() -> Void)?
 
-    init(release: @escaping () -> Void = {}) {
+    init(release: @escaping () -> Void) {
         releaseOperation = release
     }
 
@@ -162,6 +162,10 @@ protocol WalletAccess: AnyObject {
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey?
+}
+
+protocol OwnedWalletAccess: WalletAccess {
+    func invalidate()
 }
 
 extension WalletAccess {
@@ -388,7 +392,7 @@ enum WalletSnapshotValidation {
     }
 }
 
-final class UnlockedWalletAccess: WalletAccess {
+final class UnlockedWalletAccess: OwnedWalletAccess {
 
     let catalogIdentity: WalletCatalogIdentity
     private(set) var orderedAccounts: [SpecificWalletAccount]
@@ -454,21 +458,19 @@ final class UnlockedWalletAccess: WalletAccess {
 final class RequestScopedWalletAccess: WalletAccess {
 
     private let lock = NSLock()
-    private var access: WalletAccess?
+    private var access: OwnedWalletAccess?
     private let isCurrent: () -> Bool
     private let acquireExecutionLease: () async -> WalletExecutionLease?
     private var executionLeaseTaken = false
 
     init(
-        _ access: WalletAccess,
-        isCurrent: @escaping () -> Bool = { true },
-        acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil
+        _ access: OwnedWalletAccess,
+        isCurrent: @escaping () -> Bool,
+        acquireExecutionLease: @escaping () async -> WalletExecutionLease?
     ) {
         self.access = access
         self.isCurrent = isCurrent
-        self.acquireExecutionLease = acquireExecutionLease ?? {
-            isCurrent() ? WalletExecutionLease() : nil
-        }
+        self.acquireExecutionLease = acquireExecutionLease
     }
 
     var catalogIdentity: WalletCatalogIdentity {
@@ -550,11 +552,7 @@ final class RequestScopedWalletAccess: WalletAccess {
         let access = access
         self.access = nil
         lock.unlock()
-        if let scoped = access as? RequestScopedWalletAccess {
-            scoped.invalidate()
-        } else {
-            (access as? UnlockedWalletAccess)?.invalidate()
-        }
+        access?.invalidate()
     }
 
     deinit {
