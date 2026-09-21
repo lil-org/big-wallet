@@ -5,13 +5,14 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 const wire = require("../Resources/popup_wire.js");
-const fixtures = JSON.parse(await readFile(new URL("fixtures/popup_contract.json", import.meta.url), "utf8"));
+const wireFixtures = JSON.parse(await readFile(new URL("fixtures/popup_contract.json", import.meta.url), "utf8"));
 
-for (const [name, value] of Object.entries(fixtures)) {
+const fixtures = Object.fromEntries(Object.entries(wireFixtures).map(([name, value]) => [name, value.approval ?? value]));
+
+for (const [name, value] of Object.entries(wireFixtures)) {
     test(`popup contract decodes the shared ${name} fixture`, () => {
         const decoded = value.requests ? wire.decodeQueue(value)
-            : value.state ? wire.decodeApprovalState(value, value.id)
-                : wire.decodeCommandResult(value);
+            : wire.decodeCommandResult(value, value.approval?.id);
         assert.deepEqual(decoded, value);
     });
 }
@@ -54,6 +55,17 @@ test("popup queue and command replies retain their exact identity contracts", ()
     assert.equal(wire.decodeCommandResult({status: "ok", actions: ["approve"]}), null);
     assert.equal(wire.decodeCommandResult({status: "arbitrary"}), null);
     assert.equal(wire.decodeCommandResult(undefined), null);
+    assert.equal(wire.decodeCommandResult({status: "ok"}, 91), null);
+    assert.equal(wire.decodeCommandResult({status: "ok", approval: null}, 91), null);
+    assert.equal(wire.decodeCommandResult(fixtures.working, 91), null);
+    assert.equal(wire.decodeCommandResult(wireFixtures.working, 92), null);
+    assert.equal(wire.decodeCommandResult({...wireFixtures.working, extra: true}, 91), null);
+    for (const status of ["ignored", "unavailable"]) {
+        const empty = {status, approval: null};
+        assert.deepEqual(wire.decodeCommandResult(empty, 91), empty);
+        const current = {status, approval: fixtures.working};
+        assert.deepEqual(wire.decodeCommandResult(current, 91), current);
+    }
 });
 
 test("popup selection identities fold Ethereum address case and retain distinct derivation paths", () => {

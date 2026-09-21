@@ -24,6 +24,89 @@ private enum PopupRequestSessionsTestError: Error {
 @MainActor
 final class PopupRequestSessionsTests: XCTestCase {
 
+    func testCommandRepliesCarryCurrentStateWithoutAnotherRead() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 701), in: store)
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor(),
+            walletEnvironment: popupWalletEnvironment(),
+            loadsTransactionContext: false
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        let stale = try popupCommand(
+            subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            reviewToken: UUID().uuidString.lowercased(),
+            payload: ["revisions": snapshot.revisions.json]
+        )
+        let ignored = popupResponseJSON(await controller.dispatch(request: stale, profileIdentifier: nil))
+        XCTAssertEqual(Set(ignored.keys), ["status", "approval"])
+        XCTAssertEqual(ignored["status"] as? String, "ignored")
+        let current = try XCTUnwrap(ignored["approval"] as? [String: Any])
+        XCTAssertEqual(current["state"] as? String, "review")
+        XCTAssertEqual((current["review"] as? [String: Any])?["reviewToken"] as? String, token)
+        let reject = try popupCommand(
+            subject: "rejectRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        let completed = popupResponseJSON(await controller.dispatch(request: reject, profileIdentifier: nil))
+        XCTAssertEqual(completed["status"] as? String, "ok")
+        XCTAssertEqual((completed["approval"] as? [String: Any])?["state"] as? String, "missing")
+        let pending = await controller.dispatchJSON(
+            request: try popupCommand(subject: "getPendingRequests", id: 702),
+            profileIdentifier: nil
+        )
+        XCTAssertEqual((pending["completedResponses"] as? [[String: Any]])?.count, 1)
+    }
+
+    func testPrivatePopupCommandsNeverExposeStoredReview() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 703), in: store)
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor(),
+            walletEnvironment: popupWalletEnvironment(),
+            loadsTransactionContext: false
+        )
+        _ = try await materializeToken(controller: controller, snapshot: snapshot)
+        let reads = await store.loadCount()
+        for subject in ["getApprovalState", "retryApproval", "rejectRequest"] {
+            let command = try popupCommand(
+                subject: subject, id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            )
+            let reply = popupResponseJSON(controller.privateBrowsingResponse(for: command))
+            XCTAssertEqual(Set(reply.keys), ["status", "approval"])
+            XCTAssertEqual(reply["status"] as? String, "ignored")
+            XCTAssertTrue(reply["approval"] is NSNull)
+        }
+        let readsAfter = await store.loadCount()
+        XCTAssertEqual(readsAfter, reads)
+    }
+
+    func testUnavailableStoreNeverLooksLikeCompletedRequest() async throws {
+        let store = try ApprovalStoreTestFixture()
+        addTeardownBlock { try? await store.cleanup() }
+        let snapshot = try await enqueue(popupSnapshot(id: 704), in: store)
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor(),
+            walletEnvironment: popupWalletEnvironment(),
+            loadsTransactionContext: false
+        )
+        try await store.cleanup()
+        for subject in ["getApprovalState", "retryApproval", "rejectRequest"] {
+            let command = try popupCommand(
+                subject: subject, id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            )
+            let reply = popupResponseJSON(await controller.dispatch(request: command, profileIdentifier: nil))
+            XCTAssertEqual(reply["status"] as? String, "unavailable")
+            XCTAssertTrue(reply["approval"] is NSNull)
+        }
+    }
+
     func testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog() {
         for explicitlyInvalidate in [false, true] {
             let catalog = CompactWalletAccess(account: popupTestAccount())
@@ -207,7 +290,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(session.presentationRevision, firstRevision + 2)
     }
 
-    func testSessionPreservesFeedbackAndRecoveryAcrossAuthentication() throws {
+    func testSessionPreservesFeedbackAcrossAuthentication() throws {
         let session = try makeSession()
         session.setFeedback("Choose an account")
         XCTAssertEqual(session.errorText, "Choose an account")
@@ -221,10 +304,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         session.setFeedback("Try again")
         XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
         XCTAssertEqual(session.errorText, "Try again")
-        session.requireRematerializationAfterAuthentication()
         XCTAssertTrue(session.finishAuthentication(claim: claim, token: token))
-        XCTAssertTrue(session.takeAuthenticationRematerializationRequirement())
-        XCTAssertFalse(session.takeAuthenticationRematerializationRequirement())
         XCTAssertTrue(session.returnToReview(token: token))
         XCTAssertEqual(session.errorText, "Try again")
         XCTAssertNil(session.approvalClaim)
@@ -611,38 +691,27 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testTransactionSessionTransfersAccessAfterSynchronousPreflight() async throws {
-        let access = makeRequestScopedWalletAccessForTesting(
-            CompactWalletAccess(account: popupTestAccount())
-        )
+    func testTransactionSessionCompletesSynchronousPreflightOnce() async throws {
         let session = makeTransactionApprovalSession { transaction, _, completion in
             completion(.safe(transaction, popupTransactionEstimate()))
             completion(.safe(transaction, popupTransactionEstimate()))
             return EthereumRequestCancellation()
         }
-
-        let result = await session.approve { access }
-        let approval = try XCTUnwrap(result)
-
-        XCTAssertEqual(approval.transaction.id, session.snapshot.transaction.id)
-        XCTAssertTrue(approval.walletAccess === access)
-        XCTAssertEqual(access.orderedAccounts.count, 1)
+        let token = try XCTUnwrap(session.beginApproval())
+        let result = await session.finishAuthentication(token: token, succeeded: true)
+        guard case .approved(let transaction) = result else {
+            return XCTFail("Expected approved transaction")
+        }
+        XCTAssertEqual(transaction.id, session.snapshot.transaction.id)
         XCTAssertEqual(session.snapshot.phase, .finished)
         XCTAssertNil(session.activeAlert)
-        approval.walletAccess.invalidate()
-        XCTAssertTrue(access.orderedAccounts.isEmpty)
     }
 
     func testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication()
         async throws {
-        let access = makeRequestScopedWalletAccessForTesting(
-            CompactWalletAccess(account: popupTestAccount())
-        )
         var preparationUpdate: ((Transaction) -> Void)?
-        var authentication: CheckedContinuation<RequestScopedWalletAccess?, Never>?
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         var preflightTransaction: Transaction?
-        var approvalCompleted = false
         let session = makeTransactionApprovalSession(
             prepare: { transaction, _, _, onUpdate, _, completion in
                 preparationUpdate = onUpdate
@@ -656,52 +725,40 @@ final class PopupRequestSessionsTests: XCTestCase {
             }
         )
         let reviewedTransaction = session.snapshot.transaction
-        let approvalTask = Task { @MainActor in
-            let result = await session.approve {
-                await withCheckedContinuation { authentication = $0 }
-            }
-            approvalCompleted = true
-            return result
-        }
-        try await waitForCondition { authentication != nil }
+        let token = try XCTUnwrap(session.beginApproval())
         XCTAssertEqual(session.snapshot.phase, .authenticating)
-
         var lateTransaction = reviewedTransaction
         lateTransaction.interpretation = "Unreviewed preparation update"
         preparationUpdate?(lateTransaction)
-        let duplicateDuringAuthentication = await session.approve {
-            XCTFail("Duplicate approval must not authenticate")
-            return nil
-        }
-        XCTAssertNil(duplicateDuringAuthentication)
-        XCTAssertEqual(
-            session.snapshot.transaction.interpretation,
-            reviewedTransaction.interpretation
-        )
+        XCTAssertNil(session.beginApproval())
+        XCTAssertEqual(session.snapshot.transaction.interpretation, reviewedTransaction.interpretation)
         XCTAssertNil(preflightCompletion)
-        XCTAssertFalse(approvalCompleted)
-
-        authentication?.resume(returning: access)
-        try await waitForCondition { preflightCompletion != nil }
-        let duplicateDuringPreflight = await session.approve {
-            XCTFail("Duplicate approval must not authenticate")
-            return nil
+        let approvalTask = Task { @MainActor in
+            await session.finishAuthentication(token: token, succeeded: true)
         }
-        XCTAssertNil(duplicateDuringPreflight)
+        try await waitForCondition { preflightCompletion != nil }
+        XCTAssertNil(session.beginApproval())
+        let duplicate = await session.finishAuthentication(token: token, succeeded: true)
+        guard case .invalidated = duplicate else { return XCTFail("Expected duplicate rejection") }
         XCTAssertEqual(session.snapshot.phase, .preflighting)
-        XCTAssertFalse(approvalCompleted)
-        XCTAssertEqual(access.orderedAccounts.count, 1)
-        XCTAssertEqual(
-            preflightTransaction?.interpretation,
-            reviewedTransaction.interpretation
-        )
-
+        XCTAssertEqual(preflightTransaction?.interpretation, reviewedTransaction.interpretation)
         preflightCompletion?(.safe(reviewedTransaction, popupTransactionEstimate()))
-        let result = await approvalTask.value
-        let approval = try XCTUnwrap(result)
-        XCTAssertTrue(approvalCompleted)
-        XCTAssertTrue(approval.walletAccess === access)
-        approval.walletAccess.invalidate()
+        guard case .approved = await approvalTask.value else { return XCTFail("Expected approval") }
+    }
+
+    func testTransactionSessionInvalidationWinsAlreadyResumedPreflight() async throws {
+        var session: PopupTransactionSession!
+        session = makeTransactionApprovalSession { transaction, _, completion in
+            completion(.safe(transaction, popupTransactionEstimate()))
+            session.invalidate()
+            return EthereumRequestCancellation()
+        }
+        let token = try XCTUnwrap(session.beginApproval())
+        let result = await session.finishAuthentication(token: token, succeeded: true)
+        guard case .invalidated = result else {
+            return XCTFail("Invalidation must fence a preflight result that has already resumed")
+        }
+        XCTAssertNil(session.beginApproval())
     }
 
     func testTransactionSessionAuthenticationRefusalAllowsFreshApproval() async throws {
@@ -711,25 +768,19 @@ final class PopupRequestSessionsTests: XCTestCase {
             completion(.safe(transaction, popupTransactionEstimate()))
             return EthereumRequestCancellation()
         }
-
-        let refused = await session.approve { nil }
-
-        XCTAssertNil(refused)
+        let firstToken = try XCTUnwrap(session.beginApproval())
+        let refused = await session.finishAuthentication(token: firstToken, succeeded: false)
+        guard case .reviewRequired = refused else { return XCTFail("Expected another review") }
         XCTAssertEqual(preflightCount, 0)
         XCTAssertEqual(session.snapshot.phase, .ready)
         XCTAssertTrue(session.snapshot.canApprove)
-
-        let access = makeRequestScopedWalletAccessForTesting(
-            CompactWalletAccess(account: popupTestAccount())
-        )
-        let retried = await session.approve { access }
-        let approval = try XCTUnwrap(retried)
+        let nextToken = try XCTUnwrap(session.beginApproval())
+        let retried = await session.finishAuthentication(token: nextToken, succeeded: true)
+        guard case .approved = retried else { return XCTFail("Expected approval") }
         XCTAssertEqual(preflightCount, 1)
-        XCTAssertTrue(approval.walletAccess === access)
-        approval.walletAccess.invalidate()
     }
 
-    func testTransactionSessionPreflightAlertsReleaseAccessAndRemainPresentable() async {
+    func testTransactionSessionPreflightAlertsRemainPresentable() async throws {
         let cases: [(
             TransactionApprovalAlertIntent.Kind,
             (Transaction, GasService.Estimate) -> TransactionFeePreflightResult
@@ -739,63 +790,38 @@ final class PopupRequestSessionsTests: XCTestCase {
             (.unavailableFees, { .unavailable($0, $1) }),
         ]
         for (kind, makeResult) in cases {
-            let access = makeRequestScopedWalletAccessForTesting(
-                CompactWalletAccess(account: popupTestAccount())
-            )
             let session = makeTransactionApprovalSession { transaction, _, completion in
                 completion(makeResult(transaction, popupTransactionEstimate()))
                 completion(.safe(transaction, popupTransactionEstimate()))
                 return EthereumRequestCancellation()
             }
-
-            let result = await session.approve { access }
-
-            XCTAssertNil(result)
-            XCTAssertTrue(access.orderedAccounts.isEmpty)
+            let token = try XCTUnwrap(session.beginApproval())
+            let result = await session.finishAuthentication(token: token, succeeded: true)
+            guard case .reviewRequired = result else { return XCTFail("Expected review") }
             XCTAssertEqual(session.activeAlert?.kind, kind)
             XCTAssertFalse(session.activeAlert?.presentation.actions.isEmpty ?? true)
             XCTAssertNotEqual(session.snapshot.phase, .finished)
         }
     }
 
-    func testTransactionSessionInvalidationDiscardsLateAuthenticationAccess() async throws {
-        let access = makeRequestScopedWalletAccessForTesting(
-            CompactWalletAccess(account: popupTestAccount())
-        )
-        var authentication: CheckedContinuation<RequestScopedWalletAccess?, Never>?
+    func testTransactionSessionInvalidationRejectsLateAuthentication() async throws {
         var preflightCount = 0
         let session = makeTransactionApprovalSession { _, _, _ in
             preflightCount += 1
             return EthereumRequestCancellation()
         }
-        let approvalTask = Task { @MainActor in
-            await session.approve {
-                await withCheckedContinuation { authentication = $0 }
-            }
-        }
-        try await waitForCondition { authentication != nil }
-
+        let token = try XCTUnwrap(session.beginApproval())
         session.invalidate()
         session.invalidate()
-        authentication?.resume(returning: access)
-        let result = await approvalTask.value
-        let retry = await session.approve {
-            XCTFail("Invalidated session must not authenticate")
-            return nil
-        }
-
-        XCTAssertNil(result)
-        XCTAssertNil(retry)
-        XCTAssertTrue(access.orderedAccounts.isEmpty)
+        let result = await session.finishAuthentication(token: token, succeeded: true)
+        guard case .invalidated = result else { return XCTFail("Expected invalidation") }
+        XCTAssertNil(session.beginApproval())
         XCTAssertEqual(preflightCount, 0)
         XCTAssertEqual(session.snapshot.phase, .finished)
     }
 
     func testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults()
         async throws {
-        let access = makeRequestScopedWalletAccessForTesting(
-            CompactWalletAccess(account: popupTestAccount())
-        )
         let cancellation = EthereumRequestCancellation()
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         let session = makeTransactionApprovalSession { _, _, completion in
@@ -803,22 +829,19 @@ final class PopupRequestSessionsTests: XCTestCase {
             return cancellation
         }
         let transaction = session.snapshot.transaction
+        let token = try XCTUnwrap(session.beginApproval())
         var approvalCompleted = false
         let approvalTask = Task { @MainActor in
-            let result = await session.approve { access }
+            let result = await session.finishAuthentication(token: token, succeeded: true)
             approvalCompleted = true
             return result
         }
         try await waitForCondition { preflightCompletion != nil }
-
         session.invalidate()
         session.invalidate()
         try await waitForCondition { approvalCompleted }
-        let result = await approvalTask.value
-
-        XCTAssertNil(result)
+        guard case .invalidated = await approvalTask.value else { return XCTFail("Expected invalidation") }
         XCTAssertTrue(cancellation.isCancelled)
-        XCTAssertTrue(access.orderedAccounts.isEmpty)
         preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
         preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
         XCTAssertEqual(session.snapshot.phase, .finished)
@@ -1329,7 +1352,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error"])
+        XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error", "status"])
         XCTAssertEqual(response["actions"] as? [String], ["retry"])
         XCTAssertEqual(response["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertEqual(response["state"] as? String, "error")
@@ -1543,7 +1566,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(state.keys), ["id", "state", "actions", "host"])
+        XCTAssertEqual(Set(state.keys), ["id", "state", "actions", "host", "status"])
         XCTAssertEqual(state["id"] as? Int, snapshot.handle.id)
         XCTAssertEqual(state["state"] as? String, "working")
         XCTAssertEqual(state["host"] as? String, snapshot.host)
@@ -1978,7 +2001,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(owned.keys), ["id", "state", "actions", "host"])
+        XCTAssertEqual(Set(owned.keys), ["id", "state", "actions", "host", "status"])
         XCTAssertEqual(owned["state"] as? String, "working")
         XCTAssertEqual(owned["host"] as? String, snapshot.host)
         XCTAssertNil((owned["review"] as? [String: Any])?["reviewToken"])
@@ -2031,7 +2054,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(state.keys), ["id", "state", "actions", "host"])
+        XCTAssertEqual(Set(state.keys), ["id", "state", "actions", "host", "status"])
         XCTAssertEqual(state["state"] as? String, "working")
         XCTAssertEqual(state["host"] as? String, snapshot.host)
         XCTAssertNil((state["review"] as? [String: Any])?["reviewToken"])
@@ -2109,7 +2132,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error"])
+        XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error", "status"])
         XCTAssertEqual(response["actions"] as? [String], ["retry"])
         XCTAssertEqual(response["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertEqual(response["state"] as? String, "error")
@@ -2758,12 +2781,14 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
 
-        _ = await controller.dispatchJSON(
+        let response = await controller.dispatchJSON(
             request: approve,
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(response["state"] as? String, "review")
+        XCTAssertNotEqual((response["review"] as? [String: Any])?["reviewToken"] as? String, token)
         XCTAssertEqual(authenticationCount, 1)
         XCTAssertEqual(staleResolveCount, 0)
         let storeEvents = await store.events()
@@ -3380,7 +3405,7 @@ extension PopupRequestSessionsTests {
         )
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "release"])
-        XCTAssertEqual(preparedCatalogs, [original.catalogIdentity])
+        XCTAssertEqual(preparedCatalogs, [original.catalogIdentity, replacement.catalogIdentity])
         let nextToken = try await materializeToken(controller: controller, snapshot: snapshot)
         XCTAssertNotEqual(nextToken, token)
         XCTAssertEqual(preparedCatalogs, [original.catalogIdentity, replacement.catalogIdentity])
@@ -3972,12 +3997,14 @@ extension PopupRequestSessionsTests {
             payload: ["revisions": snapshot.revisions.json]
         )
 
-        _ = await controller.dispatchJSON(
+        let response = await controller.dispatchJSON(
             request: approve,
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(response["state"] as? String, "review")
+        XCTAssertNotEqual((response["review"] as? [String: Any])?["reviewToken"] as? String, token)
         XCTAssertEqual(resolveCount, 0)
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "release"])
@@ -4287,12 +4314,17 @@ extension PopupRequestSessionsTests {
             )))
         }
         let authenticationCatalog = CompactWalletAccess(account: popupTestAccount())
+        let owned = BorrowedWalletAccessForTesting(authenticationCatalog)
+        let access = RequestScopedWalletAccess(
+            owned, isCurrent: { true },
+            acquireExecutionLease: { WalletExecutionLease(release: {}) }
+        )
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 catalogAccess: { authenticationCatalog },
-                unlockWalletAccess: { _ in .unlocked(makeRequestScopedWalletAccessForTesting(authenticationCatalog)) }
+                unlockWalletAccess: { _ in .unlocked(access) }
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
@@ -4319,6 +4351,9 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertEqual(events, ["claim", "release"])
+        XCTAssertEqual(owned.invalidationCount, 1)
+        XCTAssertEqual(response["state"] as? String, "review")
+        XCTAssertNotNil((response["review"] as? [String: Any])?["alert"])
 
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -6784,6 +6819,18 @@ private extension PopupRequestSessions {
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> [String: Any] {
-        popupResponseJSON(await dispatch(request: request, profileIdentifier: profileIdentifier))
+        let json = popupResponseJSON(await dispatch(request: request, profileIdentifier: profileIdentifier))
+        if case .popup(.getPendingRequests) = request.command { return json }
+        XCTAssertEqual(Set(json.keys), ["status", "approval"])
+        let status = json["status"] as? String
+        XCTAssertTrue(["ok", "ignored", "unavailable"].contains(status ?? ""))
+        if var approval = json["approval"] as? [String: Any] {
+            XCTAssertEqual(approval["id"] as? Int, request.id)
+            approval["status"] = status
+            return approval
+        }
+        XCTAssertNotEqual(status, "ok")
+        XCTAssertTrue(json["approval"] is NSNull)
+        return json
     }
 }

@@ -4,31 +4,6 @@ import Foundation
 
 struct InternalSafariRequest: Decodable {
 
-    private struct ProviderRevisionsPayload: Decodable {
-        let value: ExtensionBridge.ProviderRevisions
-
-        init(from decoder: Decoder) throws {
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: ["ethereum", "solana"]
-            )
-            let ethereum = try container.decode(Int.self, forKey: "ethereum")
-            let solana = try container.decode(Int.self, forKey: "solana")
-            guard let value = ExtensionBridge.ProviderRevisions(rawValue: [
-                "ethereum": ethereum,
-                "solana": solana,
-            ]) else {
-                throw DecodingError.dataCorrupted(
-                    DecodingError.Context(
-                        codingPath: decoder.codingPath,
-                        debugDescription: "invalid provider revisions"
-                    )
-                )
-            }
-            self.value = value
-        }
-    }
-
     struct SelectedAccount: Decodable {
         let walletId: String
         let address: String
@@ -92,9 +67,9 @@ struct InternalSafariRequest: Decodable {
                 executionDeadline = nil
             }
             revisions = try container.decodeIfPresent(
-                ProviderRevisionsPayload.self,
+                ExtensionBridge.ProviderRevisions.self,
                 forKey: "revisions"
-            )?.value
+            )
         }
     }
 
@@ -476,9 +451,9 @@ struct InternalSafariRequest: Decodable {
                 timeIntervalSince1970: Double(milliseconds) / 1_000
             ),
             revisions: container.decode(
-                ProviderRevisionsPayload.self,
+                ExtensionBridge.ProviderRevisions.self,
                 forKey: "revisions"
-            ).value
+            )
         )
     }
 

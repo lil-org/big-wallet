@@ -86,6 +86,157 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("Expected private browsing rejection") }
     }
 
+    func testProviderRevisionsDecodingAndEncodingPreserveWireShape() throws {
+        let validValues: [[String: Any]] = [
+            ["ethereum": 0, "solana": 9_007_199_254_740_991],
+            ["ethereum": 9_007_199_254_740_991, "solana": 0],
+            ["ethereum": NSNumber(value: 1.0), "solana": NSNumber(value: 2.0)],
+        ]
+        for rawValue in validValues {
+            let expected = try XCTUnwrap(ExtensionBridge.ProviderRevisions(rawValue: rawValue))
+            let jsonData = try JSONSerialization.data(withJSONObject: rawValue)
+            let decodedJSON = try JSONDecoder().decode(
+                ExtensionBridge.ProviderRevisions.self,
+                from: jsonData
+            )
+            XCTAssertEqual(decodedJSON, expected)
+            let encodedJSON = try JSONEncoder().encode(decodedJSON)
+            XCTAssertEqual(
+                try JSONSerialization.jsonObject(with: encodedJSON) as? NSDictionary,
+                expected.json as NSDictionary
+            )
+
+            let plistData = try PropertyListSerialization.data(
+                fromPropertyList: rawValue,
+                format: .binary,
+                options: 0
+            )
+            let decodedPlist = try PropertyListDecoder().decode(
+                ExtensionBridge.ProviderRevisions.self,
+                from: plistData
+            )
+            XCTAssertEqual(decodedPlist, expected)
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            XCTAssertEqual(
+                try PropertyListSerialization.propertyList(
+                    from: encoder.encode(decodedPlist), options: [], format: nil
+                ) as? NSDictionary,
+                expected.json as NSDictionary
+            )
+        }
+    }
+
+    func testProviderRevisionsDecodingRejectsInvalidWireValues() throws {
+        for rawValue in invalidProviderRevisionValues {
+            let message = String(describing: rawValue)
+            XCTAssertNil(ExtensionBridge.ProviderRevisions(rawValue: rawValue), message)
+            let jsonData = try JSONSerialization.data(
+                withJSONObject: rawValue,
+                options: [.fragmentsAllowed]
+            )
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                ExtensionBridge.ProviderRevisions.self,
+                from: jsonData
+            ), message)
+            if PropertyListSerialization.propertyList(rawValue, isValidFor: .binary) {
+                let plistData = try PropertyListSerialization.data(
+                    fromPropertyList: rawValue, format: .binary, options: 0
+                )
+                XCTAssertThrowsError(try PropertyListDecoder().decode(
+                    ExtensionBridge.ProviderRevisions.self,
+                    from: plistData
+                ), message)
+            }
+        }
+    }
+
+    func testInternalRequestsDecodeValidatedProviderRevisions() throws {
+        let revisions: [String: Any] = ["ethereum": 0, "solana": 9_007_199_254_740_991]
+        let expected = try XCTUnwrap(ExtensionBridge.ProviderRevisions(rawValue: revisions))
+        let token = UUID().uuidString.lowercased()
+        for subject in ["getResponse", "getManualSwitchResponse", "approveRequest"] {
+            var object: [String: Any] = [
+                "id": 1,
+                "workflowVersion": ExtensionBridge.workflowVersion,
+                "subject": subject,
+                "requestToken": token,
+            ]
+            if subject == "approveRequest" {
+                object["reviewToken"] = UUID().uuidString.lowercased()
+                object["payload"] = ["revisions": revisions]
+            } else {
+                object["configurationKey"] = "https://wallet.example"
+                object["executionDeadline"] = 1_700_000_160_000
+                object["revisions"] = revisions
+            }
+            let request = try JSONDecoder().decode(
+                InternalSafariRequest.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            )
+            switch request.command {
+            case .page(.getResponse(let identity)), .worker(.getManualSwitchResponse(let identity)):
+                XCTAssertEqual(identity.revisions, expected)
+            case .popup(.approveRequest(_, let payload)):
+                XCTAssertEqual(payload.revisions, expected)
+            default:
+                XCTFail("Expected command carrying provider revisions")
+            }
+            for rawValue in invalidProviderRevisionValues {
+                var invalid = object
+                if subject == "approveRequest" {
+                    if rawValue is NSNull { continue }
+                    invalid["payload"] = ["revisions": rawValue]
+                } else {
+                    invalid["revisions"] = rawValue
+                }
+                XCTAssertThrowsError(try JSONDecoder().decode(
+                    InternalSafariRequest.self,
+                    from: JSONSerialization.data(withJSONObject: invalid)
+                ), "\(subject): \(rawValue)")
+            }
+            if subject == "approveRequest" {
+                for payload: [String: Any] in [[:], ["revisions": NSNull()]] {
+                    object["payload"] = payload
+                    let request = try JSONDecoder().decode(
+                        InternalSafariRequest.self,
+                        from: JSONSerialization.data(withJSONObject: object)
+                    )
+                    guard case .popup(.approveRequest(_, let approval)) = request.command else {
+                        return XCTFail("Expected approval payload")
+                    }
+                    XCTAssertNil(approval.revisions)
+                }
+            } else {
+                object.removeValue(forKey: "revisions")
+                XCTAssertThrowsError(try JSONDecoder().decode(
+                    InternalSafariRequest.self,
+                    from: JSONSerialization.data(withJSONObject: object)
+                ))
+            }
+        }
+    }
+
+    private var invalidProviderRevisionValues: [Any] {
+        var values: [Any] = [
+            [:] as [String: Any],
+            ["ethereum": 0],
+            ["solana": 0],
+            ["ethereum": 0, "solana": 0, "extra": 0],
+            "invalid",
+            [0, 0],
+            NSNull(),
+        ]
+        for key in ["ethereum", "solana"] {
+            for invalid: Any in [-1, 9_007_199_254_740_992, true, false, 1.5, "1", NSNull()] {
+                var value: [String: Any] = ["ethereum": 0, "solana": 0]
+                value[key] = invalid
+                values.append(value)
+            }
+        }
+        return values
+    }
+
     func testCompletionReadFailureIsRetryableWithoutLosingOwnership() async throws {
         let fixture = try makeFixture(id: 742)
         let handle = try accepted(await bridge.enqueue(

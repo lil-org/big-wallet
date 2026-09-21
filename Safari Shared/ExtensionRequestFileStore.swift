@@ -1769,9 +1769,6 @@ final class ExtensionRequestFileStore {
         for record in profile.records {
             guard record.profileIdentifier == expectedIdentifier,
                   !record.host.isEmpty,
-                  ExtensionBridge.ProviderRevisions(
-                      rawValue: record.revisions.json
-                  ) != nil,
                   ExtensionBridge.isValidIdentity(
                       host: record.host,
                       configurationKey: record.configurationKey
@@ -1786,10 +1783,7 @@ final class ExtensionRequestFileStore {
                       record.readyApproval.map {
                             context.observedAt >= $0.approvedAt
                       } == true &&
-                        context.executionDeadline >= context.observedAt &&
-                        ExtensionBridge.ProviderRevisions(
-                            rawValue: context.revisions.json
-                        ) != nil
+                        context.executionDeadline >= context.observedAt
                   }) ?? true,
                   record.nativeDeliveryReceipt.map({
                       $0.nativeDeliveryNonce == record.nativeDeliveryNonce &&

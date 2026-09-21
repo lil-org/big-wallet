@@ -400,7 +400,7 @@ class PopupRequestController {
             const outcome = await this.sendCommand({subject: "getApprovalState"});
             if (!this.isActive || this.readFlight !== flight) { return null; }
             this.readFlight = null;
-            const state = this.acceptState(outcome);
+            const state = this.acceptReply(outcome)?.approval;
             if (state) { this.adoptState(state, {refresh}); }
             this.scheduleRead();
             return state;
@@ -408,12 +408,12 @@ class PopupRequestController {
         return flight.result;
     }
 
-    acceptState(outcome) {
-        const state = outcome.status === "response"
-            ? BigWalletPopupWire.decodeApprovalState(outcome.response, this.request.id) : null;
-        if (!state) { this.fail(); return null; }
-        if (state.state === "missing") { void this.reconcile(); return null; }
-        return state;
+    acceptReply(outcome) {
+        const reply = outcome.status === "response"
+            ? BigWalletPopupWire.decodeCommandResult(outcome.response, this.request.id) : null;
+        if (!reply?.approval) { this.fail(); return null; }
+        if (reply.approval.state === "missing") { void this.reconcile(); return null; }
+        return reply;
     }
 
     reconcile() {
@@ -472,15 +472,19 @@ class PopupRequestController {
         this.scheduleRead();
     }
 
+    completeAction(operation, outcome) {
+        if (!this.ownsAction(operation)) { return; }
+        const state = this.acceptReply(outcome)?.approval;
+        if (state) { this.adoptState(state); }
+        this.finishAction(operation);
+    }
+
     async retry() {
         if (!this.isActive || this.action || !this.transportError && !this.allows("retry")) { return; }
         const operation = this.beginAction("retry");
         this.showSubmitting();
         const outcome = await this.sendCommand({subject: "retryApproval"});
-        if (!this.ownsAction(operation)) { return; }
-        const state = this.acceptState(outcome);
-        if (state) { this.adoptState(state); }
-        this.finishAction(operation);
+        this.completeAction(operation, outcome);
     }
 
     approve(payload) { return this.decide("approveRequest", payload); }
@@ -504,18 +508,7 @@ class PopupRequestController {
         const decisionPayload = subject === "approveRequest" ? {...(isRecord(payload) ? payload : {})} : undefined;
         if (decisionPayload) { delete decisionPayload.revisions; delete decisionPayload.password; }
         const outcome = await this.sendCommand({subject, payload: decisionPayload, reviewToken});
-        if (!this.ownsAction(operation)) { return; }
-        if (outcome.status !== "response" || !BigWalletPopupWire.decodeCommandResult(outcome.response)) {
-            this.fail();
-            return;
-        }
-        const timer = setTimeout(() => {
-            if (this.readTimer !== timer || !this.ownsAction(operation)) { return; }
-            this.readTimer = null;
-            this.action = null;
-            void this.readState();
-        }, APPROVAL_POLL_INTERVAL);
-        this.readTimer = timer;
+        this.completeAction(operation, outcome);
     }
 
     async resolveAlert(payload, reviewToken) {
@@ -523,38 +516,25 @@ class PopupRequestController {
         const operation = this.beginAction("alert");
         const outcome = await this.sendCommand({subject: "resolveApprovalAlert", payload, reviewToken});
         if (!this.ownsAction(operation)) { return; }
-        if (outcome.status === "response" && BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored") {
-            this.finishAction(operation);
-            await this.readState();
-            return;
-        }
         if (this.state?.review?.reviewToken !== reviewToken) {
             this.finishAction(operation);
             return;
         }
-        const state = this.acceptState(outcome);
-        if (state) { this.adoptState(state); }
-        this.finishAction(operation);
+        this.completeAction(operation, outcome);
     }
 
     async setSpeed(payload, reviewToken) {
         if (this.action || !this.allows("setTransactionSpeed") || this.interaction || !isRequestToken(reviewToken)) { return null; }
         const operation = this.beginAction("speed");
         const staleReview = this.state?.review?.reviewToken !== reviewToken;
-        let outcome = await this.sendCommand(staleReview
+        const outcome = await this.sendCommand(staleReview
             ? {subject: "getApprovalState"}
             : {subject: "setTransactionSpeed", payload, reviewToken});
         if (!this.ownsAction(operation)) { return false; }
-        const ignored = !staleReview && outcome.status === "response" &&
-            BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored";
-        if (ignored) {
-            outcome = await this.sendCommand({subject: "getApprovalState"});
-            if (!this.ownsAction(operation)) { return false; }
-        }
-        const state = this.acceptState(outcome);
-        if (state) { this.adoptState(state); }
+        const reply = this.acceptReply(outcome);
+        if (reply) { this.adoptState(reply.approval); }
         this.finishAction(operation);
-        return !staleReview && !ignored && state !== null && this.isActive;
+        return !staleReview && reply?.status === "ok" && this.isActive;
     }
 
     updateInteractionControls() {
@@ -1032,10 +1012,9 @@ class PopupRequestController {
         const operation = this.beginAction("edits");
         const outcome = await this.sendCommand({subject: "applyTransactionEdits", payload, reviewToken: draft.reviewToken});
         if (!this.ownsAction(operation)) { return; }
-        if (outcome.status === "response" && BigWalletPopupWire.decodeCommandResult(outcome.response)?.status === "ignored") {
-            const recovered = await this.sendCommand({subject: "getApprovalState"});
-            if (!this.ownsAction(operation)) { return; }
-            const state = this.acceptState(recovered);
+        const reply = this.acceptReply(outcome);
+        const state = reply?.approval;
+        if (reply && reply.status !== "ok") {
             if (state) {
                 const preservesDraft = state.review?.kind === "sendTransaction" &&
                     !state.review.alert &&
@@ -1044,7 +1023,9 @@ class PopupRequestController {
                 if (preservesDraft) {
                     this.adoptState(state);
                     draft.reviewToken = state.review.reviewToken;
-                    setText("edits-error", localized("reviewChanged", "Review changed. Check the values and apply again."));
+                    setText("edits-error", reply.status === "ignored"
+                        ? localized("reviewChanged", "Review changed. Check the values and apply again.")
+                        : localized("failedToLoad", "Failed to load"));
                     show("edits-error");
                 } else {
                     this.resetEditorDraft();
@@ -1053,7 +1034,6 @@ class PopupRequestController {
                 }
             }
         } else {
-            const state = this.acceptState(outcome);
             if (state?.editsError) {
                 this.adoptState(state);
                 draft.reviewToken = state.review?.reviewToken ?? draft.reviewToken;

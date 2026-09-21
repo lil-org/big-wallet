@@ -10,26 +10,49 @@ enum PopupResponse: Encodable {
     case queue(PopupQueueResponse)
     case approval(PopupApprovalState)
     case status(Status)
+    case command(Status, PopupApprovalState?)
+    case queueUnavailable
 
-    private enum CodingKeys: String, CodingKey { case status }
+    private enum CodingKeys: String, CodingKey { case status, approval }
+
+    var approvalState: PopupApprovalState? {
+        switch self {
+        case .approval(let state), .command(_, .some(let state)): return state
+        case .queue, .status, .command(_, nil), .queueUnavailable: return nil
+        }
+    }
 
     func encode(to encoder: Encoder) throws {
         switch self {
         case .queue(let queue): try queue.encode(to: encoder)
-        case .approval(let state): try state.encode(to: encoder)
+        case .approval(let state):
+            try Self.command(.ok, state).encode(to: encoder)
         case .status(let status):
+            try Self.command(status, nil).encode(to: encoder)
+        case .command(let status, let approval):
+            guard status != .ok || approval != nil else {
+                throw EncodingError.invalidValue(status, .init(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "A successful popup reply requires approval state"
+                ))
+            }
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(status, forKey: .status)
+            try container.encode(approval, forKey: .approval)
+        case .queueUnavailable:
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(Status.unavailable, forKey: .status)
         }
     }
 
     fileprivate var removingDecorativeImages: Self {
-        guard case .approval(var state) = self,
+        guard var state = approvalState,
               case .review(var review, let actions, let feedback) = state.content else {
             return self
         }
         review.removeDecorativeImages()
         state.content = .review(review, actions: actions, feedback: feedback)
+        if case .command(let status, _) = self { return .command(status, state) }
         return .approval(state)
     }
 }
@@ -351,10 +374,12 @@ enum PopupResponseEncoder {
         if let data = bounded(response.removingDecorativeImages) { return data }
         guard case .popup(let command) = request.command,
               returnsApprovalState(command) else {
-            return try encoder.encode(PopupResponse.status(.unavailable))
+            return try encoder.encode(PopupResponse.queueUnavailable)
         }
-        let original: PopupApprovalState?
-        if case .approval(let state) = response { original = state } else { original = nil }
+        let original = response.approvalState
+        let status: PopupResponse.Status
+        if case .command(let value, _) = response { status = value }
+        else { status = .ok }
         var fallback = PopupApprovalState(
             id: request.id,
             host: original?.host,
@@ -363,17 +388,18 @@ enum PopupResponseEncoder {
                 action: original?.canReject == true ? .reject : .retry
             )
         )
-        if let data = bounded(.approval(fallback)) { return data }
+        if let data = bounded(.command(status, fallback)) { return data }
         fallback.host = nil
-        return try encoder.encode(PopupResponse.approval(fallback))
+        return try encoder.encode(PopupResponse.command(status, fallback))
     }
 
     private static func returnsApprovalState(_ command: InternalSafariRequest.PopupCommand) -> Bool {
         switch command {
         case .getApprovalState, .retryApproval, .applyTransactionEdits,
-             .resolveApprovalAlert, .setTransactionSpeed:
+             .resolveApprovalAlert, .setTransactionSpeed, .approveRequest,
+             .rejectRequest:
             return true
-        case .getPendingRequests, .approveRequest, .rejectRequest:
+        case .getPendingRequests:
             return false
         }
     }

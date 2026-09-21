@@ -231,11 +231,17 @@ class PublicKey {
     }
 }
 
+function commitPublicKey(state, publicKeyString, publicKey = publicKeyString === null
+    ? null : new PublicKey(publicKeyString)) {
+    state.publicKeyString = publicKeyString;
+    state.publicKey = publicKey;
+}
+
 function authorizationSnapshot(state) {
     return {
         accountRevision: state.accountRevision,
         disconnectedConfigurationRevision: state.disconnectedConfigurationRevision,
-        publicKey: state.publicKey?.toString() || null,
+        publicKey: state.publicKeyString,
         solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
     };
 }
@@ -243,7 +249,7 @@ function authorizationSnapshot(state) {
 function authorizationMatches(state, authorization) {
     return !!authorization &&
         authorization.accountRevision === state.accountRevision &&
-        authorization.publicKey === (state.publicKey?.toString() || null) &&
+        authorization.publicKey === state.publicKeyString &&
         authorization.solanaAuthorizationEpoch === state.solanaAuthorizationEpoch;
 }
 
@@ -289,12 +295,12 @@ function advanceAuthorizationEpoch(provider) {
 
 function clearAuthorization(provider, tombstone, emitChanges = true) {
     const state = getProviderState(provider);
-    const previousPublicKey = state.publicKey?.toString() || null;
+    const previousPublicKey = state.publicKeyString;
     const wasConnected = state.isConnected;
     if (previousPublicKey !== null && state.accountRevision < maximumCounter) {
         state.accountRevision += 1;
     }
-    state.publicKey = null;
+    commitPublicKey(state, null);
     state.isConnected = false;
     state.accountRevocationTombstone = tombstone === true;
     if (!emitChanges) { return; }
@@ -819,7 +825,7 @@ function dispatchOperation(provider, record) {
         return false;
     }
     const method = record.metadata.method;
-    if (method !== "connect" && !state.publicKey) {
+    if (method !== "connect" && !state.publicKeyString) {
         rejectOperation(
             provider,
             record,
@@ -827,7 +833,7 @@ function dispatchOperation(provider, record) {
         );
         return false;
     }
-    if (method === "connect" && state.publicKey &&
+    if (method === "connect" && state.publicKeyString &&
         !state.accountRevocationTombstone) {
         const wasConnected = state.isConnected;
         state.isConnected = true;
@@ -890,7 +896,7 @@ function dispatchOperation(provider, record) {
 
 function registerOperation(provider, method, params, originalId) {
     const state = getProviderState(provider);
-    const authorization = method !== "connect" && state.publicKey
+    const authorization = method !== "connect" && state.publicKeyString
         ? authorizationSnapshot(state)
         : null;
     if (state.runtime.phase === "retired") {
@@ -1055,10 +1061,9 @@ function applyConfiguration(provider, envelope, configurationIsCurrent) {
         return state.runtime.phase === "ready";
     }
     const incoming = envelope.configuration;
-    let previousPublicKey = state.publicKey?.toString() || null;
+    let previousPublicKey = state.publicKeyString;
     if (!configurationIsCurrent()) { return false; }
     const hadAccount = previousPublicKey !== null || state.isConnected;
-    if (state.publicKey === null) { previousPublicKey = null; }
     let previousConnected = state.isConnected;
     const reauthorizationRevision = incoming?.reauthorizationRevision ??
         state.reauthorizationRevision;
@@ -1071,14 +1076,13 @@ function applyConfiguration(provider, envelope, configurationIsCurrent) {
         try { externalDisconnect(provider); } catch {}
         if (!configurationIsCurrent()) { return true; }
         if (state.runtime.phase === "retired") { return false; }
-        previousPublicKey = state.publicKey?.toString() || null;
-        if (state.publicKey === null) { previousPublicKey = null; }
+        previousPublicKey = state.publicKeyString;
         previousConnected = state.isConnected;
     }
     if (!currentProviderState(provider)) { return false; }
     if (needsDisconnect) {
         if (!state.accountRevocationTombstone) {
-            state.publicKey = null;
+            commitPublicKey(state, null);
             state.isConnected = false;
         }
     } else if (incoming && envelope.workerRevision >= state.solanaAuthorizationEpoch) {
@@ -1095,7 +1099,7 @@ function applyConfiguration(provider, envelope, configurationIsCurrent) {
                 : minimumRevision;
             state.solanaAuthorizationEpoch = envelope.workerRevision;
             state.accountRevocationTombstone = false;
-            state.publicKey = new PublicKey(incoming.publicKey);
+            commitPublicKey(state, incoming.publicKey);
             state.isConnected = incoming.isConnected;
         }
     }
@@ -1103,12 +1107,12 @@ function applyConfiguration(provider, envelope, configurationIsCurrent) {
         state.runtime.drain(record => dispatchOperation(provider, record));
     }
     const configuredConnected = state.isConnected;
-    const nextPublicKey = state.publicKey?.toString() || null;
+    const nextPublicKey = state.publicKeyString;
     if (previousPublicKey !== nextPublicKey) {
         emitProvider(provider, "accountChanged", state.publicKey);
         notifyAccountChange(provider);
     }
-    if (!previousConnected && configuredConnected && state.publicKey) {
+    if (!previousConnected && configuredConnected && state.publicKeyString) {
         emitProvider(provider, "connect", state.publicKey);
     } else if (previousConnected && !configuredConnected) {
         emitProvider(provider, "disconnect");
@@ -1234,7 +1238,7 @@ function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () =>
                 providerReplacementError()
             );
         }
-        const previousPublicKey = state.publicKey?.toString() || null;
+        const previousPublicKey = state.publicKeyString;
         const appliedConfigurationMatches =
             envelope.configurationMatch === true &&
             state.accountRevocationTombstone !== true &&
@@ -1270,7 +1274,7 @@ function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () =>
                 return false;
             }
         }
-        state.publicKey = resultPublicKey;
+        commitPublicKey(state, publicKeyValue, resultPublicKey);
         state.isConnected = true;
         const settled = state.runtime.resolve(
             record,
@@ -1320,7 +1324,7 @@ function retire(provider, error = providerReplacementError()) {
 function snapshot(provider) {
     const state = providerState(provider);
     if (!state) { return null; }
-    const publicKey = state.publicKey?.toString() || null;
+    const publicKey = state.publicKeyString;
     if ((publicKey !== null && !validPublicKeyString(publicKey)) ||
         !Number.isSafeInteger(state.accountRevision) ||
         state.accountRevision < 0 ||
@@ -1361,14 +1365,15 @@ function initialAuthorization(initialState) {
         ? initial.solanaAuthorizationEpoch
         : 0;
     const tombstone = initial.accountRevocationTombstone === true;
-    const publicKey = !tombstone && validPublicKeyString(initial.publicKey)
-        ? new PublicKey(initial.publicKey)
+    const publicKeyString = !tombstone && validPublicKeyString(initial.publicKey)
+        ? initial.publicKey
         : null;
     return {
         accountRevision,
         accountRevocationTombstone: tombstone,
-        isConnected: !!publicKey && initial.isConnected === true,
-        publicKey,
+        isConnected: publicKeyString !== null && initial.isConnected === true,
+        publicKey: publicKeyString === null ? null : new PublicKey(publicKeyString),
+        publicKeyString,
         reauthorizationRevision:
             Number.isSafeInteger(initial.reauthorizationRevision) &&
             initial.reauthorizationRevision >= 0
@@ -1590,11 +1595,10 @@ class BigWalletSolana {
 
     accountState() {
         const state = getProviderState(this);
-        const {publicKey, accountRevision, solanaAuthorizationEpoch} = state;
-        if (!publicKey) { return null; }
-        const address = publicKey.toString();
+        const {publicKeyString: address, accountRevision, solanaAuthorizationEpoch} = state;
+        if (address === null) { return null; }
         const bytes = new Uint8Array(Base58.decode(address));
-        if (state.publicKey !== publicKey || state.accountRevision !== accountRevision ||
+        if (state.publicKeyString !== address || state.accountRevision !== accountRevision ||
             state.solanaAuthorizationEpoch !== solanaAuthorizationEpoch) {
             throw providerReplacementError();
         }
@@ -1602,8 +1606,8 @@ class BigWalletSolana {
     }
 
     assertStandardAccount(account) {
-        const publicKey = this.publicKey;
-        if (!publicKey || !account || account.address !== publicKey.toString()) {
+        const address = getProviderState(this).publicKeyString;
+        if (!address || !account || account.address !== address) {
             throw new ProviderRpcError(4100, providerNotReadyMessage);
         }
     }
@@ -1718,13 +1722,14 @@ class BigWalletSolana {
         }
         const signaturesStart = signatureCount.offset;
         const messageStart = signaturesStart + signatureCount.value * 64;
-        if (messageStart >= transactionBytes.length || !this.publicKey) {
+        const address = getProviderState(this).publicKeyString;
+        if (messageStart >= transactionBytes.length || !address) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
         const messageBytes = transactionBytes.slice(messageStart);
         const signer = this.signerDetailsForMessage(
             messageBytes,
-            new Uint8Array(this.publicKey.toBytes())
+            new Uint8Array(Base58.decode(address))
         );
         if (signatureCount.value !== signer.requiredSignaturesCount ||
             signer.signerIndex >= signatureCount.value) {

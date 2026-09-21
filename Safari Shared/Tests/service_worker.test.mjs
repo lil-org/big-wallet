@@ -415,6 +415,10 @@ function approvalProxy(id = 7, overrides = {}) {
     };
 }
 
+function nativeApprovalCommandResult(id, status = "ok") {
+    return {status, approval: {id, state: "working", actions: []}};
+}
+
 function popupSender(overrides = {}) {
     return {
         id: "extension-id",
@@ -4128,8 +4132,8 @@ test("popup approval rejects disconnect until native execution settles", async (
     });
     assert.equal(blocked.error?.code, -32603);
 
-    resolveApproval({status: "ok"});
-    assert.deepEqual(clone(await approving), {status: "ok"});
+    resolveApproval(nativeApprovalCommandResult(91));
+    assert.deepEqual(clone(await approving), nativeApprovalCommandResult(91));
     const disconnected = await harness.dispatch({
         subject: "disconnect",
         id: 92,
@@ -4176,8 +4180,14 @@ function timedApprovalHarness(options = {}) {
     };
 }
 
-test("popup approval waits for a response poll and preserves its review token", async () => {
-    for (const nativeResult of [{status: "ok"}, {status: "staleReview"}]) {
+test("popup approval waits for a response poll and forwards command results unchanged", async () => {
+    for (const nativeResult of [
+        nativeApprovalCommandResult(108),
+        nativeApprovalCommandResult(108, "ignored"),
+        nativeApprovalCommandResult(108, "unavailable"),
+        {status: "ignored", approval: null},
+        {status: "unavailable", approval: null},
+    ]) {
         let resolvePoll;
         const pollGate = new Promise(resolve => { resolvePoll = resolve; });
         const harness = timedApprovalHarness({native: message =>
@@ -4226,13 +4236,13 @@ test("popup approval can acquire a persisted lease after its expiry", async () =
     }]]);
     const harness = timedApprovalHarness({
         storage,
-        native: () => ({status: "ok"}),
+        native: () => nativeApprovalCommandResult(109),
     });
     const approving = harness.dispatch(approvalProxy(109), popupSender());
     await harness.advance(499);
     assert.equal(harness.nativeMessages.length, 0);
     await harness.advance(1);
-    assert.deepEqual(clone(await approving), {status: "ok"});
+    assert.deepEqual(clone(await approving), nativeApprovalCommandResult(109));
     assert.equal(harness.nativeMessages.length, 1);
     assert.equal(storage.has(leaseKey), false);
     assert.equal(harness.timers.size, 0);
@@ -4374,8 +4384,8 @@ test("a durable approval lease blocks revision changes after worker restart", as
     ));
     assert.equal(storage.has(leaseEntry[0]), true);
 
-    resolveApproval({status: "ok"});
-    assert.deepEqual(clone(await approving), {status: "ok"});
+    resolveApproval(nativeApprovalCommandResult(96));
+    assert.deepEqual(clone(await approving), nativeApprovalCommandResult(96));
     assert.equal(storage.has(leaseEntry[0]), false);
     const disconnected = await restarted.dispatch({
         subject: "disconnect",
@@ -4605,14 +4615,14 @@ test("approval cleanup cannot remove a replacement lease", async () => {
             const replacement = clone(storage.get(leaseKey));
             replacement.token = replacementToken;
             storage.set(leaseKey, replacement);
-            return {status: "ok"};
+            return nativeApprovalCommandResult(100);
         },
     });
 
     assert.deepEqual(clone(await harness.dispatch(
         approvalProxy(100),
         popupSender()
-    )), {status: "ok"});
+    )), nativeApprovalCommandResult(100));
     assert.equal(storage.get(leaseKey).token, replacementToken);
 });
 
@@ -4654,7 +4664,7 @@ test("approval cleanup serializes with replacement lease installation", async ()
     const first = harness.dispatch(approvalProxy(103), popupSender());
     await settle();
     now += 161_000;
-    resolveFirst({status: "ok"});
+    resolveFirst(nativeApprovalCommandResult(103));
     await cleanupReadStarted;
 
     const second = harness.dispatch(approvalProxy(104), popupSender());
@@ -4662,7 +4672,7 @@ test("approval cleanup serializes with replacement lease installation", async ()
     assert.equal(harness.nativeMessages.length, 1);
 
     releaseCleanupRead();
-    assert.deepEqual(clone(await first), {status: "ok"});
+    assert.deepEqual(clone(await first), nativeApprovalCommandResult(103));
     await settle();
     assert.equal(harness.nativeMessages.length, 2);
     const leaseEntry = [...storage.entries()].find(([key]) =>
@@ -4671,8 +4681,8 @@ test("approval cleanup serializes with replacement lease installation", async ()
     assert.ok(leaseEntry);
     assert.equal(leaseEntry[1].issuedAt, now);
 
-    resolveSecond({status: "ok"});
-    assert.deepEqual(clone(await second), {status: "ok"});
+    resolveSecond(nativeApprovalCommandResult(104));
+    assert.deepEqual(clone(await second), nativeApprovalCommandResult(104));
     assert.equal(storage.has(leaseEntry[0]), false);
 });
 
@@ -4686,13 +4696,13 @@ test("popup approval overwrites drifted revisions and preserves add-chain", asyn
     const harness = makeHarness({
         dateNow: () => now,
         storage,
-        native: () => ({status: "ok"}),
+        native: message => nativeApprovalCommandResult(message.id),
     });
 
     assert.deepEqual(clone(await harness.dispatch(
         approvalProxy(93, {privateBrowsing: true}),
         popupSender()
-    )), {status: "ok"});
+    )), nativeApprovalCommandResult(93));
     assert.deepEqual(harness.nativeMessages[0].message, {
         subject: "approveRequest",
         id: 93,
@@ -4709,7 +4719,7 @@ test("popup approval overwrites drifted revisions and preserves add-chain", asyn
     assert.deepEqual(clone(await harness.dispatch(
         approvalProxy(94),
         popupSender()
-    )), {status: "ok"});
+    )), nativeApprovalCommandResult(94));
     assert.deepEqual(harness.nativeMessages[1].message.payload, {
         executionDeadline: now + 150_000,
         revisions: {ethereum: 4, solana: 9},
@@ -4723,7 +4733,7 @@ test("popup approval overwrites drifted revisions and preserves add-chain", asyn
             derivationPath: "m/44'/60'/0'/0/0",
         }]}}),
         popupSender()
-    )), {status: "ok"});
+    )), nativeApprovalCommandResult(95));
     assert.deepEqual(harness.nativeMessages[2].message.payload, {
         selectedAccounts: [{
             walletId: "wallet",

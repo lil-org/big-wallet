@@ -20,12 +20,6 @@ final class PopupRequestSession {
     private struct ApprovalContext {
         let claim: ExtensionBridge.ApprovalClaim
         var feedback: String?
-        var reviewRecovery: ReviewRecovery = .reuse
-    }
-
-    private enum ReviewRecovery {
-        case reuse
-        case rematerialize
     }
 
     let handle: ExtensionBridge.Handle
@@ -176,19 +170,6 @@ final class PopupRequestSession {
         reviewToken = UUID()
     }
 
-    func requireRematerializationAfterAuthentication() {
-        updateApprovalContext { $0.reviewRecovery = .rematerialize }
-    }
-
-    func takeAuthenticationRematerializationRequirement() -> Bool {
-        var rematerialize = false
-        updateApprovalContext { context in
-            rematerialize = context.reviewRecovery == .rematerialize
-            context.reviewRecovery = .reuse
-        }
-        return rematerialize
-    }
-
     private func updateApprovalContext(
         _ update: (inout ApprovalContext) -> Void
     ) {
@@ -214,9 +195,29 @@ final class PopupRequestSessions {
         let session: PopupRequestSession
     }
 
+    private enum MutableSessionResult {
+        case available(MutableSessionContext)
+        case ignored
+        case unavailable
+    }
+
     private struct ClaimedApproval {
         let claim: ExtensionBridge.ApprovalClaim
         let token: UUID
+    }
+
+    private enum AuthenticationOutcome {
+        case unlocked(RequestScopedWalletAccess)
+        case cancelled
+        case unavailable(feedback: String)
+        case reviewChanged
+        case superseded
+    }
+
+    private enum SigningValidation {
+        case valid
+        case reviewChanged
+        case superseded
     }
 
     private enum ActiveSessionResult {
@@ -327,15 +328,37 @@ final class PopupRequestSessions {
         switch command {
         case .getPendingRequests:
             return presenter.pendingResponse()
-        case .getApprovalState, .retryApproval:
-            return presenter.missingState(id: request.id)
-        case .approveRequest, .rejectRequest, .setTransactionSpeed,
+        case .getApprovalState, .retryApproval, .approveRequest, .rejectRequest, .setTransactionSpeed,
              .applyTransactionEdits, .resolveApprovalAlert:
             return ignoredResponse()
         }
     }
 
     func dispatch(
+        request: InternalSafariRequest,
+        profileIdentifier: UUID?
+    ) async -> PopupResponse {
+        let response = await dispatchCommand(request: request, profileIdentifier: profileIdentifier)
+        guard case .popup(let command) = request.command,
+              case .status(let status) = response else { return response }
+        if case .getPendingRequests = command { return response }
+        if status == .unavailable { return response }
+        guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
+            return ignoredResponse()
+        }
+        switch await store.load(handle: handle) {
+        case .found(let snapshot):
+            let current = await approvalState(snapshot: snapshot)
+            guard let approval = current.approvalState else { return .status(.unavailable) }
+            return .command(status, approval)
+        case .missing:
+            return .command(status, presenter.missingState(id: request.id).approvalState)
+        case .unavailable:
+            return .status(.unavailable)
+        }
+    }
+
+    private func dispatchCommand(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> PopupResponse {
@@ -346,10 +369,15 @@ final class PopupRequestSessions {
         case .getPendingRequests:
             return await pendingRequestsResponse(profileIdentifier: profileIdentifier)
         case .getApprovalState, .retryApproval:
-            guard let snapshot = await snapshot(
-                      for: request,
-                      profileIdentifier: profileIdentifier
-                  ) else { return missingState(id: request.id) }
+            guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
+                return ignoredResponse()
+            }
+            let snapshot: ExtensionBridge.Snapshot
+            switch await store.load(handle: handle) {
+            case .found(let value): snapshot = value
+            case .missing: return missingState(id: request.id)
+            case .unavailable: return .status(.unavailable)
+            }
             if case .retryApproval = command,
                case .queued(_, .unowned) = snapshot.state {
                 if sessions[snapshot.handle]?.state == .error {
@@ -372,24 +400,27 @@ final class PopupRequestSessions {
                 profileIdentifier: profileIdentifier
             )
         case .setTransactionSpeed(_, let payload):
-            guard payload.value.isFinite,
-                  let context = await mutableSession(
-                      for: request,
-                      profileIdentifier: profileIdentifier
-                  ) else { return ignoredResponse() }
-            return await setTransactionSpeed(context: context, payload: payload)
+            guard payload.value.isFinite else { return ignoredResponse() }
+            switch await mutableSession(for: request, profileIdentifier: profileIdentifier) {
+            case .available(let context):
+                return await setTransactionSpeed(context: context, payload: payload)
+            case .ignored: return ignoredResponse()
+            case .unavailable: return .status(.unavailable)
+            }
         case .applyTransactionEdits(_, let payload):
-            guard let context = await mutableSession(
-                      for: request,
-                      profileIdentifier: profileIdentifier
-                  ) else { return ignoredResponse() }
-            return await applyTransactionEdits(context: context, payload: payload)
+            switch await mutableSession(for: request, profileIdentifier: profileIdentifier) {
+            case .available(let context):
+                return await applyTransactionEdits(context: context, payload: payload)
+            case .ignored: return ignoredResponse()
+            case .unavailable: return .status(.unavailable)
+            }
         case .resolveApprovalAlert(_, let payload):
-            guard let context = await mutableSession(
-                      for: request,
-                      profileIdentifier: profileIdentifier
-                  ) else { return ignoredResponse() }
-            return await resolveApprovalAlert(context: context, payload: payload)
+            switch await mutableSession(for: request, profileIdentifier: profileIdentifier) {
+            case .available(let context):
+                return await resolveApprovalAlert(context: context, payload: payload)
+            case .ignored: return ignoredResponse()
+            case .unavailable: return .status(.unavailable)
+            }
         }
     }
 
@@ -408,12 +439,11 @@ final class PopupRequestSessions {
     private func snapshot(
         for request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> ExtensionBridge.Snapshot? {
-        guard let handle = handle(for: request, profileIdentifier: profileIdentifier),
-              case .found(let snapshot) = await store.load(handle: handle) else {
-            return nil
+    ) async -> ExtensionBridge.SnapshotResult {
+        guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
+            return .missing
         }
-        return snapshot
+        return await store.load(handle: handle)
     }
 
     private func reviewToken(for request: InternalSafariRequest) -> UUID? {
@@ -448,7 +478,7 @@ final class PopupRequestSessions {
         guard case .available(let availableSnapshots) = await store.list(
             profileIdentifier: profileIdentifier
         ) else {
-            return .status(.unavailable)
+            return .queueUnavailable
         }
         let snapshots = availableSnapshots.values.sorted {
             $0.createdAt == $1.createdAt
@@ -584,18 +614,19 @@ final class PopupRequestSessions {
     private func mutableSession(
         for request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> MutableSessionContext? {
-        guard let handle = handle(
-                  for: request,
-                  profileIdentifier: profileIdentifier
-              ),
-              case .found(let snapshot) = await store.load(handle: handle),
-              let session = sessions[snapshot.handle],
+    ) async -> MutableSessionResult {
+        let snapshot: ExtensionBridge.Snapshot
+        switch await self.snapshot(for: request, profileIdentifier: profileIdentifier) {
+        case .found(let value): snapshot = value
+        case .missing: return .ignored
+        case .unavailable: return .unavailable
+        }
+        guard let session = sessions[snapshot.handle],
               reviewToken(for: request) == session.reviewToken,
               canMutateTransaction(snapshot: snapshot, session: session) else {
-            return nil
+            return .ignored
         }
-        return MutableSessionContext(snapshot: snapshot, session: session)
+        return .available(MutableSessionContext(snapshot: snapshot, session: session))
     }
 
     private func canMutateTransaction(
@@ -645,11 +676,14 @@ final class PopupRequestSessions {
             if snapshot.phase == .approving {
                 return stateResponse(id: handle.id, state: .working, host: snapshot.host)
             }
-            if case .found(let current) = await store.load(handle: handle),
-               current.phase == .responded {
+            switch await store.load(handle: handle) {
+            case .found(let current) where current.phase == .responded:
                 discardSession(handle: handle)
                 immediateResponses[handle] = nil
-                return missingState(id: handle.id)
+            case .found, .missing:
+                break
+            case .unavailable:
+                return .status(.unavailable)
             }
             return missingState(id: handle.id)
         }
@@ -689,11 +723,13 @@ final class PopupRequestSessions {
         profileIdentifier: UUID?,
         payload: InternalSafariRequest.ApprovalPayload
     ) async -> PopupResponse {
-        guard let snapshot = await snapshot(
-                  for: request,
-                  profileIdentifier: profileIdentifier
-              ),
-              snapshot.phase != .responded,
+        let snapshot: ExtensionBridge.Snapshot
+        switch await self.snapshot(for: request, profileIdentifier: profileIdentifier) {
+        case .found(let value): snapshot = value
+        case .missing: return ignoredResponse()
+        case .unavailable: return .status(.unavailable)
+        }
+        guard snapshot.phase != .responded,
               case .available(let session) = activeSession(snapshot: snapshot),
               reviewToken(for: request) == session.reviewToken,
               session.canBeginApproval else {
@@ -737,71 +773,18 @@ final class PopupRequestSessions {
                 expectedRevisions: payload.revisions,
                 executionDeadline: executionDeadline
             ) else { return ignoredResponse() }
-        case .approveTransaction(let reviewedAction):
+        case .approveTransaction:
             guard let executionDeadline = payload.executionDeadline,
-                  let transactionSession = session.transaction,
-                  transactionSession.snapshot.canApprove else {
+                  session.transaction?.snapshot.canApprove == true else {
                 return ignoredResponse()
             }
-            guard let approval = await beginAndClaimApproval(for: session) else {
-                return ignoredResponse()
-            }
-            guard let approved = await transactionSession.approve(authenticate: {
-                await self.authenticateClaimedSession(
-                    session: session,
-                    approval: approval,
-                    reason: Strings.sendTransaction
-                )
-            }) else {
-                await releaseApproval(
-                    approval.claim,
-                    for: session,
-                    token: approval.token,
-                    rematerializeOnSuccess:
-                        session.takeAuthenticationRematerializationRequirement()
-                )
-                return .status(.ok)
-            }
-            let walletAccess = approved.walletAccess
-            defer { walletAccess.invalidate() }
-            guard await validateSigningAccess(
-                for: session,
-                reviewedAction: action,
-                approval: approval,
-                walletAccess: walletAccess,
+            guard await runSigningApproval(
+                session: session,
+                action: action,
+                cluster: nil,
                 expectedRevisions: payload.revisions,
                 executionDeadline: executionDeadline
-            ) else {
-                return .status(.ok)
-            }
-            guard let execution = DappApprovalDecision.TransactionExecution(
-                      approved.transaction,
-                      reviewedNetwork: reviewedAction.resolvedNetwork
-                  ) else {
-                await releaseApproval(
-                    approval.claim,
-                    for: session,
-                    token: approval.token,
-                    rematerializeOnSuccess: true
-                )
-                return .status(.ok)
-            }
-            await beginSigningExecution(
-                claim: approval.claim,
-                for: session,
-                token: approval.token,
-                deadline: executionDeadline,
-                acquireWalletLease: {
-                    await walletAccess.takeExecutionLease()
-                }
-            ) {
-                await self.executeDecision(
-                    request: session.request,
-                    action: action,
-                    decision: .transaction(execution),
-                    walletAccess: walletAccess
-                )
-            }
+            ) else { return ignoredResponse() }
         case .addEthereumChain:
             guard let approval = await beginAndClaimApproval(for: session) else {
                 return ignoredResponse()
@@ -975,30 +958,120 @@ final class PopupRequestSessions {
             session.setFeedback(Strings.somethingWentWrong)
             return true
         }
+        return await runSigningApproval(
+            session: session,
+            action: .approveMessage(action),
+            cluster: cluster,
+            expectedRevisions: expectedRevisions,
+            executionDeadline: executionDeadline
+        )
+    }
+
+    private func runSigningApproval(
+        session: PopupRequestSession,
+        action: DappRequestAction,
+        cluster: Solana.Cluster?,
+        expectedRevisions: ExtensionBridge.ProviderRevisions?,
+        executionDeadline: Date
+    ) async -> Bool {
+        let reason: String
+        let transactionSession: PopupTransactionSession?
+        switch action {
+        case .approveMessage(let message):
+            reason = message.subject.title
+            transactionSession = nil
+        case .approveTransaction:
+            reason = Strings.sendTransaction
+            guard let transaction = session.transaction else { return false }
+            transactionSession = transaction
+        case .selectAccount, .switchAccount, .addEthereumChain:
+            return false
+        }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
-        guard let walletAccess = await authenticateClaimedSession(
+        let transactionToken = transactionSession?.beginApproval()
+        if transactionSession != nil && transactionToken == nil {
+            await releaseApproval(approval.claim, for: session, token: approval.token)
+            return true
+        }
+        let authentication = await authenticateClaimedSession(
             session: session,
             approval: approval,
-            reason: action.subject.title
-        ) else {
+            reason: reason
+        )
+        guard case .unlocked(let walletAccess) = authentication else {
+            if let transactionSession, let transactionToken {
+                _ = await transactionSession.finishAuthentication(
+                    token: transactionToken,
+                    succeeded: false
+                )
+            }
+            let rematerialize: Bool
+            switch authentication {
+            case .cancelled:
+                rematerialize = false
+            case .unavailable(let feedback):
+                if isCurrent(session, token: approval.token) {
+                    session.setFeedback(feedback)
+                }
+                rematerialize = false
+            case .reviewChanged, .superseded:
+                rematerialize = true
+            case .unlocked:
+                preconditionFailure()
+            }
             await releaseApproval(
                 approval.claim,
                 for: session,
                 token: approval.token,
-                rematerializeOnSuccess:
-                    session.takeAuthenticationRematerializationRequirement()
+                rematerializeOnSuccess: rematerialize
             )
             return true
         }
-        guard await validateSigningAccess(
+        defer { walletAccess.invalidate() }
+        let decision: DappApprovalDecision
+        if let transactionSession, let transactionToken,
+           case .approveTransaction(let reviewedAction) = action {
+            switch await transactionSession.finishAuthentication(
+                token: transactionToken,
+                succeeded: true
+            ) {
+            case .approved(let transaction):
+                guard let execution = DappApprovalDecision.TransactionExecution(
+                    transaction,
+                    reviewedNetwork: reviewedAction.resolvedNetwork
+                ) else {
+                    await releaseApproval(
+                        approval.claim, for: session, token: approval.token,
+                        rematerializeOnSuccess: true
+                    )
+                    return true
+                }
+                decision = .transaction(execution)
+            case .reviewRequired:
+                await releaseApproval(approval.claim, for: session, token: approval.token)
+                return true
+            case .invalidated:
+                await releaseApproval(
+                    approval.claim, for: session, token: approval.token,
+                    rematerializeOnSuccess: true
+                )
+                return true
+            }
+        } else {
+            decision = .message(.init(solanaCluster: cluster))
+        }
+        guard case .valid = await validateSigningAccess(
             for: session,
-            reviewedAction: .approveMessage(action),
+            reviewedAction: action,
             approval: approval,
             walletAccess: walletAccess,
             expectedRevisions: expectedRevisions,
             executionDeadline: executionDeadline
         ) else {
-            walletAccess.invalidate()
+            await releaseApproval(
+                approval.claim, for: session, token: approval.token,
+                rematerializeOnSuccess: true
+            )
             return true
         }
         await beginSigningExecution(
@@ -1006,18 +1079,15 @@ final class PopupRequestSessions {
             for: session,
             token: approval.token,
             deadline: executionDeadline,
-            acquireWalletLease: {
-                await walletAccess.takeExecutionLease()
-            }
+            acquireWalletLease: { await walletAccess.takeExecutionLease() }
         ) {
             await self.executeDecision(
                 request: session.request,
-                action: .approveMessage(action),
-                decision: .message(.init(solanaCluster: cluster)),
+                action: action,
+                decision: decision,
                 walletAccess: walletAccess
             )
         }
-        walletAccess.invalidate()
         return true
     }
 
@@ -1066,7 +1136,8 @@ final class PopupRequestSessions {
         walletAccess: WalletAccess,
         expectedRevisions: ExtensionBridge.ProviderRevisions?,
         executionDeadline: Date
-    ) async -> Bool {
+    ) async -> SigningValidation {
+        guard isCurrent(session, token: approval.token) else { return .superseded }
         let signer: (walletID: String, account: WalletAccount)
         switch reviewedAction {
         case .approveMessage(let action):
@@ -1074,7 +1145,7 @@ final class PopupRequestSessions {
         case .approveTransaction(let action):
             signer = (action.walletId, action.account)
         case .selectAccount, .switchAccount, .addEthereumChain:
-            return false
+            return .reviewChanged
         }
         let revisionIsCurrent = await providerRevisionLeaseIsCurrent(
             for: session,
@@ -1102,15 +1173,9 @@ final class PopupRequestSessions {
                       Self.sameAccountIdentity($0.account, signer.account)
               }),
               networkMatches else {
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token,
-                rematerializeOnSuccess: true
-            )
-            return false
+            return .reviewChanged
         }
-        return true
+        return isCurrent(session, token: approval.token) ? .valid : .superseded
     }
 
     private static func sameAccountIdentity(
@@ -1168,51 +1233,45 @@ final class PopupRequestSessions {
         session: PopupRequestSession,
         approval: ClaimedApproval,
         reason: String
-    ) async -> RequestScopedWalletAccess? {
+    ) async -> AuthenticationOutcome {
         guard session.beginAuthentication(
             claim: approval.claim,
             token: approval.token
-        ) else { return nil }
-        let walletAccess = await authenticate(session: session, reason: reason)
+        ) else { return .superseded }
+        let outcome = await authenticate(session: session, reason: reason)
         guard isCurrent(session, token: approval.token),
               session.finishAuthentication(
                 claim: approval.claim,
                 token: approval.token
               ) else {
-            walletAccess?.invalidate()
-            return nil
+            if case .unlocked(let walletAccess) = outcome {
+                walletAccess.invalidate()
+            }
+            return .superseded
         }
-        return walletAccess
+        return outcome
     }
 
     private func authenticate(
         session: PopupRequestSession,
         reason: String
-    ) async -> RequestScopedWalletAccess? {
+    ) async -> AuthenticationOutcome {
         switch await walletEnvironment.unlock(reason) {
         case .canceled:
-            return nil
+            return .cancelled
         case .unavailable:
-            let reviewedIdentity = session.walletAccess?.catalogIdentity
-            if let currentIdentity = walletEnvironment.currentReviewAccess()?.catalogIdentity {
-                if currentIdentity != reviewedIdentity {
-                    session.requireRematerializationAfterAuthentication()
-                } else {
-                    session.setFeedback(Strings.somethingWentWrong)
-                }
-            } else {
-                session.setFeedback(Strings.secureApprovalSetupRequired)
-                session.requireRematerializationAfterAuthentication()
+            guard let currentIdentity = walletEnvironment.currentReviewAccess()?.catalogIdentity,
+                  currentIdentity == session.walletAccess?.catalogIdentity else {
+                return .reviewChanged
             }
-            return nil
+            return .unavailable(feedback: Strings.somethingWentWrong)
         case .unlocked(let unlocked):
             guard let reviewedIdentity = session.walletAccess?.catalogIdentity,
                   unlocked.catalogIdentity == reviewedIdentity else {
                 unlocked.invalidate()
-                session.requireRematerializationAfterAuthentication()
-                return nil
+                return .reviewChanged
             }
-            return unlocked
+            return .unlocked(unlocked)
         }
     }
 
@@ -1220,10 +1279,13 @@ final class PopupRequestSessions {
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> PopupResponse {
-        guard let snapshot = await snapshot(
-                  for: request,
-                  profileIdentifier: profileIdentifier
-              ), snapshot.phase == .queued else {
+        let snapshot: ExtensionBridge.Snapshot
+        switch await self.snapshot(for: request, profileIdentifier: profileIdentifier) {
+        case .found(let value): snapshot = value
+        case .missing: return ignoredResponse()
+        case .unavailable: return .status(.unavailable)
+        }
+        guard snapshot.phase == .queued else {
             return ignoredResponse()
         }
         switch await store.reject(handle: snapshot.handle) {

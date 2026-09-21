@@ -247,6 +247,17 @@ actor ExtensionBridge {
             self.solana = solana
         }
 
+        init(from decoder: Decoder) throws {
+            let rawValue = try [String: Int](from: decoder)
+            guard let value = Self(rawValue: rawValue) else {
+                throw DecodingError.dataCorrupted(DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "invalid provider revisions"
+                ))
+            }
+            self = value
+        }
+
         var json: [String: Any] {
             return ["ethereum": ethereum, "solana": solana]
         }

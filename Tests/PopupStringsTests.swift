@@ -99,7 +99,10 @@ final class PopupStringsTests: XCTestCase {
     ) throws -> [String: Any] {
         let data = try PopupResponseEncoder.encode(response, for: request)
         XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        if case .popup(.getPendingRequests) = request.command { return json }
+        XCTAssertEqual(Set(json.keys), ["status", "approval"])
+        return try XCTUnwrap(json["approval"] as? [String: Any])
     }
 
     private func resource(_ name: String) throws -> String {
@@ -198,7 +201,7 @@ final class PopupStringsTests: XCTestCase {
     }
 
     func testApprovalErrorHasExactRefreshOnlyEnvelope() {
-        let error = popupResponseJSON(PopupApprovalStatePresenter.errorState(
+        let error = popupApprovalJSON(PopupApprovalStatePresenter.errorState(
             id: 91,
             host: "wallet.example",
             error: Strings.failedToLoad
@@ -213,7 +216,7 @@ final class PopupStringsTests: XCTestCase {
 
     @MainActor
     func testSecureSetupRequiredStateIsDistinctAndRefreshOnly() {
-        let state = popupResponseJSON(PopupApprovalStatePresenter()
+        let state = popupApprovalJSON(PopupApprovalStatePresenter()
             .secureSetupRequiredState(id: 91, host: "wallet.example"))
 
         XCTAssertEqual(
@@ -259,7 +262,7 @@ final class PopupStringsTests: XCTestCase {
             action: action
         )
         let presenter = PopupApprovalStatePresenter()
-        let review = popupResponseJSON(presenter.approvalState(
+        let review = popupApprovalJSON(presenter.approvalState(
             for: session,
             action: action,
             transactionMutationAllowed: false
@@ -275,7 +278,7 @@ final class PopupStringsTests: XCTestCase {
                 XCTAssertTrue(session.acceptClaim(claim, token: token))
                 XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
             }
-            let busy = popupResponseJSON(presenter.approvalState(
+            let busy = popupApprovalJSON(presenter.approvalState(
                 for: session,
                 action: action,
                 transactionMutationAllowed: true
@@ -288,7 +291,7 @@ final class PopupStringsTests: XCTestCase {
     }
 
     func testRejectableErrorHasExactRejectOnlyEnvelope() {
-        let error = popupResponseJSON(PopupApprovalStatePresenter.errorState(
+        let error = popupApprovalJSON(PopupApprovalStatePresenter.errorState(
             id: 91,
             action: .reject,
             host: "wallet.example",
@@ -387,7 +390,7 @@ final class PopupStringsTests: XCTestCase {
             XCTAssertNil((review["account"] as? [String: Any])?["icon"])
             XCTAssertNil((review["accounts"] as? [[String: Any]])?.first?["icon"])
             XCTAssertEqual(review["reviewToken"] as? String, reviewToken)
-            XCTAssertEqual((popupResponseJSON(response)["review"] as? [String: Any])?["iconURL"] as? String, icon)
+            XCTAssertEqual((popupApprovalJSON(response)["review"] as? [String: Any])?["iconURL"] as? String, icon)
         }
     }
 
@@ -425,6 +428,20 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
         XCTAssertNil(bounded["review"])
+    }
+
+    func testOversizedIgnoredCommandPreservesDispositionAndRecovery() throws {
+        let state = try XCTUnwrap(oversizedResponse().approvalState)
+        let request = try popupRequest(subject: .approveRequest, payload: [:])
+        let data = try PopupResponseEncoder.encode(.command(.ignored, state), for: request)
+        XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
+        let reply = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(Set(reply.keys), ["status", "approval"])
+        XCTAssertEqual(reply["status"] as? String, "ignored")
+        let approval = try XCTUnwrap(reply["approval"] as? [String: Any])
+        XCTAssertEqual(approval["state"] as? String, "error")
+        XCTAssertEqual(approval["actions"] as? [String], ["reject"])
+        XCTAssertNil(approval["review"])
     }
 
     func testOversizedMutationResponsesUseApprovalErrorEnvelope() throws {
@@ -475,7 +492,7 @@ final class PopupStringsTests: XCTestCase {
                 content: .addChain(.init(chainName: "Custom", rpcURL: "https://rpc.example"))
             ), actions: [.approve, .reject], feedback: nil)
         ))
-        let json = popupResponseJSON(response)
+        let json = popupApprovalJSON(response)
         let review = try XCTUnwrap(json["review"] as? [String: Any])
         XCTAssertEqual(review["reviewToken"] as? String, token.uuidString.lowercased())
         XCTAssertNil(review["iconURL"])
@@ -555,7 +572,8 @@ final class PopupStringsTests: XCTestCase {
                                                 actions: [.approve, .reject, .editTransaction, .setTransactionSpeed]),
             "type2Transaction": reviewResponse(.sendTransaction(transactionReview(type2: true)), title: "Send Transaction",
                                                actions: [.reject, .resolveApprovalAlert]),
-            "ok": .status(.ok), "ignored": .status(.ignored), "unavailable": .status(.unavailable),
+            "ok": .approval(.init(id: 91, content: .missing)),
+            "ignored": .status(.ignored), "unavailable": .status(.unavailable),
         ]
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Safari Shared/Tests/fixtures/popup_contract.json")
@@ -576,4 +594,15 @@ func popupResponseJSON(_ response: PopupResponse) -> [String: Any] {
         XCTFail("Failed to encode popup response: \(error)")
         return [:]
     }
+}
+
+private func popupApprovalJSON(_ response: PopupResponse) -> [String: Any] {
+    let reply = popupResponseJSON(response)
+    XCTAssertEqual(Set(reply.keys), ["status", "approval"])
+    XCTAssertEqual(reply["status"] as? String, "ok")
+    guard let approval = reply["approval"] as? [String: Any] else {
+        XCTFail("Expected approval state")
+        return [:]
+    }
+    return approval
 }

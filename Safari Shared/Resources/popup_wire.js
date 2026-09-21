@@ -298,10 +298,16 @@
         return review ? {...decoded, review} : null;
     }
 
-    function decodeCommandResult(raw) {
-        return hasExactKeys(raw, ["status"]) &&
-            ["ok", "ignored", "unavailable"].includes(raw.status)
-            ? {status: raw.status} : null;
+    function decodeCommandResult(raw, expectedRequestID) {
+        if (!hasExactKeys(raw, ["status", "approval"]) ||
+            !["ok", "ignored", "unavailable"].includes(raw.status)) {
+            return null;
+        }
+        if (raw.approval === null) {
+            return raw.status === "ok" ? null : {status: raw.status, approval: null};
+        }
+        const approval = decodeApprovalState(raw.approval, expectedRequestID);
+        return approval ? {status: raw.status, approval} : null;
     }
 
     return Object.freeze({
