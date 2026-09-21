@@ -1034,16 +1034,7 @@ final class ExtensionRequestFileStore {
         context: ExtensionBridge.NativeExecutionContext,
         fence: CrossProcessFileLock
     ) {
-        guard let storeLock else {
-            fence.release()
-            return
-        }
-        do {
-            try storeLock.acquire(
-                timeoutNanoseconds: UInt64.max,
-                pollNanoseconds: lockPoll
-            )
-        } catch {
+        guard let storeLock, (try? storeLock.tryAcquire()) == true else {
             fence.release()
             return
         }

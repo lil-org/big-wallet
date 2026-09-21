@@ -5562,6 +5562,50 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(helperReads, 1)
     }
 
+    func testNativeReadReleaseDoesNotWaitForContendedStoreLock() async throws {
+        let fixture = try makeFixture(id: 745)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        _ = try await markNativeApprovalReady(handle: handle)
+        let execution = try await makeNativeDecisionExecutable(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey,
+            revisions: fixture.ingress.revisions
+        )
+        let released = expectation(description: "Release while the store is locked")
+        var cleanup: Task<Void, Never>?
+        try await CrossProcessLockTestFixture.withHeldLock(
+            at: rootURL.appendingPathComponent("bridge-v7.lock"),
+            readyURL: rootURL.appendingPathComponent("holder-ready")
+        ) {
+            cleanup = Task.detached {
+                execution.lease.release()
+                released.fulfill()
+            }
+            await self.fulfillment(of: [released], timeout: 0.5)
+        }
+        await cleanup?.value
+
+        let staleClaim = await claimReadyNativeExecution(in: bridge, handle: handle)
+        XCTAssertEqual(staleClaim, .notStaged)
+        let next = try await makeNativeDecisionExecutable(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey,
+            revisions: fixture.ingress.revisions
+        )
+        defer { next.lease.release() }
+        XCTAssertNotEqual(next.context.fenceToken, execution.context.fenceToken)
+        execution.lease.release()
+        guard case .claimed(let claim) = await claimReadyNativeExecution(
+            in: bridge,
+            handle: handle
+        ) else { return XCTFail("Old cleanup must not revoke a successor") }
+        let result = await bridge.release(claim: claim.approvalClaim)
+        XCTAssertEqual(result, .persisted)
+    }
+
     func testSeparateProcessStoreLockFencesAccess() async throws {
         let fixture = try makeFixture(id: 80)
         let readyURL = rootURL.appendingPathComponent("holder-ready")

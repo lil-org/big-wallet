@@ -3369,6 +3369,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { _ in await Task.yield() },
+            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
             attemptNativeDecision: { _, _ in executions += 1; return .responseReady }
         ))
         start(fixture)
