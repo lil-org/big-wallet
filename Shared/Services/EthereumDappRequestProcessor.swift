@@ -9,9 +9,9 @@ struct EthereumDappRequestProcessor {
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        walletAccess: WalletAccess = SourceWalletAccess.shared
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
-        prepareAvailable(request: request, body: body, walletAccess: walletAccess)
+        prepareAvailable(request: request, body: body, catalog: catalog)
             ?? .response(response(to: request, error: .internalError))
     }
 
@@ -19,15 +19,15 @@ struct EthereumDappRequestProcessor {
         request: SafariRequest,
         body: SafariRequest.Ethereum
     ) -> DappRequestPreparation? {
-        prepareAvailable(request: request, body: body, walletAccess: nil)
+        prepareAvailable(request: request, body: body, catalog: nil)
     }
 
     private static func prepareAvailable(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        walletAccess: WalletAccess?
+        catalog: WalletReviewCatalog?
     ) -> DappRequestPreparation? {
-        lazy var walletAndAccount = walletAccess?.specificAccount(
+        lazy var walletAndAccount = catalog?.specificAccount(
             coin: .ethereum,
             address: body.address
         ).map { ($0.walletId, $0.account) }
@@ -36,10 +36,10 @@ struct EthereumDappRequestProcessor {
         case .addEthereumChain:
             return prepareAddChain(request: request, body: body)
         case .requestAccounts:
-            guard let walletAccess else { return nil }
+            guard let catalog else { return nil }
             let action = SelectAccountAction(
                 coinType: .ethereum,
-                selectedAccounts: Set(walletAccess.suggestedAccounts(coin: .ethereum)),
+                selectedAccounts: Set(catalog.suggestedAccounts(coin: .ethereum)),
                 initiallyConnectedProviders: [],
                 network: nil
             )
@@ -48,7 +48,7 @@ struct EthereumDappRequestProcessor {
             guard let raw = body.raw else {
                 return .response(genericFailureResponse(to: request))
             }
-            guard walletAccess != nil else { return nil }
+            guard catalog != nil else { return nil }
             guard let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
@@ -63,7 +63,7 @@ struct EthereumDappRequestProcessor {
             guard let data = body.message else {
                 return .response(genericFailureResponse(to: request))
             }
-            guard walletAccess != nil else { return nil }
+            guard catalog != nil else { return nil }
             guard let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
@@ -78,7 +78,7 @@ struct EthereumDappRequestProcessor {
             guard let data = body.message else {
                 return .response(genericFailureResponse(to: request))
             }
-            guard walletAccess != nil else { return nil }
+            guard catalog != nil else { return nil }
             guard let walletAndAccount else {
                 return .response(genericFailureResponse(to: request))
             }
@@ -105,7 +105,7 @@ struct EthereumDappRequestProcessor {
                   case .resolved(let resolvedNetwork) = Nodes.resolution(chainId: chainId) else {
                 return .response(response(to: request, error: .internalError))
             }
-            guard walletAccess != nil else { return nil }
+            guard catalog != nil else { return nil }
             guard let walletAndAccount else {
                 return .response(response(
                     to: request,
@@ -143,7 +143,7 @@ struct EthereumDappRequestProcessor {
                 ))
             }
             if !body.address.isEmpty {
-                guard walletAccess != nil else { return nil }
+                guard catalog != nil else { return nil }
                 guard walletAndAccount != nil else {
                     return .response(response(
                         to: request,
@@ -162,11 +162,11 @@ struct EthereumDappRequestProcessor {
     static func execute(
         request: SafariRequest,
         approval: DappApprovalValidator.Approval,
-        walletAccess: WalletAccess?
+        signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
         switch approval {
         case .message(let action, _):
-            guard let privateKey = walletAccess?.privateKey(
+            guard let privateKey = signer?.privateKey(
                 walletID: action.walletId,
                 account: action.account
             ) else {
@@ -189,7 +189,7 @@ struct EthereumDappRequestProcessor {
             }
             return .response(response(to: request, signingResult: result))
         case .transaction(let action, let transaction):
-            guard let privateKey = walletAccess?.privateKey(
+            guard let privateKey = signer?.privateKey(
                 walletID: action.walletId,
                 account: action.account
             ) else {

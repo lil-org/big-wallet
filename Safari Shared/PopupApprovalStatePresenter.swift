@@ -99,9 +99,9 @@ final class PopupApprovalStatePresenter {
         var error = session.errorText
         switch action {
         case .selectAccount(let action):
-            content = .selectAccount(selectionReview(action: action, walletAccess: session.walletAccess))
+            content = .selectAccount(selectionReview(action: action, reviewCatalog: session.reviewCatalog))
         case .switchAccount(let action):
-            content = .switchAccount(selectionReview(action: action, walletAccess: session.walletAccess))
+            content = .switchAccount(selectionReview(action: action, reviewCatalog: session.reviewCatalog))
         case .approveMessage(let action):
             content = .signMessage(messageReview(action: action))
         case .approveTransaction(let action):
@@ -169,11 +169,11 @@ final class PopupApprovalStatePresenter {
 
     private func selectionReview(
         action: SelectAccountAction,
-        walletAccess: WalletAccess?
+        reviewCatalog: WalletReviewCatalog?
     ) -> PopupSelectionReview {
         var accounts = [PopupSelectableAccount]()
         var hasEthereumCandidates = false
-        for specific in walletAccess?.orderedAccounts ?? [] {
+        for specific in reviewCatalog?.orderedAccounts ?? [] {
             let account = specific.account
             if let coinType = action.coinType, account.coin != coinType { continue }
             if account.coin == .ethereum { hasEthereumCandidates = true }

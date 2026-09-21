@@ -18,7 +18,8 @@ final class NativeApprovalFinalizer {
 
     private let store: NativeApprovalStore
     private let requestProcessor: DappRequestProcessing
-    private let refreshWalletAccess: () -> WalletAccess?
+    private let refreshWalletCatalog: () -> WalletReviewCatalog?
+    private let signer: any WalletSigning
     private let networkResolver: (String) -> EthereumNetwork?
     private let clock: () -> Date
     private let executor: DurableApprovalExecutor
@@ -26,10 +27,11 @@ final class NativeApprovalFinalizer {
     init(
         store: NativeApprovalStore,
         requestProcessor: DappRequestProcessing,
-        refreshWalletAccess: @escaping () -> WalletAccess? = {
+        refreshWalletCatalog: @escaping () -> WalletReviewCatalog? = {
             guard WalletsManager.shared.start() else { return nil }
-            return SourceWalletAccess.shared
+            return WalletsManager.shared.reviewCatalog()
         },
+        signer: any WalletSigning = SourceWalletSigner.shared,
         networkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
         },
@@ -39,7 +41,8 @@ final class NativeApprovalFinalizer {
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
-        self.refreshWalletAccess = refreshWalletAccess
+        self.refreshWalletCatalog = refreshWalletCatalog
+        self.signer = signer
         self.networkResolver = networkResolver
         self.clock = clock
         executor = DurableApprovalExecutor(
@@ -127,19 +130,19 @@ final class NativeApprovalFinalizer {
         }
 
         let preparation: DappRequestPreparation
-        let walletAccess: WalletAccess?
+        let executionSigner: (any WalletSigning)?
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent
-            walletAccess = nil
+            executionSigner = nil
         } else {
-            guard let refreshedAccess = refreshWalletAccess() else {
+            guard let refreshedAccess = refreshWalletCatalog() else {
                 return .interruptionRequired
             }
+            executionSigner = signer
             CustomNetworkCache.shared.invalidate()
-            walletAccess = refreshedAccess
             preparation = requestProcessor.prepare(
                 request,
-                walletAccess: refreshedAccess
+                catalog: refreshedAccess
             )
         }
         switch preparation {
@@ -158,7 +161,7 @@ final class NativeApprovalFinalizer {
                 }
                 let accounts: [SpecificWalletAccount]?
                 if case .accountSelection = authorization.decision {
-                    accounts = walletAccess?.orderedAccounts
+                    accounts = self.refreshWalletCatalog()?.orderedAccounts
                 } else {
                     accounts = nil
                 }
@@ -172,7 +175,7 @@ final class NativeApprovalFinalizer {
                     return await self.requestProcessor.execute(
                         request: request,
                         approval: approval,
-                        walletAccess: walletAccess
+                        signer: executionSigner
                     )
                 case .failure(.staleTransaction):
                     return .response(Self.staleResponse(for: request), approvalCommitted: false)

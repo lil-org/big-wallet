@@ -2,13 +2,13 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
-func makeRequestScopedWalletAccessForTesting(
-    _ access: WalletAccess,
+func makeRequestScopedWalletSignerForTesting(
+    _ signer: any WalletSigning = TestWalletSigner(),
     isCurrent: @escaping () -> Bool = { true },
     acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil
-) -> RequestScopedWalletAccess {
-    RequestScopedWalletAccess(
-        BorrowedWalletAccessForTesting(access),
+) -> RequestScopedWalletSigner {
+    RequestScopedWalletSigner(
+        BorrowedWalletSignerForTesting(signer),
         isCurrent: isCurrent,
         acquireExecutionLease: acquireExecutionLease ?? {
             isCurrent() ? WalletExecutionLease(release: {}) : nil
@@ -16,35 +16,30 @@ func makeRequestScopedWalletAccessForTesting(
     )
 }
 
-final class BorrowedWalletAccessForTesting: OwnedWalletAccess {
-    private var access: WalletAccess?
+final class TestWalletSigner: WalletSigning {
+    func privateKey(walletID: String, account: WalletAccount) -> WalletPrivateKey? {
+        nil
+    }
+}
+
+final class BorrowedWalletSignerForTesting: OwnedWalletSigning {
+    private var signer: (any WalletSigning)?
     private(set) var invalidationCount = 0
 
-    init(_ access: WalletAccess) {
-        self.access = access
-    }
-
-    var catalogIdentity: WalletCatalogIdentity {
-        access?.catalogIdentity ?? WalletCatalogIdentity(
-            generation: nil,
-            catalogData: Data()
-        )
-    }
-
-    var orderedAccounts: [SpecificWalletAccount] {
-        access?.orderedAccounts ?? []
+    init(_ signer: any WalletSigning = TestWalletSigner()) {
+        self.signer = signer
     }
 
     func privateKey(
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey? {
-        access?.privateKey(walletID: walletID, account: account)
+        signer?.privateKey(walletID: walletID, account: account)
     }
 
     func invalidate() {
         invalidationCount += 1
-        access = nil
+        signer = nil
     }
 }
 

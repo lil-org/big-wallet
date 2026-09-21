@@ -1075,37 +1075,12 @@ final class ExtensionRequestFileStore {
                   claim.matches(handle: claim.handle, value: claimID) else {
                 return .ownershipLost
             }
-            if profile.state.records[index].readyApproval != nil {
-                guard interruptNativeRecord(in: &profile, at: index, now: now),
-                      writeProfileLocked(profile, failureRecovery: .readBack) else {
-                    return .retryablePersistenceFailure
-                }
-                claim.releaseLease()
-                removeOperationLockLocked(handle: claim.handle)
-                removeNativeExecutionFenceLocked(handle: claim.handle)
-                return .persisted
-            }
-            profile.state.records[index].restorePendingClaim()
-            let result: ExtensionBridge.StoreMutationResult
-            switch transitionExpiredPending(
+            return abandonClaimLocked(
                 in: &profile,
                 at: index,
-                now: now
-            ) {
-            case .active:
-                result = .persisted
-            case .expired:
-                result = .ownershipLost
-            case .unavailable:
-                return .retryablePersistenceFailure
-            }
-            guard writeProfileLocked(profile) else {
-                return .retryablePersistenceFailure
-            }
-            claim.releaseLease()
-            removeOperationLockLocked(handle: claim.handle)
-            removeNativeExecutionFenceLocked(handle: claim.handle)
-            return result
+                now: now,
+                releaseLease: claim.releaseLease
+            )
         }
     }
 
@@ -1340,18 +1315,31 @@ final class ExtensionRequestFileStore {
                     profile.state.records[index].state,
                   permit.matches(handle: permit.handle, value: claimID),
                   permit.lease != nil else { return .ownershipLost }
-            if profile.state.records[index].readyApproval != nil {
-                guard interruptNativeRecord(in: &profile, at: index, now: now),
-                      writeProfileLocked(profile, failureRecovery: .readBack) else {
-                    return .retryablePersistenceFailure
-                }
-                permit.releaseLease()
-                removeOperationLockLocked(handle: permit.handle)
-                removeNativeExecutionFenceLocked(handle: permit.handle)
-                return .persisted
+            return abandonClaimLocked(
+                in: &profile,
+                at: index,
+                now: now,
+                releaseLease: permit.releaseLease
+            )
+        }
+    }
+
+    private func abandonClaimLocked(
+        in profile: inout ValidatedProfile,
+        at index: Int,
+        now: Date,
+        releaseLease: () -> Void
+    ) -> ExtensionBridge.StoreMutationResult {
+        let handle = profile.state.records[index].handle
+        let result: ExtensionBridge.StoreMutationResult
+        if profile.state.records[index].readyApproval != nil {
+            guard interruptNativeRecord(in: &profile, at: index, now: now),
+                  writeProfileLocked(profile, failureRecovery: .readBack) else {
+                return .retryablePersistenceFailure
             }
+            result = .persisted
+        } else {
             profile.state.records[index].restorePendingClaim()
-            let result: ExtensionBridge.StoreMutationResult
             switch transitionExpiredPending(
                 in: &profile,
                 at: index,
@@ -1367,11 +1355,11 @@ final class ExtensionRequestFileStore {
             guard writeProfileLocked(profile) else {
                 return .retryablePersistenceFailure
             }
-            permit.releaseLease()
-            removeOperationLockLocked(handle: permit.handle)
-            removeNativeExecutionFenceLocked(handle: permit.handle)
-            return result
         }
+        releaseLease()
+        removeOperationLockLocked(handle: handle)
+        removeNativeExecutionFenceLocked(handle: handle)
+        return result
     }
 
     func readResponse(

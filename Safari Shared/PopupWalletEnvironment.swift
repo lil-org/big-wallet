@@ -3,17 +3,17 @@ import Foundation
 @MainActor
 struct PopupWalletEnvironment {
 
-    let currentReviewAccess: () -> WalletAccess?
+    let currentReviewCatalog: () -> WalletReviewCatalog?
     let unlock: (String) async -> WalletUnlockResult
 
     init(
-        catalogAccess: @escaping () -> WalletAccess?,
-        unlockWalletAccess: @escaping (String) async -> WalletUnlockResult
+        reviewCatalog: @escaping () -> WalletReviewCatalog?,
+        unlockWallets: @escaping (String) async -> WalletUnlockResult
     ) {
-        currentReviewAccess = {
+        currentReviewCatalog = {
             WalletsMetadataService.reload()
-            return catalogAccess()
+            return reviewCatalog()
         }
-        unlock = unlockWalletAccess
+        unlock = unlockWallets
     }
 }

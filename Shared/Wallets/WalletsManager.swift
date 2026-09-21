@@ -111,6 +111,19 @@ final class WalletsManager: NSObject {
         return true
     }
 
+    func reviewCatalog() -> WalletReviewCatalog? {
+        let wallets = wallets
+        guard let data = try? WalletAccountCatalog(wallets: wallets).canonicalData() else {
+            return nil
+        }
+        return WalletReviewCatalog(
+            identity: WalletCatalogIdentity(generation: nil, catalogData: data),
+            orderedAccounts: wallets.flatMap { wallet in
+                wallet.accounts.map { SpecificWalletAccount(walletId: wallet.id, account: $0) }
+            }
+        )
+    }
+
 #if os(iOS) || os(visionOS)
     func safariApprovalSourceSnapshot() throws -> SafariApprovalSourceSnapshot? {
         guard let password = try keychain.readPasswordData() else { return nil }
@@ -131,9 +144,7 @@ final class WalletsManager: NSObject {
                 storedKeyJSON: data
             ))
         }
-        let catalog = WalletAccountCatalog(
-            accounts: SourceWalletAccess.descriptors(for: wallets)
-        )
+        let catalog = WalletAccountCatalog(wallets: wallets)
         guard catalog.isValid else { throw Error.invalidInput }
         return SafariApprovalSourceSnapshot(
             catalog: catalog,

@@ -96,6 +96,29 @@ struct WalletAccountCatalog: Codable, Equatable, Sendable {
 
     let accounts: [WalletAccountDescriptor]
 
+    init(accounts: [WalletAccountDescriptor]) {
+        self.accounts = accounts
+    }
+
+    init(wallets: [WalletContainer]) {
+        accounts = wallets.flatMap { wallet in
+            wallet.accounts.map { account in
+                WalletAccountDescriptor(
+                    walletID: wallet.id,
+                    coin: account.coin,
+                    normalizedAddress: account.coin.normalizedAddress(account.address),
+                    derivationPath: account.derivationPath
+                )
+            }
+        }
+    }
+
+    func canonicalData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(self)
+    }
+
     var isValid: Bool {
         accounts.count <= 16_384 &&
             accounts.allSatisfy(\.isValid) &&
@@ -114,7 +137,7 @@ struct ValidatedWalletAccountCatalog: Sendable {
                   from: data
               ),
               catalog.isValid,
-              (try? SourceWalletAccess.encodeCatalog(catalog)) == data else {
+              (try? catalog.canonicalData()) == data else {
             return nil
         }
         self.catalog = catalog
@@ -128,7 +151,7 @@ struct WalletCatalogIdentity: Equatable, Sendable {
 }
 
 enum WalletUnlockResult {
-    case unlocked(RequestScopedWalletAccess)
+    case unlocked(catalog: WalletReviewCatalog, signer: RequestScopedWalletSigner)
     case canceled
     case unavailable
 }
@@ -155,20 +178,21 @@ final class WalletExecutionLease: @unchecked Sendable {
     }
 }
 
-protocol WalletAccess: AnyObject {
-    var catalogIdentity: WalletCatalogIdentity { get }
-    var orderedAccounts: [SpecificWalletAccount] { get }
+protocol WalletSigning: AnyObject {
     func privateKey(
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey?
 }
 
-protocol OwnedWalletAccess: WalletAccess {
+protocol OwnedWalletSigning: WalletSigning {
     func invalidate()
 }
 
-extension WalletAccess {
+struct WalletReviewCatalog {
+
+    let identity: WalletCatalogIdentity
+    let orderedAccounts: [SpecificWalletAccount]
 
     func specificAccount(
         coin: WalletCoin,
@@ -208,9 +232,9 @@ extension WalletAccess {
     }
 }
 
-final class SourceWalletAccess: WalletAccess {
+final class SourceWalletSigner: WalletSigning {
 
-    static let shared = SourceWalletAccess()
+    static let shared = SourceWalletSigner()
 
     private let walletsManager: WalletsManager
 
@@ -218,73 +242,11 @@ final class SourceWalletAccess: WalletAccess {
         self.walletsManager = walletsManager
     }
 
-    var orderedAccounts: [SpecificWalletAccount] {
-        walletsManager.wallets.flatMap { wallet in
-            wallet.accounts.map {
-                SpecificWalletAccount(walletId: wallet.id, account: $0)
-            }
-        }
-    }
-
-    var catalogIdentity: WalletCatalogIdentity {
-        let catalog = WalletAccountCatalog(
-            accounts: Self.descriptors(for: walletsManager.wallets)
-        )
-        return WalletCatalogIdentity(
-            generation: nil,
-            catalogData: (try? Self.encodeCatalog(catalog)) ?? Data()
-        )
-    }
-
     func privateKey(
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey? {
         walletsManager.getPrivateKey(walletId: walletID, account: account)
-    }
-
-    static func descriptors(
-        for wallets: [WalletContainer]
-    ) -> [WalletAccountDescriptor] {
-        wallets.flatMap { wallet in
-            wallet.accounts.map { account in
-                WalletAccountDescriptor(
-                    walletID: wallet.id,
-                    coin: account.coin,
-                    normalizedAddress: account.coin.normalizedAddress(
-                        account.address
-                    ),
-                    derivationPath: account.derivationPath
-                )
-            }
-        }
-    }
-
-    static func encodeCatalog(_ catalog: WalletAccountCatalog) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        return try encoder.encode(catalog)
-    }
-}
-
-final class CatalogWalletAccess: WalletAccess {
-
-    let catalogIdentity: WalletCatalogIdentity
-    let orderedAccounts: [SpecificWalletAccount]
-
-    init(catalog: ValidatedWalletAccountCatalog, generation: UUID) {
-        catalogIdentity = WalletCatalogIdentity(
-            generation: generation,
-            catalogData: catalog.data
-        )
-        orderedAccounts = catalog.catalog.accounts.map(\.specificAccount)
-    }
-
-    func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey? {
-        nil
     }
 }
 
@@ -307,7 +269,7 @@ enum WalletSnapshotValidation {
             }
             wallets.append(wallet)
         }
-        guard SourceWalletAccess.descriptors(for: wallets) == catalog.accounts else {
+        guard WalletAccountCatalog(wallets: wallets).accounts == catalog.accounts else {
             return nil
         }
 
@@ -392,38 +354,16 @@ enum WalletSnapshotValidation {
     }
 }
 
-final class UnlockedWalletAccess: OwnedWalletAccess {
+final class UnlockedWalletSigner: OwnedWalletSigning {
 
-    let catalogIdentity: WalletCatalogIdentity
-    private(set) var orderedAccounts: [SpecificWalletAccount]
     private var password: Data
     private var walletsByID: [String: WalletContainer]
 
-    init?(
-        catalog: ValidatedWalletAccountCatalog,
-        generation: UUID,
-        password: Data,
-        walletRecords: [(id: String, data: Data)]
-    ) {
+    init?(password: Data, wallets: [WalletContainer]) {
         guard !password.isEmpty,
-              let wallets = WalletSnapshotValidation.wallets(
-                  catalog: catalog.catalog,
-                  walletRecords: walletRecords
-              ) else { return nil }
-
+              Set(wallets.map(\.id)).count == wallets.count else { return nil }
         self.password = password
-        walletsByID = Dictionary(
-            uniqueKeysWithValues: wallets.map { ($0.id, $0) }
-        )
-        orderedAccounts = wallets.flatMap { wallet in
-            wallet.accounts.map {
-                SpecificWalletAccount(walletId: wallet.id, account: $0)
-            }
-        }
-        catalogIdentity = WalletCatalogIdentity(
-            generation: generation,
-            catalogData: catalog.data
-        )
+        walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
     }
 
     func privateKey(
@@ -446,7 +386,6 @@ final class UnlockedWalletAccess: OwnedWalletAccess {
     func invalidate() {
         password.resetBytes(in: 0..<password.count)
         password.removeAll(keepingCapacity: false)
-        orderedAccounts.removeAll(keepingCapacity: false)
         walletsByID.removeAll(keepingCapacity: false)
     }
 
@@ -455,16 +394,16 @@ final class UnlockedWalletAccess: OwnedWalletAccess {
     }
 }
 
-final class RequestScopedWalletAccess: WalletAccess {
+final class RequestScopedWalletSigner: WalletSigning {
 
     private let lock = NSLock()
-    private var access: OwnedWalletAccess?
+    private var access: OwnedWalletSigning?
     private let isCurrent: () -> Bool
     private let acquireExecutionLease: () async -> WalletExecutionLease?
     private var executionLeaseTaken = false
 
     init(
-        _ access: OwnedWalletAccess,
+        _ access: OwnedWalletSigning,
         isCurrent: @escaping () -> Bool,
         acquireExecutionLease: @escaping () async -> WalletExecutionLease?
     ) {
@@ -473,37 +412,12 @@ final class RequestScopedWalletAccess: WalletAccess {
         self.acquireExecutionLease = acquireExecutionLease
     }
 
-    var catalogIdentity: WalletCatalogIdentity {
+    func validateCurrent() -> Bool {
         guard isCurrent() else {
             invalidate()
-            return WalletCatalogIdentity(
-                generation: nil,
-                catalogData: Data()
-            )
+            return false
         }
-        lock.lock()
-        defer { lock.unlock() }
-        guard !executionLeaseTaken else {
-            return WalletCatalogIdentity(
-                generation: nil,
-                catalogData: Data()
-            )
-        }
-        return access?.catalogIdentity ?? WalletCatalogIdentity(
-            generation: nil,
-            catalogData: Data()
-        )
-    }
-
-    var orderedAccounts: [SpecificWalletAccount] {
-        guard isCurrent() else {
-            invalidate()
-            return []
-        }
-        lock.lock()
-        defer { lock.unlock() }
-        guard !executionLeaseTaken else { return [] }
-        return access?.orderedAccounts ?? []
+        return lock.withLock { access != nil && !executionLeaseTaken }
     }
 
     func privateKey(

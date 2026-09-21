@@ -3182,28 +3182,138 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual((response["error"] as? [String: Any])?["code"] as? Int, 4001)
     }
 
-    func testReleasedClaimAfterDeadlineBecomesRetainedRejection() async throws {
-        let fixture = try makeFixture(id: 95)
-        let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        )).handle
-        let claim = try approvalClaim(await bridge.claim(handle: handle))
-        clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+    func testReleaseAndRollbackRestoreActiveClaimsAndRetainExpiredRejections() async throws {
+        for (operationIndex, rollsBack) in [false, true].enumerated() {
+            for (expiryIndex, expires) in [false, true].enumerated() {
+                let fixture = try makeFixture(id: 950 + operationIndex * 2 + expiryIndex)
+                let handle = try accepted(await bridge.enqueue(
+                    ingress: fixture.ingress,
+                    profileIdentifier: nil
+                )).handle
+                let claim = try approvalClaim(await bridge.claim(handle: handle))
+                if expires { clock.now.addTimeInterval(ExtensionBridge.requestTTL) }
 
-        let release = await bridge.release(claim: claim)
-        XCTAssertEqual(release, .ownershipLost)
-        guard case .found(let released) = await bridge.load(handle: handle) else {
-            return XCTFail("Expected retained release rejection")
+                let result: ExtensionBridge.StoreMutationResult
+                if rollsBack {
+                    let permit = try executionPermit(await bridge.begin(claim: claim))
+                    result = await bridge.rollback(permit: permit)
+                } else {
+                    result = await bridge.release(claim: claim)
+                }
+                XCTAssertEqual(result, expires ? .ownershipLost : .persisted)
+                XCTAssertFalse(FileManager.default.fileExists(atPath: operationLockURL(handle).path))
+                guard case .found(let released) = await bridge.load(handle: handle) else {
+                    return XCTFail("Expected retained request")
+                }
+                XCTAssertEqual(released.phase, expires ? .responded : .queued)
+                if expires {
+                    let response = try responseJSON(await bridge.readResponse(
+                        id: handle.id,
+                        configurationKey: fixture.request.configurationKey,
+                        requestToken: handle.requestToken,
+                        profileIdentifier: nil
+                    ))
+                    XCTAssertEqual((response["error"] as? [String: Any])?["code"] as? Int, 4001)
+                } else {
+                    let reclaimed = try approvalClaim(await bridge.claim(handle: handle))
+                    let release = await bridge.release(claim: reclaimed)
+                    XCTAssertEqual(release, .persisted)
+                }
+            }
         }
-        XCTAssertEqual(released.phase, .responded)
-        let response = try responseJSON(await bridge.readResponse(
-            id: handle.id,
-            configurationKey: fixture.request.configurationKey,
-            requestToken: handle.requestToken,
-            profileIdentifier: nil
-        ))
-        XCTAssertEqual((response["error"] as? [String: Any])?["code"] as? Int, 4001)
+    }
+
+    func testClaimAbandonmentPreservesWriteRecoveryAndLeaseOwnership() async throws {
+        for (nativeIndex, native) in [false, true].enumerated() {
+            for (operationIndex, rollsBack) in [false, true].enumerated() {
+                for (failureIndex, persistsBeforeFailure) in [false, true].enumerated() {
+                    let fixture = try makeFixture(
+                        id: 960 + nativeIndex * 4 + operationIndex * 2 + failureIndex
+                    )
+                    let handle = try accepted(await bridge.enqueue(
+                        ingress: fixture.ingress,
+                        profileIdentifier: nil
+                    )).handle
+                    var nativeRead: ExtensionBridge.NativeExecutionReadLease?
+                    defer { nativeRead?.release() }
+                    let claim: ExtensionBridge.ApprovalClaim
+                    if native {
+                        let staged = try await markNativeApprovalReady(handle: handle)
+                        XCTAssertEqual(staged, .persisted)
+                        nativeRead = try await makeNativeDecisionExecutable(
+                            handle: handle,
+                            configurationKey: fixture.request.configurationKey,
+                            revisions: fixture.ingress.revisions
+                        ).lease
+                        guard case .claimed(let nativeClaim) = await claimReadyNativeExecution(
+                            in: bridge,
+                            handle: handle
+                        ) else { return XCTFail("Expected native claim") }
+                        claim = nativeClaim.approvalClaim
+                    } else {
+                        claim = try approvalClaim(await bridge.claim(handle: handle))
+                    }
+                    defer { claim.releaseLease() }
+                    let failingWriter = makeBridge(
+                        clock: { self.clock.now },
+                        atomicWrite: { data, url in
+                            if persistsBeforeFailure {
+                                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                            }
+                            throw Failure.injectedWrite
+                        }
+                    )
+                    let result: ExtensionBridge.StoreMutationResult
+                    if rollsBack {
+                        let permit = try executionPermit(await bridge.begin(claim: claim))
+                        result = await failingWriter.rollback(permit: permit)
+                    } else {
+                        result = await failingWriter.release(claim: claim)
+                    }
+
+                    if native && persistsBeforeFailure {
+                        XCTAssertEqual(result, .persisted)
+                        XCTAssertFalse(FileManager.default.fileExists(atPath: operationLockURL(handle).path))
+                    } else {
+                        XCTAssertEqual(result, .retryablePersistenceFailure)
+                        let competingLock = CrossProcessFileLock(fileURL: operationLockURL(handle))
+                        XCTAssertFalse(try competingLock.tryAcquireExisting())
+                        competingLock.release()
+                    }
+                    if !persistsBeforeFailure {
+                        guard case .found(let retained) = await bridge.load(handle: handle) else {
+                            return XCTFail("Expected retained claim")
+                        }
+                        XCTAssertEqual(retained.phase, .approving)
+                        let retried = await bridge.release(claim: claim)
+                        XCTAssertEqual(retried, .persisted)
+                    }
+                    claim.releaseLease()
+                    guard case .found(let recovered) = await bridge.load(handle: handle) else {
+                        return XCTFail("Expected persisted abandonment")
+                    }
+                    XCTAssertEqual(recovered.phase, native ? .responded : .queued)
+                    if native {
+                        let response = try responseJSON(await bridge.readResponse(
+                            id: handle.id,
+                            configurationKey: fixture.request.configurationKey,
+                            requestToken: handle.requestToken,
+                            profileIdentifier: handle.profileIdentifier
+                        ))
+                        XCTAssertEqual(
+                            NSDictionary(dictionary: response),
+                            NSDictionary(dictionary: ResponseToExtension(
+                                for: fixture.request,
+                                payload: .error(.approvalInterrupted)
+                            ).json)
+                        )
+                    } else {
+                        let rejected = await bridge.reject(handle: handle)
+                        XCTAssertEqual(rejected, .persisted)
+                    }
+                }
+            }
+        }
     }
 
     func testClaimCanBeginExecutionOnlyOnce() async throws {

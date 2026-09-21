@@ -90,7 +90,7 @@ final class NativeApprovalCoordinator {
         let wait: (UInt64) async -> Void
         let prepareWithoutWallets: @MainActor (SafariRequest) -> DappRequestPreparation?
         let reloadWallets: () -> Bool
-        let prepare: @MainActor (SafariRequest) -> DappRequestPreparation
+        let prepare: @MainActor (SafariRequest) -> DappRequestPreparation?
         let attemptNativeDecision: (
             ExtensionBridge.Snapshot, ExtensionBridge.NativeApprovalAuthorization
         ) async ->
@@ -107,8 +107,9 @@ final class NativeApprovalCoordinator {
             reloadWallets: @escaping () -> Bool = {
                 WalletsManager.shared.reloadFromStore()
             },
-            prepare: @escaping @MainActor (SafariRequest) -> DappRequestPreparation = {
-                DappRequestProcessor().prepare($0)
+            prepare: @escaping @MainActor (SafariRequest) -> DappRequestPreparation? = {
+                guard let catalog = WalletsManager.shared.reviewCatalog() else { return nil }
+                return DappRequestProcessor().prepare($0, catalog: catalog)
             },
             attemptNativeDecision: @escaping (
                 ExtensionBridge.Snapshot, ExtensionBridge.NativeApprovalAuthorization

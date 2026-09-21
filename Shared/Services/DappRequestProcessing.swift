@@ -4,7 +4,7 @@
 protocol DappRequestProcessing {
     func prepare(
         _ request: SafariRequest,
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation
 
     func prepareWithoutWallets(
@@ -14,6 +14,6 @@ protocol DappRequestProcessing {
     func execute(
         request: SafariRequest,
         approval: DappApprovalValidator.Approval,
-        walletAccess: WalletAccess?
+        signer: (any WalletSigning)?
     ) async -> DappExecutionResult
 }

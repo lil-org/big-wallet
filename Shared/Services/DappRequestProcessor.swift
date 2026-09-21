@@ -76,26 +76,26 @@ struct DappRequestProcessor: DappRequestProcessing {
 
     func prepare(
         _ request: SafariRequest,
-        walletAccess: WalletAccess = SourceWalletAccess.shared
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         switch request.body {
         case .ethereum(let body):
             return EthereumDappRequestProcessor.prepare(
                 request: request,
                 body: body,
-                walletAccess: walletAccess
+                catalog: catalog
             )
         case .solana(let body):
             return SolanaDappRequestProcessor.prepare(
                 request: request,
                 body: body,
-                walletAccess: walletAccess
+                catalog: catalog
             )
         case .unknown(let body):
             return Self.prepareSwitchAccount(
                 request: request,
                 body: body,
-                walletAccess: walletAccess
+                catalog: catalog
             )
         }
     }
@@ -122,7 +122,7 @@ struct DappRequestProcessor: DappRequestProcessing {
     func execute(
         request: SafariRequest,
         approval: DappApprovalValidator.Approval,
-        walletAccess: WalletAccess?
+        signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
         switch approval {
         case .accountSelection(let selectionAction, let selection):
@@ -137,13 +137,13 @@ struct DappRequestProcessor: DappRequestProcessing {
                 return await EthereumDappRequestProcessor.execute(
                     request: request,
                     approval: approval,
-                    walletAccess: walletAccess
+                    signer: signer
                 )
             case .solana:
                 return await SolanaDappRequestProcessor.execute(
                     request: request,
                     approval: approval,
-                    walletAccess: walletAccess
+                    signer: signer
                 )
             case .unknown:
                 break
@@ -155,12 +155,12 @@ struct DappRequestProcessor: DappRequestProcessing {
     private static func prepareSwitchAccount(
         request: SafariRequest,
         body: SafariRequest.Unknown,
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         let initiallyConnectedProviders = connectedProviders(in: body.providerConfigurations)
         let preselectedAccounts = preselectedAccounts(
             for: body.providerConfigurations,
-            walletAccess: walletAccess
+            catalog: catalog
         )
         let chainId = body.providerConfigurations.compactMap(\.chainId).first
         let network = Networks.withChainIdHex(chainId)
@@ -242,7 +242,7 @@ struct DappRequestProcessor: DappRequestProcessing {
 
     private static func preselectedAccounts(
         for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration],
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> [SpecificWalletAccount] {
         return preselectedAccounts(
             for: providerConfigurations,
@@ -252,13 +252,13 @@ struct DappRequestProcessor: DappRequestProcessing {
                       !address.isEmpty else {
                     return nil
                 }
-                return walletAccess.specificAccount(coin: coin, address: address)
+                return catalog.specificAccount(coin: coin, address: address)
             },
             suggestedAccountsForProviders: { providers in
-                walletAccess.suggestedAccounts(providers: providers)
+                catalog.suggestedAccounts(providers: providers)
             },
             defaultSuggestedAccounts: {
-                walletAccess.suggestedAccounts()
+                catalog.suggestedAccounts()
             }
         )
     }

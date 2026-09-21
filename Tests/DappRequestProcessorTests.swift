@@ -36,7 +36,7 @@ private final class CancellableCallbackProbe<Value: Sendable>: @unchecked Sendab
 @MainActor
 final class DappRequestProcessorTests: XCTestCase {
 
-    func testPreparedMessageKeepsReviewedPayloadAndUsesExplicitExecutionAccess() async throws {
+    func testPreparedMessageKeepsReviewedPayloadAndUsesExplicitSigner() async throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: privateKey, coin: .ethereum)
         let request = try ethereumRequest(
@@ -44,11 +44,10 @@ final class DappRequestProcessorTests: XCTestCase {
             address: account.address,
             parameters: ["data": "0x7265766965776564"]
         )
-        var reviewAccess: ProcessorWalletAccess? = ProcessorWalletAccess(accounts: [account])
-        let retainedReviewAccess = ProcessorWeakWalletAccess(value: reviewAccess)
+        let reviewCatalog = processorCatalog(accounts: [account])
         let preparation = DappRequestProcessor().prepare(
             request,
-            walletAccess: try XCTUnwrap(reviewAccess)
+            catalog: reviewCatalog
         )
         guard case .approval(.approveMessage(let action)) = preparation,
               case .ethereumPersonalMessage(let data) = action.payload else {
@@ -56,11 +55,8 @@ final class DappRequestProcessorTests: XCTestCase {
         }
         XCTAssertEqual(data, Data("reviewed".utf8))
         XCTAssertEqual(action.meta, "reviewed")
-        XCTAssertEqual(reviewAccess?.privateKeyReads, 0)
-        reviewAccess = nil
-        XCTAssertNil(retainedReviewAccess.value)
 
-        let executionAccess = ProcessorWalletAccess(accounts: [account], key: privateKey)
+        let signer = ProcessorWalletSigner(accounts: reviewCatalog.orderedAccounts, key: privateKey)
         let result = await DappRequestProcessor().execute(
             request: request,
             approval: try DappApprovalValidator.resolve(
@@ -69,7 +65,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 accounts: nil,
                 networkResolver: Networks.withChainIdHex
             ).get(),
-            walletAccess: executionAccess
+            signer: signer
         )
         guard case .response(let response, _) = result else {
             return XCTFail("Message signing must not broadcast")
@@ -78,15 +74,15 @@ final class DappRequestProcessorTests: XCTestCase {
             response.json["result"] as? String,
             try Ethereum.signPersonalMessage(data: Data("reviewed".utf8), privateKey: privateKey)
         )
-        XCTAssertEqual(executionAccess.privateKeyReads, 1)
+        XCTAssertEqual(signer.privateKeyReads, 1)
     }
 
     func testAccountSelectionExecutionUsesExactReviewedDerivationPath() async throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: privateKey, coin: .ethereum)
-        let access = ProcessorWalletAccess(accounts: [account])
+        let catalog = processorCatalog(accounts: [account])
         let request = try ethereumRequest(method: "requestAccounts", address: account.address)
-        guard case .approval(let action) = DappRequestProcessor().prepare(request, walletAccess: access)
+        guard case .approval(let action) = DappRequestProcessor().prepare(request, catalog: catalog)
         else { return XCTFail("Expected account selection") }
         for path in [account.derivationPath, "m/44'/60'/0'/0/9"] {
             let decision = DappApprovalDecision.accountSelection(.init(
@@ -100,12 +96,12 @@ final class DappRequestProcessorTests: XCTestCase {
             ))
             let resolved = DappApprovalValidator.resolve(
                 action: action, decision: decision,
-                accounts: access.orderedAccounts,
+                accounts: catalog.orderedAccounts,
                 networkResolver: Networks.withChainIdHex
             )
             if path == account.derivationPath {
                 let result = await DappRequestProcessor().execute(
-                    request: request, approval: try resolved.get(), walletAccess: access
+                    request: request, approval: try resolved.get(), signer: nil
                 )
                 guard case .response(let response, _) = result else {
                     return XCTFail("Account selection must not broadcast")
@@ -118,13 +114,13 @@ final class DappRequestProcessorTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(access.privateKeyReads, 0)
     }
 
     func testSolanaPreparedBroadcastRequiresExplicitClusterAndDoesNotSend() async throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 2, count: 32)))
         let account = processorAccount(privateKey: privateKey, coin: .solana)
-        let access = ProcessorWalletAccess(accounts: [account], key: privateKey)
+        let catalog = processorCatalog(accounts: [account])
+        let signer = ProcessorWalletSigner(accounts: catalog.orderedAccounts, key: privateKey)
         let message = SolanaMessageFixture.wireMessage(
             accountKeys: [privateKey.publicKeyData(coin: .solana)],
             bodyAfterBlockhash: Data([0])
@@ -138,7 +134,7 @@ final class DappRequestProcessorTests: XCTestCase {
             ]
         )
         guard case .approval(.approveMessage(let action)) =
-                DappRequestProcessor().prepare(request, walletAccess: access) else {
+                DappRequestProcessor().prepare(request, catalog: catalog) else {
             return XCTFail("Expected prepared Solana broadcast")
         }
         XCTAssertEqual(action.solanaClusterOptions?.suggestedCluster, .devnet)
@@ -147,7 +143,6 @@ final class DappRequestProcessorTests: XCTestCase {
             decision: .message(.init(solanaCluster: nil)),
             accounts: nil, networkResolver: Networks.withChainIdHex
         ) else { return XCTFail("A missing cluster must fail validation") }
-        XCTAssertEqual(access.privateKeyReads, 0)
 
         let result = await DappRequestProcessor().execute(
             request: request,
@@ -156,7 +151,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 decision: .message(.init(solanaCluster: .testnet)),
                 accounts: nil, networkResolver: Networks.withChainIdHex
             ).get(),
-            walletAccess: access
+            signer: signer
         )
         guard case .broadcast(let broadcast) = result else {
             return XCTFail("Execution must return a broadcast for the durable executor")
@@ -170,7 +165,7 @@ final class DappRequestProcessorTests: XCTestCase {
         )
         XCTAssertTrue(publicKey.isValidSignature(signatureData, for: message))
         XCTAssertEqual(action.solanaClusterOptions?.suggestedCluster, .devnet)
-        XCTAssertEqual(access.privateKeyReads, 1)
+        XCTAssertEqual(signer.privateKeyReads, 1)
     }
 
     func testApprovalSelectionNormalizesEthereumButPreservesSolanaCase() throws {
@@ -234,14 +229,13 @@ final class DappRequestProcessorTests: XCTestCase {
             ([identity], []),
         ]
         for (identities, accounts) in cases {
-            let access = ProcessorWalletAccess(accounts: accounts, key: key)
+            let catalog = processorCatalog(accounts: accounts)
             guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
                 action: .selectAccount(action),
                 decision: .accountSelection(.init(accounts: identities, ethereumChainID: nil)),
-                accounts: access.orderedAccounts,
+                accounts: catalog.orderedAccounts,
                 networkResolver: Networks.withChainIdHex
             ) else { return XCTFail("Invalid selections must fail validation") }
-            XCTAssertEqual(access.privateKeyReads, 0)
         }
     }
 
@@ -285,11 +279,10 @@ final class DappRequestProcessorTests: XCTestCase {
         ))
     }
 
-    func testInvalidMessageDecisionsFailWithoutReadingKeys() async throws {
+    func testInvalidMessageDecisionsFailValidation() async throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         for coin in [WalletCoin.ethereum, .solana] {
             let account = processorAccount(privateKey: key, coin: coin)
-            let access = ProcessorWalletAccess(accounts: [account], key: key)
             let action = SignMessageAction(
                 subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
                 payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
@@ -300,8 +293,6 @@ final class DappRequestProcessorTests: XCTestCase {
                     action: .approveMessage(action), decision: decision,
                     accounts: nil, networkResolver: Networks.withChainIdHex
                 ) else { return XCTFail("Invalid decisions must fail validation") }
-                XCTAssertEqual(access.orderedAccountReads, 0)
-                XCTAssertEqual(access.privateKeyReads, 0)
             }
         }
     }
@@ -377,7 +368,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 )),
                 accounts: [], networkResolver: Networks.withChainIdHex
             ).get(),
-            walletAccess: ProcessorWalletAccess(accounts: [])
+            signer: nil
         )
         guard case .response(let response, _) = result else {
             return XCTFail("Disconnecting must not broadcast")
@@ -905,7 +896,7 @@ final class DappRequestProcessorTests: XCTestCase {
         ])
         let request = try XCTUnwrap(SafariRequest(data: requestData))
 
-        guard case let .approval(.switchAccount(action)) = DappRequestProcessor().prepare(request) else {
+        guard case let .approval(.switchAccount(action)) = DappRequestProcessor().prepare(request, catalog: processorCatalog(accounts: [])) else {
             return XCTFail("Expected switch-account action")
         }
 
@@ -916,7 +907,7 @@ final class DappRequestProcessorTests: XCTestCase {
     func testPrepareReturnsUnauthorizedForUnownedKnownChainSwitch() throws {
         let request = try ethereumRequest(method: "switchEthereumChain")
 
-        guard case let .response(response) = DappRequestProcessor().prepare(request) else {
+        guard case let .response(response) = DappRequestProcessor().prepare(request, catalog: processorCatalog(accounts: [])) else {
             return XCTFail("Expected immediate response")
         }
 
@@ -938,13 +929,11 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertTrue(response.json["result"] is NSNull)
         XCTAssertEqual(response.mutation, .ethereumChain("0x1"))
         XCTAssertNil(response.json["error"])
-        let access = ProcessorWalletAccess(accounts: [])
+        let catalog = processorCatalog(accounts: [])
         guard case .response(let withWallets) = DappRequestProcessor().prepare(
-            request, walletAccess: access
+            request, catalog: catalog
         ) else { return XCTFail("Expected the same wallet-independent response") }
         XCTAssertEqual(try encodedResponse(withWallets), try encodedResponse(response))
-        XCTAssertEqual(access.orderedAccountReads, 0)
-        XCTAssertEqual(access.privateKeyReads, 0)
     }
 
     func testPrepareReturnsUnrecognizedForUnknownChainSwitch() throws {
@@ -953,9 +942,9 @@ final class DappRequestProcessorTests: XCTestCase {
             requestedChainId: "0x7fffffffffffffff"
         )
 
-        let access = ProcessorWalletAccess(accounts: [])
+        let catalog = processorCatalog(accounts: [])
         for preparation in [
-            DappRequestProcessor().prepare(request, walletAccess: access),
+            DappRequestProcessor().prepare(request, catalog: catalog),
             try XCTUnwrap(DappRequestProcessor().prepareWithoutWallets(request)),
         ] {
             guard case let .response(response) = preparation else {
@@ -964,14 +953,12 @@ final class DappRequestProcessorTests: XCTestCase {
             XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, 4902)
             XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, Strings.unrecognizedChainId)
         }
-        XCTAssertEqual(access.orderedAccountReads, 0)
-        XCTAssertEqual(access.privateKeyReads, 0)
     }
 
     func testPrepareSolanaConnectReturnsApproval() async throws {
         let request = try solanaRequest(method: "connect", publicKey: "")
 
-        guard case let .approval(.selectAccount(action)) = DappRequestProcessor().prepare(request) else {
+        guard case let .approval(.selectAccount(action)) = DappRequestProcessor().prepare(request, catalog: processorCatalog(accounts: [])) else {
             return XCTFail("Expected Solana account selection")
         }
 
@@ -989,7 +976,7 @@ final class DappRequestProcessorTests: XCTestCase {
             ]
         )
 
-        guard case let .response(response) = DappRequestProcessor().prepare(request) else {
+        guard case let .response(response) = DappRequestProcessor().prepare(request, catalog: processorCatalog(accounts: [])) else {
             return XCTFail("Expected unauthorized response")
         }
 
@@ -1002,14 +989,14 @@ final class DappRequestProcessorTests: XCTestCase {
     func testPrepareEthereumAccountRequestReturnsApproval() async throws {
         let request = try ethereumRequest(method: "requestAccounts")
 
-        guard case let .approval(.selectAccount(action)) = DappRequestProcessor().prepare(request) else {
+        guard case let .approval(.selectAccount(action)) = DappRequestProcessor().prepare(request, catalog: processorCatalog(accounts: [])) else {
             return XCTFail("Expected Ethereum account selection")
         }
 
         XCTAssertEqual(action.coinType, .ethereum)
     }
 
-    func testEthereumInvalidPreparationMatchesWithoutReadingWallets() throws {
+    func testEthereumInvalidPreparationMatchesWithoutCatalog() throws {
         let cases: [(method: String, parameters: [String: Any], errorCode: Int?)] = [
             ("signMessage", [:], nil),
             ("signPersonalMessage", [:], nil),
@@ -1022,9 +1009,9 @@ final class DappRequestProcessorTests: XCTestCase {
             let request = try ethereumRequest(
                 method: testCase.method, parameters: testCase.parameters
             )
-            let access = ProcessorWalletAccess(accounts: [])
+            let catalog = processorCatalog(accounts: [])
             guard case .response(let response) = DappRequestProcessor().prepare(
-                request, walletAccess: access
+                request, catalog: catalog
             ), case .response(let withoutWallets) =
                 DappRequestProcessor().prepareWithoutWallets(request) else {
                 return XCTFail("Expected wallet-independent failure for \(testCase.method)")
@@ -1032,12 +1019,10 @@ final class DappRequestProcessorTests: XCTestCase {
             XCTAssertEqual(try encodedResponse(response), try encodedResponse(withoutWallets))
             XCTAssertNotNil(response.json["error"])
             XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, testCase.errorCode ?? ProviderResponseError.internalErrorCode)
-            XCTAssertEqual(access.orderedAccountReads, 0)
-            XCTAssertEqual(access.privateKeyReads, 0)
         }
     }
 
-    func testEthereumPreparationDefersOnlyWhenWalletAccessIsRequired() throws {
+    func testEthereumPreparationDefersOnlyWhenCatalogIsRequired() throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: key, coin: .ethereum)
         let cases: [(method: String, parameters: [String: Any])] = [
@@ -1055,8 +1040,8 @@ final class DappRequestProcessorTests: XCTestCase {
                 parameters: testCase.parameters
             )
             XCTAssertNil(DappRequestProcessor().prepareWithoutWallets(request))
-            let access = ProcessorWalletAccess(accounts: [account])
-            let prepared = DappRequestProcessor().prepare(request, walletAccess: access)
+            let catalog = processorCatalog(accounts: [account])
+            let prepared = DappRequestProcessor().prepare(request, catalog: catalog)
             switch (testCase.method, prepared) {
             case ("requestAccounts", .approval(.selectAccount(let action))):
                 XCTAssertEqual(action.selectedAccounts.map(\.account), [account])
@@ -1073,16 +1058,14 @@ final class DappRequestProcessorTests: XCTestCase {
             default:
                 XCTFail("Unexpected preparation for \(testCase.method)")
             }
-            XCTAssertGreaterThan(access.orderedAccountReads, 0)
-            XCTAssertEqual(access.privateKeyReads, 0)
         }
     }
 
-    func testEthereumChainAdditionPreparationDoesNotReadWallets() throws {
+    func testEthereumChainAdditionPreparationDoesNotRequireCatalog() throws {
         let request = try addEthereumChainRequest(chainId: "0x7ffffffffffffffe").request
-        let access = ProcessorWalletAccess(accounts: [])
+        let catalog = processorCatalog(accounts: [])
         guard case .approval(.addEthereumChain(let withWallets)) =
-                DappRequestProcessor().prepare(request, walletAccess: access),
+                DappRequestProcessor().prepare(request, catalog: catalog),
               case .approval(.addEthereumChain(let withoutWallets)) =
                 DappRequestProcessor().prepareWithoutWallets(request) else {
             return XCTFail("Expected wallet-independent chain approval")
@@ -1093,8 +1076,6 @@ final class DappRequestProcessorTests: XCTestCase {
             try encoder.encode(withWallets.chainToAdd),
             try encoder.encode(withoutWallets.chainToAdd)
         )
-        XCTAssertEqual(access.orderedAccountReads, 0)
-        XCTAssertEqual(access.privateKeyReads, 0)
     }
 
     func testResponseToExtensionPreservesEncodedRPCErrorData() throws {
@@ -2329,27 +2310,20 @@ final class DappRequestProcessorTests: XCTestCase {
 
 }
 
-private struct ProcessorWeakWalletAccess {
-    weak var value: ProcessorWalletAccess?
+private func processorCatalog(accounts: [WalletAccount]) -> WalletReviewCatalog {
+    WalletReviewCatalog(
+        identity: WalletCatalogIdentity(generation: nil, catalogData: Data()),
+        orderedAccounts: accounts.map { SpecificWalletAccount(walletId: "wallet", account: $0) }
+    )
 }
 
-private final class ProcessorWalletAccess: WalletAccess {
-    let catalogIdentity = WalletCatalogIdentity(
-        generation: nil,
-        catalogData: Data()
-    )
+private final class ProcessorWalletSigner: WalletSigning {
     private let accounts: [SpecificWalletAccount]
     private let key: WalletPrivateKey?
-    private(set) var orderedAccountReads = 0
     private(set) var privateKeyReads = 0
 
-    var orderedAccounts: [SpecificWalletAccount] {
-        orderedAccountReads += 1
-        return accounts
-    }
-
-    init(accounts: [WalletAccount], key: WalletPrivateKey? = nil) {
-        self.accounts = accounts.map { SpecificWalletAccount(walletId: "wallet", account: $0) }
+    init(accounts: [SpecificWalletAccount], key: WalletPrivateKey?) {
+        self.accounts = accounts
         self.key = key
     }
 

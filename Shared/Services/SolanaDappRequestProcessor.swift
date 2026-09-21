@@ -45,22 +45,22 @@ struct SolanaDappRequestProcessor {
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        walletAccess: WalletAccess = SourceWalletAccess.shared
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         switch body.method {
         case .connect:
-            return prepareConnect(walletAccess: walletAccess)
+            return prepareConnect(catalog: catalog)
         case .signAllTransactions:
             return prepareSignAllTransactions(
                 request: request,
                 body: body,
-                walletAccess: walletAccess
+                catalog: catalog
             )
         case .signMessage, .signTransaction, .signAndSendTransaction:
             return prepareSigningOrSending(
                 request: request,
                 body: body,
-                walletAccess: walletAccess
+                catalog: catalog
             )
         }
     }
@@ -85,11 +85,11 @@ struct SolanaDappRequestProcessor {
     static func execute(
         request: SafariRequest,
         approval: DappApprovalValidator.Approval,
-        walletAccess: WalletAccess?
+        signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
         guard case .message(let action, let cluster) = approval
         else { return .response(response(to: request, error: .internalError)) }
-        guard let privateKey = walletAccess?.privateKey(
+        guard let privateKey = signer?.privateKey(
             walletID: action.walletId,
             account: action.account
         ) else { return .response(response(to: request, error: .failedToSign)) }
@@ -158,11 +158,11 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func prepareConnect(
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         let action = SelectAccountAction(
             coinType: .solana,
-            selectedAccounts: Set(walletAccess.suggestedAccounts(coin: .solana)),
+            selectedAccounts: Set(catalog.suggestedAccounts(coin: .solana)),
             initiallyConnectedProviders: [],
             network: nil
         )
@@ -172,7 +172,7 @@ struct SolanaDappRequestProcessor {
     private static func prepareSignAllTransactions(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         guard let messages = body.messages else {
             return .response(response(to: request, error: .malformedPayload))
@@ -182,7 +182,7 @@ struct SolanaDappRequestProcessor {
         let account: WalletAccount
         switch walletAndAccount(
             publicKey: body.publicKey,
-            walletAccess: walletAccess
+            catalog: catalog
         ) {
         case .success(let value):
             (walletID, account) = value
@@ -218,13 +218,13 @@ struct SolanaDappRequestProcessor {
     private static func prepareSigningOrSending(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         let walletID: String
         let account: WalletAccount
         switch walletAndAccount(
             publicKey: body.publicKey,
-            walletAccess: walletAccess
+            catalog: catalog
         ) {
         case .success(let value):
             (walletID, account) = value
@@ -432,9 +432,9 @@ struct SolanaDappRequestProcessor {
 
     private static func walletAndAccount(
         publicKey: String,
-        walletAccess: WalletAccess
+        catalog: WalletReviewCatalog
     ) -> Result<(String, WalletAccount), ProviderError> {
-        guard let value = walletAccess.specificAccount(
+        guard let value = catalog.specificAccount(
             coin: .solana,
             address: publicKey
         ) else {

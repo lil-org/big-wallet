@@ -15,6 +15,41 @@ final class WalletsManagerPreviewTests: XCTestCase {
 
     private let mnemonic = Vectors.abandonMnemonic
 
+    func testReviewCatalogPreservesAccountMetadataAndSurvivesSourceReload() throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [
+            reader.walletAttributes(id: "wallet-a"),
+            reader.walletAttributes(id: "wallet-b"),
+        ]
+        reader.walletData = [
+            "wallet-a": Vectors.walletCoreJSONMnemonicFixture,
+            "wallet-b": Vectors.walletCoreJSONPrivateKeyFixture,
+        ]
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        XCTAssertTrue(manager.reloadFromStore())
+        let originalAccounts = manager.wallets.flatMap { wallet in
+            wallet.accounts.map { SpecificWalletAccount(walletId: wallet.id, account: $0) }
+        }
+        let catalog = try XCTUnwrap(manager.reviewCatalog())
+        XCTAssertEqual(catalog.orderedAccounts, originalAccounts)
+        XCTAssertEqual(catalog.orderedAccounts.map(\.walletId), ["wallet-a", "wallet-b"])
+        XCTAssertNil(catalog.identity.generation)
+        let persistedCatalog = try JSONDecoder().decode(
+            WalletAccountCatalog.self,
+            from: catalog.identity.catalogData
+        )
+        XCTAssertEqual(persistedCatalog.accounts.map(\.normalizedAddress), originalAccounts.map {
+            $0.account.coin.normalizedAddress($0.account.address)
+        })
+
+        reader.attributes = []
+        XCTAssertTrue(manager.reloadFromStore())
+        let emptyCatalog = try XCTUnwrap(manager.reviewCatalog())
+        XCTAssertTrue(emptyCatalog.orderedAccounts.isEmpty)
+        XCTAssertNotEqual(emptyCatalog.identity, catalog.identity)
+        XCTAssertEqual(catalog.orderedAccounts, originalAccounts)
+    }
+
     func testEthereumPreviewReturnsPageOfAccounts() throws {
         let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .ethereum)
 

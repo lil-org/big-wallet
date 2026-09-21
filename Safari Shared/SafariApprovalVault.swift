@@ -537,7 +537,7 @@ final class SafariApprovalVault {
         guard source.catalog.isValid else { throw Error.invalidCatalog }
         guard integrityKey.count == 32 else { throw Error.invalidKey }
         let generation = UUID()
-        let catalogData = try SourceWalletAccess.encodeCatalog(source.catalog)
+        let catalogData = try source.catalog.canonicalData()
         let header = Header(
             version: Self.envelopeVersion,
             generation: generation
@@ -662,15 +662,18 @@ final class SafariApprovalVault {
         )
     }
 
-    func catalogAccess() -> CatalogWalletAccess? {
+    func reviewCatalog() -> WalletReviewCatalog? {
         lock.lock()
         defer { lock.unlock() }
         guard let record = loadEnvelopeRecordLocked(),
               keyStore.availability(generation: record.envelope.generation)
                 .permitsPublishedEnvelope else { return nil }
-        return CatalogWalletAccess(
-            catalog: record.catalog,
-            generation: record.envelope.generation
+        return WalletReviewCatalog(
+            identity: WalletCatalogIdentity(
+                generation: record.envelope.generation,
+                catalogData: record.catalog.data
+            ),
+            orderedAccounts: record.catalog.catalog.accounts.map(\.specificAccount)
         )
     }
 
@@ -683,9 +686,7 @@ final class SafariApprovalVault {
     ) -> PublicationStatus {
         guard integrityKey.count == 32,
               source.catalog.isValid,
-              let catalogData = try? SourceWalletAccess.encodeCatalog(
-                  source.catalog
-              ) else { return .stale }
+              let catalogData = try? source.catalog.canonicalData() else { return .stale }
         var secret = SecretSnapshot(
             catalog: catalogData,
             password: source.password,
@@ -720,12 +721,6 @@ final class SafariApprovalVault {
         case .unavailable(let status):
             return .unavailable(status)
         }
-    }
-
-    func unlock(reason: String) async -> RequestScopedWalletAccess? {
-        guard case .unlocked(let access) = await unlockResult(reason: reason)
-        else { return nil }
-        return access
     }
 
     func unlockResult(reason: String) async -> WalletUnlockResult {
@@ -786,21 +781,27 @@ final class SafariApprovalVault {
         defer { secret.resetSecrets() }
         guard
               secret.catalog == envelope.catalog,
-              let access = UnlockedWalletAccess(
-                  catalog: record.catalog,
-                  generation: envelope.generation,
-                  password: secret.password,
+              let wallets = WalletSnapshotValidation.wallets(
+                  catalog: record.catalog.catalog,
                   walletRecords: secret.wallets.map {
                       (id: $0.walletID, data: $0.storedKeyJSON)
                   }
-              ) else { return .unavailable }
+              ),
+              let signer = UnlockedWalletSigner(password: secret.password, wallets: wallets)
+        else { return .unavailable }
+        let catalog = WalletReviewCatalog(
+            identity: WalletCatalogIdentity(generation: generation, catalogData: record.catalog.data),
+            orderedAccounts: wallets.flatMap { wallet in
+                wallet.accounts.map { SpecificWalletAccount(walletId: wallet.id, account: $0) }
+            }
+        )
         let isStillCurrent = isCurrent(snapshotData, generation: generation)
         guard isStillCurrent else {
-            access.invalidate()
+            signer.invalidate()
             return .unavailable
         }
-        return .unlocked(RequestScopedWalletAccess(
-            access,
+        return .unlocked(catalog: catalog, signer: RequestScopedWalletSigner(
+            signer,
             isCurrent: { [weak self] in
                 self?.isCurrent(snapshotData, generation: generation) == true
             },

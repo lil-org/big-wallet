@@ -13,7 +13,7 @@ final class DappRequestAdmission {
     static let shared = DappRequestAdmission(
         store: ExtensionBridge.shared,
         requestProcessor: DappRequestProcessor(),
-        catalogAccess: { SafariApprovalVault.shared.catalogAccess() }
+        reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() }
     )
 #else
     static let shared = DappRequestAdmission(
@@ -24,16 +24,16 @@ final class DappRequestAdmission {
 
     private let store: PopupRequestStore
     private let requestProcessor: DappRequestProcessing
-    private let catalogAccess: (() -> WalletAccess?)?
+    private let reviewCatalog: (() -> WalletReviewCatalog?)?
 
     init(
         store: PopupRequestStore,
         requestProcessor: DappRequestProcessing,
-        catalogAccess: (() -> WalletAccess?)? = nil
+        reviewCatalog: (() -> WalletReviewCatalog?)? = nil
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
-        self.catalogAccess = catalogAccess
+        self.reviewCatalog = reviewCatalog
     }
 
     func materialize(
@@ -60,13 +60,13 @@ final class DappRequestAdmission {
         let preparation: DappRequestPreparation
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent
-        } else if catalogAccess == nil {
+        } else if reviewCatalog == nil {
             return await currentAdmissionDisposition(
                 handle: handle,
                 queued: .approvalRequired
             )
         } else {
-            guard let walletAccess = catalogAccess?() else {
+            guard let catalog = reviewCatalog?() else {
                 return await currentAdmissionDisposition(
                     handle: handle,
                     queued: .approvalRequired
@@ -74,7 +74,7 @@ final class DappRequestAdmission {
             }
             preparation = requestProcessor.prepare(
                 request,
-                walletAccess: walletAccess
+                catalog: catalog
             )
         }
         switch preparation {
