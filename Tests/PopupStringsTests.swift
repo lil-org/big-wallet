@@ -46,7 +46,7 @@ final class PopupStringsTests: XCTestCase {
         iconURL: String? = nil,
         actions: [PopupApprovalState.Action] = [.approve, .reject]
     ) -> PopupResponse {
-        .approval(PopupApprovalState(
+        .command(.ok(PopupApprovalState(
             id: 91,
             host: "wallet.example",
             content: .review(PopupReview(
@@ -55,7 +55,7 @@ final class PopupStringsTests: XCTestCase {
                 iconURL: iconURL,
                 content: content
             ), actions: actions, feedback: nil)
-        ))
+        )))
     }
 
     private func oversizedResponse() -> PopupResponse {
@@ -407,10 +407,10 @@ final class PopupStringsTests: XCTestCase {
 
     func testOversizedResponsePreservesExistingRecoveryCapability() throws {
         for action in [PopupApprovalState.RecoveryAction.retry, .reject] {
-            let response = PopupResponse.approval(.init(
+            let response = PopupResponse.command(.ok(.init(
                 id: 91, host: "wallet.example",
                 content: .error(message: String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes), action: action)
-            ))
+            )))
             let bounded = try boundedResponse(response, for: approvalStateRequest())
             XCTAssertEqual(bounded["state"] as? String, "error")
             XCTAssertEqual(bounded["host"] as? String, "wallet.example")
@@ -421,9 +421,9 @@ final class PopupStringsTests: XCTestCase {
     }
 
     func testOversizedHostCannotOverflowErrorEnvelope() throws {
-        guard case .approval(var state) = oversizedResponse() else { return XCTFail() }
+        guard case .command(.ok(var state)) = oversizedResponse() else { return XCTFail() }
         state.host = String(repeating: "h", count: PopupResponseEncoder.maximumResponseBytes)
-        let bounded = try boundedResponse(.approval(state), for: approvalStateRequest())
+        let bounded = try boundedResponse(.command(.ok(state)), for: approvalStateRequest())
         XCTAssertNil(bounded["host"])
         XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
@@ -433,7 +433,7 @@ final class PopupStringsTests: XCTestCase {
     func testOversizedIgnoredCommandPreservesDispositionAndRecovery() throws {
         let state = try XCTUnwrap(oversizedResponse().approvalState)
         let request = try popupRequest(subject: .approveRequest, payload: [:])
-        let data = try PopupResponseEncoder.encode(.command(.ignored, state), for: request)
+        let data = try PopupResponseEncoder.encode(.command(.ignored(state)), for: request)
         XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
         let reply = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(Set(reply.keys), ["status", "approval"])
@@ -483,7 +483,7 @@ final class PopupStringsTests: XCTestCase {
 
     func testReviewTokenIsLowercaseAndAbsentOptionalsAreOmitted() throws {
         let token = try XCTUnwrap(UUID(uuidString: "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF"))
-        let response = PopupResponse.approval(.init(
+        let response = PopupResponse.command(.ok(.init(
             id: 91,
             host: "wallet.example",
             content: .review(.init(
@@ -491,7 +491,7 @@ final class PopupStringsTests: XCTestCase {
                 title: "Add Network",
                 content: .addChain(.init(chainName: "Custom", rpcURL: "https://rpc.example"))
             ), actions: [.approve, .reject], feedback: nil)
-        ))
+        )))
         let json = popupApprovalJSON(response)
         let review = try XCTUnwrap(json["review"] as? [String: Any])
         XCTAssertEqual(review["reviewToken"] as? String, token.uuidString.lowercased())
@@ -537,11 +537,11 @@ final class PopupStringsTests: XCTestCase {
                     requestToken: reviewToken, revisions: revisions
                 )], strings: ["ok": "OK"], layoutDirection: .ltr
             )),
-            "missing": .approval(.init(id: 91, content: .missing)),
-            "working": .approval(.init(id: 91, host: "wallet.example", content: .working)),
-            "authenticating": .approval(.init(id: 91, host: "wallet.example", content: .authenticating)),
-            "retryError": .approval(.init(id: 91, host: "wallet.example", content: .error(message: "Failed to load", action: .retry))),
-            "rejectError": .approval(.init(id: 91, content: .error(message: "Review unavailable", action: .reject))),
+            "missing": .command(.ok(.init(id: 91, content: .missing))),
+            "working": .command(.ok(.init(id: 91, host: "wallet.example", content: .working))),
+            "authenticating": .command(.ok(.init(id: 91, host: "wallet.example", content: .authenticating))),
+            "retryError": .command(.ok(.init(id: 91, host: "wallet.example", content: .error(message: "Failed to load", action: .retry)))),
+            "rejectError": .command(.ok(.init(id: 91, content: .error(message: "Review unavailable", action: .reject)))),
             "selectAccount": reviewResponse(.selectAccount(.init(
                 accounts: [.init(
                     display: .init(name: "Primary", croppedAddress: "0x1111…1111"),
@@ -572,8 +572,8 @@ final class PopupStringsTests: XCTestCase {
                                                 actions: [.approve, .reject, .editTransaction, .setTransactionSpeed]),
             "type2Transaction": reviewResponse(.sendTransaction(transactionReview(type2: true)), title: "Send Transaction",
                                                actions: [.reject, .resolveApprovalAlert]),
-            "ok": .approval(.init(id: 91, content: .missing)),
-            "ignored": .status(.ignored), "unavailable": .status(.unavailable),
+            "ok": .command(.ok(.init(id: 91, content: .missing))),
+            "ignored": .command(.ignored(nil)), "unavailable": .command(.unavailable(nil)),
         ]
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Safari Shared/Tests/fixtures/popup_contract.json")
@@ -605,4 +605,13 @@ private func popupApprovalJSON(_ response: PopupResponse) -> [String: Any] {
         return [:]
     }
     return approval
+}
+
+private func popupApprovalJSON(_ state: PopupApprovalState) -> [String: Any] {
+    do {
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(state)) as? [String: Any])
+    } catch {
+        XCTFail("Failed to encode popup approval state: \(error)")
+        return [:]
+    }
 }

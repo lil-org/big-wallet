@@ -3,57 +3,73 @@
 import Foundation
 
 enum PopupResponse: Encodable {
-    enum Status: String, Encodable {
-        case ok, ignored, unavailable
-    }
-
     case queue(PopupQueueResponse)
-    case approval(PopupApprovalState)
-    case status(Status)
-    case command(Status, PopupApprovalState?)
+    case command(PopupCommandResponse)
     case queueUnavailable
 
-    private enum CodingKeys: String, CodingKey { case status, approval }
+    private enum CodingKeys: String, CodingKey { case status }
 
     var approvalState: PopupApprovalState? {
         switch self {
-        case .approval(let state), .command(_, .some(let state)): return state
-        case .queue, .status, .command(_, nil), .queueUnavailable: return nil
+        case .command(let command): return command.approvalState
+        case .queue, .queueUnavailable: return nil
         }
     }
 
     func encode(to encoder: Encoder) throws {
         switch self {
         case .queue(let queue): try queue.encode(to: encoder)
-        case .approval(let state):
-            try Self.command(.ok, state).encode(to: encoder)
-        case .status(let status):
-            try Self.command(status, nil).encode(to: encoder)
-        case .command(let status, let approval):
-            guard status != .ok || approval != nil else {
-                throw EncodingError.invalidValue(status, .init(
-                    codingPath: encoder.codingPath,
-                    debugDescription: "A successful popup reply requires approval state"
-                ))
-            }
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(status, forKey: .status)
-            try container.encode(approval, forKey: .approval)
+        case .command(let command): try command.encode(to: encoder)
         case .queueUnavailable:
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(Status.unavailable, forKey: .status)
+            try container.encode("unavailable", forKey: .status)
         }
     }
 
     fileprivate var removingDecorativeImages: Self {
-        guard var state = approvalState,
+        guard case .command(let command) = self,
+              var state = command.approvalState,
               case .review(var review, let actions, let feedback) = state.content else {
             return self
         }
         review.removeDecorativeImages()
         state.content = .review(review, actions: actions, feedback: feedback)
-        if case .command(let status, _) = self { return .command(status, state) }
-        return .approval(state)
+        return .command(command.replacingApprovalState(state))
+    }
+}
+
+enum PopupCommandResponse: Encodable {
+    case ok(PopupApprovalState)
+    case ignored(PopupApprovalState?)
+    case unavailable(PopupApprovalState?)
+
+    private enum CodingKeys: String, CodingKey { case status, approval }
+
+    var approvalState: PopupApprovalState? {
+        switch self {
+        case .ok(let state): return state
+        case .ignored(let state), .unavailable(let state): return state
+        }
+    }
+
+    fileprivate func replacingApprovalState(_ state: PopupApprovalState) -> Self {
+        switch self {
+        case .ok: return .ok(state)
+        case .ignored: return .ignored(state)
+        case .unavailable: return .unavailable(state)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        let status: String
+        switch self {
+        case .ok: status = "ok"
+        case .ignored: status = "ignored"
+        case .unavailable: status = "unavailable"
+        }
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        try container.encode(approvalState, forKey: .approval)
     }
 }
 
@@ -377,9 +393,9 @@ enum PopupResponseEncoder {
             return try encoder.encode(PopupResponse.queueUnavailable)
         }
         let original = response.approvalState
-        let status: PopupResponse.Status
-        if case .command(let value, _) = response { status = value }
-        else { status = .ok }
+        guard case .command(let command) = response else {
+            return try encoder.encode(PopupResponse.queueUnavailable)
+        }
         var fallback = PopupApprovalState(
             id: request.id,
             host: original?.host,
@@ -388,9 +404,9 @@ enum PopupResponseEncoder {
                 action: original?.canReject == true ? .reject : .retry
             )
         )
-        if let data = bounded(.command(status, fallback)) { return data }
+        if let data = bounded(.command(command.replacingApprovalState(fallback))) { return data }
         fallback.host = nil
-        return try encoder.encode(PopupResponse.command(status, fallback))
+        return try encoder.encode(PopupResponse.command(command.replacingApprovalState(fallback)))
     }
 
     private static func returnsApprovalState(_ command: InternalSafariRequest.PopupCommand) -> Bool {

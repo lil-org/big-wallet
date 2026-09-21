@@ -599,16 +599,16 @@ actor NativeAgentLauncher {
               !Task.isCancelled, isPending() else {
             return false
         }
-        let resolution = LaunchResolution()
+        let resolution = ApprovalResolution<Bool>()
         return await withTaskCancellationHandler {
             guard !Task.isCancelled, isPending() else { return false }
             dependencies.launch(selectedTarget, route.url) { succeeded in
                 let delivered = succeeded && isPending()
-                Task { await resolution.finish(delivered) }
+                Task { @MainActor in resolution.resolve(delivered) }
             }
             return await resolution.value()
         } onCancel: {
-            Task { await resolution.finish(false) }
+            Task { @MainActor in resolution.resolve(false) }
         }
     }
 

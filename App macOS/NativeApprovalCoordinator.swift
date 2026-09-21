@@ -652,23 +652,13 @@ final class NativeApprovalCoordinator {
             )
             guard work.isCurrent else { return }
             if result == .persisted {
-                work.update { $0.recordVerifiedReceipt() }
-                if work.update({ $0.state.rejectsBeforeAuthentication }) == true {
-                    await rejectBeforeAuthentication(work)
-                } else {
-                    work.update { $0.awaitAuthentication() }
-                }
+                await continueAfterReceiptAcquired(work)
                 return
             }
             guard let current = await work.load() else { return }
             switch current {
             case .pending(_, .current), .staged(.current, _):
-                work.update { $0.recordVerifiedReceipt() }
-                if work.update({ $0.state.rejectsBeforeAuthentication }) == true {
-                    await rejectBeforeAuthentication(work)
-                } else {
-                    work.update { $0.awaitAuthentication() }
-                }
+                await continueAfterReceiptAcquired(work)
                 return
             case .responded, .missing, .executing, .superseded,
                  .pending(_, .foreign), .staged(.foreign, _):
@@ -685,6 +675,15 @@ final class NativeApprovalCoordinator {
             if !(await work.retry()) { break }
         }
         work.update { $0.pause() }
+    }
+
+    private static func continueAfterReceiptAcquired(_ work: Work) async {
+        work.update { $0.recordVerifiedReceipt() }
+        if work.update({ $0.state.rejectsBeforeAuthentication }) == true {
+            await rejectBeforeAuthentication(work)
+        } else {
+            work.update { $0.awaitAuthentication() }
+        }
     }
 
     private static func prepareReview(_ work: Work) async {

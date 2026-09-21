@@ -596,6 +596,43 @@
             XCTAssertEqual(f.launches.count, 1)
         }
 
+        func testDeliveryDeadlineCompletesWhileMainActorIsBlocked() async throws {
+            let f = try fixture()
+            let clock = f.clock
+            let deadline = clock.now + 100_000_000
+            let launcher = f.launcher(timeout: 100_000_000)
+            let route = NativeAgentRoute.showWallet(
+                workflowVersion: ExtensionBridge.workflowVersion
+            )
+            var callback: ((Bool) -> Void)?
+            f.onLaunch = { _, _, completion in callback = completion }
+            let completed = DispatchSemaphore(value: 0)
+            let delivery = Task.detached {
+                let result = await launcher.open(route)
+                completed.signal()
+                return result
+            }
+            try await f.eventually {
+                callback != nil && clock.deadlines == [deadline]
+            }
+
+            let advanceClock = DispatchSemaphore(value: 0)
+            Thread.detachNewThread {
+                advanceClock.wait()
+                clock.advance(to: deadline)
+            }
+            advanceClock.signal()
+            let completedWhileBlocked = completed.wait(timeout: .now() + 5)
+
+            XCTAssertEqual(completedWhileBlocked, .success)
+            let result = await delivery.value
+            XCTAssertFalse(result)
+            callback?(true)
+            for _ in 0..<20 { await Task.yield() }
+            XCTAssertEqual(f.launches.count, 1)
+            XCTAssertTrue(clock.deadlines.isEmpty)
+        }
+
         func testResolutionTimeoutDoesNotLaunchOrQuitBeforeGrace() async throws {
             let f = try fixture()
             f.unidentifiedProcesses[42] = .init(

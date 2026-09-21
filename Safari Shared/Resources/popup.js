@@ -334,47 +334,48 @@ class PopupRequestController {
             lastEditorRequestKey: null,
         };
         this.nativeState = null;
-        this.transportError = false;
-        this.lifecycle = "active";
-        this.action = null;
-        this.interaction = null;
-        this.completion = null;
-        this.readFlight = null;
-        this.readTimer = null;
+        this.activity = {kind: "viewing"};
+        this.read = {kind: "idle"};
         this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
     }
 
     get isActive() {
         return this.owner.presentation.kind === "review" &&
-            this.owner.currentRequest === this && this.lifecycle === "active";
+            this.owner.currentRequest === this &&
+            !["reconciling", "disposed"].includes(this.activity.kind);
     }
 
     get state() { return this.nativeState; }
-
-    allows(action) {
-        return this.isActive && !this.transportError && hasApprovalAction(this.state, action);
+    get isSubmitting() { return this.activity.kind === "submitting"; }
+    get presentationActivity() {
+        return this.isSubmitting ? this.activity.source : this.activity;
+    }
+    get editorDraft() {
+        return this.presentationActivity.kind === "editing" ? this.presentationActivity.draft : null;
     }
 
-    resetReadBackoff() { this.refreshDelay = TRANSACTION_REFRESH_INTERVAL; }
+    allows(action) {
+        return this.isActive && this.presentationActivity.kind !== "failed" &&
+            hasApprovalAction(this.state, action);
+    }
 
     stopRead() {
-        clearTimeout(this.readTimer);
-        this.readTimer = null;
-        this.readFlight = null;
+        if (this.read.kind === "scheduled") { clearTimeout(this.read.timerId); }
+        this.read = {kind: "idle"};
     }
 
     scheduleRead() {
-        clearTimeout(this.readTimer);
-        this.readTimer = null;
-        if (!this.isActive || this.transportError || this.action || this.interaction || this.readFlight) { return; }
+        if (this.read.kind === "scheduled") { this.stopRead(); }
+        if (!this.isActive || this.activity.kind !== "viewing" || this.read.kind !== "idle") { return; }
         const polling = shouldPollApprovalState(this.state);
         if (!polling && !(this.state?.state === "review" && this.state.review.kind === "sendTransaction")) { return; }
-        const timer = setTimeout(() => {
-            if (this.readTimer !== timer) { return; }
-            this.readTimer = null;
+        const scheduled = {kind: "scheduled", timerId: null};
+        scheduled.timerId = setTimeout(() => {
+            if (this.read !== scheduled) { return; }
+            this.read = {kind: "idle"};
             void this.readState({refresh: !polling});
         }, polling ? APPROVAL_POLL_INTERVAL : this.refreshDelay);
-        this.readTimer = timer;
+        this.read = scheduled;
     }
 
     async sendCommand({subject, payload, reviewToken}) {
@@ -391,21 +392,21 @@ class PopupRequestController {
     }
 
     async readState({refresh = false} = {}) {
-        if (!this.isActive || this.action || this.interaction) { return null; }
-        if (this.readFlight) { return this.readFlight.result; }
-        const flight = {};
-        this.readFlight = flight;
-        this.scheduleRead();
-        flight.result = (async () => {
+        if (!this.isActive || this.activity.kind !== "viewing") { return null; }
+        if (this.read.kind === "reading") { return this.read.promise; }
+        this.stopRead();
+        const flight = {kind: "reading", promise: null};
+        this.read = flight;
+        flight.promise = (async () => {
             const outcome = await this.sendCommand({subject: "getApprovalState"});
-            if (!this.isActive || this.readFlight !== flight) { return null; }
-            this.readFlight = null;
+            if (!this.isActive || this.read !== flight) { return null; }
+            this.read = {kind: "idle"};
             const state = this.acceptReply(outcome)?.approval;
             if (state) { this.adoptState(state, {refresh}); }
             this.scheduleRead();
             return state;
         })();
-        return flight.result;
+        return flight.promise;
     }
 
     acceptReply(outcome) {
@@ -417,35 +418,32 @@ class PopupRequestController {
     }
 
     reconcile() {
-        if (this.completion) { return this.completion; }
+        if (this.activity.kind === "reconciling") { return this.activity.promise; }
         if (!this.isActive) { return Promise.resolve(); }
-        this.lifecycle = "reconciling";
         this.stopRead();
-        this.action = null;
         this.discardSliderGesture();
         this.closeAlert(false);
-        this.completion = this.owner.reconcile(this);
-        return this.completion;
+        const activity = {kind: "reconciling", promise: null};
+        this.activity = activity;
+        activity.promise = this.owner.reconcile(this);
+        return activity.promise;
     }
 
     fail() {
         if (!this.isActive) { return; }
-        this.transportError = true;
         this.stopRead();
-        this.action = null;
         this.discardSliderGesture();
+        this.activity = {kind: "failed"};
         this.renderTransportFailure();
     }
 
     adoptState(state, {refresh = false} = {}) {
         if (!this.isActive || !state) { return; }
-        if (this.interaction?.kind === "editor" &&
+        if (this.editorDraft &&
             (state.review?.alert || !hasApprovalAction(state, "editTransaction"))) {
             this.resetEditorDraft();
-            document.getElementById("tx-editor").open = false;
         }
         this.nativeState = state;
-        this.transportError = false;
         const unchanged = canonicalJSONString(state) === this.presentation.lastStateJSON;
         if (!refresh || !unchanged) { this.renderState(state); }
         this.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
@@ -457,16 +455,20 @@ class PopupRequestController {
     beginAction(kind) {
         this.stopRead();
         const operation = {kind};
-        this.action = operation;
+        this.activity = {kind: "submitting", operation, source: this.activity};
+        hide("working-overlay");
         this.updateInteractionControls();
         return operation;
     }
 
-    ownsAction(operation) { return this.isActive && this.action === operation; }
+    ownsAction(operation) {
+        return this.isActive && this.isSubmitting && this.activity.operation === operation;
+    }
 
-    finishAction(operation) {
+    finishAction(operation, state, next = {kind: "viewing"}) {
         if (!this.ownsAction(operation)) { return; }
-        this.action = null;
+        this.activity = next;
+        if (state) { this.adoptState(state); }
         this.openRequestedEditor();
         this.updateInteractionControls();
         this.scheduleRead();
@@ -475,14 +477,13 @@ class PopupRequestController {
     completeAction(operation, outcome) {
         if (!this.ownsAction(operation)) { return; }
         const state = this.acceptReply(outcome)?.approval;
-        if (state) { this.adoptState(state); }
-        this.finishAction(operation);
+        if (state) { this.finishAction(operation, state); }
     }
 
     async retry() {
-        if (!this.isActive || this.action || !this.transportError && !this.allows("retry")) { return; }
+        if (!this.isActive || this.isSubmitting ||
+            this.activity.kind !== "failed" && !this.allows("retry")) { return; }
         const operation = this.beginAction("retry");
-        this.showSubmitting();
         const outcome = await this.sendCommand({subject: "retryApproval"});
         this.completeAction(operation, outcome);
     }
@@ -493,18 +494,16 @@ class PopupRequestController {
     async decide(subject, payload) {
         if (!this.isActive || !canSubmitDecision(subject, this.state)) { return; }
         if (subject === "approveRequest") {
-            if (this.transportError || this.action || this.interaction || document.getElementById("tx-editor").open) { return; }
+            if (this.activity.kind !== "viewing") { return; }
         } else {
-            if (this.action?.kind === "approveRequest" || this.action?.kind === "rejectRequest") { return; }
+            if (this.isSubmitting && ["approveRequest", "rejectRequest"].includes(this.activity.operation.kind)) { return; }
             this.discardSliderGesture();
-            this.resetEditorDraft();
+            this.activity = {kind: "viewing"};
             this.closeAlert(false);
-            document.getElementById("tx-editor").open = false;
+            this.syncEditor();
         }
-        if (!this.isActive || !canSubmitDecision(subject, this.state)) { return; }
         const reviewToken = subject === "approveRequest" ? this.state.review.reviewToken : undefined;
         const operation = this.beginAction(subject);
-        this.showSubmitting();
         const decisionPayload = subject === "approveRequest" ? {...(isRecord(payload) ? payload : {})} : undefined;
         if (decisionPayload) { delete decisionPayload.revisions; delete decisionPayload.password; }
         const outcome = await this.sendCommand({subject, payload: decisionPayload, reviewToken});
@@ -512,11 +511,10 @@ class PopupRequestController {
     }
 
     async resolveAlert(payload, reviewToken) {
-        if (this.action || !this.allows("resolveApprovalAlert") || this.state.review.reviewToken !== reviewToken) { return; }
+        if (this.isSubmitting || !this.allows("resolveApprovalAlert") || this.state.review.reviewToken !== reviewToken) { return; }
         const operation = this.beginAction("alert");
         const outcome = await this.sendCommand({subject: "resolveApprovalAlert", payload, reviewToken});
-        if (!this.ownsAction(operation)) { return; }
-        if (this.state?.review?.reviewToken !== reviewToken) {
+        if (this.ownsAction(operation) && this.state?.review?.reviewToken !== reviewToken) {
             this.finishAction(operation);
             return;
         }
@@ -524,7 +522,8 @@ class PopupRequestController {
     }
 
     async setSpeed(payload, reviewToken) {
-        if (this.action || !this.allows("setTransactionSpeed") || this.interaction || !isRequestToken(reviewToken)) { return null; }
+        if (!this.allows("setTransactionSpeed") ||
+            !["viewing", "dragging"].includes(this.activity.kind) || !isRequestToken(reviewToken)) { return null; }
         const operation = this.beginAction("speed");
         const staleReview = this.state?.review?.reviewToken !== reviewToken;
         const outcome = await this.sendCommand(staleReview
@@ -532,15 +531,14 @@ class PopupRequestController {
             : {subject: "setTransactionSpeed", payload, reviewToken});
         if (!this.ownsAction(operation)) { return false; }
         const reply = this.acceptReply(outcome);
-        if (reply) { this.adoptState(reply.approval); }
-        this.finishAction(operation);
+        if (reply) { this.finishAction(operation, reply.approval); }
         return !staleReview && reply?.status === "ok" && this.isActive;
     }
 
     updateInteractionControls() {
         if (!this.isActive) { return; }
-        const editing = this.interaction?.kind === "editor";
-        const busy = this.action !== null;
+        const editing = this.editorDraft !== null;
+        const busy = this.isSubmitting;
         document.getElementById("tx-slider").disabled = busy || editing || !this.allows("setTransactionSpeed");
         document.getElementById("editor-apply").disabled = busy || !this.allows("editTransaction");
         document.getElementById("editor-suggested").disabled = busy || !this.allows("editTransaction");
@@ -551,6 +549,9 @@ class PopupRequestController {
         for (const id of ["accounts-list", "clusters"]) {
             for (const row of document.getElementById(id).children) { row.disabled = busy; }
         }
+        document.getElementById("button-reject").disabled = !this.allows("reject") ||
+            busy && this.activity.operation.kind === "approveRequest";
+        this.syncEditor();
         this.updateApproveEnabled(this.state);
     }
 
@@ -558,10 +559,6 @@ class PopupRequestController {
         if (!this.isActive) { return null; }
         return typeof value === "undefined" || value === this.request.id ||
             sameRequest(value, this.request) ? this.request : null;
-    }
-
-    isCurrentRequest(request) {
-        return this.isActive && sameRequest(request, this.request);
     }
 
     start() {
@@ -575,16 +572,15 @@ class PopupRequestController {
         for (const section of ["accounts", "message", "transaction", "chain"]) {
             hide("section-" + section);
         }
-        document.getElementById("tx-editor").open = false;
+        this.syncEditor();
         return this.readState();
     }
 
     dispose() {
-        if (this.lifecycle !== "disposed") {
-            this.lifecycle = "disposed";
+        if (this.activity.kind !== "disposed") {
             this.stopRead();
-            this.action = null;
             this.discardSliderGesture();
+            this.activity = {kind: "disposed"};
         }
         this.closeAlert(false);
     }
@@ -630,11 +626,9 @@ class PopupRequestController {
                 return;
             }
             this.resetEditorDraft();
-            document.getElementById("tx-editor").open = false;
             hide("tx-editor");
         } else if (state.review.kind === "sendTransaction" && state.review.phase === "finished") {
             this.resetEditorDraft();
-            document.getElementById("tx-editor").open = false;
         }
 
         setText("request-title", state.review?.title || "");
@@ -665,7 +659,6 @@ class PopupRequestController {
                 renderAddChain(state);
                 break;
         }
-        this.updateApproveEnabled(state);
         this.renderAlertIfNeeded(state);
         this.updateInteractionControls();
     }
@@ -752,7 +745,7 @@ class PopupRequestController {
             check.setAttribute("aria-hidden", "true");
             row.appendChild(check);
             row.addEventListener("click", () => {
-                if (!this.isActive || this.transportError || this.action) { return; }
+                if (!this.isActive || this.activity.kind !== "viewing") { return; }
                 select(item);
                 this.renderState(this.state);
                 const replacement = document.getElementById(containerId).children[index];
@@ -791,9 +784,9 @@ class PopupRequestController {
 
     updateApproveEnabled(state) {
         const approve = document.getElementById("button-approve");
-        if (this.transportError) {
-            approve.disabled = this.action !== null;
-        } else if (this.action || this.interaction) {
+        if (this.presentationActivity.kind === "failed") {
+            approve.disabled = this.isSubmitting;
+        } else if (this.activity.kind !== "viewing") {
             approve.disabled = true;
         } else if (hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)) {
             approve.disabled = false;
@@ -863,9 +856,8 @@ class PopupRequestController {
             const firstFeeLine = feeLines.children[0]?.textContent ||
                 localized("calculating", "Calculating...");
             slider.max = sliderState.maximum || 200;
-            if (!(this.interaction?.kind === "slider")) {
-                slider.value = sliderState.position ?? 100;
-            }
+            slider.value = this.presentationActivity.kind === "dragging"
+                ? this.presentationActivity.gesture.value : sliderState.position ?? 100;
             slider.disabled = !hasApprovalAction(state, "setTransactionSpeed");
             slider.setAttribute("aria-valuetext", firstFeeLine);
         }
@@ -875,10 +867,9 @@ class PopupRequestController {
         const canApplyEdits = hasApprovalAction(state, "editTransaction");
         document.getElementById("editor-apply").disabled = !canApplyEdits;
         document.getElementById("editor-suggested").disabled = !canApplyEdits;
-        const editorDetails = document.getElementById("tx-editor");
-        if (canApplyEdits || editorDetails.open) {
+        if (canApplyEdits || this.editorDraft) {
             show("tx-editor");
-            if (this.interaction?.kind !== "editor") { this.populateEditor(state); }
+            this.populateEditor(state);
             this.openRequestedEditor();
         } else {
             hide("tx-editor");
@@ -887,36 +878,49 @@ class PopupRequestController {
 
     openRequestedEditor() {
         const token = this.state?.review?.editorRequestToken;
-        if (this.action || !this.allows("editTransaction") || typeof token !== "number") { return; }
+        if (this.isSubmitting || !this.allows("editTransaction") || typeof token !== "number") { return; }
         const key = this.request.requestToken + ":" + token;
         if (this.presentation.lastEditorRequestKey === key) { return; }
         this.presentation.lastEditorRequestKey = key;
-        if (this.state.review.alert) { return; }
-        document.getElementById("tx-editor").open = true;
-        this.editorToggled();
+        if (!this.state.review.alert) { this.openEditor(); }
     }
 
     populateEditor(state) {
-        const review = state.review;
-        const editor = review.editor || {};
+        const editor = state.review.editor;
         setHidden("editor-eip1559", !editor.usesEIP1559);
         setHidden("editor-legacy", editor.usesEIP1559);
-        for (const [name, value] of Object.entries(transactionEditorValues(editor))) {
-            const fieldId = TRANSACTION_EDITOR_FIELDS[name];
-            document.getElementById(fieldId).value = value;
+        const values = this.editorDraft?.values || transactionEditorValues(editor);
+        for (const [name, value] of Object.entries(values)) {
+            const field = document.getElementById(TRANSACTION_EDITOR_FIELDS[name]);
+            if (field.value !== value) { field.value = value; }
         }
         const hasSuggested = editor.suggestedGasPriceGwei != null || editor.suggestedMaxFeePerGasGwei != null;
         setHidden("editor-suggested", !hasSuggested);
+        this.syncEditor();
+    }
+
+    syncEditor() {
+        const draft = this.editorDraft;
+        document.getElementById("tx-editor").open = draft !== null;
+        const error = draft?.error;
+        if (error === "invalidValues") {
+            setText("edits-error", localized("invalidValues", "Invalid values"));
+        } else if (error === "reviewChanged") {
+            setText("edits-error", localized("reviewChanged", "Review changed. Check the values and apply again."));
+        } else if (error === "failedToLoad") {
+            setText("edits-error", localized("failedToLoad", "Failed to load"));
+        }
+        setHidden("edits-error", !error);
     }
 
     resetEditorDraft() {
-        if (this.interaction?.kind === "editor") { this.interaction = null; }
-        hide("edits-error");
+        if (this.activity.kind === "editing") { this.activity = {kind: "viewing"}; }
+        this.syncEditor();
     }
 
     async approveCurrent() {
-        if (!this.isActive || this.action || this.interaction) { return; }
-        if (this.transportError) {
+        if (!this.isActive || !["viewing", "failed"].includes(this.activity.kind)) { return; }
+        if (this.activity.kind === "failed") {
             await this.retry();
             return;
         }
@@ -948,104 +952,93 @@ class PopupRequestController {
         await this.reject();
     }
 
-    editorToggled() {
-        const details = document.getElementById("tx-editor");
-        if (!this.isActive) { return; }
-        if (this.action) {
-            details.open = this.interaction?.kind === "editor";
+    openEditor() {
+        if (this.activity.kind !== "viewing" || !this.allows("editTransaction") || this.state.review?.alert) {
+            this.syncEditor();
             return;
         }
-        if (details.open) {
-            if (this.interaction?.kind === "editor") { return; }
-            if (!this.allows("editTransaction") || this.interaction || this.state.review?.alert) {
-                details.open = false;
-                return;
-            }
-            this.stopRead();
-            this.interaction = {
-                kind: "editor",
-                reviewToken: this.state.review.reviewToken,
-                usesEIP1559: this.state.review.editor.usesEIP1559,
-            };
-            this.populateEditor(this.state);
+        this.stopRead();
+        const editor = this.state.review.editor;
+        this.activity = {kind: "editing", draft: {
+            reviewToken: this.state.review.reviewToken,
+            usesEIP1559: editor.usesEIP1559,
+            values: transactionEditorValues(editor),
+            error: null,
+        }};
+        this.populateEditor(this.state);
+        this.updateInteractionControls();
+    }
+
+    editorToggled() {
+        if (!this.isActive) { return; }
+        const wantsOpen = document.getElementById("tx-editor").open;
+        if (this.isSubmitting) {
+            this.syncEditor();
+        } else if (wantsOpen) {
+            this.openEditor();
         } else {
             this.resetEditorDraft();
+            this.updateInteractionControls();
             this.scheduleRead();
         }
-        this.updateInteractionControls();
+    }
+
+    editField(name, value) {
+        if (!this.isActive || this.activity.kind !== "editing" ||
+            !Object.hasOwn(this.activity.draft.values, name)) { return; }
+        this.activity.draft.values[name] = value;
     }
 
     beginSliderInteraction(request, reviewToken = this.state?.review?.reviewToken) {
         const capturedRequest = this.requestFor(request);
-        if (!this.allows("setTransactionSpeed") || this.action || this.interaction ||
-            document.getElementById("tx-editor").open ||
+        if (!this.allows("setTransactionSpeed") || this.activity.kind !== "viewing" ||
             !capturedRequest || !isRequestToken(reviewToken)) { return false; }
         this.stopRead();
         ignoreSliderUntilRelease = false;
-        this.interaction = {kind: "slider", reviewToken};
+        this.activity = {kind: "dragging", gesture: {
+            reviewToken, value: Number(document.getElementById("tx-slider").value),
+        }};
         this.updateInteractionControls();
         return true;
     }
 
+    updateSliderValue() {
+        if (this.activity.kind === "dragging") {
+            this.activity.gesture.value = Number(document.getElementById("tx-slider").value);
+        }
+    }
+
     finishSliderInteraction(interaction, request) {
-        const gesture = this.interaction;
-        if (gesture?.kind !== "slider" || !this.requestFor(request)) { return null; }
-        this.interaction = null;
-        return this.setSpeed({interaction, value: Number(document.getElementById("tx-slider").value)}, gesture.reviewToken);
+        if (this.activity.kind !== "dragging" || !this.requestFor(request)) { return null; }
+        this.updateSliderValue();
+        const gesture = this.activity.gesture;
+        return this.setSpeed({interaction, value: gesture.value}, gesture.reviewToken);
     }
 
-    async applyEdits() {
-        await this.applyEditor(false);
-    }
-
-    async applySuggested() {
-        await this.applyEditor(true);
-    }
+    async applyEdits() { await this.applyEditor(false); }
+    async applySuggested() { await this.applyEditor(true); }
 
     async applyEditor(suggested) {
-        if (this.action || !this.allows("editTransaction")) { return; }
-        const draft = this.interaction;
-        if (draft?.kind !== "editor") { return; }
-        const values = Object.fromEntries(Object.keys(transactionEditorValues(this.state.review.editor))
-            .map(name => [name, document.getElementById(TRANSACTION_EDITOR_FIELDS[name]).value]));
-        const payload = suggested ? {mode: "suggested"} : {mode: "custom", ...values};
+        if (!this.allows("editTransaction") || this.activity.kind !== "editing") { return; }
+        const draft = this.activity.draft;
+        const payload = suggested ? {mode: "suggested"} : {mode: "custom", ...draft.values};
         const operation = this.beginAction("edits");
         const outcome = await this.sendCommand({subject: "applyTransactionEdits", payload, reviewToken: draft.reviewToken});
         if (!this.ownsAction(operation)) { return; }
         const reply = this.acceptReply(outcome);
-        const state = reply?.approval;
-        if (reply && reply.status !== "ok") {
-            if (state) {
-                const preservesDraft = state.review?.kind === "sendTransaction" &&
-                    !state.review.alert &&
-                    hasApprovalAction(state, "editTransaction") &&
-                    state.review.editor.usesEIP1559 === draft.usesEIP1559;
-                if (preservesDraft) {
-                    this.adoptState(state);
-                    draft.reviewToken = state.review.reviewToken;
-                    setText("edits-error", reply.status === "ignored"
-                        ? localized("reviewChanged", "Review changed. Check the values and apply again.")
-                        : localized("failedToLoad", "Failed to load"));
-                    show("edits-error");
-                } else {
-                    this.resetEditorDraft();
-                    document.getElementById("tx-editor").open = false;
-                    this.adoptState(state);
-                }
-            }
-        } else {
-            if (state?.editsError) {
-                this.adoptState(state);
-                draft.reviewToken = state.review?.reviewToken ?? draft.reviewToken;
-                setText("edits-error", localized("invalidValues", "Invalid values"));
-                show("edits-error");
-            } else if (state) {
-                this.resetEditorDraft();
-                document.getElementById("tx-editor").open = false;
-                this.adoptState(state);
-            }
+        if (!reply) { return; }
+        const state = reply.approval;
+        const preservesDraft = state.review?.kind === "sendTransaction" &&
+            !state.review.alert && hasApprovalAction(state, "editTransaction") &&
+            state.review.editor.usesEIP1559 === draft.usesEIP1559;
+        let next = {kind: "viewing"};
+        if (preservesDraft && (reply.status !== "ok" || state.editsError)) {
+            draft.reviewToken = state.review.reviewToken;
+            draft.error = reply.status === "ignored" ? "reviewChanged"
+                : reply.status === "unavailable" ? "failedToLoad" : "invalidValues";
+            next = {kind: "editing", draft};
         }
-        this.finishAction(operation);
+        this.finishAction(operation, state, next);
     }
 
     renderAlertIfNeeded(state) {
@@ -1094,7 +1087,7 @@ class PopupRequestController {
                     )) {
                     return;
                 }
-                if (this.action && action.action === "cancel" && this.allows("reject")) {
+                if (this.isSubmitting && action.action === "cancel" && this.allows("reject")) {
                     await this.reject();
                 } else {
                     await this.resolveAlert({action: action.action}, reviewToken);
@@ -1108,19 +1101,10 @@ class PopupRequestController {
         focusTarget.focus();
     }
 
-    showSubmitting() {
-        document.getElementById("button-approve").disabled = true;
-        if (this.action?.kind === "approveRequest") {
-            document.getElementById("button-reject").disabled = true;
-        }
-        hide("working-overlay");
-    }
-
     renderTransportFailure() {
         this.presentation.lastStateJSON = null;
         this.closeAlert(false);
-        document.getElementById("tx-editor").open = false;
-        this.resetEditorDraft();
+        this.syncEditor();
         this.renderState({
             id: this.request.id,
             state: "error",
@@ -1131,9 +1115,9 @@ class PopupRequestController {
     }
 
     discardSliderGesture() {
-        if (this.interaction?.kind === "slider") {
+        if (this.activity.kind === "dragging") {
             ignoreSliderUntilRelease = true;
-            this.interaction = null;
+            this.activity = {kind: "viewing"};
         }
     }
 }
@@ -1613,11 +1597,25 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("editor-apply").addEventListener("click", () => popupQueue.currentRequest?.applyEdits());
     document.getElementById("editor-suggested").addEventListener("click", () => popupQueue.currentRequest?.applySuggested());
     document.getElementById("network-select").addEventListener("change", () => {
-        if (popupQueue.currentRequest?.isActive && !popupQueue.currentRequest.action) {
+        if (popupQueue.currentRequest?.isActive && popupQueue.currentRequest.activity.kind === "viewing") {
             popupQueue.currentRequest.presentation.chainId = document.getElementById("network-select").value;
         }
     });
+    document.getElementById("tx-editor-summary").addEventListener("click", event => {
+        event.preventDefault();
+        const controller = popupQueue.currentRequest;
+        if (!controller?.isActive) { return; }
+        const editor = document.getElementById("tx-editor");
+        editor.open = !editor.open;
+        controller.editorToggled();
+    });
     document.getElementById("tx-editor").addEventListener("toggle", () => popupQueue.currentRequest?.editorToggled());
+
+    for (const [name, id] of Object.entries(TRANSACTION_EDITOR_FIELDS)) {
+        document.getElementById(id).addEventListener("input", event => {
+            popupQueue.currentRequest?.editField(name, event.target.value);
+        });
+    }
 
     const slider = document.getElementById("tx-slider");
     slider.addEventListener("pointerdown", () => {
@@ -1625,9 +1623,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     slider.addEventListener("input", () => {
         if (ignoreSliderUntilRelease) { return; }
-        if (popupQueue.currentRequest?.interaction?.kind !== "slider") {
+        if (popupQueue.currentRequest?.activity.kind !== "dragging") {
             popupQueue.currentRequest?.beginSliderInteraction();
         }
+        popupQueue.currentRequest?.updateSliderValue();
     });
     const endDrag = interaction => {
         if (ignoreSliderUntilRelease) {

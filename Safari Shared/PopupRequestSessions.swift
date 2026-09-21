@@ -204,13 +204,19 @@ final class PopupRequestSession {
 @MainActor
 final class PopupRequestSessions {
 
-    private struct MutableSessionContext {
-        let snapshot: ExtensionBridge.Snapshot
-        let session: PopupRequestSession
+    private enum PopupCommandOutcome {
+        case applied(editsError: Bool? = nil)
+        case ignored
+        case unavailable
+    }
+
+    private enum ApprovalStateLoad {
+        case available(PopupApprovalState)
+        case unavailable
     }
 
     private enum MutableSessionResult {
-        case available(MutableSessionContext)
+        case available(PopupRequestSession)
         case ignored
         case unavailable
     }
@@ -336,72 +342,91 @@ final class PopupRequestSessions {
     func privateBrowsingResponse(
         for request: InternalSafariRequest
     ) -> PopupResponse {
-        guard case .popup(let command) = request.command else {
-            return ignoredResponse()
+        guard case .popup(.getPendingRequests) = request.command else {
+            return .command(.ignored(nil))
         }
-        switch command {
-        case .getPendingRequests:
-            return presenter.pendingResponse()
-        case .getApprovalState, .retryApproval, .approveRequest, .rejectRequest, .setTransactionSpeed,
-             .applyTransactionEdits, .resolveApprovalAlert:
-            return ignoredResponse()
-        }
+        return .queue(presenter.pendingResponse())
     }
 
     func dispatch(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> PopupResponse {
-        let response = await dispatchCommand(request: request, profileIdentifier: profileIdentifier)
-        guard case .popup(let command) = request.command,
-              case .status(let status) = response else { return response }
-        if case .getPendingRequests = command { return response }
-        if status == .unavailable { return response }
-        guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
-            return ignoredResponse()
+        guard case .popup(let command) = request.command else {
+            return .command(.ignored(nil))
         }
-        switch await store.load(handle: handle) {
-        case .found(let snapshot):
-            let current = await approvalState(snapshot: snapshot)
-            guard let approval = current.approvalState else { return .status(.unavailable) }
-            return .command(status, approval)
-        case .missing:
-            return .command(status, presenter.missingState(id: request.id).approvalState)
-        case .unavailable:
-            return .status(.unavailable)
+        if case .getPendingRequests = command {
+            return await pendingRequestsResponse(profileIdentifier: profileIdentifier)
+        }
+        guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
+            return .command(.ignored(nil))
+        }
+        switch command {
+        case .getApprovalState, .retryApproval:
+            let retry: Bool
+            if case .retryApproval = command { retry = true }
+            else { retry = false }
+            return await commandResponse(
+                for: .applied(),
+                handle: handle,
+                retry: retry
+            )
+        case .getPendingRequests:
+            preconditionFailure()
+        case .approveRequest, .rejectRequest, .setTransactionSpeed,
+             .applyTransactionEdits, .resolveApprovalAlert:
+            let outcome = await performCommand(
+                command,
+                request: request,
+                profileIdentifier: profileIdentifier
+            )
+            return await commandResponse(for: outcome, handle: handle)
         }
     }
 
-    private func dispatchCommand(
+    private func commandResponse(
+        for outcome: PopupCommandOutcome,
+        handle: ExtensionBridge.Handle,
+        retry: Bool = false
+    ) async -> PopupResponse {
+        if case .unavailable = outcome { return .command(.unavailable(nil)) }
+        let loaded: ApprovalStateLoad
+        switch await store.load(handle: handle) {
+        case .found(let snapshot):
+            if retry, case .queued(_, .unowned) = snapshot.state {
+                if sessions[handle]?.state == .error {
+                    discardSession(handle: handle)
+                }
+                if immediateResponses[handle]?.state == .failed {
+                    immediateResponses[handle] = nil
+                }
+            }
+            loaded = await approvalState(snapshot: snapshot)
+        case .missing:
+            loaded = .available(presenter.missingState(id: handle.id))
+        case .unavailable:
+            loaded = .unavailable
+        }
+        guard case .available(var state) = loaded else {
+            return .command(.unavailable(nil))
+        }
+        switch outcome {
+        case .applied(let editsError):
+            state.editsError = editsError
+            return .command(.ok(state))
+        case .ignored:
+            return .command(.ignored(state))
+        case .unavailable:
+            return .command(.unavailable(nil))
+        }
+    }
+
+    private func performCommand(
+        _ command: InternalSafariRequest.PopupCommand,
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> PopupResponse {
-        guard case .popup(let command) = request.command else {
-            return ignoredResponse()
-        }
+    ) async -> PopupCommandOutcome {
         switch command {
-        case .getPendingRequests:
-            return await pendingRequestsResponse(profileIdentifier: profileIdentifier)
-        case .getApprovalState, .retryApproval:
-            guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
-                return ignoredResponse()
-            }
-            let snapshot: ExtensionBridge.Snapshot
-            switch await store.load(handle: handle) {
-            case .found(let value): snapshot = value
-            case .missing: return missingState(id: request.id)
-            case .unavailable: return .status(.unavailable)
-            }
-            if case .retryApproval = command,
-               case .queued(_, .unowned) = snapshot.state {
-                if sessions[snapshot.handle]?.state == .error {
-                    discardSession(handle: snapshot.handle)
-                }
-                if immediateResponses[snapshot.handle]?.state == .failed {
-                    immediateResponses[snapshot.handle] = nil
-                }
-            }
-            return await approvalState(snapshot: snapshot)
         case .approveRequest(_, let payload):
             return await approve(
                 request: request,
@@ -409,32 +434,26 @@ final class PopupRequestSessions {
                 payload: payload
             )
         case .rejectRequest:
-            return await reject(
-                request: request,
-                profileIdentifier: profileIdentifier
-            )
-        case .setTransactionSpeed(_, let payload):
-            guard payload.value.isFinite else { return ignoredResponse() }
+            return await reject(request: request, profileIdentifier: profileIdentifier)
+        case .setTransactionSpeed, .applyTransactionEdits, .resolveApprovalAlert:
             switch await mutableSession(for: request, profileIdentifier: profileIdentifier) {
             case .available(let context):
-                return await setTransactionSpeed(context: context, payload: payload)
-            case .ignored: return ignoredResponse()
-            case .unavailable: return .status(.unavailable)
+                switch command {
+                case .setTransactionSpeed(_, let payload):
+                    guard payload.value.isFinite else { return .ignored }
+                    return setTransactionSpeed(session: context, payload: payload)
+                case .applyTransactionEdits(_, let payload):
+                    return applyTransactionEdits(session: context, payload: payload)
+                case .resolveApprovalAlert(_, let payload):
+                    return resolveApprovalAlert(session: context, payload: payload)
+                default:
+                    preconditionFailure()
+                }
+            case .ignored: return .ignored
+            case .unavailable: return .unavailable
             }
-        case .applyTransactionEdits(_, let payload):
-            switch await mutableSession(for: request, profileIdentifier: profileIdentifier) {
-            case .available(let context):
-                return await applyTransactionEdits(context: context, payload: payload)
-            case .ignored: return ignoredResponse()
-            case .unavailable: return .status(.unavailable)
-            }
-        case .resolveApprovalAlert(_, let payload):
-            switch await mutableSession(for: request, profileIdentifier: profileIdentifier) {
-            case .available(let context):
-                return await resolveApprovalAlert(context: context, payload: payload)
-            case .ignored: return ignoredResponse()
-            case .unavailable: return .status(.unavailable)
-            }
+        case .getPendingRequests, .getApprovalState, .retryApproval:
+            preconditionFailure()
         }
     }
 
@@ -463,22 +482,6 @@ final class PopupRequestSessions {
     private func reviewToken(for request: InternalSafariRequest) -> UUID? {
         guard case .popup(let command) = request.command else { return nil }
         return command.identity?.reviewToken
-    }
-
-    private func ignoredResponse() -> PopupResponse {
-        return .status(.ignored)
-    }
-
-    private func missingState(id: Int) -> PopupResponse {
-        return presenter.missingState(id: id)
-    }
-
-    private func stateResponse(
-        id: Int,
-        state: PopupRequestSession.State,
-        host: String? = nil
-    ) -> PopupResponse {
-        return presenter.state(id: id, state: state, host: host)
     }
 
     private func refreshWalletsAndNetworks() -> WalletReviewCatalog? {
@@ -524,10 +527,10 @@ final class PopupRequestSessions {
                 completedResponses.append(presenter.completedResponse(snapshot))
             }
         }
-        return presenter.pendingResponse(
+        return .queue(presenter.pendingResponse(
             requests: requests,
             completedResponses: completedResponses
-        )
+        ))
     }
 
     private func ensureSession(
@@ -640,7 +643,7 @@ final class PopupRequestSessions {
               canMutateTransaction(snapshot: snapshot, session: session) else {
             return .ignored
         }
-        return .available(MutableSessionContext(snapshot: snapshot, session: session))
+        return .available(session)
     }
 
     private func canMutateTransaction(
@@ -654,41 +657,40 @@ final class PopupRequestSessions {
     }
 
     private func approvalState(
-        snapshot: ExtensionBridge.Snapshot,
-        editsError: Bool? = nil
-    ) async -> PopupResponse {
+        snapshot: ExtensionBridge.Snapshot
+    ) async -> ApprovalStateLoad {
         let handle = snapshot.handle
         if snapshot.phase == .responded {
             discardSession(handle: handle)
             immediateResponses[handle] = nil
-            return missingState(id: handle.id)
+            return .available(presenter.missingState(id: handle.id))
         }
         if snapshot.isQueuedForNativeApproval {
             discardSession(handle: handle)
             immediateResponses[handle] = nil
-            return stateResponse(id: handle.id, state: .working, host: snapshot.host)
+            return .available(presenter.state(id: handle.id, state: .working, host: snapshot.host))
         }
         let sessionWasCached = sessions[handle] != nil
         let activeSession = activeSession(snapshot: snapshot)
         guard case .available(let session) = activeSession else {
             if case .secureSetupRequired = activeSession {
-                return presenter.secureSetupRequiredState(
+                return .available(presenter.secureSetupRequiredState(
                     id: handle.id,
                     host: snapshot.host
-                )
+                ))
             }
             if case .immediateResponse(let persistenceState) = activeSession {
                 if persistenceState == .failed {
-                    return PopupApprovalStatePresenter.errorState(
+                    return .available(PopupApprovalStatePresenter.errorState(
                         id: handle.id,
                         host: snapshot.host,
                         error: Strings.failedToLoad
-                    )
+                    ))
                 }
-                return stateResponse(id: handle.id, state: .working, host: snapshot.host)
+                return .available(presenter.state(id: handle.id, state: .working, host: snapshot.host))
             }
             if snapshot.phase == .approving {
-                return stateResponse(id: handle.id, state: .working, host: snapshot.host)
+                return .available(presenter.state(id: handle.id, state: .working, host: snapshot.host))
             }
             switch await store.load(handle: handle) {
             case .found(let current) where current.phase == .responded:
@@ -697,19 +699,19 @@ final class PopupRequestSessions {
             case .found, .missing:
                 break
             case .unavailable:
-                return .status(.unavailable)
+                return .unavailable
             }
-            return missingState(id: handle.id)
+            return .available(presenter.missingState(id: handle.id))
         }
         if session.state == .error {
-            return PopupApprovalStatePresenter.errorState(
+            return .available(PopupApprovalStatePresenter.errorState(
                 id: handle.id,
                 host: snapshot.host,
                 error: session.errorText ?? Strings.failedToLoad
-            )
+            ))
         }
         if session.state != .review {
-            return stateResponse(id: handle.id, state: session.state, host: snapshot.host)
+            return .available(presenter.state(id: handle.id, state: session.state, host: snapshot.host))
         }
         let action = session.reviewAction
         if sessionWasCached, session.state == .review {
@@ -724,30 +726,29 @@ final class PopupRequestSessions {
             snapshot: snapshot,
             session: session
         )
-        return presenter.approvalState(
+        return .available(presenter.approvalState(
             for: session,
             action: action,
-            transactionMutationAllowed: transactionMutationAllowed,
-            editsError: editsError
-        )
+            transactionMutationAllowed: transactionMutationAllowed
+        ))
     }
 
     private func approve(
         request: InternalSafariRequest,
         profileIdentifier: UUID?,
         payload: InternalSafariRequest.ApprovalPayload
-    ) async -> PopupResponse {
+    ) async -> PopupCommandOutcome {
         let snapshot: ExtensionBridge.Snapshot
         switch await self.snapshot(for: request, profileIdentifier: profileIdentifier) {
         case .found(let value): snapshot = value
-        case .missing: return ignoredResponse()
-        case .unavailable: return .status(.unavailable)
+        case .missing: return .ignored
+        case .unavailable: return .unavailable
         }
         guard snapshot.phase != .responded,
               case .available(let session) = activeSession(snapshot: snapshot),
               reviewToken(for: request) == session.reviewToken,
               session.canBeginApproval else {
-            return ignoredResponse()
+            return .ignored
         }
         let action = session.reviewAction
         guard DurableApprovalExecutor.approvalRevisionsMatch(
@@ -765,19 +766,19 @@ final class PopupRequestSessions {
             action: action,
             deadline: payload.executionDeadline
         ) else {
-            return ignoredResponse()
+            return .ignored
         }
         switch action {
         case .selectAccount(let selectAction), .switchAccount(let selectAction):
             guard let selectedAccounts = payload.selectedAccounts else {
-                return ignoredResponse()
+                return .ignored
             }
             return await approveAccountSelection(
                 session: session,
                 action: selectAction,
                 selectedAccounts: selectedAccounts,
                 chainId: payload.chainId
-            ) ? .status(.ok) : ignoredResponse()
+            ) ? .applied() : .ignored
         case .approveMessage(let signAction):
             guard let executionDeadline = payload.executionDeadline,
                   await approveMessageSigning(
@@ -786,11 +787,11 @@ final class PopupRequestSessions {
                 cluster: payload.cluster,
                 expectedRevisions: payload.revisions,
                 executionDeadline: executionDeadline
-            ) else { return ignoredResponse() }
+            ) else { return .ignored }
         case .approveTransaction:
             guard let executionDeadline = payload.executionDeadline,
                   session.transaction?.snapshot.canApprove == true else {
-                return ignoredResponse()
+                return .ignored
             }
             guard await runSigningApproval(
                 session: session,
@@ -798,10 +799,10 @@ final class PopupRequestSessions {
                 cluster: nil,
                 expectedRevisions: payload.revisions,
                 executionDeadline: executionDeadline
-            ) else { return ignoredResponse() }
+            ) else { return .ignored }
         case .addEthereumChain:
             guard let approval = await beginAndClaimApproval(for: session) else {
-                return ignoredResponse()
+                return .ignored
             }
             await beginExecution(
                 claim: approval.claim,
@@ -816,14 +817,14 @@ final class PopupRequestSessions {
                 )
             }
         }
-        return .status(.ok)
+        return .applied()
     }
 
     private func completeStaleApproval(
         snapshot: ExtensionBridge.Snapshot,
         session: PopupRequestSession
-    ) async -> PopupResponse {
-        guard snapshot.phase == .queued else { return ignoredResponse() }
+    ) async -> PopupCommandOutcome {
+        guard snapshot.phase == .queued else { return .ignored }
         session.transaction?.invalidate()
         let response = ResponseToExtension(
             for: session.request,
@@ -835,13 +836,13 @@ final class PopupRequestSessions {
         switch await store.complete(handle: snapshot.handle, response: response) {
         case .persisted:
             discardSession(handle: snapshot.handle)
-            return .status(.ok)
+            return .applied()
         case .ownershipLost:
             discardSession(handle: snapshot.handle)
-            return ignoredResponse()
+            return .ignored
         case .retryablePersistenceFailure:
             session.fail(Strings.failedToLoad)
-            return .status(.unavailable)
+            return .unavailable
         }
     }
 
@@ -1276,25 +1277,25 @@ final class PopupRequestSessions {
     private func reject(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> PopupResponse {
+    ) async -> PopupCommandOutcome {
         let snapshot: ExtensionBridge.Snapshot
         switch await self.snapshot(for: request, profileIdentifier: profileIdentifier) {
         case .found(let value): snapshot = value
-        case .missing: return ignoredResponse()
-        case .unavailable: return .status(.unavailable)
+        case .missing: return .ignored
+        case .unavailable: return .unavailable
         }
         guard snapshot.phase == .queued else {
-            return ignoredResponse()
+            return .ignored
         }
         switch await store.reject(handle: snapshot.handle) {
         case .persisted:
             discardSession(handle: snapshot.handle)
             immediateResponses[snapshot.handle] = nil
-            return .status(.ok)
+            return .applied()
         case .ownershipLost:
-            return ignoredResponse()
+            return .ignored
         case .retryablePersistenceFailure:
-            return .status(.unavailable)
+            return .unavailable
         }
     }
 
@@ -1466,47 +1467,41 @@ final class PopupRequestSessions {
     }
 
     private func setTransactionSpeed(
-        context: MutableSessionContext,
+        session: PopupRequestSession,
         payload: InternalSafariRequest.TransactionSpeedPayload
-    ) async -> PopupResponse {
-        let snapshot = context.snapshot
-        let session = context.session
+    ) -> PopupCommandOutcome {
         guard let transactionSession = session.transaction else {
-            return ignoredResponse()
+            return .ignored
         }
         transactionSession.setSpeed(payload)
-        return await approvalState(snapshot: snapshot)
+        return .applied()
     }
 
     private func applyTransactionEdits(
-        context: MutableSessionContext,
+        session: PopupRequestSession,
         payload: InternalSafariRequest.TransactionEditsPayload
-    ) async -> PopupResponse {
-        let snapshot = context.snapshot
-        let session = context.session
+    ) -> PopupCommandOutcome {
         guard let transactionSession = session.transaction,
               case .approveTransaction(let action) = session.preparedAction else {
-            return ignoredResponse()
+            return .ignored
         }
         guard transactionSession.applyEdits(payload, chain: action.chain) else {
-            return await approvalState(snapshot: snapshot, editsError: true)
+            return .applied(editsError: true)
         }
-        return await approvalState(snapshot: snapshot)
+        return .applied()
     }
 
     private func resolveApprovalAlert(
-        context: MutableSessionContext,
+        session: PopupRequestSession,
         payload: InternalSafariRequest.ApprovalAlertPayload
-    ) async -> PopupResponse {
-        let snapshot = context.snapshot
-        let session = context.session
+    ) -> PopupCommandOutcome {
         guard let transactionSession = session.transaction,
               transactionSession.resolveAlert(
                   action: payload.action
               ) else {
-            return ignoredResponse()
+            return .ignored
         }
-        return await approvalState(snapshot: snapshot)
+        return .applied()
     }
 
 

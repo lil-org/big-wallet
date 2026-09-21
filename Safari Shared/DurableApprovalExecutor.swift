@@ -13,33 +13,6 @@ final class DurableApprovalExecutor {
         case rolledBack
     }
 
-    @MainActor
-    private final class TimedResolution<Value> {
-        private var continuation: CheckedContinuation<Value, Never>?
-        var operationTask: Task<Void, Never>?
-        var timeoutTask: Task<Void, Never>?
-
-        init(_ continuation: CheckedContinuation<Value, Never>) {
-            self.continuation = continuation
-        }
-
-        func finish(
-            with result: Value,
-            cancelOperation: Bool = false
-        ) {
-            guard let continuation else { return }
-            self.continuation = nil
-            if cancelOperation {
-                operationTask?.cancel()
-            } else {
-                timeoutTask?.cancel()
-            }
-            operationTask = nil
-            timeoutTask = nil
-            continuation.resume(returning: result)
-        }
-    }
-
     private struct ExecutionPlan {
         let authority: ExtensionBridge.ExecutionAuthority
         let deadline: Date?
@@ -342,22 +315,23 @@ final class DurableApprovalExecutor {
         timeoutValue: Value,
         operation: @escaping @MainActor () async -> Value
     ) async -> Value {
-        await withCheckedContinuation { continuation in
-            let resolution = TimedResolution(continuation)
-            resolution.operationTask = Task { @MainActor in
-                resolution.finish(with: await operation())
+        let resolution = ApprovalResolution<Value>()
+        let operationTask = Task { @MainActor in
+            let value = await operation()
+            resolution.resolve(value)
+        }
+        let timeoutTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+            } catch {
+                return
             }
-            resolution.timeoutTask = Task { @MainActor in
-                do {
-                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
-                } catch {
-                    return
-                }
-                resolution.finish(
-                    with: timeoutValue,
-                    cancelOperation: true
-                )
+            resolution.resolve(timeoutValue) {
+                operationTask.cancel()
             }
         }
+        let value = await resolution.value()
+        timeoutTask.cancel()
+        return value
     }
 }

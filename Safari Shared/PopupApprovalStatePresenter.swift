@@ -18,24 +18,24 @@ final class PopupApprovalStatePresenter {
         action: PopupApprovalState.RecoveryAction = .retry,
         host: String? = nil,
         error: String
-    ) -> PopupResponse {
-        .approval(PopupApprovalState(
+    ) -> PopupApprovalState {
+        PopupApprovalState(
             id: id,
             host: host,
             content: .error(message: error, action: action)
-        ))
+        )
     }
 
     func pendingResponse(
         requests: [PopupPendingRequest] = [],
         completedResponses: [PopupCompletedResponse] = []
-    ) -> PopupResponse {
-        .queue(PopupQueueResponse(
+    ) -> PopupQueueResponse {
+        PopupQueueResponse(
             requests: requests,
             completedResponses: completedResponses,
             strings: Strings.popup,
             layoutDirection: layoutDirection
-        ))
+        )
     }
 
     func completedResponse(_ snapshot: ExtensionBridge.Snapshot) -> PopupCompletedResponse {
@@ -66,7 +66,7 @@ final class PopupApprovalStatePresenter {
         id: Int,
         state: PopupRequestSession.State,
         host: String? = nil
-    ) -> PopupResponse {
+    ) -> PopupApprovalState {
         let content: PopupApprovalState.Content
         switch state {
         case .authenticating: content = .authenticating
@@ -74,23 +74,22 @@ final class PopupApprovalStatePresenter {
         case .error, .review:
             content = .error(message: Strings.failedToLoad, action: .retry)
         }
-        return .approval(PopupApprovalState(id: id, host: host, content: content))
+        return PopupApprovalState(id: id, host: host, content: content)
     }
 
-    func missingState(id: Int) -> PopupResponse {
-        .approval(PopupApprovalState(id: id, content: .missing))
+    func missingState(id: Int) -> PopupApprovalState {
+        PopupApprovalState(id: id, content: .missing)
     }
 
-    func secureSetupRequiredState(id: Int, host: String) -> PopupResponse {
+    func secureSetupRequiredState(id: Int, host: String) -> PopupApprovalState {
         Self.errorState(id: id, host: host, error: Strings.secureApprovalSetupRequired)
     }
 
     func approvalState(
         for session: PopupRequestSession,
         action: DappRequestAction,
-        transactionMutationAllowed: Bool,
-        editsError: Bool? = nil
-    ) -> PopupResponse {
+        transactionMutationAllowed: Bool
+    ) -> PopupApprovalState {
         guard session.state == .review else {
             return state(id: session.handle.id, state: session.state, host: session.request.host)
         }
@@ -135,7 +134,7 @@ final class PopupApprovalStatePresenter {
                 rpcURL: action.chainToAdd.defaultRpcUrl
             ))
         }
-        return .approval(PopupApprovalState(
+        return PopupApprovalState(
             id: session.handle.id,
             host: session.request.host,
             content: .review(PopupReview(
@@ -143,9 +142,8 @@ final class PopupApprovalStatePresenter {
                 title: title(for: action),
                 iconURL: session.request.favicon,
                 content: content
-            ), actions: actions, feedback: error),
-            editsError: editsError
-        ))
+            ), actions: actions, feedback: error)
+        )
     }
 
     static func transactionAlertMessage(alert: TransactionApprovalAlertIntent) -> String {

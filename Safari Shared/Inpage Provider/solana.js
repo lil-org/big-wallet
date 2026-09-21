@@ -414,13 +414,15 @@ function transactionAdapter(transaction, message = invalidSolanaTransactionReque
         ownDataDescriptor(versionedMessage, "accountKeys");
     const versionedSerialize = inheritedDataFunction(versionedMessage, "serialize");
     const requiredSignatures = headerDescriptor?.value?.numRequiredSignatures;
-    if (headerDescriptor && keysDescriptor &&
+    const isVersioned = headerDescriptor && keysDescriptor &&
         isArrayNormally(keysDescriptor.value) &&
         Number.isSafeInteger(requiredSignatures) &&
         requiredSignatures > 0 &&
         requiredSignatures <= keysDescriptor.value.length &&
-        typeof versionedSerialize === "function") {
-        const adapter = {
+        typeof versionedSerialize === "function";
+    let adapter;
+    if (isVersioned) {
+        adapter = {
             messageOwner: versionedMessage,
             serializeMessage: versionedSerialize,
             staticAccountKeys: keysDescriptor.value,
@@ -428,85 +430,66 @@ function transactionAdapter(transaction, message = invalidSolanaTransactionReque
             type: "versioned",
             requiredSignatures,
         };
-        adapter.message = Base58.encode(serializedMessage(adapter));
-        const signaturesDescriptor = ownDataDescriptor(transaction, "signatures");
-        if (!signaturesDescriptor ||
-            !isArrayNormally(signaturesDescriptor.value) ||
-            requiredSignatures > signaturesDescriptor.value.length) {
+    } else {
+        const serializeMessage = inheritedDataFunction(transaction, "serializeMessage");
+        if (typeof serializeMessage !== "function") {
             throw new ProviderRpcError(4200, message);
         }
-        adapter.signatures = signaturesDescriptor.value;
-        requireBase58String(adapter.message, message);
-        return adapter;
+        adapter = {
+            messageOwner: transaction,
+            serializeMessage,
+            transaction,
+            type: "legacy",
+        };
     }
-    const serializeMessage = inheritedDataFunction(transaction, "serializeMessage");
-    if (typeof serializeMessage !== "function") {
-        throw new ProviderRpcError(4200, message);
-    }
-    const adapter = {
-        messageOwner: transaction,
-        serializeMessage,
-        transaction,
-        type: "legacy",
-    };
     adapter.message = Base58.encode(serializedMessage(adapter));
     const signaturesDescriptor = ownDataDescriptor(transaction, "signatures");
-    if (!signaturesDescriptor || !isArrayNormally(signaturesDescriptor.value)) {
+    if (!signaturesDescriptor || !isArrayNormally(signaturesDescriptor.value) ||
+        isVersioned && requiredSignatures > signaturesDescriptor.value.length) {
         throw new ProviderRpcError(4200, message);
     }
     const signatures = signaturesDescriptor.value;
     adapter.signatures = signatures;
-    if (signatures.length === 0) {
-        throw new ProviderRpcError(4200, message);
-    }
-    for (let index = 0; index < signatures.length; index += 1) {
-        const entry = signatures[index];
-        const publicKeyDescriptor = ownDataDescriptor(entry, "publicKey");
-        const signatureDescriptor = ownDataDescriptor(entry, "signature");
-        if (!publicKeyDescriptor || !signatureDescriptor ||
-            !signatureDescriptor.writable ||
-            !safePublicKeyString(publicKeyDescriptor.value) ||
-            (signatureDescriptor.value !== null &&
-                !isByteArray(signatureDescriptor.value))) {
+    if (!isVersioned) {
+        if (signatures.length === 0) {
             throw new ProviderRpcError(4200, message);
+        }
+        for (let index = 0; index < signatures.length; index += 1) {
+            const entry = signatures[index];
+            const publicKeyDescriptor = ownDataDescriptor(entry, "publicKey");
+            const signatureDescriptor = ownDataDescriptor(entry, "signature");
+            if (!publicKeyDescriptor || !signatureDescriptor ||
+                !signatureDescriptor.writable ||
+                !safePublicKeyString(publicKeyDescriptor.value) ||
+                (signatureDescriptor.value !== null &&
+                    !isByteArray(signatureDescriptor.value))) {
+                throw new ProviderRpcError(4200, message);
+            }
         }
     }
     requireBase58String(adapter.message, message);
     return adapter;
 }
 
-function transactionSerializerMatches(adapter) {
+function transactionMessageSourceMatches(adapter) {
     const method = adapter.type === "versioned"
         ? "serialize"
         : "serializeMessage";
-    return inheritedDataFunction(adapter.messageOwner, method) ===
-        adapter.serializeMessage;
+    if (inheritedDataFunction(adapter.messageOwner, method) !==
+        adapter.serializeMessage) {
+        return false;
+    }
+    if (adapter.type !== "versioned") { return true; }
+    const descriptor = ownDataDescriptor(adapter.transaction, "message");
+    return !!descriptor && descriptor.value === adapter.messageOwner;
 }
 
 function transactionMessageMatches(adapter) {
     try {
-        if (!transactionSerializerMatches(adapter)) { return false; }
-        if (adapter.type === "versioned") {
-            const descriptor = ownDataDescriptor(
-                adapter.transaction,
-                "message"
-            );
-            if (!descriptor || descriptor.value !== adapter.messageOwner) {
-                return false;
-            }
-        }
+        if (!transactionMessageSourceMatches(adapter)) { return false; }
         const message = Base58.encode(serializedMessage(adapter));
-        if (!transactionSerializerMatches(adapter)) { return false; }
-        if (adapter.type === "versioned") {
-            const descriptor = ownDataDescriptor(
-                adapter.transaction,
-                "message"
-            );
-            if (!descriptor || descriptor.value !== adapter.messageOwner) {
-                return false;
-            }
-        }
-        return message === adapter.message;
+        return transactionMessageSourceMatches(adapter) &&
+            message === adapter.message;
     } catch {
         return false;
     }
@@ -576,6 +559,43 @@ function applySignerPlan(plan) {
         ...plan.descriptor,
         value: plan.signature,
     });
+}
+
+function applyTransactionSignatures(adapters, publicKey, signatures, assertCurrent) {
+    const plans = [];
+    const signerTargets = new MapConstructor;
+    for (let index = 0; index < adapters.length; index += 1) {
+        const adapter = adapters[index];
+        if (!transactionMessageMatches(adapter)) {
+            throw new ProviderRpcError(
+                4200,
+                mismatchedSolanaTransactionSignatures
+            );
+        }
+        const plan = signerPlan(adapter, publicKey, signatures[index]);
+        let properties = getMapEntry(signerTargets, plan.target);
+        if (!properties) {
+            properties = new MapConstructor;
+            setMapEntry(signerTargets, plan.target, properties);
+        }
+        if (getMapEntry(properties, plan.property)) {
+            throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+        }
+        setMapEntry(properties, plan.property, true);
+        plans[index] = plan;
+    }
+    for (let index = 0; index < plans.length; index += 1) {
+        assertCurrent();
+        applySignerPlan(plans[index]);
+        assertCurrent();
+    }
+    if (!transactionMessagesMatch(adapters)) {
+        throw new ProviderRpcError(
+            4200,
+            mismatchedSolanaTransactionSignatures
+        );
+    }
+    assertCurrent();
 }
 
 function normalizedTransactionBatch(transactions, message) {
@@ -989,51 +1009,17 @@ function signedResult(
         );
         return false;
     }
-    const plans = [];
-    const signerTargets = new MapConstructor;
     try {
-        for (let index = 0; index < metadata.adapters.length; index += 1) {
-            const adapter = metadata.adapters[index];
-            if (!transactionMessageMatches(adapter)) {
-                throw new ProviderRpcError(
-                    4200,
-                    mismatchedSolanaTransactionSignatures
-                );
+        applyTransactionSignatures(
+            metadata.adapters,
+            metadata.authorization.publicKey,
+            signatures,
+            () => {
+                if (!operationIsCurrent(provider, record, approvalCommitted)) {
+                    throw providerReplacementError();
+                }
             }
-            const plan = signerPlan(
-                adapter,
-                metadata.authorization.publicKey,
-                signatures[index]
-            );
-            let properties = getMapEntry(signerTargets, plan.target);
-            if (!properties) {
-                properties = new MapConstructor;
-                setMapEntry(signerTargets, plan.target, properties);
-            }
-            if (getMapEntry(properties, plan.property)) {
-                throw new ProviderRpcError(4200, solanaSignatureApplicationError);
-            }
-            setMapEntry(properties, plan.property, true);
-            plans[index] = plan;
-        }
-        for (let index = 0; index < plans.length; index += 1) {
-            if (!operationIsCurrent(provider, record, approvalCommitted)) {
-                throw providerReplacementError();
-            }
-            applySignerPlan(plans[index]);
-            if (!operationIsCurrent(provider, record, approvalCommitted)) {
-                throw providerReplacementError();
-            }
-        }
-        if (!transactionMessagesMatch(metadata.adapters)) {
-            throw new ProviderRpcError(
-                4200,
-                mismatchedSolanaTransactionSignatures
-            );
-        }
-        if (!operationIsCurrent(provider, record, approvalCommitted)) {
-            throw providerReplacementError();
-        }
+        );
         let result = metadata.adapters[0].transaction;
         if (metadata.method === "signAllTransactions") {
             result = [];
