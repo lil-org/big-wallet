@@ -247,9 +247,11 @@ function authorizationMatches(state, authorization) {
         authorization.solanaAuthorizationEpoch === state.solanaAuthorizationEpoch;
 }
 
-function observeDisconnectedConfigurationRevision(provider, revision) {
+function observeConfiguration(provider, envelope) {
     const state = providerState(provider);
+    const revision = envelope.workerRevision;
     if (!state || state.runtime.phase === "retired" ||
+        envelope.suppressUpdate === true || envelope.configuration !== null ||
         !isSafeIntegerNormally(revision) || revision < 0) {
         return false;
     }
@@ -303,6 +305,14 @@ function clearAuthorization(provider, tombstone, emitChanges = true) {
     if (wasConnected || previousPublicKey !== null) {
         emitProvider(provider, "disconnect");
     }
+}
+
+function externalDisconnect(provider) {
+    const state = getProviderState(provider);
+    if (state.runtime.phase === "retired" || !advanceAuthorizationEpoch(provider)) {
+        return;
+    }
+    clearAuthorization(provider, true);
 }
 
 function operationIsCurrent(provider, record, approvalCommitted = false) {
@@ -1039,41 +1049,54 @@ function signedResult(
     }
 }
 
-function applyConfiguration(provider, envelope) {
+function applyConfiguration(provider, envelope, configurationIsCurrent) {
     const state = getProviderState(provider);
     if (envelope.suppressUpdate === true) {
         return state.runtime.phase === "ready";
     }
     const incoming = envelope.configuration;
-    const configuration = incoming.accountRevision < state.accountRevision ||
-        incoming.solanaAuthorizationEpoch < state.solanaAuthorizationEpoch
-        ? null
-        : incoming;
-    const previousPublicKey = state.publicKey?.toString() || null;
-    const previousConnected = state.isConnected;
-    const reauthorizationRevision = configuration?.reauthorizationRevision;
-    const reauthorizes = Number.isSafeInteger(reauthorizationRevision) &&
-        reauthorizationRevision > state.reauthorizationRevision;
-    if (reauthorizes) {
-        state.reauthorizationRevision = reauthorizationRevision;
+    let previousPublicKey = state.publicKey?.toString() || null;
+    if (!configurationIsCurrent()) { return false; }
+    const hadAccount = previousPublicKey !== null || state.isConnected;
+    if (state.publicKey === null) { previousPublicKey = null; }
+    let previousConnected = state.isConnected;
+    const reauthorizationRevision = incoming?.reauthorizationRevision ??
+        state.reauthorizationRevision;
+    const changesAccount = reauthorizationRevision > state.reauthorizationRevision ||
+        (incoming?.publicKey ?? null) !== previousPublicKey;
+    const revisionExhausted = changesAccount && state.accountRevision === maximumCounter;
+    const needsDisconnect = revisionExhausted ||
+        (incoming === null && hadAccount);
+    if (needsDisconnect) {
+        try { externalDisconnect(provider); } catch {}
+        if (!configurationIsCurrent()) { return true; }
+        if (state.runtime.phase === "retired") { return false; }
+        previousPublicKey = state.publicKey?.toString() || null;
+        if (state.publicKey === null) { previousPublicKey = null; }
+        previousConnected = state.isConnected;
     }
-    const preservesTombstone = state.accountRevocationTombstone &&
-        !reauthorizes;
-    if (configuration && !preservesTombstone) {
-        const canClearTombstone = state.accountRevocationTombstone &&
-            reauthorizes &&
-            configuration.publicKey !== null;
-        state.accountRevision = configuration.accountRevision;
-        state.solanaAuthorizationEpoch = configuration.solanaAuthorizationEpoch;
-        if (!state.accountRevocationTombstone || canClearTombstone) {
-            state.accountRevocationTombstone = false;
-            state.publicKey = configuration.publicKey
-                ? new PublicKey(configuration.publicKey)
-                : null;
-            state.isConnected = configuration.isConnected;
-        } else {
+    if (!currentProviderState(provider)) { return false; }
+    if (needsDisconnect) {
+        if (!state.accountRevocationTombstone) {
             state.publicKey = null;
             state.isConnected = false;
+        }
+    } else if (incoming && envelope.workerRevision >= state.solanaAuthorizationEpoch) {
+        const reauthorizes = reauthorizationRevision > state.reauthorizationRevision;
+        if (reauthorizes) {
+            state.reauthorizationRevision = reauthorizationRevision;
+        }
+        if (!state.accountRevocationTombstone || reauthorizes) {
+            const minimumRevision = changesAccount
+                ? state.accountRevision + 1
+                : state.accountRevision;
+            state.accountRevision = envelope.workerRevision > minimumRevision
+                ? envelope.workerRevision
+                : minimumRevision;
+            state.solanaAuthorizationEpoch = envelope.workerRevision;
+            state.accountRevocationTombstone = false;
+            state.publicKey = new PublicKey(incoming.publicKey);
+            state.isConnected = incoming.isConnected;
         }
     }
     if (state.runtime.phase === "failed") {
@@ -1095,17 +1118,23 @@ function applyConfiguration(provider, envelope) {
 }
 
 
-function applyDecodedEnvelope(provider, envelope) {
+function currentProviderState(provider) {
     const state = providerState(provider);
     if (!state || state.runtime.phase === "retired") {
-        return false;
+        return null;
     }
     if (state.transport.isCurrent() !== true) {
         retire(provider, providerReplacementError());
-        return false;
+        return null;
     }
+    return state;
+}
+
+function applyDecodedEnvelope(provider, envelope, configurationIsCurrent = () => true) {
+    const state = currentProviderState(provider);
+    if (!state) { return false; }
     if (envelope.kind === "configuration") {
-        return applyConfiguration(provider, envelope);
+        return applyConfiguration(provider, envelope, configurationIsCurrent);
     }
     if (envelope.kind === "configurationError") {
         const error = normalizeSolanaProviderError(envelope.error);
@@ -1521,12 +1550,7 @@ class BigWalletSolana {
     }
 
     externalDisconnect() {
-        const state = getProviderState(this);
-        if (state.runtime.phase === "retired") { return Promise.resolve(true); }
-        if (!advanceAuthorizationEpoch(this)) {
-            return Promise.resolve(true);
-        }
-        clearAuthorization(this, true);
+        externalDisconnect(this);
         return Promise.resolve(true);
     }
 
@@ -1807,10 +1831,8 @@ class BigWalletSolana {
 }
 
 BigWalletSolana.retire = retire;
-BigWalletSolana.observeDisconnectedConfigurationRevision =
-    observeDisconnectedConfigurationRevision;
 BigWalletSolana.snapshot = snapshot;
 BigWalletSolana.isReady = isReady;
 
-export { applyDecodedEnvelope, isReady, retire, snapshot, subscribeNotifications };
+export { applyDecodedEnvelope, isReady, observeConfiguration, retire, snapshot, subscribeNotifications };
 export default BigWalletSolana;

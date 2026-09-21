@@ -17,6 +17,7 @@ import BigWalletEthereum, {
 } from "./ethereum";
 import BigWalletSolana, {
     applyDecodedEnvelope as applySolanaDecodedEnvelope,
+    observeConfiguration as observeSolanaConfiguration,
     subscribeNotifications as solanaSubscribeNotifications,
 } from "./solana";
 import {providerReplacementError} from "./error";
@@ -252,7 +253,7 @@ function malformedError() {
 }
 
 
-function applyDecoded(providerName, envelope) {
+function applyDecoded(providerName, envelope, configurationIsCurrent) {
     const delivery = freezeObjectNormally({
         __proto__: null,
         suppressUpdate: false,
@@ -261,136 +262,62 @@ function applyDecoded(providerName, envelope) {
     try {
         return providerName === "ethereum"
             ? applyEthereumDecodedEnvelope(ethereumProvider, delivery)
-            : applySolanaDecodedEnvelope(solanaProvider, delivery);
+            : applySolanaDecodedEnvelope(solanaProvider, delivery, configurationIsCurrent);
     } catch {
         return false;
     }
 }
 
-function currentSnapshot(providerName) {
-    return providerName === "ethereum"
-        ? BigWalletEthereum.snapshot(ethereumProvider)
-        : BigWalletSolana.snapshot(solanaProvider);
-}
-
-function configurationFor(providerName, value) {
-    const current = currentSnapshot(providerName) || {__proto__: null};
+function ethereumConfiguration(value) {
+    const current = BigWalletEthereum.snapshot(ethereumProvider) || {__proto__: null};
     const reauthorizationRevision = value?.reauthorizationRevision ??
         current.reauthorizationRevision ?? 0;
-    if (providerName === "ethereum") {
-        return freezeObjectNormally({
-            __proto__: null,
-            reauthorizationRevision,
-            address: value?.address ?? "",
-            chainId: value?.chainId ?? current.chainId ?? "0x1",
-        });
-    }
-    const publicKey = value?.publicKey ?? null;
-    const currentRevision = current.accountRevision ?? 0;
-    const changesAccount = reauthorizationRevision > (current.reauthorizationRevision ?? 0) ||
-        publicKey !== current.publicKey;
-    if (changesAccount && currentRevision === Number.MAX_SAFE_INTEGER) {
-        return null;
-    }
-    const minimumRevision = changesAccount
-        ? currentRevision + 1
-        : currentRevision;
-    const incomingRevision = value?.accountRevision ?? 0;
     return freezeObjectNormally({
         __proto__: null,
         reauthorizationRevision,
-        accountRevision: incomingRevision > minimumRevision
-            ? incomingRevision
-            : minimumRevision,
-        isConnected: value?.isConnected === true && publicKey !== null,
-        publicKey,
-        solanaAuthorizationEpoch:
-            value?.solanaAuthorizationEpoch ?? current.solanaAuthorizationEpoch ?? 0,
+        address: value?.address ?? "",
+        chainId: value?.chainId ?? current.chainId ?? "0x1",
     });
 }
 
-function deliverConfiguration(
-    providerName,
+function deliverEthereumConfiguration(
     value,
     suppressUpdate,
     ingressEpoch
 ) {
     if (!ingressIsCurrent(ingressEpoch)) {
-        return {configuration: null, delivered: false};
+        return false;
     }
-    const current = providerName === "solana"
-        ? currentSnapshot("solana")
-        : null;
-    const configuration = configurationFor(providerName, value);
+    const configuration = ethereumConfiguration(value);
     if (!ingressIsCurrent(ingressEpoch)) {
-        return {configuration: null, delivered: false};
+        return false;
     }
-    if (providerName === "solana" &&
-        suppressUpdate !== true &&
-        (configuration === null ||
-            (configuration.publicKey === null &&
-                (typeof current?.publicKey === "string" ||
-                    current?.isConnected === true)))) {
-        try {
-            solanaProvider.externalDisconnect();
-        } catch {
-        }
-        if (!ingressIsCurrent(ingressEpoch)) {
-            return {configuration: null, delivered: true};
-        }
-        const disconnected = currentSnapshot("solana");
-        if (!disconnected) {
-            return {configuration: null, delivered: false};
-        }
-        const disconnectedConfiguration = freezeObjectNormally({
-            __proto__: null,
-            accountRevision: disconnected.accountRevision,
-            isConnected: false,
-            publicKey: null,
-            reauthorizationRevision: disconnected.reauthorizationRevision,
-            solanaAuthorizationEpoch:
-                disconnected.solanaAuthorizationEpoch,
-        });
-        return {
-            configuration: disconnectedConfiguration,
-            delivered: applyDecoded(providerName, {
-                configuration: disconnectedConfiguration,
-                kind: "configuration",
-                suppressUpdate: false,
-            }),
-        };
-    }
-    return {
+    return applyDecoded("ethereum", {
         configuration,
-        delivered: applyDecoded(providerName, {
-            configuration,
-            kind: "configuration",
-            suppressUpdate,
-        }),
-    };
+        kind: "configuration",
+        suppressUpdate,
+    });
 }
 
 function deliverConfigurations(response, suppressUpdate, ingressEpoch) {
     const state = response.state;
     if (!state) { return false; }
     if (!ingressIsCurrent(ingressEpoch)) { return false; }
-    if (state.solana === null && suppressUpdate !== true) {
-        BigWalletSolana.observeDisconnectedConfigurationRevision(
-            solanaProvider, state.revisions.solana
-        );
-    }
-    let delivered = deliverConfiguration(
-        "ethereum", state.ethereum, suppressUpdate, ingressEpoch
-    ).delivered;
+    const solana = freezeObjectNormally({
+        __proto__: null,
+        kind: "configuration",
+        configuration: state.solana,
+        workerRevision: state.revisions.solana,
+        suppressUpdate,
+    });
+    observeSolanaConfiguration(solanaProvider, solana);
+    let delivered = deliverEthereumConfiguration(
+        state.ethereum, suppressUpdate, ingressEpoch
+    );
     if (!ingressIsCurrent(ingressEpoch)) { return delivered; }
-    const solana = state.solana ? {
-        ...state.solana,
-        accountRevision: state.revisions.solana,
-        solanaAuthorizationEpoch: state.revisions.solana,
-    } : null;
-    delivered = deliverConfiguration(
-        "solana", solana, suppressUpdate, ingressEpoch
-    ).delivered || delivered;
+    delivered = applyDecoded(
+        "solana", solana, () => ingressIsCurrent(ingressEpoch)
+    ) || delivered;
     return delivered;
 }
 

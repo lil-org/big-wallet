@@ -1221,17 +1221,25 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testReactivationCapabilitiesFollowApprovalLifecycle() async throws {
         let fixture = try makeFixture()
         XCTAssertFalse(fixture.coordinator.canReactivate)
+        XCTAssertFalse(fixture.coordinator.hasAuthenticated)
+        XCTAssertTrue(fixture.coordinator.countsTowardUnverifiedLimit)
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         XCTAssertTrue(fixture.coordinator.isAwaitingAuthentication)
         XCTAssertFalse(fixture.coordinator.canReactivate)
+        XCTAssertFalse(fixture.coordinator.hasAuthenticated)
+        XCTAssertFalse(fixture.coordinator.countsTowardUnverifiedLimit)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
         XCTAssertTrue(fixture.coordinator.canReactivate)
+        XCTAssertTrue(fixture.coordinator.hasAuthenticated)
+        XCTAssertFalse(fixture.coordinator.countsTowardUnverifiedLimit)
         fixture.store.rejectHandler = { _, _, _ in .persisted }
         fixture.coordinator.reject()
         await waitForState(fixture.coordinator, .finished)
         XCTAssertFalse(fixture.coordinator.canReactivate)
+        XCTAssertTrue(fixture.coordinator.hasAuthenticated)
+        XCTAssertFalse(fixture.coordinator.countsTowardUnverifiedLimit)
     }
 
     func testApprovalWindowContextSurvivesContentReplacement() throws {
