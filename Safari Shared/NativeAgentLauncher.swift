@@ -295,7 +295,7 @@ actor NativeAgentLauncher {
                 case .incompatible(let current) where current.identity == runtime.identity:
                     guard current.helper.requestQuit() else { return .unavailable }
                     while current.helper.isRunning(), !Task.isCancelled, isPending() {
-                        await dependencies.wait(50_000_000)
+                        await dependencies.wait(NativeApprovalTiming.launchPollIntervalNanoseconds)
                     }
                 case .compatible:
                     continue
@@ -380,7 +380,7 @@ actor NativeAgentLauncher {
 
     init(
         dependencies: Dependencies,
-        launchTimeoutNanoseconds: UInt64 = 5_000_000_000
+        launchTimeoutNanoseconds: UInt64 = NativeApprovalTiming.launchTimeoutNanoseconds
     ) {
         self.dependencies = dependencies
         self.launchTimeoutNanoseconds = launchTimeoutNanoseconds
@@ -582,7 +582,7 @@ actor NativeAgentLauncher {
             }
             let now = dependencies.uptime()
             guard isPending(), now < deadline else { return false }
-            await dependencies.wait(min(50_000_000, deadline - now))
+            await dependencies.wait(min(NativeApprovalTiming.launchPollIntervalNanoseconds, deadline - now))
         }
         return false
     }
@@ -966,7 +966,8 @@ actor NativeAgentLauncher {
                 case .unidentified:
                     let firstObserved = unknownFirstObservedAt[key] ?? now
                     unknownFirstObservedAt[key] = firstObserved
-                    if now < firstObserved || now - firstObserved < 1_000_000_000 {
+                    if now < firstObserved ||
+                        now - firstObserved < NativeApprovalTiming.runtimeIdentityGracePeriodNanoseconds {
                         mustWait = true
                         continue
                     }
@@ -999,7 +1000,7 @@ actor NativeAgentLauncher {
             if mustWait {
                 let now = dependencies.uptime()
                 guard now < deadline else { return nil }
-                await dependencies.wait(min(50_000_000, deadline - now))
+                await dependencies.wait(min(NativeApprovalTiming.launchPollIntervalNanoseconds, deadline - now))
                 continue
             }
             return target ?? .launch(url: expected.url)
@@ -1014,7 +1015,9 @@ actor NativeAgentLauncher {
         waitDeadline: UInt64? = nil
     ) async -> ExistingDeliveryStatus {
 #if os(macOS)
-        let deadline = waitDeadline ?? dependencies.deadline(after: 250_000_000)
+        let deadline = waitDeadline ?? dependencies.deadline(
+            after: NativeApprovalTiming.receiptWaitTimeoutNanoseconds
+        )
         return await Self.reconcileReceipt(
             handle: handle, nonce: nativeDeliveryNonce,
             isPending: { self.dependencies.uptime() < deadline }, dependencies: dependencies

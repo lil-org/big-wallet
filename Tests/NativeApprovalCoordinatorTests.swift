@@ -2071,7 +2071,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
-    func testResponseOwnershipLossPausesWithoutRepreparing() async throws {
+    func testResponseOwnershipLossRepeatedlyPausesWithoutRepreparing() async throws {
         let clock = Clock()
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -2085,7 +2085,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var responses = [NSDictionary]()
         fixture.store.completeHandler = { _, _, _, response in
             responses.append(response.json as NSDictionary)
-            return responses.count == 1 ? .ownershipLost : .persisted
+            return responses.count < 3 ? .ownershipLost : .persisted
         }
         fixture.store.rejectHandler = { _, _, _ in
             XCTFail("A paused response must retain its accepted intent")
@@ -2094,17 +2094,20 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        await waitForState(fixture.coordinator, .paused)
-        XCTAssertEqual(preparations, 1)
-        XCTAssertTrue(fixture.coordinator.canReactivate)
-        fixture.coordinator.reject()
-        XCTAssertTrue(fixture.coordinator.isPaused)
-        fixture.coordinator.retryRecovery()
-        XCTAssertEqual(fixture.coordinator.phase, .responding)
+        for attempt in 1...2 {
+            await waitForState(fixture.coordinator, .paused)
+            XCTAssertEqual(preparations, 1)
+            XCTAssertEqual(responses.count, attempt)
+            XCTAssertTrue(fixture.coordinator.canReactivate)
+            fixture.coordinator.reject()
+            XCTAssertTrue(fixture.coordinator.isPaused)
+            fixture.coordinator.retryRecovery()
+            XCTAssertEqual(fixture.coordinator.phase, .responding)
+        }
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(preparations, 1)
-        XCTAssertEqual(responses.count, 2)
-        XCTAssertEqual(responses.first, responses.last)
+        XCTAssertEqual(responses.count, 3)
+        XCTAssertTrue(responses.allSatisfy { $0 == responses[0] })
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -3327,10 +3330,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = nil
     }
 
-    func testObservationOutagePausesAfterTenSeconds() async throws {
+    func testObservationOutagePausesAfterTenSecondsAndRetriesFreshPreparation() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
         var unavailable = false
+        var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { delay in
@@ -3339,7 +3343,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     await Task.yield()
                 } else { await waits.wait(delay) }
             },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            prepareWithoutWallets: { _ in
+                preparations += 1
+                return .approval(self.accountSelectionAction())
+            }
         ))
         defer { waits.resumeAll() }
         start(fixture)
@@ -3356,11 +3363,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let pausedReads = reads
         for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(reads, pausedReads)
+        unavailable = false
         fixture.store.loadHandler = nil
-        fixture.store.snapshot = nil
         fixture.coordinator.retryRecovery()
-        await waitForState(fixture.coordinator, .finished)
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(preparations, 2)
         XCTAssertEqual(fixture.store.recordCount, 1)
+        fixture.store.rejectHandler = { _, _, _ in .persisted }
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
     }
 
     func testObservedReadyMarkerWithoutLocalDecisionCannotExecute() async throws {

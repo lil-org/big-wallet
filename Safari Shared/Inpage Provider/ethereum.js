@@ -309,7 +309,8 @@ function setDispatchAuthorization(state, record) {
 }
 
 function walletMessage(state, record, name, data) {
-    const requiresSnapshot = name === "signPersonalMessage" ||
+    const requiresSnapshot = (name === "signPersonalMessage" &&
+        typeof data.data !== "string") ||
         name === "switchEthereumChain" || name === "addEthereumChain";
     return {
         accountRevision: state.accountRevision,

@@ -14,36 +14,6 @@ export function normalized(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
-export function popupElement(id) {
-    const classes = new Set(id === "screen-loading" ? [] : ["hidden"]);
-    const listeners = new Map;
-    const element = {
-        children: [],
-        classList: {
-            add: value => classes.add(value),
-            contains: value => classes.has(value),
-            remove: value => classes.delete(value),
-        },
-        dataset: {},
-        disabled: false,
-        focus() {},
-        inert: false,
-        isConnected: true,
-        open: false,
-        src: "",
-        textContent: "",
-        value: "",
-        addEventListener(name, listener) { listeners.set(name, listener); },
-        appendChild(child) { this.children.push(child); return child; },
-        setAttribute(name, value) { this[name] = value; },
-    };
-    Object.defineProperty(element, "innerHTML", {
-        get() { return ""; },
-        set() { element.children = []; },
-    });
-    return element;
-}
-
 export function nativeResult({id, name, provider, result, mutation = null, approvalCommitted = false}) {
     return {id, name, provider, kind: "result", result, mutation, approvalCommitted};
 }

@@ -5,16 +5,15 @@ import {webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {deferred, popupElement, nativeResult, nativeError} from "./test_helpers.mjs";
+import {deferred, nativeResult, nativeError} from "./test_helpers.mjs";
+import {createPopupHarness} from "./popup_harness.mjs";
 
-const [wireSource, workerSource, sharedManifestSource, macManifestSource, popupSource, popupWireSource] =
+const [wireSource, workerSource, sharedManifestSource, macManifestSource] =
     await Promise.all([
     readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
     readFile(new URL("../Resources/service_worker.js", import.meta.url), "utf8"),
     readFile(new URL("../Resources/manifest.json", import.meta.url), "utf8"),
     readFile(new URL("../../Safari macOS/Resources/manifest.json", import.meta.url), "utf8"),
-    readFile(new URL("../Resources/popup.js", import.meta.url), "utf8"),
-    readFile(new URL("../Resources/popup_wire.js", import.meta.url), "utf8"),
     ]);
 const requestToken = "123e4567-e89b-12d3-a456-426614174000";
 const reviewToken = "123e4567-e89b-12d3-a456-426614174001";
@@ -515,63 +514,23 @@ function completedResponseStore(count) {
 }
 
 function openRecoveryPopup(worker, native) {
-    const elements = new Map;
-    const listeners = new Map;
-    let open = true;
-    const document = {
-        documentElement: popupElement("document-element"),
-        addEventListener(name, listener) { listeners.set(name, listener); },
-        createElement: () => popupElement("created"),
-        getElementById(id) {
-            if (!elements.has(id)) { elements.set(id, popupElement(id)); }
-            return elements.get(id);
-        },
-        querySelectorAll: () => [],
-    };
-    const unavailable = () => new Promise(() => {});
-    const context = vm.createContext({
-        URL,
-        crypto: webcrypto,
-        document,
-        navigator: {maxTouchPoints: 5},
-        setTimeout: () => 1,
-        clearTimeout() {},
-        window: {close() { open = false; }},
-        browser: {
-            extension: {inIncognitoContext: false},
-            runtime: {
-                getManifest: () => ({version: packagedMarketingVersion}),
-                onMessage: {addListener() {}},
-                sendMessage(message) {
-                    if (!open) { return unavailable(); }
-                    return worker.dispatch(clone(message), popupSender()).then(value =>
-                        open ? clone(value) : unavailable()
-                    );
-                },
-                sendNativeMessage(_application, message) {
-                    return open ? Promise.resolve(native(clone(message))) : unavailable();
-                },
-            },
-            storage: {local: {get: async key => ({[key]: worker.storage.get(key)})}},
-            tabs: {query: async () => [contentSender().tab]},
-        },
+    const harness = createPopupHarness({
+        tab: contentSender().tab,
+        worker: message => worker.dispatch(clone(message), popupSender()).then(clone),
+        native: message => native(clone(message)),
+        storageGet: async key => ({[key]: worker.storage.get(key)}),
     });
-    new vm.Script(wireSource).runInContext(context);
-    new vm.Script(popupWireSource, {filename: "popup_wire.js"}).runInContext(context);
-    new vm.Script(popupSource, {filename: "popup.js"}).runInContext(context);
-    listeners.get("DOMContentLoaded")();
+    void harness.boot();
     return {
-        element: id => document.getElementById(id),
-        close() { open = false; },
-        refresh: () => vm.runInContext("popupQueue.refreshIdleStatus()", context),
+        element: id => harness.get(id),
+        close: harness.close,
+        refresh: () => harness.get("idle-check-status").click(),
         async waitForIdleText(text) {
             for (let attempt = 0; attempt < 50; attempt += 1) {
                 await settle();
-                if (document.getElementById("idle-connection").textContent === text) {
-                    return;
-                }
+                if (harness.get("idle-connection").textContent === text) { return; }
             }
-            assert.equal(document.getElementById("idle-connection").textContent, text);
+            assert.equal(harness.get("idle-connection").textContent, text);
         },
     };
 }

@@ -830,11 +830,17 @@ function normalizeRequest(method, params) {
 }
 
 function wirePayload(record) {
-    const payload = {id: record.wireId, method: record.metadata.method};
+    const payload = {
+        __proto__: null,
+        id: record.wireId,
+        method: record.metadata.method,
+    };
     if (typeof record.payload.params !== "undefined") {
         payload.params = record.payload.params;
     }
-    return outboundDataSnapshot(payload);
+    return payload.method === "connect" || payload.method === "signMessage"
+        ? outboundDataSnapshot(payload)
+        : trustedOutboundRecord(payload);
 }
 
 function dispatchOperation(provider, record) {

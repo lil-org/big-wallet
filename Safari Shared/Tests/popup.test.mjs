@@ -4,14 +4,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import { deferred, normalized, popupElement , nativeResult, nativeError} from "./test_helpers.mjs";
+import {deferred, normalized, nativeResult, nativeError} from "./test_helpers.mjs";
+import {createPopupHarness, flushPopup, popupMarkup as markup} from "./popup_harness.mjs";
 
-const [source, wireSource, popupWireSource, markup] = await Promise.all([
-    readFile(new URL("../Resources/popup.js", import.meta.url), "utf8"),
-    readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
-    readFile(new URL("../Resources/popup_wire.js", import.meta.url), "utf8"),
-    readFile(new URL("../Resources/popup.html", import.meta.url), "utf8"),
-]);
+const wireSource = await readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8");
 const wireContext = vm.createContext({URL});
 new vm.Script(wireSource).runInContext(wireContext);
 const packagedBuildVersion = wireContext.BigWalletBridgeWire.BUILD_VERSION;
@@ -257,7 +253,7 @@ async function idleRecoveryRefreshHarness(reload = async () => {}) {
 test("update recovery reloads only the active tab on explicit Refresh", async () => {
     const success = await idleRecoveryRefreshHarness();
     assert.deepEqual(success.reloaded, []);
-    await success.queue.refreshIdleStatus();
+    await success.get("idle-check-status").click();
     assert.deepEqual(success.reloaded, [success.tab.id]);
     assert.equal(success.tabMessages.length, 1);
     assert.equal(success.tabMessages[0].id, success.tab.id);
@@ -265,7 +261,7 @@ test("update recovery reloads only the active tab on explicit Refresh", async ()
     assert.equal(success.model.closed, 1);
 
     const failure = await idleRecoveryRefreshHarness(async () => { throw new Error("reload failed"); });
-    await failure.queue.refreshIdleStatus();
+    await failure.get("idle-check-status").click();
     assert.deepEqual(failure.reloaded, [failure.tab.id]);
     assert.equal(failure.lookups(), 1);
     assert.equal(failure.model.closed, 0);
@@ -275,7 +271,7 @@ test("update recovery reloads only the active tab on explicit Refresh", async ()
 
     const unknownQueue = await idleRecoveryRefreshHarness();
     unknownQueue.notify();
-    await unknownQueue.queue.refreshIdleStatus();
+    await unknownQueue.get("idle-check-status").click();
     assert.deepEqual(unknownQueue.reloaded, []);
     assert.deepEqual(unknownQueue.tabMessages, []);
     assert.equal(unknownQueue.lookups(), 0);
@@ -290,7 +286,7 @@ test("update recovery requires the exact stored tab identity at click", async ()
     ]) {
         const changed = await idleRecoveryRefreshHarness();
         Object.assign(changed.tab, overrides);
-        await changed.queue.refreshIdleStatus();
+        await changed.get("idle-check-status").click();
         assert.deepEqual(changed.reloaded, []);
         assert.deepEqual(changed.tabMessages, []);
         assert.equal(changed.lookups(), 1);
@@ -304,7 +300,7 @@ test("update recovery requires the exact stored tab identity at click", async ()
 test("update recovery clears a candidate that now answers with this build", async () => {
     const recovered = await idleRecoveryRefreshHarness();
     recovered.handlers.tab = undefined;
-    await recovered.queue.refreshIdleStatus();
+    await recovered.get("idle-check-status").click();
     assert.deepEqual(recovered.reloaded, []);
     assert.equal(recovered.tabMessages.length, 1);
     assert.equal(recovered.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
@@ -529,7 +525,7 @@ test("notification bursts coalesce into one scheduled refresh and one necessary 
 test("queue invalidation preserves the active review and its selections until reconciliation", async () => {
     const harness = await reviewedPopup(selectionState);
     const controller = harness.controller;
-    await harness.get("accounts-list").children[0].emit("click");
+    await harness.get("accounts-list").children[0].click();
     const selected = normalized(controller.presentation.accounts);
     const accountRow = harness.get("accounts-list").children[0];
     const review = controller.state;
@@ -716,7 +712,7 @@ test("manual Switch Account accepts canonical native handles and terminal respon
     ];
     for (const response of responses) {
         const harness = await manualSwitchHarness(async () => response);
-        await harness.queue.switchAccountFromIdle();
+        await harness.get("idle-switch-account").click();
         assert.equal(harness.nativeMessages.length, 1);
         assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
         assert.equal(harness.queue.isEmpty, true);
@@ -734,7 +730,7 @@ test("manual Switch Account rejects undefined malformed and cross-key replies", 
         manualSwitchAcknowledgement({id: "41"}),
     ]) {
         const harness = await manualSwitchHarness(async () => response);
-        await harness.queue.switchAccountFromIdle();
+        await harness.get("idle-switch-account").click();
         assert.equal(harness.get("idle-switch-account").disabled, false);
         assert.deepEqual(harness.nativeMessages, []);
         assert.equal(harness.get("idle-connection").textContent, "Failed to load");
@@ -746,9 +742,9 @@ test("manual Switch Account repeats the same intent after transport failure", as
         if (attempt === 1) { throw new Error("unavailable"); }
         return manualSwitchAcknowledgement();
     });
-    await harness.queue.switchAccountFromIdle();
+    await harness.get("idle-switch-account").click();
     assert.equal(harness.get("idle-switch-account").disabled, false);
-    await harness.queue.switchAccountFromIdle();
+    await harness.get("idle-switch-account").click();
     assert.equal(harness.tabMessages.length, 2);
     assert.deepEqual(harness.tabMessages[0].message, harness.tabMessages[1].message);
     assert.equal(harness.nativeMessages.length, 1);
@@ -757,67 +753,32 @@ test("manual Switch Account repeats the same intent after transport failure", as
 
 for (const recovery of ["queue failure", "extension update"]) {
     test(`queue refresh preserves Refresh after ${recovery}`, async () => {
-        const elements = new Map;
         let queueFails = recovery === "queue failure";
-        const document = {
-            documentElement: popupElement("document-element"),
-            addEventListener() {},
-            querySelectorAll: () => [],
-            getElementById(id) {
-                if (!elements.has(id)) { elements.set(id, popupElement(id)); }
-                return elements.get(id);
+        const harness = popupHarness({
+            updateRecovery: recovery === "extension update",
+            native: (message, fallback) => {
+                if (queueFails) { throw new Error("Native unavailable"); }
+                return fallback(message);
             },
-        };
-        const context = vm.createContext({
-            URL,
-            document,
-            navigator: {maxTouchPoints: 5},
-            setTimeout: () => 1,
-            clearTimeout() {},
-            browser: {
-                extension: {inIncognitoContext: false},
-                runtime: {
-                    async sendNativeMessage() {
-                        if (queueFails) { throw new Error("Native unavailable"); }
-                        return {requests: [], completedResponses: []};
-                    },
-                    sendMessage: async () => ({
-                        kind: "configuration", state: {ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0}},
-                    }),
-                },
-            },
+            tab: message => ({
+                buildVersion: previousBuildVersion,
+                nonce: message.nonce,
+                subject: "workflowProbe",
+                workflowVersion: 3,
+            }),
         });
-        new vm.Script(wireSource).runInContext(context);
-        new vm.Script(popupWireSource).runInContext(context);
-        new vm.Script(source).runInContext(context);
-        vm.runInContext(`
-            popupQueue = new PopupQueueController();
-            popupQueue.presentation = {kind: "loading"};
-            popupQueue.tab.activeTab = {
-                id: 3,
-                host: "wallet.example",
-                configurationKey: "https://wallet.example",
-                incognito: false,
-            };
-        `, context);
-        if (recovery === "extension update") {
-            vm.runInContext("popupQueue.tab.recoveryTab = popupQueue.tab.activeTab", context);
-        }
-
-        await vm.runInContext("popupQueue.refreshQueue()", context);
-
-        const refresh = document.getElementById("idle-check-status");
-        assert.equal(document.getElementById("idle-connection").textContent, "Failed to load");
+        await harness.boot();
+        const refresh = harness.get("idle-check-status");
+        assert.equal(harness.get("idle-connection").textContent, "Failed to load");
         assert.equal(refresh.classList.contains("hidden"), false);
         assert.equal(refresh.disabled, false);
-        assert.equal(document.getElementById("idle-switch-account").disabled, true);
+        assert.equal(harness.get("idle-switch-account").disabled, true);
 
         queueFails = false;
-        vm.runInContext("popupQueue.tab.recoveryTab = null", context);
-        await vm.runInContext("popupQueue.refreshQueue()", context);
-
+        harness.handlers.tab = undefined;
+        await refresh.click();
         assert.equal(refresh.classList.contains("hidden"), true);
-        assert.equal(document.getElementById("idle-switch-account").disabled, false);
+        assert.equal(harness.get("idle-switch-account").disabled, false);
     });
 }
 
@@ -915,94 +876,15 @@ function transactionState(request = pendingRequest(), overrides = {}, envelope =
     };
 }
 
-async function flushPopup() {
-    for (let index = 0; index < 3; index += 1) {
-        await new Promise(resolve => setImmediate(resolve));
-    }
-}
-
 function popupHarness(options = {}) {
-    const nativeMessages = [];
-    const workerMessages = [];
-    const tabMessages = [];
-    const focusCalls = [];
-    const textWrites = [];
-    const elements = new Map;
-    const documentListeners = new Map;
-    const runtimeListeners = [];
-    const timers = new Map;
-    const timerHistory = [];
     const states = new Map;
-    const handlers = {
-        native: options.native,
-        worker: options.worker,
-        tab: options.tab,
-    };
+    const handlers = {native: options.native, worker: options.worker, tab: options.tab};
     const model = {
-        closed: 0,
         completed: [],
         requests: options.requests || [],
         updateRecovery: options.updateRecovery === true,
     };
-    let nextTimer = 0;
-    let nextElement = 0;
-    let randomValue = 0;
-    const tab = {
-        id: 3,
-        incognito: false,
-        url: "https://wallet.example/path",
-    };
-    let document;
-    function element(id) {
-        const classes = new Set(id === "screen-loading" ? [] : ["hidden"]);
-        const listeners = new Map;
-        let textContent = "";
-        const value = {
-            id,
-            children: [],
-            classList: {
-                add: name => classes.add(name),
-                contains: name => classes.has(name),
-                remove: name => classes.delete(name),
-            },
-            dataset: {},
-            disabled: false,
-            inert: false,
-            isConnected: true,
-            open: false,
-            src: "",
-            textContent: "",
-            value: "",
-            addEventListener(name, listener) { listeners.set(name, listener); },
-            appendChild(child) { this.children.push(child); return child; },
-            emit(name, event = {}) { return listeners.get(name)?.({target: this, ...event}); },
-            focus() { document.activeElement = this; focusCalls.push(id); },
-            setAttribute(name, attribute) { this[name] = attribute; },
-        };
-        Object.defineProperty(value, "textContent", {
-            get() { return textContent; },
-            set(text) { textContent = text; textWrites.push({id, text}); },
-        });
-        Object.defineProperty(value, "innerHTML", {
-            get() { return ""; },
-            set() {
-                for (const child of value.children) { child.isConnected = false; }
-                value.children = [];
-            },
-        });
-        return value;
-    }
-    document = {
-        activeElement: null,
-        documentElement: element("document-element"),
-        addEventListener(name, listener) { documentListeners.set(name, listener); },
-        createElement: name => element(`${name}-${++nextElement}`),
-        getElementById(id) {
-            if (!elements.has(id)) { elements.set(id, element(id)); }
-            return elements.get(id);
-        },
-        querySelectorAll: () => [],
-    };
+    const tab = {id: 3, incognito: false, url: "https://wallet.example/path"};
     const defaultNative = message => {
         if (message.subject === "getPendingRequests") {
             return {completedResponses: model.completed, requests: model.requests};
@@ -1016,92 +898,32 @@ function popupHarness(options = {}) {
             return {kind: "configuration", state: {ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0}}};
         }
         if (message.subject === "applyCompletedResponse") {
-            model.completed = model.completed.filter(item =>
-                item.requestToken !== message.requestToken
-            );
+            model.completed = model.completed.filter(item => item.requestToken !== message.requestToken);
             return {applied: true};
         }
-        if (message.subject === "approveRequestWithCurrentRevisions") {
-            return defaultNative(message);
-        }
+        if (message.subject === "approveRequestWithCurrentRevisions") { return defaultNative(message); }
         return {status: "ok"};
     };
-    const browser = {
-        extension: {inIncognitoContext: false},
-        permissions: {contains: async () => true},
-        runtime: {
-            onMessage: {addListener(listener) { runtimeListeners.push(listener); }},
-            sendMessage(message) {
-                workerMessages.push(normalized(message));
-                return Promise.resolve(handlers.worker
-                    ? handlers.worker(message, defaultWorker)
-                    : defaultWorker(message));
-            },
-            sendNativeMessage(application, message) {
-                assert.equal(application, "org.lil.wallet");
-                nativeMessages.push(normalized(message));
-                return Promise.resolve(handlers.native
-                    ? handlers.native(message, defaultNative)
-                    : defaultNative(message));
-            },
-        },
-        storage: {local: {get: async () => ({
-            workflowUpdateRecoveryNeeded: model.updateRecovery,
-        })}},
-        tabs: {
-            query: async () => [tab],
-            sendMessage(id, message) {
-                tabMessages.push({id, message: normalized(message)});
-                return Promise.resolve(handlers.tab ? handlers.tab(message) : {
-                    buildVersion: packagedBuildVersion,
-                    nonce: message.nonce,
-                    subject: "workflowProbe",
-                    workflowVersion: 3,
-                });
-            },
-        },
-    };
-    const context = vm.createContext({
-        URL,
-        browser,
-        clearTimeout: id => timers.delete(id),
-        crypto: {getRandomValues(values) {
-            for (let index = 0; index < values.length; index += 1) {
-                values[index] = ++randomValue;
-            }
-            return values;
-        }},
-        document,
-        navigator: {maxTouchPoints: 5},
-        setTimeout(callback, delay) {
-            const timer = {callback, delay, id: ++nextTimer};
-            timers.set(timer.id, timer);
-            timerHistory.push(timer);
-            return timer.id;
-        },
-        window: {close() { model.closed += 1; }},
-    });
-    new vm.Script(wireSource, {filename: "bridge_wire.js"}).runInContext(context);
-    new vm.Script(popupWireSource, {filename: "popup_wire.js"}).runInContext(context);
-    new vm.Script(source, {filename: "popup.js"}).runInContext(context);
-    return {
-        browser,
-        context,
-        document,
-        focusCalls,
-        handlers,
+    const harness = createPopupHarness({
         model,
-        nativeMessages,
-        states,
         tab,
-        tabMessages,
-        textWrites,
-        timerHistory,
-        timers,
-        workerMessages,
-        get controller() { return vm.runInContext("popupQueue?.currentRequest ?? null", context); },
-        get queue() { return vm.runInContext("popupQueue", context); },
-        get(name) { return document.getElementById(name); },
+        native: message => handlers.native ? handlers.native(message, defaultNative) : defaultNative(message),
+        worker: message => handlers.worker ? handlers.worker(message, defaultWorker) : defaultWorker(message),
+        storageGet: async () => ({workflowUpdateRecoveryNeeded: model.updateRecovery}),
+        tabMessage: message => handlers.tab ? handlers.tab(message) : {
+            buildVersion: packagedBuildVersion,
+            nonce: message.nonce,
+            subject: "workflowProbe",
+            workflowVersion: 3,
+        },
+    });
+    const {context, nativeMessages, timers} = harness;
+    Object.defineProperties(harness, {
+        controller: {get: () => vm.runInContext("popupQueue?.currentRequest ?? null", context)},
+        queue: {get: () => vm.runInContext("popupQueue", context)},
+    });
+    return Object.assign(harness, {
+        handlers, states, tab,
         call(name, ...arguments_) { return vm.runInContext(name, context)(...arguments_); },
         setState(request, state) { states.set(request.requestToken, state); },
         async failTransport(controller = this.controller) {
@@ -1115,10 +937,6 @@ function popupHarness(options = {}) {
             await controller.reject();
             handlers.native = handler;
             nativeMessages.splice(nativeMessages.findIndex(message => message.subject === "rejectRequest"), 1);
-        },
-        async boot() {
-            documentListeners.get("DOMContentLoaded")();
-            await flushPopup();
         },
         async show(requests) {
             model.requests = requests;
@@ -1135,36 +953,7 @@ function popupHarness(options = {}) {
             assert.ok(matches.length <= 1, "Expected at most one follow-up timer");
             return matches[0]?.id ?? null;
         },
-        async fire(id) {
-            const timer = timers.get(id);
-            assert.ok(timer, `Expected live timer ${id}`);
-            timers.delete(id);
-            timer.callback();
-            await flushPopup();
-        },
-        notify() {
-            for (const listener of runtimeListeners) {
-                listener({subject: "pendingRequestAvailable", workflowVersion: 3});
-            }
-        },
-        clearMessages() {
-            nativeMessages.length = 0;
-            workerMessages.length = 0;
-            tabMessages.length = 0;
-        },
-        visibleSnapshot() {
-            return [...elements].map(([id, item]) => ({
-                id,
-                text: item.textContent,
-                value: item.value,
-                disabled: item.disabled,
-                hidden: item.classList.contains("hidden"),
-                inert: item.inert,
-                open: item.open,
-                children: item.children.map(child => [child.id, child.textContent]),
-            }));
-        },
-    };
+    });
 }
 
 async function reviewedPopup(stateFor = messageState) {
@@ -1219,8 +1008,8 @@ test("additional approval display fields leave rendering and approval payloads u
         assert.equal((extended.controller.presentationActivity.kind === "failed"), false);
         assert.deepEqual(extended.visibleSnapshot(), baseline.visibleSnapshot());
 
-        await baseline.controller.approveCurrent();
-        await extended.controller.approveCurrent();
+        await baseline.get("button-approve").click();
+        await extended.get("button-approve").click();
 
         const approvals = harness => harness.workerMessages.filter(message =>
             message.subject === "approveRequestWithCurrentRevisions"
@@ -1239,7 +1028,7 @@ test("additional display fields cannot grant actions or repair invalid approval 
 
     await harness.boot();
     harness.clearMessages();
-    await harness.controller.approveCurrent();
+    await harness.get("button-approve").click();
 
     assert.equal((harness.controller.presentationActivity.kind === "failed"), false);
     assert.equal(harness.get("button-approve").disabled, true);
@@ -1341,7 +1130,7 @@ test("poll and transaction edit responses use the same nonfatal image normalizat
 
     harness.get("tx-editor").open = true;
     harness.get("tx-editor").emit("toggle");
-    await harness.get("editor-suggested").emit("click");
+    await harness.get("editor-suggested").click();
 
     assert.equal(controller.state.state, "review");
     assert.equal(controller.state.review.reviewToken, requestToken(103));
@@ -1385,7 +1174,7 @@ test("discarding invalid images never makes malformed approval content actionabl
         assert.equal(harness.get("button-reject").disabled, true);
         harness.clearMessages();
 
-        await harness.get("button-approve").emit("click");
+        await harness.get("button-approve").click();
 
         assert.deepEqual(harness.workerMessages, []);
         assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["retryApproval"]);
@@ -1440,7 +1229,7 @@ test("controller errors explicitly retry the visible request without entering th
     assert.equal(harness.get("button-reject").disabled, true);
     assert.equal(harness.followUpTimerId(), null);
 
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
 
     assert.deepEqual(harness.nativeMessages, [{
         subject: "retryApproval",
@@ -1532,7 +1321,7 @@ test("rejectable errors submit tokenless Reject without a refresh", async () => 
     assert.equal(harness.get("button-reject").disabled, false);
     assert.equal(harness.followUpTimerId(), null);
 
-    await harness.get("button-reject").emit("click");
+    await harness.get("button-reject").click();
 
     assert.deepEqual(harness.workerMessages, []);
     assert.deepEqual(harness.nativeMessages, [{
@@ -1805,7 +1594,7 @@ test("approval requires a fresh click after the drag result is displayed", async
     assert.equal(harness.get("button-approve").disabled, true);
     slider.value = "160";
     slider.emit("input");
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
     await controller.approve({});
     assert.deepEqual(harness.nativeMessages, []);
     slider.emit("pointerup");
@@ -1822,7 +1611,7 @@ test("approval requires a fresh click after the drag result is displayed", async
     assert.equal(harness.get("request-title").textContent, "Updated fee review");
     assert.equal(harness.get("button-approve").disabled, false);
     assert.deepEqual(harness.workerMessages, []);
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
 
     assert.equal(harness.workerMessages[0].subject, "approveRequestWithCurrentRevisions");
     assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
@@ -1865,7 +1654,7 @@ test("stale or ignored terminal slider commands block approval until a fresh rev
         assert.equal(harness.get("button-approve").disabled, false);
         assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
         assert.deepEqual(harness.workerMessages, []);
-        await harness.get("button-approve").emit("click");
+        await harness.get("button-approve").click();
         assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
     }
 });
@@ -1968,7 +1757,7 @@ test("Apply and Reset clear drafts so subsequent native values populate every fi
             ? commandReply(transactionState(controller.request, {editor, reviewToken: requestToken(102)}))
             : fallback(message);
 
-        await harness.get(button).emit("click");
+        await harness.get(button).click();
 
         assert.equal(harness.get("tx-editor").open, false);
         assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
@@ -1999,7 +1788,7 @@ test("an edit error preserves the open editor and typed values", async () => {
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
         ? commandReply(transactionState(controller.request, {}, {editsError: true})) : fallback(message);
 
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
 
     assert.equal(harness.get("tx-editor").open, true);
     assert.equal(harness.get("edit-nonce").value, "invalid");
@@ -2123,7 +1912,7 @@ test("account selection belongs to one controller and old rows cannot change its
     assert.deepEqual(normalized(harness.controller.presentation.accounts).map(account => account.coin), ["solana"]);
     assert.equal(harness.focusCalls.length, focusCount);
     harness.clearMessages();
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
     assert.equal(harness.workerMessages[0].requestToken, replacement.requestToken);
     assert.deepEqual(harness.workerMessages[0].payload, {
         chainId: "0x1",
@@ -2156,7 +1945,7 @@ test("an empty required account selection refreshes without retrying", async () 
     const request = harness.controller.request;
     assert.equal(harness.get("button-approve").textContent, "Refresh");
     assert.equal(harness.get("button-approve").disabled, false);
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
     assert.deepEqual(harness.nativeMessages, [{
         subject: "getApprovalState", id: request.id, workflowVersion: 3,
         requestToken: request.requestToken, __bwPrivateBrowsing: false,
@@ -2639,7 +2428,7 @@ test("advanced editing pauses refresh and exclusively owns a complete draft", as
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits" ? commandReply(result) : fallback(message);
     harness.get("edit-nonce").value = "8";
     harness.get("edit-nonce").emit("input");
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
     assert.deepEqual(harness.nativeMessages[0].payload, {mode: "custom", nonce: "8", gasPriceGwei: "2"});
     assert.equal(harness.nativeMessages[0].reviewToken, requestToken(101));
     assert.equal(harness.get("tx-editor").open, false);
@@ -2727,7 +2516,7 @@ test("stale Apply adopts its reply without a read and preserves the draft for an
         }
         return fallback(message);
     };
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits"]);
     assert.equal(harness.get("tx-editor").open, true);
     assert.equal(harness.get("edit-nonce").value, "7");
@@ -2736,7 +2525,7 @@ test("stale Apply adopts its reply without a read and preserves the draft for an
     assert.equal(harness.get("editor-apply").disabled, false);
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.followUpTimerId(), null);
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
     assert.equal(attempts, 2);
     assert.equal(harness.nativeMessages[1].reviewToken, requestToken(102));
     assert.deepEqual(harness.nativeMessages[1].payload, {mode: "custom", nonce: "7", gasPriceGwei: "8"});
@@ -2757,7 +2546,7 @@ test("stale Apply discards a draft when recovery changes the fee model or edit c
         }) : transactionState(controller.request, {reviewToken: requestToken(102)}, {actions: ["reject"]});
         harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
             ? commandReply(fresh, "ignored") : fallback(message);
-        await harness.get("editor-apply").emit("click");
+        await harness.get("editor-apply").click();
         assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
         assert.equal(harness.get("tx-editor").open, false);
         assert.equal(controller.state.review.reviewToken, requestToken(102));
@@ -2778,7 +2567,7 @@ test("an unavailable edit preserves its compatible draft and adopts the returned
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
         ? commandReply(fresh, "unavailable") : fallback(message);
 
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
 
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits"]);
     assert.equal(harness.get("tx-editor").open, true);
@@ -2802,7 +2591,7 @@ test("queued editor input cannot change a submitted draft or its retry payload",
     const gate = deferred();
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
         ? gate.promise : fallback(message);
-    const applying = harness.get("editor-apply").emit("click");
+    const applying = harness.get("editor-apply").click();
     await flushPopup();
     harness.get("edit-nonce").value = "99";
     harness.get("edit-nonce").emit("input");
@@ -2816,7 +2605,7 @@ test("queued editor input cannot change a submitted draft or its retry payload",
     assert.equal(harness.get("edit-nonce").value, "7");
     assert.equal(harness.get("edit-gas-price").value, "8");
     assert.equal(harness.get("button-approve").disabled, true);
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
     const commands = harness.nativeMessages.filter(message => message.subject === "applyTransactionEdits");
     assert.equal(commands.length, 2);
     assert.deepEqual(commands[0].payload, {mode: "custom", nonce: "7", gasPriceGwei: "8"});
@@ -2843,7 +2632,7 @@ test("Cancel supersedes hung reads edits and speed commands without waiting", as
             harness.get("tx-editor").emit("toggle");
             harness.get("edit-nonce").value = "8";
             harness.get("edit-nonce").emit("input");
-            pending = harness.get("editor-apply").emit("click");
+            pending = harness.get("editor-apply").click();
         }
         await flushPopup();
         if (kind === "edits") {
@@ -2855,7 +2644,7 @@ test("Cancel supersedes hung reads edits and speed commands without waiting", as
         assert.equal(harness.get("button-reject").disabled, false);
         assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
         assert.equal(harness.get("screen-request").inert, false);
-        await harness.get("button-reject").emit("click");
+        await harness.get("button-reject").click();
         assert.equal(harness.nativeMessages.at(-1).subject, "rejectRequest");
         const timer = harness.followUpTimerId();
         const snapshot = harness.visibleSnapshot();
@@ -2877,7 +2666,7 @@ test("a hung approval disables Cancel without blocking replacement requests", as
     assert.equal(harness.timerHistory.at(-1).delay, 190_000);
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
     assert.equal(harness.get("button-reject").disabled, true);
-    await harness.get("button-reject").emit("click");
+    await harness.get("button-reject").click();
     assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 0);
     assert.equal(original.activity.operation.kind, "approveRequest");
     const replacement = pendingRequest(original.request.id, 2);
@@ -2903,8 +2692,8 @@ test("clicks during a pending fee update are discarded and failure never approve
         harness.get("tx-slider").value = "155";
         harness.get("tx-slider").emit("pointerup");
         assert.equal(harness.get("button-approve").disabled, true);
-        await harness.get("button-approve").emit("click");
-        await harness.get("button-approve").emit("click");
+        await harness.get("button-approve").click();
+        await harness.get("button-approve").click();
         await controller.approve({});
         if (success) { gate.resolve(commandReply(transactionState(controller.request, {reviewToken: requestToken(102)}))); }
         else { gate.reject(new Error("Native unavailable")); }
@@ -2912,7 +2701,7 @@ test("clicks during a pending fee update are discarded and failure never approve
         assert.deepEqual(harness.workerMessages, []);
         if (success) {
             assert.equal(harness.get("button-approve").disabled, false);
-            await harness.get("button-approve").emit("click");
+            await harness.get("button-approve").click();
             assert.equal(harness.workerMessages.length, 1);
             assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
         } else {
@@ -2961,7 +2750,7 @@ test("a timed-out action releases its controller while late raw settlement canno
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits" ? gate.promise : fallback(message);
     harness.get("tx-editor").open = true;
     harness.get("tx-editor").emit("toggle");
-    const applying = harness.get("editor-apply").emit("click");
+    const applying = harness.get("editor-apply").click();
     const timeout = harness.timerHistory.at(-1);
     assert.equal(timeout.delay, 5000);
     await harness.fire(timeout.id);
@@ -2969,7 +2758,7 @@ test("a timed-out action releases its controller while late raw settlement canno
     assert.equal((controller.presentationActivity.kind === "failed"), true);
     assert.equal(controller.isSubmitting, false);
     harness.setState(controller.request, transactionState(controller.request, {title: "Current retry", reviewToken: requestToken(103)}));
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
     assert.equal((controller.presentationActivity.kind === "failed"), false);
     assert.equal(harness.get("request-title").textContent, "Current retry");
     const snapshot = harness.visibleSnapshot();
@@ -2990,13 +2779,13 @@ test("closing a recovered stale draft cannot approve a token whose summary is st
     });
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
         ? commandReply(fresh, "ignored") : fallback(message);
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
     assert.equal(harness.get("request-title").textContent, "Updated review");
     assert.equal(harness.get("tx-fee-lines").children[0].textContent, "Network fee: 0.002 ETH");
     assert.equal(harness.get("edit-gas-price").value, "8");
     harness.get("tx-editor").open = false;
     harness.get("tx-editor").emit("toggle");
-    await harness.get("button-approve").emit("click");
+    await harness.get("button-approve").click();
     assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
 });
 
@@ -3049,7 +2838,7 @@ test("a pending approval locks selection and Cancel until review resumes", async
     await row.emit("click");
     assert.deepEqual(normalized(controller.presentation.accounts), selected);
     assert.equal(harness.get("button-reject").disabled, true);
-    await harness.get("button-reject").emit("click");
+    await harness.get("button-reject").click();
     assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 0);
     gate.resolve(commandReply(harness.states.get(controller.request.requestToken) ?? messageState(controller.request)));
     await approving;
@@ -3073,7 +2862,7 @@ test("an alert consumes an old editor request and Retry keeps preparation pollin
             phase: "preparing", editorRequestToken: 1, reviewToken: requestToken(102),
         }, {actions: ["reject", "setTransactionSpeed"]})) : fallback(message);
 
-    await harness.get("alert-buttons").children[0].emit("click");
+    await harness.get("alert-buttons").children[0].click();
 
     assert.equal(controller.state.review.phase, "preparing");
     assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
@@ -3102,14 +2891,14 @@ test("an alert replaces a stale editor draft and ignored Cancel can refresh it",
         message.subject === "applyTransactionEdits" || message.subject === "resolveApprovalAlert"
             ? commandReply(harness.states.get(controller.request.requestToken), "ignored") : fallback(message);
 
-    await harness.get("editor-apply").emit("click");
+    await harness.get("editor-apply").click();
 
     assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
     assert.equal(harness.get("tx-editor").open, false);
     assert.equal(harness.get("alert-overlay").classList.contains("hidden"), false);
     harness.setState(controller.request, transactionState(controller.request, {reviewToken: requestToken(103)}));
     harness.clearMessages();
-    await harness.get("alert-buttons").children[1].emit("click");
+    await harness.get("alert-buttons").children[1].click();
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["resolveApprovalAlert"]);
     assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
     assert.equal(harness.get("screen-request").inert, false);
@@ -3129,7 +2918,7 @@ test("a new Edit alert request still opens exclusive advanced editing", async ()
             phase: "failed", editorRequestToken: 2, reviewToken: requestToken(102),
         })) : fallback(message);
 
-    await harness.get("alert-buttons").children[0].emit("click");
+    await harness.get("alert-buttons").children[0].click();
 
     assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
     assert.equal(harness.get("tx-editor").open, true);

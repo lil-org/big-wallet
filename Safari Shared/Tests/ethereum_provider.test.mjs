@@ -194,6 +194,7 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
     let currentError = null;
     let disconnectPost = true;
     let requestPost = true;
+    let requestObserver = null;
     const transport = Object.freeze({
         isCurrent() {
             if (currentError) { throw currentError; }
@@ -204,6 +205,7 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
             return current && disconnectPost;
         },
         postRequest(message) {
+            requestObserver?.(message);
             requests.push(message);
             return current && requestPost;
         },
@@ -240,6 +242,7 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
         setCurrentError(value) { currentError = value; },
         setDisconnectPost(value) { disconnectPost = value; },
         setRequestPost(value) { requestPost = value; },
+        setRequestObserver(value) { requestObserver = value; },
         Solana,
     };
 }
@@ -1095,6 +1098,38 @@ test("Ethereum chain request arrays retain their original wire shape", async () 
             error: {code: -32603, message: "Invalid chain request"},
         });
         await rejected;
+    }
+});
+
+test("queued Ethereum string signing dispatch does not invoke inherited serializers", async () => {
+    for (const method of ["personal_sign", "eth_sign"]) {
+        const harness = ethereumHarness();
+        const pending = harness.provider.request({
+            method,
+            params: method === "personal_sign" ? ["0x41"] : ["0xaccount", "0x41"],
+        });
+        const prototype = vm.runInContext("Object.prototype", harness.context);
+        let calls = 0;
+        prototype.toJSON = () => {
+            calls += 1;
+            throw new Error("Object prototype serializer called");
+        };
+        try {
+            applyEthereumConfiguration(harness);
+            assert.equal(harness.requests.length, 1);
+            assert.equal(harness.requests[0].name, "signPersonalMessage");
+            assert.deepEqual(structuredClone(harness.requests[0].data), {data: "0x41"});
+            assert.equal(calls, 0);
+        } finally {
+            delete prototype.toJSON;
+        }
+        harness.applyDecodedEnvelope({
+            id: harness.requests[0].id,
+            kind: "result",
+            name: "signPersonalMessage",
+            result: "0xsignature",
+        });
+        assert.equal(await pending, "0xsignature");
     }
 });
 
@@ -2817,6 +2852,134 @@ test("Solana accepts raw ArrayBuffer messages", async () => {
     assert.equal((await signing).signature.length, 64);
 });
 
+test("queued Solana connect and message requests retain admission snapshots", async () => {
+    const cases = [
+        {method: "connect", params: undefined, expected: undefined},
+        {
+            method: "connect",
+            params: {onlyIfTrusted: false, context: {values: [1]}},
+            expected: {onlyIfTrusted: false, context: {values: [1]}},
+        },
+        {
+            method: "signMessage",
+            params: {message: new Uint8Array([1, 2]), display: "hex", context: {values: [1]}},
+            expected: {message: "0x0102", display: "hex", messageEncoding: "hex", context: {values: [1]}},
+        },
+        {
+            method: "signMessage",
+            params: {message: "hello", display: "utf8", context: {values: [1]}},
+            expected: {message: "hello", display: "utf8", messageEncoding: "utf8", context: {values: [1]}},
+        },
+    ];
+    for (const {method, params, expected} of cases) {
+        const harness = solanaHarness();
+        const pending = harness.provider.request({method, params});
+        const rejected = assert.rejects(pending, error => error.code === 4001);
+        if (params) {
+            params.context.values[0] = 9;
+            if (method === "connect") {
+                params.onlyIfTrusted = true;
+            } else {
+                if (params.message instanceof Uint8Array) { params.message.fill(9); }
+                params.message = "changed";
+                params.display = "changed";
+            }
+        }
+        applySolanaConfiguration(harness, method === "connect" ? {} : {
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            workerRevision: 1,
+        });
+        assert.equal(harness.requests.length, 1, method);
+        const request = harness.requests[0];
+        assert.equal(Object.hasOwn(request.body.object, "params"), expected !== undefined);
+        assert.deepEqual(structuredClone(request.body.object.params), expected);
+        harness.applyDecodedEnvelope(harness.provider, {
+            id: request.id,
+            kind: "error",
+            name: method,
+            error: {code: 4001, message: "Canceled"},
+        });
+        await rejected;
+    }
+});
+
+test("Solana message dispatch removes non-cloneable values added by normalization hooks", async () => {
+    const harness = solanaHarness();
+    let posted;
+    harness.setRequestObserver(message => { posted = structuredClone(message); });
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    let calls = 0;
+    Object.defineProperty(prototype, "messageEncoding", {
+        configurable: true,
+        set(value) {
+            calls += 1;
+            Object.defineProperty(this, "messageEncoding", {
+                configurable: true,
+                enumerable: true,
+                value,
+                writable: true,
+            });
+            this.extra = () => {};
+        },
+    });
+    let pending;
+    try {
+        pending = harness.provider.signMessage(new Uint8Array([1]));
+    } finally {
+        delete prototype.messageEncoding;
+    }
+    const rejected = assert.rejects(pending, error => error.code === 4001);
+    applySolanaConfiguration(harness, {
+        isConnected: true,
+        publicKey: firstSolanaKey,
+        workerRevision: 1,
+    });
+    assert.equal(calls, 1);
+    assert.equal(harness.requests.length, 1);
+    assert.deepEqual(posted.body.object.params, {message: "0x01", messageEncoding: "hex"});
+    harness.applyDecodedEnvelope(harness.provider, {
+        id: posted.id,
+        kind: "error",
+        name: "signMessage",
+        error: {code: 4001, message: "Canceled"},
+    });
+    await rejected;
+});
+
+test("queued Solana connect removes non-cloneable values added by dispatch hooks", async () => {
+    const harness = solanaHarness();
+    let posted;
+    harness.setRequestObserver(message => { posted = structuredClone(message); });
+    const pending = harness.provider.connect({});
+    const rejected = assert.rejects(pending, error => error.code === 4001);
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    let calls = 0;
+    Object.defineProperty(prototype, "onlyIfTrusted", {
+        configurable: true,
+        get() {
+            calls += 1;
+            this.extra = () => {};
+            return false;
+        },
+    });
+    try {
+        applySolanaConfiguration(harness);
+    } finally {
+        delete prototype.onlyIfTrusted;
+    }
+    assert.equal(calls, 1);
+    assert.equal(harness.requests.length, 1);
+    assert.deepEqual(posted.body.object.params, {});
+    harness.applyDecodedEnvelope(harness.provider, {
+        id: posted.id,
+        kind: "error",
+        name: "connect",
+        error: {code: 4001, message: "Canceled"},
+    });
+    await rejected;
+});
+
 test("queued Solana generated payloads reuse normalized data without extra hooks", async () => {
     const cases = [
         {method: "signTransaction", params: {transaction: legacyTransaction(1).transaction}, expected: {message: "2"}},
@@ -2840,8 +3003,15 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
         const objectPrototype = vm.runInContext("Object.prototype", harness.context);
         const arrayPrototype = vm.runInContext("Array.prototype", harness.context);
         let objectCalls = 0;
+        let setterCalls = 0;
         objectPrototype.toJSON = function () { objectCalls += 1; return this; };
         arrayPrototype.toJSON = () => { throw new Error("Array prototype called"); };
+        for (const field of ["id", "method", "params"]) {
+            Object.defineProperty(objectPrototype, field, {
+                configurable: true,
+                set() { setterCalls += 1; },
+            });
+        }
         try {
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
@@ -2851,10 +3021,14 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
             });
             assert.equal(harness.requests.length, 1, method);
             assert.deepEqual(normalized(harness.requests[0].body.object.params), expected);
-            assert.equal(objectCalls, 1, "Only the final wire envelope uses its JSON hook");
+            assert.equal(objectCalls, 0, "The final wire envelope never invokes JSON hooks");
+            assert.equal(setterCalls, 0, "Envelope fields never invoke inherited setters");
         } finally {
             delete objectPrototype.toJSON;
             delete arrayPrototype.toJSON;
+            for (const field of ["id", "method", "params"]) {
+                delete objectPrototype[field];
+            }
         }
         harness.applyDecodedEnvelope(harness.provider, {
             id: harness.requests[0].id,

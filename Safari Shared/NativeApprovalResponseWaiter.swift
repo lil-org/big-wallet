@@ -44,7 +44,9 @@ struct NativeApprovalResponseWaiter {
             mode: mode
         ) else { return .deliveryUnavailable }
         let startedAt = uptime()
-        let deadline = startedAt.addingReportingOverflow(170_000_000_000).partialValue
+        let deadline = startedAt.addingReportingOverflow(
+            NativeApprovalTiming.responseTimeoutNanoseconds
+        ).partialValue
         var nextDeliveryCheck = startedAt
         if wallClock() >= initialContext.executionDeadline { return .pending }
         while !Task.isCancelled, uptime() < deadline {
@@ -64,14 +66,16 @@ struct NativeApprovalResponseWaiter {
                         mode: mode,
                         waitDeadline: deadline
                     ) else { return .pending }
-                    nextDeliveryCheck = now.addingReportingOverflow(1_000_000_000).partialValue
+                    nextDeliveryCheck = now.addingReportingOverflow(
+                        NativeApprovalTiming.deliveryCheckIntervalNanoseconds
+                    ).partialValue
                 }
             case .missing:
                 return .readyToRead
             case .unavailable:
                 break
             }
-            let wake = uptime().addingReportingOverflow(250_000_000)
+            let wake = uptime().addingReportingOverflow(NativeApprovalTiming.responsePollIntervalNanoseconds)
             await sleepUntil(wake.overflow ? UInt64.max : wake.partialValue)
         }
         return .pending

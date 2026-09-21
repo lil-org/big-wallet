@@ -144,22 +144,6 @@ final class NativeApprovalCoordinator {
         case authenticate, reject
     }
 
-    private enum Recovery {
-        case validate, loadReview
-        case respond(ResponseToExtension)
-        case rejectBeforeAuthentication, rejectOwned
-
-        var state: State {
-            switch self {
-            case .validate: .validating
-            case .loadReview: .loading
-            case .respond(let response): .responding(response)
-            case .rejectBeforeAuthentication: .rejectingBeforeAuthentication
-            case .rejectOwned: .rejectingOwned
-            }
-        }
-    }
-
     private enum State {
         case registered, validating
         case acquiringReceipt(afterReceipt: ReceiptContinuation)
@@ -168,7 +152,7 @@ final class NativeApprovalCoordinator {
         case waiting(ExtensionBridge.NativeApprovalAuthorization)
         case responding(ResponseToExtension)
         case rejectingBeforeAuthentication, rejectingOwned, interrupting
-        case paused(Recovery)
+        indirect case paused(resuming: State)
         case finished
 
         var phase: Phase {
@@ -188,13 +172,12 @@ final class NativeApprovalCoordinator {
             }
         }
 
-        var recovery: Recovery? {
+        var retryState: State? {
             switch self {
-            case .validating, .acquiringReceipt(.authenticate): .validate
-            case .acquiringReceipt(.reject), .rejectingBeforeAuthentication: .rejectBeforeAuthentication
-            case .loading, .reviewing: .loadReview
-            case .responding(let response): .respond(response)
-            case .rejectingOwned: .rejectOwned
+            case .validating, .acquiringReceipt(.authenticate): .validating
+            case .acquiringReceipt(.reject), .rejectingBeforeAuthentication: .rejectingBeforeAuthentication
+            case .loading, .reviewing: .loading
+            case .responding, .rejectingOwned: self
             case .registered, .awaitingAuthentication, .staging, .waiting,
                  .interrupting, .paused, .finished: nil
             }
@@ -210,7 +193,7 @@ final class NativeApprovalCoordinator {
         var rejectsBeforeAuthentication: Bool {
             switch self {
             case .acquiringReceipt(.reject), .rejectingBeforeAuthentication,
-                 .paused(.rejectBeforeAuthentication): true
+                 .paused(resuming: .rejectingBeforeAuthentication): true
             default: false
             }
         }
@@ -219,7 +202,7 @@ final class NativeApprovalCoordinator {
             switch self {
             case .registered, .validating, .acquiringReceipt(.authenticate),
                  .awaitingAuthentication, .loading, .reviewing: true
-            case .paused(let recovery): recovery.state.canReject
+            case .paused(let resuming): resuming.canReject
             default: false
             }
         }
@@ -242,7 +225,7 @@ final class NativeApprovalCoordinator {
             handle = owner.handle
             nonce = owner.nativeDeliveryNonce
             runtime = owner.runtime
-            recoveryDeadline = environment.uptime() + 10
+            recoveryDeadline = environment.uptime() + NativeApprovalTiming.recoveryTimeout
         }
 
         var isCurrent: Bool {
@@ -273,7 +256,9 @@ final class NativeApprovalCoordinator {
                 owner.map { $0.terminalDeadline.timeIntervalSince(environment.now()) } ?? 0
             )
             guard remaining > 0 else { return false }
-            await environment.wait(UInt64(min(1, remaining) * 1_000_000_000))
+            await environment.wait(UInt64(
+                min(NativeApprovalTiming.recoveryRetryInterval, remaining) * 1_000_000_000
+            ))
             return mayAttempt
         }
     }
@@ -343,12 +328,12 @@ final class NativeApprovalCoordinator {
     }
 
     func retryRecovery() {
-        guard case .paused(let recovery) = state else { return }
+        guard case .paused(let resuming) = state else { return }
         guard environment.now() < terminalDeadline else {
             finish()
             return
         }
-        run(recovery.state)
+        run(resuming)
         if hasAuthenticated { presentWaiting() }
     }
 
@@ -476,13 +461,13 @@ final class NativeApprovalCoordinator {
             interruptApproval()
             return
         }
-        guard let recovery = state.recovery else { return }
+        guard let retryState = state.retryState else { return }
         stopWork()
         guard environment.now() < terminalDeadline else {
             finish()
             return
         }
-        state = .paused(recovery)
+        state = .paused(resuming: retryState)
         if hasAuthenticated { publishPresentation(.retryRequired) }
     }
 
@@ -573,7 +558,7 @@ final class NativeApprovalCoordinator {
                     work.update { $0.finish(.interrupted) }
                     return
                 }
-                await work.environment.wait(1_000_000_000)
+                await work.environment.wait(NativeApprovalTiming.recoveryRetryNanoseconds)
             }
         }
     }
@@ -858,7 +843,7 @@ final class NativeApprovalCoordinator {
     }
 
     private static func observe(_ work: Work) async {
-        var delay: UInt64 = 1_000_000_000
+        var delay = NativeApprovalTiming.observationInitialDelayNanoseconds
         var outageDeadline: TimeInterval?
         while work.isCurrent {
             await work.environment.wait(delay)
@@ -911,16 +896,18 @@ final class NativeApprovalCoordinator {
             }
             if unavailable {
                 let now = work.environment.uptime()
-                let deadline = outageDeadline ?? now + 10
+                let deadline = outageDeadline ?? now + NativeApprovalTiming.recoveryTimeout
                 outageDeadline = deadline
                 guard now < deadline else {
                     work.update { $0.pause() }
                     return
                 }
-                delay = UInt64(min(1, deadline - now) * 1_000_000_000)
+                delay = UInt64(
+                    min(NativeApprovalTiming.recoveryRetryInterval, deadline - now) * 1_000_000_000
+                )
             } else {
                 outageDeadline = nil
-                delay = min(delay * 2, 5_000_000_000)
+                delay = min(delay * 2, NativeApprovalTiming.observationMaximumDelayNanoseconds)
             }
         }
     }
