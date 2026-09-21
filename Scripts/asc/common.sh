@@ -89,24 +89,11 @@ tracked_macos_app_sandbox_feedback_id() {
   ' "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE")" \
     || die "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE must contain exactly one newline-terminated value"
   [[ "$feedback_id" != "PENDING" ]] \
-    || die "macOS release is blocked until the real Feedback Assistant ID replaces PENDING in $ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE"
+    || die "macOS review submission is blocked until the real Feedback Assistant ID replaces PENDING in $ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE"
   [[ "$feedback_id" =~ ^FB[0-9]+$ ]] \
     || die "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE must contain a reviewed Feedback Assistant ID in FB-number format"
 
   printf '%s\n' "$feedback_id"
-}
-
-validate_macos_app_sandbox_information_confirmation() {
-  local platform="$1"
-  local expected_target="org.lil.wallet.ambient"
-  local expected_feedback_id
-
-  [[ "$platform" != "MAC_OS" ]] && return 0
-  expected_feedback_id="$(tracked_macos_app_sandbox_feedback_id)"
-  [[ "${ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED:-}" == "$expected_target" ]] \
-    || die "macOS release requires App Store Connect App Sandbox Information for the temporary Apple-events exception; confirm the exception targets $expected_target, then set ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=$expected_target for this invocation"
-  [[ "${ASC_MACOS_APP_SANDBOX_FEEDBACK_ID:-}" == "$expected_feedback_id" ]] \
-    || die "macOS release requires the reviewed Feedback Assistant ID from $ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE; set ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=$expected_feedback_id for this invocation"
 }
 
 alchemy_jwt_request_proof_key_fail() {

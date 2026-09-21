@@ -14,7 +14,6 @@ unset _asc_entrypoint_source _asc_entrypoint_directory
 
 platform="${1:-${PLATFORM:-IOS}}"
 build_id="${2:-${BUILD_ID:-}}"
-validate_macos_app_sandbox_information_confirmation "$platform"
 
 require_cmd asc
 require_cmd curl
@@ -53,6 +52,10 @@ version_state="$(asc versions view --version-id "$version_id" --output json | ex
 if app_store_version_is_submitted_state "$version_state"; then
   log "$platform $version is already in App Store state $version_state; skipping review submission"
   exit 0
+fi
+
+if [[ "$platform" == MAC_OS ]]; then
+  tracked_macos_app_sandbox_feedback_id >/dev/null
 fi
 
 resolve_rejected_review_items() {

@@ -4,12 +4,8 @@ set -euo pipefail
 tests_directory="$(cd "$(dirname "$0")" && pwd)"
 repository_directory="$(cd "$tests_directory/../.." && pwd)"
 common_script="$repository_directory/Scripts/asc/common.sh"
-publish_script="$repository_directory/Scripts/asc/publish.sh"
-publish_check_script="$repository_directory/Scripts/asc/publish_check.sh"
-submit_script="$repository_directory/Scripts/asc/submit_review.sh"
 toolchain_script="$repository_directory/Scripts/inpage_provider_toolchain.sh"
 workflow_file="$repository_directory/.asc/workflow.json"
-feedback_id_file="$repository_directory/app-store-connect/macos-app-sandbox-feedback-id.txt"
 
 test_root="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/asc-alchemy-release-guard.XXXXXX")"
 test_root="$(cd "$test_root" && pwd -P)"
@@ -516,147 +512,6 @@ if grep -F "$(printf '%040d' 3)" "$hostile_cloudflare_export_probe" >/dev/null; 
   fail "the loaded Cloudflare token was exported through hostile scratch state"
 fi
 
-for sandbox_environment_name in \
-  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
-  ASC_MACOS_APP_SANDBOX_FEEDBACK_ID
-do
-  if jq -e \
-    --arg key "$sandbox_environment_name" \
-    '[.. | objects | has($key)] | any' \
-    "$workflow_file" >/dev/null
-  then
-    fail "the tracked workflow persists $sandbox_environment_name"
-  fi
-  if grep -F "$sandbox_environment_name=" "$workflow_file" >/dev/null; then
-    fail "the tracked workflow hardcodes $sandbox_environment_name"
-  fi
-done
-
-tracked_sandbox_feedback_id="$(/bin/cat "$feedback_id_file")"
-if [[ "$tracked_sandbox_feedback_id" != "PENDING" &&
-      ! "$tracked_sandbox_feedback_id" =~ ^FB[0-9]+$ ]]; then
-  fail "the production Feedback Assistant configuration is neither PENDING nor a reviewed FB number"
-fi
-
-if [[ "$tracked_sandbox_feedback_id" == "PENDING" ]]; then
-  pending_feedback_stdout="$logs_directory/pending-production-sandbox-feedback.stdout"
-  pending_feedback_stderr="$logs_directory/pending-production-sandbox-feedback.stderr"
-  set +e
-  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-    ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
-    ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
-    "$publish_script" MAC_OS \
-    >"$pending_feedback_stdout" \
-    2>"$pending_feedback_stderr"
-  pending_feedback_status=$?
-  set -e
-  [[ "$pending_feedback_status" -ne 0 ]] \
-    || fail "the PENDING production Feedback Assistant configuration permitted direct publish"
-  [[ ! -s "$pending_feedback_stdout" ]] \
-    || fail "the PENDING production Feedback Assistant configuration wrote to stdout"
-  grep -F "replaces PENDING" "$pending_feedback_stderr" >/dev/null \
-    || fail "the PENDING production Feedback Assistant configuration did not explain the release block"
-fi
-
-sandbox_gate_fixture="$test_root/sandbox gate fixture"
-mkdir -p \
-  "$sandbox_gate_fixture/Scripts/asc" \
-  "$sandbox_gate_fixture/Scripts" \
-  "$sandbox_gate_fixture/app-store-connect"
-for relative_file in \
-  Scripts/asc/common.sh \
-  Scripts/asc/publish.sh \
-  Scripts/asc/publish_check.sh \
-  Scripts/alchemy_jwt_request_proof_key_common.sh
-do
-  cp -p \
-    "$repository_directory/$relative_file" \
-    "$sandbox_gate_fixture/$relative_file"
-done
-printf '%s\n' FB00000000 \
-  >"$sandbox_gate_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
-
-for gated_script in \
-  "$sandbox_gate_fixture/Scripts/asc/publish_check.sh" \
-  "$sandbox_gate_fixture/Scripts/asc/publish.sh"
-do
-  gated_script_name="${gated_script##*/}"
-  for sandbox_confirmation_case in missing wrong; do
-    sandbox_confirmation_stdout="$logs_directory/$sandbox_confirmation_case-$gated_script_name-sandbox-confirmation.stdout"
-    sandbox_confirmation_stderr="$logs_directory/$sandbox_confirmation_case-$gated_script_name-sandbox-confirmation.stderr"
-    set +e
-    if [[ "$sandbox_confirmation_case" == "missing" ]]; then
-      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
-        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
-        /usr/bin/env -u ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
-        "$gated_script" MAC_OS \
-        >"$sandbox_confirmation_stdout" \
-        2>"$sandbox_confirmation_stderr"
-    else
-      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=yes \
-        ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
-        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
-        "$gated_script" MAC_OS \
-        >"$sandbox_confirmation_stdout" \
-        2>"$sandbox_confirmation_stderr"
-    fi
-    sandbox_confirmation_status=$?
-    set -e
-
-    [[ "$sandbox_confirmation_status" -ne 0 ]] \
-      || fail "$sandbox_confirmation_case macOS $gated_script_name confirmation unexpectedly succeeded"
-    [[ ! -s "$sandbox_confirmation_stdout" ]] \
-      || fail "$sandbox_confirmation_case macOS $gated_script_name confirmation wrote to stdout"
-    grep -F "App Store Connect App Sandbox Information" \
-      "$sandbox_confirmation_stderr" >/dev/null \
-      || fail "$sandbox_confirmation_case macOS $gated_script_name confirmation did not explain the manual gate"
-  done
-
-  for sandbox_feedback_case in missing wrong; do
-    sandbox_feedback_stdout="$logs_directory/$sandbox_feedback_case-$gated_script_name-sandbox-feedback.stdout"
-    sandbox_feedback_stderr="$logs_directory/$sandbox_feedback_case-$gated_script_name-sandbox-feedback.stderr"
-    set +e
-    if [[ "$sandbox_feedback_case" == "missing" ]]; then
-      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
-        /usr/bin/env -u ASC_MACOS_APP_SANDBOX_FEEDBACK_ID \
-        "$gated_script" MAC_OS \
-        >"$sandbox_feedback_stdout" \
-        2>"$sandbox_feedback_stderr"
-    else
-      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-        ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB11111111 \
-        ALCHEMY_JWT_REQUEST_PROOF_KEY=invalid \
-        "$gated_script" MAC_OS \
-        >"$sandbox_feedback_stdout" \
-        2>"$sandbox_feedback_stderr"
-    fi
-    sandbox_feedback_status=$?
-    set -e
-
-    [[ "$sandbox_feedback_status" -ne 0 ]] \
-      || fail "$sandbox_feedback_case macOS $gated_script_name feedback ID unexpectedly succeeded"
-    [[ ! -s "$sandbox_feedback_stdout" ]] \
-      || fail "$sandbox_feedback_case macOS $gated_script_name feedback ID wrote to stdout"
-    grep -F "ASC_MACOS_APP_SANDBOX_FEEDBACK_ID" \
-      "$sandbox_feedback_stderr" >/dev/null \
-      || fail "$sandbox_feedback_case macOS $gated_script_name did not report the Feedback Assistant contract"
-  done
-done
-
-/bin/bash -c '
-  set -euo pipefail
-  . "$1/Scripts/asc/common.sh"
-  unset ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
-    ASC_MACOS_APP_SANDBOX_FEEDBACK_ID
-  validate_macos_app_sandbox_information_confirmation IOS
-  validate_macos_app_sandbox_information_confirmation VISION_OS
-  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient
-  ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000
-  validate_macos_app_sandbox_information_confirmation MAC_OS
-' sandbox-gate-test "$sandbox_gate_fixture" \
-  || fail "the sandbox-information gate changed iOS or visionOS behavior or rejected the exact tracked confirmation"
-
 for verifier_outcome in success failure; do
   verifier_stdout="$logs_directory/verifier-$verifier_outcome.stdout"
   verifier_stderr="$logs_directory/verifier-$verifier_outcome.stderr"
@@ -778,107 +633,6 @@ printf '%s\n' \
   'exit 70' \
   >"$mock_bin/asc"
 chmod 700 "$mock_bin/asc"
-
-for sandbox_confirmation_case in missing wrong; do
-  sandbox_confirmation_stdout="$logs_directory/$sandbox_confirmation_case-sandbox-confirmation.stdout"
-  sandbox_confirmation_stderr="$logs_directory/$sandbox_confirmation_case-sandbox-confirmation.stderr"
-  sandbox_confirmation_asc_log="$logs_directory/$sandbox_confirmation_case-sandbox-confirmation.asc"
-  set +e
-  if [[ "$sandbox_confirmation_case" == "missing" ]]; then
-    PATH="$mock_bin:$PATH" \
-      MOCK_ASC_LOG="$sandbox_confirmation_asc_log" \
-      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
-      /usr/bin/env -u ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED \
-      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
-      >"$sandbox_confirmation_stdout" \
-      2>"$sandbox_confirmation_stderr"
-  else
-    PATH="$mock_bin:$PATH" \
-      MOCK_ASC_LOG="$sandbox_confirmation_asc_log" \
-      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=yes \
-      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
-      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
-      >"$sandbox_confirmation_stdout" \
-      2>"$sandbox_confirmation_stderr"
-  fi
-  sandbox_confirmation_status=$?
-  set -e
-
-  [[ "$sandbox_confirmation_status" -ne 0 ]] \
-    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation unexpectedly succeeded"
-  [[ ! -s "$sandbox_confirmation_stdout" ]] \
-    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation wrote to stdout"
-  grep -F "App Store Connect App Sandbox Information" \
-    "$sandbox_confirmation_stderr" >/dev/null \
-    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation did not explain the manual gate"
-  grep -F "ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient" \
-    "$sandbox_confirmation_stderr" >/dev/null \
-    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation did not report the exact contract"
-  [[ ! -e "$sandbox_confirmation_asc_log" ]] \
-    || fail "$sandbox_confirmation_case macOS sandbox-information confirmation invoked asc"
-done
-
-for sandbox_feedback_case in missing wrong; do
-  sandbox_feedback_stdout="$logs_directory/$sandbox_feedback_case-sandbox-feedback.stdout"
-  sandbox_feedback_stderr="$logs_directory/$sandbox_feedback_case-sandbox-feedback.stderr"
-  sandbox_feedback_asc_log="$logs_directory/$sandbox_feedback_case-sandbox-feedback.asc"
-  set +e
-  if [[ "$sandbox_feedback_case" == "missing" ]]; then
-    PATH="$mock_bin:$PATH" \
-      MOCK_ASC_LOG="$sandbox_feedback_asc_log" \
-      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-      /usr/bin/env -u ASC_MACOS_APP_SANDBOX_FEEDBACK_ID \
-      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
-      >"$sandbox_feedback_stdout" \
-      2>"$sandbox_feedback_stderr"
-  else
-    PATH="$mock_bin:$PATH" \
-      MOCK_ASC_LOG="$sandbox_feedback_asc_log" \
-      ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-      ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB11111111 \
-      "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
-      >"$sandbox_feedback_stdout" \
-      2>"$sandbox_feedback_stderr"
-  fi
-  sandbox_feedback_status=$?
-  set -e
-
-  [[ "$sandbox_feedback_status" -ne 0 ]] \
-    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID unexpectedly succeeded"
-  [[ ! -s "$sandbox_feedback_stdout" ]] \
-    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID wrote to stdout"
-  grep -F "ASC_MACOS_APP_SANDBOX_FEEDBACK_ID" \
-    "$sandbox_feedback_stderr" >/dev/null \
-    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID did not report the exact contract"
-  [[ ! -e "$sandbox_feedback_asc_log" ]] \
-    || fail "$sandbox_feedback_case macOS sandbox Feedback Assistant ID invoked asc"
-done
-
-confirmed_sandbox_stdout="$logs_directory/confirmed-sandbox-information.stdout"
-confirmed_sandbox_stderr="$logs_directory/confirmed-sandbox-information.stderr"
-confirmed_sandbox_asc_log="$logs_directory/confirmed-sandbox-information.asc"
-set +e
-PATH="$mock_bin:$PATH" \
-  MOCK_ASC_LOG="$confirmed_sandbox_asc_log" \
-  ASC_RUNTIME_ROOT="$test_root/confirmed sandbox runtime" \
-  ALCHEMY_JWT_REQUEST_PROOF_KEY="$fixture_key" \
-  ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-  ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000 \
-  "$submit_fixture/Scripts/asc/submit_review.sh" MAC_OS \
-  >"$confirmed_sandbox_stdout" \
-  2>"$confirmed_sandbox_stderr"
-confirmed_sandbox_status=$?
-set -e
-
-[[ "$confirmed_sandbox_status" -ne 0 ]] \
-  || fail "confirmed macOS sandbox information bypassed the next release guard"
-[[ ! -s "$confirmed_sandbox_stdout" ]] \
-  || fail "confirmed macOS sandbox information wrote to stdout"
-grep -F "missing validated Alchemy release receipt" \
-  "$confirmed_sandbox_stderr" >/dev/null \
-  || fail "the exact macOS sandbox-information confirmation did not reach the next release guard"
-[[ ! -e "$confirmed_sandbox_asc_log" ]] \
-  || fail "confirmed macOS sandbox information invoked asc before the release receipt guard"
 
 missing_receipt_stdout="$logs_directory/missing-receipt-submit.stdout"
 missing_receipt_stderr="$logs_directory/missing-receipt-submit.stderr"
@@ -1002,7 +756,6 @@ record_event() {
   fi
 }
 require_cmd() { :; }
-validate_macos_app_sandbox_information_confirmation() { record_event sandbox "$1"; }
 validate_alchemy_release_inputs() { record_event inputs; }
 validate_export_options() { :; }
 validate_local_version_sources() { :; }
@@ -1023,7 +776,7 @@ asc() {
   shift 2
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
-      --archive-path|--ipa-path|--ipa) path="$2"; shift ;;
+      --archive-path|--ipa-path|--ipa|--pkg) path="$2"; shift ;;
     esac
     shift
   done
@@ -1040,8 +793,24 @@ asc() {
     builds/upload)
       record_event upload "$path" || return
       printf '%s\n' '{"data":{"id":"fixture-build"}}' ;;
+    versions/view)
+      record_event version-state
+      jq -n --arg state "$ASC_TEST_VERSION_STATE" '{data:{attributes:{appStoreState:$state}}}' ;;
     *) printf 'unexpected asc command: %s/%s\n' "$category" "$operation" >&2; return 99 ;;
   esac
+}
+xcodebuild() {
+  local export_path=""
+  while [[ "$#" -gt 0 ]]; do
+    if [[ "$1" == -exportPath ]]; then
+      export_path="$2"
+      shift
+    fi
+    shift
+  done
+  [[ -n "$export_path" ]] || return 99
+  record_event export "$export_path/Big-Wallet.pkg"
+  printf '%s\n' fixture-artifact >"$export_path/Big-Wallet.pkg"
 }
 export -f record_event
 FIXTURE
@@ -1065,11 +834,18 @@ FIXTURE
 cat >"$orchestration_fixture/Scripts/asc/ensure_version.sh" <<'FIXTURE'
 #!/bin/bash
 set -euo pipefail
-record_event mutation
+record_event version-lookup
+printf '%s\n' fixture-version
+FIXTURE
+cat >"$orchestration_fixture/Scripts/asc/validate_idfa_declaration.sh" <<'FIXTURE'
+#!/bin/bash
+set -euo pipefail
+record_event review-boundary
 exit 77
 FIXTURE
 chmod 700 "$orchestration_fixture"/Scripts/*.sh \
-  "$orchestration_fixture/Scripts/asc/ensure_version.sh"
+  "$orchestration_fixture/Scripts/asc/ensure_version.sh" \
+  "$orchestration_fixture/Scripts/asc/validate_idfa_declaration.sh"
 
 assert_event_before() {
   awk -F '|' -v first="$1" -v second="$2" '
@@ -1085,26 +861,31 @@ assert_no_event() {
 }
 run_orchestration() {
   orchestration_case="$1"
-  local script="$2" failure="${3:-}"
+  local script="$2" failure="${3:-}" platform="${4:-IOS}"
+  local version_state="${5:-PREPARE_FOR_SUBMISSION}"
   orchestration_events="$logs_directory/$orchestration_case.events"
   orchestration_stdout="$logs_directory/$orchestration_case.stdout"
+  orchestration_stderr="$logs_directory/$orchestration_case.stderr"
   : >"$orchestration_events"
+  set -- "$orchestration_fixture/Scripts/asc/$script.sh"
+  [[ "$script" == publish_check ]] || set -- "$@" "$platform"
   set +e
-  ASC_TEST_EVENTS="$orchestration_events" \
+  /usr/bin/env -i \
+    PATH="$PATH" \
+    ASC_TEST_EVENTS="$orchestration_events" \
     ASC_TEST_FAILURE="$failure" \
+    ASC_TEST_VERSION_STATE="$version_state" \
     ASC_TEST_ARTIFACT="$submit_artifact" \
     ASC_ARTIFACTS_DIR="$test_root/$orchestration_case-artifacts" \
-    "$orchestration_fixture/Scripts/asc/$script.sh" IOS \
-    >"$orchestration_stdout" 2>"$logs_directory/$orchestration_case.stderr"
+    "$@" >"$orchestration_stdout" 2>"$orchestration_stderr"
   orchestration_status=$?
   set -e
 }
 
-for failed_gate in sandbox inputs worker artifact-validation upload receipt none; do
+for failed_gate in inputs worker artifact-validation upload receipt none; do
   run_orchestration "publish-$failed_gate" publish "$failed_gate"
   if [[ "$failed_gate" == none ]]; then
     [[ "$orchestration_status" -eq 0 ]] || fail "publish fixture failed"
-    assert_event_before sandbox inputs
     assert_event_before inputs lookup
     assert_event_before worker artifact-validation
     assert_event_before artifact-validation upload
@@ -1122,7 +903,6 @@ for failed_gate in sandbox inputs worker artifact-validation upload receipt none
     [[ "$orchestration_status" -ne 0 && ! -s "$orchestration_stdout" ]] \
       || fail "$orchestration_case produced a successful result"
     case "$failed_gate" in
-      sandbox) assert_no_event inputs; assert_no_event lookup ;;
       inputs) assert_no_event lookup ;;
       worker|artifact-validation) assert_no_event upload; assert_no_event receipt ;;
       upload) assert_no_event receipt ;;
@@ -1136,83 +916,125 @@ for failed_gate in sandbox inputs worker artifact-validation upload receipt none
     fi
   fi
 done
-for failed_gate in sandbox receipt artifact-validation worker none; do
+for failed_gate in receipt artifact-validation worker none; do
   run_orchestration "submit-$failed_gate" submit_review "$failed_gate"
   [[ "$orchestration_status" -ne 0 && ! -s "$orchestration_stdout" ]] \
     || fail "$orchestration_case escaped the mocked submission boundary"
   if [[ "$failed_gate" == none ]]; then
-    [[ "$orchestration_status" -eq 77 ]] || fail "submission did not reach its mutation boundary"
-    assert_event_before sandbox receipt
+    [[ "$orchestration_status" -eq 77 ]] || fail "submission did not reach its mocked boundary"
     assert_event_before receipt artifact-validation
     assert_event_before artifact-validation worker
-    assert_event_before worker mutation
+    assert_event_before worker version-lookup
+    assert_event_before version-lookup version-state
+    assert_event_before version-state review-boundary
     grep -F -x "artifact-validation|$submit_artifact" "$orchestration_events" >/dev/null \
       || fail "submission validated a different receipt artifact"
   else
-    assert_no_event mutation
+    assert_no_event version-lookup
+    assert_no_event review-boundary
   fi
 done
-for failed_gate in sandbox inputs none; do
+for failed_gate in inputs none; do
   run_orchestration "preflight-$failed_gate" publish_check "$failed_gate"
   if [[ "$failed_gate" == none ]]; then
     [[ "$orchestration_status" -eq 0 ]] || fail "valid preflight failed"
-    assert_event_before sandbox inputs
+    grep -F -x 'inputs|' "$orchestration_events" >/dev/null \
+      || fail "preflight skipped release validation"
   else
     [[ "$orchestration_status" -ne 0 ]] || fail "preflight ignored $failed_gate failure"
-    [[ "$failed_gate" != sandbox ]] || assert_no_event inputs
   fi
 done
+
+orchestration_feedback_file="$orchestration_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
+for sandbox_feedback_case in missing malformed pending valid; do
+  case "$sandbox_feedback_case" in
+    missing) rm -f "$orchestration_feedback_file" ;;
+    malformed) printf '%s\n' 12345678 >"$orchestration_feedback_file" ;;
+    pending) printf '%s\n' PENDING >"$orchestration_feedback_file" ;;
+    valid) printf '%s\n' FB12345678 >"$orchestration_feedback_file" ;;
+  esac
+  run_orchestration "macos-submit-$sandbox_feedback_case" submit_review none MAC_OS
+  if [[ "$sandbox_feedback_case" == valid ]]; then
+    [[ "$orchestration_status" -eq 77 && ! -s "$orchestration_stdout" ]] \
+      || fail "a valid tracked Feedback Assistant ID did not reach the mocked submission boundary"
+    assert_event_before version-state review-boundary
+  else
+    [[ "$orchestration_status" -ne 0 && ! -s "$orchestration_stdout" ]] \
+      || fail "$sandbox_feedback_case tracked Feedback Assistant ID permitted macOS submission"
+    assert_event_before worker version-lookup
+    assert_event_before version-lookup version-state
+    assert_no_event review-boundary
+    case "$sandbox_feedback_case" in
+      missing) expected_feedback_error='missing tracked macOS App Sandbox Feedback Assistant configuration' ;;
+      malformed) expected_feedback_error='must contain a reviewed Feedback Assistant ID in FB-number format' ;;
+      pending) expected_feedback_error='macOS review submission is blocked' ;;
+    esac
+    grep -F "$expected_feedback_error" "$orchestration_stderr" >/dev/null \
+      || fail "$sandbox_feedback_case tracked Feedback Assistant ID reported the wrong failure"
+  fi
+  for platform in IOS VISION_OS; do
+    run_orchestration "$platform-submit-$sandbox_feedback_case" submit_review none "$platform"
+    [[ "$orchestration_status" -eq 77 && ! -s "$orchestration_stdout" ]] \
+      || fail "$platform submission depends on the macOS Feedback Assistant file"
+    assert_event_before version-state review-boundary
+  done
+done
+printf '%s\n' PENDING >"$orchestration_feedback_file"
+for submitted_state in WAITING_FOR_REVIEW IN_REVIEW PENDING_APPLE_RELEASE PENDING_DEVELOPER_RELEASE READY_FOR_SALE; do
+  run_orchestration "macos-submit-$submitted_state" submit_review none MAC_OS "$submitted_state"
+  [[ "$orchestration_status" -eq 0 && ! -s "$orchestration_stdout" ]] \
+    || fail "an already-submitted macOS version was blocked by PENDING"
+  assert_event_before worker version-state
+  assert_no_event review-boundary
+done
+run_orchestration macos-publish-pending publish none MAC_OS
+[[ "$orchestration_status" -eq 0 ]] || fail "macOS upload was blocked by PENDING"
+assert_event_before artifact-validation upload
+assert_event_before upload receipt
+jq -e '.platform == "MAC_OS" and .buildId == "fixture-build"' \
+  "$orchestration_stdout" >/dev/null || fail "macOS upload returned an invalid result"
+run_orchestration preflight-pending publish_check none
+[[ "$orchestration_status" -eq 0 ]] || fail "preflight was blocked by PENDING"
 
 workflow_fixture="$test_root/workflow fixture"
 mkdir -p "$workflow_fixture/Scripts/asc" "$workflow_fixture/app-store-connect"
 cp -p "$common_script" "$workflow_fixture/Scripts/asc/"
 cp -p "$repository_directory/Scripts/alchemy_jwt_request_proof_key_common.sh" \
   "$workflow_fixture/Scripts/"
-printf '%s\n' FB00000000 >"$workflow_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
+printf '%s\n' PENDING >"$workflow_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
 cat >"$workflow_fixture/Scripts/asc/publish_check.sh" <<'FIXTURE'
 #!/bin/bash
-printf '%s\n' "$1" >"$ASC_TEST_PLATFORM_LOG"
+printf '%s\n' "$#" >"$ASC_TEST_ARGUMENT_COUNT_LOG"
 FIXTURE
 chmod 700 "$workflow_fixture/Scripts/asc/publish_check.sh"
-while read -r workflow_name platform_name; do
+for workflow_name in release_ios release_macos release_visionos; do
   workflow_command="$(jq -r --arg workflow "$workflow_name" \
     '.workflows[$workflow].steps[] | select((.name // "") | startswith("publish_preflight_")) | .run' \
     "$workflow_file")"
-  platform_log="$logs_directory/$workflow_name.platform"
-  (cd "$workflow_fixture"; ASC_TEST_PLATFORM_LOG="$platform_log" /bin/bash -e -c "$workflow_command")
-  [[ "$(cat "$platform_log")" == "$platform_name" ]] || fail "$workflow_name passed the wrong platform"
-done <<'WORKFLOWS'
-release_ios IOS
-release_macos MAC_OS
-release_visionos VISION_OS
-WORKFLOWS
-for confirmation in missing confirmed; do
-  aggregate_boundary="$logs_directory/aggregate-$confirmation.boundary"
-  set +e
-  (
-    cd "$workflow_fixture"
-    unset ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED ASC_MACOS_APP_SANDBOX_FEEDBACK_ID
-    if [[ "$confirmation" == confirmed ]]; then
-      export ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=org.lil.wallet.ambient \
-        ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=FB00000000
-    fi
-    while IFS= read -r step; do
-      if jq -e 'has("workflow")' <<<"$step" >/dev/null; then
-        printf '%s\n' reached >"$aggregate_boundary"
-        break
-      fi
-      /bin/bash -e -c "$(jq -r '.run' <<<"$step")" || exit "$?"
-    done < <(jq -c '.workflows.release.steps[]' "$workflow_file")
-  ) >"$logs_directory/aggregate-$confirmation.stdout" \
-    2>"$logs_directory/aggregate-$confirmation.stderr"
-  aggregate_status=$?
-  set -e
-  if [[ "$confirmation" == confirmed ]]; then
-    [[ "$aggregate_status" -eq 0 && -s "$aggregate_boundary" ]] || fail "confirmed aggregate release was blocked"
-  else
-    [[ "$aggregate_status" -ne 0 && ! -e "$aggregate_boundary" ]] || fail "aggregate release bypassed macOS confirmation"
-  fi
+  argument_count_log="$logs_directory/$workflow_name.argument-count"
+  (cd "$workflow_fixture"; /usr/bin/env -i PATH="$PATH" \
+    ASC_TEST_ARGUMENT_COUNT_LOG="$argument_count_log" /bin/bash -e -c "$workflow_command")
+  [[ "$(cat "$argument_count_log")" == 0 ]] || fail "$workflow_name passed an obsolete preflight argument"
 done
+aggregate_boundary="$logs_directory/aggregate.boundary"
+set +e
+(
+  cd "$workflow_fixture"
+  while IFS= read -r step; do
+    if jq -e 'has("workflow")' <<<"$step" >/dev/null; then
+      jq -r '.workflow' <<<"$step" >>"$aggregate_boundary"
+      continue
+    fi
+    /usr/bin/env -i PATH="$PATH" /bin/bash -e -c "$(jq -r '.run' <<<"$step")" || exit "$?"
+  done < <(jq -c '.workflows.release.steps[]' "$workflow_file")
+) >"$logs_directory/aggregate.stdout" 2>"$logs_directory/aggregate.stderr"
+aggregate_status=$?
+set -e
+[[ "$aggregate_status" -eq 0 && -s "$aggregate_boundary" ]] \
+  || fail "aggregate release was blocked before platform dispatch"
+printf '%s\n' release_ios release_macos release_visionos >"$logs_directory/expected-aggregate.boundary"
+cmp "$aggregate_boundary" "$logs_directory/expected-aggregate.boundary" \
+  || fail "aggregate release dispatch changed"
 
 if grep -F "$fixture_key" "$logs_directory"/*.stdout "$logs_directory"/*.stderr >/dev/null 2>&1; then
   fail "a synthetic release secret leaked into test output"
