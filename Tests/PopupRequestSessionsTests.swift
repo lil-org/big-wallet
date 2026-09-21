@@ -4470,6 +4470,87 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(events, ["claim", "complete", "release"])
     }
 
+    func testTransactionPreflightDeadlineReleasesClaimAndIgnoresLateResults() async throws {
+        for remainingAfterAuthentication in [0.05, 0] {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 65, provider: .ethereum), in: store)
+            let transaction = popupReadyTransaction()
+            let catalog = WalletReviewCatalog(account: popupTestAccount())
+            let access = makeRequestScopedWalletSignerForTesting()
+            let cancellation = EthereumRequestCancellation()
+            let deadline = Date(timeIntervalSince1970: 1_900_000_000)
+            var now = deadline.addingTimeInterval(-60)
+            var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
+            var dispatchCompleted = false
+            var executionCount = 0
+            let controller = PopupRequestSessions(
+                store: store,
+                requestProcessor: CompactPopupProcessor(execute: { request, _, _ in
+                    executionCount += 1
+                    return .response(request.response(error: .userRejected))
+                }) { _ in
+                    .approval(.approveTransaction(SendTransactionAction(
+                        transaction: transaction,
+                        resolvedNetwork: ResolvedEthereumNetwork(
+                            network: popupTransactionNetwork(), source: .custom
+                        ),
+                        walletId: "wallet", account: popupTestAccount()
+                    )))
+                },
+                walletEnvironment: PopupWalletEnvironment(
+                    reviewCatalog: { catalog },
+                    unlockWallets: { _ in
+                        now = deadline.addingTimeInterval(-remainingAfterAuthentication)
+                        return .unlocked(catalog: catalog, signer: access)
+                    }
+                ),
+                loadsTransactionContext: false,
+                transactionApprovalOperations: TransactionApprovalOperations(
+                    prepare: { transaction, _, _, _, _, completion in
+                        completion(.success(transaction))
+                        return EthereumRequestCancellation()
+                    },
+                    preflight: { _, _, completion in
+                        preflightCompletion = completion
+                        return cancellation
+                    }
+                ),
+                signingNetworkResolver: popupSigningNetwork,
+                clock: { now }
+            )
+            let token = try await materializeToken(controller: controller, snapshot: snapshot)
+            let approve = try popupCommand(
+                subject: "approveRequest", id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken, reviewToken: token,
+                payload: ["revisions": snapshot.revisions.json],
+                executionDeadline: deadline
+            )
+            let dispatch = Task { @MainActor in
+                let response = await controller.dispatchJSON(request: approve, profileIdentifier: nil)
+                dispatchCompleted = true
+                return response
+            }
+            defer {
+                preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
+            }
+
+            try await waitForCondition { dispatchCompleted }
+            let response = await dispatch.value
+
+            XCTAssertEqual(response["state"] as? String, "review")
+            XCTAssertNotEqual((response["review"] as? [String: Any])?["reviewToken"] as? String, token)
+            XCTAssertFalse(access.validateCurrent())
+            XCTAssertEqual(preflightCompletion != nil, remainingAfterAuthentication > 0)
+            if preflightCompletion != nil { XCTAssertTrue(cancellation.isCancelled) }
+            preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+            XCTAssertEqual(executionCount, 0)
+            let events = await store.events()
+            XCTAssertEqual(events, ["claim", "release"])
+            let stored = try await store.snapshot(handle: snapshot.handle)
+            XCTAssertEqual(stored.phase, .queued)
+        }
+    }
+
     func testTransactionAlertReleasesClaimBeforeApprovalReturns() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 34, provider: .ethereum), in: store)

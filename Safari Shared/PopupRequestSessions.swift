@@ -1026,10 +1026,31 @@ final class PopupRequestSessions {
         let decision: DappApprovalDecision
         if let transactionSession, let transactionToken,
            case .approveTransaction(let reviewedAction) = action {
-            switch await transactionSession.finishAuthentication(
+            guard clock() < executionDeadline else {
+                await releaseApproval(
+                    approval.claim, for: session, token: approval.token,
+                    rematerializeOnSuccess: true
+                )
+                return true
+            }
+            let timeout = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: .seconds(max(
+                        0, executionDeadline.timeIntervalSince(self.clock())
+                    )))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                signer.invalidate()
+                transactionSession.invalidate()
+            }
+            let preflight = await transactionSession.finishAuthentication(
                 token: transactionToken,
                 succeeded: true
-            ) {
+            )
+            timeout.cancel()
+            switch preflight {
             case .approved(let transaction):
                 guard let execution = DappApprovalDecision.TransactionExecution(
                     transaction,
