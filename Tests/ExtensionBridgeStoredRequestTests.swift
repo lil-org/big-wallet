@@ -262,16 +262,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             isDirectory: true
         )
         let helperURL = try XCTUnwrap(
-            NativeAgentLauncher.embeddedHelperURL(in: extensionURL)
+            NativeAgentRuntime.embeddedHelperURL(in: extensionURL)
         )
         XCTAssertEqual(
             helperURL.path,
             extensionURL.path + "/Contents/Helpers/Big Wallet.app"
         )
-        XCTAssertNil(NativeAgentLauncher.embeddedHelperURL(
+        XCTAssertNil(NativeAgentRuntime.embeddedHelperURL(
             in: extensionURL.deletingLastPathComponent()
         ))
-        XCTAssertNil(NativeAgentLauncher.embeddedHelperURL(
+        XCTAssertNil(NativeAgentRuntime.embeddedHelperURL(
             in: URL(string: "https://example.com/Safari.appex")!
         ))
     }
@@ -293,7 +293,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let checks = expectation(description: "Validate every request")
         checks.expectedFulfillmentCount = 4
         checks.assertForOverFulfill = true
-        let validator = NativeAgentLauncher.CodeValidator(validate: { _, _ in
+        let validator = NativeAgentRuntime.CodeValidator(validate: { _, _ in
             XCTAssertFalse(Thread.isMainThread)
             checks.fulfill()
             return (try? Data(contentsOf: resourceURL)) == Data([1])

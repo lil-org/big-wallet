@@ -28,7 +28,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static let genericRPCFailureMessage = "something went wrong"
 #if os(macOS)
     private static let nativeAgentLauncher = NativeAgentLauncher.live
-    @MainActor private static let nativeApprovalResponseWaiter = NativeApprovalResponseWaiter()
 #endif
 
     func beginRequest(with context: NSExtensionContext) {
@@ -241,21 +240,21 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 switch await DappRequestAdmission.shared.materialize(handle: handle) {
                 case .approvalRequired:
 #if os(macOS)
-                    let launched = await Self.nativeAgentLauncher.open(
-                        .approval(
-                            workflowVersion: ExtensionBridge.workflowVersion,
-                            handle: handle,
-                            nativeDeliveryNonce: nativeDeliveryNonce
-                        )
-                    )
-                    guard launched else {
-                        await reconcileAfterNativeLaunchFailure(
-                            request: request,
-                            handle: handle,
-                            nativeDeliveryNonce: nativeDeliveryNonce,
-                            revisions: revisions,
+                    switch await Self.nativeAgentLauncher.deliverApproval(
+                        handle: handle, nativeDeliveryNonce: nativeDeliveryNonce
+                    ) {
+                    case .pending:
+                        break
+                    case .responseReady:
+                        Self.respond(
+                            with: Self.admissionResponse(
+                                handle: handle, approvalRequired: false, revisions: revisions
+                            ),
                             context: context
                         )
+                        return
+                    case .unavailable:
+                        context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                         return
                     }
 #endif
@@ -424,25 +423,23 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 token: identity.token,
                 profileIdentifier: profileIdentifier
             )
+#if os(macOS)
+            let result = await Self.nativeAgentLauncher.readApprovalResponse(
+                handle: handle,
+                configurationKey: identity.configurationKey,
+                revisions: identity.revisions,
+                executionDeadline: identity.executionDeadline,
+                mode: mode.nativeMode
+            )
+#else
             if mode == .manualRecovery {
                 switch await Self.bridge.loadManualSwitch(
-                    handle: handle,
-                    configurationKey: identity.configurationKey
+                    handle: handle, configurationKey: identity.configurationKey
                 ) {
                 case .found(let snapshot):
-                    if snapshot.phase != .responded {
-#if os(macOS)
-                        guard await Self.nativeAgentLauncher.recoverExistingApprovalDelivery(
-                            handle: handle,
-                            nativeDeliveryNonce: snapshot.nativeDeliveryNonce
-                        ) else {
-                            Self.respondPending(id: id, mode: mode, context: context)
-                            return
-                        }
-#else
-                        Self.respondPending(id: id, mode: mode, context: context)
+                    guard snapshot.phase == .responded else {
+                        Self.respondPending(id: id, context: context)
                         return
-#endif
                     }
                 case .missing:
                     Self.respond(with: ["id": id, "missing": true], context: context)
@@ -452,67 +449,21 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     return
                 }
             }
-#if os(macOS)
-            var executionLease: ExtensionBridge.NativeExecutionReadLease?
-            defer { executionLease?.release() }
-            let execution = await Self.bridge.beginNativeExecutionRead(
-                handle: handle,
-                configurationKey: identity.configurationKey,
-                revisions: identity.revisions,
-                executionDeadline: identity.executionDeadline
-            )
-            switch execution {
-            case .acquired(let lease):
-                executionLease = lease
-                switch await Self.nativeApprovalResponseWaiter.waitForResponse(
-                    handle: handle,
-                    configurationKey: identity.configurationKey,
-                    initialContext: lease.context,
-                    mode: mode.nativeMode
-                ) {
-                case .readyToRead:
-                    break
-                case .pending:
-                    Self.respondPending(id: id, mode: mode, context: context)
-                    return
-                case .deliveryUnavailable:
-                    Self.respondPending(
-                        id: id, mode: mode, context: context,
-                        error: .bridgeUnavailable
-                    )
-                    return
-                }
-            case .needsDelivery:
-                guard await Self.nativeAgentLauncher.ensureApprovalDelivery(
-                    handle: handle,
-                    mode: mode.nativeMode
-                ) else {
-                    Self.respondPending(
-                        id: id, mode: mode, context: context,
-                        error: .bridgeUnavailable
-                    )
-                    return
-                }
-            case .pending, .responseReady, .missing:
-                break
-            case .unavailable:
-                context.cancelRequest(withError: HandlerError.bridgeUnavailable)
-                return
-            }
-#endif
-            switch await Self.bridge.readResponse(
+            let result = await Self.bridge.readResponse(
                 id: id,
                 configurationKey: identity.configurationKey,
                 requestToken: identity.token.rawValue,
                 profileIdentifier: profileIdentifier
-            ) {
+            )
+#endif
+            switch result {
             case .response(let response):
                 if ResponseToExtension(json: response)?.addsEthereumChain == true {
                     CustomNetworkCache.shared.invalidate()
                 }
                 Self.respond(with: response, context: context)
             case .pending:
-                Self.respondPending(id: id, mode: mode, context: context)
+                Self.respondPending(id: id, context: context)
             case .missing:
                 Self.respond(with: [
                     "id": id,
@@ -526,15 +477,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private static func respondPending(
         id: Int,
-        mode: ResponseReadMode,
-        context: NSExtensionContext,
-        error: HandlerError? = nil
+        context: NSExtensionContext
     ) {
-        if let error, mode == .page {
-            context.cancelRequest(withError: error)
-        } else {
-            respond(with: ["id": id, "pending": true], context: context)
-        }
+        respond(with: ["id": id, "pending": true], context: context)
     }
 
     private func rpcRequest(
@@ -615,57 +560,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
 
-    private func reconcileAfterNativeLaunchFailure(
-        request: SafariRequest,
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        revisions: ExtensionBridge.ProviderRevisions,
-        context: NSExtensionContext
-    ) async {
-        switch await Self.bridge.load(handle: handle) {
-        case .found(let snapshot):
-            guard snapshot.nativeDeliveryNonce == nativeDeliveryNonce else {
-                context.cancelRequest(withError: HandlerError.bridgeUnavailable)
-                return
-            }
-            if snapshot.phase == .responded {
-                Self.respond(
-                    with: Self.admissionResponse(
-                        handle: handle,
-                        approvalRequired: false,
-                        revisions: revisions
-                    ),
-                    context: context
-                )
-                return
-            }
-            guard Self.nativeLaunchWasDelivered(
-                      await Self.nativeAgentLauncher.reconcileApprovalDelivery(
-                          handle: handle,
-                          nativeDeliveryNonce: nativeDeliveryNonce
-                      )
-                  ) else {
-                context.cancelRequest(withError: HandlerError.bridgeUnavailable)
-                return
-            }
-            Self.respond(
-                with: Self.admissionResponse(
-                    handle: handle,
-                    approvalRequired: true,
-                    revisions: revisions
-                ),
-                context: context
-            )
-        case .missing, .unavailable:
-            context.cancelRequest(withError: HandlerError.bridgeUnavailable)
-        }
-    }
-
-    static func nativeLaunchWasDelivered(
-        _ status: NativeAgentLauncher.ExistingDeliveryStatus
-    ) -> Bool {
-        status == .delivered
-    }
 #endif
     
 }

@@ -6057,7 +6057,7 @@ extension PopupRequestSessionsTests {
         let capturedStartDate = Date(timeIntervalSince1970: 1_000)
         var targetedProcessIdentifier: Int32?
 
-        XCTAssertTrue(NativeAgentLauncher.requestExactReceiptOwnerQuit(
+        XCTAssertTrue(NativeAgentRuntime.requestExactReceiptOwnerQuit(
             processIdentifier: 8_111,
             capturedStartDate: capturedStartDate,
             runningProcessStartDate: { _ in
@@ -6075,7 +6075,7 @@ extension PopupRequestSessionsTests {
         let capturedStartDate = Date(timeIntervalSince1970: 1_000)
         var targetedProcessIdentifier: Int32?
 
-        XCTAssertTrue(NativeAgentLauncher.requestExactReceiptOwnerQuit(
+        XCTAssertTrue(NativeAgentRuntime.requestExactReceiptOwnerQuit(
             processIdentifier: 8_112,
             capturedStartDate: capturedStartDate,
             runningProcessStartDate: { _ in capturedStartDate },
@@ -6090,7 +6090,7 @@ extension PopupRequestSessionsTests {
     func testNativeAgentCannotQuitWithoutCapturedProcessStart() {
         var targetedProcessIdentifier: Int32?
 
-        XCTAssertFalse(NativeAgentLauncher.requestExactReceiptOwnerQuit(
+        XCTAssertFalse(NativeAgentRuntime.requestExactReceiptOwnerQuit(
             processIdentifier: 8_115,
             capturedStartDate: nil,
             runningProcessStartDate: { _ in Date() },
@@ -6106,7 +6106,7 @@ extension PopupRequestSessionsTests {
         let capturedStartDate = Date(timeIntervalSince1970: 1_000)
         var targetedProcessIdentifier: Int32?
 
-        XCTAssertFalse(NativeAgentLauncher.requestExactReceiptOwnerQuit(
+        XCTAssertFalse(NativeAgentRuntime.requestExactReceiptOwnerQuit(
             processIdentifier: 8_114,
             capturedStartDate: capturedStartDate,
             runningProcessStartDate: { _ in nil },
@@ -6115,7 +6115,7 @@ extension PopupRequestSessionsTests {
                 return true
             }
         ))
-        XCTAssertTrue(NativeAgentLauncher.runtimeProcessIsRunning(
+        XCTAssertTrue(NativeAgentRuntime.runtimeProcessIsRunning(
             processIdentifier: 8_114,
             capturedStartDate: capturedStartDate,
             isTerminated: false,
@@ -6125,7 +6125,7 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeAgentTreatsUnidentifiedLiveProcessAsRunning() {
-        XCTAssertTrue(NativeAgentLauncher.runtimeProcessIsRunning(
+        XCTAssertTrue(NativeAgentRuntime.runtimeProcessIsRunning(
             processIdentifier: 8_113,
             capturedStartDate: nil,
             isTerminated: false,
@@ -6406,7 +6406,7 @@ extension PopupRequestSessionsTests {
     }
 
     func testNativeAgentLaunchConfigurationIsPrivateAndCopyIsolated() {
-        let configuration = NativeAgentLauncher.applicationLaunchConfiguration()
+        let configuration = NativeAgentRuntime.applicationLaunchConfiguration()
 
         XCTAssertTrue(configuration.activates)
         XCTAssertFalse(configuration.addsToRecentItems)

@@ -17,9 +17,9 @@
 		C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
 		C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
 		C0DE00900000000000000023 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
-		C0DE00500000000000000011 /* NativeApprovalResponseWaiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeApprovalResponseWaiter.swift */; };
-		C0DE00500000000000000012 /* NativeApprovalResponseWaiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeApprovalResponseWaiter.swift */; };
-		C0DE00500000000000000013 /* NativeApprovalResponseWaiterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000002 /* NativeApprovalResponseWaiterTests.swift */; };
+		C0DE00500000000000000011 /* NativeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeAgentRuntime.swift */; };
+		C0DE00500000000000000012 /* NativeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeAgentRuntime.swift */; };
+		C0DE00500000000000000013 /* NativeApprovalResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */; };
 		D0A101012FD1000000000001 /* WalletAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A100012FD1000000000001 /* WalletAccess.swift */; };
 		D0A101022FD1000000000001 /* WalletAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A100012FD1000000000001 /* WalletAccess.swift */; };
 		D0A101032FD1000000000001 /* WalletAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A100012FD1000000000001 /* WalletAccess.swift */; };
@@ -913,8 +913,8 @@
 /* Begin PBXFileReference section */
 		C0DE00900000000000000001 /* ApprovalResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolution.swift; sourceTree = "<group>"; };
 		C0DE00900000000000000002 /* ApprovalResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolutionTests.swift; sourceTree = "<group>"; };
-		C0DE00500000000000000001 /* NativeApprovalResponseWaiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalResponseWaiter.swift; sourceTree = "<group>"; };
-		C0DE00500000000000000002 /* NativeApprovalResponseWaiterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalResponseWaiterTests.swift; sourceTree = "<group>"; };
+		C0DE00500000000000000001 /* NativeAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentRuntime.swift; sourceTree = "<group>"; };
+		C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalResponseTests.swift; sourceTree = "<group>"; };
 		D0A100012FD1000000000001 /* WalletAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletAccess.swift; sourceTree = "<group>"; };
 		D0A200012FD1000000000001 /* SafariApprovalVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariApprovalVault.swift; sourceTree = "<group>"; };
 		D0A300012FD1000000000001 /* SafariApprovalVaultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariApprovalVaultTests.swift; sourceTree = "<group>"; };
@@ -1222,7 +1222,7 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
-				C0DE00500000000000000002 /* NativeApprovalResponseWaiterTests.swift */,
+				C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */,
 				D0A300012FD1000000000001 /* SafariApprovalVaultTests.swift */,
 				C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */,
 				C2D200002FC2000000000001 /* NativeAgentLauncherTestFixture.swift */,
@@ -1586,7 +1586,7 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
-				C0DE00500000000000000001 /* NativeApprovalResponseWaiter.swift */,
+				C0DE00500000000000000001 /* NativeAgentRuntime.swift */,
 				D0A200012FD1000000000001 /* SafariApprovalVault.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */,
@@ -2689,7 +2689,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C0DE00500000000000000012 /* NativeApprovalResponseWaiter.swift in Sources */,
+				C0DE00500000000000000012 /* NativeAgentRuntime.swift in Sources */,
 				D0A101012FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3D00012FB3000000000000 /* PopupRequestSessions.swift in Sources */,
 				4727EE588FE24F25917280DF /* DappRequestAdmission.swift in Sources */,
@@ -2877,7 +2877,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C0DE00500000000000000011 /* NativeApprovalResponseWaiter.swift in Sources */,
+				C0DE00500000000000000011 /* NativeAgentRuntime.swift in Sources */,
 				D0A101032FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00012FB5000000000000 /* PopupRequestSessions.swift in Sources */,
 				1FB10BCC67404AAA872FD9EB /* DappRequestAdmission.swift in Sources */,
@@ -3420,7 +3420,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C0DE00500000000000000013 /* NativeApprovalResponseWaiterTests.swift in Sources */,
+				C0DE00500000000000000013 /* NativeApprovalResponseTests.swift in Sources */,
 				BF5C00122FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00022FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				BF4000122FB6000000000000 /* PopupStringsTests.swift in Sources */,
