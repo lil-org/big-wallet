@@ -724,14 +724,6 @@ function applyDecodedEnvelope(provider, envelope) {
         return false;
     }
     const kind = dataProperty(envelope, "kind");
-    if (kind === "configuration") {
-        const prepared = prepareConfiguration(provider, envelope.configuration, envelope.workerRevision);
-        if (!prepared || !configurationIsCurrent(provider, prepared)) { return false; }
-        const change = commitConfiguration(provider, prepared);
-        emitConfiguration(provider, change);
-        finishConfiguration(provider, change);
-        return true;
-    }
     if (kind === "configurationError") {
         const error = normalizeEthereumProviderError(dataProperty(envelope, "error"));
         if (!state.runtime.failLoading(error)) { return false; }

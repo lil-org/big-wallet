@@ -25,19 +25,19 @@ final class NativeAgentLauncher {
         URL,
         @escaping (Bool) -> Void
     ) -> Void
-    struct RuntimeHelper {
+    struct RuntimeHelper: Sendable {
         let processIdentifier: Int32
         let bundleURL: URL?
         let processStartDate: Date?
-        let isRunning: () -> Bool
-        let requestQuit: () -> Bool
+        let isRunning: @MainActor @Sendable () -> Bool
+        let requestQuit: @MainActor @Sendable () -> Bool
 
         init(
             processIdentifier: Int32,
             bundleURL: URL?,
             processStartDate: Date? = nil,
-            isRunning: @escaping () -> Bool = { false },
-            requestQuit: @escaping () -> Bool = { false }
+            isRunning: @escaping @MainActor @Sendable () -> Bool = { false },
+            requestQuit: @escaping @MainActor @Sendable () -> Bool = { false }
         ) {
             self.processIdentifier = processIdentifier
             self.bundleURL = bundleURL
@@ -47,7 +47,7 @@ final class NativeAgentLauncher {
         }
     }
 
-    struct ExpectedRuntime {
+    struct ExpectedRuntime: Sendable {
         let url: URL
         let version: AmbientRuntimeIdentity.Version
 
@@ -84,7 +84,7 @@ final class NativeAgentLauncher {
         case receiptOwner(ExtensionBridge.NativeDeliveryOwner)
     }
 
-    struct IdentifiedRuntime {
+    struct IdentifiedRuntime: Sendable {
         let helper: RuntimeHelper
         let identity: AmbientRuntimeIdentity
 
@@ -97,14 +97,14 @@ final class NativeAgentLauncher {
         }
     }
 
-    enum RuntimeAssessment {
+    enum RuntimeAssessment: Sendable {
         case absent
         case unidentified(RuntimeHelper?)
         case compatible(IdentifiedRuntime)
         case incompatible(IdentifiedRuntime)
     }
 
-    enum OwnerRetirementResult {
+    enum OwnerRetirementResult: Sendable {
         case exited, reassess, unavailable
     }
 
@@ -119,14 +119,14 @@ final class NativeAgentLauncher {
     }
 
     struct Dependencies {
-        let helperURL: () -> URL?
-        let validate: (URL) async -> Bool
+        let helperURL: @MainActor () -> URL?
+        let validate: @MainActor (URL) async -> Bool
         let helpers: @MainActor () -> [RuntimeHelper]
         let helper: @MainActor (Int32) -> RuntimeHelper?
-        let identity: (Int32) -> AmbientRuntimeIdentity?
+        let identity: @MainActor (Int32) -> AmbientRuntimeIdentity?
         let launch: Launch
         let uptime: () -> UInt64
-        let sleepUntil: (UInt64) async -> Void
+        let sleepUntil: @MainActor (UInt64) async -> Void
 
         static var live: Self {
             Self(
@@ -162,6 +162,7 @@ final class NativeAgentLauncher {
             return result.overflow ? UInt64.max : result.partialValue
         }
 
+        @MainActor
         func wait(_ interval: UInt64) async {
             await sleepUntil(deadline(after: interval))
         }
@@ -187,8 +188,9 @@ final class NativeAgentLauncher {
 
     func status(
         owner: ExtensionBridge.NativeDeliveryOwner,
-        expected: ExpectedRuntime
+        expected: ExpectedRuntime? = nil
     ) async -> RuntimeAssessment {
+        guard let expected = expected ?? expectedRuntime() else { return .unidentified(nil) }
         let assessment = assess(owner: owner, expected: expected)
         if case .compatible(let runtime) = assessment {
             guard await verify(runtime, expected: expected) else {
@@ -196,6 +198,18 @@ final class NativeAgentLauncher {
             }
         }
         return assessment
+    }
+
+    func hasCompatibleOwner(_ owner: ExtensionBridge.NativeDeliveryOwner) -> Bool {
+        guard let expected = expectedRuntime(),
+              case .compatible = assess(owner: owner, expected: expected) else { return false }
+        return expected.installedVersionMatches
+    }
+
+    func verifiedExpectedRuntime(for runtime: IdentifiedRuntime) async -> ExpectedRuntime? {
+        guard let expected = expectedRuntime(),
+              await verify(runtime, expected: expected) else { return nil }
+        return expected
     }
 
     func retireVerifiedOwner(
@@ -324,7 +338,7 @@ final class NativeAgentLauncher {
         processIdentifier: Int32,
         bundleURL: URL,
         processStartDate: Date?,
-        identity: (Int32) -> AmbientRuntimeIdentity?
+        identity: @MainActor (Int32) -> AmbientRuntimeIdentity?
     ) -> AmbientRuntimeIdentity? {
         guard let runtimeIdentity = identity(processIdentifier),
               runtimeIdentity.matches(

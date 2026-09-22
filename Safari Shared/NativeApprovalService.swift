@@ -79,16 +79,6 @@ actor NativeApprovalService {
         func wait(_ interval: UInt64) async {
             await sleepUntil(deadline(after: interval))
         }
-
-        @MainActor
-        func receiptRuntimeStatus(
-            _ receipt: ExtensionBridge.NativeDeliveryReceipt
-        ) async -> NativeAgentLauncher.RuntimeAssessment {
-            guard let expected = launcher.expectedRuntime() else {
-                return .unidentified(nil)
-            }
-            return await launcher.status(owner: receipt.owner, expected: expected)
-        }
     }
 
     private struct SharedDelivery {
@@ -103,16 +93,18 @@ actor NativeApprovalService {
         case unowned, completed, terminal, unavailable
     }
 
-    @MainActor
-    private static func observeReceipt(
+    private func isPending(until deadline: UInt64) -> Bool {
+        !Task.isCancelled && dependencies.uptime() < deadline
+    }
+
+    private func observeReceipt(
         handle: ExtensionBridge.Handle,
         nonce: ExtensionBridge.NativeDeliveryNonce,
-        isPending: () -> Bool,
-        dependencies: Dependencies
+        deadline: UInt64
     ) async -> ReceiptObservation {
-        guard !Task.isCancelled, isPending() else { return .unavailable }
+        guard isPending(until: deadline) else { return .unavailable }
         let loaded = await dependencies.load(handle)
-        guard !Task.isCancelled, isPending() else { return .unavailable }
+        guard isPending(until: deadline) else { return .unavailable }
         switch loaded {
         case .found(let snapshot):
             guard snapshot.nativeDeliveryNonce == nonce else { return .terminal }
@@ -127,19 +119,16 @@ actor NativeApprovalService {
         }
     }
 
-    @MainActor
-    private static func reconcileReceipt(
+    private func reconcileReceipt(
         handle: ExtensionBridge.Handle,
         nonce: ExtensionBridge.NativeDeliveryNonce,
         policy: ReceiptPolicy = .delivery,
-        deadline: UInt64,
-        dependencies: Dependencies
+        deadline: UInt64
     ) async -> ReceiptStatus {
-        let isPending = { !Task.isCancelled && dependencies.uptime() < deadline }
-        while !Task.isCancelled, isPending() {
+        while isPending(until: deadline) {
             let receipt: ExtensionBridge.NativeDeliveryReceipt
             switch await observeReceipt(
-                handle: handle, nonce: nonce, isPending: isPending, dependencies: dependencies
+                handle: handle, nonce: nonce, deadline: deadline
             ) {
             case .owned(let snapshot, let current):
                 if policy == .manualRecovery && !snapshot.hasStagedOrActiveExecution {
@@ -147,9 +136,8 @@ actor NativeApprovalService {
                 }
                 if policy == .pageRead,
                    case .queued(_, .delivered) = snapshot.state,
-                   let expected = dependencies.launcher.expectedRuntime(),
-                   case .compatible = dependencies.launcher.assess(owner: current.owner, expected: expected),
-                   expected.installedVersionMatches, isPending() {
+                   await dependencies.launcher.hasCompatibleOwner(current.owner),
+                   isPending(until: deadline) {
                     return .delivered
                 }
                 receipt = current
@@ -158,18 +146,17 @@ actor NativeApprovalService {
             case .terminal: return .terminal
             case .unavailable: return .unavailable
             }
-            let status = await dependencies.receiptRuntimeStatus(receipt)
-            guard !Task.isCancelled, isPending() else { return .unavailable }
+            let status = await dependencies.launcher.status(owner: receipt.owner)
+            guard isPending(until: deadline) else { return .unavailable }
             switch status {
             case .compatible:
                 return .delivered
             case .incompatible(let runtime):
                 guard policy != .manualRecovery else { return .unavailable }
-                guard let expected = dependencies.launcher.expectedRuntime(),
-                      await dependencies.launcher.verify(runtime, expected: expected),
-                      !Task.isCancelled, isPending() else { return .unavailable }
+                guard let expected = await dependencies.launcher.verifiedExpectedRuntime(for: runtime),
+                      isPending(until: deadline) else { return .unavailable }
                 switch await observeReceipt(
-                    handle: handle, nonce: nonce, isPending: isPending, dependencies: dependencies
+                    handle: handle, nonce: nonce, deadline: deadline
                 ) {
                 case .owned(_, let current):
                     guard current == receipt else { continue }
@@ -196,13 +183,13 @@ actor NativeApprovalService {
             case .unidentified:
                 return .unavailable
             }
-            guard !Task.isCancelled, isPending() else { return .unavailable }
+            guard isPending(until: deadline) else { return .unavailable }
             let cleared = await dependencies.clearReceipt(handle, receipt)
-            guard !Task.isCancelled, isPending() else { return .unavailable }
+            guard isPending(until: deadline) else { return .unavailable }
             switch cleared {
             case .persisted:
                 switch await observeReceipt(
-                    handle: handle, nonce: nonce, isPending: isPending, dependencies: dependencies
+                    handle: handle, nonce: nonce, deadline: deadline
                 ) {
                 case .owned:
                     guard policy != .manualRecovery else { return .unavailable }
@@ -291,25 +278,22 @@ actor NativeApprovalService {
         case page, manualRecovery
     }
 
-    @MainActor
     private func inspectReceipt(
         handle: ExtensionBridge.Handle,
         nonce: ExtensionBridge.NativeDeliveryNonce,
         policy: ReceiptPolicy = .delivery,
         deadline: UInt64
     ) async -> ReceiptStatus {
-        guard !Task.isCancelled, dependencies.uptime() < deadline else { return .unavailable }
-        let dependencies = dependencies
-        let operation = Task { @MainActor in
-            await Self.reconcileReceipt(
+        guard isPending(until: deadline) else { return .unavailable }
+        let operation = Task {
+            await reconcileReceipt(
                 handle: handle, nonce: nonce, policy: policy,
-                deadline: deadline, dependencies: dependencies
+                deadline: deadline
             )
         }
         return await boundedResult(of: operation, deadline: deadline, timeoutValue: .unavailable)
     }
 
-    @MainActor
     func deliverApproval(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
@@ -352,7 +336,6 @@ actor NativeApprovalService {
         return .pending
     }
 
-    @MainActor
     func readApprovalResponse(
         handle: ExtensionBridge.Handle,
         configurationKey: String,
@@ -488,26 +471,24 @@ actor NativeApprovalService {
 
     private func reactivateApproval(_ route: NativeAgentRoute, deadline: UInt64) async -> Bool {
         guard case .approval(_, let handle, let nativeDeliveryNonce) = route else { return false }
-        let isPending = { !Task.isCancelled && self.dependencies.uptime() < deadline }
-        switch await Self.reconcileReceipt(
+        switch await reconcileReceipt(
             handle: handle, nonce: nativeDeliveryNonce,
-            deadline: deadline, dependencies: dependencies
+            deadline: deadline
         ) {
         case .needsDelivery:
-            return isPending() ? await open(route, waitDeadline: deadline) : false
+            return isPending(until: deadline) ? await open(route, waitDeadline: deadline) : false
         case .delivered:
             break
         case .responseReady, .terminal, .unavailable:
             return false
         }
-        guard isPending(),
+        guard isPending(until: deadline),
               case .found(let snapshot) = await dependencies.load(handle),
               snapshot.nativeDeliveryNonce == nativeDeliveryNonce,
               case .queued = snapshot.state,
               let receipt = snapshot.nativeDeliveryReceipt,
               receipt.nativeDeliveryNonce == nativeDeliveryNonce,
-              case .compatible(let runtime) = await dependencies
-                .receiptRuntimeStatus(receipt),
+              case .compatible(let runtime) = await dependencies.launcher.status(owner: receipt.owner),
               runtime.identity.instanceIdentifier == receipt.owner.runtimeInstanceIdentifier else {
             return false
         }
@@ -522,38 +503,35 @@ actor NativeApprovalService {
         }
     }
 
-    @MainActor
     private func deliver(
         _ route: NativeAgentRoute,
         deadline: UInt64
     ) async -> Bool {
-        let dependencies = dependencies
-        let isPending = { !Task.isCancelled && dependencies.uptime() < deadline }
-        guard isPending() else { return false }
+        guard isPending(until: deadline) else { return false }
         if case .approval(_, let handle, let nonce) = route {
-            switch await Self.reconcileReceipt(
+            switch await reconcileReceipt(
                 handle: handle, nonce: nonce,
-                deadline: deadline, dependencies: dependencies
+                deadline: deadline
             ) {
             case .delivered, .responseReady: return true
             case .terminal, .unavailable: return false
             case .needsDelivery: break
             }
         }
-        guard isPending(), let initialExpected = dependencies.launcher.expectedRuntime(),
+        guard isPending(until: deadline), let initialExpected = await dependencies.launcher.expectedRuntime(),
               let target = await dependencies.launcher.resolveTarget(
                 expected: initialExpected, deadline: deadline
-              ), isPending(),
+              ), isPending(until: deadline),
               await dependencies.launcher.send(route, to: target, deadline: deadline),
-              let expected = dependencies.launcher.expectedRuntime(at: target.url) else { return false }
-        while isPending() {
+              let expected = await dependencies.launcher.expectedRuntime(at: target.url) else { return false }
+        while isPending(until: deadline) {
             switch route {
             case .approval(_, let handle, let nonce):
-                switch await Self.reconcileReceipt(
+                switch await reconcileReceipt(
                     handle: handle, nonce: nonce,
-                    deadline: deadline, dependencies: dependencies
+                    deadline: deadline
                 ) {
-                case .delivered, .responseReady: return isPending()
+                case .delivered, .responseReady: return isPending(until: deadline)
                 case .terminal: return false
                 case .needsDelivery, .unavailable: break
                 }
@@ -561,7 +539,7 @@ actor NativeApprovalService {
                 if await dependencies.launcher.isConfirmed(expected, deadline: deadline) { return true }
             }
             let now = dependencies.uptime()
-            guard isPending(), now < deadline else { return false }
+            guard isPending(until: deadline), now < deadline else { return false }
             await dependencies.wait(min(NativeApprovalTiming.launchPollIntervalNanoseconds, deadline - now))
         }
         return false

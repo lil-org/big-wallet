@@ -36,11 +36,19 @@ function bundle(entryPoint, format = "cjs", contents) {
 const operationRuntimeSource = bundle("operation_runtime.js");
 const rpcSource = bundle("rpc.js");
 const ethereumSource = bundle("ethereum-harness.js", "cjs", `
-    export {default, applyDecodedEnvelope, subscribeNotifications, withReadyState} from "./ethereum";
+    export {
+        default, applyDecodedEnvelope, subscribeNotifications, withReadyState,
+        prepareConfiguration, configurationIsCurrent, commitConfiguration,
+        emitConfiguration, finishConfiguration,
+    } from "./ethereum";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const solanaSource = bundle("solana-harness.js", "cjs", `
-    export {default, applyDecodedEnvelope, subscribeNotifications} from "./solana";
+    export {
+        default, applyDecodedEnvelope, subscribeNotifications,
+        prepareConfiguration, configurationIsCurrent, commitConfiguration,
+        emitConfiguration, finishConfiguration,
+    } from "./solana";
     export {createStableFacadeRecord} from "./stable_facades";
 `);
 const base58Source = bundle("base58.js");
@@ -109,6 +117,15 @@ function decodedDelivery(envelope) {
     return Object.freeze({__proto__: null, ...envelope});
 }
 
+function applyTestConfiguration(exports, provider, configuration, revision) {
+    const prepared = exports.prepareConfiguration(provider, configuration, revision);
+    if (!prepared || !exports.configurationIsCurrent(provider, prepared)) { return false; }
+    const change = exports.commitConfiguration(provider, prepared);
+    exports.emitConfiguration(provider, change);
+    exports.finishConfiguration(provider, change);
+    return true;
+}
+
 function ethereumHarness(initialState = null) {
     const module = moduleHarness(ethereumSource);
     const requests = [];
@@ -161,12 +178,9 @@ function ethereumHarness(initialState = null) {
     return {
         ...module,
         disconnects,
-        applyDecodedEnvelope: envelope => module.exports.applyDecodedEnvelope(engine, decodedDelivery({
-            ...envelope,
-            ...(envelope.kind === "configuration" ? {
-                workerRevision: envelope.workerRevision ?? (Ethereum.snapshot(engine).workerRevision ?? -1) + 1,
-            } : {}),
-        })),
+        applyDecodedEnvelope: envelope => module.exports.applyDecodedEnvelope(engine, decodedDelivery(envelope)),
+        applyConfiguration: (configuration, revision = (Ethereum.snapshot(engine).workerRevision ?? -1) + 1) =>
+            applyTestConfiguration(module.exports, engine, configuration, revision),
         snapshot: () => Ethereum.snapshot(engine),
         retire: error => Ethereum.retire(engine, error),
         isReady: () => Ethereum.isReady(engine),
@@ -221,8 +235,8 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
         solanaProvider: target,
     }).commit();
     return {
-        applyDecodedEnvelope: (provider, envelope, configurationIsCurrent) => module.exports.applyDecodedEnvelope(
-            provider, decodedDelivery(envelope), configurationIsCurrent
+        applyDecodedEnvelope: (provider, envelope) => module.exports.applyDecodedEnvelope(
+            provider, decodedDelivery(envelope)
         ),
         standardProvider: record.solana,
         target,
@@ -241,10 +255,7 @@ function solanaHarness(initialState = null, extraGlobals = {}) {
 }
 
 function applyEthereumConfiguration(harness, address = "", chainId = "0x1") {
-    return harness.applyDecodedEnvelope({
-        kind: "configuration",
-        configuration: {address, chainId},
-    });
+    return harness.applyConfiguration({address, chainId});
 }
 
 const firstSolanaKey = "11111111111111111111111111111111";
@@ -255,9 +266,9 @@ function applySolanaConfiguration(harness, {
     workerRevision = (harness.Solana.snapshot(harness.provider).workerRevision ?? -1) + 1,
     publicKey = null,
 } = {}) {
-    return harness.applyDecodedEnvelope(harness.provider, decodedDelivery({
-        kind: "configuration", configuration: publicKey === null ? null : {publicKey}, workerRevision,
-    }));
+    return applyTestConfiguration(
+        harness.exports, harness.provider, publicKey === null ? null : {publicKey}, workerRevision
+    );
 }
 
 function grantEthereum(harness, id, address, chainId = harness.provider.chainId) {
@@ -1311,10 +1322,7 @@ test("Ethereum contains listener failures while emitting state changes", () => {
     harness.provider.on("accountsChanged", () => {
         laterListener += 1;
     });
-    harness.applyDecodedEnvelope({
-        kind: "configuration",
-        configuration: {address: secondAddress, chainId: "0x2"},
-    });
+    harness.applyConfiguration({address: secondAddress, chainId: "0x2"});
     assert.equal(laterListener, 0);
     assert.equal(harness.provider.selectedAddress, secondAddress);
     assert.deepEqual(chains, ["0x2"]);
@@ -1640,10 +1648,7 @@ test("late Ethereum revocation preserves newer account authorization", async () 
                 params: [{eth_accounts: {}}],
             });
             applyEthereumConfiguration(harness);
-            harness.applyDecodedEnvelope({
-                kind: "configuration",
-                configuration: {address, chainId: "0x1"},
-            });
+            harness.applyConfiguration({address, chainId: "0x1"});
             const accountChanges = [];
             harness.provider.on("accountsChanged", accounts => {
                 accountChanges.push(accounts);
@@ -1723,10 +1728,7 @@ test("Ethereum rejects signing results after account authorization drifts", asyn
         params: ["0x01"],
     });
     const request = harness.requests.at(-1);
-    harness.applyDecodedEnvelope({
-        configuration: {address: secondAddress, chainId: "0x1"},
-        kind: "configuration",
-    });
+    harness.applyConfiguration({address: secondAddress, chainId: "0x1"});
     harness.applyDecodedEnvelope({
         id: request.id,
         kind: "result",
@@ -1761,10 +1763,7 @@ test("Ethereum settles a committed signature after later authorization drift", a
         params: ["0x01"],
     });
     const request = harness.requests.at(-1);
-    harness.applyDecodedEnvelope({
-        configuration: {address: secondAddress, chainId: "0x1"},
-        kind: "configuration",
-    });
+    harness.applyConfiguration({address: secondAddress, chainId: "0x1"});
     harness.applyDecodedEnvelope({
         approvalCommitted: true,
         id: request.id,
@@ -1784,10 +1783,7 @@ test("Ethereum settles committed account approval without replacing newer state"
     applyEthereumConfiguration(harness, "");
     const accounts = harness.provider.request({method: "eth_requestAccounts"});
     const request = harness.requests.at(-1);
-    harness.applyDecodedEnvelope({
-        configuration: {address: newerAddress, chainId: "0x1"},
-        kind: "configuration",
-    });
+    harness.applyConfiguration({address: newerAddress, chainId: "0x1"});
     harness.applyDecodedEnvelope({
         approvalCommitted: true,
         id: request.id,
@@ -1805,7 +1801,7 @@ test("invalid initial Ethereum revision neither drains nor emits connect", async
     let connects = 0;
     h.provider.on("connect", () => connects++);
     const pending = h.provider.request({method: "eth_chainId"});
-    assert.equal(h.applyDecodedEnvelope({kind: "configuration", workerRevision: -1, configuration: {address: "", chainId: "0x2"}}), false);
+    assert.equal(h.applyConfiguration({address: "", chainId: "0x2"}, -1), false);
     assert.equal(h.isReady(), false);
     assert.equal(connects, 0);
     applyEthereumConfiguration(h, "", "0x3");
@@ -1827,12 +1823,9 @@ test("Ethereum first connect follows current configuration events synchronously"
                 if (name === retireDuring) { harness.retire(); }
             });
         }
-        harness.applyDecodedEnvelope({
-            kind: "configuration",
-            configuration: {
-                address: "0x0000000000000000000000000000000000000001",
-                chainId: "0x2",
-            },
+        harness.applyConfiguration({
+            address: "0x0000000000000000000000000000000000000001",
+            chainId: "0x2",
         });
         if (retireDuring === null) {
             assert.deepEqual(events, [
@@ -6578,28 +6571,16 @@ test("Ethereum readiness preserves a replacement observer and reads state withou
             assert.equal(readReadyState("second"), true);
         });
     });
-    module.exports.applyDecodedEnvelope(engine, {
-        kind: "configuration",
-        workerRevision: 2,
-        configuration: {address: "", chainId: "0x2"},
-    });
+    applyTestConfiguration(module.exports, engine, {address: "", chainId: "0x2"}, 2);
     assert.deepEqual(deliveries, [["first", "0x2"]]);
     disposeFirst();
     module.runTimers();
     assert.deepEqual(deliveries, [["first", "0x2"]]);
-    module.exports.applyDecodedEnvelope(engine, {
-        kind: "configuration",
-        workerRevision: 3,
-        configuration: {address: "", chainId: "0x3"},
-    });
+    applyTestConfiguration(module.exports, engine, {address: "", chainId: "0x3"}, 3);
     module.runTimers();
     assert.deepEqual(deliveries, [["first", "0x2"], ["second", "0x3"]]);
     disposeSecond();
-    module.exports.applyDecodedEnvelope(engine, {
-        kind: "configuration",
-        workerRevision: 4,
-        configuration: {address: "", chainId: "0x4"},
-    });
+    applyTestConfiguration(module.exports, engine, {address: "", chainId: "0x4"}, 4);
     module.runTimers();
     assert.equal(deliveries.length, 2);
 });

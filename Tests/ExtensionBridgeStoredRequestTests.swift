@@ -5953,8 +5953,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         processIdentifier: Int32,
         bundleURL: URL,
         launchDate: Date,
-        isRunning: @escaping () -> Bool = { true },
-        requestQuit: @escaping () -> Bool = { false }
+        isRunning: @escaping @MainActor @Sendable () -> Bool = { true },
+        requestQuit: @escaping @MainActor @Sendable () -> Bool = { false }
     ) -> NativeAgentLauncher.RuntimeHelper {
         NativeAgentLauncher.RuntimeHelper(
             processIdentifier: processIdentifier,

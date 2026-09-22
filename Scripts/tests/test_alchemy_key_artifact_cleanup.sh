@@ -507,7 +507,8 @@ for fixture_script in \
     Scripts/alchemy_jwt_request_proof_key_common.sh \
     Scripts/alchemy_login_keychain_supervisor.pl \
     Scripts/assert_no_bundled_alchemy_key.sh \
-    Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh
+    Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh \
+    Scripts/release_bundle_validation.sh
 do
     cp -p \
         "$repository_directory/$fixture_script" \
@@ -517,7 +518,7 @@ done
 /usr/bin/perl -0pi -e '
     s/(validate_mobile_entitlements\(\) \{\n)/$1    return 0\n/
         or die "missing mobile signature validation fixture hook\n";
-' "$publish_fixture_root/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh"
+' "$publish_fixture_root/Scripts/release_bundle_validation.sh"
 cp \
     "$repository_directory/Wallet.xcodeproj/project.pbxproj" \
     "$publish_fixture_root/Wallet.xcodeproj/project.pbxproj"

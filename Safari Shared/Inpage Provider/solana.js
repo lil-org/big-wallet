@@ -1060,14 +1060,6 @@ function currentProviderState(provider) {
 function applyDecodedEnvelope(provider, envelope) {
     const state = currentProviderState(provider);
     if (!state) { return false; }
-    if (envelope.kind === "configuration") {
-        const prepared = prepareConfiguration(provider, envelope.configuration, envelope.workerRevision);
-        if (!prepared || !configurationIsCurrent(provider, prepared)) { return false; }
-        const change = commitConfiguration(provider, prepared);
-        emitConfiguration(provider, change);
-        finishConfiguration(provider, change);
-        return true;
-    }
     if (envelope.kind === "configurationError") {
         const error = normalizeSolanaProviderError(envelope.error);
         if (!state.runtime.failLoading(error)) { return false; }

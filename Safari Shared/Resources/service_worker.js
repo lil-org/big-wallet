@@ -36,8 +36,9 @@ const SOLANA_ACCOUNT_METHODS = new Set([
 ]);
 const configurationOperationTails = new Map;
 const responseReadFlights = new Map;
-const manualSwitches = new Map;
-const manualSwitchRecoveryRunners = new Map;
+const manualSwitchAdmissions = new Map;
+const manualSwitchTasks = new Map;
+const manualSwitchAttemptTails = new Map;
 let manualSwitchAlarmFlight = null;
 let manualSwitchRecoveryFlight = null;
 
@@ -882,104 +883,142 @@ function manualSwitchHandle(request) {
     return JSON.stringify([request.configurationKey, request.id, request.requestToken]);
 }
 
-function finishManualSwitchRecovery(request) {
-    manualSwitchRecoveryFlight?.finished.add(manualSwitchHandle(request));
+function ownsManualSwitchTask(task) {
+    return manualSwitchTasks.get(task.handle) === task;
 }
 
-function matchingManualSwitch(request) {
-    const context = manualSwitches.get(request.configurationKey);
-    if (context && Date.now() >= context.pollingDeadline) {
-        forgetManualSwitch(context);
-        return null;
+function liveManualSwitchAdmission(task) {
+    const admission = task.admission;
+    if (!admission) { return null; }
+    if (manualSwitchAdmissions.get(admission.configurationKey) === admission &&
+        Date.now() < admission.pollingDeadline) {
+        return admission;
     }
-    return context?.id === request.id && context.requestToken === request.requestToken
-        ? context : null;
+    forgetManualSwitchAdmission(admission);
+    return null;
 }
 
-function drainManualSwitchRecovery(lineage, runner, finished = new Set) {
-    if (manualSwitchRecoveryRunners.get(lineage) !== runner) { return Promise.resolve(); }
-    clearTimeout(runner.timer);
-    runner.timer = null;
-    if (runner.running) {
-        runner.rerun = true;
-        return runner.running;
+function removeManualSwitchTask(task) {
+    clearTimeout(task.timer);
+    task.timer = null;
+    if (ownsManualSwitchTask(task)) { manualSwitchTasks.delete(task.handle); }
+}
+
+function forgetManualSwitchAdmission(admission) {
+    if (manualSwitchAdmissions.get(admission.configurationKey) === admission) {
+        manualSwitchAdmissions.delete(admission.configurationKey);
     }
-    runner.running = (async () => {
-        do {
-            runner.rerun = false;
-            const batch = runner.requests;
-            const retries = [];
-            for (const request of batch) {
-                const handle = manualSwitchHandle(request);
-                if (finished.has(handle)) { continue; }
-                const context = matchingManualSwitch(request);
-                let retry = false;
-                try {
-                    if (context) {
-                        const result = await pollManualSwitch(context, true);
-                        if (result === "missing" || result === "acknowledged") {
-                            finished.add(handle);
-                        }
-                    } else {
-                        const identity = WIRE.configurationIdentityForURL(request.configurationKey);
-                        const completed = await readAndApplyDappResponse(
-                            request.id, request.configurationKey, request.requestToken,
-                            request.revisions, identity.legacyConfigurationKey, true
-                        );
-                        if (isMissingStoredResponse(completed?.response, request.id) ||
-                            completed && await completed.acknowledgement) {
-                            finished.add(handle);
-                            finishManualSwitchRecovery(request);
-                        } else {
-                            retry = !completed?.pending;
-                        }
-                    }
-                } catch {
-                    retry = true;
-                }
-                if (runner.requests !== batch) { break; }
-                if (retry && !matchingManualSwitch(request)) { retries.push(request); }
-            }
-            if (runner.requests === batch) { runner.requests = retries; }
-        } while (runner.rerun);
-    })().finally(() => {
-        runner.running = null;
-        if (manualSwitchRecoveryRunners.get(lineage) !== runner) { return; }
-        if (runner.rerun) {
-            return drainManualSwitchRecovery(lineage, runner, finished);
-        } else if (runner.requests.length) {
-            runner.timer = setTimeout(() => {
-                drainManualSwitchRecovery(lineage, runner);
-            }, MANUAL_SWITCH_POLL_DELAY);
-        } else {
-            manualSwitchRecoveryRunners.delete(lineage);
+    const task = admission.task;
+    if (task?.admission !== admission) { return; }
+    task.admission = null;
+    if (!task.recovery && !task.attempt) { removeManualSwitchTask(task); }
+}
+
+function finishManualSwitchTask(task) {
+    manualSwitchRecoveryFlight?.finished.add(task.handle);
+    if (task.admission) { forgetManualSwitchAdmission(task.admission); }
+    removeManualSwitchTask(task);
+}
+
+function manualSwitchTask(request) {
+    const handle = manualSwitchHandle(request);
+    let task = manualSwitchTasks.get(handle);
+    if (!task) {
+        const identity = WIRE.configurationIdentityForURL(request.configurationKey);
+        task = {
+            id: request.id,
+            configurationKey: request.configurationKey,
+            requestToken: request.requestToken,
+            revisions: {...request.revisions},
+            handle,
+            legacyConfigurationKey: identity.legacyConfigurationKey,
+            admission: null,
+            recovery: false,
+            attempt: null,
+            timer: null,
+        };
+        manualSwitchTasks.set(handle, task);
+    }
+    return task;
+}
+
+function scheduleManualSwitchTask(task) {
+    clearTimeout(task.timer);
+    task.timer = null;
+    const live = liveManualSwitchAdmission(task);
+    if (!ownsManualSwitchTask(task) || task.attempt || !live && !task.recovery) { return; }
+    task.timer = setTimeout(() => {
+        task.timer = null;
+        void runManualSwitchTask(task, !liveManualSwitchAdmission(task)).catch(() => {});
+    }, MANUAL_SWITCH_POLL_DELAY);
+}
+
+function runManualSwitchTask(task, quiet) {
+    if (task.attempt) {
+        return quiet && !task.attempt.quiet
+            ? Promise.resolve()
+            : task.attempt.promise;
+    }
+    const live = liveManualSwitchAdmission(task);
+    if (!ownsManualSwitchTask(task) || !live && (!quiet || !task.recovery)) {
+        return Promise.resolve();
+    }
+    clearTimeout(task.timer);
+    task.timer = null;
+    const lineage = approvalLeaseLineageKey(task.configurationKey);
+    const previous = manualSwitchAttemptTails.get(lineage) || Promise.resolve();
+    const attempt = {quiet, promise: null};
+    task.attempt = attempt;
+    let pending = false;
+    const operation = previous.catch(() => {}).then(async () => {
+        const live = liveManualSwitchAdmission(task);
+        if (!ownsManualSwitchTask(task) || !live && (!quiet || !task.recovery)) { return; }
+        const completed = await readAndApplyDappResponse(
+            task.id, task.configurationKey, task.requestToken,
+            task.revisions, task.legacyConfigurationKey, quiet
+        );
+        if (isMissingStoredResponse(completed?.response, task.id)) {
+            finishManualSwitchTask(task);
+            return "missing";
+        }
+        if (completed && await completed.acknowledgement) {
+            finishManualSwitchTask(task);
+            return "acknowledged";
+        }
+        pending = completed?.pending === true;
+    }).catch(() => {}).finally(() => {
+        task.attempt = null;
+        if (liveManualSwitchAdmission(task) || task.recovery && !pending) {
+            scheduleManualSwitchTask(task);
+        } else if (!task.recovery) {
+            removeManualSwitchTask(task);
+        }
+        if (manualSwitchAttemptTails.get(lineage) === operation) {
+            manualSwitchAttemptTails.delete(lineage);
         }
     });
-    return runner.running;
+    attempt.promise = operation;
+    manualSwitchAttemptTails.set(lineage, operation);
+    return operation;
 }
 
 function publishManualSwitchRecovery(requests, finished) {
-    const batches = new Map;
-    for (const request of requests) {
-        if (request.state === "pending" || finished.has(manualSwitchHandle(request))) { continue; }
-        const lineage = approvalLeaseLineageKey(request.configurationKey);
-        if (!batches.has(lineage)) { batches.set(lineage, []); }
-        batches.get(lineage).push(request);
-    }
-    for (const lineage of manualSwitchRecoveryRunners.keys()) {
-        if (!batches.has(lineage)) { batches.set(lineage, []); }
-    }
-    const drains = [];
-    for (const [lineage, requests] of batches) {
-        let runner = manualSwitchRecoveryRunners.get(lineage);
-        if (!runner) {
-            runner = {requests, running: null, timer: null, rerun: false};
-            manualSwitchRecoveryRunners.set(lineage, runner);
+    const eligible = requests.filter(request =>
+        request.state !== "pending" && !finished.has(manualSwitchHandle(request)));
+    const handles = new Set(eligible.map(manualSwitchHandle));
+    for (const task of manualSwitchTasks.values()) {
+        task.recovery = handles.has(task.handle);
+        if (!task.recovery && !liveManualSwitchAdmission(task)) {
+            clearTimeout(task.timer);
+            task.timer = null;
+            if (!task.attempt) { removeManualSwitchTask(task); }
         }
-        runner.requests = requests;
-        drains.push(drainManualSwitchRecovery(lineage, runner));
     }
-    return drains;
+    return eligible.map(request => {
+        const task = manualSwitchTask(request);
+        task.recovery = true;
+        return runManualSwitchTask(task, true);
+    });
 }
 
 async function discoverManualSwitches() {
@@ -1041,83 +1080,18 @@ function recoverManualSwitches() {
     return pending.then(drains => Promise.all(drains)).then(() => {});
 }
 
-function forgetManualSwitch(context) {
-    clearTimeout(context.timer);
-    if (manualSwitches.get(context.configurationKey) === context) {
-        manualSwitches.delete(context.configurationKey);
-    }
-}
-
-function scheduleManualSwitchPoll(context) {
-    clearTimeout(context.timer);
-    if (manualSwitches.get(context.configurationKey) !== context) { return; }
-    if (Date.now() >= context.pollingDeadline) {
-        forgetManualSwitch(context);
-        return;
-    }
-    context.timer = setTimeout(() => {
-        void pollManualSwitch(context).catch(() => {});
-    }, MANUAL_SWITCH_POLL_DELAY);
-}
-
-function pollManualSwitch(context, quiet = false) {
-    if (context.polling) {
-        return quiet && !context.polling.quiet
-            ? Promise.resolve()
-            : context.polling.promise;
-    }
-    if (!context.requestToken ||
-        manualSwitches.get(context.configurationKey) !== context) {
-        return Promise.resolve();
-    }
-    clearTimeout(context.timer);
-    if (Date.now() >= context.pollingDeadline) {
-        forgetManualSwitch(context);
-        return Promise.resolve();
-    }
-    const pending = (async () => {
-        try {
-            const completed = await readAndApplyDappResponse(
-                context.id,
-                context.configurationKey,
-                context.requestToken,
-                context.revisions,
-                context.legacyConfigurationKey,
-                quiet
-            );
-            if (isMissingStoredResponse(completed?.response, context.id)) {
-                finishManualSwitchRecovery(context);
-                if (manualSwitches.get(context.configurationKey) !== context) { return; }
-                forgetManualSwitch(context);
-                return "missing";
-            }
-            if (completed && await completed.acknowledgement) {
-                finishManualSwitchRecovery(context);
-                forgetManualSwitch(context);
-                return "acknowledged";
-            }
-        } catch {}
-        finally {
-            context.polling = null;
-            scheduleManualSwitchPoll(context);
-        }
-    })();
-    context.polling = {promise: pending, quiet};
-    return pending;
-}
-
 function beginManualSwitch(identity) {
-    const existing = manualSwitches.get(identity.configurationKey);
+    const existing = manualSwitchAdmissions.get(identity.configurationKey);
     if (existing) {
         if (Date.now() < existing.pollingDeadline) {
-            void pollManualSwitch(existing, false).then(result => {
-                if (result === "missing" && !manualSwitches.has(identity.configurationKey)) {
+            void (existing.task ? runManualSwitchTask(existing.task, false) : Promise.resolve()).then(result => {
+                if (result === "missing" && !manualSwitchAdmissions.has(identity.configurationKey)) {
                     return beginManualSwitch(identity);
                 }
             }).catch(() => {});
             return existing.admission;
         }
-        forgetManualSwitch(existing);
+        forgetManualSwitchAdmission(existing);
     }
     const admissionDeadline = Date.now() +
         WIRE.WORKFLOW_POLICY.requestTTLMilliseconds;
@@ -1126,10 +1100,9 @@ function beginManualSwitch(identity) {
         admissionDeadline,
         pollingDeadline: admissionDeadline +
             WIRE.WORKFLOW_POLICY.responseExpiryMilliseconds,
-        timer: null,
-        polling: null,
+        task: null,
     };
-    manualSwitches.set(identity.configurationKey, context);
+    manualSwitchAdmissions.set(identity.configurationKey, context);
     context.admission = (async () => {
         try {
             await ensureManualSwitchAlarm();
@@ -1165,16 +1138,24 @@ function beginManualSwitch(identity) {
             }, false), TRANSPORT_TIMEOUT);
             if (WIRE.isValidRequestId(response?.id) &&
                 WIRE.isNativeEnqueueAcknowledgement(response, response.id)) {
-                Object.assign(context, {
-                    id: response.id,
-                    requestToken: response.requestToken,
-                    revisions: {...response.revisions},
-                });
                 if (response.approvalRequired) {
                     notifyPendingRequestAvailable();
                     cuePopup();
                 }
-                scheduleManualSwitchPoll(context);
+                if (manualSwitchAdmissions.get(identity.configurationKey) === context &&
+                    Date.now() < context.pollingDeadline) {
+                    const task = manualSwitchTask({
+                        ...identity,
+                        id: response.id,
+                        requestToken: response.requestToken,
+                        revisions: response.revisions,
+                    });
+                    task.admission = context;
+                    context.task = task;
+                    scheduleManualSwitchTask(task);
+                } else {
+                    forgetManualSwitchAdmission(context);
+                }
                 return {
                     ...response,
                     configurationKey: identity.configurationKey,
@@ -1184,7 +1165,7 @@ function beginManualSwitch(identity) {
             }
             const terminal = WIRE.decodeNativeResponse(response, id);
             if (!terminal || terminal.name !== "switchAccount") {
-                forgetManualSwitch(context);
+                forgetManualSwitchAdmission(context);
                 return undefined;
             }
             const completed = await completeResponse({
@@ -1192,10 +1173,10 @@ function beginManualSwitch(identity) {
                 ...identity,
                 revisions: snapshot.revisions,
             }, terminal);
-            forgetManualSwitch(context);
+            forgetManualSwitchAdmission(context);
             return completed?.response;
         } catch {
-            forgetManualSwitch(context);
+            forgetManualSwitchAdmission(context);
             return undefined;
         }
     })();
@@ -1575,14 +1556,9 @@ async function handleToolbarClick(tab) {
 async function broadcastResponseReady(request) {
     const ids = WIRE.responseReadyIds(request);
     if (!ids) { return; }
-    const polling = [...manualSwitches.values()]
-        .filter(context => ids.includes(context.id))
-        .map(context => pollManualSwitch(context, true));
-    for (const [lineage, runner] of manualSwitchRecoveryRunners) {
-        if (runner.requests.some(request => ids.includes(request.id))) {
-            polling.push(drainManualSwitchRecovery(lineage, runner));
-        }
-    }
+    const polling = [...manualSwitchTasks.values()]
+        .filter(task => ids.includes(task.id))
+        .map(task => runManualSwitchTask(task, true));
     const recovery = recoverManualSwitches().catch(() => {});
     const tabs = await boundedTabsQuery();
     if (tabs) {

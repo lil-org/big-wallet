@@ -206,14 +206,15 @@ final class NativeApprovalResponseTests: XCTestCase {
         let f = try fixture()
         let request = try f.request()
         let gate = NativeApprovalServiceTestFixture.Gate()
-        var releases = 0
+        let executionReads = NativeApprovalServiceTestFixture.ExecutionReads()
         f.onBeginRead = { handle, _, revisions, deadline in
             await gate.wait()
+            XCTAssertTrue(executionReads.acquire(handle))
             return .acquired(.init(
                 handle: handle,
                 context: .init(revisions: revisions, observedAt: f.clock.date, executionDeadline: deadline, fenceToken: UUID()),
                 nativeDeliveryNonce: request.nativeDeliveryNonce,
-                finish: { releases += 1 }
+                finish: { executionReads.release(handle) }
             ))
         }
         let service = f.service()
@@ -222,7 +223,7 @@ final class NativeApprovalResponseTests: XCTestCase {
         task.cancel()
         gate.open()
         guard case .pending = await task.value else { return XCTFail("Expected pending") }
-        XCTAssertEqual(releases, 1)
+        XCTAssertEqual(executionReads.releasedHandles, [request.handle])
         XCTAssertTrue(f.loads.isEmpty)
         XCTAssertTrue(f.launches.isEmpty)
     }
@@ -297,13 +298,12 @@ final class NativeApprovalResponseTests: XCTestCase {
             )
             _ = try await store.prepareNativeApproval(handle: snapshot.handle, decision: .addEthereumChain)
             let boundary = f.launcherDependencies
-            var held = false
-            var releases = 0
+            let executionReads = NativeApprovalServiceTestFixture.ExecutionReads()
             var finalReads = 0
             let dependencies = approvalServiceTestDependencies(
                 launcher: NativeAgentLauncher(dependencies: boundary),
                 load: { handle in
-                    if held && completes {
+                    if executionReads.activeHandles.contains(handle) && completes {
                         _ = await bridge.interruptNativeApproval(
                             handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
                             runtimeInstanceIdentifier: runtime.instanceIdentifier
@@ -316,7 +316,7 @@ final class NativeApprovalResponseTests: XCTestCase {
                         handle: handle, configurationKey: key, revisions: revisions, executionDeadline: deadline
                     )
                     guard case .acquired(let lease) = result else { return result }
-                    held = true
+                    XCTAssertTrue(executionReads.acquire(handle))
                     let competing = await bridge.beginNativeExecutionRead(
                         handle: handle, configurationKey: key, revisions: revisions, executionDeadline: deadline
                     )
@@ -327,20 +327,24 @@ final class NativeApprovalResponseTests: XCTestCase {
                     }
                     return .acquired(.init(
                         handle: handle, context: lease.context, nativeDeliveryNonce: lease.nativeDeliveryNonce,
-                        finish: { lease.release(); held = false; releases += 1 }
+                        finish: {
+                            lease.release()
+                            executionReads.release(handle)
+                        }
                     ))
                 },
                 readResponse: { handle, key in
-                    XCTAssertTrue(held)
+                    XCTAssertTrue(executionReads.activeHandles.contains(handle))
                     finalReads += 1
                     let result = await bridge.readResponse(
                         id: handle.id, configurationKey: key, requestToken: handle.requestToken,
                         profileIdentifier: handle.profileIdentifier
                     )
-                    XCTAssertTrue(held)
+                    XCTAssertTrue(executionReads.activeHandles.contains(handle))
                     return result
                 },
-                uptime: { f.clock.now }, wallClock: { f.clock.date },
+                uptime: { [clock = f.clock] in clock.now },
+                wallClock: { [clock = f.clock] in clock.date },
                 sleepUntil: { [clock = f.clock] in await clock.sleepUntil($0) }
             )
             let service = NativeApprovalService(dependencies: dependencies)
@@ -350,8 +354,8 @@ final class NativeApprovalResponseTests: XCTestCase {
             } else {
                 guard case .pending = result else { return XCTFail("Expected expiry") }
             }
-            XCTAssertFalse(held)
-            XCTAssertEqual(releases, 1)
+            XCTAssertTrue(executionReads.activeHandles.isEmpty)
+            XCTAssertEqual(executionReads.releasedHandles, [snapshot.handle])
             XCTAssertEqual(finalReads, completes ? 1 : 0)
             let stored = try await store.snapshot(handle: snapshot.handle)
             XCTAssertNil(stored.nativeExecutionContext)

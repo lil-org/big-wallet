@@ -33,6 +33,7 @@ for fixture_script in \
     validate_alchemy_jwt_request_proof_key.sh \
     bundle_alchemy_jwt_request_proof_key.sh \
     assert_bundled_alchemy_jwt_request_proof_key.sh \
+    release_bundle_validation.sh \
     alchemy_jwt_request_proof_key_common.sh \
     alchemy_login_keychain_supervisor.pl
 do
@@ -94,7 +95,7 @@ printf '%s\n' \
 /bin/chmod 0755 "$fixture_codesign"
 FIXTURE_CODESIGN="$fixture_codesign" /usr/bin/perl -pi -e '
     s{\Q/usr/bin/codesign\E}{$ENV{FIXTURE_CODESIGN}}g
-' "$artifact_validator"
+' "$fixture_scripts_directory/release_bundle_validation.sh"
 last_stdout=""
 last_stderr=""
 
@@ -688,6 +689,19 @@ write_mobile_entitlements() {
     printf '%s\n' TESTTEAM > "$wmobile_bundle/SigningTeam"
 }
 
+reorder_mobile_keychain_groups() {
+    rmk_app=$1
+    rmk_extension_name=$2
+    /usr/libexec/PlistBuddy \
+        -c "Set :keychain-access-groups:0 TESTTEAM.org.lil.wallet.rpc-auth" \
+        -c "Set :keychain-access-groups:2 TESTTEAM.org.lil.keychain" \
+        "$rmk_app/SignedEntitlements.plist"
+    /usr/libexec/PlistBuddy \
+        -c "Set :keychain-access-groups:0 TESTTEAM.org.lil.wallet.rpc-auth" \
+        -c "Set :keychain-access-groups:1 TESTTEAM.org.lil.wallet.safari-approval" \
+        "$rmk_app/PlugIns/$rmk_extension_name/SignedEntitlements.plist"
+}
+
 for executable in "$validator" "$bundler" "$artifact_validator"; do
     [ -x "$executable" ] || fail "$executable is not executable"
 done
@@ -1092,6 +1106,51 @@ invoke_artifact_validator \
     "$ios_artifact" \
     "$valid_key_file"
 
+ios_reordered_artifact="$test_root/iOS reordered keychain groups"
+/usr/bin/ditto "$ios_artifact" "$ios_reordered_artifact"
+reorder_mobile_keychain_groups \
+    "$ios_reordered_artifact/Products/Applications/Big Wallet.app" \
+    "Safari iOS.appex"
+invoke_artifact_validator \
+    ios-reordered-keychain-groups success IOS \
+    "$ios_reordered_artifact" "$valid_key_file"
+
+for malformed_entitlement in missing scalar dictionary non-string duplicate newline; do
+    malformed_artifact="$test_root/iOS $malformed_entitlement keychain groups"
+    /usr/bin/ditto "$ios_artifact" "$malformed_artifact"
+    malformed_plist="$malformed_artifact/Products/Applications/Big Wallet.app/PlugIns/Safari iOS.appex/SignedEntitlements.plist"
+    case "$malformed_entitlement" in
+        missing)
+            /usr/bin/plutil -remove keychain-access-groups "$malformed_plist"
+            ;;
+        scalar)
+            /usr/bin/plutil -replace keychain-access-groups \
+                -string TESTTEAM.org.lil.wallet.safari-approval "$malformed_plist"
+            ;;
+        dictionary)
+            /usr/bin/plutil -replace keychain-access-groups \
+                -json '{"0":"TESTTEAM.org.lil.wallet.safari-approval","1":"TESTTEAM.org.lil.wallet.rpc-auth"}' \
+                "$malformed_plist"
+            ;;
+        non-string)
+            /usr/bin/plutil -replace keychain-access-groups.1 -integer 1 \
+                "$malformed_plist"
+            ;;
+        duplicate)
+            /usr/bin/plutil -replace keychain-access-groups.1 \
+                -string TESTTEAM.org.lil.wallet.safari-approval "$malformed_plist"
+            ;;
+        newline)
+            /usr/bin/plutil -replace keychain-access-groups.1 \
+                -string 'TESTTEAM.org.lil.wallet.rpc-auth
+' "$malformed_plist"
+            ;;
+    esac
+    invoke_artifact_validator \
+        "ios-$malformed_entitlement-keychain-groups" failure IOS \
+        "$malformed_artifact" "$valid_key_file"
+done
+
 ios_source_keychain_artifact="$test_root/iOS extension source keychain group"
 /usr/bin/ditto "$ios_artifact" "$ios_source_keychain_artifact"
 /usr/libexec/PlistBuddy \
@@ -1254,6 +1313,15 @@ invoke_artifact_validator \
     "$vision_artifact" \
     "$valid_key_file"
 
+vision_reordered_artifact="$test_root/visionOS reordered keychain groups"
+/usr/bin/ditto "$vision_artifact" "$vision_reordered_artifact"
+reorder_mobile_keychain_groups \
+    "$vision_reordered_artifact/Products/Applications/Big Wallet.app" \
+    "Safari visionOS.appex"
+invoke_artifact_validator \
+    visionos-reordered-keychain-groups success VISION_OS \
+    "$vision_reordered_artifact" "$valid_key_file"
+
 vision_source_keychain_artifact="$test_root/visionOS extension source keychain group"
 /usr/bin/ditto "$vision_artifact" "$vision_source_keychain_artifact"
 /usr/libexec/PlistBuddy \
@@ -1340,6 +1408,22 @@ invoke_artifact_validator \
     MAC_OS \
     "$mac_artifact" \
     "$valid_key_file"
+
+mac_reordered_artifact="$test_root/macOS reordered keychain groups"
+/usr/bin/ditto "$mac_artifact" "$mac_reordered_artifact"
+mac_reordered_app="$mac_reordered_artifact/Products/Applications/Big Wallet.app"
+for reordered_bundle in \
+    "$mac_reordered_app" \
+    "$mac_reordered_app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app"
+do
+    /usr/libexec/PlistBuddy \
+        -c "Set :keychain-access-groups:0 TESTTEAM.org.lil.wallet.rpc-auth" \
+        -c "Set :keychain-access-groups:1 TESTTEAM.org.lil.keychain" \
+        "$reordered_bundle/Contents/SignedEntitlements.plist"
+done
+invoke_artifact_validator \
+    macos-reordered-keychain-groups success MAC_OS \
+    "$mac_reordered_artifact" "$valid_key_file"
 
 empty_outer_helpers_artifact="$test_root/macOS empty outer Helpers"
 /usr/bin/ditto "$mac_artifact" "$empty_outer_helpers_artifact"

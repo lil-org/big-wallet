@@ -4,14 +4,14 @@
     @testable import Big_Wallet
 
     func launcherTestDependencies(
-        helperURL: @escaping () -> URL? = { nil },
-        validate: @escaping (URL) async -> Bool = { _ in false },
+        helperURL: @escaping @MainActor () -> URL? = { nil },
+        validate: @escaping @MainActor (URL) async -> Bool = { _ in false },
         helpers: @escaping @MainActor () -> [NativeAgentLauncher.RuntimeHelper] = { [] },
         helper: @escaping @MainActor (Int32) -> NativeAgentLauncher.RuntimeHelper? = { _ in nil },
-        identity: @escaping (Int32) -> AmbientRuntimeIdentity? = { _ in nil },
+        identity: @escaping @MainActor (Int32) -> AmbientRuntimeIdentity? = { _ in nil },
         launch: @escaping NativeAgentLauncher.Launch = { _, _, completion in completion(false) },
         uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
-        sleepUntil: @escaping (UInt64) async -> Void = { deadline in
+        sleepUntil: @escaping @MainActor (UInt64) async -> Void = { deadline in
             let now = DispatchTime.now().uptimeNanoseconds
             if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
         }
@@ -25,12 +25,12 @@
     @MainActor
     func approvalServiceTestDependencies(
         launcher: NativeAgentLauncher? = nil,
-        load: @escaping (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult = { _ in .missing },
-        loadManualSwitch: @escaping (ExtensionBridge.Handle, String) async -> ExtensionBridge.SnapshotResult = { _, _ in .missing },
-        beginExecutionRead: @escaping (ExtensionBridge.Handle, String, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionReadResult = { _, _, _, _ in .missing },
-        readResponse: @escaping (ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseReadResult = { _, _ in .missing },
+        load: @escaping @MainActor (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult = { _ in .missing },
+        loadManualSwitch: @escaping @MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.SnapshotResult = { _, _ in .missing },
+        beginExecutionRead: @escaping @MainActor (ExtensionBridge.Handle, String, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionReadResult = { _, _, _, _ in .missing },
+        readResponse: @escaping @MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseReadResult = { _, _ in .missing },
         clearReceipt:
-            @escaping (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
+            @escaping @MainActor (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
             ExtensionBridge.StoreMutationResult = { _, _ in .ownershipLost },
         uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
         wallClock: @escaping () -> Date = Date.init,
@@ -40,14 +40,37 @@
         }
     ) -> NativeApprovalService.Dependencies {
         .init(
-            launcher: launcher ?? NativeAgentLauncher(dependencies: launcherTestDependencies()), load: load,
-            loadManualSwitch: loadManualSwitch, beginExecutionRead: beginExecutionRead,
-            readResponse: readResponse, clearReceipt: clearReceipt,
+            launcher: launcher ?? NativeAgentLauncher(dependencies: launcherTestDependencies()),
+            load: { await load($0) },
+            loadManualSwitch: { await loadManualSwitch($0, $1) },
+            beginExecutionRead: { await beginExecutionRead($0, $1, $2, $3) },
+            readResponse: { await readResponse($0, $1) },
+            clearReceipt: { await clearReceipt($0, $1) },
             uptime: uptime, wallClock: wallClock, sleepUntil: sleepUntil)
     }
 
     @MainActor
     final class NativeApprovalServiceTestFixture {
+        final class ExecutionReads: @unchecked Sendable {
+            private let lock = NSLock()
+            private var active = Set<ExtensionBridge.Handle>()
+            private var released = [ExtensionBridge.Handle]()
+
+            var activeHandles: Set<ExtensionBridge.Handle> { lock.withLock { active } }
+            var releasedHandles: [ExtensionBridge.Handle] { lock.withLock { released } }
+
+            func acquire(_ handle: ExtensionBridge.Handle) -> Bool {
+                lock.withLock { active.insert(handle).inserted }
+            }
+
+            func release(_ handle: ExtensionBridge.Handle) {
+                lock.withLock {
+                    active.remove(handle)
+                    released.append(handle)
+                }
+            }
+        }
+
         final class Clock: @unchecked Sendable {
             private let lock = NSLock()
             private var uptime: UInt64 = 1_000_000_000
@@ -126,20 +149,21 @@
         var manualLoads = [ExtensionBridge.Handle]()
         var executionReads = [ExtensionBridge.Handle]()
         var responseReads = [ExtensionBridge.Handle]()
-        var releasedReads = [ExtensionBridge.Handle]()
-        var activeReads = Set<ExtensionBridge.Handle>()
+        private let executionReadsState = ExecutionReads()
+        var releasedReads: [ExtensionBridge.Handle] { executionReadsState.releasedHandles }
+        var activeReads: Set<ExtensionBridge.Handle> { executionReadsState.activeHandles }
         var responses = [ExtensionBridge.Handle: [String: Any]]()
-        var onManualLoad: ((ExtensionBridge.Handle, String) async -> ExtensionBridge.SnapshotResult)?
-        var onBeginRead: ((ExtensionBridge.Handle, String, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionReadResult)?
-        var onReadResponse: ((ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseReadResult)?
-        var onValidate: ((URL) async -> Bool)?
-        var onLoad: ((ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult)?
+        var onManualLoad: (@MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.SnapshotResult)?
+        var onBeginRead: (@MainActor (ExtensionBridge.Handle, String, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionReadResult)?
+        var onReadResponse: (@MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseReadResult)?
+        var onValidate: (@MainActor (URL) async -> Bool)?
+        var onLoad: (@MainActor (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult)?
         var onLaunch:
             ((NativeAgentLauncher.HelperTarget, NativeAgentRoute, @escaping (Bool) -> Void) -> Void)?
         var onQuit: ((Int32) -> Bool)?
         var onClear:
             (
-                (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
+                @MainActor (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
                     ExtensionBridge.StoreMutationResult
             )?
 
@@ -263,7 +287,7 @@
                         completion(false)
                     }
                 },
-                uptime: { self.clock.now }, sleepUntil: clock.sleepUntil
+                uptime: { [clock] in clock.now }, sleepUntil: clock.sleepUntil
             )
         }
 
@@ -289,15 +313,15 @@
                     case .responded: return .responseReady
                     case .approving: return .pending
                     case .queued(_, .staged):
-                        guard self.activeReads.insert(handle).inserted else { return .pending }
+                        let executionReads = self.executionReadsState
+                        guard executionReads.acquire(handle) else { return .pending }
                         return .acquired(.init(
                             handle: handle,
                             context: .init(revisions: revisions, observedAt: self.clock.date,
                                            executionDeadline: deadline, fenceToken: UUID()),
                             nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
                             finish: {
-                                self.activeReads.remove(handle)
-                                self.releasedReads.append(handle)
+                                executionReads.release(handle)
                             }
                         ))
                     case .queued: return .needsDelivery(snapshot.nativeDeliveryNonce)
@@ -326,7 +350,7 @@
                     }
                     return .persisted
                 },
-                uptime: { self.clock.now }, wallClock: { self.clock.date },
+                uptime: { [clock] in clock.now }, wallClock: { [clock] in clock.date },
                 sleepUntil: { [clock] in await clock.sleepUntil($0) }
             )
         }

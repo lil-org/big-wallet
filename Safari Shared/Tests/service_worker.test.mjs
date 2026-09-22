@@ -1245,6 +1245,48 @@ test("a lost switch admission reply requires another click and resumes the canon
     assert.notEqual(restarted.nativeMessages[0].message.enqueueAttempt, original.enqueueAttempt);
 });
 
+test("an expired admission reply preserves its newer owner or leaves completion to quiet recovery", async () => {
+    for (const replaced of [false, true]) {
+        let now = 1_700_000_000_000;
+        const firstReply = deferred();
+        const descriptor = recoveryDescriptor({state: "completed"});
+        let admitted = 0;
+        let persisted = false;
+        const harness = makeHarness({
+            dateNow: () => now,
+            recoveryNative: message => ({
+                id: message.id, requests: persisted ? [descriptor] : [], nextCursor: null,
+            }),
+            native: message => {
+                if (message.name === "switchAccount") {
+                    return ++admitted === 1 ? firstReply.promise
+                        : nativeAcknowledgement(descriptor.id, descriptor.revisions);
+                }
+                assert.equal(message.subject, replaced ? "getResponse" : "getManualSwitchResponse");
+                return nativeError({
+                    id: message.id, name: "switchAccount", provider: "multiple",
+                    error: {code: 4001, message: "Canceled"},
+                });
+            },
+        });
+        const first = harness.dispatch(manualSwitchIntent(), contentSender());
+        await settle();
+        now += 76 * 60 * 1000;
+        if (replaced) {
+            assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
+        }
+        persisted = true;
+        firstReply.resolve(nativeAcknowledgement(descriptor.id, descriptor.revisions));
+        assert.equal((await first).id, descriptor.id);
+        assert.equal(await harness.runTimer(), replaced);
+        if (!replaced) { await harness.fireAlarm(); }
+
+        assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
+        assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
+        assert.equal(await harness.runTimer(), false);
+    }
+});
+
 test("another click recovers an unacknowledged completed switch before a later click starts a new one", async () => {
     let acknowledged = false;
     const native = message => {
@@ -1808,7 +1850,7 @@ test("a live click during recovery acknowledgement shares the read and takes ove
         assert.equal(acknowledgements, 1);
         const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
         assert.equal(admitted.id, descriptor.id);
-        assert.equal(await harness.runTimer(), true);
+        assert.equal(await harness.runTimer(), false);
         assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
         assert.equal(acknowledgements, 1);
         if (outcome === "timeout") {
@@ -1826,6 +1868,67 @@ test("a live click during recovery acknowledgement shares the read and takes ove
         assert.equal(providerStateWrites(harness).length, 1);
         assert.deepEqual(harness.storage.get(descriptor.configurationKey).revisions, {ethereum: 1, solana: 1});
     }
+});
+
+test("rediscovery and a live click reuse a completion omitted by an intervening snapshot", async () => {
+    const reading = deferred();
+    const descriptor = recoveryDescriptor({state: "completed"});
+    let snapshot = [descriptor];
+    const harness = makeHarness({
+        recoveryNative: message => ({id: message.id, requests: snapshot, nextCursor: null}),
+        native: message => message.name === "switchAccount"
+            ? nativeAcknowledgement(descriptor.id, descriptor.revisions, false)
+            : reading.promise,
+    });
+    await settle();
+    snapshot = [];
+    await harness.fireAlarm();
+    snapshot = [descriptor];
+    const recovered = harness.fireAlarm();
+    await settle();
+    assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
+    assert.equal(await harness.runTimer(), false);
+
+    reading.resolve(nativeError({
+        id: descriptor.id, name: "switchAccount", provider: "multiple",
+        error: {code: 4001, message: "Canceled"},
+    }));
+    await recovered;
+
+    assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
+    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
+    assert.equal(await harness.runTimer(), false);
+});
+
+test("an expired live read finishes before its replacement without forgetting the new admission", async () => {
+    let now = 1_700_000_000_000;
+    const firstRead = deferred();
+    const secondRead = deferred();
+    let admissions = 0;
+    const harness = makeHarness({
+        dateNow: () => now,
+        native: message => message.name === "switchAccount"
+            ? nativeAcknowledgement(30 + ++admissions, message.revisions)
+            : message.id === 31 ? firstRead.promise : secondRead.promise,
+    });
+    await harness.dispatch(manualSwitchIntent(), contentSender());
+    await harness.runTimer();
+    now += 76 * 60 * 1000;
+    assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, 32);
+    await harness.runTimer();
+    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id), [31]);
+
+    firstRead.resolve({id: 31, missing: true});
+    await settle();
+    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id), [31, 32]);
+    assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, 32);
+    assert.equal(admissions, 2);
+    secondRead.resolve(nativeError({
+        id: 32, name: "switchAccount", provider: "multiple",
+        error: {code: 4001, message: "Canceled"},
+    }));
+    await settle();
+    assert.equal(await harness.runTimer(), false);
 });
 
 test("a discovery queued during a delegated live acknowledgement cannot read or acknowledge it again", async () => {

@@ -582,6 +582,7 @@ for relative_file in \
   Scripts/alchemy_login_keychain_supervisor.pl \
   Scripts/assert_no_bundled_alchemy_key.sh \
   Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh \
+  Scripts/release_bundle_validation.sh \
   Wallet.xcodeproj/project.pbxproj \
   "App iOS/Info.plist" \
   "App macOS/Info.plist" \
@@ -597,7 +598,7 @@ done
 /usr/bin/perl -0pi -e '
   s/(validate_mobile_entitlements\(\) \{\n)/$1    return 0\n/
     or die "missing mobile signature validation fixture hook\n";
-' "$submit_fixture/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh"
+' "$submit_fixture/Scripts/release_bundle_validation.sh"
 printf '%s\n' FB00000000 \
   >"$submit_fixture/app-store-connect/macos-app-sandbox-feedback-id.txt"
 
