@@ -55,8 +55,16 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
     }
 
     static func bundleVersion(at bundleURL: URL) -> Version? {
-        guard let bundle = Bundle(url: bundleURL) else { return nil }
-        return bundleVersion(for: bundle)
+        let infoURL = bundleURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: infoURL),
+              let info = try? PropertyListSerialization.propertyList(
+                  from: data, options: [], format: nil
+              ) as? [String: Any],
+              let marketing = info["CFBundleShortVersionString"].map({ String(describing: $0) }),
+              let build = info["CFBundleVersion"].map({ String(describing: $0) }),
+              !marketing.isEmpty,
+              !build.isEmpty else { return nil }
+        return Version(marketing: marketing, build: build)
     }
 
     var bundleURL: URL {

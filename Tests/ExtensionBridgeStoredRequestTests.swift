@@ -4686,6 +4686,21 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     #if os(macOS)
+    func testExpectedRuntimeRefreshesAfterBundleReplacement() throws {
+        let bundleURL = try makeAmbientBundle(name: "Installed", build: "148")
+        let previous = try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL))
+        XCTAssertTrue(previous.installedVersionMatches)
+
+        let replacementURL = try makeAmbientBundle(name: "Replacement", build: "149")
+        try FileManager.default.removeItem(at: bundleURL)
+        try FileManager.default.moveItem(at: replacementURL, to: bundleURL)
+
+        XCTAssertFalse(previous.installedVersionMatches)
+        let current = try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL))
+        XCTAssertEqual(current.version, .init(marketing: "1.0.99", build: "149"))
+        XCTAssertTrue(current.installedVersionMatches)
+    }
+
     func testRuntimeIdentityLoadsMismatchedProtocolForRejection() throws {
         let bundleURL = try makeAmbientBundle(name: "Protocol", build: "148")
         let identity = try runtimeIdentity(
