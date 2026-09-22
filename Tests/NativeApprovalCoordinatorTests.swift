@@ -9,6 +9,87 @@ import XCTest
 @MainActor
 final class NativeApprovalCoordinatorTests: XCTestCase {
 
+    func testSigningDecisionsCaptureTheAccountFromTheReviewedPresentation() async throws {
+        let account = WalletAccount(
+            address: "0x0000000000000000000000000000000000000001",
+            coin: .ethereum,
+            derivation: .custom,
+            derivationPath: "m/44'/60'/0'/0/7",
+            publicKey: "",
+            extendedPublicKey: ""
+        )
+        let approvedAccount = WalletAccountDescriptor(walletID: "reviewed-wallet", account: account)
+        let network = ResolvedEthereumNetwork(network: EthereumNetwork(
+            chainId: 1, name: "Ethereum", symbol: "ETH",
+            rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
+            isTestnet: false, mightShowPrice: true, explorer: nil
+        ), source: .custom)
+        let transaction = Transaction(
+            from: account.address, to: account.address, nonce: "0x1", gas: "0x5208",
+            value: "0x0", data: "0x", preparedFee: .legacy(gasPrice: 10)
+        )
+        let actions: [DappRequestAction] = [
+            .approveMessage(SignMessageAction(
+                subject: .signPersonalMessage, walletId: approvedAccount.walletID,
+                account: account, meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+            )),
+            .approveTransaction(SendTransactionAction(
+                transaction: transaction, resolvedNetwork: network,
+                walletId: approvedAccount.walletID, account: account
+            )),
+        ]
+        for action in actions {
+            let clock = Clock()
+            let waits = ScheduledWaits()
+            var capturedDecision: DappApprovalDecision?
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+                prepareWithoutWallets: { _ in .approval(action) },
+                attemptNativeDecision: { _, authorization in
+                    capturedDecision = authorization.decision
+                    return .responseReady
+                }
+            ))
+            defer { waits.resumeAll() }
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication()
+            await waitForState(fixture.coordinator, .reviewing)
+            await waitForScheduledWait(waits, count: 1)
+            let staged = try ownedSnapshot(fixture, staged: true)
+            fixture.store.stageHandler = { _, _, _, _ in
+                fixture.store.snapshot = staged
+                return .persisted
+            }
+            switch action {
+            case .approveMessage:
+                fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network)
+                XCTAssertTrue(fixture.store.stagedApprovalDates.isEmpty)
+                fixture.coordinator.approveMessage(solanaCluster: nil)
+            case .approveTransaction:
+                fixture.coordinator.approveMessage(solanaCluster: nil)
+                XCTAssertTrue(fixture.store.stagedApprovalDates.isEmpty)
+                fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network)
+            default:
+                return XCTFail("Expected signing action")
+            }
+            await waitForState(fixture.coordinator, .waiting)
+            await waitForScheduledWait(waits, count: 2)
+            waits.resumeAll()
+            await waitForState(fixture.coordinator, .finished)
+
+            switch try XCTUnwrap(capturedDecision) {
+            case .message(let decision):
+                XCTAssertEqual(decision.approvedAccount, approvedAccount)
+            case .transaction(let decision):
+                XCTAssertEqual(decision.approvedAccount, approvedAccount)
+            default:
+                XCTFail("Expected an account-bound signing decision")
+            }
+            XCTAssertEqual(fixture.store.stagedApprovalDates.count, 1)
+        }
+    }
+
     func testReviewLifetimeInvalidatesBeforeCleanupAndDoesNotRetainParticipants() {
         let lifetime = NativeApprovalReviewLifetime()
         var cleanupCount = 0

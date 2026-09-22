@@ -34,9 +34,11 @@ enum DappApprovalDecision: Equatable, Sendable {
     }
 
     struct MessageApproval: Equatable, Sendable {
+        let approvedAccount: WalletAccountDescriptor
         let solanaCluster: Solana.Cluster?
 
-        init(solanaCluster: Solana.Cluster?) {
+        init(approvedAccount: WalletAccountDescriptor, solanaCluster: Solana.Cluster?) {
+            self.approvedAccount = approvedAccount
             self.solanaCluster = solanaCluster
         }
     }
@@ -102,6 +104,7 @@ enum DappApprovalDecision: Equatable, Sendable {
     }
 
     struct TransactionExecution: Equatable, Sendable {
+        let approvedAccount: WalletAccountDescriptor
         let nonce: String
         let gasLimit: String
         let fee: TransactionFee
@@ -111,7 +114,8 @@ enum DappApprovalDecision: Equatable, Sendable {
 
         init?(
             _ transaction: Transaction,
-            reviewedNetwork: ResolvedEthereumNetwork
+            reviewedNetwork: ResolvedEthereumNetwork,
+            approvedAccount: WalletAccountDescriptor
         ) {
             guard let nonce = transaction.nonce.flatMap({
                       EthereumQuantity.parseUInt256($0, allowPrefixless: true)
@@ -124,6 +128,7 @@ enum DappApprovalDecision: Equatable, Sendable {
                 return nil
             }
             self.nonce = nonce.toHexString(withPrefix: true)
+            self.approvedAccount = approvedAccount
             self.gasLimit = gasLimit.toHexString(withPrefix: true)
             switch preparedFee {
             case .legacy(let gasPrice):
@@ -213,11 +218,23 @@ enum DappApprovalValidator {
         case message(SignMessageAction, Solana.Cluster?)
         case transaction(SendTransactionAction, Transaction)
         case addEthereumChain(AddEthereumChainAction)
+
+        var signingAccount: WalletAccountDescriptor? {
+            switch self {
+            case .message(let action, _):
+                return WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            case .transaction(let action, _):
+                return WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            case .accountSelection, .addEthereumChain:
+                return nil
+            }
+        }
     }
 
     enum Failure: Error {
         case invalidDecision
         case staleTransaction
+        case staleAccount
     }
 
     static func resolve(
@@ -238,12 +255,18 @@ enum DappApprovalValidator {
                   ) else { return .failure(.invalidDecision) }
             return .success(.accountSelection(action, resolved))
         case (.approveMessage(let action), .message(let approval)):
+            guard approval.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
+                return .failure(.staleAccount)
+            }
             guard (action.solanaClusterOptions != nil) ==
                     (approval.solanaCluster != nil) else {
                 return .failure(.invalidDecision)
             }
             return .success(.message(action, approval.solanaCluster))
         case (.approveTransaction(let action), .transaction(let execution)):
+            guard execution.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
+                return .failure(.staleAccount)
+            }
             guard let transaction = execution.applying(to: action) else {
                 return .failure(.staleTransaction)
             }

@@ -262,7 +262,7 @@ final class PopupRequestSessions {
         walletEnvironment: PopupWalletEnvironment(
             reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() },
             unlockWallets: {
-                await SafariApprovalVault.shared.unlockResult(reason: $0)
+                await SafariApprovalVault.shared.unlockResult(reason: $0, approvedAccount: $1)
             }
         ),
         loadsTransactionContext: true
@@ -946,7 +946,10 @@ final class PopupRequestSessions {
     ) async -> Bool {
         guard case .success = DappApprovalValidator.resolve(
             action: .approveMessage(action),
-            decision: .message(.init(solanaCluster: cluster)),
+            decision: .message(.init(
+                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account),
+                solanaCluster: cluster
+            )),
             accounts: nil,
             networkResolver: selectionNetworkResolver
         ) else {
@@ -970,13 +973,16 @@ final class PopupRequestSessions {
         executionDeadline: Date
     ) async -> Bool {
         let reason: String
+        let approvedAccount: WalletAccountDescriptor
         let transactionSession: PopupTransactionSession?
         switch action {
         case .approveMessage(let message):
             reason = message.subject.title
+            approvedAccount = WalletAccountDescriptor(walletID: message.walletId, account: message.account)
             transactionSession = nil
-        case .approveTransaction:
+        case .approveTransaction(let transactionAction):
             reason = Strings.sendTransaction
+            approvedAccount = WalletAccountDescriptor(walletID: transactionAction.walletId, account: transactionAction.account)
             guard let transaction = session.transaction else { return false }
             transactionSession = transaction
         case .selectAccount, .switchAccount, .addEthereumChain:
@@ -991,7 +997,8 @@ final class PopupRequestSessions {
         let authentication = await authenticateClaimedSession(
             session: session,
             approval: approval,
-            reason: reason
+            reason: reason,
+            approvedAccount: approvedAccount
         )
         guard case .unlocked(let catalog, let signer) = authentication else {
             if let transactionSession, let transactionToken {
@@ -1054,7 +1061,8 @@ final class PopupRequestSessions {
             case .approved(let transaction):
                 guard let execution = DappApprovalDecision.TransactionExecution(
                     transaction,
-                    reviewedNetwork: reviewedAction.resolvedNetwork
+                    reviewedNetwork: reviewedAction.resolvedNetwork,
+                    approvedAccount: approvedAccount
                 ) else {
                     await releaseApproval(
                         approval.claim, for: session, token: approval.token,
@@ -1074,7 +1082,7 @@ final class PopupRequestSessions {
                 return true
             }
         } else {
-            decision = .message(.init(solanaCluster: cluster))
+            decision = .message(.init(approvedAccount: approvedAccount, solanaCluster: cluster))
         }
         guard case .valid = await validateSigningAccess(
             for: session,
@@ -1156,12 +1164,12 @@ final class PopupRequestSessions {
         executionDeadline: Date
     ) async -> SigningValidation {
         guard isCurrent(session, token: approval.token) else { return .superseded }
-        let signingAccount: (walletID: String, account: WalletAccount)
+        let approvedAccount: WalletAccountDescriptor
         switch reviewedAction {
         case .approveMessage(let action):
-            signingAccount = (action.walletId, action.account)
+            approvedAccount = WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         case .approveTransaction(let action):
-            signingAccount = (action.walletId, action.account)
+            approvedAccount = WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         case .selectAccount, .switchAccount, .addEthereumChain:
             return .reviewChanged
         }
@@ -1186,25 +1194,15 @@ final class PopupRequestSessions {
         guard revisionIsCurrent,
               walletsAvailable,
               session.reviewCatalog?.identity == catalog.identity,
+              signer.approvedAccount == approvedAccount,
               signer.validateCurrent(),
               catalog.orderedAccounts.contains(where: {
-                  $0.walletId == signingAccount.walletID &&
-                      Self.sameAccountIdentity($0.account, signingAccount.account)
+                  approvedAccount.matches(walletID: $0.walletId, account: $0.account)
               }),
               networkMatches else {
             return .reviewChanged
         }
         return isCurrent(session, token: approval.token) ? .valid : .superseded
-    }
-
-    private static func sameAccountIdentity(
-        _ left: WalletAccount,
-        _ right: WalletAccount
-    ) -> Bool {
-        left.coin == right.coin &&
-            left.coin.normalizedAddress(left.address) ==
-                right.coin.normalizedAddress(right.address) &&
-            left.derivationPath == right.derivationPath
     }
 
     private func beginAndClaimApproval(
@@ -1251,13 +1249,14 @@ final class PopupRequestSessions {
     private func authenticateClaimedSession(
         session: PopupRequestSession,
         approval: ClaimedApproval,
-        reason: String
+        reason: String,
+        approvedAccount: WalletAccountDescriptor
     ) async -> AuthenticationOutcome {
         guard session.beginAuthentication(
             claim: approval.claim,
             token: approval.token
         ) else { return .superseded }
-        let outcome = await authenticate(session: session, reason: reason)
+        let outcome = await authenticate(session: session, reason: reason, approvedAccount: approvedAccount)
         guard isCurrent(session, token: approval.token),
               session.finishAuthentication(
                 claim: approval.claim,
@@ -1273,9 +1272,10 @@ final class PopupRequestSessions {
 
     private func authenticate(
         session: PopupRequestSession,
-        reason: String
+        reason: String,
+        approvedAccount: WalletAccountDescriptor
     ) async -> AuthenticationOutcome {
-        switch await walletEnvironment.unlock(reason) {
+        switch await walletEnvironment.unlock(reason, approvedAccount) {
         case .canceled:
             return .cancelled
         case .unavailable:
@@ -1287,6 +1287,10 @@ final class PopupRequestSessions {
         case .unlocked(let catalog, let signer):
             guard let reviewedIdentity = session.reviewCatalog?.identity,
                   catalog.identity == reviewedIdentity,
+                  signer.approvedAccount == approvedAccount,
+                  catalog.orderedAccounts.contains(where: {
+                      approvedAccount.matches(walletID: $0.walletId, account: $0.account)
+                  }),
                   signer.validateCurrent() else {
                 signer.invalidate()
                 return .reviewChanged

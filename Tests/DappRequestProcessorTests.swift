@@ -61,7 +61,7 @@ final class DappRequestProcessorTests: XCTestCase {
             request: request,
             approval: try DappApprovalValidator.resolve(
                 action: .approveMessage(action),
-                decision: .message(.init(solanaCluster: nil)),
+                decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: nil)),
                 accounts: nil,
                 networkResolver: Networks.withChainIdHex
             ).get(),
@@ -140,7 +140,7 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(action.solanaClusterOptions?.suggestedCluster, .devnet)
         guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
             action: .approveMessage(action),
-            decision: .message(.init(solanaCluster: nil)),
+            decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: nil)),
             accounts: nil, networkResolver: Networks.withChainIdHex
         ) else { return XCTFail("A missing cluster must fail validation") }
 
@@ -148,7 +148,7 @@ final class DappRequestProcessorTests: XCTestCase {
             request: request,
             approval: try DappApprovalValidator.resolve(
                 action: .approveMessage(action),
-                decision: .message(.init(solanaCluster: .testnet)),
+                decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: .testnet)),
                 accounts: nil, networkResolver: Networks.withChainIdHex
             ).get(),
             signer: signer
@@ -287,12 +287,90 @@ final class DappRequestProcessorTests: XCTestCase {
                 subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
                 payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
             )
-            for decision in [DappApprovalDecision.message(.init(solanaCluster: .devnet)),
+            for decision in [DappApprovalDecision.message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: .devnet)),
                              .addEthereumChain] {
                 guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
                     action: .approveMessage(action), decision: decision,
                     accounts: nil, networkResolver: Networks.withChainIdHex
                 ) else { return XCTFail("Invalid decisions must fail validation") }
+            }
+        }
+    }
+
+    func testMessageDecisionRejectsAnotherWalletWithTheSameAddress() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            let request = try coin == .ethereum
+                ? ethereumRequest(method: "signPersonalMessage", address: account.address,
+                                  parameters: ["data": "0x7265766965776564"])
+                : solanaRequest(method: "signMessage", publicKey: account.address,
+                                parameters: ["message": "7265766965776564", "messageEncoding": "hex"])
+            let original = SpecificWalletAccount(walletId: "reviewed-wallet", account: account)
+            let duplicate = SpecificWalletAccount(walletId: "duplicate-wallet", account: account)
+            let identity = processorCatalog(accounts: [account]).identity
+            let processor = DappRequestProcessor()
+            guard case .approval(.approveMessage(let reviewed)) = processor.prepare(
+                request,
+                catalog: WalletReviewCatalog(identity: identity, orderedAccounts: [original, duplicate])
+            ) else { return XCTFail("Expected a signing review") }
+            let approvedAccount = WalletAccountDescriptor(walletID: reviewed.walletId, account: reviewed.account)
+            let decision = DappApprovalDecision.message(.init(
+                approvedAccount: approvedAccount,
+                solanaCluster: nil
+            ))
+            let approval = try DappApprovalValidator.resolve(
+                action: .approveMessage(reviewed), decision: decision,
+                accounts: nil, networkResolver: { _ in nil }
+            ).get()
+            XCTAssertEqual(approval.signingAccount, approvedAccount)
+
+            for accounts in [[duplicate, original], [duplicate]] {
+                guard case .approval(let rematerialized) = processor.prepare(
+                    request,
+                    catalog: WalletReviewCatalog(identity: identity, orderedAccounts: accounts)
+                ) else { return XCTFail("Expected the duplicate account to prepare") }
+                guard case .failure(.staleAccount) = DappApprovalValidator.resolve(
+                    action: rematerialized, decision: decision,
+                    accounts: nil, networkResolver: { _ in nil }
+                ) else { return XCTFail("A different wallet must require another approval") }
+            }
+        }
+    }
+
+    func testMessageDecisionChecksAllAccountIdentityFields() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            let action = SignMessageAction(
+                subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
+                payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
+            )
+            let exact = WalletAccountDescriptor(walletID: action.walletId, account: account)
+            let scopes: [WalletAccountDescriptor] = [
+                exact,
+                .init(walletID: "other", coin: coin, normalizedAddress: exact.normalizedAddress,
+                      derivationPath: exact.derivationPath),
+                .init(walletID: exact.walletID, coin: coin == .ethereum ? .solana : .ethereum,
+                      normalizedAddress: exact.normalizedAddress, derivationPath: exact.derivationPath),
+                .init(walletID: exact.walletID, coin: coin, normalizedAddress: "other-address",
+                      derivationPath: exact.derivationPath),
+                .init(walletID: exact.walletID, coin: coin, normalizedAddress: exact.normalizedAddress,
+                      derivationPath: exact.derivationPath + "/1"),
+            ]
+            for scope in scopes {
+                let result = DappApprovalValidator.resolve(
+                    action: .approveMessage(action),
+                    decision: .message(.init(approvedAccount: scope, solanaCluster: nil)),
+                    accounts: nil, networkResolver: { _ in nil }
+                )
+                if scope == exact {
+                    XCTAssertEqual(try result.get().signingAccount, exact)
+                } else {
+                    guard case .failure(.staleAccount) = result else {
+                        return XCTFail("Every signing identity field must match")
+                    }
+                }
             }
         }
     }
@@ -310,7 +388,8 @@ final class DappRequestProcessorTests: XCTestCase {
             walletId: "wallet", account: account
         )
         let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
-            transaction, reviewedNetwork: network
+            transaction, reviewedNetwork: network,
+            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         ))
         guard case .success(.transaction(_, let rebuilt)) = DappApprovalValidator.resolve(
             action: .approveTransaction(action), decision: .transaction(execution),
@@ -319,6 +398,15 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(rebuilt.nonce, transaction.nonce)
         XCTAssertEqual(rebuilt.gas, transaction.gas)
         XCTAssertEqual(rebuilt.preparedFee, transaction.preparedFee)
+
+        let replacedAccountAction = SendTransactionAction(
+            transaction: transaction, resolvedNetwork: network,
+            walletId: "duplicate-wallet", account: account
+        )
+        guard case .failure(.staleAccount) = DappApprovalValidator.resolve(
+            action: .approveTransaction(replacedAccountAction), decision: .transaction(execution),
+            accounts: nil, networkResolver: { _ in nil }
+        ) else { return XCTFail("The transaction must remain bound to the reviewed wallet") }
 
         let changedNetwork = try XCTUnwrap(resolvedEthereumNetworkResolution(source: .alchemy).resolvedNetwork)
         let changedAction = SendTransactionAction(
@@ -333,7 +421,8 @@ final class DappRequestProcessorTests: XCTestCase {
         var unready = transaction
         unready.currentBaseFeePerGas = 11
         let unreadyExecution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
-            unready, reviewedNetwork: network
+            unready, reviewedNetwork: network,
+            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         ))
         guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
             action: .approveTransaction(action), decision: .transaction(unreadyExecution),

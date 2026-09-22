@@ -4565,12 +4565,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ),
             source: .custom
         )
-        let execution = try XCTUnwrap(
-            DappApprovalDecision.TransactionExecution(
-                edited,
-                reviewedNetwork: resolvedNetwork
-            )
-        )
         let account = WalletAccount(
             address: original.from,
             coin: .ethereum,
@@ -4584,6 +4578,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             resolvedNetwork: resolvedNetwork,
             walletId: "wallet",
             account: account
+        )
+        let execution = try XCTUnwrap(
+            DappApprovalDecision.TransactionExecution(
+                edited,
+                reviewedNetwork: resolvedNetwork,
+                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            )
         )
         let rebuilt = try XCTUnwrap(execution.applying(to: action))
         XCTAssertEqual(rebuilt.from, original.from)
@@ -4660,10 +4661,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 preparedFee: fee,
                 feeProvenance: provenance
             )
-            let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
-                transaction,
-                reviewedNetwork: network
-            ))
             let action = SendTransactionAction(
                 transaction: transaction,
                 resolvedNetwork: network,
@@ -4677,6 +4674,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     extendedPublicKey: ""
                 )
             )
+            let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+                transaction,
+                reviewedNetwork: network,
+                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            ))
             let rebuilt = try XCTUnwrap(execution.applying(to: action))
             XCTAssertEqual(rebuilt.preparedFee, fee)
             XCTAssertEqual(rebuilt.feeProvenance, provenance)

@@ -28,6 +28,19 @@ struct WalletAccountDescriptor: Codable, Equatable, Hashable, Sendable {
         self.derivationPath = derivationPath
     }
 
+    init(walletID: String, account: WalletAccount) {
+        self.init(
+            walletID: walletID,
+            coin: account.coin,
+            normalizedAddress: account.coin.normalizedAddress(account.address),
+            derivationPath: account.derivationPath
+        )
+    }
+
+    func matches(walletID: String, account: WalletAccount) -> Bool {
+        isValid && self == Self(walletID: walletID, account: account)
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         walletID = try container.decode(String.self, forKey: .walletID)
@@ -103,12 +116,7 @@ struct WalletAccountCatalog: Codable, Equatable, Sendable {
     init(wallets: [WalletContainer]) {
         accounts = wallets.flatMap { wallet in
             wallet.accounts.map { account in
-                WalletAccountDescriptor(
-                    walletID: wallet.id,
-                    coin: account.coin,
-                    normalizedAddress: account.coin.normalizedAddress(account.address),
-                    derivationPath: account.derivationPath
-                )
+                WalletAccountDescriptor(walletID: wallet.id, account: account)
             }
         }
     }
@@ -234,11 +242,14 @@ struct WalletReviewCatalog {
 
 final class SourceWalletSigner: WalletSigning {
 
-    static let shared = SourceWalletSigner()
-
+    let approvedAccount: WalletAccountDescriptor
     private let walletsManager: WalletsManager
 
-    init(walletsManager: WalletsManager = .shared) {
+    init(
+        approvedAccount: WalletAccountDescriptor,
+        walletsManager: WalletsManager = .shared
+    ) {
+        self.approvedAccount = approvedAccount
         self.walletsManager = walletsManager
     }
 
@@ -246,7 +257,13 @@ final class SourceWalletSigner: WalletSigning {
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey? {
-        walletsManager.getPrivateKey(walletId: walletID, account: account)
+        guard approvedAccount.matches(walletID: walletID, account: account) else {
+            return nil
+        }
+        return walletsManager.getPrivateKey(
+            walletId: approvedAccount.walletID,
+            account: approvedAccount.account
+        )
     }
 }
 
@@ -396,6 +413,7 @@ final class UnlockedWalletSigner: OwnedWalletSigning {
 
 final class RequestScopedWalletSigner: WalletSigning {
 
+    let approvedAccount: WalletAccountDescriptor
     private let lock = NSLock()
     private var access: OwnedWalletSigning?
     private let isCurrent: () -> Bool
@@ -404,10 +422,12 @@ final class RequestScopedWalletSigner: WalletSigning {
 
     init(
         _ access: OwnedWalletSigning,
+        approvedAccount: WalletAccountDescriptor,
         isCurrent: @escaping () -> Bool,
         acquireExecutionLease: @escaping () async -> WalletExecutionLease?
     ) {
         self.access = access
+        self.approvedAccount = approvedAccount
         self.isCurrent = isCurrent
         self.acquireExecutionLease = acquireExecutionLease
     }
@@ -424,6 +444,9 @@ final class RequestScopedWalletSigner: WalletSigning {
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey? {
+        guard approvedAccount.matches(walletID: walletID, account: account) else {
+            return nil
+        }
         guard isCurrent() else {
             invalidate()
             return nil
@@ -434,8 +457,8 @@ final class RequestScopedWalletSigner: WalletSigning {
             return nil
         }
         let privateKey = access?.privateKey(
-            walletID: walletID,
-            account: account
+            walletID: approvedAccount.walletID,
+            account: approvedAccount.account
         )
         lock.unlock()
         guard isCurrent() else {

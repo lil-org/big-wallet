@@ -4,11 +4,13 @@ import XCTest
 
 func makeRequestScopedWalletSignerForTesting(
     _ signer: any WalletSigning = TestWalletSigner(),
+    approvedAccount: WalletAccountDescriptor,
     isCurrent: @escaping () -> Bool = { true },
     acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil
 ) -> RequestScopedWalletSigner {
     RequestScopedWalletSigner(
         BorrowedWalletSignerForTesting(signer),
+        approvedAccount: approvedAccount,
         isCurrent: isCurrent,
         acquireExecutionLease: acquireExecutionLease ?? {
             isCurrent() ? WalletExecutionLease(release: {}) : nil

@@ -723,8 +723,13 @@ final class SafariApprovalVault {
         }
     }
 
-    func unlockResult(reason: String) async -> WalletUnlockResult {
-        guard let record = withLock({ loadEnvelopeRecordLocked() }) else {
+    func unlockResult(
+        reason: String,
+        approvedAccount: WalletAccountDescriptor
+    ) async -> WalletUnlockResult {
+        guard approvedAccount.isValid,
+              let record = withLock({ loadEnvelopeRecordLocked() }),
+              record.catalog.catalog.accounts.contains(approvedAccount) else {
             return .unavailable
         }
         let envelope = record.envelope
@@ -787,6 +792,7 @@ final class SafariApprovalVault {
                       (id: $0.walletID, data: $0.storedKeyJSON)
                   }
               ),
+              WalletAccountCatalog(wallets: wallets).accounts.contains(approvedAccount),
               let signer = UnlockedWalletSigner(password: secret.password, wallets: wallets)
         else { return .unavailable }
         let catalog = WalletReviewCatalog(
@@ -802,6 +808,7 @@ final class SafariApprovalVault {
         }
         return .unlocked(catalog: catalog, signer: RequestScopedWalletSigner(
             signer,
+            approvedAccount: approvedAccount,
             isCurrent: { [weak self] in
                 self?.isCurrent(snapshotData, generation: generation) == true
             },

@@ -369,16 +369,22 @@ final class NativeApprovalCoordinator {
     }
 
     func approveMessage(solanaCluster: Solana.Cluster?) {
-        stage(.message(.init(solanaCluster: solanaCluster)))
+        guard case .approval(_, .approveMessage(let action)) = currentPresentation?.presentation else { return }
+        stage(.message(.init(
+            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account),
+            solanaCluster: solanaCluster
+        )))
     }
 
     func approveTransaction(
         _ transaction: Transaction,
         reviewedNetwork: ResolvedEthereumNetwork
     ) {
+        guard case .approval(_, .approveTransaction(let action)) = currentPresentation?.presentation else { return }
         guard let execution = DappApprovalDecision.TransactionExecution(
             transaction,
-            reviewedNetwork: reviewedNetwork
+            reviewedNetwork: reviewedNetwork,
+            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         ) else {
             failAndReject()
             return
