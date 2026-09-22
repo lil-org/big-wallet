@@ -144,20 +144,16 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             return
         }
         switch command {
-        case .getManualSwitchRequests(let cursor):
+        case .getManualSwitchRequests:
             Task {
                 switch await Self.bridge.listManualSwitchRequests(
-                    profileIdentifier: profileIdentifier,
-                    cursor: cursor
+                    profileIdentifier: profileIdentifier
                 ) {
-                case .available(let page):
+                case .available(let requests):
                     Self.respond(with: [
                         "id": request.id,
-                        "requests": page.requests.map(\.json),
-                        "nextCursor": page.nextCursor as Any? ?? NSNull(),
+                        "requests": requests.map(\.json),
                     ], context: context)
-                case .invalidCursor:
-                    context.cancelRequest(withError: HandlerError.invalidMessage)
                 case .unavailable:
                     context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 }
@@ -284,6 +280,15 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         for: request,
                         payload: .error(.userRejected)
                     ),
+                    for: request,
+                    context: context
+                )
+            case .manualSwitchCapacityReached:
+                Self.respond(
+                    with: ResponseToExtension(for: request, payload: .error(.init(
+                        message: Strings.manualSwitchCapacityReached,
+                        code: ProviderResponseError.internalErrorCode
+                    ))),
                     for: request,
                     context: context
                 )

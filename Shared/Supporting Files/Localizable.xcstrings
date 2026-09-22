@@ -21067,6 +21067,286 @@
         }
       }
     },
+    "Too many account switches are pending. Finish one, then try again." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هناك عدد كبير جدًا من عمليات تبديل الحساب المعلّقة. أكمل إحداها، ثم حاول مرة أخرى."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "অনেকগুলো অ্যাকাউন্ট পরিবর্তন অপেক্ষমাণ আছে। একটি শেষ করে আবার চেষ্টা করুন।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hi ha massa canvis de compte pendents. Acaba’n un i torna-ho a provar."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Čeká příliš mnoho změn účtu. Dokončete jednu a zkuste to znovu."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der er for mange afventende kontoskift. Afslut et af dem, og prøv igen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es stehen zu viele Kontowechsel aus. Schließe einen ab und versuche es erneut."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εκκρεμούν πάρα πολλές αλλαγές λογαριασμού. Ολοκληρώστε μία και δοκιμάστε ξανά."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many account switches are pending. Finish one, then try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay demasiados cambios de cuenta pendientes. Completa uno y vuelve a intentarlo."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay demasiados cambios de cuenta pendientes. Completa uno y vuelve a intentarlo."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liian monta tilin vaihtoa odottaa. Viimeistele yksi ja yritä uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trop de changements de compte sont en attente. Terminez-en un, puis réessayez."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ઘણા બધા એકાઉન્ટ ફેરફારો બાકી છે. એક પૂરો કરો, પછી ફરી પ્રયાસ કરો."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יותר מדי החלפות חשבון ממתינות. יש להשלים אחת מהן ולנסות שוב."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बहुत सारे खाते बदलने के अनुरोध लंबित हैं। एक पूरा करें, फिर दोबारा कोशिश करें।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previše je promjena računa na čekanju. Dovršite jednu pa pokušajte ponovno."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Túl sok fiókváltás van függőben. Fejezzen be egyet, majd próbálja újra."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terlalu banyak pergantian akun yang tertunda. Selesaikan satu, lalu coba lagi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ci sono troppi cambi di account in sospeso. Completane uno, poi riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留中のアカウント切り替えが多すぎます。1件完了してから、もう一度お試しください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಹಲವಾರು ಖಾತೆ ಬದಲಾವಣೆಗಳು ಬಾಕಿ ಇವೆ. ಒಂದನ್ನು ಪೂರ್ಣಗೊಳಿಸಿ, ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대기 중인 계정 전환이 너무 많습니다. 하나를 완료한 후 다시 시도하세요."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "വളരെയധികം അക്കൗണ്ട് മാറ്റങ്ങൾ തീർപ്പാക്കാനുണ്ട്. ഒരെണ്ണം പൂർത്തിയാക്കിയ ശേഷം വീണ്ടും ശ്രമിക്കുക."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "खूप खाते बदल प्रलंबित आहेत. एक पूर्ण करा, नंतर पुन्हा प्रयत्न करा."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terlalu banyak pertukaran akaun yang belum selesai. Selesaikan satu, kemudian cuba lagi."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For mange kontobytter venter. Fullfør ett av dem, og prøv igjen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er staan te veel accountwissels open. Rond er één af en probeer het opnieuw."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଅତ୍ୟଧିକ ଆକାଉଣ୍ଟ ପରିବର୍ତ୍ତନ ବାକି ଅଛି। ଗୋଟିଏ ସମ୍ପୂର୍ଣ୍ଣ କରି ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਬਹੁਤ ਸਾਰੀਆਂ ਖਾਤਾ ਤਬਦੀਲੀਆਂ ਬਾਕੀ ਹਨ। ਇੱਕ ਪੂਰੀ ਕਰੋ, ਫਿਰ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oczekuje zbyt wiele zmian konta. Dokończ jedną i spróbuj ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Há muitas trocas de conta pendentes. Conclua uma e tente novamente."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Há demasiadas mudanças de conta pendentes. Conclua uma e tente novamente."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sunt prea multe schimbări de cont în așteptare. Finalizează una, apoi încearcă din nou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Слишком много смен аккаунта ожидают завершения. Завершите одну и попробуйте снова."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Čaká príliš veľa zmien účtu. Dokončite jednu a skúste to znova."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preveč menjav računa je na čakanju. Dokončajte eno in poskusite znova."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "För många kontobyten väntar. Slutför ett av dem och försök igen."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பல கணக்கு மாற்றங்கள் நிலுவையில் உள்ளன. ஒன்றை முடித்துவிட்டு மீண்டும் முயலவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "చాలా ఖాతా మార్పులు పెండింగ్‌లో ఉన్నాయి. ఒకటి పూర్తి చేసి, మళ్లీ ప్రయత్నించండి."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มีการสลับบัญชีที่รอดำเนินการมากเกินไป ดำเนินการให้เสร็จหนึ่งรายการแล้วลองอีกครั้ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Çok fazla hesap değişikliği bekliyor. Birini tamamlayıp tekrar deneyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Забагато змін облікового запису очікують завершення. Завершіть одну й спробуйте ще раз."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اکاؤنٹ کی بہت زیادہ تبدیلیاں زیر التوا ہیں۔ ایک مکمل کریں، پھر دوبارہ کوشش کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Có quá nhiều yêu cầu chuyển tài khoản đang chờ. Hãy hoàn tất một yêu cầu rồi thử lại."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待处理的账户切换过多。请完成其中一项后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待處理的帳號切換過多。請完成其中一項後再試。"
+          }
+        }
+      }
+    },
     "provider is not ready" : {
       "comment" : "Error message when a provider is not ready.",
       "isCommentAutoGenerated" : true,

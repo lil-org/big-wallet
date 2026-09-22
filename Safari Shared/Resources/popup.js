@@ -235,6 +235,7 @@ class PopupQueueController {
     async switchAccountFromIdle() {
         if (!this.canSwitchAccount) { return; }
         const tab = this.tab.activeTab;
+        this.presentation.token = {};
         const {token} = this.presentation;
         const operation = {kind: "switch"};
         this.presentation.operation = operation;
@@ -257,9 +258,10 @@ class PopupQueueController {
         const valid = Number.isSafeInteger(id) && (
             BigWalletBridgeWire.isManualSwitchAcknowledgement(response, id, tab.configurationKey) ||
             BigWalletBridgeWire.isManualSwitchTerminalResponse(response, id));
-        if (!valid) {
+        const terminal = valid ? BigWalletBridgeWire.decodeNativeResponse(response, id) : null;
+        if (!valid || terminal?.kind === "error") {
             this.presentation.operation = null;
-            setText("idle-connection", localized("failedToLoad", "Failed to load"));
+            setText("idle-connection", terminal?.error.message || localized("failedToLoad", "Failed to load"));
             this.renderIdleControls();
             return;
         }

@@ -158,14 +158,9 @@ actor ExtensionBridge {
         }
     }
 
-    struct ManualSwitchRequestsPage: Equatable, Sendable {
-        let requests: [ManualSwitchRequest]
-        let nextCursor: String?
-    }
-
     enum ManualSwitchRequestsResult: Equatable, Sendable {
-        case available(ManualSwitchRequestsPage)
-        case unavailable, invalidCursor
+        case available([ManualSwitchRequest])
+        case unavailable
     }
 
     struct Snapshot {
@@ -434,7 +429,7 @@ actor ExtensionBridge {
             admissionKind: AdmissionKind,
             nativeDeliveryNonce: NativeDeliveryNonce
         )
-        case expired, rejected, unavailable
+        case expired, rejected, manualSwitchCapacityReached, unavailable
     }
 
     enum AdmissionDeadlineDisposition: Equatable {
@@ -481,7 +476,7 @@ actor ExtensionBridge {
     static let maximumRetainedRequests = 16
     static let maximumRetainedRequestsPerOrigin = 12
     static let maximumGlobalRetainedRequests = maximumRetainedRequests
-    static let maximumManualSwitchPageBytes = maximumPayloadBytes * 2
+    static let maximumManualSwitchResponseBytes = maximumPayloadBytes * 2
     static let maximumStoredRecordBytes = maximumPayloadBytes * 2
     static let maximumRetainedBytes = maximumRetainedRequests * maximumStoredRecordBytes
     static let maximumRetainedBytesPerOrigin =
@@ -654,14 +649,14 @@ actor ExtensionBridge {
         store.list(profileIdentifier: profileIdentifier)
     }
 
+    func performMaintenance() {
+        store.performMaintenance()
+    }
+
     func listManualSwitchRequests(
-        profileIdentifier: UUID?,
-        cursor: String? = nil
+        profileIdentifier: UUID?
     ) -> ManualSwitchRequestsResult {
-        store.listManualSwitchRequests(
-            profileIdentifier: profileIdentifier,
-            cursor: cursor
-        )
+        store.listManualSwitchRequests(profileIdentifier: profileIdentifier)
     }
 
     func loadManualSwitch(

@@ -260,52 +260,11 @@ final class ExtensionRequestFileStore {
         let identity: ProfileFileIdentity
     }
 
-    private struct ManualSwitchCursor: Codable {
-        let version: Int
-        let profile: String
-        let admittedAt: Date
-        let requestToken: String
-
-        init(record: Record) {
-            version = 1
-            profile = record.profileIdentifier?.uuidString.lowercased() ?? "default"
-            admittedAt = record.admissionCreatedAt
-            requestToken = record.handle.requestToken
-        }
-
-        static func decode(_ value: String, profileIdentifier: UUID?) -> Self? {
-            guard value.utf8.count <= 1024,
-                  let data = Data(base64Encoded: value),
-                  data.base64EncodedString() == value,
-                  let cursor = try? JSONDecoder().decode(Self.self, from: data),
-                  cursor.version == 1,
-                  cursor.profile == (profileIdentifier?.uuidString.lowercased() ?? "default"),
-                  cursor.admittedAt.timeIntervalSinceReferenceDate.isFinite,
-                  ExtensionBridge.lowercaseUUID(cursor.requestToken) != nil,
-                  cursor.encoded == value else { return nil }
-            return cursor
-        }
-
-        var encoded: String? {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            return (try? encoder.encode(self))?.base64EncodedString()
-        }
-
-        func precedes(_ record: Record) -> Bool {
-            admittedAt < record.admissionCreatedAt ||
-                (admittedAt == record.admissionCreatedAt &&
-                    requestToken < record.handle.requestToken)
-        }
-    }
-
     private static let profileSchemaVersion = 7
     private static let profileDirectoryName = "profiles-v7"
-    private static let profileSweepCursorName = "sweep.cursor"
     private static let operationLockDirectoryName = "operation-locks-v7"
     private static let nativeExecutionFenceDirectoryName =
         "native-execution-fences-v7"
-    static let profileSweepBatchSize = 2
     private static let maximumProfileBytes =
         ExtensionBridge.maximumRetainedBytes + 64 * 1024
     private static let futureSkew = ExtensionBridge.admissionDeadlineFutureSkew
@@ -419,8 +378,9 @@ final class ExtensionRequestFileStore {
                 return .rejected
             }
 
-            if ingress.request.name == "switchAccount",
-               ingress.request.provider == .unknown,
+            let isManualSwitchRequest = ingress.request.name == "switchAccount" &&
+                ingress.request.provider == .unknown
+            if isManualSwitchRequest,
                let existing = profile.state.records.first(where: { record in
                    record.configurationKey == ingress.request.configurationKey &&
                        !record.responseAcknowledged && isManualSwitch(record, in: profile)
@@ -432,6 +392,13 @@ final class ExtensionRequestFileStore {
                     admissionKind: .coalesced,
                     nativeDeliveryNonce: existing.nativeDeliveryNonce
                 )
+            }
+
+            let manualSwitches = isManualSwitchRequest ? profile.state.records.filter {
+                !$0.responseAcknowledged && isManualSwitch($0, in: profile)
+            }.map(manualSwitchRequest) : []
+            if isManualSwitchRequest, manualSwitches.count >= ExtensionBridge.maximumRequests {
+                return .manualSwitchCapacityReached
             }
 
             let active = profile.state.records.filter(\.state.isActive)
@@ -462,6 +429,10 @@ final class ExtensionRequestFileStore {
                 state: .pending(request: ingress.canonicalData, approval: .unowned),
                 nativeDeliveryNonce: .init(value: nativeDeliveryNonceValue)
             )
+            if isManualSwitchRequest,
+               !manualSwitchRequestsFit(manualSwitches + [manualSwitchRequest(record)]) {
+                return .manualSwitchCapacityReached
+            }
             guard let retiredHandles = makeRoomForAdmission(
                 record,
                 in: &profile.state.records,
@@ -490,16 +461,9 @@ final class ExtensionRequestFileStore {
     }
 
     func list(profileIdentifier: UUID?) -> ExtensionBridge.SnapshotsResult {
-        let maintenanceCandidates = discoverProfileCandidates(
-            excluding: profileIdentifier
-        )
         return withLock(or: .unavailable) {
             let now = clock()
             guard prepareDirectoriesLocked() else { return .unavailable }
-            sweepProfilesLocked(
-                candidates: maintenanceCandidates,
-                now: now
-            )
             guard case .state(let profile) = readProfileLocked(
                 profileIdentifier: profileIdentifier,
                 now: now,
@@ -550,55 +514,39 @@ final class ExtensionRequestFileStore {
     }
 
     func listManualSwitchRequests(
-        profileIdentifier: UUID?,
-        cursor: String?
+        profileIdentifier: UUID?
     ) -> ExtensionBridge.ManualSwitchRequestsResult {
-        let position: ManualSwitchCursor?
-        if let cursor {
-            guard let decoded = ManualSwitchCursor.decode(
-                cursor,
-                profileIdentifier: profileIdentifier
-            ) else { return .invalidCursor }
-            position = decoded
-        } else {
-            position = nil
-        }
-        return withLock(or: .unavailable) {
+        withLock(or: .unavailable) {
             guard case .state(let profile) = readProfileLocked(
                 profileIdentifier: profileIdentifier,
                 now: clock(),
                 recover: true
             ) else { return .unavailable }
-            let records = profile.state.records.filter {
-                !$0.responseAcknowledged && isManualSwitch($0, in: profile) &&
-                    (position?.precedes($0) ?? true)
+            let requests = profile.state.records.filter {
+                !$0.responseAcknowledged && isManualSwitch($0, in: profile)
             }.sorted {
                 $0.admissionCreatedAt == $1.admissionCreatedAt
                     ? $0.handle.requestToken < $1.handle.requestToken
                     : $0.admissionCreatedAt < $1.admissionCreatedAt
-            }
-            var requests = [ExtensionBridge.ManualSwitchRequest]()
-            var lastCursor: String?
-            for record in records.prefix(ExtensionBridge.maximumRetainedRequests) {
-                guard let cursor = ManualSwitchCursor(record: record).encoded else {
-                    return .unavailable
-                }
-                let candidate = requests + [manualSwitchRequest(record)]
-                guard let data = ExtensionBridge.payloadData([
-                    "requests": candidate.map(\.json),
-                    "nextCursor": cursor,
-                ]), data.count <= ExtensionBridge.maximumManualSwitchPageBytes - 1024 else {
-                    guard !requests.isEmpty else { return .unavailable }
-                    break
-                }
-                requests = candidate
-                lastCursor = cursor
-            }
-            return .available(.init(
-                requests: requests,
-                nextCursor: requests.count < records.count ? lastCursor : nil
-            ))
+            }.map(manualSwitchRequest)
+            guard manualSwitchRequestsFit(requests) else { return .unavailable }
+            return .available(requests)
         }
+    }
+
+    private func manualSwitchRequestsFit(
+        _ requests: [ExtensionBridge.ManualSwitchRequest]
+    ) -> Bool {
+        guard requests.count <= ExtensionBridge.maximumRequests else { return false }
+        let descriptors = requests.map { request in
+            var descriptor = request.json
+            descriptor["state"] = ExtensionBridge.ManualSwitchRequestState.completed.rawValue
+            return descriptor
+        }
+        return ExtensionBridge.payloadData([
+            "id": Int.min,
+            "requests": descriptors,
+        ]).map { $0.count <= ExtensionBridge.maximumManualSwitchResponseBytes } ?? false
     }
 
     func loadManualSwitch(
@@ -1596,9 +1544,25 @@ final class ExtensionRequestFileStore {
         return .state(profile)
     }
 
-    private func discoverProfileCandidates(
-        excluding profileIdentifier: UUID?
-    ) -> [ProfileFileCandidate] {
+    func performMaintenance() {
+        let candidates = discoverProfileCandidates()
+        for candidate in candidates {
+            let maintained = withLock(or: false) {
+                guard prepareDirectoriesLocked() else { return false }
+                _ = readProfileFileLocked(
+                    at: candidate.url,
+                    profileIdentifier: candidate.identity.identifier,
+                    now: clock(),
+                    recover: true,
+                    removeIfEmpty: true
+                )
+                return true
+            }
+            if !maintained { return }
+        }
+    }
+
+    private func discoverProfileCandidates() -> [ProfileFileCandidate] {
         guard rootURL != nil else { return [] }
         do {
             let attributes = try fileManager.attributesOfItem(
@@ -1612,82 +1576,12 @@ final class ExtensionRequestFileStore {
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles]
             ).compactMap { url in
-                guard let identity = profileFileIdentity(for: url),
-                      identity.identifier != profileIdentifier else { return nil }
+                guard let identity = profileFileIdentity(for: url) else { return nil }
                 return ProfileFileCandidate(url: url, identity: identity)
-            }.sorted { $0.url.lastPathComponent < $1.url.lastPathComponent }
+            }
         } catch {
             return []
         }
-    }
-
-    private func sweepProfilesLocked(
-        candidates: [ProfileFileCandidate],
-        now: Date
-    ) {
-        let profileSweepCursor = readProfileSweepCursorLocked()
-        var startIndex = 0
-        if let profileSweepCursor {
-            startIndex = candidates.firstIndex(where: {
-                $0.url.lastPathComponent > profileSweepCursor
-            }) ?? 0
-        }
-        let selectedCount = min(Self.profileSweepBatchSize, candidates.count)
-        let selected = (0..<selectedCount).map {
-            candidates[(startIndex + $0) % candidates.count]
-        }
-        for candidate in selected {
-            guard let identity = profileFileIdentity(for: candidate.url),
-                  identity.identifier == candidate.identity.identifier else {
-                continue
-            }
-            _ = readProfileFileLocked(
-                at: candidate.url,
-                profileIdentifier: candidate.identity.identifier,
-                now: now,
-                recover: true,
-                removeIfEmpty: true
-            )
-        }
-        if let last = selected.last {
-            persistProfileSweepCursorLocked(last.url.lastPathComponent)
-        }
-    }
-
-    private func readProfileSweepCursorLocked() -> String? {
-        switch regularFileStatusLocked(at: profileSweepCursorURL) {
-        case .regular:
-            break
-        case .missing, .unsafe, .unavailable:
-            return nil
-        }
-        let data: Data
-        do {
-            guard let size = try readFileSize(profileSweepCursorURL),
-                  size > 0, size <= 64 else { return nil }
-            data = try readData(profileSweepCursorURL)
-            guard data.count == size else { return nil }
-        } catch {
-            return nil
-        }
-        guard let value = String(data: data, encoding: .utf8),
-              value == URL(fileURLWithPath: value).lastPathComponent,
-              profileFileIdentity(
-                for: profileDirectoryURL.appendingPathComponent(value)
-              ) != nil else { return nil }
-        return value
-    }
-
-    private func persistProfileSweepCursorLocked(_ value: String) {
-        switch regularFileStatusLocked(at: profileSweepCursorURL) {
-        case .missing, .regular:
-            break
-        case .unsafe, .unavailable:
-            return
-        }
-        guard let data = value.data(using: .utf8),
-              data.count <= 64 else { return }
-        try? atomicWrite(data, profileSweepCursorURL)
     }
 
     private func expirationResponseData(for request: SafariRequest) -> Data? {
@@ -1910,8 +1804,9 @@ final class ExtensionRequestFileStore {
             if record.configurationKey == incoming.configurationKey {
                 originBytes += bytes
             }
-            if case .completed(let since, _, _) = record.state,
-               canRetireAdmissionRecord(record, now: now) {
+            if case .completed(let since, let response, let acknowledged) = record.state,
+               canRetireAdmissionRecord(record, now: now),
+               acknowledged || responseJSON(response, id: record.id)?["name"] as? String != "switchAccount" {
                 candidates.append((record, bytes, since, index))
             }
         }
@@ -2356,10 +2251,6 @@ final class ExtensionRequestFileStore {
             Self.nativeExecutionFenceDirectoryName,
             isDirectory: true
         )
-    }
-
-    private var profileSweepCursorURL: URL {
-        profileDirectoryURL.appendingPathComponent(Self.profileSweepCursorName)
     }
 
     private func profileFileIdentity(for url: URL) -> ProfileFileIdentity? {

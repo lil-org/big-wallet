@@ -495,11 +495,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(ordinarySnapshot.request?.id, ordinary.request.id)
         XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
 
-        let page = try manualSwitchPage(store.listManualSwitchRequests(
-            profileIdentifier: nil,
-            cursor: nil
+        let page = try manualSwitchRequests(store.listManualSwitchRequests(
+            profileIdentifier: nil
         ))
-        XCTAssertEqual(page.requests.map(\.handle), [manualHandle])
+        XCTAssertEqual(page.map(\.handle), [manualHandle])
         XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
         guard case .found(let manualSnapshot) = store.loadManualSwitch(
             handle: manualHandle,
@@ -1846,19 +1845,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: foreignProfile
         )).handle
 
-        let page = try manualSwitchPage(await bridge.listManualSwitchRequests(
+        let page = try manualSwitchRequests(await bridge.listManualSwitchRequests(
             profileIdentifier: nil
         ))
-        XCTAssertNil(page.nextCursor)
-        XCTAssertEqual(Dictionary(uniqueKeysWithValues: page.requests.map {
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: page.map {
             ($0.handle, $0.state)
         }), [pendingHandle: .pending, approvedHandle: .approved, completedHandle: .completed])
-        for request in page.requests {
+        for request in page {
             XCTAssertEqual(Set(request.json.keys), [
                 "id", "host", "configurationKey", "requestToken", "revisions", "state",
             ])
         }
-        let pendingDescriptor = try XCTUnwrap(page.requests.first { $0.handle == pendingHandle })
+        let pendingDescriptor = try XCTUnwrap(page.first { $0.handle == pendingHandle })
         XCTAssertEqual(pendingDescriptor.revisions, pending.ingress.revisions)
         XCTAssertEqual(pendingDescriptor.host, pending.request.host)
         XCTAssertEqual(pendingDescriptor.configurationKey, pending.request.configurationKey)
@@ -1892,29 +1890,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: completedHandle,
             configurationKey: completed.request.configurationKey
         ) else { return XCTFail("Acknowledged switches must not be recovered") }
-        let remaining = try manualSwitchPage(await bridge.listManualSwitchRequests(
+        let remaining = try manualSwitchRequests(await bridge.listManualSwitchRequests(
             profileIdentifier: nil
         ))
-        XCTAssertEqual(Set(remaining.requests.map(\.handle)), [pendingHandle, approvedHandle])
-        let foreignPage = try manualSwitchPage(await bridge.listManualSwitchRequests(
+        XCTAssertEqual(Set(remaining.map(\.handle)), [pendingHandle, approvedHandle])
+        let foreignPage = try manualSwitchRequests(await bridge.listManualSwitchRequests(
             profileIdentifier: foreignProfile
         ))
-        XCTAssertEqual(foreignPage.requests.map(\.handle), [foreign])
+        XCTAssertEqual(foreignPage.map(\.handle), [foreign])
     }
 
-    func testManualSwitchDiscoveryFiltersBeforePagingAndKeepsDeletedCursorPosition()
-        async throws {
-        for id in 450..<468 {
-            let ordinary = try makeFixture(id: id)
-            let handle = try accepted(await bridge.enqueue(
-                ingress: ordinary.ingress,
-                profileIdentifier: nil
-            )).handle
-            let result = await bridge.complete(handle: handle, response: response(for: ordinary.request))
-            XCTAssertEqual(result, .persisted)
-        }
+    func testManualSwitchCapacityPreservesCompletedSelectionsAndCoalescesWhenFull() async throws {
         var handles = [ExtensionBridge.Handle]()
-        for id in 470..<489 {
+        for id in 470..<(470 + ExtensionBridge.maximumRequests) {
             let manual = try makeManualFixture(
                 id: id,
                 enqueueAttempt: attempt(for: id),
@@ -1930,48 +1918,107 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handles.append(handle)
             let completed = await bridge.complete(
                 handle: handle,
-                response: ResponseToExtension(for: manual.request, payload: .error(.userRejected))
+                response: ResponseToExtension(
+                    for: manual.request,
+                    payload: .result(.null),
+                    mutation: .accounts([.disconnectEthereum])
+                ).markingApprovalCommitted()
             )
             XCTAssertEqual(completed, .persisted)
+            clock.now.addTimeInterval(0.125)
         }
-        handles.sort { $0.requestToken < $1.requestToken }
-        let first = try manualSwitchPage(await bridge.listManualSwitchRequests(
+        let before = try Data(contentsOf: defaultProfileURL)
+        let incoming = try makeManualFixture(
+            id: 490,
+            enqueueAttempt: attempt(for: 490),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0],
+            host: "next.example",
+            configurationKey: "https://next.example"
+        )
+        guard case .manualSwitchCapacityReached = await bridge.enqueue(
+            ingress: incoming.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("A full manual-switch inbox must reject new work") }
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), before)
+        let coalesced = try makeManualFixture(
+            id: 491,
+            enqueueAttempt: attempt(for: 491),
+            latestConfigurations: [],
+            revisions: ["ethereum": 1, "solana": 2],
+            host: "wallet470.example",
+            configurationKey: "https://wallet470.example"
+        )
+        let replay = try accepted(await bridge.enqueue(
+            ingress: coalesced.ingress,
             profileIdentifier: nil
         ))
-        XCTAssertEqual(first.requests.map(\.handle), Array(handles.prefix(16)))
-        let cursor = try XCTUnwrap(first.nextCursor)
-        let boundary = try XCTUnwrap(first.requests.last?.handle)
-        var profile = try storedProfile()
-        var records = try XCTUnwrap(profile["records"] as? [[String: Any]])
-        records.removeAll { $0["id"] as? Int == boundary.id }
-        profile["records"] = records
-        try PropertyListSerialization.data(
-            fromPropertyList: profile,
-            format: .binary,
-            options: 0
-        ).write(to: defaultProfileURL, options: .atomic)
-
-        let second = try manualSwitchPage(await bridge.listManualSwitchRequests(
-            profileIdentifier: nil,
-            cursor: cursor
-        ))
-        XCTAssertEqual(second.requests.map(\.handle), Array(handles.dropFirst(16)))
-        XCTAssertNil(second.nextCursor)
-        for invalid in ["", "not-a-cursor", cursor + "=", String(repeating: "a", count: 1025)] {
-            let result = await bridge.listManualSwitchRequests(profileIdentifier: nil, cursor: invalid)
-            XCTAssertEqual(result, .invalidCursor)
-        }
-        let crossProfile = await bridge.listManualSwitchRequests(
-            profileIdentifier: UUID(),
-            cursor: cursor
+        XCTAssertEqual(replay.handle, handles[0])
+        XCTAssertEqual(replay.admissionKind, .coalesced)
+        let requests = try manualSwitchRequests(await bridge.listManualSwitchRequests(profileIdentifier: nil))
+        XCTAssertEqual(requests.map(\.handle), handles)
+        XCTAssertTrue(requests.allSatisfy { $0.state == .completed })
+        let acknowledged = await bridge.acknowledgeResponse(
+            handle: handles[0], configurationKey: "https://wallet470.example"
         )
-        XCTAssertEqual(crossProfile, .invalidCursor)
+        XCTAssertEqual(acknowledged, .persisted)
+        _ = try accepted(await bridge.enqueue(ingress: incoming.ingress, profileIdentifier: nil))
     }
 
-    func testManualSwitchDiscoveryBoundsPagesWithoutLosingLargeValidOrigins()
-        async throws {
+    func testPendingManualSwitchesReachCapacityBeforeGenericActiveLimit() async throws {
+        for id in 800..<809 {
+            let manual = try makeManualFixture(
+                id: id,
+                enqueueAttempt: attempt(for: id),
+                latestConfigurations: [],
+                revisions: ["ethereum": 0, "solana": 0],
+                host: "pending\(id).example",
+                configurationKey: "https://pending\(id).example"
+            )
+            let result = await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)
+            if id < 808 {
+                _ = try accepted(result)
+            } else {
+                guard case .manualSwitchCapacityReached = result else {
+                    return XCTFail("The ninth manual switch must report capacity")
+                }
+            }
+        }
+    }
+
+    func testManualSwitchCompletionSurvivesAdmissionBytePressure() async throws {
+        let manual = try makeManualFixture(
+            id: 810,
+            enqueueAttempt: attempt(for: 810),
+            latestConfigurations: [],
+            revisions: ["ethereum": 0, "solana": 0]
+        )
+        let handle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
+        let completed = await bridge.complete(
+            handle: handle,
+            response: response(for: manual.request).markingApprovalCommitted()
+        )
+        XCTAssertEqual(completed, .persisted)
+        clock.now.addTimeInterval(0.125)
+        let ordinary = try await fillCompletedByteCapacity(startingID: 100)
+        clock.now.addTimeInterval(ExtensionBridge.requestTTL + ExtensionBridge.admissionDeadlineFutureSkew)
+        _ = try accepted(await bridge.enqueue(
+            ingress: makeFixture(id: 1000, host: "new.example").ingress,
+            profileIdentifier: nil
+        ))
+        guard case .missing = await bridge.load(handle: ordinary[0].handle) else {
+            return XCTFail("The test must exercise completed-record eviction")
+        }
+        guard case .found(let retained) = await bridge.loadManualSwitch(
+            handle: handle, configurationKey: manual.request.configurationKey
+        ) else { return XCTFail("An unacknowledged selection must survive admission pressure") }
+        XCTAssertEqual(retained.phase, .responded)
+    }
+
+    func testManualSwitchAdmissionBoundsEntireDiscoveryResponse() async throws {
         var handles = [ExtensionBridge.Handle]()
-        for id in 500..<502 {
+        var rejected = false
+        for id in 500..<503 {
             let baseOrigin = "file:///tmp/entry-\(id)-"
             let baseline = try makeManualFixture(
                 id: id,
@@ -1991,11 +2038,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 host: origin,
                 configurationKey: origin
             )
-            XCTAssertGreaterThan(manual.ingress.canonicalData.count, ExtensionBridge.maximumPayloadBytes - 128)
-            let handle = try accepted(await bridge.enqueue(
-                ingress: manual.ingress,
-                profileIdentifier: nil
-            )).handle
+            let result = await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)
+            if case .manualSwitchCapacityReached = result {
+                rejected = true
+                break
+            }
+            let handle = try accepted(result).handle
             handles.append(handle)
             let completed = await bridge.complete(
                 handle: handle,
@@ -2004,26 +2052,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             XCTAssertEqual(completed, .persisted)
             clock.now.addTimeInterval(0.125)
         }
-
-        let first = try manualSwitchPage(await bridge.listManualSwitchRequests(
-            profileIdentifier: nil
-        ))
-        XCTAssertEqual(first.requests.map(\.handle), [handles[0]])
-        let cursor = try XCTUnwrap(first.nextCursor)
-        let second = try manualSwitchPage(await bridge.listManualSwitchRequests(
-            profileIdentifier: nil,
-            cursor: cursor
-        ))
-        XCTAssertEqual(second.requests.map(\.handle), [handles[1]])
-        XCTAssertNil(second.nextCursor)
-        for page in [first, second] {
-            let encoded = try XCTUnwrap(ExtensionBridge.payloadData([
-                "id": 9_007_199_254_740_991,
-                "requests": page.requests.map(\.json),
-                "nextCursor": page.nextCursor as Any? ?? NSNull(),
-            ]))
-            XCTAssertLessThanOrEqual(encoded.count, ExtensionBridge.maximumManualSwitchPageBytes)
-        }
+        XCTAssertTrue(rejected)
+        XCTAssertFalse(handles.isEmpty)
+        let requests = try manualSwitchRequests(await bridge.listManualSwitchRequests(profileIdentifier: nil))
+        XCTAssertEqual(requests.map(\.handle), handles)
+        let encoded = try XCTUnwrap(ExtensionBridge.payloadData([
+            "id": Int.min,
+            "requests": requests.map(\.json),
+        ]))
+        XCTAssertLessThanOrEqual(encoded.count, ExtensionBridge.maximumManualSwitchResponseBytes)
     }
 
     func testManualSwitchDiscoveryRecoversExpirationAndReportsStoreFailures()
@@ -2039,15 +2076,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         )).handle
         clock.now = manual.request.admissionDeadline
-        let expired = try manualSwitchPage(await bridge.listManualSwitchRequests(
+        let expired = try manualSwitchRequests(await bridge.listManualSwitchRequests(
             profileIdentifier: nil
         ))
-        XCTAssertEqual(expired.requests.map(\.state), [.completed])
+        XCTAssertEqual(expired.map(\.state), [.completed])
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
-        let retired = try manualSwitchPage(await bridge.listManualSwitchRequests(
+        let retired = try manualSwitchRequests(await bridge.listManualSwitchRequests(
             profileIdentifier: nil
         ))
-        XCTAssertTrue(retired.requests.isEmpty)
+        XCTAssertTrue(retired.isEmpty)
         try Data("corrupt profile".utf8).write(to: defaultProfileURL, options: .atomic)
         let unavailable = await bridge.listManualSwitchRequests(profileIdentifier: nil)
         XCTAssertEqual(unavailable, .unavailable)
@@ -2931,13 +2968,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
 
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
-        guard case .available = await bridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected default profile maintenance")
-        }
+        await bridge.performMaintenance()
         XCTAssertFalse(FileManager.default.fileExists(atPath: inactiveURL.path))
     }
 
-    func testEnqueueAndResponsePollingDoNotSweepExpiredInactiveProfile() async throws {
+    func testQueueAccessDoesNotSweepExpiredInactiveProfile() async throws {
         let inactiveProfile = UUID()
         let fixture = try makeFixture(id: 35)
         let handle = try accepted(await bridge.enqueue(
@@ -2972,8 +3007,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
 
         guard case .available = await bridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected list maintenance")
+            return XCTFail("Expected current profile listing")
         }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
+        await bridge.performMaintenance()
         XCTAssertFalse(FileManager.default.fileExists(atPath: inactiveURL.path))
     }
 
@@ -2998,9 +3035,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             options: 0
         ).write(to: inactiveURL, options: .atomic)
 
-        guard case .available = await bridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected default profile maintenance")
-        }
+        await bridge.performMaintenance()
         XCTAssertFalse(FileManager.default.fileExists(atPath: inactiveURL.path))
     }
 
@@ -3023,72 +3058,36 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .available = await bridge.list(profileIdentifier: nil) else {
             return XCTFail("Expected current profile despite corrupt inactive profile")
         }
+        await bridge.performMaintenance()
         XCTAssertEqual(try Data(contentsOf: inactiveURL), corrupt)
         XCTAssertTrue(FileManager.default.fileExists(atPath: orphanLockURL.path))
     }
 
-    func testMaintenanceSweepIsBoundedAndUsesDiskCursorAcrossStores() async throws {
-        let batchSize = ExtensionRequestFileStore.profileSweepBatchSize
-        let profileCount = batchSize * 2 + 1
-        let firstBridge = try XCTUnwrap(bridge)
+    func testMaintenanceCleansAllEligibleProfilesAndPreservesHeldClaims() async throws {
         var heldClaims = [ExtensionBridge.ApprovalClaim]()
         defer { heldClaims.forEach { $0.releaseLease() } }
-        var profileURLs = [URL]()
-        for index in 0..<profileCount {
-            let profileIdentifier = try XCTUnwrap(UUID(uuidString: String(
-                format: "00000000-0000-0000-0000-%012x",
-                index + 1
-            )))
+        var heldURLs = [URL]()
+        var expiredURLs = [URL]()
+        for index in 0..<6 {
+            let identifier = UUID()
             let fixture = try makeFixture(id: 200 + index)
-            let handle = try accepted(await firstBridge.enqueue(
-                ingress: fixture.ingress,
-                profileIdentifier: profileIdentifier
+            let handle = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress, profileIdentifier: identifier
             )).handle
-            if index < batchSize * 2 {
-                heldClaims.append(try approvalClaim(
-                    await firstBridge.claim(handle: handle)
-                ))
+            if index < 2 {
+                heldClaims.append(try approvalClaim(await bridge.claim(handle: handle)))
+                heldURLs.append(profileURL(identifier))
             } else {
-                let completion = await firstBridge.complete(
-                    handle: handle,
-                    response: response(for: fixture.request)
-                )
-                XCTAssertEqual(completion, .persisted)
+                let completed = await bridge.complete(handle: handle, response: response(for: fixture.request))
+                XCTAssertEqual(completed, .persisted)
+                expiredURLs.append(profileURL(identifier))
             }
-            profileURLs.append(profileURL(profileIdentifier))
         }
-
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
-        guard case .available = await firstBridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected first maintenance batch")
-        }
-        XCTAssertEqual(
-            profileURLs.filter {
-                FileManager.default.fileExists(atPath: $0.path)
-            }.count,
-            profileCount
-        )
-
-        let secondBridge = makeBridge(clock: { self.clock.now })
-        guard case .available = await secondBridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected restarted maintenance batch")
-        }
-        XCTAssertEqual(
-            profileURLs.filter {
-                FileManager.default.fileExists(atPath: $0.path)
-            }.count,
-            profileCount
-        )
-
-        guard case .available = await firstBridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected authoritative cursor maintenance")
-        }
-        XCTAssertEqual(
-            profileURLs.filter {
-                FileManager.default.fileExists(atPath: $0.path)
-            }.count,
-            profileCount - 1
-        )
+        await bridge.performMaintenance()
+        XCTAssertTrue(heldURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        XCTAssertTrue(expiredURLs.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) })
+        XCTAssertFalse(FileManager.default.fileExists(atPath: defaultProfileURL.deletingLastPathComponent().appendingPathComponent("sweep.cursor").path))
     }
 
     func testMaintenanceLeavesUnrelatedOrphanOperationLock() async throws {
@@ -3103,9 +3102,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let lockURL = operationLockURL(handle)
         try Data().write(to: lockURL)
 
-        guard case .available = await bridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected best-effort maintenance")
-        }
+        await bridge.performMaintenance()
         XCTAssertTrue(FileManager.default.fileExists(atPath: lockURL.path))
     }
 
@@ -3122,9 +3119,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             withDestinationURL: targetURL
         )
 
-        guard case .available = await bridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected symlink to be isolated")
-        }
+        await bridge.performMaintenance()
         XCTAssertEqual(try Data(contentsOf: targetURL), targetData)
         XCTAssertNotNil(
             try? FileManager.default.destinationOfSymbolicLink(atPath: inactiveURL.path)
@@ -4700,7 +4695,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
 
-        XCTAssertTrue(identity.persist(directoryURL: directoryURL))
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+        try JSONEncoder().encode(identity).write(
+            to: directoryURL.appendingPathComponent("791.json"),
+            options: .atomic
+        )
         XCTAssertEqual(
             AmbientRuntimeIdentity.load(
                 processIdentifier: identity.processIdentifier,
@@ -4713,69 +4715,94 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testRuntimeIdentityPersistenceReportsWriteFailure() throws {
         let bundleURL = try makeAmbientBundle(name: "Persist", build: "148")
         let identity = try runtimeIdentity(
-            processIdentifier: 792,
+            processIdentifier: ProcessInfo.processInfo.processIdentifier,
             bundleURL: bundleURL,
             launchDate: Date(timeIntervalSince1970: 9_001)
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
 
-        XCTAssertFalse(identity.persist(
-            directoryURL: directoryURL,
-            atomicWrite: { _, _ in throw Failure.injectedWrite }
-        ))
-        XCTAssertFalse(identity.persist(
-            directoryURL: directoryURL,
-            atomicWrite: { _, _ in }
-        ))
+        try Data("occupied".utf8).write(to: directoryURL)
+        XCTAssertFalse(identity.persistForCurrentProcess(directoryURL: directoryURL))
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
             directoryURL: directoryURL
         ))
-        XCTAssertTrue(identity.persist(directoryURL: directoryURL))
+        try FileManager.default.removeItem(at: directoryURL)
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o500]
+        )
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: directoryURL.path
+            )
+        }
+        XCTAssertFalse(identity.persistForCurrentProcess(directoryURL: directoryURL))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: directoryURL.path
+        )
+        XCTAssertTrue(identity.persistForCurrentProcess(directoryURL: directoryURL))
         XCTAssertEqual(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
             directoryURL: directoryURL
         ), identity)
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: directoryURL.path),
+            ["\(identity.processIdentifier).json"]
+        )
     }
 
+    @MainActor
     func testRuntimeIdentityClearReportsRemovalFailureAndRetries() throws {
         let bundleURL = try makeAmbientBundle(name: "Clear", build: "148")
         let identity = try runtimeIdentity(
-            processIdentifier: 793,
+            processIdentifier: ProcessInfo.processInfo.processIdentifier,
             bundleURL: bundleURL,
             launchDate: Date(timeIntervalSince1970: 9_002)
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
-        XCTAssertTrue(identity.persist(directoryURL: directoryURL))
+        XCTAssertTrue(identity.persistForCurrentProcess(directoryURL: directoryURL))
 
-        XCTAssertFalse(identity.clear(
-            directoryURL: directoryURL,
-            removeItem: { _ in throw Failure.injectedWrite }
-        ))
-        XCTAssertFalse(identity.clear(
-            directoryURL: directoryURL,
-            removeItem: { _ in }
-        ))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o500],
+            ofItemAtPath: directoryURL.path
+        )
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: directoryURL.path
+            )
+        }
+        XCTAssertFalse(identity.clearForCurrentProcess(directoryURL: directoryURL))
         XCTAssertEqual(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
             directoryURL: directoryURL
         ), identity)
 
-        XCTAssertTrue(identity.clear(directoryURL: directoryURL))
-        XCTAssertTrue(identity.clear(directoryURL: directoryURL))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: directoryURL.path
+        )
+        XCTAssertTrue(identity.clearForCurrentProcess(directoryURL: directoryURL))
+        XCTAssertTrue(identity.clearForCurrentProcess(directoryURL: directoryURL))
         XCTAssertNil(AmbientRuntimeIdentity.load(
             processIdentifier: identity.processIdentifier,
             directoryURL: directoryURL
         ))
     }
 
+    @MainActor
     func testRuntimeIdentityClearPreservesReplacementInstance() throws {
         let bundleURL = try makeAmbientBundle(name: "Replaced", build: "148")
         let original = try runtimeIdentity(
-            processIdentifier: 794,
+            processIdentifier: ProcessInfo.processInfo.processIdentifier,
             bundleURL: bundleURL,
             launchDate: Date(timeIntervalSince1970: 9_003)
         )
@@ -4785,19 +4812,59 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             launchDate: Date(timeIntervalSince1970: 9_004)
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
-        XCTAssertTrue(original.persist(directoryURL: directoryURL))
+        XCTAssertTrue(original.persistForCurrentProcess(directoryURL: directoryURL))
         XCTAssertEqual(AmbientRuntimeIdentity.load(
             processIdentifier: original.processIdentifier,
             directoryURL: directoryURL
         ), original)
-        XCTAssertTrue(replacement.persist(directoryURL: directoryURL))
+        XCTAssertTrue(replacement.persistForCurrentProcess(directoryURL: directoryURL))
 
-        XCTAssertFalse(original.clear(directoryURL: directoryURL))
+        XCTAssertFalse(original.clearForCurrentProcess(directoryURL: directoryURL))
         XCTAssertEqual(AmbientRuntimeIdentity.load(
             processIdentifier: original.processIdentifier,
             directoryURL: directoryURL
         ), replacement)
-        XCTAssertTrue(replacement.clear(directoryURL: directoryURL))
+        XCTAssertTrue(replacement.clearForCurrentProcess(directoryURL: directoryURL))
+    }
+
+    @MainActor
+    func testRuntimeIdentityMutationsRejectAnotherProcess() throws {
+        let bundleURL = try makeAmbientBundle(name: "Foreign", build: "148")
+        let processIdentifier: Int32 = ProcessInfo.processInfo.processIdentifier == 1 ? 2 : 1
+        let identity = try runtimeIdentity(
+            processIdentifier: processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: Date(timeIntervalSince1970: 9_004)
+        )
+        let directoryURL = rootURL.appendingPathComponent("runtime-identities")
+        XCTAssertFalse(identity.persistForCurrentProcess(directoryURL: directoryURL))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directoryURL.path))
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+        try JSONEncoder().encode(identity).write(
+            to: directoryURL.appendingPathComponent("\(processIdentifier).json"),
+            options: .atomic
+        )
+        XCTAssertFalse(identity.clearForCurrentProcess(directoryURL: directoryURL))
+        XCTAssertEqual(AmbientRuntimeIdentity.load(
+            processIdentifier: processIdentifier,
+            directoryURL: directoryURL
+        ), identity)
+    }
+
+    @MainActor
+    func testRuntimeIdentityClearDoesNotCreateMissingDirectory() throws {
+        let bundleURL = try makeAmbientBundle(name: "Missing", build: "148")
+        let identity = try runtimeIdentity(
+            processIdentifier: ProcessInfo.processInfo.processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: Date(timeIntervalSince1970: 9_004)
+        )
+        let directoryURL = rootURL.appendingPathComponent("runtime-identities")
+        XCTAssertTrue(identity.clearForCurrentProcess(directoryURL: directoryURL))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directoryURL.path))
     }
 
     func testRuntimeIdentityRejectsMalformedAndMismatchedFiles() throws {
@@ -4808,7 +4875,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             launchDate: Date(timeIntervalSince1970: 9_005)
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
-        XCTAssertTrue(identity.persist(directoryURL: directoryURL))
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
         let fileURL = directoryURL.appendingPathComponent("795.json")
         let data = try JSONEncoder().encode(identity)
         var object = try XCTUnwrap(
@@ -4844,8 +4914,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             launchDate: Date(timeIntervalSince1970: 9_006)
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
-        XCTAssertTrue(identity.persist(directoryURL: directoryURL))
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
         let fileURL = directoryURL.appendingPathComponent("796.json")
+        try JSONEncoder().encode(identity).write(to: fileURL, options: .atomic)
         try FileManager.default.setAttributes(
             [.posixPermissions: 0],
             ofItemAtPath: fileURL.path
@@ -5846,6 +5920,28 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(result, .persisted)
     }
 
+    func testMaintenanceStopsAtStoreLockContention() async throws {
+        let profileIdentifier = UUID()
+        let fixture = try makeFixture(id: 81)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: profileIdentifier
+        )).handle
+        let completed = await bridge.complete(handle: handle, response: response(for: fixture.request))
+        XCTAssertEqual(completed, .persisted)
+        let url = profileURL(profileIdentifier)
+        let original = try Data(contentsOf: url)
+        clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
+        try await CrossProcessLockTestFixture.withHeldLock(
+            at: rootURL.appendingPathComponent("bridge-v7.lock"),
+            readyURL: rootURL.appendingPathComponent("holder-ready")
+        ) {
+            await self.bridge.performMaintenance()
+            XCTAssertEqual(try Data(contentsOf: url), original)
+        }
+        await bridge.performMaintenance()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     func testSeparateProcessStoreLockFencesAccess() async throws {
         let fixture = try makeFixture(id: 80)
         let readyURL = rootURL.appendingPathComponent("holder-ready")
@@ -6140,13 +6236,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         return Fixture(request: request, ingress: ingress)
     }
 
-    private func manualSwitchPage(
+    private func manualSwitchRequests(
         _ result: ExtensionBridge.ManualSwitchRequestsResult,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws -> ExtensionBridge.ManualSwitchRequestsPage {
+    ) throws -> [ExtensionBridge.ManualSwitchRequest] {
         guard case .available(let page) = result else {
-            XCTFail("Expected a manual switch page", file: file, line: line)
+            XCTFail("Expected manual switch requests", file: file, line: line)
             throw Failure.expectedValue
         }
         return page

@@ -641,22 +641,9 @@ final class PopupRequestSessionsTests: XCTestCase {
             "subject": "getManualSwitchRequests",
             "workflowVersion": ExtensionBridge.workflowVersion,
         ]
-        guard case .worker(.getManualSwitchRequests(let cursor)) =
+        guard case .worker(.getManualSwitchRequests) =
             try decode(listing).command else {
             return XCTFail("Expected a worker-only discovery command")
-        }
-        XCTAssertNil(cursor)
-        var paginated = listing
-        paginated["cursor"] = "opaque-cursor"
-        guard case .worker(.getManualSwitchRequests(let next)) =
-            try decode(paginated).command else {
-            return XCTFail("Expected a paginated discovery command")
-        }
-        XCTAssertEqual(next, "opaque-cursor")
-        for invalid in [NSNull(), 1, true] as [Any] {
-            var malformed = listing
-            malformed["cursor"] = invalid
-            XCTAssertThrowsError(try decode(malformed))
         }
         let token = UUID().uuidString.lowercased()
         let response: [String: Any] = [

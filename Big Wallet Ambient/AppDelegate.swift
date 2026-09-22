@@ -50,7 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             NSApplication.shared.terminate(nil)
             return
         }
-        guard runtimeIdentity.persist() else {
+        guard runtimeIdentity.persistForCurrentProcess() else {
             Self.logger.error("Cannot persist helper runtime identity")
             allowsProgrammaticTermination = true
             NSApplication.shared.terminate(nil)
@@ -61,6 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             runtimeIdentity: runtimeIdentity
         )
         walletsManager.start()
+        Task { await ExtensionBridge.shared.performMaintenance() }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -98,7 +99,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        _ = runtimeIdentity?.clear()
+        _ = runtimeIdentity?.clearForCurrentProcess()
         if let commandQBlockerMonitor {
             NSEvent.removeMonitor(commandQBlockerMonitor)
         }

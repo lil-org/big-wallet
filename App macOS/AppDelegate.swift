@@ -34,6 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         walletsManager.handleExternalWalletStoreChange()
+        Task { await ExtensionBridge.shared.performMaintenance() }
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

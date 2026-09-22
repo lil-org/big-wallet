@@ -76,6 +76,7 @@ struct Strings {
     static let sendingTransaction = loc("Sending transaction")
     static let disconnect = loc("Disconnect")
     static let switchAccount = loc("Switch Account")
+    static let manualSwitchCapacityReached = loc("Too many account switches are pending. Finish one, then try again.")
     static let rawSolanaTransactionWarning = loc("Raw Solana transaction. Big Wallet cannot display decoded instructions for this request. Only approve if you trust this website and expected this transaction.")
     static let suggestedByWebsite = loc("Suggested by website")
     static let alchemyRPC = loc("Alchemy RPC")

@@ -699,15 +699,16 @@ test("manual Switch Account sends one exact stateless intent with a full native 
     await switching;
 });
 
-test("manual Switch Account accepts canonical native handles and terminal responses", async () => {
+test("manual Switch Account accepts canonical native handles and terminal success", async () => {
     const responses = [
         manualSwitchAcknowledgement({approvalRequired: false, id: 17, revisions: {ethereum: 3, solana: 2}}),
         manualSwitchAcknowledgement(),
-        nativeError({
+        nativeResult({
             id: 41,
             name: "switchAccount",
             provider: "multiple",
-            error: {code: 4001, message: "Canceled"},
+            result: null,
+            mutation: {kind: "accounts", updates: {}},
         }),
     ];
     for (const response of responses) {
@@ -718,6 +719,45 @@ test("manual Switch Account accepts canonical native handles and terminal respon
         assert.equal(harness.queue.isEmpty, true);
         assert.notEqual(harness.get("idle-connection").textContent, "Failed to load");
     }
+});
+
+test("manual Switch Account shows terminal errors and permits retry", async () => {
+    for (const error of [
+        {code: -32603, message: "Too many account switches are pending. Finish one, then try again."},
+        {code: 4001, message: "Canceled"},
+    ]) {
+        const harness = await manualSwitchHarness(async attempt => attempt === 1
+            ? nativeError({id: 41, name: "switchAccount", provider: "multiple", error})
+            : manualSwitchAcknowledgement());
+        await harness.get("idle-switch-account").click();
+        assert.equal(harness.get("idle-connection").textContent, error.message);
+        assert.equal(harness.get("idle-switch-account").disabled, false);
+        assert.equal(harness.get("idle-switch-account").classList.contains("hidden"), false);
+        assert.deepEqual(harness.nativeMessages, []);
+
+        await harness.get("idle-switch-account").click();
+        assert.equal(harness.tabMessages.length, 2);
+        assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
+    }
+});
+
+test("an earlier idle configuration read cannot overwrite a manual Switch Account error", async () => {
+    const configuration = deferred();
+    const error = {code: -32603, message: "Too many account switches are pending. Finish one, then try again."};
+    const harness = popupHarness({
+        worker: (message, fallback) => message.subject === "getLatestConfiguration"
+            ? configuration.promise : fallback(message),
+        tab: () => nativeError({id: 41, name: "switchAccount", provider: "multiple", error}),
+    });
+    await harness.boot();
+    await harness.get("idle-switch-account").click();
+    configuration.resolve({kind: "configuration", state: {
+        ethereum: {address: "", chainId: "0x1"}, solana: null,
+        revisions: {ethereum: 0, solana: 0},
+    }});
+    await flushPopup();
+    assert.equal(harness.get("idle-connection").textContent, error.message);
+    assert.equal(harness.get("idle-switch-account").disabled, false);
 });
 
 test("manual Switch Account rejects undefined malformed and cross-key replies", async () => {
@@ -2090,7 +2130,8 @@ test("retry follows busy states and reconciles missing requests", async () => {
 
 test("late idle switch replies preserve preparing and working requests", async () => {
     for (const busy of [false, true]) {
-        for (const succeeds of [false, true]) {
+        for (const outcome of ["acknowledged", "transport failure", "terminal error"]) {
+            const succeeds = outcome === "acknowledged";
             const intent = deferred();
             const harness = popupHarness({tab: () => intent.promise});
             await harness.boot();
@@ -2119,6 +2160,11 @@ test("late idle switch replies preserve preparing and working requests", async (
                     subject: "manualSwitchAcknowledged",
                     workflowVersion: 3,
                 });
+            } else if (outcome === "terminal error") {
+                intent.resolve(nativeError({
+                    id: 8, name: "switchAccount", provider: "multiple",
+                    error: {code: -32603, message: "Too many account switches are pending. Finish one, then try again."},
+                }));
             } else {
                 intent.reject(new Error("Late transport failure"));
             }

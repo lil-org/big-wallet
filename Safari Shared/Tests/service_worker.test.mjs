@@ -120,6 +120,7 @@ function makeHarness({
     storageSet,
     workerPrivateBrowsing = false,
 } = {}) {
+    const retainedSwitches = new Map;
     const nativeMessages = [];
     const recoveryMessages = [];
     const alarmGets = [];
@@ -179,12 +180,27 @@ function makeHarness({
                     recoveryMessages.push({application, message: clone(message)});
                     return Promise.resolve(recoveryNative
                         ? recoveryNative(message)
-                        : {id: message.id, requests: [], nextCursor: null});
+                        : {id: message.id, requests: [...retainedSwitches.values()]});
                 }
                 nativeMessages.push({application, message: clone(message)});
                 return Promise.resolve(message.subject === "acknowledgeResponse"
                     ? acknowledgeResponse(message)
-                    : native?.(message));
+                    : native?.(message)).then(response => {
+                    if (message.name === "switchAccount" && response?.requestToken) {
+                        retainedSwitches.set(response.id, recoveryDescriptor({
+                            id: response.id,
+                            host: message.host,
+                            configurationKey: message.configurationKey,
+                            requestToken: response.requestToken,
+                            revisions: response.revisions,
+                            state: "approved",
+                        }));
+                    }
+                    if (response?.acknowledged === true || response?.missing === true) {
+                        retainedSwitches.delete(message.id);
+                    }
+                    return response;
+                });
             },
             sendMessage(message) {
                 runtimeMessages.push(clone(message));
@@ -317,8 +333,9 @@ function makeHarness({
         clickToolbar(tab) {
             toolbarListener(tab);
         },
-        fireAlarm(name = recoveryAlarmName) {
-            return alarmListener?.({name});
+        async fireAlarm(name = recoveryAlarmName) {
+            await alarmListener?.({name});
+            await settle();
         },
         async runTimer(delay = 1000) {
             const entry = [...timers].find(([, value]) => value.delay === delay);
@@ -795,7 +812,7 @@ test("toolbar restores the same approval while background polling stays silent",
         native: message => {
             if (isResponseRead(message)) { return polling.promise; }
             if (message.subject === "showApproval") { return {opened: true}; }
-            return nativeAcknowledgement(message.id, message.revisions);
+            return nativeAcknowledgement(31, message.revisions);
         },
         sendTabMessage: (_id, message) => message.subject === "workflowProbe"
             ? {
@@ -835,9 +852,29 @@ test("toolbar restores the same approval while background polling stays silent",
     }));
     assert.equal(harness.nativeMessages.filter(({message}) =>
         message.name === "switchAccount"
-    ).length, 1);
+    ).length, 3);
     polling.resolve(undefined);
     await backgroundPoll;
+});
+
+test("a toolbar admission capacity error opens the native-wallet fallback", async () => {
+    const harness = makeHarness({
+        configuredPopup: false,
+        native: message => {
+            assert.equal(message.subject, "openApp");
+            return {opened: true};
+        },
+        sendTabMessage: (_id, message) => message.subject === "workflowProbe"
+            ? {buildVersion: packagedBuildVersion, nonce: message.nonce,
+                subject: "workflowProbe", workflowVersion: 3}
+            : nativeError({id: 31, name: "switchAccount", provider: "multiple",
+                error: {code: -32000, message: "Finish an existing account switch and try again."}}),
+    });
+    harness.clickToolbar({id: 9, url: "https://wallet.example/dapp", incognito: false});
+    await settle();
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.equal(harness.nativeMessages[0].message.subject, "openApp");
+    assert.equal(harness.popupCalls.length, 0);
 });
 
 test("toolbar probe failures always open the native wallet", async () => {
@@ -1048,6 +1085,7 @@ test("a live macOS switch polls after one second and persists before notifying a
     assert.equal(harness.nativeMessages.filter(({message}) =>
         message.subject === "acknowledgeResponse"
     ).length, 1);
+    assert.equal(await harness.runTimer(), true);
     assert.equal(await harness.runTimer(), false);
     assert.deepEqual(harness.alarmCreates, [{
         name: recoveryAlarmName,
@@ -1056,6 +1094,39 @@ test("a live macOS switch polls after one second and persists before notifying a
     assert.equal(harness.tabMessages.some(({message}) =>
         message.subject === "manualSwitchResult"
     ), false);
+});
+
+test("normal approval completes on the next shared poll without a response-ready hint", async () => {
+    let descriptor;
+    const harness = makeHarness({
+        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
+        native: message => {
+            if (message.name === "switchAccount") {
+                descriptor = recoveryDescriptor({id: message.id});
+                return nativeAcknowledgement(message.id, message.revisions);
+            }
+            assert.equal(message.subject, "getManualSwitchResponse");
+            return nativeResult({id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                mutation: {kind: "accounts", updates: {ethereum: null, solana: null}}});
+        },
+        acknowledgeResponse: message => {
+            descriptor = null;
+            return {id: message.id, acknowledged: true};
+        },
+    });
+    await harness.dispatch(manualSwitchIntent(), contentSender());
+    await settle();
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.equal(await harness.runTimer(), true);
+    assert.equal(harness.nativeMessages.length, 1);
+    descriptor.state = "approved";
+    assert.equal(await harness.runTimer(), true);
+    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject || message.name), [
+        "switchAccount", "getManualSwitchResponse", "acknowledgeResponse",
+    ]);
+    assert.deepEqual(harness.storage.get("https://wallet.example").revisions, {ethereum: 1, solana: 1});
+    assert.equal(await harness.runTimer(), true);
+    assert.equal(await harness.runTimer(), false);
 });
 
 test("response-ready hints share a live switch read and retries do not repeat a committed change", async () => {
@@ -1086,6 +1157,7 @@ test("response-ready hints share a live switch read and retries do not repeat a 
         mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
     }));
     await Promise.all([first, second]);
+    await settle();
     const revisions = clone(harness.storage.get("https://wallet.example").revisions);
     const writes = providerStateWrites(harness).length;
     const notifications = harness.tabMessages.filter(({message}) =>
@@ -1098,6 +1170,7 @@ test("response-ready hints share a live switch read and retries do not repeat a 
     assert.equal(harness.tabMessages.filter(({message}) =>
         message.subject === "configurationChanged"
     ).length, notifications + 1);
+    assert.equal(await harness.runTimer(), true);
     assert.equal(await harness.runTimer(), false);
 });
 
@@ -1191,28 +1264,15 @@ test("clicking a switch whose native response expired retries admission once", a
     }
 });
 
-test("a click does not readmit a completed switch or a failed native read", async () => {
-    for (const completes of [false, true]) {
-        const harness = makeHarness({native: message => {
-            if (message.name === "switchAccount") {
-                return nativeAcknowledgement(message.id, message.revisions);
-            }
-            return completes ? nativeError({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                error: {code: 4001, message: "Canceled"},
-            }) : undefined;
-        }});
-        await harness.dispatch(manualSwitchIntent(), contentSender());
-
-        await harness.dispatch(manualSwitchIntent(), contentSender());
-        await settle();
-
-        assert.equal(harness.nativeMessages.filter(({message}) =>
-            message.name === "switchAccount"
-        ).length, 1);
-    }
+test("later clicks let native coalesce an outstanding switch", async () => {
+    const harness = makeHarness({native: message => message.name === "switchAccount"
+        ? nativeAcknowledgement(31, {ethereum: 0, solana: 0})
+        : undefined});
+    const first = await harness.dispatch(manualSwitchIntent(), contentSender());
+    await settle();
+    const second = await harness.dispatch(manualSwitchIntent(), contentSender());
+    assert.equal(first.id, second.id);
+    assert.equal(harness.nativeMessages.filter(({message}) => message.name === "switchAccount").length, 2);
 });
 
 test("a lost switch admission reply requires another click and resumes the canonical native request", async () => {
@@ -1229,7 +1289,6 @@ test("a lost switch admission reply requires another click and resumes the canon
     const recoveryNative = message => ({
         id: message.id,
         requests: original ? [recoveryDescriptor({id: original.id, revisions: original.revisions})] : [],
-        nextCursor: null,
     });
     const first = makeHarness({storage, native, recoveryNative});
     assert.equal(await first.dispatch(manualSwitchIntent(), contentSender()), undefined);
@@ -1245,46 +1304,42 @@ test("a lost switch admission reply requires another click and resumes the canon
     assert.notEqual(restarted.nativeMessages[0].message.enqueueAttempt, original.enqueueAttempt);
 });
 
-test("an expired admission reply preserves its newer owner or leaves completion to quiet recovery", async () => {
-    for (const replaced of [false, true]) {
-        let now = 1_700_000_000_000;
-        const firstReply = deferred();
-        const descriptor = recoveryDescriptor({state: "completed"});
-        let admitted = 0;
-        let persisted = false;
-        const harness = makeHarness({
-            dateNow: () => now,
-            recoveryNative: message => ({
-                id: message.id, requests: persisted ? [descriptor] : [], nextCursor: null,
-            }),
-            native: message => {
-                if (message.name === "switchAccount") {
-                    return ++admitted === 1 ? firstReply.promise
-                        : nativeAcknowledgement(descriptor.id, descriptor.revisions);
-                }
-                assert.equal(message.subject, replaced ? "getResponse" : "getManualSwitchResponse");
-                return nativeError({
-                    id: message.id, name: "switchAccount", provider: "multiple",
-                    error: {code: 4001, message: "Canceled"},
-                });
-            },
-        });
-        const first = harness.dispatch(manualSwitchIntent(), contentSender());
-        await settle();
-        now += 76 * 60 * 1000;
-        if (replaced) {
-            assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
-        }
-        persisted = true;
-        firstReply.resolve(nativeAcknowledgement(descriptor.id, descriptor.revisions));
-        assert.equal((await first).id, descriptor.id);
-        assert.equal(await harness.runTimer(), replaced);
-        if (!replaced) { await harness.fireAlarm(); }
-
-        assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-        assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-        assert.equal(await harness.runTimer(), false);
-    }
+test("an admission settling during an older empty discovery starts a fresh scan", async () => {
+    const discovery = deferred();
+    let discoveryID;
+    let descriptor;
+    let scans = 0;
+    const harness = makeHarness({
+        recoveryNative: message => {
+            if (++scans === 1) {
+                discoveryID = message.id;
+                return discovery.promise;
+            }
+            return {id: message.id, requests: descriptor ? [descriptor] : []};
+        },
+        native: message => {
+            if (message.name === "switchAccount") {
+                descriptor = recoveryDescriptor({id: message.id, state: "approved"});
+                return nativeAcknowledgement(message.id, message.revisions);
+            }
+            return nativeError({id: message.id, name: "switchAccount", provider: "multiple",
+                error: {code: 4001, message: "Canceled"}});
+        },
+        acknowledgeResponse: message => {
+            descriptor = null;
+            return {id: message.id, acknowledged: true};
+        },
+    });
+    await harness.dispatch(manualSwitchIntent(), contentSender());
+    assert.equal(harness.nativeMessages.length, 1);
+    discovery.resolve({id: discoveryID, requests: []});
+    await settle();
+    assert.equal(scans, 2);
+    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject || message.name), [
+        "switchAccount", "getManualSwitchResponse", "acknowledgeResponse",
+    ]);
+    assert.equal(await harness.runTimer(), true);
+    assert.equal(await harness.runTimer(), false);
 });
 
 test("another click recovers an unacknowledged completed switch before a later click starts a new one", async () => {
@@ -1386,6 +1441,7 @@ test("a switch completed before admission expiry survives a delayed completion h
         id: admitted.id,
         workflowVersion: 3,
     }, {});
+    await settle();
 
     assert.deepEqual(harness.storage.get("https://wallet.example"), {
         latestConfigurations: [selected],
@@ -1401,6 +1457,7 @@ test("a switch completed before admission expiry survives a delayed completion h
     assert.equal(harness.tabMessages.filter(({message}) =>
         message.subject === "configurationChanged"
     ).length, 1);
+    assert.equal(await harness.runTimer(), true);
     assert.equal(await harness.runTimer(), false);
 });
 
@@ -1448,7 +1505,7 @@ test("startup discovers native work without admitting or changing unrelated stor
     }]);
     assert.deepEqual(harness.alarmClears, []);
     assert.deepEqual(harness.storageRemovals, ["workflowUpdateRecoveryNeeded"]);
-    assert.equal(harness.recoveryMessages.length, 1);
+    assert.equal(harness.recoveryMessages.length, 2);
     assert.equal(await harness.fireAlarm(), undefined);
     assert.equal(await harness.runTimer(), false);
     assert.equal(harness.nativeMessages.length, 0);
@@ -1459,7 +1516,7 @@ test("an alarm recovers an approval after worker termination before its admissio
     const storage = new Map;
     const lostReply = deferred();
     let descriptor;
-    const discovery = message => ({id: message.id, requests: descriptor ? [descriptor] : [], nextCursor: null});
+    const discovery = message => ({id: message.id, requests: descriptor ? [descriptor] : []});
     const first = makeHarness({
         alarms, storage, recoveryNative: discovery,
         native: message => {
@@ -1539,7 +1596,7 @@ test("recovery rebroadcasts the current stored configuration before acknowledgin
                 {id: 10, url: "https://other.example", incognito: false},
                 {id: 11, url: "https://wallet.example/private", incognito: true},
             ],
-            recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor], nextCursor: null}),
+            recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
             native: message => (nativeResult({
                 id: message.id,
                 name: "switchAccount",
@@ -1580,7 +1637,7 @@ test("recovery retries unacknowledged completions without a duplicate configurat
     let allowAcknowledgement = false;
     const descriptor = recoveryDescriptor({state: "completed"});
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor], nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
         native: message => {
             assert.equal(message.subject, "getManualSwitchResponse");
             return nativeResult({
@@ -1611,7 +1668,7 @@ test("recovery retries unacknowledged completions without a duplicate configurat
 test("pending discovery and unavailable approved helpers never reopen native UI or fast poll", async () => {
     const descriptor = recoveryDescriptor();
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: [descriptor], nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: [descriptor]}),
         native: message => {
             assert.equal(message.subject, "getManualSwitchResponse");
             return {id: message.id, pending: true};
@@ -1631,48 +1688,88 @@ test("pending discovery and unavailable approved helpers never reopen native UI 
     assert.equal(harness.alarms.has(recoveryAlarmName), true);
 });
 
-test("recovery retries a failed website after one second while another read stalls and a third stays pending", async () => {
+test("recovery advances past pending or failed reads to a completed switch in the same lineage", async () => {
+    for (const outcome of ["pending", "failure"]) {
+        const address = "0x0000000000000000000000000000000000000001";
+        let descriptors = [
+            recoveryDescriptor({id: 31, configurationKey: "http://wallet.example", state: "approved"}),
+            recoveryDescriptor({id: 32, state: "completed"}),
+        ];
+        const reads = [];
+        const harness = makeHarness({
+            recoveryNative: message => ({id: message.id, requests: descriptors}),
+            native: message => {
+                reads.push(message.id);
+                if (message.id === 31) {
+                    if (outcome === "failure") { throw new Error("Helper unavailable"); }
+                    return {id: message.id, pending: true};
+                }
+                return nativeResult({
+                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                    mutation: {kind: "accounts", updates: {ethereum: {address, chainId: "0x1"}}},
+                });
+            },
+            acknowledgeResponse: message => {
+                descriptors = descriptors.filter(request => request.id !== message.id);
+                return {id: message.id, acknowledged: true};
+            },
+        });
+        await settle();
+        assert.deepEqual(reads, [31, 32]);
+        assert.equal(harness.storage.get("https://wallet.example").latestConfigurations[0].results[0], address);
+        assert.deepEqual(descriptors.map(request => request.id), [31]);
+        await harness.fireAlarm();
+        assert.deepEqual(reads, [31, 32, 31]);
+        assert.equal(providerStateWrites(harness).length, 1);
+    }
+});
+
+test("fast discovery retries another origin while a long read stalls and its lineage stays ordered", async () => {
+    let now = 1_700_000_000_000;
     const stalled = deferred();
-    const descriptors = ["failed.example", "stalled.example", "pending.example"].map((host, index) =>
-        recoveryDescriptor({id: 31 + index, host, configurationKey: `https://${host}`, state: "approved"}));
-    const reads = [0, 0, 0];
+    let descriptors = [
+        recoveryDescriptor({id: 31, state: "approved"}),
+        recoveryDescriptor({id: 32, state: "completed", configurationKey: "http://wallet.example"}),
+        recoveryDescriptor({id: 33, state: "approved", host: "other.example", configurationKey: "https://other.example"}),
+        recoveryDescriptor({id: 34, host: "pending.example", configurationKey: "https://pending.example"}),
+    ];
+    const reads = [];
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptors, nextCursor: null}),
+        dateNow: () => now,
+        recoveryNative: message => ({id: message.id, requests: descriptors}),
         native: message => {
-            assert.equal(message.subject, "getManualSwitchResponse");
-            const index = message.id - 31;
-            reads[index] += 1;
-            if (index === 1) { return stalled.promise; }
-            if (index === 2) { return {id: message.id, pending: true}; }
-            return reads[index] === 1 ? undefined : nativeResult({
-                id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                mutation: {kind: "accounts", updates: {ethereum: {
-                    address: "0x0000000000000000000000000000000000000001", chainId: "0x1",
-                }}},
-            });
+            if (message.name === "switchAccount") { return nativeAcknowledgement(31); }
+            reads.push(message.id);
+            if (message.id === 31) { return stalled.promise; }
+            if (message.id === 33 && reads.filter(id => id === 33).length === 1) { return undefined; }
+            return nativeError({id: message.id, name: "switchAccount", provider: "multiple",
+                error: {code: 4001, message: "Canceled"}});
         },
         acknowledgeResponse: message => {
-            assert.deepEqual(harness.storage.get("https://failed.example"), {
-                latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: ["0x0000000000000000000000000000000000000001"]}],
-                revisions: {ethereum: 1, solana: 0}, workflowVersion: 3,
-            });
+            descriptors = descriptors.filter(request => request.id !== message.id);
             return {id: message.id, acknowledged: true};
         },
     });
     await settle();
-    assert.deepEqual(reads, [1, 1, 1]);
-    assert.equal(await harness.runTimer(1000), true);
-    assert.deepEqual(reads, [2, 1, 1]);
-    assert.equal(providerStateWrites(harness).length, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-    assert.equal(await harness.runTimer(1000), false);
-    assert.equal(await harness.runTimer(180_000), true);
-    assert.deepEqual(reads, [2, 1, 1]);
-    stalled.resolve({id: descriptors[1].id, missing: true});
-    assert.equal(await harness.runTimer(1000), true);
-    assert.deepEqual(reads, [2, 2, 1]);
-    assert.equal(await harness.runTimer(1000), false);
-    assert.equal(harness.popupCalls.length, 0);
+    assert.deepEqual(reads, [31, 33]);
+    await harness.dispatch(manualSwitchIntent(), contentSender());
+    await settle();
+    assert.deepEqual(reads, [31, 33, 33]);
+    now += 170_000;
+    assert.equal(await harness.runTimer(), true);
+    assert.deepEqual(reads, [31, 33, 33]);
+    assert.equal(harness.recoveryMessages.length, 3);
+    stalled.resolve(nativeError({id: 31, name: "switchAccount", provider: "multiple",
+        error: {code: 4001, message: "Canceled"}}));
+    await settle();
+    assert.equal(await harness.runTimer(), true);
+    assert.deepEqual(reads, [31, 33, 33, 32]);
+    assert.equal(harness.popupCalls.length, 1);
+    assert.equal(descriptors.length, 1);
+    now += 15 * 60 * 1000;
+    assert.equal(await harness.runTimer(), true);
+    assert.equal(await harness.runTimer(), false);
+    assert.equal(harness.alarms.has(recoveryAlarmName), true);
 });
 
 test("recovery retries persistence and acknowledgement failures without advancing configuration twice", async () => {
@@ -1680,7 +1777,7 @@ test("recovery retries persistence and acknowledgement failures without advancin
         let failing = true;
         const descriptor = recoveryDescriptor({state: "completed"});
         const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: [descriptor], nextCursor: null}),
+            recoveryNative: message => ({id: message.id, requests: [descriptor]}),
             native: message => nativeResult({
                 id: message.id, name: "switchAccount", provider: "multiple", result: null,
                 mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
@@ -1697,72 +1794,67 @@ test("recovery retries persistence and acknowledgement failures without advancin
         assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length,
             failure === "persistence" ? 0 : 1);
         failing = false;
-        assert.equal(await harness.runTimer(), true);
+        await harness.fireAlarm();
         assert.deepEqual(harness.storage.get(descriptor.configurationKey).revisions, {ethereum: 1, solana: 1});
         assert.equal(providerStateWrites(harness).length, 1);
         assert.equal(await harness.runTimer(), false);
     }
 });
 
-test("fresh discovery removes obsolete recovery retries and malformed discovery preserves them", async () => {
-    for (const invalid of ["transport", "shape", "page"]) {
+test("fast polling survives unavailable discovery and stops once the native queue is empty", async () => {
+    for (const invalid of ["transport", "shape", "descriptor"]) {
         let mode = "initial";
-        let reads = 0;
-        const descriptor = recoveryDescriptor({state: "approved"});
+        const descriptor = recoveryDescriptor();
         const harness = makeHarness({
             recoveryNative: message => {
                 if (mode === "invalid") {
                     if (invalid === "transport") { throw new Error("Discovery failed"); }
-                    if (invalid === "shape" || message.cursor) { return {id: message.id, requests: []}; }
-                    return {id: message.id, requests: [], nextCursor: "bad-page"};
+                    return invalid === "shape" ? {id: message.id} : {
+                        id: message.id, requests: [{...descriptor, state: "unknown"}],
+                    };
                 }
-                return {id: message.id, requests: mode === "empty" ? [] : [descriptor], nextCursor: null};
+                return {id: message.id, requests: mode === "empty" ? [] : [descriptor]};
             },
-            native: () => { reads += 1; return undefined; },
+            native: message => nativeAcknowledgement(31),
         });
+        await harness.dispatch(manualSwitchIntent(), contentSender());
         await settle();
-        assert.equal(reads, 1);
         mode = "invalid";
-        await harness.fireAlarm();
         assert.equal(await harness.runTimer(), true);
-        assert.equal(reads, 2);
+        assert.equal(await harness.runTimer(), true);
         mode = "empty";
-        await harness.fireAlarm();
+        assert.equal(await harness.runTimer(), true);
         assert.equal(await harness.runTimer(), false);
-        assert.equal(reads, 2);
+        assert.equal(harness.nativeMessages.length, 1);
         assert.equal(harness.alarms.has(recoveryAlarmName), true);
     }
 });
 
-test("a valid later page is required before discovery publishes any work", async () => {
-    const page = deferred();
-    let pageID;
-    const descriptor = recoveryDescriptor({state: "approved"});
-    const harness = makeHarness({
-        recoveryNative: message => {
-            if (!message.cursor) { return {id: message.id, requests: [descriptor], nextCursor: "next"}; }
-            pageID = message.id;
-            return page.promise;
-        },
-        native: () => assert.fail("An incomplete snapshot must not be published"),
-    });
-    await settle();
-    assert.equal(harness.recoveryMessages.length, 2);
-    assert.equal(harness.nativeMessages.length, 0);
-    page.resolve({id: pageID, requests: []});
-    await settle();
-    assert.equal(harness.nativeMessages.length, 0);
-    assert.equal(await harness.runTimer(), false);
+test("discovery rejects excess requests and validates the whole bounded snapshot before reading", async () => {
+    for (const requests of [
+        Array.from({length: 9}, (_, index) => recoveryDescriptor({id: 31 + index, state: "approved"})),
+        [recoveryDescriptor({state: "approved"}), recoveryDescriptor({id: 32, state: "unknown"})],
+    ]) {
+        const harness = makeHarness({
+            recoveryNative: message => ({id: message.id, requests}),
+            native: () => assert.fail("An invalid snapshot must not be published"),
+        });
+        await settle();
+        assert.equal(harness.recoveryMessages.length, 1);
+        assert.equal(harness.nativeMessages.length, 0);
+        assert.equal(await harness.runTimer(), false);
+    }
 });
 
-test("fresh discovery replaces queued handles after the current lineage read finishes", async () => {
+test("a stale batch tolerates removed handles before the next discovery drains new work", async () => {
     const reading = deferred();
     const descriptors = [31, 32, 33].map(id => recoveryDescriptor({
-        id, state: "approved", requestToken: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+        id, state: "approved", configurationKey: `${id === 31 ? "https" : "http"}://wallet.example`,
+        requestToken: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
     }));
     let snapshot = descriptors.slice(0, 2);
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: snapshot, nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: snapshot}),
         native: message => message.id === 31 ? reading.promise : {id: message.id, missing: true},
     });
     await settle();
@@ -1774,95 +1866,147 @@ test("fresh discovery replaces queued handles after the current lineage read fin
     assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31]);
     reading.resolve({id: 31, missing: true});
     await wake;
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 33]);
+    await harness.fireAlarm();
+    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 32, 33]);
     assert.equal(await harness.runTimer(), false);
 });
 
-test("acknowledged and missing handles cannot be reintroduced by an in-flight discovery snapshot", async () => {
-    for (const result of ["acknowledged", "missing"]) {
-        const reading = deferred();
-        const discovery = deferred();
-        let nextDiscoveryID;
-        let scans = 0;
-        const descriptor = recoveryDescriptor({state: "completed"});
-        const harness = makeHarness({
-            recoveryNative: message => {
-                scans += 1;
-                if (scans === 1) { return {id: message.id, requests: [descriptor], nextCursor: null}; }
-                nextDiscoveryID = message.id;
-                return discovery.promise;
-            },
-            native: () => reading.promise,
-        });
-        await settle();
-        const wake = harness.fireAlarm();
-        await settle();
-        reading.resolve(result === "missing" ? {id: descriptor.id, missing: true} : nativeError({
-            id: descriptor.id, name: "switchAccount", provider: "multiple",
-            error: {code: 4001, message: "Canceled"},
-        }));
-        await settle();
-        discovery.resolve({id: nextDiscoveryID, requests: [descriptor], nextCursor: null});
-        await wake;
-        assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-        assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length,
-            result === "acknowledged" ? 1 : 0);
-        assert.equal(await harness.runTimer(), false);
-    }
+test("a stale discovery snapshot after acknowledgement only performs a harmless missing read", async () => {
+    const reading = deferred();
+    const discovery = deferred();
+    let discoveryID;
+    let scans = 0;
+    let acknowledged = false;
+    const descriptor = recoveryDescriptor({state: "completed"});
+    const harness = makeHarness({
+        recoveryNative: message => {
+            if (++scans === 1) { return {id: message.id, requests: [descriptor]}; }
+            discoveryID = message.id;
+            return discovery.promise;
+        },
+        native: message => acknowledged ? {id: message.id, missing: true} : reading.promise,
+        acknowledgeResponse: message => {
+            acknowledged = true;
+            return {id: message.id, acknowledged: true};
+        },
+    });
+    await settle();
+    const wake = harness.fireAlarm();
+    await settle();
+    reading.resolve(nativeResult({id: descriptor.id, name: "switchAccount", provider: "multiple", result: null,
+        mutation: {kind: "accounts", updates: {ethereum: null, solana: null}}}));
+    await settle();
+    discovery.resolve({id: discoveryID, requests: [descriptor]});
+    await wake;
+    assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 2);
+    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
+    assert.equal(providerStateWrites(harness).length, 1);
+    assert.equal(await harness.runTimer(), false);
 });
 
 test("HTTP and HTTPS recovery handles serialize through their shared lease lineage", async () => {
     const reading = deferred();
-    const descriptors = [
+    let descriptors = [
         recoveryDescriptor({id: 31, configurationKey: "http://wallet.example", state: "approved"}),
         recoveryDescriptor({id: 32, state: "approved"}),
         recoveryDescriptor({id: 33, host: "other.example", configurationKey: "https://other.example", state: "approved"}),
     ];
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptors, nextCursor: null}),
-        native: message => message.id === 31 ? reading.promise : {id: message.id, missing: true},
+        recoveryNative: message => ({id: message.id, requests: descriptors}),
+        native: async message => {
+            const response = message.id === 31 ? await reading.promise : {id: message.id, missing: true};
+            descriptors = descriptors.filter(request => request.id !== message.id);
+            return response;
+        },
     });
     await settle();
     assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 33]);
     reading.resolve({id: 31, missing: true});
     await settle();
+    await harness.fireAlarm();
     assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 33, 32]);
     assert.equal(await harness.runTimer(), false);
 });
 
-test("a live click during recovery acknowledgement shares the read and takes over failed retries", async () => {
+test("lineage batches wait for acknowledgement while other origins and discovery keep progressing", async () => {
+    for (const acknowledged of [true, false]) {
+        const acknowledgement = deferred();
+        let descriptors = [
+            recoveryDescriptor({id: 31, configurationKey: "http://wallet.example", state: "completed"}),
+            recoveryDescriptor({id: 32, state: "completed"}),
+            recoveryDescriptor({id: 33, host: "other.example", configurationKey: "https://other.example", state: "completed"}),
+        ];
+        const reads = [];
+        const harness = makeHarness({
+            recoveryNative: message => ({id: message.id, requests: descriptors}),
+            native: message => {
+                reads.push(message.id);
+                return nativeResult({
+                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                    mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
+                });
+            },
+            acknowledgeResponse: async message => {
+                const response = message.id === 31
+                    ? await acknowledgement.promise
+                    : {id: message.id, acknowledged: true};
+                if (response.acknowledged) {
+                    descriptors = descriptors.filter(request => request.id !== message.id);
+                }
+                return response;
+            },
+        });
+        await settle();
+        assert.deepEqual(reads, [31, 33]);
+        await Promise.all([harness.fireAlarm(), harness.fireAlarm()]);
+        assert.deepEqual(reads, [31, 33]);
+        acknowledgement.resolve({id: 31, acknowledged});
+        await settle();
+        assert.deepEqual(reads, [31, 33, 32]);
+        assert.equal(harness.storage.get("https://wallet.example").revisions.ethereum, 1);
+        assert.equal(descriptors.some(request => request.id === 32), false);
+    }
+});
+
+test("clicks and scans share a response through acknowledgement and retry failed acknowledgements", async () => {
     for (const outcome of ["acknowledged", "failed", "timeout"]) {
         const acknowledgement = deferred();
         const descriptor = recoveryDescriptor({state: "completed"});
+        let acknowledged = false;
         let acknowledgements = 0;
         const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: [descriptor], nextCursor: null}),
+            recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
             native: message => message.name === "switchAccount"
                 ? nativeAcknowledgement(descriptor.id, descriptor.revisions, false)
-                : nativeResult({
-                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                    mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
-                }),
-            acknowledgeResponse: message => ++acknowledgements === 1
-                ? acknowledgement.promise : {id: message.id, acknowledged: true},
+                : nativeResult({id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                    mutation: {kind: "accounts", updates: {ethereum: null, solana: null}}}),
+            acknowledgeResponse: message => {
+                if (++acknowledgements === 1) {
+                    return acknowledgement.promise.then(response => {
+                        acknowledged = response.acknowledged;
+                        return response;
+                    });
+                }
+                acknowledged = true;
+                return {id: message.id, acknowledged: true};
+            },
         });
         await settle();
         assert.equal(acknowledgements, 1);
-        const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
-        assert.equal(admitted.id, descriptor.id);
-        assert.equal(await harness.runTimer(), false);
+        assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
+        assert.equal(await harness.runTimer(), true);
         assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-        assert.equal(acknowledgements, 1);
         if (outcome === "timeout") {
             assert.equal(await harness.runTimer(5000), true);
         } else {
             acknowledgement.resolve({id: descriptor.id, acknowledged: outcome === "acknowledged"});
             await settle();
         }
+        assert.equal(await harness.runTimer(), true);
         if (outcome !== "acknowledged") {
-            assert.equal(await harness.runTimer(), true);
             assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 2);
             assert.equal(acknowledgements, 2);
+            assert.equal(await harness.runTimer(), true);
         }
         assert.equal(await harness.runTimer(), false);
         assert.equal(providerStateWrites(harness).length, 1);
@@ -1875,7 +2019,7 @@ test("rediscovery and a live click reuse a completion omitted by an intervening 
     const descriptor = recoveryDescriptor({state: "completed"});
     let snapshot = [descriptor];
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: snapshot, nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: snapshot}),
         native: message => message.name === "switchAccount"
             ? nativeAcknowledgement(descriptor.id, descriptor.revisions, false)
             : reading.promise,
@@ -1887,17 +2031,19 @@ test("rediscovery and a live click reuse a completion omitted by an intervening 
     const recovered = harness.fireAlarm();
     await settle();
     assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
-    assert.equal(await harness.runTimer(), false);
+    assert.equal(await harness.runTimer(), true);
 
     reading.resolve(nativeError({
         id: descriptor.id, name: "switchAccount", provider: "multiple",
         error: {code: 4001, message: "Canceled"},
     }));
     await recovered;
+    await settle();
+    snapshot = [];
 
     assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
     assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-    assert.equal(await harness.runTimer(), false);
+    assert.equal(await harness.runTimer(), true);
 });
 
 test("an expired live read finishes before its replacement without forgetting the new admission", async () => {
@@ -1908,7 +2054,7 @@ test("an expired live read finishes before its replacement without forgetting th
     const harness = makeHarness({
         dateNow: () => now,
         native: message => message.name === "switchAccount"
-            ? nativeAcknowledgement(30 + ++admissions, message.revisions)
+            ? nativeAcknowledgement(30 + Math.min(++admissions, 2), message.revisions)
             : message.id === 31 ? firstRead.promise : secondRead.promise,
     });
     await harness.dispatch(manualSwitchIntent(), contentSender());
@@ -1920,14 +2066,16 @@ test("an expired live read finishes before its replacement without forgetting th
 
     firstRead.resolve({id: 31, missing: true});
     await settle();
+    await harness.runTimer();
     assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id), [31, 32]);
     assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, 32);
-    assert.equal(admissions, 2);
+    assert.equal(admissions, 3);
     secondRead.resolve(nativeError({
         id: 32, name: "switchAccount", provider: "multiple",
         error: {code: 4001, message: "Canceled"},
     }));
     await settle();
+    assert.equal(await harness.runTimer(), true);
     assert.equal(await harness.runTimer(), false);
 });
 
@@ -1935,7 +2083,7 @@ test("a discovery queued during a delegated live acknowledgement cannot read or 
     const acknowledgement = deferred();
     let descriptor;
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : [], nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
         native: message => {
             if (message.name === "switchAccount") { return nativeAcknowledgement(31); }
             assert.equal(message.subject, "getManualSwitchResponse");
@@ -1944,6 +2092,7 @@ test("a discovery queued during a delegated live acknowledgement cannot read or 
         acknowledgeResponse: () => acknowledgement.promise,
     });
     await harness.dispatch(manualSwitchIntent(), contentSender());
+    await settle();
     descriptor = recoveryDescriptor({state: "completed"});
     const first = harness.fireAlarm();
     await settle();
@@ -1954,6 +2103,7 @@ test("a discovery queued during a delegated live acknowledgement cannot read or 
     await Promise.all([first, second]);
     assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
     assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
+    descriptor = null;
     assert.equal(await harness.runTimer(), false);
 });
 
@@ -1962,7 +2112,7 @@ test("discovery immediately drains a completion whose live polling deadline expi
     let descriptor;
     const harness = makeHarness({
         dateNow: () => now,
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : [], nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
         native: message => {
             if (message.name === "switchAccount") { return nativeAcknowledgement(31); }
             assert.equal(message.subject, "getManualSwitchResponse");
@@ -1973,6 +2123,7 @@ test("discovery immediately drains a completion whose live polling deadline expi
         },
     });
     await harness.dispatch(manualSwitchIntent(), contentSender());
+    await settle();
     descriptor = recoveryDescriptor({state: "completed"});
     now += (15 + 60) * 60 * 1000;
     await harness.fireAlarm();
@@ -1987,7 +2138,7 @@ test("page configuration reads and response hints discover approved work without
     for (const trigger of ["configuration", "hint"]) {
         const descriptor = recoveryDescriptor();
         const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: [descriptor], nextCursor: null}),
+            recoveryNative: message => ({id: message.id, requests: [descriptor]}),
             native: message => {
                 assert.equal(message.subject, "getManualSwitchResponse");
                 return nativeError({
@@ -2010,6 +2161,44 @@ test("page configuration reads and response hints discover approved work without
     }
 });
 
+test("a page returning during stale discovery recovers its completed account switch", async () => {
+    const discovery = deferred();
+    const descriptor = recoveryDescriptor();
+    const address = "0x0000000000000000000000000000000000000001";
+    let discoveryID;
+    const harness = makeHarness({
+        recoveryNative: message => {
+            if (discoveryID) {
+                return {id: message.id, requests: [{...descriptor, state: "completed"}]};
+            }
+            discoveryID = message.id;
+            return discovery.promise;
+        },
+        native: message => {
+            assert.equal(message.subject, "getManualSwitchResponse");
+            return nativeResult({
+                id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                mutation: {kind: "accounts", updates: {ethereum: {address, chainId: "0x1"}}},
+            });
+        },
+    });
+    await settle();
+    await harness.dispatch({
+        subject: "getLatestConfiguration", host: descriptor.host,
+        configurationKey: descriptor.configurationKey, workflowVersion: 3,
+    }, contentSender());
+    discovery.resolve({id: discoveryID, requests: [descriptor]});
+    await settle();
+    assert.equal(harness.recoveryMessages.length, 2);
+    assert.deepEqual(harness.storage.get(descriptor.configurationKey).latestConfigurations, [
+        {provider: "ethereum", chainId: "0x1", results: [address]},
+    ]);
+    assert.equal(harness.nativeMessages.filter(({message}) =>
+        message.subject === "acknowledgeResponse"
+    ).length, 1);
+    assert.equal(await harness.runTimer(), false);
+});
+
 test("simultaneous wake triggers coalesce discovery and share one quiet response read", async () => {
     const discovery = deferred();
     const reading = deferred();
@@ -2017,7 +2206,7 @@ test("simultaneous wake triggers coalesce discovery and share one quiet response
     const descriptor = recoveryDescriptor({state: "approved"});
     const harness = makeHarness({
         recoveryNative: message => {
-            if (discoveryID) { return {id: message.id, requests: [descriptor], nextCursor: null}; }
+            if (discoveryID) { return {id: message.id, requests: [descriptor]}; }
             discoveryID = message.id;
             return discovery.promise;
         },
@@ -2031,7 +2220,7 @@ test("simultaneous wake triggers coalesce discovery and share one quiet response
     const hint = harness.dispatch({subject: "responseReady", id: descriptor.id, workflowVersion: 3});
     const configuration = harness.dispatch({subject: "getLatestConfiguration", host: descriptor.host, configurationKey: descriptor.configurationKey, workflowVersion: 3});
     const repeated = Array.from({length: 20}, () => harness.fireAlarm());
-    discovery.resolve({id: discoveryID, requests: [descriptor], nextCursor: null});
+    discovery.resolve({id: discoveryID, requests: [descriptor]});
     await settle();
     assert.equal(harness.recoveryMessages.length, 2);
     assert.equal(harness.nativeMessages.length, 1);
@@ -2041,52 +2230,49 @@ test("simultaneous wake triggers coalesce discovery and share one quiet response
     assert.equal(await harness.runTimer(), false);
 });
 
-test("paginated discovery drains every same-origin handle without replacing its pending picker", async () => {
-    const descriptors = Array.from({length: 17}, (_, index) => recoveryDescriptor({
-        id: 200 + index,
-        requestToken: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-        state: index === 0 ? "pending" : "completed",
-    }));
-    let outstanding = 0;
-    let maximumOutstanding = 0;
+test("bounded discovery drains completions sequentially per lineage and leaves pending pickers alone", async () => {
+    let descriptors = Array.from({length: 8}, (_, index) => {
+        const host = `wallet${Math.floor(index / 2)}.example`;
+        return recoveryDescriptor({
+            id: 200 + index,
+            host,
+            configurationKey: `${index % 2 === 0 ? "https" : "http"}://${host}`,
+            requestToken: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+            state: index === 0 ? "pending" : "completed",
+        });
+    });
     const harness = makeHarness({
-        recoveryNative: message => ({
-            id: message.id,
-            requests: message.cursor ? descriptors.slice(16) : descriptors.slice(0, 16),
-            nextCursor: message.cursor ? null : "next-page",
-        }),
-        native: async message => {
-            assert.equal(message.subject, "getManualSwitchResponse");
-            outstanding += 1;
-            maximumOutstanding = Math.max(outstanding, maximumOutstanding);
-            await settle();
-            outstanding -= 1;
-            return nativeError({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                error: {code: 4001, message: "Canceled"},
-            });
+        recoveryNative: message => ({id: message.id, requests: descriptors}),
+        native: message => nativeError({id: message.id, name: "switchAccount", provider: "multiple",
+            error: {code: 4001, message: "Canceled"}}),
+        acknowledgeResponse: message => {
+            descriptors = descriptors.filter(request => request.id !== message.id);
+            return {id: message.id, acknowledged: true};
         },
     });
+    await settle();
+    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id),
+        [201, 202, 204, 206, 203, 205, 207]);
     await harness.fireAlarm();
-    assert.deepEqual(harness.recoveryMessages.map(({message}) => message.cursor), [undefined, "next-page"]);
-    assert.deepEqual(harness.nativeMessages.filter(({message}) => message.subject === "getManualSwitchResponse").map(({message}) => message.id), descriptors.slice(1).map(request => request.id));
-    assert.equal(maximumOutstanding, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 16);
+    assert.equal(harness.recoveryMessages.every(({message}) => !Object.hasOwn(message, "cursor")), true);
+    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id),
+        [201, 202, 204, 206, 203, 205, 207]);
+    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 7);
+    assert.equal(descriptors.length, 1);
+    assert.equal(descriptors[0].state, "pending");
     assert.equal(await harness.runTimer(), false);
 });
 
 test("failed, malformed, and empty discovery all retain the recovery alarm", async () => {
-    for (const failure of ["throw", "shape", "descriptor", "cursor"]) {
+    for (const failure of ["throw", "shape", "descriptor", "extra-field"]) {
         let failing = true;
         const harness = makeHarness({
             recoveryNative: message => {
-                if (!failing) { return {id: message.id, requests: [], nextCursor: null}; }
+                if (!failing) { return {id: message.id, requests: []}; }
                 if (failure === "throw") { throw new Error("native unavailable"); }
-                if (failure === "shape") { return {id: message.id, requests: []}; }
-                if (failure === "descriptor") { return {id: message.id, requests: [recoveryDescriptor({state: "unknown"})], nextCursor: null}; }
-                return {id: message.id, requests: [], nextCursor: "same-cursor"};
+                if (failure === "shape") { return {id: message.id}; }
+                if (failure === "descriptor") { return {id: message.id, requests: [recoveryDescriptor({state: "unknown"})]}; }
+                return {id: message.id, requests: [], extra: true};
             },
             native: () => assert.fail("Failed discovery must not read or admit requests"),
         });
@@ -2118,7 +2304,7 @@ test("a native admission committed after the next worker's empty scan is recover
     const storage = new Map;
     const abandonedReply = deferred();
     let descriptor;
-    const discovery = message => ({id: message.id, requests: descriptor ? [descriptor] : [], nextCursor: null});
+    const discovery = message => ({id: message.id, requests: descriptor ? [descriptor] : []});
     const first = makeHarness({alarms, storage, recoveryNative: discovery, native: () => abandonedReply.promise});
     void first.dispatch(manualSwitchIntent(), contentSender());
     await settle();
@@ -2188,27 +2374,22 @@ test("quiet recovery never joins or upgrades an interactive response read", asyn
     const reading = deferred();
     let descriptor;
     const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : [], nextCursor: null}),
+        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
         native: message => {
-            if (message.name === "switchAccount") {
-                descriptor = recoveryDescriptor({id: message.id, state: "approved"});
-                return nativeAcknowledgement(message.id, message.revisions);
-            }
             assert.equal(message.subject, "getResponse");
             return reading.promise;
         },
     });
-    const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
-    await harness.runTimer();
+    const interactive = harness.dispatch({subject: "applyCompletedResponse", host: "wallet.example",
+        configurationKey: "https://wallet.example", id: 31, requestToken,
+        revisions: {ethereum: 0, solana: 0}, workflowVersion: 3}, popupSender());
+    await settle();
+    descriptor = recoveryDescriptor({state: "approved"});
     await harness.fireAlarm();
     assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-    reading.resolve(nativeError({
-        id: admitted.id,
-        name: "switchAccount",
-        provider: "multiple",
-        error: {code: 4001, message: "Canceled"},
-    }));
-    await settle();
+    reading.resolve(nativeError({id: 31, name: "switchAccount", provider: "multiple",
+        error: {code: 4001, message: "Canceled"}}));
+    assert.deepEqual(clone(await interactive), {applied: true});
 });
 
 test("worker-private recovery stays silent and native discovery is not a page message API", async () => {
@@ -2271,6 +2452,7 @@ test("same-account grants advance revisions through missed delivery, replay, and
             id: acknowledged.id,
             workflowVersion: 3,
         }, {});
+        await settle();
 
         const acceptedRevision = revisions[selected.provider] + 1;
         assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
@@ -4125,7 +4307,7 @@ test("the finalization ceiling releases a switch lineage for another attempt", a
         storage,
         native: message => isResponseRead(message)
             ? new Promise(() => {})
-            : nativeAcknowledgement(message.id, message.revisions),
+            : nativeAcknowledgement(31, message.revisions),
         scheduleTimeout(callback, delay) {
             if (delay === 180_000) { queueMicrotask(callback); }
             return delay;
@@ -4139,6 +4321,7 @@ test("the finalization ceiling releases a switch lineage for another attempt", a
         id: acknowledged.id,
         workflowVersion: 3,
     }, {});
+    await settle();
     const disconnected = await harness.dispatch({
         subject: "disconnect",
         id: 79,
@@ -4933,6 +5116,7 @@ test("manual finalization keeps revisions leased across worker restart", async (
         mutation: {kind: "accounts", updates: {}},
     }));
     await polling;
+    await settle();
     assert.equal([...storage.keys()].some(key =>
         key.startsWith(approvalLeaseStoragePrefix)
     ), false);
@@ -5328,7 +5512,7 @@ test("a response-ready tab-query timeout completes without delivery", async () =
         ids: [65],
         workflowVersion: 3,
     }, {}), undefined);
-    assert.deepEqual(harness.timerDelays, [1000, 5000]);
+    assert.deepEqual(harness.timerDelays, [1000, 5000, 5000]);
     assert.deepEqual(harness.tabMessages, []);
 });
 

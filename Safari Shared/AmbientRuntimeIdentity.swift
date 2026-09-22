@@ -8,9 +8,6 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
 
     private static let logger = Logger(subsystem: "org.lil.wallet", category: "AmbientRuntimeIdentity")
 
-    typealias AtomicWrite = (Data, URL) throws -> Void
-    typealias RemoveItem = (URL) throws -> Void
-
     private enum FileStatus {
         case missing, regular, directory, unavailable
     }
@@ -118,35 +115,44 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
         return false
     }
 
+    @MainActor
     @discardableResult
-    func persist(
-        directoryURL: URL? = AmbientRuntimeIdentity.defaultDirectoryURL,
-        atomicWrite: AtomicWrite = { try $0.write(to: $1, options: .atomic) }
+    func persistForCurrentProcess(
+        directoryURL: URL? = AmbientRuntimeIdentity.defaultDirectoryURL
     ) -> Bool {
-        guard isValid,
+        guard processIdentifier == ProcessInfo.processInfo.processIdentifier,
+              isValid,
+              let directoryURL, directoryURL.isFileURL,
               let data = try? JSONEncoder().encode(self),
               data.count <= Self.maximumEncodedBytes else { return false }
-        return Self.withMutationLock(directoryURL: directoryURL) { directory in
-            let url = Self.fileURL(
-                processIdentifier: processIdentifier,
-                directoryURL: directory
+        do {
+            try FileManager.default.createDirectory(
+                at: directoryURL,
+                withIntermediateDirectories: true
             )
-            switch Self.fileStatus(at: url) {
-            case .missing, .regular:
-                break
-            case .directory, .unavailable:
-                return false
-            }
-            do {
-                try atomicWrite(data, url)
-            } catch {
-                return false
-            }
-            return Self.readData(at: url) == data && Self.load(
-                processIdentifier: processIdentifier,
-                directoryURL: directory
-            ) == self
+        } catch {
+            return false
         }
+        guard Self.fileStatus(at: directoryURL) == .directory else { return false }
+        let url = Self.fileURL(
+            processIdentifier: processIdentifier,
+            directoryURL: directoryURL
+        )
+        switch Self.fileStatus(at: url) {
+        case .missing, .regular:
+            break
+        case .directory, .unavailable:
+            return false
+        }
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            return false
+        }
+        return Self.load(
+            processIdentifier: processIdentifier,
+            directoryURL: directoryURL
+        ) == self
     }
 
     static func load(
@@ -177,37 +183,44 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
         return identity
     }
 
+    @MainActor
     @discardableResult
-    func clear(
-        directoryURL: URL? = AmbientRuntimeIdentity.defaultDirectoryURL,
-        removeItem: RemoveItem = { try FileManager.default.removeItem(at: $0) }
+    func clearForCurrentProcess(
+        directoryURL: URL? = AmbientRuntimeIdentity.defaultDirectoryURL
     ) -> Bool {
-        guard processIdentifier > 0 else { return false }
-        return Self.withMutationLock(directoryURL: directoryURL) { directory in
-            let url = Self.fileURL(
-                processIdentifier: processIdentifier,
-                directoryURL: directory
-            )
-            switch Self.fileStatus(at: url) {
-            case .missing:
-                return true
-            case .regular:
-                break
-            case .directory, .unavailable:
-                return false
-            }
-            guard let stored = Self.load(
-                      processIdentifier: processIdentifier,
-                      directoryURL: directory
-                  ), stored.instanceIdentifier == instanceIdentifier else {
-                return false
-            }
-            do {
-                try removeItem(url)
-            } catch {
-                return false
-            }
-            return Self.fileStatus(at: url) == .missing
+        guard processIdentifier == ProcessInfo.processInfo.processIdentifier,
+              let directoryURL, directoryURL.isFileURL else { return false }
+        switch Self.fileStatus(at: directoryURL) {
+        case .missing:
+            return true
+        case .directory:
+            break
+        case .regular, .unavailable:
+            return false
+        }
+        let url = Self.fileURL(
+            processIdentifier: processIdentifier,
+            directoryURL: directoryURL
+        )
+        switch Self.fileStatus(at: url) {
+        case .missing:
+            return true
+        case .regular:
+            break
+        case .directory, .unavailable:
+            return false
+        }
+        guard let stored = Self.load(
+                  processIdentifier: processIdentifier,
+                  directoryURL: directoryURL
+              ), stored.instanceIdentifier == instanceIdentifier else {
+            return false
+        }
+        do {
+            try FileManager.default.removeItem(at: url)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -227,40 +240,6 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
         directoryURL: URL
     ) -> URL {
         directoryURL.appendingPathComponent("\(processIdentifier).json")
-    }
-
-    private static func withMutationLock(
-        directoryURL: URL?,
-        operation: (URL) -> Bool
-    ) -> Bool {
-        guard let directoryURL, directoryURL.isFileURL else { return false }
-        do {
-            try FileManager.default.createDirectory(
-                at: directoryURL,
-                withIntermediateDirectories: true
-            )
-        } catch {
-            return false
-        }
-        guard fileStatus(at: directoryURL) == .directory else { return false }
-        let lockURL = directoryURL.appendingPathComponent("identities.lock")
-        switch fileStatus(at: lockURL) {
-        case .missing, .regular:
-            break
-        case .directory, .unavailable:
-            return false
-        }
-        let lock = CrossProcessFileLock(fileURL: lockURL)
-        do {
-            try lock.acquire(
-                timeoutNanoseconds: 1_000_000_000,
-                pollNanoseconds: 10_000_000
-            )
-        } catch {
-            return false
-        }
-        defer { lock.release() }
-        return operation(directoryURL)
     }
 
     private static func fileStatus(at url: URL) -> FileStatus {

@@ -24,6 +24,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         WalletsManager.shared.handleExternalWalletStoreChange()
         SafariApprovalVaultHost.shared.reconcile()
+        Task { await ExtensionBridge.shared.performMaintenance() }
     }
     
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {

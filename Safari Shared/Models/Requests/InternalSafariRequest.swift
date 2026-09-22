@@ -182,7 +182,7 @@ struct InternalSafariRequest: Decodable {
     }
 
     enum WorkerCommand {
-        case getManualSwitchRequests(cursor: String?)
+        case getManualSwitchRequests
         case getManualSwitchResponse(ResponseIdentity)
     }
 
@@ -311,16 +311,8 @@ struct InternalSafariRequest: Decodable {
                 common: common
             )))
         case .worker(.getManualSwitchRequests):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common,
-                optional: ["cursor"]
-            )
-            command = .worker(.getManualSwitchRequests(
-                cursor: container.container.contains(InternalCodingKey("cursor"))
-                    ? try container.decode(String.self, forKey: "cursor")
-                    : nil
-            ))
+            _ = try ExactKeyedContainer(decoder: decoder, required: common)
+            command = .worker(.getManualSwitchRequests)
         case .page(.acknowledgeResponse), .page(.showApproval):
             let container = try ExactKeyedContainer(
                 decoder: decoder,

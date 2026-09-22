@@ -38,6 +38,7 @@ struct Big_Wallet_visionOSApp: App {
                 AlchemyJWTProvider.prewarmForApplicationLifecycle()
                 WalletsManager.shared.handleExternalWalletStoreChange()
                 SafariApprovalVaultHost.shared.reconcile()
+                Task { await ExtensionBridge.shared.performMaintenance() }
             case .background, .inactive:
                 break
             @unknown default:
