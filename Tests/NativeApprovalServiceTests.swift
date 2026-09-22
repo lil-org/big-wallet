@@ -96,7 +96,9 @@
             XCTAssertTrue(f.validations.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
             f.deliver(request, staged: true)
-            _ = try await f.finish { await f.read(service, request, duration: 0.25) }
+            _ = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 250_000_000)
+            }) { await f.read(service, request, duration: 0.25) }
             XCTAssertEqual(f.validations.count, 1)
         }
 
@@ -232,7 +234,9 @@
                 return .found(f.snapshots[handle]!)
             }
             let service = f.service()
-            let result = try await f.finish { await f.read(service, request, duration: 0.25) }
+            let result = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 250_000_000)
+            }) { await f.read(service, request, duration: 0.25) }
             guard case .pending = result else { return XCTFail("Expected pending approval") }
             XCTAssertEqual(f.validations.count, 2)
             XCTAssertEqual(f.snapshots[request.handle]?.nativeDeliveryReceipt, receipt)
@@ -285,7 +289,9 @@
                     }
                 }
                 let service = f.service()
-                _ = try await f.finish { await f.read(service, request, duration: 0.25) }
+                _ = try await f.finish(afterStarting: {
+                    try await f.advanceClock(by: 250_000_000)
+                }) { await f.read(service, request, duration: 0.25) }
                 XCTAssertTrue(f.quits.isEmpty)
                 XCTAssertTrue(f.clears.isEmpty)
                 XCTAssertTrue(f.launches.isEmpty)
@@ -447,7 +453,9 @@
                     completion(true)
                 }
                 let service = f.service()
-                let result = try await f.finish { await service.reactivate(f.route(request)) }
+                let result = try await f.finish(afterStarting: {
+                    if !publish { try await f.advanceClock(by: 50_000_000, steps: 100) }
+                }) { await service.reactivate(f.route(request)) }
                 XCTAssertEqual(result, publish)
                 XCTAssertEqual(f.launches.count, 1)
             }
@@ -459,7 +467,9 @@
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service(timeout: 1_000_000_000)
             let started = f.clock.now
-            let result = try await f.finish { await service.open(f.route(request)) }
+            let result = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 50_000_000, steps: 20)
+            }) { await service.open(f.route(request)) }
             XCTAssertFalse(result)
             XCTAssertEqual(f.launches.map { $0.time - started }, [0])
             XCTAssertEqual(f.launches.map(\.route), [f.route(request)])
@@ -474,7 +484,9 @@
                 completion(true)
             }
             let service = f.service()
-            let first = try await f.finish { await service.open(f.route(request)) }
+            let first = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 50_000_000, steps: 100)
+            }) { await service.open(f.route(request)) }
             XCTAssertFalse(first)
             XCTAssertEqual(f.launches.count, 1)
             let result = try await f.finish { await service.open(f.route(request)) }
@@ -492,7 +504,9 @@
                 }
                 f.onLaunch = { _, _, completion in completion(true) }
                 let service = f.service(timeout: 800_000_000)
-                let result = try await f.finish { await service.open(f.route(request)) }
+                let result = try await f.finish(afterStarting: {
+                    if afterLaunch { try await f.advanceClock(by: 50_000_000, steps: 16) }
+                }) { await service.open(f.route(request)) }
                 XCTAssertFalse(result)
                 XCTAssertEqual(f.launches.count, afterLaunch ? 1 : 0)
                 if afterLaunch { XCTAssertGreaterThan(f.loads.count, 3) }
@@ -539,11 +553,12 @@
                 let f = try fixture()
                 f.onLaunch = { _, _, completion in
                     if publish { f.processes[42] = f.runtime() }
-                    f.clock.advance(to: f.clock.now + 300_000_000)
                     completion(true)
                 }
                 let service = f.service()
-                let result = try await f.finish {
+                let result = try await f.finish(afterStarting: {
+                    if !publish { try await f.advanceClock(by: 50_000_000, steps: 100) }
+                }) {
                     await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
                 }
                 XCTAssertEqual(result, publish)
@@ -615,7 +630,10 @@
             var callback: ((Bool) -> Void)?
             f.onLaunch = { _, _, completion in callback = completion }
             let service = f.service(timeout: 100_000_000)
-            let result = try await f.finish {
+            let result = try await f.finish(afterStarting: {
+                try await f.eventually { callback != nil }
+                try await f.advanceClock(by: 100_000_000)
+            }) {
                 await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
             }
             XCTAssertFalse(result)
@@ -672,7 +690,9 @@
                     return true
                 })
             let service = f.service(timeout: 100_000_000)
-            let result = try await f.finish {
+            let result = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 50_000_000, steps: 2)
+            }) {
                 await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
             }
             XCTAssertFalse(result)
@@ -777,7 +797,9 @@
             let earlyResult = await second.value
             XCTAssertFalse(earlyResult)
             XCTAssertEqual(f.launches.count, 1)
-            let firstResult = try await f.finish { await first.value }
+            let firstResult = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 450_000_000)
+            }) { await first.value }
             XCTAssertFalse(firstResult)
             firstCallback?(true)
             for _ in 0..<50 { await Task.yield() }
@@ -890,7 +912,10 @@
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service(timeout: 100_000_000)
             let start = f.clock.now
-            let expired = try await f.finish { await service.reactivate(f.route(request)) }
+            let expired = try await f.finish(afterStarting: {
+                try await f.eventually { f.validations.count == 1 }
+                try await f.advanceClock(by: 100_000_000)
+            }) { await service.reactivate(f.route(request)) }
             XCTAssertFalse(expired)
             XCTAssertEqual(f.clock.now, start + 100_000_000)
             XCTAssertTrue(f.launches.isEmpty)
@@ -946,7 +971,10 @@
             f.onLaunch = { _, _, _ in }
             let started = f.clock.now
             let service = f.service()
-            let result = try await f.finish {
+            let result = try await f.finish(afterStarting: {
+                try await f.eventually { f.launches.count == 1 }
+                try await f.advanceClock(by: 20_000_000)
+            }) {
                 await service.reactivate(f.route(request), waitDeadline: started + 100_000_000)
             }
             XCTAssertFalse(result)

@@ -35,7 +35,9 @@ final class NativeApprovalResponseTests: XCTestCase {
                 return true
             }
             let service = f.service()
-            let result = try await f.finish { await f.read(service, request, duration: duration) }
+            let result = try await f.finish(afterStarting: {
+                try await f.advanceClock(by: 250_000_000, steps: Int(min(duration, 170) * 4))
+            }) { await f.read(service, request, duration: duration) }
             guard case .pending = result else { return XCTFail("Expected pending at expiry") }
             XCTAssertEqual(f.clock.now - start, UInt64(min(duration, 170) * 1_000_000_000))
             let times = Array(Set(f.loads.map { $0.1 - start })).sorted()
@@ -57,7 +59,9 @@ final class NativeApprovalResponseTests: XCTestCase {
         }
         let start = f.clock.now
         let service = f.service()
-        let result = try await f.finish { await f.read(service, request, duration: 1) }
+        let result = try await f.finish(afterStarting: {
+            try await f.advanceClock(by: 250_000_000, steps: 680)
+        }) { await f.read(service, request, duration: 1) }
         guard case .pending = result else { return XCTFail("Expected executing work to remain pending") }
         XCTAssertEqual(f.clock.now - start, 170_000_000_000)
         XCTAssertEqual(f.validations.count, 1)
@@ -73,7 +77,9 @@ final class NativeApprovalResponseTests: XCTestCase {
             let start = f.clock.now
             f.onValidate = { _ in later && f.clock.now - start < 1_000_000_000 }
             let service = f.service()
-            let result = try await f.finish { await f.read(service, request) }
+            let result = try await f.finish(afterStarting: {
+                if later { try await f.advanceClock(by: 250_000_000, steps: 4) }
+            }) { await f.read(service, request) }
             if later {
                 guard case .pending = result else { return XCTFail("Expected pending") }
             } else {
@@ -100,10 +106,14 @@ final class NativeApprovalResponseTests: XCTestCase {
             await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
         }
         XCTAssertTrue(shown)
-        _ = try await f.finish { await short.value }
+        _ = try await f.finish(afterStarting: {
+            try await f.advanceClock(by: 250_000_000, steps: 2, waiters: 2)
+        }) { await short.value }
         XCTAssertEqual(f.clock.now - start, 500_000_000)
         XCTAssertEqual(f.activeReads, [second.handle])
-        _ = try await f.finish { await long.value }
+        _ = try await f.finish(afterStarting: {
+            try await f.advanceClock(by: 250_000_000, steps: 4)
+        }) { await long.value }
         XCTAssertEqual(f.clock.now - start, 1_500_000_000)
         XCTAssertEqual(Set(f.releasedReads), [first.handle, second.handle])
     }
@@ -152,7 +162,9 @@ final class NativeApprovalResponseTests: XCTestCase {
             return .found(f.snapshots[handle]!)
         }
         let service = f.service()
-        let result = try await f.finish { await f.read(service, request) }
+        let result = try await f.finish(afterStarting: {
+            try await f.advanceClock(by: 250_000_000, steps: 4)
+        }) { await f.read(service, request) }
         guard case .response(let json) = result,
               case .error(let error) = ResponseToExtension(json: json)?.payload else {
             return XCTFail("Expected interruption response")
@@ -348,7 +360,9 @@ final class NativeApprovalResponseTests: XCTestCase {
                 sleepUntil: { [clock = f.clock] in await clock.sleepUntil($0) }
             )
             let service = NativeApprovalService(dependencies: dependencies)
-            let result = try await f.finish { await f.read(service, snapshot, duration: 0.25) }
+            let result = try await f.finish(afterStarting: {
+                if !completes { try await f.advanceClock(by: 250_000_000) }
+            }) { await f.read(service, snapshot, duration: 0.25) }
             if completes {
                 guard case .response = result else { return XCTFail("Expected interruption") }
             } else {
@@ -377,7 +391,10 @@ final class NativeApprovalResponseTests: XCTestCase {
         let gate = NativeApprovalServiceTestFixture.Gate()
         f.onValidate = { _ in await gate.wait(); return true }
         let service = f.service()
-        let result = try await f.finish { await f.read(service, request) }
+        let result = try await f.finish(afterStarting: {
+            try await f.eventually { !f.validations.isEmpty }
+            try await f.advanceClock(by: 5_000_000_000)
+        }) { await f.read(service, request) }
         guard case .unavailable = result else { return XCTFail("Expected bounded initial validation") }
         XCTAssertEqual(f.releasedReads, [request.handle])
         gate.open()

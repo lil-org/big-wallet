@@ -378,30 +378,25 @@
                 nativeDeliveryNonce: snapshot.nativeDeliveryNonce)
         }
 
-        func finish<Value>(_ operation: @escaping @MainActor () async -> Value) async throws -> Value {
+        func advanceClock(by interval: UInt64, steps: Int = 1, waiters: Int = 1) async throws {
+            for _ in 0..<steps {
+                let deadline = clock.now + interval
+                try await eventually { self.clock.deadlines.filter { $0 == deadline }.count >= waiters }
+                clock.advance(to: deadline)
+            }
+        }
+
+        func finish<Value>(
+            afterStarting: () async throws -> Void = {},
+            _ operation: @escaping @MainActor () async -> Value
+        ) async throws -> Value {
             var result: Value?
             let task = Task { result = await operation() }
             defer { task.cancel() }
-            var previousDeadline: UInt64?
-            var previousActivity = -1
-            var idleTicks = 0
+            try await afterStarting()
             for _ in 0..<20_000 {
                 if let result { return result }
                 try await Task.sleep(for: .milliseconds(1))
-                if let result { return result }
-                let deadline = clock.deadlines.first
-                let activity = loads.count + validations.count + launches.count + quits.count + clears.count
-                if deadline == previousDeadline, activity == previousActivity {
-                    idleTicks += 1
-                } else {
-                    idleTicks = 0
-                }
-                previousDeadline = deadline
-                previousActivity = activity
-                if idleTicks >= 5, let deadline {
-                    clock.advance(to: deadline)
-                    idleTicks = 0
-                }
             }
             throw CocoaError(.coderInvalidValue)
         }
