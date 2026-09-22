@@ -178,18 +178,17 @@ actor NativeApprovalService {
                 case .terminal: return .terminal
                 case .unavailable: return .unavailable
                 }
-                guard expected.installedVersionMatches else { return .unavailable }
-                switch dependencies.launcher.assess(owner: receipt.owner, expected: expected) {
-                case .absent:
+                switch await dependencies.launcher.retireVerifiedOwner(
+                    owner: receipt.owner,
+                    observedRuntime: runtime,
+                    expected: expected,
+                    deadline: deadline
+                ) {
+                case .exited:
                     break
-                case .incompatible(let current) where current.identity == runtime.identity:
-                    guard dependencies.launcher.requestQuit(current) else { return .unavailable }
-                    guard await dependencies.launcher.waitForExit(current, deadline: deadline) else {
-                        return .unavailable
-                    }
-                case .compatible:
+                case .reassess:
                     continue
-                case .incompatible, .unidentified:
+                case .unavailable:
                     return .unavailable
                 }
             case .absent:

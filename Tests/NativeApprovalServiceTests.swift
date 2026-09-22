@@ -190,6 +190,81 @@
             XCTAssertTrue(f.launches.isEmpty)
         }
 
+        func testOwnerExitDuringReceiptReloadClearsWithoutQuitting() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+            let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
+            f.onLoad = { handle in
+                if f.loads.count == 2 {
+                    XCTAssertEqual(f.validations.count, 1)
+                    f.processes.removeAll()
+                }
+                return .found(f.snapshots[handle]!)
+            }
+            let result = await f.read(f.service(), request)
+            guard case .response = result else { return XCTFail("Expected interrupted response") }
+            XCTAssertEqual(f.clears, [receipt])
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
+        }
+
+        func testOwnerBecomingCompatibleDuringReceiptReloadIsReassessed() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            let compatible = f.runtime()
+            let incompatible = AmbientRuntimeIdentity(
+                instanceIdentifier: compatible.instanceIdentifier,
+                processIdentifier: compatible.processIdentifier,
+                bundlePath: compatible.bundlePath,
+                version: compatible.version,
+                runtimeProtocolVersion: AmbientRuntimeIdentity.currentRuntimeProtocolVersion - 1,
+                supportedWorkflowVersions: compatible.supportedWorkflowVersions,
+                launchedAt: compatible.launchedAt
+            )
+            f.deliver(request, runtime: incompatible, staged: true)
+            let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
+            f.onLoad = { handle in
+                if f.loads.count == 2 {
+                    XCTAssertEqual(f.validations.count, 1)
+                    f.processes[compatible.processIdentifier] = compatible
+                }
+                return .found(f.snapshots[handle]!)
+            }
+            let service = f.service()
+            let result = try await f.finish { await f.read(service, request, duration: 0.25) }
+            guard case .pending = result else { return XCTFail("Expected pending approval") }
+            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertEqual(f.snapshots[request.handle]?.nativeDeliveryReceipt, receipt)
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.clears.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
+        }
+
+        func testRetirementRejectsAnInstalledVersionDifferentFromVerifiedVersion() async throws {
+            let f = try fixture()
+            let runtime = f.runtime(build: "147")
+            f.processes[runtime.processIdentifier] = runtime
+            let owner = try XCTUnwrap(runtime.nativeDeliveryOwner)
+            let observed = NativeAgentLauncher.IdentifiedRuntime(
+                helper: try XCTUnwrap(f.helper(runtime.processIdentifier)),
+                identity: runtime
+            )
+            let previouslyVerified = NativeAgentLauncher.ExpectedRuntime(
+                url: f.bundleURL,
+                version: .init(marketing: "1.0.99", build: "146")
+            )
+            XCTAssertEqual(AmbientRuntimeIdentity.bundleVersion(at: f.bundleURL)?.build, "148")
+            let result = await NativeAgentLauncher(dependencies: f.launcherDependencies)
+                .retireVerifiedOwner(
+                    owner: owner, observedRuntime: observed,
+                    expected: previouslyVerified, deadline: UInt64.max
+                )
+            guard case .unavailable = result else { return XCTFail("Expected changed installation to be unavailable") }
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
+        }
+
         func testReceiptReplacementDuringVerificationPreventsQuittingOldOwner() async throws {
             for replacementPoint in ["validation", "reload"] {
                 let f = try fixture()
@@ -217,21 +292,61 @@
             }
         }
 
-        func testRuntimeReplacementOrExpiryDuringVerificationPreventsQuit() async throws {
-            for expires in [false, true] {
+        func testRuntimeReplacementOrExpiryBeforeRetirementPreventsQuit() async throws {
+            for (replacementPoint, expires) in [
+                ("validation", false), ("validation", true),
+                ("reload", false), ("reload", true),
+            ] {
                 let f = try fixture()
                 let request = try f.request()
                 f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
-                f.onValidate = { _ in
+                let replaceOrExpire = {
                     if expires { f.clock.advance(to: f.clock.now + 6_000_000_000) }
                     else { f.processes[42] = f.runtime(instance: UUID()) }
-                    return true
+                }
+                if replacementPoint == "validation" {
+                    f.onValidate = { _ in replaceOrExpire(); return true }
+                } else {
+                    f.onLoad = { handle in
+                        if f.loads.count == 2 {
+                            XCTAssertEqual(f.validations.count, 1)
+                            replaceOrExpire()
+                        }
+                        return .found(f.snapshots[handle]!)
+                    }
                 }
                 let result = await f.read(f.service(), request)
                 guard case .unavailable = result else { return XCTFail("Expected unavailable") }
                 XCTAssertTrue(f.quits.isEmpty)
                 XCTAssertTrue(f.clears.isEmpty)
+                XCTAssertTrue(f.launches.isEmpty)
             }
+        }
+
+        func testCancellationDuringReceiptReloadPreventsRetirement() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+            let gate = NativeApprovalServiceTestFixture.Gate()
+            defer { gate.open() }
+            f.onLoad = { handle in
+                if f.loads.count == 2 {
+                    XCTAssertEqual(f.validations.count, 1)
+                    await gate.wait()
+                }
+                return .found(f.snapshots[handle]!)
+            }
+            let service = f.service()
+            let task = Task { await f.read(service, request) }
+            defer { task.cancel() }
+            try await f.eventually { f.loads.count == 2 }
+            task.cancel()
+            gate.open()
+            guard case .pending = await task.value else { return XCTFail("Expected cancellation") }
+            for _ in 0..<20 { await Task.yield() }
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.clears.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
         }
 
         func testCancelledReadCannotRepairAfterSuspension() async throws {

@@ -104,6 +104,10 @@ final class NativeAgentLauncher {
         case incompatible(IdentifiedRuntime)
     }
 
+    enum OwnerRetirementResult {
+        case exited, reassess, unavailable
+    }
+
     private struct RuntimeProcessKey: Hashable {
         let processIdentifier: Int32
         let processStartDate: Date?
@@ -194,11 +198,41 @@ final class NativeAgentLauncher {
         return assessment
     }
 
-    func requestQuit(_ runtime: IdentifiedRuntime) -> Bool {
-        runtime.helper.requestQuit()
+    func retireVerifiedOwner(
+        owner: ExtensionBridge.NativeDeliveryOwner,
+        observedRuntime: IdentifiedRuntime,
+        expected: ExpectedRuntime,
+        deadline: UInt64
+    ) async -> OwnerRetirementResult {
+        guard !Task.isCancelled, dependencies.uptime() < deadline,
+              expected.installedVersionMatches else { return .unavailable }
+        switch assess(owner: owner, expected: expected) {
+        case .absent:
+            return .exited
+        case .compatible:
+            return .reassess
+        case .incompatible(let current) where current.identity == observedRuntime.identity:
+            guard requestQuit(current.helper, expected: expected, deadline: deadline),
+                  await waitForExit(current, deadline: deadline) else {
+                return .unavailable
+            }
+            return .exited
+        case .incompatible, .unidentified:
+            return .unavailable
+        }
     }
 
-    func waitForExit(_ runtime: IdentifiedRuntime, deadline: UInt64) async -> Bool {
+    private func requestQuit(
+        _ helper: RuntimeHelper,
+        expected: ExpectedRuntime,
+        deadline: UInt64
+    ) -> Bool {
+        guard !Task.isCancelled, dependencies.uptime() < deadline,
+              expected.installedVersionMatches else { return false }
+        return helper.requestQuit()
+    }
+
+    private func waitForExit(_ runtime: IdentifiedRuntime, deadline: UInt64) async -> Bool {
         while runtime.helper.isRunning(), !Task.isCancelled,
               dependencies.uptime() < deadline {
             await dependencies.wait(NativeApprovalTiming.launchPollIntervalNanoseconds)
@@ -357,7 +391,7 @@ final class NativeAgentLauncher {
                 case .incompatible, .unidentified:
                     mustWait = true
                     requestedQuit.insert(key)
-                    guard candidate.requestQuit() else { return nil }
+                    guard requestQuit(candidate, expected: expected, deadline: deadline) else { return nil }
                 }
             }
             guard canContinue() else { return nil }
