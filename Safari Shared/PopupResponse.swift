@@ -113,7 +113,7 @@ struct PopupApprovalState: Encodable {
     enum Content {
         case review(PopupReview, actions: [Action], feedback: String?)
         case authenticating, working, missing
-        case error(message: String, action: RecoveryAction)
+        case error(message: String, actions: [RecoveryAction])
     }
 
     let id: Int
@@ -128,7 +128,7 @@ struct PopupApprovalState: Encodable {
     var canReject: Bool {
         switch content {
         case .review(_, let actions, _): return actions.contains(.reject)
-        case .error(_, let action): return action == .reject
+        case .error(_, let actions): return actions.contains(.reject)
         case .authenticating, .working, .missing: return false
         }
     }
@@ -144,9 +144,9 @@ struct PopupApprovalState: Encodable {
             try container.encode(actions, forKey: .actions)
             try container.encode(review, forKey: .review)
             try container.encodeIfPresent(feedback, forKey: .error)
-        case .error(let message, let action):
+        case .error(let message, let actions):
             try container.encode("error", forKey: .state)
-            try container.encode([action], forKey: .actions)
+            try container.encode(actions, forKey: .actions)
             try container.encode(message, forKey: .error)
         case .authenticating:
             try container.encode("authenticating", forKey: .state)
@@ -402,7 +402,7 @@ enum PopupResponseEncoder {
             host: original?.host,
             content: .error(
                 message: Strings.somethingWentWrong,
-                action: original?.canReject == true ? .reject : .retry
+                actions: original?.canReject == true ? [.reject] : [.retry]
             )
         )
         if let data = bounded(.command(command.replacingApprovalState(fallback))) { return data }

@@ -215,9 +215,10 @@ final class PopupStringsTests: XCTestCase {
     }
 
     @MainActor
-    func testSecureSetupRequiredStateIsDistinctAndRefreshOnly() {
-        let state = popupApprovalJSON(PopupApprovalStatePresenter()
-            .secureSetupRequiredState(id: 91, host: "wallet.example"))
+    func testSecureSetupRequiredStateAllowsRefreshAndRejection() {
+        let approval = PopupApprovalStatePresenter()
+            .secureSetupRequiredState(id: 91, host: "wallet.example")
+        let state = popupApprovalJSON(approval)
 
         XCTAssertEqual(
             Set(state.keys),
@@ -228,7 +229,8 @@ final class PopupStringsTests: XCTestCase {
             state["error"] as? String,
             Strings.secureApprovalSetupRequired
         )
-        XCTAssertEqual(state["actions"] as? [String], ["retry"])
+        XCTAssertEqual(state["actions"] as? [String], ["retry", "reject"])
+        XCTAssertTrue(approval.canReject)
         XCTAssertNil(state["review"])
     }
 
@@ -293,7 +295,7 @@ final class PopupStringsTests: XCTestCase {
     func testRejectableErrorHasExactRejectOnlyEnvelope() {
         let error = popupApprovalJSON(PopupApprovalStatePresenter.errorState(
             id: 91,
-            action: .reject,
+            actions: [.reject],
             host: "wallet.example",
             error: Strings.failedToLoad
         ))
@@ -409,7 +411,7 @@ final class PopupStringsTests: XCTestCase {
         for action in [PopupApprovalState.RecoveryAction.retry, .reject] {
             let response = PopupResponse.command(.ok(.init(
                 id: 91, host: "wallet.example",
-                content: .error(message: String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes), action: action)
+                content: .error(message: String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes), actions: [action])
             )))
             let bounded = try boundedResponse(response, for: approvalStateRequest())
             XCTAssertEqual(bounded["state"] as? String, "error")
@@ -540,8 +542,8 @@ final class PopupStringsTests: XCTestCase {
             "missing": .command(.ok(.init(id: 91, content: .missing))),
             "working": .command(.ok(.init(id: 91, host: "wallet.example", content: .working))),
             "authenticating": .command(.ok(.init(id: 91, host: "wallet.example", content: .authenticating))),
-            "retryError": .command(.ok(.init(id: 91, host: "wallet.example", content: .error(message: "Failed to load", action: .retry)))),
-            "rejectError": .command(.ok(.init(id: 91, content: .error(message: "Review unavailable", action: .reject)))),
+            "retryError": .command(.ok(.init(id: 91, host: "wallet.example", content: .error(message: "Failed to load", actions: [.retry])))),
+            "rejectError": .command(.ok(.init(id: 91, content: .error(message: "Review unavailable", actions: [.reject])))),
             "selectAccount": reviewResponse(.selectAccount(.init(
                 accounts: [.init(
                     display: .init(name: "Primary", croppedAddress: "0x1111…1111"),

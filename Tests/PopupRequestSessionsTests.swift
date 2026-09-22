@@ -1321,7 +1321,7 @@ extension PopupRequestSessionsTests {
         )
     }
 
-    func testUnavailableCatalogRequiresSecureSetup() async throws {
+    func testUnavailableCatalogAllowsRetryAndRejection() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 20), in: store)
         let controller = PopupRequestSessions(
@@ -1342,11 +1342,34 @@ extension PopupRequestSessionsTests {
         )
 
         XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error", "status"])
-        XCTAssertEqual(response["actions"] as? [String], ["retry"])
+        XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"])
         XCTAssertEqual(response["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertEqual(response["state"] as? String, "error")
         XCTAssertNil((response["review"] as? [String: Any])?["reviewToken"])
         XCTAssertNil(response["canReject"])
+
+        let retry = await controller.dispatchJSON(
+            request: try popupCommand(
+                subject: "retryApproval",
+                id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            ),
+            profileIdentifier: nil
+        )
+        XCTAssertEqual(retry["actions"] as? [String], ["retry", "reject"])
+
+        let rejected = await controller.dispatchJSON(
+            request: try popupCommand(
+                subject: "rejectRequest",
+                id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            ),
+            profileIdentifier: nil
+        )
+        XCTAssertEqual(rejected["status"] as? String, "ok")
+        XCTAssertEqual(rejected["state"] as? String, "missing")
+        let events = await store.events()
+        XCTAssertEqual(events, ["reject"])
     }
 
     func testNonemptySwitchMaterializesImmediateResponseFromCatalog() async throws {
@@ -2122,7 +2145,7 @@ extension PopupRequestSessionsTests {
         )
 
         XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error", "status"])
-        XCTAssertEqual(response["actions"] as? [String], ["retry"])
+        XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"])
         XCTAssertEqual(response["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertEqual(response["state"] as? String, "error")
         XCTAssertNil((response["review"] as? [String: Any])?["reviewToken"])
@@ -3660,7 +3683,7 @@ extension PopupRequestSessionsTests {
             state["error"] as? String,
             Strings.secureApprovalSetupRequired
         )
-        XCTAssertEqual(state["actions"] as? [String], ["retry"])
+        XCTAssertEqual(state["actions"] as? [String], ["retry", "reject"])
         XCTAssertNil((state["review"] as? [String: Any])?["reviewToken"])
     }
 
@@ -3777,7 +3800,7 @@ extension PopupRequestSessionsTests {
                 state["error"] as? String,
                 Strings.secureApprovalSetupRequired
             )
-            XCTAssertEqual(state["actions"] as? [String], ["retry"])
+            XCTAssertEqual(state["actions"] as? [String], ["retry", "reject"])
             XCTAssertNil((state["review"] as? [String: Any])?["reviewToken"])
         }
     }

@@ -286,8 +286,8 @@
         const decoded = definedFields({id, state, host, error, editsError, actions: actions.slice()});
         if (state !== "review") {
             if (value.review !== undefined || (state === "error"
-                ? typeof error !== "string" || actions.length !== 1 ||
-                    (!actions.includes("retry") && !actions.includes("reject"))
+                ? typeof error !== "string" || actions.length === 0 ||
+                    actions.some(action => action !== "retry" && action !== "reject")
                 : actions.length !== 0)) {
                 return null;
             }

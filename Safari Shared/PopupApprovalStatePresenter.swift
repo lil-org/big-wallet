@@ -15,14 +15,14 @@ final class PopupApprovalStatePresenter {
 
     nonisolated static func errorState(
         id: Int,
-        action: PopupApprovalState.RecoveryAction = .retry,
+        actions: [PopupApprovalState.RecoveryAction] = [.retry],
         host: String? = nil,
         error: String
     ) -> PopupApprovalState {
         PopupApprovalState(
             id: id,
             host: host,
-            content: .error(message: error, action: action)
+            content: .error(message: error, actions: actions)
         )
     }
 
@@ -72,7 +72,7 @@ final class PopupApprovalStatePresenter {
         case .authenticating: content = .authenticating
         case .working: content = .working
         case .error, .review:
-            content = .error(message: Strings.failedToLoad, action: .retry)
+            content = .error(message: Strings.failedToLoad, actions: [.retry])
         }
         return PopupApprovalState(id: id, host: host, content: content)
     }
@@ -82,7 +82,12 @@ final class PopupApprovalStatePresenter {
     }
 
     func secureSetupRequiredState(id: Int, host: String) -> PopupApprovalState {
-        Self.errorState(id: id, host: host, error: Strings.secureApprovalSetupRequired)
+        Self.errorState(
+            id: id,
+            actions: [.retry, .reject],
+            host: host,
+            error: Strings.secureApprovalSetupRequired
+        )
     }
 
     func approvalState(
@@ -107,7 +112,7 @@ final class PopupApprovalStatePresenter {
             guard let transaction = session.transaction else {
                 return Self.errorState(
                     id: session.handle.id,
-                    action: .reject,
+                    actions: [.reject],
                     host: session.request.host,
                     error: Strings.failedToLoad
                 )

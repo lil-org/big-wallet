@@ -103,9 +103,10 @@ test("approval envelope validates capabilities and requires canonical review con
     const request = pendingRequest();
     const error = {id: request.id, state: "error", actions: ["retry"], error: "Failed"};
     const rejectable = {...error, actions: ["reject"]};
+    const recoverable = {...error, actions: ["retry", "reject"]};
     for (const state of [
         messageState(request), transactionState(request), selectionState(request),
-        error, rejectable,
+        error, rejectable, recoverable,
         {id: request.id, state: "working", actions: []},
         {id: request.id, state: "authenticating", actions: []},
         {id: request.id, state: "missing", actions: []},
@@ -115,10 +116,12 @@ test("approval envelope validates capabilities and requires canonical review con
     assert.equal(harness.call("shouldPollApprovalState", error), false);
     assert.equal(harness.call("canRejectApprovalState", error), false);
     assert.equal(harness.call("canRejectApprovalState", rejectable), true);
+    assert.equal(harness.call("canRejectApprovalState", recoverable), true);
     assert.equal(harness.call("canSubmitDecision", "approveRequest", rejectable), false);
     for (const invalid of [
         {...error, actions: undefined}, {...error, actions: ["approve"]},
-        {...error, actions: ["retry", "reject"]}, {...error, review: messageState(request).review},
+        {...error, actions: []}, {...error, actions: ["retry", "approve"]},
+        {...error, actions: ["retry", "retry"]}, {...error, review: messageState(request).review},
         {...messageState(request), review: undefined},
         {...messageState(request), actions: ["reject", "reject"]},
         {...messageState(request), actions: ["editTransaction"]},
@@ -1373,6 +1376,50 @@ test("rejectable errors submit tokenless Reject without a refresh", async () => 
     }]);
     assert.equal(harness.followUpTimerId(), null);
     assert.equal(controller.state.state, "review");
+});
+
+test("secure setup errors allow Refresh and Cancel advances to the next request", async () => {
+    const first = pendingRequest();
+    const second = {...pendingRequest(8, 2), sequence: 1};
+    const harness = popupHarness({requests: [first, second]});
+    const error = "Open Big Wallet to finish setting up secure approvals.";
+    harness.setState(first, {
+        id: first.id,
+        host: first.host,
+        state: "error",
+        actions: ["retry", "reject"],
+        error,
+    });
+    harness.setState(second, messageState(second, {title: "Next request"}));
+    await harness.boot();
+    harness.clearMessages();
+
+    assert.equal(harness.get("request-error").textContent, error);
+    assert.equal(harness.get("button-approve").textContent, "Refresh");
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(harness.get("button-reject").disabled, false);
+    await harness.get("button-approve").click();
+    await flushPopup();
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["retryApproval"]);
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(harness.get("button-reject").disabled, false);
+
+    harness.clearMessages();
+    harness.handlers.native = (message, fallback) => {
+        if (message.subject !== "rejectRequest") { return fallback(message); }
+        harness.model.requests = [second];
+        return commandReply({id: first.id, state: "missing", actions: []});
+    };
+    await harness.get("button-reject").click();
+    await flushPopup();
+
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
+        "rejectRequest", "getPendingRequests", "getApprovalState",
+    ]);
+    assert.equal(harness.nativeMessages[0].requestToken, first.requestToken);
+    assert.equal(harness.controller.request.requestToken, second.requestToken);
+    assert.equal(harness.get("request-title").textContent, "Next request");
+    assert.equal(harness.model.closed, 0);
 });
 
 test("approval polling adopts an error and stops its only follow-up timer", async () => {
