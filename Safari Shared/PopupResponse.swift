@@ -41,14 +41,15 @@ enum PopupResponse: Encodable {
 enum PopupCommandResponse: Encodable {
     case ok(PopupApprovalState)
     case ignored(PopupApprovalState?)
-    case unavailable(PopupApprovalState?)
+    case unavailable
 
     private enum CodingKeys: String, CodingKey { case status, approval }
 
     var approvalState: PopupApprovalState? {
         switch self {
         case .ok(let state): return state
-        case .ignored(let state), .unavailable(let state): return state
+        case .ignored(let state): return state
+        case .unavailable: return nil
         }
     }
 
@@ -56,7 +57,7 @@ enum PopupCommandResponse: Encodable {
         switch self {
         case .ok: return .ok(state)
         case .ignored: return .ignored(state)
-        case .unavailable: return .unavailable(state)
+        case .unavailable: return .unavailable
         }
     }
 

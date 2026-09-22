@@ -340,7 +340,8 @@ final class NativeApprovalResponseTests: XCTestCase {
                     XCTAssertTrue(held)
                     return result
                 },
-                uptime: { f.clock.now }, wallClock: { f.clock.date }, sleepUntil: f.clock.sleepUntil
+                uptime: { f.clock.now }, wallClock: { f.clock.date },
+                sleepUntil: { [clock = f.clock] in await clock.sleepUntil($0) }
             )
             let service = NativeApprovalService(dependencies: dependencies)
             let result = try await f.finish { await f.read(service, snapshot, duration: 0.25) }

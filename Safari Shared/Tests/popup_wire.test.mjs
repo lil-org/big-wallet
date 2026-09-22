@@ -63,9 +63,11 @@ test("popup queue and command replies retain their exact identity contracts", ()
     for (const status of ["ignored", "unavailable"]) {
         const empty = {status, approval: null};
         assert.deepEqual(wire.decodeCommandResult(empty, 91), empty);
-        const current = {status, approval: fixtures.working};
-        assert.deepEqual(wire.decodeCommandResult(current, 91), current);
     }
+    const current = {status: "ignored", approval: fixtures.working};
+    assert.deepEqual(wire.decodeCommandResult(current, 91), current);
+    assert.equal(wire.decodeCommandResult({status: "unavailable", approval: fixtures.working}, 91), null);
+    assert.equal(wire.decodeCommandResult({status: "unavailable", approval: fixtures.legacyTransaction}, 91), null);
 });
 
 test("popup selection identities fold Ethereum address case and retain distinct derivation paths", () => {

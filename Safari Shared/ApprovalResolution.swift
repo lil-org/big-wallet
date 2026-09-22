@@ -1,7 +1,6 @@
 import Foundation
 
-@MainActor
-final class ApprovalResolution<Value> {
+actor ApprovalResolution<Value: Sendable> {
     private enum State {
         case empty
         case waiting(CheckedContinuation<Value, Never>)
@@ -10,8 +9,6 @@ final class ApprovalResolution<Value> {
     }
 
     private var state = State.empty
-
-    nonisolated init() {}
 
     func value() async -> Value {
         switch state {
@@ -27,10 +24,31 @@ final class ApprovalResolution<Value> {
         }
     }
 
+    func value(
+        timeoutValue: Value,
+        waitForTimeout: @escaping @Sendable () async -> Void,
+        operation: @escaping @Sendable () async -> Value
+    ) async -> Value {
+        let operationTask = Task {
+            resolve(await operation())
+        }
+        let timeoutTask = Task {
+            await waitForTimeout()
+            guard !Task.isCancelled else { return }
+            resolve(timeoutValue) {
+                operationTask.cancel()
+            }
+        }
+        let result = await value()
+        timeoutTask.cancel()
+        operationTask.cancel()
+        return result
+    }
+
     @discardableResult
     func resolve(
         _ value: Value,
-        beforeResume: () -> Void = {}
+        beforeResume: @Sendable () -> Void = {}
     ) -> Bool {
         let continuation: CheckedContinuation<Value, Never>?
         switch state {

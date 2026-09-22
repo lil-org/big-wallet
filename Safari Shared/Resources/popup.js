@@ -907,8 +907,6 @@ class PopupRequestController {
             setText("edits-error", localized("invalidValues", "Invalid values"));
         } else if (error === "reviewChanged") {
             setText("edits-error", localized("reviewChanged", "Review changed. Check the values and apply again."));
-        } else if (error === "failedToLoad") {
-            setText("edits-error", localized("failedToLoad", "Failed to load"));
         }
         setHidden("edits-error", !error);
     }
@@ -1032,10 +1030,9 @@ class PopupRequestController {
             !state.review.alert && hasApprovalAction(state, "editTransaction") &&
             state.review.editor.usesEIP1559 === draft.usesEIP1559;
         let next = {kind: "viewing"};
-        if (preservesDraft && (reply.status !== "ok" || state.editsError)) {
+        if (preservesDraft && (reply.status === "ignored" || state.editsError)) {
             draft.reviewToken = state.review.reviewToken;
-            draft.error = reply.status === "ignored" ? "reviewChanged"
-                : reply.status === "unavailable" ? "failedToLoad" : "invalidValues";
+            draft.error = reply.status === "ignored" ? "reviewChanged" : "invalidValues";
             next = {kind: "editing", draft};
         }
         this.finishAction(operation, state, next);

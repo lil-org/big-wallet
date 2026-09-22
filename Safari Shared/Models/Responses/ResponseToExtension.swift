@@ -2,13 +2,13 @@
 
 import Foundation
 
-struct ProviderResponseError: Equatable {
+struct ProviderResponseError: Equatable, Sendable {
 
     static let userRejectedCode = 4001
     static let internalErrorCode = -32_603
     static let transactionSubmissionUnknownCode = internalErrorCode
 
-    enum Context: Equatable {
+    enum Context: Equatable, Sendable {
         case dataJSON(String)
         case transactionHash(String)
         case unauthorizedPublicKey(String)
@@ -52,9 +52,9 @@ struct ProviderResponseError: Equatable {
 
 }
 
-struct ResponseToExtension {
+struct ResponseToExtension: Sendable {
 
-    enum Result {
+    enum Result: Sendable {
         case string(String)
         case strings([String])
         case solanaPublicKey(String)
@@ -81,7 +81,7 @@ struct ResponseToExtension {
         }
     }
 
-    enum AccountUpdate: Equatable {
+    enum AccountUpdate: Equatable, Sendable {
         case ethereum(address: String, chainId: String)
         case solana(publicKey: String)
         case disconnectEthereum
@@ -104,7 +104,7 @@ struct ResponseToExtension {
         }
     }
 
-    enum ConfigurationMutation: Equatable {
+    enum ConfigurationMutation: Equatable, Sendable {
         case accounts([AccountUpdate])
         case ethereumChain(String)
         case revokeSolana(String)
@@ -171,7 +171,7 @@ struct ResponseToExtension {
         }
     }
 
-    enum Payload {
+    enum Payload: Sendable {
         case result(Result)
         case error(ProviderResponseError)
     }

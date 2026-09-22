@@ -310,28 +310,15 @@ final class DurableApprovalExecutor {
         }
     }
 
-    private func bounded<Value>(
+    private func bounded<Value: Sendable>(
         timeoutNanoseconds: UInt64,
         timeoutValue: Value,
         operation: @escaping @MainActor () async -> Value
     ) async -> Value {
-        let resolution = ApprovalResolution<Value>()
-        let operationTask = Task { @MainActor in
-            let value = await operation()
-            resolution.resolve(value)
-        }
-        let timeoutTask = Task { @MainActor in
-            do {
-                try await Task.sleep(nanoseconds: timeoutNanoseconds)
-            } catch {
-                return
-            }
-            resolution.resolve(timeoutValue) {
-                operationTask.cancel()
-            }
-        }
-        let value = await resolution.value()
-        timeoutTask.cancel()
-        return value
+        await ApprovalResolution<Value>().value(
+            timeoutValue: timeoutValue,
+            waitForTimeout: { try? await Task.sleep(nanoseconds: timeoutNanoseconds) },
+            operation: { await operation() }
+        )
     }
 }

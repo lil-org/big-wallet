@@ -37,6 +37,7 @@ const SOLANA_ACCOUNT_METHODS = new Set([
 const configurationOperationTails = new Map;
 const responseReadFlights = new Map;
 const manualSwitches = new Map;
+const manualSwitchRecoveryRunners = new Map;
 let manualSwitchAlarmFlight = null;
 let manualSwitchRecoveryFlight = null;
 
@@ -810,7 +811,13 @@ async function readAndApplyDappResponse(
             responseReadFlights.delete(key);
         }
     };
-    promise.then(clear, clear);
+    promise.then(completed => {
+        if (completed?.response?.name === "switchAccount" && completed.acknowledgement) {
+            completed.acknowledgement.then(clear, clear);
+        } else {
+            clear();
+        }
+    }, clear);
     return promise;
 }
 
@@ -871,108 +878,167 @@ function validManualSwitchDescriptor(request) {
         ["pending", "approved", "completed"].includes(request.state);
 }
 
-function hydrateManualSwitch(request) {
-    const existing = manualSwitches.get(request.configurationKey);
-    if (existing && (existing.id !== request.id ||
-        existing.requestToken !== request.requestToken)) {
+function manualSwitchHandle(request) {
+    return JSON.stringify([request.configurationKey, request.id, request.requestToken]);
+}
+
+function finishManualSwitchRecovery(request) {
+    manualSwitchRecoveryFlight?.finished.add(manualSwitchHandle(request));
+}
+
+function matchingManualSwitch(request) {
+    const context = manualSwitches.get(request.configurationKey);
+    if (context && Date.now() >= context.pollingDeadline) {
+        forgetManualSwitch(context);
         return null;
     }
-    const identity = WIRE.configurationIdentityForURL(request.configurationKey);
-    const context = existing || {
-        ...identity,
-        id: request.id,
-        requestToken: request.requestToken,
-        revisions: {...request.revisions},
-        pollingDeadline: Infinity,
-        quiet: true,
-        polling: null,
-        timer: null,
-    };
-    if (context.quiet) {
-        context.fastPolling = request.state === "approved";
-        context.admission = Promise.resolve({
-            id: request.id,
-            requestToken: request.requestToken,
-            revisions: {...request.revisions},
-            approvalRequired: request.state !== "completed",
-            configurationKey: request.configurationKey,
-            subject: WIRE.MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
-            workflowVersion: WORKFLOW_VERSION,
-        });
+    return context?.id === request.id && context.requestToken === request.requestToken
+        ? context : null;
+}
+
+function drainManualSwitchRecovery(lineage, runner, finished = new Set) {
+    if (manualSwitchRecoveryRunners.get(lineage) !== runner) { return Promise.resolve(); }
+    clearTimeout(runner.timer);
+    runner.timer = null;
+    if (runner.running) {
+        runner.rerun = true;
+        return runner.running;
     }
-    manualSwitches.set(request.configurationKey, context);
-    return context;
+    runner.running = (async () => {
+        do {
+            runner.rerun = false;
+            const batch = runner.requests;
+            const retries = [];
+            for (const request of batch) {
+                const handle = manualSwitchHandle(request);
+                if (finished.has(handle)) { continue; }
+                const context = matchingManualSwitch(request);
+                let retry = false;
+                try {
+                    if (context) {
+                        const result = await pollManualSwitch(context, true);
+                        if (result === "missing" || result === "acknowledged") {
+                            finished.add(handle);
+                        }
+                    } else {
+                        const identity = WIRE.configurationIdentityForURL(request.configurationKey);
+                        const completed = await readAndApplyDappResponse(
+                            request.id, request.configurationKey, request.requestToken,
+                            request.revisions, identity.legacyConfigurationKey, true
+                        );
+                        if (isMissingStoredResponse(completed?.response, request.id) ||
+                            completed && await completed.acknowledgement) {
+                            finished.add(handle);
+                            finishManualSwitchRecovery(request);
+                        } else {
+                            retry = !completed?.pending;
+                        }
+                    }
+                } catch {
+                    retry = true;
+                }
+                if (runner.requests !== batch) { break; }
+                if (retry && !matchingManualSwitch(request)) { retries.push(request); }
+            }
+            if (runner.requests === batch) { runner.requests = retries; }
+        } while (runner.rerun);
+    })().finally(() => {
+        runner.running = null;
+        if (manualSwitchRecoveryRunners.get(lineage) !== runner) { return; }
+        if (runner.rerun) {
+            return drainManualSwitchRecovery(lineage, runner, finished);
+        } else if (runner.requests.length) {
+            runner.timer = setTimeout(() => {
+                drainManualSwitchRecovery(lineage, runner);
+            }, MANUAL_SWITCH_POLL_DELAY);
+        } else {
+            manualSwitchRecoveryRunners.delete(lineage);
+        }
+    });
+    return runner.running;
+}
+
+function publishManualSwitchRecovery(requests, finished) {
+    const batches = new Map;
+    for (const request of requests) {
+        if (request.state === "pending" || finished.has(manualSwitchHandle(request))) { continue; }
+        const lineage = approvalLeaseLineageKey(request.configurationKey);
+        if (!batches.has(lineage)) { batches.set(lineage, []); }
+        batches.get(lineage).push(request);
+    }
+    for (const lineage of manualSwitchRecoveryRunners.keys()) {
+        if (!batches.has(lineage)) { batches.set(lineage, []); }
+    }
+    const drains = [];
+    for (const [lineage, requests] of batches) {
+        let runner = manualSwitchRecoveryRunners.get(lineage);
+        if (!runner) {
+            runner = {requests, running: null, timer: null, rerun: false};
+            manualSwitchRecoveryRunners.set(lineage, runner);
+        }
+        runner.requests = requests;
+        drains.push(drainManualSwitchRecovery(lineage, runner));
+    }
+    return drains;
+}
+
+async function discoverManualSwitches() {
+    const requests = [];
+    const cursors = new Set;
+    let cursor;
+    do {
+        const id = WIRE.genId();
+        const response = await WIRE.withTimeout(sendNativeMessage({
+            id,
+            subject: "getManualSwitchRequests",
+            workflowVersion: WORKFLOW_VERSION,
+            ...(cursor ? {cursor} : {}),
+        }, false), TRANSPORT_TIMEOUT);
+        if (!WIRE.hasExactKeys(response, ["id", "requests", "nextCursor"]) ||
+            response.id !== id || !Array.isArray(response.requests) ||
+            response.requests.length > WIRE.WORKFLOW_POLICY.maximumRetainedRequests ||
+            !response.requests.every(validManualSwitchDescriptor) ||
+            response.nextCursor !== null &&
+                (typeof response.nextCursor !== "string" ||
+                    response.nextCursor.length === 0 ||
+                    response.nextCursor.length > 4096 ||
+                    cursors.has(response.nextCursor))) {
+            throw new Error("Invalid manual-switch discovery");
+        }
+        requests.push(...response.requests);
+        cursor = response.nextCursor;
+        if (cursor) { cursors.add(cursor); }
+    } while (cursor);
+    return requests;
 }
 
 function recoverManualSwitches() {
     if (browser.extension?.inIncognitoContext === true) { return Promise.resolve(); }
-    if (manualSwitchRecoveryFlight) { return manualSwitchRecoveryFlight; }
+    if (manualSwitchRecoveryFlight) {
+        manualSwitchRecoveryFlight.rerun = true;
+        return manualSwitchRecoveryFlight.promise.then(drains => Promise.all(drains)).then(() => {});
+    }
+    const flight = {promise: null, rerun: false, finished: new Set};
+    manualSwitchRecoveryFlight = flight;
     const pending = (async () => {
         await ensureManualSwitchAlarm();
-        const requests = [];
-        const cursors = new Set;
-        let cursor;
+        const drains = new Set;
         do {
-            const id = WIRE.genId();
-            const response = await WIRE.withTimeout(sendNativeMessage({
-                id,
-                subject: "getManualSwitchRequests",
-                workflowVersion: WORKFLOW_VERSION,
-                ...(cursor ? {cursor} : {}),
-            }, false), TRANSPORT_TIMEOUT);
-            if (!WIRE.hasExactKeys(response, ["id", "requests", "nextCursor"]) ||
-                response.id !== id || !Array.isArray(response.requests) ||
-                response.requests.length > WIRE.WORKFLOW_POLICY.maximumRetainedRequests ||
-                !response.requests.every(validManualSwitchDescriptor) ||
-                response.nextCursor !== null &&
-                    (typeof response.nextCursor !== "string" ||
-                        response.nextCursor.length === 0 ||
-                        response.nextCursor.length > 4096 ||
-                        cursors.has(response.nextCursor))) {
-                throw new Error("Invalid manual-switch discovery");
+            flight.rerun = false;
+            flight.finished.clear();
+            const requests = await discoverManualSwitches();
+            for (const drain of publishManualSwitchRecovery(requests, flight.finished)) {
+                drains.add(drain);
             }
-            requests.push(...response.requests);
-            cursor = response.nextCursor;
-            if (cursor) { cursors.add(cursor); }
-        } while (cursor);
-        const discovered = new Set(requests.map(request => request.requestToken));
-        for (const context of manualSwitches.values()) {
-            if (context.quiet && !discovered.has(context.requestToken)) {
-                forgetManualSwitch(context);
-            }
-        }
-        const origins = new Map;
-        for (const request of requests) {
-            const previous = origins.get(request.configurationKey) || Promise.resolve();
-            origins.set(request.configurationKey, previous.then(async () => {
-                const context = request.state === "completed"
-                    ? manualSwitches.get(request.configurationKey)
-                    : hydrateManualSwitch(request);
-                if (request.state === "pending") {
-                    if (context?.quiet) { clearTimeout(context.timer); }
-                    return;
-                }
-                if (context?.id === request.id &&
-                    context.requestToken === request.requestToken) {
-                    await pollManualSwitch(context, true);
-                    return;
-                }
-                const identity = WIRE.configurationIdentityForURL(request.configurationKey);
-                const completed = await readAndApplyDappResponse(
-                    request.id, request.configurationKey, request.requestToken,
-                    request.revisions, identity.legacyConfigurationKey, true
-                );
-                await completed?.acknowledgement;
-            }).catch(() => {}));
-        }
-        await Promise.all(origins.values());
+        } while (flight.rerun);
+        return drains;
     })();
-    manualSwitchRecoveryFlight = pending;
+    flight.promise = pending;
     const clear = () => {
-        if (manualSwitchRecoveryFlight === pending) { manualSwitchRecoveryFlight = null; }
+        if (manualSwitchRecoveryFlight === flight) { manualSwitchRecoveryFlight = null; }
     };
     pending.then(clear, clear);
-    return pending;
+    return pending.then(drains => Promise.all(drains)).then(() => {});
 }
 
 function forgetManualSwitch(context) {
@@ -985,7 +1051,6 @@ function forgetManualSwitch(context) {
 function scheduleManualSwitchPoll(context) {
     clearTimeout(context.timer);
     if (manualSwitches.get(context.configurationKey) !== context) { return; }
-    if (context.quiet && !context.fastPolling) { return; }
     if (Date.now() >= context.pollingDeadline) {
         forgetManualSwitch(context);
         return;
@@ -995,7 +1060,7 @@ function scheduleManualSwitchPoll(context) {
     }, MANUAL_SWITCH_POLL_DELAY);
 }
 
-function pollManualSwitch(context, quiet = context.quiet === true) {
+function pollManualSwitch(context, quiet = false) {
     if (context.polling) {
         return quiet && !context.polling.quiet
             ? Promise.resolve()
@@ -1020,14 +1085,16 @@ function pollManualSwitch(context, quiet = context.quiet === true) {
                 context.legacyConfigurationKey,
                 quiet
             );
-            if (completed?.pending && context.quiet) { context.fastPolling = false; }
             if (isMissingStoredResponse(completed?.response, context.id)) {
+                finishManualSwitchRecovery(context);
                 if (manualSwitches.get(context.configurationKey) !== context) { return; }
                 forgetManualSwitch(context);
-                return true;
+                return "missing";
             }
             if (completed && await completed.acknowledgement) {
+                finishManualSwitchRecovery(context);
                 forgetManualSwitch(context);
+                return "acknowledged";
             }
         } catch {}
         finally {
@@ -1043,9 +1110,8 @@ function beginManualSwitch(identity) {
     const existing = manualSwitches.get(identity.configurationKey);
     if (existing) {
         if (Date.now() < existing.pollingDeadline) {
-            existing.quiet = false;
-            void pollManualSwitch(existing, false).then(missing => {
-                if (missing && !manualSwitches.has(identity.configurationKey)) {
+            void pollManualSwitch(existing, false).then(result => {
+                if (result === "missing" && !manualSwitches.has(identity.configurationKey)) {
                     return beginManualSwitch(identity);
                 }
             }).catch(() => {});
@@ -1219,6 +1285,11 @@ async function handleGetResponse(request, sender) {
         request.revisions,
         identity.legacyConfigurationKey
     );
+    if (completed?.response.name === "switchAccount" &&
+        completed.pageResponse?.kind === "configuration") {
+        const state = await readConfigurationState(request.configurationKey, identity.legacyConfigurationKey);
+        return pageResponse(completed.response, publicConfigurationState(state));
+    }
     return completed?.pageResponse || completed?.response;
 }
 
@@ -1507,6 +1578,11 @@ async function broadcastResponseReady(request) {
     const polling = [...manualSwitches.values()]
         .filter(context => ids.includes(context.id))
         .map(context => pollManualSwitch(context, true));
+    for (const [lineage, runner] of manualSwitchRecoveryRunners) {
+        if (runner.requests.some(request => ids.includes(request.id))) {
+            polling.push(drainManualSwitchRecovery(lineage, runner));
+        }
+    }
     const recovery = recoverManualSwitches().catch(() => {});
     const tabs = await boundedTabsQuery();
     if (tabs) {

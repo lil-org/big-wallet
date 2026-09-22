@@ -33,7 +33,7 @@ actor NativeApprovalService {
         ) async -> ExtensionBridge.StoreMutationResult
         let uptime: () -> UInt64
         let wallClock: () -> Date
-        let sleepUntil: (UInt64) async -> Void
+        let sleepUntil: @Sendable (UInt64) async -> Void
 
         @MainActor
         static var live: Self {
@@ -222,25 +222,6 @@ actor NativeApprovalService {
             }
         }
         return .unavailable
-    }
-
-    private actor LaunchResolution<Value: Sendable> {
-        private var result: Value?
-        private var continuation: CheckedContinuation<Value, Never>?
-
-        func value() async -> Value {
-            if let result { return result }
-            return await withCheckedContinuation { continuation in
-                self.continuation = continuation
-            }
-        }
-
-        func finish(_ succeeded: Value) {
-            guard result == nil else { return }
-            result = succeeded
-            continuation?.resume(returning: succeeded)
-            self.continuation = nil
-        }
     }
 
     @MainActor
@@ -590,14 +571,14 @@ actor NativeApprovalService {
     private func boundedResult<Value: Sendable>(
         of task: Task<Value, Never>, deadline: UInt64, timeoutValue: Value
     ) async -> Value {
-        let resolution = LaunchResolution<Value>()
+        let resolution = ApprovalResolution<Value>()
         return await withTaskCancellationHandler {
             let result = await awaitResult(of: task, deadline: deadline, timeoutValue: timeoutValue, resolution: resolution)
             task.cancel()
             return result
         } onCancel: {
             task.cancel()
-            Task { await resolution.finish(timeoutValue) }
+            Task { await resolution.resolve(timeoutValue) }
         }
     }
 
@@ -605,18 +586,14 @@ actor NativeApprovalService {
         of task: Task<Value, Never>,
         deadline: UInt64,
         timeoutValue: Value,
-        resolution: LaunchResolution<Value> = LaunchResolution()
+        resolution: ApprovalResolution<Value> = ApprovalResolution()
     ) async -> Value {
         guard dependencies.uptime() < deadline else { return timeoutValue }
-        let timeoutTask = Task {
-            await dependencies.sleepUntil(deadline)
-            guard !Task.isCancelled else { return }
-            await resolution.finish(timeoutValue)
-        }
-        let completionTask = Task { await resolution.finish(await task.value) }
-        let result = await resolution.value()
-        timeoutTask.cancel()
-        completionTask.cancel()
-        return result
+        let sleepUntil = dependencies.sleepUntil
+        return await resolution.value(
+            timeoutValue: timeoutValue,
+            waitForTimeout: { await sleepUntil(deadline) },
+            operation: { await task.value }
+        )
     }
 }

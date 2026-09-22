@@ -306,6 +306,7 @@
         if (raw.approval === null) {
             return raw.status === "ok" ? null : {status: raw.status, approval: null};
         }
+        if (raw.status === "unavailable") { return null; }
         const approval = decodeApprovalState(raw.approval, expectedRequestID);
         return approval ? {status: raw.status, approval} : null;
     }

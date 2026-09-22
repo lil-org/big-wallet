@@ -573,7 +573,7 @@ final class PopupStringsTests: XCTestCase {
             "type2Transaction": reviewResponse(.sendTransaction(transactionReview(type2: true)), title: "Send Transaction",
                                                actions: [.reject, .resolveApprovalAlert]),
             "ok": .command(.ok(.init(id: 91, content: .missing))),
-            "ignored": .command(.ignored(nil)), "unavailable": .command(.unavailable(nil)),
+            "ignored": .command(.ignored(nil)), "unavailable": .command(.unavailable),
         ]
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Safari Shared/Tests/fixtures/popup_contract.json")

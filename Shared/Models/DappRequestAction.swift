@@ -15,12 +15,12 @@ enum DappRequestPreparation {
     case approval(DappRequestAction)
 }
 
-struct PreparedBroadcast {
+struct PreparedBroadcast: Sendable {
     let recoveryResponse: ResponseToExtension
-    let send: () async -> ResponseToExtension
+    let send: @MainActor @Sendable () async -> ResponseToExtension
 }
 
-enum DappExecutionResult {
+enum DappExecutionResult: Sendable {
     case response(ResponseToExtension, approvalCommitted: Bool = true)
     case broadcast(PreparedBroadcast)
     case rollback

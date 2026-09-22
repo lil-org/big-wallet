@@ -1243,7 +1243,7 @@ test("controller errors explicitly retry the visible request without entering th
 });
 
 test("decisions adopt their current reply immediately without rereading or resubmitting", async () => {
-    for (const status of ["ok", "ignored", "unavailable"]) {
+    for (const status of ["ok", "ignored"]) {
         const harness = await reviewedPopup();
         const controller = harness.controller;
         const fresh = messageState(controller.request, {
@@ -2554,30 +2554,60 @@ test("stale Apply discards a draft when recovery changes the fee model or edit c
     }
 });
 
-test("an unavailable edit preserves its compatible draft and adopts the returned review", async () => {
-    const harness = await reviewedPopup(transactionState);
-    const controller = harness.controller;
-    harness.get("tx-editor").open = true;
-    harness.get("tx-editor").emit("toggle");
-    harness.get("edit-nonce").value = "7";
-    harness.get("edit-nonce").emit("input");
-    harness.get("edit-gas-price").value = "8";
-    harness.get("edit-gas-price").emit("input");
-    const fresh = transactionState(controller.request, {reviewToken: requestToken(102)});
-    harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
-        ? commandReply(fresh, "unavailable") : fallback(message);
+for (const failure of ["unavailable", "transport"]) {
+    test(`${failure} edits discard the draft and retain the request until explicit Refresh`, async () => {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        harness.get("tx-editor").open = true;
+        harness.get("tx-editor").emit("toggle");
+        harness.get("edit-nonce").value = "7";
+        harness.get("edit-nonce").emit("input");
+        harness.get("edit-gas-price").value = "8";
+        harness.get("edit-gas-price").emit("input");
+        const fresh = transactionState(controller.request, {
+            reviewToken: requestToken(102),
+            editor: {usesEIP1559: false, nonce: "2", gasPriceGwei: "4"},
+        });
+        harness.handlers.native = (message, fallback) => {
+            if (message.subject === "applyTransactionEdits") {
+                if (failure === "transport") { throw new Error("Native transport failed"); }
+                return commandReply(null, "unavailable");
+            }
+            if (message.subject === "retryApproval") { return commandReply(fresh); }
+            return fallback(message);
+        };
 
-    await harness.get("editor-apply").click();
+        await harness.get("editor-apply").click();
+        await flushPopup();
 
-    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits"]);
-    assert.equal(harness.get("tx-editor").open, true);
-    assert.equal(harness.get("edit-nonce").value, "7");
-    assert.equal(harness.get("edit-gas-price").value, "8");
-    assert.equal(harness.get("edits-error").textContent, "Failed to load");
-    assert.equal((controller.activity.draft ?? controller.activity.gesture).reviewToken, requestToken(102));
-    assert.equal(harness.get("editor-apply").disabled, false);
-    assert.equal(harness.followUpTimerId(), null);
-});
+        assert.equal(harness.controller, controller);
+        assert.equal(controller.isActive, true);
+        assert.equal(controller.activity.kind, "failed");
+        assert.equal(controller.editorDraft, null);
+        assert.equal(harness.get("tx-editor").open, false);
+        assert.equal(harness.get("request-error").textContent, "Failed to load");
+        assert.equal(harness.get("button-approve").textContent, "Refresh");
+        assert.equal(harness.get("button-reject").disabled, true);
+        assert.equal(harness.followUpTimerId(), null);
+        await controller.applyEdits();
+        await controller.approve({});
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits"]);
+        assert.deepEqual(harness.workerMessages, []);
+
+        await harness.get("button-approve").click();
+
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits", "retryApproval"]);
+        assert.deepEqual(harness.workerMessages, []);
+        assert.equal(controller.activity.kind, "viewing");
+        assert.equal(controller.state.review.reviewToken, requestToken(102));
+        assert.equal(controller.editorDraft, null);
+        assert.equal(harness.get("tx-editor").open, false);
+        harness.get("tx-editor").open = true;
+        harness.get("tx-editor").emit("toggle");
+        assert.equal(harness.get("edit-nonce").value, "2");
+        assert.equal(harness.get("edit-gas-price").value, "4");
+    });
+}
 
 test("queued editor input cannot change a submitted draft or its retry payload", async () => {
     const harness = await reviewedPopup(transactionState);

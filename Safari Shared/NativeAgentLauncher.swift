@@ -239,11 +239,11 @@ final class NativeAgentLauncher {
             guard !Task.isCancelled, isPending() else { return false }
             dependencies.launch(selectedTarget, route.url) { succeeded in
                 let delivered = succeeded && isPending()
-                Task { @MainActor in resolution.resolve(delivered) }
+                Task.detached { await resolution.resolve(delivered) }
             }
             return await resolution.value()
         } onCancel: {
-            Task { @MainActor in resolution.resolve(false) }
+            Task { await resolution.resolve(false) }
         }
     }
 

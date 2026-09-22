@@ -389,7 +389,7 @@ final class PopupRequestSessions {
         handle: ExtensionBridge.Handle,
         retry: Bool = false
     ) async -> PopupResponse {
-        if case .unavailable = outcome { return .command(.unavailable(nil)) }
+        if case .unavailable = outcome { return .command(.unavailable) }
         let loaded: ApprovalStateLoad
         switch await store.load(handle: handle) {
         case .found(let snapshot):
@@ -408,7 +408,7 @@ final class PopupRequestSessions {
             loaded = .unavailable
         }
         guard case .available(var state) = loaded else {
-            return .command(.unavailable(nil))
+            return .command(.unavailable)
         }
         switch outcome {
         case .applied(let editsError):
@@ -417,7 +417,7 @@ final class PopupRequestSessions {
         case .ignored:
             return .command(.ignored(state))
         case .unavailable:
-            return .command(.unavailable(nil))
+            return .command(.unavailable)
         }
     }
 
