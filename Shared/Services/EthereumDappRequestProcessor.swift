@@ -165,42 +165,35 @@ struct EthereumDappRequestProcessor {
         signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
         switch approval {
-        case .message(let action, _):
-            guard let privateKey = signer?.privateKey(
-                walletID: action.walletId,
-                account: action.account
-            ) else {
+        case .message, .transaction:
+            guard let signer else { return .rollback }
+            switch await signer.sign() {
+            case .success(.ethereumSignature(let signature)):
+                guard case .message = approval else {
+                    return .response(response(to: request, error: .internalError))
+                }
+                return .response(response(to: request, result: .string(signature)))
+            case .success(.ethereumTransaction(let signedTransaction, let hash, let network)):
+                guard case .transaction = approval else {
+                    return .response(response(to: request, error: .internalError))
+                }
+                return prepareTransactionBroadcast(
+                    signedTransaction: signedTransaction,
+                    expectedHash: hash,
+                    resolvedNetwork: network,
+                    request: request
+                )
+            case .success:
+                return .response(response(to: request, error: .internalError))
+            case .failure(.authorizationUnavailable):
+                return .rollback
+            case .failure(.failedToSign):
                 return .response(signingFailedResponse(to: request))
+            case .failure(.ethereum(let failure)):
+                return .response(response(to: request, error: providerError(for: failure)))
+            case .failure(.solana):
+                return .response(response(to: request, error: .internalError))
             }
-            let signing: @Sendable () -> SigningResult
-            switch action.payload {
-            case .ethereumMessage(let data):
-                signing = { signMessage(privateKey: privateKey, data: data) }
-            case .ethereumPersonalMessage(let data):
-                signing = { signPersonalMessage(privateKey: privateKey, data: data) }
-            case .ethereumTypedData(let raw):
-                signing = { signTypedData(privateKey: privateKey, raw: raw) }
-            case .solanaMessage, .solanaTransaction, .solanaTransactions,
-                 .solanaLegacyBroadcast, .solanaSerializedBroadcast:
-                return .response(signingFailedResponse(to: request))
-            }
-            guard let result = await awaitBackgroundOperation(signing) else {
-                return .response(genericFailureResponse(to: request))
-            }
-            return .response(response(to: request, signingResult: result))
-        case .transaction(let action, let transaction):
-            guard let privateKey = signer?.privateKey(
-                walletID: action.walletId,
-                account: action.account
-            ) else {
-                return .response(signingFailedResponse(to: request))
-            }
-            return await prepareTransactionBroadcast(
-                privateKey: privateKey,
-                transaction: transaction,
-                resolvedNetwork: action.resolvedNetwork,
-                request: request
-            )
         case .addEthereumChain(let action):
             guard let chainID = Int(hexString: action.chainToAdd.chainId),
                   completeApprovedChainAddition(action.chainToAdd, chainId: chainID),
@@ -328,11 +321,6 @@ struct EthereumDappRequestProcessor {
         }
     }
 
-    private enum SigningResult: Sendable {
-        case success(String)
-        case failure
-    }
-
     private static func prepareMessageSigning(
         walletId: String,
         account: WalletAccount,
@@ -349,103 +337,45 @@ struct EthereumDappRequestProcessor {
         )))
     }
 
-    private static func signTypedData(
-        privateKey: WalletPrivateKey,
-        raw: String
-    ) -> SigningResult {
-        guard let signed = try? Ethereum.sign(typedData: raw, privateKey: privateKey) else {
-            return .failure
-        }
-        return .success(signed)
-    }
-
-    private static func signMessage(
-        privateKey: WalletPrivateKey,
-        data: Data
-    ) -> SigningResult {
-        guard let signed = try? Ethereum.sign(data: data, privateKey: privateKey) else {
-            return .failure
-        }
-        return .success(signed)
-    }
-
-    private static func signPersonalMessage(
-        privateKey: WalletPrivateKey,
-        data: Data
-    ) -> SigningResult {
-        guard let signed = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey) else {
-            return .failure
-        }
-        return .success(signed)
-    }
-
     private static func prepareTransactionBroadcast(
-        privateKey: WalletPrivateKey,
-        transaction: Transaction,
+        signedTransaction: String,
+        expectedHash: String,
         resolvedNetwork: ResolvedEthereumNetwork,
         request: SafariRequest
-    ) async -> DappExecutionResult {
-        guard let signingResult = await awaitBackgroundOperation({
-            Ethereum.signedTransaction(
-                transaction: transaction,
-                privateKey: privateKey,
-                network: resolvedNetwork.network
-            )
-        }) else {
-            return .response(ResponseToExtension(
-                for: request,
-                payload: .error(.internalError)
-            ))
-        }
-        switch signingResult {
-        case .failure(let failure):
-            return .response(response(
-                to: request,
-                error: providerError(for: failure)
-            ))
-        case .success(let signedTransaction):
-            guard let expectedHash = Ethereum.transactionHash(
-                signedTransaction: signedTransaction
-            ) else {
-                return .response(ResponseToExtension(
-                    for: request,
-                    payload: .error(.internalError)
-                ))
-            }
-            let recoveryResponse = transactionSubmissionUnknownResponse(
-                to: request,
-                transactionHash: expectedHash
-            )
-            return .broadcast(PreparedBroadcast(
-                recoveryResponse: recoveryResponse,
-                send: {
-                    guard !Task.isCancelled else {
-                        return ResponseToExtension(
-                            for: request,
-                            payload: .error(.internalError)
-                        )
-                    }
-                    guard let result = await awaitCancellableCallback({ completion in
-                        ethereum.sendSignedTransaction(
-                            signedTransaction,
-                            network: resolvedNetwork.network,
-                            completion: completion
-                        )
-                    }) else {
-                        return ResponseToExtension(
-                            for: request,
-                            payload: .error(.internalError)
-                        )
-                    }
-                    return transactionBroadcastResponse(
-                        to: request,
-                        expectedHash: expectedHash,
-                        recoveryResponse: recoveryResponse,
-                        result: result
+    ) -> DappExecutionResult {
+        let recoveryResponse = transactionSubmissionUnknownResponse(
+            to: request,
+            transactionHash: expectedHash
+        )
+        return .broadcast(PreparedBroadcast(
+            recoveryResponse: recoveryResponse,
+            send: {
+                guard !Task.isCancelled else {
+                    return ResponseToExtension(
+                        for: request,
+                        payload: .error(.internalError)
                     )
                 }
-            ))
-        }
+                guard let result = await awaitCancellableCallback({ completion in
+                    ethereum.sendSignedTransaction(
+                        signedTransaction,
+                        network: resolvedNetwork.network,
+                        completion: completion
+                    )
+                }) else {
+                    return ResponseToExtension(
+                        for: request,
+                        payload: .error(.internalError)
+                    )
+                }
+                return transactionBroadcastResponse(
+                    to: request,
+                    expectedHash: expectedHash,
+                    recoveryResponse: recoveryResponse,
+                    result: result
+                )
+            }
+        ))
     }
 
     static func transactionBroadcastResponse(
@@ -504,18 +434,6 @@ struct EthereumDappRequestProcessor {
         mutation: ResponseToExtension.ConfigurationMutation? = nil
     ) -> ResponseToExtension {
         return ResponseToExtension(for: request, payload: .result(result), mutation: mutation)
-    }
-
-    private static func response(
-        to request: SafariRequest,
-        signingResult: SigningResult
-    ) -> ResponseToExtension {
-        switch signingResult {
-        case .success(let signature):
-            return response(to: request, result: .string(signature))
-        case .failure:
-            return signingFailedResponse(to: request)
-        }
     }
 
     private static func response(

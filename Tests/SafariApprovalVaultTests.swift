@@ -91,6 +91,54 @@ final class SafariApprovalVaultTests: XCTestCase {
         return (catalog, try XCTUnwrap(UnlockedWalletSigner(password: source.password, wallets: wallets)))
     }
 
+    @MainActor
+    private func assertSigningAccessForTesting(
+        _ access: RequestScopedWalletAccess,
+        walletID: String,
+        account: WalletAccount,
+        expectedSuccess: Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let operation = try approvedWalletSigningOperationForTesting(
+            approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
+        )
+        guard let signer = access.bind(operation: operation) else {
+            XCTAssertFalse(expectedSuccess, "Expected authorization to bind", file: file, line: line)
+            return
+        }
+        try assertSigningResultForTesting(await signer.sign(), account: account, expectedSuccess: expectedSuccess, file: file, line: line)
+    }
+
+    @MainActor
+    private func assertSigningAccessForTesting(
+        _ access: UnlockedWalletSigner,
+        walletID: String,
+        account: WalletAccount,
+        expectedSuccess: Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let operation = try approvedWalletSigningOperationForTesting(
+            approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
+        )
+        try assertSigningResultForTesting(await access.sign(operation), account: account, expectedSuccess: expectedSuccess, file: file, line: line)
+    }
+
+    private func assertSigningResultForTesting(
+        _ result: Result<WalletSigningOutput, WalletSigningFailure>,
+        account: WalletAccount,
+        expectedSuccess: Bool,
+        file: StaticString,
+        line: UInt
+    ) throws {
+        if expectedSuccess {
+            try assertWalletSigningSuccessForTesting(result, account: account, file: file, line: line)
+        } else if case .success = result {
+            XCTFail("Unexpected signing authorization", file: file, line: line)
+        }
+    }
+
     private func reformatStoredKey(in source: inout SafariApprovalSourceSnapshot) throws {
         let original = source.wallets[0].storedKeyJSON
         let object = try JSONSerialization.jsonObject(with: original)
@@ -236,15 +284,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertTrue(capabilityContext === authenticationContext)
         XCTAssertTrue(authenticationContext === keys.loadedContext)
         XCTAssertEqual(unlockedCatalog.identity, catalogAccess.identity)
-        XCTAssertNotNil(unlocked.privateKey(
-            walletID: "wallet",
-            account: fixture.account
-        ))
+        try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: fixture.account, expectedSuccess: true)
         unlocked.invalidate()
-        XCTAssertNil(unlocked.privateKey(
-            walletID: "wallet",
-            account: fixture.account
-        ))
+        try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: fixture.account, expectedSuccess: false)
     }
 
     func testHeaderTamperingFailsAuthenticatedUnlock() async throws {
@@ -314,13 +356,10 @@ final class SafariApprovalVaultTests: XCTestCase {
         let unlockedValue = await vault.unlockSignerForTesting(reason: "Approve")
         let unlocked = try XCTUnwrap(unlockedValue)
 
-        XCTAssertNotNil(unlocked.privateKey(
-            walletID: "mnemonic-wallet",
-            account: fixture.account
-        ))
+        try await assertSigningAccessForTesting(unlocked, walletID: "mnemonic-wallet", account: fixture.account, expectedSuccess: true)
     }
 
-    func testPublicationAndSelectedSignerRejectUnownedMnemonicAccount() throws {
+    func testPublicationAndSelectedSignerRejectUnownedMnemonicAccount() async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -382,10 +421,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let (_, access) = try unlockedAccess(source: source)
         defer { access.invalidate() }
-        XCTAssertNil(access.privateKey(
-            walletID: wallet.id,
-            account: try XCTUnwrap(wallet.accounts.first)
-        ))
+        try await assertSigningAccessForTesting(access, walletID: wallet.id, account: try XCTUnwrap(wallet.accounts.first), expectedSuccess: false)
     }
 
     func testVaultUnlockBindsEthereumAndSolanaSignersToSelectedIdentity()
@@ -433,24 +469,13 @@ final class SafariApprovalVaultTests: XCTestCase {
                 return XCTFail("Expected selected account to unlock")
             }
             defer { access.invalidate() }
-            let privateKey = try XCTUnwrap(access.privateKey(
-                walletID: selected.walletId,
-                account: account
-            ))
-            XCTAssertEqual(
-                account.coin.normalizedAddress(WalletCrypto.addressFromPublicKeyData(
-                    privateKey.publicKeyData(coin: account.coin),
-                    coin: account.coin
-                )),
-                account.coin.normalizedAddress(account.address)
-            )
-            XCTAssertNil(access.privateKey(walletID: "missing-wallet", account: account))
+            try await assertSigningAccessForTesting(access, walletID: "missing-wallet", account: account, expectedSuccess: false)
             let otherWallet = try XCTUnwrap(unlockedCatalog.orderedAccounts.first {
                 $0.walletId != selected.walletId
             })
-            XCTAssertNil(access.privateKey(walletID: otherWallet.walletId, account: account))
+            try await assertSigningAccessForTesting(access, walletID: otherWallet.walletId, account: account, expectedSuccess: false)
             for other in unlockedCatalog.orderedAccounts where other != selected {
-                XCTAssertNil(access.privateKey(walletID: other.walletId, account: other.account))
+                try await assertSigningAccessForTesting(access, walletID: other.walletId, account: other.account, expectedSuccess: false)
             }
 
             let otherAddress = account.coin == .ethereum
@@ -471,11 +496,12 @@ final class SafariApprovalVaultTests: XCTestCase {
                     publicKey: account.publicKey,
                     extendedPublicKey: account.extendedPublicKey
                 )
-                XCTAssertNil(access.privateKey(
-                    walletID: selected.walletId,
-                    account: mismatchedAccount
-                ))
+                let descriptor = WalletAccountDescriptor(walletID: selected.walletId, account: mismatchedAccount)
+                if descriptor.isValid {
+                    try await assertSigningAccessForTesting(access, walletID: selected.walletId, account: mismatchedAccount, expectedSuccess: false)
+                }
             }
+            try await assertSigningAccessForTesting(access, walletID: selected.walletId, account: account, expectedSuccess: true)
         }
     }
 
@@ -527,7 +553,7 @@ final class SafariApprovalVaultTests: XCTestCase {
     }
 
     func testUnrelatedUndecryptableWalletDoesNotBlockSelectedSignerButCannotPublish()
-        throws {
+        async throws {
         let fixture = try fixture()
         let unrelatedKey = try XCTUnwrap(WalletStoredKey.importPrivateKey(
             privateKey: Data(repeating: 2, count: 32),
@@ -549,12 +575,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         let (_, access) = try unlockedAccess(source: source)
         defer { access.invalidate() }
-        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
-        XCTAssertNil(access.privateKey(
-            walletID: unrelatedWallet.id,
-            account: try XCTUnwrap(unrelatedWallet.accounts.first)
-        ))
-        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
+        try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: true)
+        try await assertSigningAccessForTesting(access, walletID: unrelatedWallet.id, account: try XCTUnwrap(unrelatedWallet.accounts.first), expectedSuccess: false)
+        try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: true)
 
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -568,7 +591,7 @@ final class SafariApprovalVaultTests: XCTestCase {
     }
 
     func testUnownedSiblingDoesNotBlockSelectedMnemonicSignerButCannotPublish()
-        throws {
+        async throws {
         let fixture = try orderedFixture()
         var records = fixture.source.wallets
         var object = try XCTUnwrap(
@@ -596,12 +619,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         let (_, access) = try unlockedAccess(source: source)
         defer { access.invalidate() }
         let selected = fixture.accounts[0]
-        XCTAssertNotNil(access.privateKey(walletID: selected.walletId, account: selected.account))
-        XCTAssertNil(access.privateKey(
-            walletID: wallets[0].id,
-            account: wallets[0].accounts[1]
-        ))
-        XCTAssertNotNil(access.privateKey(walletID: selected.walletId, account: selected.account))
+        try await assertSigningAccessForTesting(access, walletID: selected.walletId, account: selected.account, expectedSuccess: true)
+        try await assertSigningAccessForTesting(access, walletID: wallets[0].id, account: wallets[0].accounts[1], expectedSuccess: false)
+        try await assertSigningAccessForTesting(access, walletID: selected.walletId, account: selected.account, expectedSuccess: true)
 
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -715,10 +735,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertNil(vault.reviewCatalog())
         XCTAssertFalse(unlocked.validateCurrent())
-        XCTAssertNil(unlocked.privateKey(
-            walletID: "wallet",
-            account: fixture.account
-        ))
+        try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: fixture.account, expectedSuccess: false)
         let lease = await execution.takeExecutionLease()
         XCTAssertNil(lease)
     }
@@ -744,7 +761,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         try originalData.write(to: url, options: .atomic)
 
         XCTAssertTrue(unlocked.validateCurrent())
-        XCTAssertNotNil(unlocked.privateKey(walletID: "wallet", account: fixture.account))
+        try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: fixture.account, expectedSuccess: true)
 
         try (originalData + Data("\n".utf8)).write(to: url, options: .atomic)
 
@@ -752,27 +769,24 @@ final class SafariApprovalVaultTests: XCTestCase {
         let replacement = await vault.unlockSignerForTesting(reason: "Approve")
         XCTAssertNotNil(replacement)
         XCTAssertFalse(unlocked.validateCurrent())
-        XCTAssertNil(unlocked.privateKey(walletID: "wallet", account: fixture.account))
+        try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: fixture.account, expectedSuccess: false)
         let lease = await execution.takeExecutionLease()
         XCTAssertNil(lease)
     }
 
-    func testRequestScopeRechecksGenerationAfterPrivateKeyDerivation() throws {
+    func testRequestScopeRechecksGenerationAfterSigning() async throws {
         let fixture = try fixture()
         var isCurrent = true
         let underlying = DerivationRaceWalletSigner(account: fixture.account) {
             isCurrent = false
         }
-        let scoped = makeRequestScopedWalletSignerForTesting(
+        let scoped = makeRequestScopedWalletAccessForTesting(
             underlying,
             approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account),
             isCurrent: { isCurrent }
         )
 
-        XCTAssertNil(scoped.privateKey(
-            walletID: "wallet",
-            account: fixture.account
-        ))
+        try await assertSigningAccessForTesting(scoped, walletID: "wallet", account: fixture.account, expectedSuccess: false)
         XCTAssertFalse(scoped.validateCurrent())
     }
 
@@ -853,7 +867,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         for cancel in [false, true] {
             let started = expectation(description: "Lease acquisition started")
             var continuation: CheckedContinuation<WalletExecutionLease?, Never>?
-            let access = makeRequestScopedWalletSignerForTesting(
+            let access = makeRequestScopedWalletAccessForTesting(
                 DerivationRaceWalletSigner(account: account) {},
                 approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: account),
                 acquireExecutionLease: {
@@ -1056,12 +1070,9 @@ final class SafariApprovalVaultTests: XCTestCase {
             XCTAssertEqual(unlockedCatalog.identity, catalog.identity)
             XCTAssertEqual(unlockedCatalog.orderedAccounts, fixture.accounts)
             XCTAssertEqual(unlocked.approvedAccount, approvedAccount)
-            XCTAssertNotNil(unlocked.privateKey(
-                walletID: selected.walletId,
-                account: selected.account
-            ))
+            try await assertSigningAccessForTesting(unlocked, walletID: selected.walletId, account: selected.account, expectedSuccess: true)
             for other in fixture.accounts where other != selected {
-                XCTAssertNil(unlocked.privateKey(walletID: other.walletId, account: other.account))
+                try await assertSigningAccessForTesting(unlocked, walletID: other.walletId, account: other.account, expectedSuccess: false)
             }
         }
     }
@@ -1436,7 +1447,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let unlockedValue = await vault.unlockSignerForTesting(reason: "Approve")
         let unlocked = try XCTUnwrap(unlockedValue)
-        XCTAssertNotNil(unlocked.privateKey(walletID: "wallet", account: try fixture().account))
+        try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: try fixture().account, expectedSuccess: true)
         let leaseValue = await unlocked.takeExecutionLease()
         let lease = try XCTUnwrap(leaseValue)
         lease.release()
@@ -2596,7 +2607,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(repaired.catalogData, first.catalogData)
     }
 
-    func testPublicationAndSelectedSignerRejectWrongPassword() throws {
+    func testPublicationAndSelectedSignerRejectWrongPassword() async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keys = MemoryApprovalKeyStore()
@@ -2620,10 +2631,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         let (unlockedCatalog, access) = try unlockedAccess(source: source)
         defer { access.invalidate() }
-        XCTAssertNil(access.privateKey(
-            walletID: "wallet",
-            account: try XCTUnwrap(unlockedCatalog.orderedAccounts.first).account
-        ))
+        try await assertSigningAccessForTesting(access, walletID: "wallet", account: try XCTUnwrap(unlockedCatalog.orderedAccounts.first).account, expectedSuccess: false)
     }
 
     func testHostRepublishesSameCatalogWhenStoredKeyJSONChanges() throws {
@@ -2713,7 +2721,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(vault.reviewCatalog()?.identity, initial)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
         XCTAssertNotNil(keys.keys[try XCTUnwrap(initial.generation)])
-        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
+        try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: true)
     }
 
     @MainActor
@@ -2830,10 +2838,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let originalIdentity = try XCTUnwrap(vault.reviewCatalog()?.identity)
         let unlocked = await vault.unlockSignerForTesting(reason: "Before metadata failure")
         let previousAccess = try XCTUnwrap(unlocked)
-        XCTAssertNotNil(previousAccess.privateKey(
-            walletID: "wallet",
-            account: original.account
-        ))
+        try await assertSigningAccessForTesting(previousAccess, walletID: "wallet", account: original.account, expectedSuccess: true)
         rejectSynchronization = true
         var mutations = 0
 
@@ -2858,18 +2863,12 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotEqual(current.generation, originalIdentity.generation)
         XCTAssertNotEqual(current.catalogData, originalIdentity.catalogData)
         XCTAssertFalse(previousAccess.validateCurrent())
-        XCTAssertNil(previousAccess.privateKey(
-            walletID: "wallet",
-            account: original.account
-        ))
+        try await assertSigningAccessForTesting(previousAccess, walletID: "wallet", account: original.account, expectedSuccess: false)
         let previousLease = await previousAccess.takeExecutionLease()
         XCTAssertNil(previousLease)
         let replacementUnlock = await vault.unlockSignerForTesting(reason: "During metadata failure")
         let replacementAccess = try XCTUnwrap(replacementUnlock)
-        XCTAssertNotNil(replacementAccess.privateKey(
-            walletID: "mnemonic-wallet",
-            account: replacement.account
-        ))
+        try await assertSigningAccessForTesting(replacementAccess, walletID: "mnemonic-wallet", account: replacement.account, expectedSuccess: true)
 
         for _ in 0..<2 {
             let previousFailures = synchronizationFailures
@@ -2883,10 +2882,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             XCTAssertEqual(defaults.data(
                 forKey: "SafariApprovalVault.hostPublicationMetadata.v1"
             ), metadata)
-            XCTAssertNotNil(replacementAccess.privateKey(
-                walletID: "mnemonic-wallet",
-                account: replacement.account
-            ))
+            XCTAssertTrue(replacementAccess.validateCurrent())
         }
 
         rejectSynchronization = false
@@ -2899,10 +2895,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url), envelope)
         let recoveredUnlock = await vault.unlockSignerForTesting(reason: "After metadata recovery")
         let recoveredAccess = try XCTUnwrap(recoveredUnlock)
-        XCTAssertNotNil(recoveredAccess.privateKey(
-            walletID: "mnemonic-wallet",
-            account: replacement.account
-        ))
+        try await assertSigningAccessForTesting(recoveredAccess, walletID: "mnemonic-wallet", account: replacement.account, expectedSuccess: true)
         XCTAssertNil(keys.keys[try XCTUnwrap(originalIdentity.generation)])
         XCTAssertFalse(previousAccess.validateCurrent())
         let replayedLease = await previousAccess.takeExecutionLease()
@@ -2978,7 +2971,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(previousLease)
         let replacementUnlock = await vault.unlockSignerForTesting(reason: "After mutation")
         let access = try XCTUnwrap(replacementUnlock)
-        XCTAssertNotNil(access.privateKey(walletID: "mnemonic-wallet", account: replacement.account))
+        try await assertSigningAccessForTesting(access, walletID: "mnemonic-wallet", account: replacement.account, expectedSuccess: true)
     }
 
     @MainActor
@@ -3313,7 +3306,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         ))
         let unlocked = await vault.unlockSignerForTesting(reason: "During metadata failure")
         let access = try XCTUnwrap(unlocked)
-        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
+        try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: true)
         XCTAssertNil(synchronizedMetadata)
         host.reconcile()
         reconciliationQueue.sync {}
@@ -3330,7 +3323,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(stores, 1)
         XCTAssertEqual(vault.reviewCatalog()?.identity, initial)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
-        XCTAssertNotNil(access.privateKey(walletID: "wallet", account: fixture.account))
+        XCTAssertTrue(access.validateCurrent())
     }
 
     func testPublicationDeletionFailureStaysUnavailableAndRecovers() throws {
@@ -3648,23 +3641,24 @@ private final class MemoryApprovalIntegrityKeyStore:
     }
 }
 
-private final class DerivationRaceWalletSigner: WalletSigning {
+private final class DerivationRaceWalletSigner: OwnedWalletSigningAccess {
     private let didDerive: () -> Void
 
     init(account: WalletAccount, didDerive: @escaping () -> Void) {
         self.didDerive = didDerive
     }
 
-    func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey? {
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
         didDerive()
-        return WalletPrivateKey(data: Data(repeating: 1, count: 32))
+        return .success(.ethereumSignature("discarded-signature"))
     }
+
+    func invalidate() {}
+
 }
 private extension SafariApprovalVault {
-    func unlockSignerForTesting(reason: String) async -> RequestScopedWalletSigner? {
+    func unlockSignerForTesting(reason: String) async -> RequestScopedWalletAccess? {
         guard let selected = reviewCatalog()?.orderedAccounts.first,
               case .unlocked(_, let signer) = await unlockResult(
                   reason: reason,

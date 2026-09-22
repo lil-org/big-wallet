@@ -61,6 +61,9 @@ final class SolanaOptionsTests: XCTestCase {
         case .success(let options):
             XCTAssertEqual(options.clusterHint, .devnet)
             XCTAssertEqual(options.confirmationCommitment, .finalized)
+            XCTAssertEqual(options.preflightCommitment, .confirmed)
+            XCTAssertEqual(options.maxRetries, 2)
+            XCTAssertEqual(options.minContextSlot, 123)
             XCTAssertEqual(options.rpcOptions["encoding"] as? String, "base64")
             XCTAssertEqual(options.rpcOptions["skipPreflight"] as? Bool, false)
             XCTAssertEqual(options.rpcOptions["preflightCommitment"] as? String, "confirmed")
@@ -197,7 +200,6 @@ final class SolanaOptionsTests: XCTestCase {
                 cluster: cluster,
                 sendOptions: Solana.PreparedSendOptions(
                     clusterHint: cluster,
-                    rpcOptions: ["encoding": "base64"],
                     confirmationCommitment: nil
                 )
             ) { result in
@@ -254,10 +256,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .devnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .devnet,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -311,10 +309,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .devnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .devnet,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -368,10 +362,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -424,10 +414,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -496,10 +482,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -563,10 +545,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -634,10 +612,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -719,10 +693,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -820,10 +790,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -902,10 +868,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -997,10 +959,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -1100,10 +1058,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -1170,10 +1124,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -1242,10 +1192,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .testnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .testnet,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in
@@ -1318,10 +1264,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .testnet,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .testnet,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: .finalized
             )
         ) { result in
@@ -1380,10 +1322,6 @@ final class SolanaOptionsTests: XCTestCase {
             cluster: .mainnetBeta,
             sendOptions: Solana.PreparedSendOptions(
                 clusterHint: .mainnetBeta,
-                rpcOptions: [
-                    "encoding": "base64",
-                    "skipPreflight": false,
-                ],
                 confirmationCommitment: nil
             )
         ) { result in

@@ -87,62 +87,33 @@ struct SolanaDappRequestProcessor {
         approval: DappApprovalValidator.Approval,
         signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
-        guard case .message(let action, let cluster) = approval
+        guard case .message = approval
         else { return .response(response(to: request, error: .internalError)) }
-        guard let privateKey = signer?.privateKey(
-            walletID: action.walletId,
-            account: action.account
-        ) else { return .response(response(to: request, error: .failedToSign)) }
-
-        switch action.payload {
-        case .solanaMessage(let data):
-            return await signMessage(data, privateKey: privateKey, request: request)
-        case .solanaTransaction(let prepared):
-            return await signMessage(
-                prepared.messageData,
-                privateKey: privateKey,
-                request: request
+        guard let signer else { return .rollback }
+        switch await signer.sign() {
+        case .success(.solanaSignature(let signature)):
+            return .response(response(to: request, result: .string(signature)))
+        case .success(.solanaSignatures(let signatures)):
+            return .response(response(to: request, result: .strings(signatures)))
+        case .success(.solanaTransaction(let signedTransaction, let signature, let cluster, let options)):
+            return prepareTransactionBroadcast(
+                request: request,
+                signedTransaction: signedTransaction,
+                expectedSignature: signature,
+                cluster: cluster,
+                sendOptions: options
             )
-        case .solanaTransactions(let prepared):
-            let messages = prepared.map(\.messageData)
-            guard let results = await awaitBackgroundOptionalOperation({
-                Solana.sign(messageDataList: messages, privateKey: privateKey)
-            }) else { return .response(response(to: request, error: .failedToSign)) }
-            return .response(response(to: request, result: .strings(results)))
-        case .solanaLegacyBroadcast(let transaction, let options):
-            guard let cluster else {
-                return .response(response(to: request, error: .internalError))
-            }
-            return await signAndSend(request: request, cluster: cluster, sendOptions: options) {
-                Solana.signedTransactionForSignAndSend(
-                    preparedLegacyTransaction: transaction,
-                    privateKey: privateKey
-                )
-            }
-        case .solanaSerializedBroadcast(let transaction, let options):
-            guard let cluster else {
-                return .response(response(to: request, error: .internalError))
-            }
-            return await signAndSend(request: request, cluster: cluster, sendOptions: options) {
-                Solana.signedTransactionForSignAndSend(
-                    preparedSerializedTransaction: transaction,
-                    privateKey: privateKey
-                )
-            }
-        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
+        case .success:
+            return .response(response(to: request, error: .internalError))
+        case .failure(.authorizationUnavailable):
+            return .rollback
+        case .failure(.failedToSign):
+            return .response(response(to: request, error: .failedToSign))
+        case .failure(.solana(let error)):
+            return .response(response(to: request, error: .sendTransaction(error)))
+        case .failure(.ethereum):
             return .response(response(to: request, error: .internalError))
         }
-    }
-
-    private static func signMessage(
-        _ data: Data,
-        privateKey: WalletPrivateKey,
-        request: SafariRequest
-    ) async -> DappExecutionResult {
-        guard let signed = await awaitBackgroundOptionalOperation({
-            Solana.sign(messageData: data, privateKey: privateKey)
-        }) else { return .response(response(to: request, error: .failedToSign)) }
-        return .response(response(to: request, result: .string(signed)))
     }
 
     static func decodedSignMessage(
@@ -459,65 +430,47 @@ struct SolanaDappRequestProcessor {
         ))
     }
 
-    private static func signAndSend(
+    private static func prepareTransactionBroadcast(
         request: SafariRequest,
+        signedTransaction: String,
+        expectedSignature: String,
         cluster: Solana.Cluster,
-        sendOptions: Solana.PreparedSendOptions,
-        signing: @escaping @Sendable () -> Result<String, Solana.SendTransactionError>
-    ) async -> DappExecutionResult {
-        guard let signingResult = await awaitBackgroundOperation(signing) else {
-            return .response(ResponseToExtension(
-                for: request,
-                payload: .error(.internalError)
-            ))
-        }
-        switch signingResult {
-        case .failure(let error):
-            return .response(response(to: request, sendResult: .failure(error)))
-        case .success(let signedTransaction):
-            guard let expectedSignature = Solana.transactionSignature(
-                signedTransaction: signedTransaction
-            ) else {
-                return .response(ResponseToExtension(
-                    for: request,
-                    payload: .error(.internalError)
-                ))
-            }
-            let recoveryResponse = transactionSubmissionUnknownResponse(
-                to: request,
-                signature: expectedSignature
-            )
-            return .broadcast(PreparedBroadcast(
-                recoveryResponse: recoveryResponse,
-                send: {
-                    guard !Task.isCancelled else {
-                        return ResponseToExtension(
-                            for: request,
-                            payload: .error(.internalError)
-                        )
-                    }
-                    guard let result = await awaitCancellableCallback({ completion in
-                        solana.sendSignedTransaction(
-                            signedTransaction,
-                            cluster: cluster,
-                            sendOptions: sendOptions,
-                            completion: completion
-                        )
-                    }) else {
-                        return ResponseToExtension(
-                            for: request,
-                            payload: .error(.internalError)
-                        )
-                    }
-                    return transactionBroadcastResponse(
-                        to: request,
-                        expectedSignature: expectedSignature,
-                        recoveryResponse: recoveryResponse,
-                        result: result
+        sendOptions: Solana.PreparedSendOptions
+    ) -> DappExecutionResult {
+        let recoveryResponse = transactionSubmissionUnknownResponse(
+            to: request,
+            signature: expectedSignature
+        )
+        return .broadcast(PreparedBroadcast(
+            recoveryResponse: recoveryResponse,
+            send: {
+                guard !Task.isCancelled else {
+                    return ResponseToExtension(
+                        for: request,
+                        payload: .error(.internalError)
                     )
                 }
-            ))
-        }
+                guard let result = await awaitCancellableCallback({ completion in
+                    solana.sendSignedTransaction(
+                        signedTransaction,
+                        cluster: cluster,
+                        sendOptions: sendOptions,
+                        completion: completion
+                    )
+                }) else {
+                    return ResponseToExtension(
+                        for: request,
+                        payload: .error(.internalError)
+                    )
+                }
+                return transactionBroadcastResponse(
+                    to: request,
+                    expectedSignature: expectedSignature,
+                    recoveryResponse: recoveryResponse,
+                    result: result
+                )
+            }
+        ))
     }
 
     static func transactionBroadcastResponse(

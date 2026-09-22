@@ -19,7 +19,7 @@ final class NativeApprovalFinalizer {
     private let store: NativeApprovalStore
     private let requestProcessor: DappRequestProcessing
     private let refreshWalletCatalog: () -> WalletReviewCatalog?
-    private let makeSigner: (WalletAccountDescriptor) -> any WalletSigning
+    private let makeSigner: (ApprovedWalletSigningOperation) -> any WalletSigning
     private let networkResolver: (String) -> EthereumNetwork?
     private let clock: () -> Date
     private let executor: DurableApprovalExecutor
@@ -31,9 +31,7 @@ final class NativeApprovalFinalizer {
             guard WalletsManager.shared.start() else { return nil }
             return WalletsManager.shared.reviewCatalog()
         },
-        makeSigner: @escaping (WalletAccountDescriptor) -> any WalletSigning = {
-            SourceWalletSigner(approvedAccount: $0)
-        },
+        makeSigner: ((ApprovedWalletSigningOperation) -> any WalletSigning)? = nil,
         networkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
         },
@@ -44,7 +42,7 @@ final class NativeApprovalFinalizer {
         self.store = store
         self.requestProcessor = requestProcessor
         self.refreshWalletCatalog = refreshWalletCatalog
-        self.makeSigner = makeSigner
+        self.makeSigner = makeSigner ?? { SourceWalletSigner(operation: $0, clock: clock) }
         self.networkResolver = networkResolver
         self.clock = clock
         executor = DurableApprovalExecutor(
@@ -181,10 +179,19 @@ final class NativeApprovalFinalizer {
                         }) == true else {
                             return .response(Self.staleResponse(for: request), approvalCommitted: false)
                         }
-                        executionSigner = self.makeSigner(approvedAccount)
+                        let deadline = self.requestRequiresFreshTransactionDecision(request)
+                            ? min(executionContext.executionDeadline,
+                                  nativeClaim.approvedAt.addingTimeInterval(Self.maximumTransactionDecisionAge))
+                            : executionContext.executionDeadline
+                        guard let operation = ApprovedWalletSigningOperation(
+                            request: request, approval: approval,
+                            handle: snapshot.handle, deadline: deadline
+                        ) else { return .rollback }
+                        executionSigner = self.makeSigner(operation)
                     } else {
                         executionSigner = nil
                     }
+                    defer { executionSigner?.invalidate() }
                     return await self.requestProcessor.execute(
                         request: request,
                         approval: approval,

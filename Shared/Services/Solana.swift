@@ -926,7 +926,7 @@ enum SolanaTransactionSummaryFormatter {
 
 final class Solana {
 
-    enum Cluster: String, CaseIterable, Hashable, Codable {
+    enum Cluster: String, CaseIterable, Hashable, Codable, Sendable {
         case mainnetBeta
         case devnet
         case testnet
@@ -1272,10 +1272,43 @@ final class Solana {
         }
     }
 
-    struct PreparedSendOptions {
+    struct PreparedSendOptions: Sendable {
         let clusterHint: Cluster?
-        let rpcOptions: [String: Any]
+        let preflightCommitment: Commitment?
+        let maxRetries: Int?
+        let minContextSlot: Int?
         let confirmationCommitment: Commitment?
+
+        init(
+            clusterHint: Cluster? = nil,
+            preflightCommitment: Commitment? = nil,
+            maxRetries: Int? = nil,
+            minContextSlot: Int? = nil,
+            confirmationCommitment: Commitment? = nil
+        ) {
+            self.clusterHint = clusterHint
+            self.preflightCommitment = preflightCommitment
+            self.maxRetries = maxRetries
+            self.minContextSlot = minContextSlot
+            self.confirmationCommitment = confirmationCommitment
+        }
+
+        var rpcOptions: [String: Any] {
+            var options: [String: Any] = [
+                "encoding": "base64",
+                "skipPreflight": false,
+            ]
+            if let preflightCommitment {
+                options["preflightCommitment"] = preflightCommitment.rawValue
+            }
+            if let maxRetries {
+                options["maxRetries"] = maxRetries
+            }
+            if let minContextSlot {
+                options["minContextSlot"] = minContextSlot
+            }
+            return options
+        }
     }
 
     enum RPCSource: Equatable {
@@ -1350,7 +1383,6 @@ final class Solana {
     private let signatureStatusPollBackoffMultiplier: TimeInterval = 1.5
     private let signatureStatusPollTimeout: TimeInterval = 45
     private static let clusterHintOptionKeys = ["bigWalletCluster", "cluster"]
-    private static let allowedPreflightCommitments = Set(["processed", "confirmed", "finalized"])
 
     init(urlSession: URLSession,
          rpcConfiguration: RPCConfiguration,
@@ -1374,13 +1406,47 @@ final class Solana {
                 parsedConfirmationCommitment = value
             }
 
-            guard let rpcOptions = sanitizedRPCOptions(from: options) else {
-                return .failure(.invalidSendOptions)
+            var preflightCommitment: Commitment?
+            var maxRetries: Int?
+            var minContextSlot: Int?
+            for (key, value) in options {
+                switch key {
+                case "skipPreflight":
+                    guard let skipPreflight = value as? Bool, !skipPreflight else {
+                        return .failure(.invalidSendOptions)
+                    }
+                case "preflightCommitment":
+                    guard let rawValue = value as? String,
+                          let commitment = Commitment(rawValue: rawValue) else {
+                        return .failure(.invalidSendOptions)
+                    }
+                    preflightCommitment = commitment
+                case "mode":
+                    guard let mode = value as? String, mode == "serial" else {
+                        return .failure(.invalidSendOptions)
+                    }
+                case "maxRetries":
+                    guard let value = nonNegativeInt(from: value) else {
+                        return .failure(.invalidSendOptions)
+                    }
+                    maxRetries = value
+                case "minContextSlot":
+                    guard let value = nonNegativeInt(from: value) else {
+                        return .failure(.invalidSendOptions)
+                    }
+                    minContextSlot = value
+                default:
+                    continue
+                }
             }
 
-            return .success(PreparedSendOptions(clusterHint: clusterHint,
-                                                rpcOptions: rpcOptions,
-                                                confirmationCommitment: parsedConfirmationCommitment))
+            return .success(PreparedSendOptions(
+                clusterHint: clusterHint,
+                preflightCommitment: preflightCommitment,
+                maxRetries: maxRetries,
+                minContextSlot: minContextSlot,
+                confirmationCommitment: parsedConfirmationCommitment
+            ))
         }
     }
 
@@ -1410,48 +1476,6 @@ final class Solana {
             return .failure(.invalidSendOptions)
         }
         return .success(commitment)
-    }
-
-    private static func sanitizedRPCOptions(from options: [String: Any]) -> [String: Any]? {
-        var sanitizedOptions: [String: Any] = [
-            "encoding": "base64",
-            "skipPreflight": false,
-        ]
-
-        for (key, value) in options {
-            switch key {
-            case "encoding":
-                continue
-            case _ where clusterHintOptionKeys.contains(key):
-                continue
-            case "skipPreflight":
-                guard let skipPreflight = value as? Bool, !skipPreflight else {
-                    return nil
-                }
-            case "preflightCommitment":
-                guard let commitment = value as? String,
-                      allowedPreflightCommitments.contains(commitment) else {
-                    return nil
-                }
-                sanitizedOptions[key] = commitment
-            case "commitment":
-                continue
-            case "mode":
-                guard let mode = value as? String, mode == "serial" else {
-                    return nil
-                }
-                continue
-            case "maxRetries", "minContextSlot":
-                guard let intValue = nonNegativeInt(from: value) else {
-                    return nil
-                }
-                sanitizedOptions[key] = intValue
-            default:
-                continue
-            }
-        }
-
-        return sanitizedOptions
     }
 
     private static func nonNegativeInt(from value: Any) -> Int? {

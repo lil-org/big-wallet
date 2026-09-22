@@ -1,47 +1,161 @@
+import CryptoKit
 import Foundation
 import XCTest
 @testable import Big_Wallet
 
-func makeRequestScopedWalletSignerForTesting(
-    _ signer: any WalletSigning = TestWalletSigner(),
+func makeRequestScopedWalletAccessForTesting(
+    _ access: any OwnedWalletSigningAccess = TestWalletSigningAccess(),
     approvedAccount: WalletAccountDescriptor,
     isCurrent: @escaping () -> Bool = { true },
-    acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil
-) -> RequestScopedWalletSigner {
-    RequestScopedWalletSigner(
-        BorrowedWalletSignerForTesting(signer),
+    acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil,
+    clock: @escaping () -> Date = Date.init
+) -> RequestScopedWalletAccess {
+    RequestScopedWalletAccess(
+        BorrowedWalletSignerForTesting(access),
         approvedAccount: approvedAccount,
         isCurrent: isCurrent,
         acquireExecutionLease: acquireExecutionLease ?? {
             isCurrent() ? WalletExecutionLease(release: {}) : nil
-        }
+        },
+        clock: clock
     )
 }
 
 final class TestWalletSigner: WalletSigning {
-    func privateKey(walletID: String, account: WalletAccount) -> WalletPrivateKey? {
-        nil
+    func invalidate() {}
+
+    @MainActor
+    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        .failure(.failedToSign)
     }
 }
 
-final class BorrowedWalletSignerForTesting: OwnedWalletSigning {
-    private var signer: (any WalletSigning)?
-    private(set) var invalidationCount = 0
-
-    init(_ signer: any WalletSigning = TestWalletSigner()) {
-        self.signer = signer
+final class TestWalletSigningAccess: OwnedWalletSigningAccess {
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        .failure(.failedToSign)
     }
 
-    func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey? {
-        signer?.privateKey(walletID: walletID, account: account)
+    func invalidate() {}
+}
+
+final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
+    private let lock = NSLock()
+    private var access: (any OwnedWalletSigningAccess)?
+    private var invalidations = 0
+
+    var invalidationCount: Int { lock.withLock { invalidations } }
+
+    init(_ access: any OwnedWalletSigningAccess = TestWalletSigningAccess()) {
+        self.access = access
+    }
+
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        guard let access = lock.withLock({ access }) else { return .failure(.authorizationUnavailable) }
+        return await access.sign(operation)
     }
 
     func invalidate() {
-        invalidationCount += 1
-        signer = nil
+        let access = lock.withLock {
+            invalidations += 1
+            let access = self.access
+            self.access = nil
+            return access
+        }
+        access?.invalidate()
+    }
+}
+
+let walletSigningTestMessage = Data("Bound wallet signing operation".utf8)
+
+func approvedWalletSigningOperationForTesting(
+    approvedAccount: WalletAccountDescriptor,
+    payload: SignMessageAction.Payload? = nil,
+    deadline: Date = Date().addingTimeInterval(60),
+    requestID: Int = 1
+) throws -> ApprovedWalletSigningOperation {
+    let ethereum = approvedAccount.coin == .ethereum
+    let payload = payload ?? (ethereum
+        ? .ethereumPersonalMessage(walletSigningTestMessage)
+        : .solanaMessage(walletSigningTestMessage))
+    let name: String
+    let subject: ApprovalSubject
+    switch payload {
+    case .ethereumMessage:
+        name = "signMessage"
+        subject = .signMessage
+    case .ethereumPersonalMessage:
+        name = "signPersonalMessage"
+        subject = .signPersonalMessage
+    case .ethereumTypedData:
+        name = "signTypedMessage"
+        subject = .signTypedData
+    case .solanaMessage:
+        name = "signMessage"
+        subject = .signMessage
+    case .solanaTransaction:
+        name = "signTransaction"
+        subject = .approveTransaction
+    case .solanaTransactions:
+        name = "signAllTransactions"
+        subject = .approveTransaction
+    case .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+        name = "signAndSendTransaction"
+        subject = .approveTransaction
+    }
+    let body: [String: Any] = ethereum
+        ? ["address": approvedAccount.normalizedAddress, "chainId": "0x1"]
+        : ["publicKey": approvedAccount.normalizedAddress]
+    let request = try XCTUnwrap(SafariRequest(json: [
+        "id": requestID,
+        "name": name,
+        "provider": ethereum ? "ethereum" : "solana",
+        "body": body,
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example",
+        "enqueueAttempt": String(format: "%032x", requestID),
+        "admissionDeadline": Int(Date().addingTimeInterval(120).timeIntervalSince1970 * 1_000),
+        "workflowVersion": ExtensionBridge.workflowVersion,
+    ]))
+    let action = SignMessageAction(
+        subject: subject,
+        walletId: approvedAccount.walletID,
+        account: approvedAccount.account,
+        meta: "",
+        payload: payload
+    )
+    return try XCTUnwrap(ApprovedWalletSigningOperation(
+        request: request,
+        approval: .message(action, action.solanaClusterOptions == nil ? nil : .devnet),
+        handle: .init(id: requestID, token: .init(value: UUID()), profileIdentifier: nil),
+        deadline: deadline
+    ))
+}
+
+func assertWalletSigningSuccessForTesting(
+    _ result: Result<WalletSigningOutput, WalletSigningFailure>,
+    account: WalletAccount,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws {
+    switch try result.get() {
+    case .ethereumSignature(let signature):
+        let signatureData = try XCTUnwrap(WalletCrypto.hexData(signature), file: file, line: line)
+        let prefix = Data("\u{19}Ethereum Signed Message:\n\(walletSigningTestMessage.count)".utf8)
+        let digest = WalletCrypto.keccak256(parts: [prefix, walletSigningTestMessage])
+        XCTAssertEqual(
+            WalletCrypto.recoverEthereumAddress(signature: signatureData, messageHash: digest)?.lowercased(),
+            account.address.lowercased(),
+            file: file, line: line
+        )
+    case .solanaSignature(let signature):
+        let signatureData = try XCTUnwrap(WalletCrypto.base58Decode(string: signature), file: file, line: line)
+        let publicKeyData = try XCTUnwrap(WalletCrypto.base58Decode(string: account.address), file: file, line: line)
+        let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+        XCTAssertTrue(publicKey.isValidSignature(signatureData, for: walletSigningTestMessage), file: file, line: line)
+    default:
+        XCTFail("Expected a signature for the approved message", file: file, line: line)
     }
 }
 

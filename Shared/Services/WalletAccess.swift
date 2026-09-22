@@ -159,7 +159,7 @@ struct WalletCatalogIdentity: Equatable, Sendable {
 }
 
 enum WalletUnlockResult {
-    case unlocked(catalog: WalletReviewCatalog, signer: RequestScopedWalletSigner)
+    case unlocked(catalog: WalletReviewCatalog, signer: RequestScopedWalletAccess)
     case canceled
     case unavailable
 }
@@ -187,14 +187,263 @@ final class WalletExecutionLease: @unchecked Sendable {
 }
 
 protocol WalletSigning: AnyObject {
-    func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey?
+    @MainActor
+    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure>
+    func invalidate()
 }
 
-protocol OwnedWalletSigning: WalletSigning {
+protocol OwnedWalletSigningAccess: AnyObject {
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async ->
+        Result<WalletSigningOutput, WalletSigningFailure>
     func invalidate()
+}
+
+enum WalletSigningFailure: Error, Equatable, Sendable {
+    case authorizationUnavailable
+    case failedToSign
+    case ethereum(EthereumSendFailure)
+    case solana(Solana.SendTransactionError)
+}
+
+enum WalletSigningOutput: Sendable {
+    case ethereumSignature(String)
+    case solanaSignature(String)
+    case solanaSignatures([String])
+    case ethereumTransaction(
+        signedTransaction: String,
+        transactionHash: String,
+        network: ResolvedEthereumNetwork
+    )
+    case solanaTransaction(
+        signedTransaction: String,
+        signature: String,
+        cluster: Solana.Cluster,
+        options: Solana.PreparedSendOptions
+    )
+}
+
+struct ApprovedWalletSigningOperation: Sendable {
+
+    enum Payload: Sendable {
+        case ethereumMessage(Data)
+        case ethereumPersonalMessage(Data)
+        case ethereumTypedData(String)
+        case ethereumTransaction(Transaction, ResolvedEthereumNetwork)
+        case solanaMessage(Data)
+        case solanaTransaction(SolanaPreparedTransactionMessage)
+        case solanaTransactions([SolanaPreparedTransactionMessage])
+        case solanaLegacyBroadcast(
+            Solana.PreparedLegacySignAndSendTransaction,
+            Solana.Cluster,
+            Solana.PreparedSendOptions
+        )
+        case solanaSerializedBroadcast(
+            Solana.PreparedSerializedTransaction,
+            Solana.Cluster,
+            Solana.PreparedSendOptions
+        )
+    }
+
+    let handle: ExtensionBridge.Handle
+    let configurationKey: String
+    let enqueueAttempt: String
+    let approvedAccount: WalletAccountDescriptor
+    let deadline: Date
+    let payload: Payload
+
+    init?(
+        request: SafariRequest,
+        approval: DappApprovalValidator.Approval,
+        handle: ExtensionBridge.Handle,
+        deadline: Date
+    ) {
+        guard request.id == handle.id,
+              deadline.timeIntervalSince1970.isFinite,
+              let approvedAccount = approval.signingAccount,
+              approvedAccount.isValid,
+              approvedAccount.coin.correspondingInpageProvider == request.provider
+        else { return nil }
+        self.handle = handle
+        configurationKey = request.configurationKey
+        enqueueAttempt = request.enqueueAttempt
+        self.approvedAccount = approvedAccount
+        self.deadline = deadline
+        switch approval {
+        case .message(let action, let cluster):
+            switch action.payload {
+            case .ethereumMessage(let data):
+                guard approvedAccount.coin == .ethereum, cluster == nil else { return nil }
+                payload = .ethereumMessage(data)
+            case .ethereumPersonalMessage(let data):
+                guard approvedAccount.coin == .ethereum, cluster == nil else { return nil }
+                payload = .ethereumPersonalMessage(data)
+            case .ethereumTypedData(let data):
+                guard approvedAccount.coin == .ethereum, cluster == nil else { return nil }
+                payload = .ethereumTypedData(data)
+            case .solanaMessage(let data):
+                guard approvedAccount.coin == .solana, cluster == nil else { return nil }
+                payload = .solanaMessage(data)
+            case .solanaTransaction(let transaction):
+                guard approvedAccount.coin == .solana, cluster == nil else { return nil }
+                payload = .solanaTransaction(transaction)
+            case .solanaTransactions(let transactions):
+                guard approvedAccount.coin == .solana, cluster == nil else { return nil }
+                payload = .solanaTransactions(transactions)
+            case .solanaLegacyBroadcast(let transaction, let options):
+                guard approvedAccount.coin == .solana, let cluster else { return nil }
+                payload = .solanaLegacyBroadcast(transaction, cluster, options)
+            case .solanaSerializedBroadcast(let transaction, let options):
+                guard approvedAccount.coin == .solana, let cluster else { return nil }
+                payload = .solanaSerializedBroadcast(transaction, cluster, options)
+            }
+        case .transaction(let action, let transaction):
+            guard approvedAccount.coin == .ethereum,
+                  DappApprovalDecision.NetworkIdentity(action.resolvedNetwork) != nil,
+                  transaction.isReadyForApproval(on: action.chain) else { return nil }
+            payload = .ethereumTransaction(transaction, action.resolvedNetwork)
+        case .accountSelection, .addEthereumChain:
+            return nil
+        }
+    }
+
+    fileprivate func sign(with privateKey: WalletPrivateKey) ->
+        Result<WalletSigningOutput, WalletSigningFailure> {
+        switch payload {
+        case .ethereumMessage(let data):
+            guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
+            else { return .failure(.failedToSign) }
+            return .success(.ethereumSignature(signature))
+        case .ethereumPersonalMessage(let data):
+            guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
+            else { return .failure(.failedToSign) }
+            return .success(.ethereumSignature(signature))
+        case .ethereumTypedData(let data):
+            guard let signature = try? Ethereum.sign(typedData: data, privateKey: privateKey)
+            else { return .failure(.failedToSign) }
+            return .success(.ethereumSignature(signature))
+        case .ethereumTransaction(let transaction, let network):
+            switch Ethereum.signedTransaction(
+                transaction: transaction, privateKey: privateKey, network: network.network
+            ) {
+            case .failure(let failure):
+                return .failure(.ethereum(failure))
+            case .success(let signed):
+                guard let hash = Ethereum.transactionHash(signedTransaction: signed)
+                else { return .failure(.ethereum(.invalidTransaction)) }
+                return .success(.ethereumTransaction(
+                    signedTransaction: signed, transactionHash: hash, network: network
+                ))
+            }
+        case .solanaMessage(let data):
+            return solanaSignature(data, privateKey: privateKey)
+        case .solanaTransaction(let transaction):
+            return solanaSignature(transaction.messageData, privateKey: privateKey)
+        case .solanaTransactions(let transactions):
+            guard let signatures = Solana.sign(
+                messageDataList: transactions.map(\.messageData), privateKey: privateKey
+            ), signatures.count == transactions.count else { return .failure(.failedToSign) }
+            return .success(.solanaSignatures(signatures))
+        case .solanaLegacyBroadcast(let transaction, let cluster, let options):
+            return solanaBroadcast(
+                Solana.signedTransactionForSignAndSend(
+                    preparedLegacyTransaction: transaction, privateKey: privateKey
+                ), cluster: cluster, options: options
+            )
+        case .solanaSerializedBroadcast(let transaction, let cluster, let options):
+            return solanaBroadcast(
+                Solana.signedTransactionForSignAndSend(
+                    preparedSerializedTransaction: transaction, privateKey: privateKey
+                ), cluster: cluster, options: options
+            )
+        }
+    }
+
+    private func solanaSignature(_ data: Data, privateKey: WalletPrivateKey) ->
+        Result<WalletSigningOutput, WalletSigningFailure> {
+        guard let signature = Solana.sign(messageData: data, privateKey: privateKey)
+        else { return .failure(.failedToSign) }
+        return .success(.solanaSignature(signature))
+    }
+
+    private func solanaBroadcast(
+        _ result: Result<String, Solana.SendTransactionError>,
+        cluster: Solana.Cluster,
+        options: Solana.PreparedSendOptions
+    ) -> Result<WalletSigningOutput, WalletSigningFailure> {
+        switch result {
+        case .failure(let failure):
+            return .failure(.solana(failure))
+        case .success(let signed):
+            guard let signature = Solana.transactionSignature(signedTransaction: signed)
+            else { return .failure(.solana(.invalidMessage)) }
+            return .success(.solanaTransaction(
+                signedTransaction: signed, signature: signature, cluster: cluster, options: options
+            ))
+        }
+    }
+}
+
+final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
+
+    let operation: ApprovedWalletSigningOperation
+    private let lock = NSLock()
+    private var access: (any OwnedWalletSigningAccess)?
+    private var consumed = false
+    private var invalidated = false
+    private let isCurrent: () -> Bool
+    private let clock: () -> Date
+
+    init(
+        operation: ApprovedWalletSigningOperation,
+        access: any OwnedWalletSigningAccess,
+        isCurrent: @escaping () -> Bool,
+        clock: @escaping () -> Date = Date.init
+    ) {
+        self.operation = operation
+        self.access = access
+        self.isCurrent = isCurrent
+        self.clock = clock
+    }
+
+    @MainActor
+    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        let access = lock.withLock { () -> (any OwnedWalletSigningAccess)? in
+            guard !consumed, !invalidated else { return nil }
+            consumed = true
+            return self.access
+        }
+        guard let access else { return .failure(.authorizationUnavailable) }
+        defer { invalidate() }
+        guard isAuthorized else { return .failure(.authorizationUnavailable) }
+        let result = await withTaskCancellationHandler {
+            await access.sign(operation)
+        } onCancel: {
+            self.invalidate()
+        }
+        guard isAuthorized else { return .failure(.authorizationUnavailable) }
+        return result
+    }
+
+    @MainActor
+    private var isAuthorized: Bool {
+        !Task.isCancelled && clock() < operation.deadline &&
+            lock.withLock { !invalidated } && isCurrent()
+    }
+
+    func invalidate() {
+        let access = lock.withLock {
+            invalidated = true
+            let access = self.access
+            self.access = nil
+            return access
+        }
+        access?.invalidate()
+    }
+
+    deinit {
+        invalidate()
+    }
 }
 
 struct WalletReviewCatalog {
@@ -242,28 +491,73 @@ struct WalletReviewCatalog {
 
 final class SourceWalletSigner: WalletSigning {
 
-    let approvedAccount: WalletAccountDescriptor
-    private let walletsManager: WalletsManager
+    private let signer: BoundWalletSigner
 
     init(
-        approvedAccount: WalletAccountDescriptor,
-        walletsManager: WalletsManager = .shared
+        operation: ApprovedWalletSigningOperation,
+        walletsManager: WalletsManager = .shared,
+        clock: @escaping () -> Date = Date.init
     ) {
+        let access = SourceWalletSigningAccess(
+            approvedAccount: operation.approvedAccount,
+            walletsManager: walletsManager
+        )
+        signer = BoundWalletSigner(
+            operation: operation, access: access,
+            isCurrent: { access.isCurrent }, clock: clock
+        )
+    }
+
+    @MainActor
+    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        await signer.sign()
+    }
+
+    func invalidate() {
+        signer.invalidate()
+    }
+}
+
+private final class SourceWalletSigningAccess: OwnedWalletSigningAccess {
+
+    private let approvedAccount: WalletAccountDescriptor
+    private let walletsManager: WalletsManager
+    private let lock = NSLock()
+    private var active = true
+
+    init(approvedAccount: WalletAccountDescriptor, walletsManager: WalletsManager) {
         self.approvedAccount = approvedAccount
         self.walletsManager = walletsManager
     }
 
-    func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey? {
-        guard approvedAccount.matches(walletID: walletID, account: account) else {
-            return nil
+    var isCurrent: Bool {
+        approvedAccount.isValid && lock.withLock { active } &&
+            walletsManager.currentWallet(id: approvedAccount.walletID)?
+                .hasAccountMatching(approvedAccount.account) == true
+    }
+
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async ->
+        Result<WalletSigningOutput, WalletSigningFailure> {
+        guard operation.approvedAccount == approvedAccount,
+              !Task.isCancelled, isCurrent else {
+            return .failure(.authorizationUnavailable)
         }
-        return walletsManager.getPrivateKey(
+        guard let privateKey = walletsManager.getPrivateKey(
             walletId: approvedAccount.walletID,
             account: approvedAccount.account
-        )
+        ), WalletSnapshotValidation.accountMatches(
+            approvedAccount.account, privateKey: privateKey
+        ) else { return .failure(.failedToSign) }
+        guard isCurrent else { return .failure(.authorizationUnavailable) }
+        guard let result = await awaitBackgroundOperation({
+            operation.sign(with: privateKey)
+        }) else { return .failure(.authorizationUnavailable) }
+        return result
+    }
+
+    func invalidate() {
+        lock.withLock { active = false }
     }
 }
 
@@ -371,8 +665,9 @@ enum WalletSnapshotValidation {
     }
 }
 
-final class UnlockedWalletSigner: OwnedWalletSigning {
+final class UnlockedWalletSigner: OwnedWalletSigningAccess {
 
+    private let lock = NSLock()
     private var password: Data
     private var walletsByID: [String: WalletContainer]
 
@@ -383,10 +678,12 @@ final class UnlockedWalletSigner: OwnedWalletSigning {
         walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
     }
 
-    func privateKey(
+    private func privateKey(
         walletID: String,
         account: WalletAccount
     ) -> WalletPrivateKey? {
+        lock.lock()
+        defer { lock.unlock() }
         guard let wallet = walletsByID[walletID],
               wallet.hasAccountMatching(account),
               let privateKey = try? wallet.privateKey(
@@ -400,7 +697,24 @@ final class UnlockedWalletSigner: OwnedWalletSigning {
         return privateKey
     }
 
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async ->
+        Result<WalletSigningOutput, WalletSigningFailure> {
+        let account = operation.approvedAccount
+        guard account.isValid, !Task.isCancelled else {
+            return .failure(.authorizationUnavailable)
+        }
+        guard let privateKey = privateKey(walletID: account.walletID, account: account.account)
+        else { return .failure(.failedToSign) }
+        guard let result = await awaitBackgroundOperation({
+            operation.sign(with: privateKey)
+        }) else { return .failure(.authorizationUnavailable) }
+        return result
+    }
+
     func invalidate() {
+        lock.lock()
+        defer { lock.unlock() }
         password.resetBytes(in: 0..<password.count)
         password.removeAll(keepingCapacity: false)
         walletsByID.removeAll(keepingCapacity: false)
@@ -411,25 +725,30 @@ final class UnlockedWalletSigner: OwnedWalletSigning {
     }
 }
 
-final class RequestScopedWalletSigner: WalletSigning {
+final class RequestScopedWalletAccess {
 
     let approvedAccount: WalletAccountDescriptor
     private let lock = NSLock()
-    private var access: OwnedWalletSigning?
+    private var access: (any OwnedWalletSigningAccess)?
     private let isCurrent: () -> Bool
     private let acquireExecutionLease: () async -> WalletExecutionLease?
     private var executionLeaseTaken = false
+    private var invalidated = false
+    private var boundSigner: BoundWalletSigner?
+    private let clock: () -> Date
 
     init(
-        _ access: OwnedWalletSigning,
+        _ access: any OwnedWalletSigningAccess,
         approvedAccount: WalletAccountDescriptor,
         isCurrent: @escaping () -> Bool,
-        acquireExecutionLease: @escaping () async -> WalletExecutionLease?
+        acquireExecutionLease: @escaping () async -> WalletExecutionLease?,
+        clock: @escaping () -> Date = Date.init
     ) {
         self.access = access
         self.approvedAccount = approvedAccount
         self.isCurrent = isCurrent
         self.acquireExecutionLease = acquireExecutionLease
+        self.clock = clock
     }
 
     func validateCurrent() -> Bool {
@@ -437,47 +756,37 @@ final class RequestScopedWalletSigner: WalletSigning {
             invalidate()
             return false
         }
-        return lock.withLock { access != nil && !executionLeaseTaken }
+        return lock.withLock { !invalidated && !executionLeaseTaken }
     }
 
-    func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey? {
-        guard approvedAccount.matches(walletID: walletID, account: account) else {
-            return nil
+    func bind(operation: ApprovedWalletSigningOperation) -> BoundWalletSigner? {
+        guard operation.approvedAccount == approvedAccount,
+              clock() < operation.deadline,
+              validateCurrent() else { return nil }
+        return lock.withLock {
+            guard let access, !invalidated, !executionLeaseTaken, boundSigner == nil else { return nil }
+            let signer = BoundWalletSigner(
+                operation: operation,
+                access: access,
+                isCurrent: { [weak self] in self?.validateCurrent() == true },
+                clock: clock
+            )
+            self.access = nil
+            boundSigner = signer
+            return signer
         }
-        guard isCurrent() else {
-            invalidate()
-            return nil
-        }
-        lock.lock()
-        guard !executionLeaseTaken else {
-            lock.unlock()
-            return nil
-        }
-        let privateKey = access?.privateKey(
-            walletID: approvedAccount.walletID,
-            account: approvedAccount.account
-        )
-        lock.unlock()
-        guard isCurrent() else {
-            invalidate()
-            return nil
-        }
-        return privateKey
     }
 
     func takeExecutionLease() async -> WalletExecutionLease? {
         let canAcquire = lock.withLock {
-            guard access != nil, !executionLeaseTaken else { return false }
+            guard !invalidated, !executionLeaseTaken else { return false }
             executionLeaseTaken = true
             return true
         }
         guard canAcquire else { return nil }
         defer { invalidate() }
         let lease = await acquireExecutionLease()
-        guard !Task.isCancelled, lock.withLock({ access != nil }) else {
+        guard !Task.isCancelled, lock.withLock({ !invalidated }) else {
             lease?.release()
             return nil
         }
@@ -486,9 +795,12 @@ final class RequestScopedWalletSigner: WalletSigning {
 
     func invalidate() {
         lock.lock()
+        invalidated = true
         let access = access
         self.access = nil
+        let signer = boundSigner
         lock.unlock()
+        signer?.invalidate()
         access?.invalidate()
     }
 

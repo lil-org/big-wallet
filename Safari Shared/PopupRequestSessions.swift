@@ -227,7 +227,7 @@ final class PopupRequestSessions {
     }
 
     private enum AuthenticationOutcome {
-        case unlocked(catalog: WalletReviewCatalog, signer: RequestScopedWalletSigner)
+        case unlocked(catalog: WalletReviewCatalog, signer: RequestScopedWalletAccess)
         case cancelled
         case unavailable(feedback: String)
         case reviewChanged
@@ -238,6 +238,12 @@ final class PopupRequestSessions {
         case valid
         case reviewChanged
         case superseded
+    }
+
+    private struct SigningExecutionContext {
+        let access: RequestScopedWalletAccess
+        let handle: ExtensionBridge.Handle
+        let deadline: Date
     }
 
     private enum ActiveSessionResult {
@@ -812,8 +818,7 @@ final class PopupRequestSessions {
                 await self.executeDecision(
                     request: session.request,
                     action: action,
-                    decision: .addEthereumChain,
-                    signer: nil
+                    decision: .addEthereumChain
                 )
             }
         }
@@ -930,8 +935,7 @@ final class PopupRequestSessions {
             await self.executeDecision(
                 request: session.request,
                 action: approvedAction,
-                decision: .accountSelection(selection),
-                signer: nil
+                decision: .accountSelection(selection)
             )
         }
         return true
@@ -1110,7 +1114,9 @@ final class PopupRequestSessions {
                 request: session.request,
                 action: action,
                 decision: decision,
-                signer: signer
+                signing: SigningExecutionContext(
+                    access: signer, handle: session.handle, deadline: executionDeadline
+                )
             )
         }
         return true
@@ -1159,7 +1165,7 @@ final class PopupRequestSessions {
         reviewedAction: DappRequestAction,
         approval: ClaimedApproval,
         catalog: WalletReviewCatalog,
-        signer: RequestScopedWalletSigner,
+        signer: RequestScopedWalletAccess,
         expectedRevisions: ExtensionBridge.ProviderRevisions?,
         executionDeadline: Date
     ) async -> SigningValidation {
@@ -1328,7 +1334,7 @@ final class PopupRequestSessions {
         request: SafariRequest,
         action: DappRequestAction,
         decision: DappApprovalDecision,
-        signer: (any WalletSigning)?
+        signing: SigningExecutionContext? = nil
     ) async -> DappExecutionResult {
         let accounts: [SpecificWalletAccount]?
         if case .accountSelection = decision {
@@ -1342,10 +1348,22 @@ final class PopupRequestSessions {
             accounts: accounts,
             networkResolver: selectionNetworkResolver
         ) else { return .rollback }
+        let executionSigner: (any WalletSigning)?
+        if approval.signingAccount != nil {
+            guard let signing,
+                  let operation = ApprovedWalletSigningOperation(
+                    request: request, approval: approval,
+                    handle: signing.handle, deadline: signing.deadline
+                  ), let bound = signing.access.bind(operation: operation) else { return .rollback }
+            executionSigner = bound
+        } else {
+            executionSigner = nil
+        }
+        defer { executionSigner?.invalidate() }
         return await requestProcessor.execute(
             request: request,
             approval: approval,
-            signer: signer
+            signer: executionSigner
         )
     }
 

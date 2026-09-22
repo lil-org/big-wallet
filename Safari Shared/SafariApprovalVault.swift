@@ -806,7 +806,7 @@ final class SafariApprovalVault {
             signer.invalidate()
             return .unavailable
         }
-        return .unlocked(catalog: catalog, signer: RequestScopedWalletSigner(
+        return .unlocked(catalog: catalog, signer: RequestScopedWalletAccess(
             signer,
             approvedAccount: approvedAccount,
             isCurrent: { [weak self] in
