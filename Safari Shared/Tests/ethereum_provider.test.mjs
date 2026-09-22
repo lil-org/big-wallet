@@ -791,6 +791,79 @@ test("Ethereum keeps the standard legacy adapters and public properties", async 
     ]);
 });
 
+test("Ethereum string send ignores inherited parameters", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    try {
+        prototype.params = 1n;
+        assert.equal(await harness.provider.send("eth_chainId"), "0x1");
+
+        prototype.params = ["unexpected"];
+        const pending = new Promise((resolve, reject) => {
+            harness.provider.send("eth_blockNumber", (error, result) => {
+                error ? reject(error) : resolve(result);
+            });
+        });
+        const message = harness.rpc[0].message;
+        assert.equal(Object.hasOwn(JSON.parse(message.body), "params"), false);
+        harness.applyDecodedEnvelope({
+            id: message.id,
+            kind: "result",
+            result: "0x10",
+        });
+        assert.deepEqual(normalized(await pending), {
+            id: message.id,
+            jsonrpc: "2.0",
+            result: "0x10",
+        });
+    } finally {
+        delete prototype.params;
+    }
+});
+
+test("Ethereum reads inherited signing parameters once", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    let reads = 0;
+    class SigningRequest {
+        method = "personal_sign";
+        get params() {
+            reads += 1;
+            return ["0x6869"];
+        }
+    }
+    const pending = harness.provider.request(new SigningRequest());
+    assert.equal(reads, 1);
+    assert.equal(harness.requests[0].name, "signPersonalMessage");
+    assert.deepEqual(normalized(harness.requests[0].data), {data: "0x6869"});
+    harness.applyDecodedEnvelope({
+        id: harness.requests[0].id,
+        kind: "result",
+        name: "signPersonalMessage",
+        result: "0xsignature",
+    });
+    assert.equal(await pending, "0xsignature");
+});
+
+test("Ethereum send preserves inherited RPC parameters", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    const params = ["0x0000000000000000000000000000000000000001", "latest"];
+    class BalanceRequest {
+        method = "eth_getBalance";
+        get params() { return params; }
+    }
+    const pending = harness.provider.send(new BalanceRequest());
+    assert.deepEqual(JSON.parse(harness.rpc[0].message.body).params, params);
+    harness.applyDecodedEnvelope({
+        id: harness.rpc[0].message.id,
+        kind: "result",
+        result: "0x10",
+    });
+    assert.equal(await pending, "0x10");
+});
+
 test("Ethereum exposes exact network versions for large chain IDs", async () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0x1");

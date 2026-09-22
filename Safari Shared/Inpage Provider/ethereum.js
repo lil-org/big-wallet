@@ -201,15 +201,12 @@ function normalizeRequestPayload(payload) {
     }
     const normalized = createObjectNormally(null);
     normalized.method = method;
-    const paramsDescriptor = getOwnPropertyDescriptorNormally(payload, "params");
-    if (paramsDescriptor) {
-        const params = payload.params;
-        if (typeof params !== "undefined") {
-            try {
-                normalized.params = outboundDataSnapshot(params);
-            } catch {
-                throw invalidParameters();
-            }
+    const params = payload.params;
+    if (typeof params !== "undefined") {
+        try {
+            normalized.params = outboundDataSnapshot(params);
+        } catch {
+            throw invalidParameters();
         }
     }
     return {
@@ -856,7 +853,7 @@ class BigWalletEthereum {
 
     send(payload, callback) {
         const requestPayload = typeof payload === "string"
-            ? {method: payload}
+            ? {__proto__: null, method: payload}
             : payload;
         if (typeof callback === "function") {
             this.sendAsync(requestPayload, callback);
