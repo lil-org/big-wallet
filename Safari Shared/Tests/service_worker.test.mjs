@@ -1610,10 +1610,14 @@ test("a switch completed before admission expiry survives a delayed completion h
     await harness.runTimer();
 });
 
-test("manual polling rejects malformed switch terminals and stops after response retention", async () => {
+test("manual polling rejects malformed switch terminals and stops when native retention expires", async () => {
     let now = 1_700_000_000_000;
+    const retentionDeadline = now + (15 + 60) * 60 * 1000;
     const harness = makeHarness({
         dateNow: () => now,
+        executionNative: message => now >= retentionDeadline
+            ? {id: message.id, missing: true}
+            : executionStatus(message, "completed"),
         native: message => isResponseRead(message) ? nativeResult({
             id: message.id,
             name: "switchAccount",
@@ -5897,13 +5901,149 @@ test("execution recovery rejects malformed and over-capacity persistent jobs bef
     }
 });
 
-test("expired execution jobs are retired without dispatch or deadline renewal", async () => {
+test("expired execution jobs settle pending requests even when backoff persistence fails", async () => {
+    for (const hasAttempt of [false, true]) {
+        const job = executionJob();
+        const storage = new Map([["nativeExecutionJobs", [job]]]);
+        const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
+        if (hasAttempt) {
+            makeHarness({storage, dateNow: () => job.createdAt,
+                executionNative: executionStatus, sendTabMessage: activeRequestReply});
+            await settle();
+            assert.ok(storage.get("nativeExecutionJobs")[0].attempt);
+            assert.equal(storage.has(leaseKey), true);
+        }
+        let ready = false;
+        const terminal = nativeError({id: job.id, name: "requestAccounts", provider: "ethereum",
+            error: {code: 4001, message: "Request expired"}});
+        const harness = makeHarness({storage, dateNow: () => job.expiresAt,
+            storageBeforeSet(values) {
+                if (values.nativeExecutionJobs?.[0]?.nextMaintenanceAt > 0) {
+                    throw new Error("quota exceeded");
+                }
+            },
+            executionNative(message) {
+                if (message.subject === "maintainRequest") {
+                    ready = true;
+                    return {id: message.id, ready: true};
+                }
+                return executionStatus(message, ready ? "completed" : "awaitingReview");
+            },
+            native: message => isResponseRead(message) ? terminal
+                : {id: message.id, [ready ? "ready" : "pending"]: true},
+        });
+        await settle();
+        const query = {subject: "getResponse", id: job.id, configurationKey: job.configurationKey,
+            requestToken, workflowVersion: 3};
+        assert.deepEqual(clone(await harness.dispatch(query)), {id: job.id, ready: true});
+        const response = await harness.dispatch({...query, subject: "consumeResponse", revisions: job.revisions});
+        assert.deepEqual(clone(response.error), terminal.error);
+        assert.deepEqual(storage.get("nativeExecutionJobs"), []);
+        assert.equal(storage.has(leaseKey), false);
+        assert.deepEqual(harness.executionMessages.map(({message}) => message.subject),
+            ["maintainRequest", "getExecutionStatus"]);
+        assert.equal(harness.executionMessages[0].message.allowDelivery, false);
+        assert.equal(harness.tabMessages.length, 0);
+        assert.equal(await harness.runTimer(), false);
+    }
+});
+
+test("expired maintenance backs off in memory when storage and native messaging fail", async () => {
     const job = executionJob();
+    let now = job.expiresAt;
+    let nativeAvailable = false;
     const storage = new Map([["nativeExecutionJobs", [job]]]);
-    const harness = makeHarness({storage, dateNow: () => job.expiresAt + 1,
-        executionNative: executionStatus, sendTabMessage: activeRequestReply});
+    const harness = makeHarness({storage, dateNow: () => now,
+        storageBeforeSet(values) {
+            if (values.nativeExecutionJobs?.length) { throw new Error("quota exceeded"); }
+        },
+        executionNative(message) {
+            if (!nativeAvailable) { throw new Error("native unavailable"); }
+            return {id: message.id, missing: true};
+        },
+    });
+    await settle();
+    assert.equal(harness.executionMessages.length, 1);
+    assert.equal(storage.get("nativeExecutionJobs")[0].nextMaintenanceAt, 0);
+    now += 29_999;
+    await harness.runTimer();
+    assert.equal(harness.executionMessages.length, 1);
+    nativeAvailable = true;
+    now += 1;
+    await harness.runTimer();
+    assert.equal(harness.executionMessages.length, 2);
+    assert.deepEqual(storage.get("nativeExecutionJobs"), []);
+    assert.equal(await harness.runTimer(), false);
+});
+
+test("expired execution maintenance backs off across failures and restarts until terminal", async () => {
+    for (const failure of ["rejection", "timeout", "unavailable"]) {
+        const job = executionJob();
+        let now = job.expiresAt;
+        const storage = new Map([["nativeExecutionJobs", [job]]]);
+        const first = makeHarness({storage, dateNow: () => now, executionNative: message => {
+            if (failure === "rejection") { throw new Error("native unavailable"); }
+            if (failure === "timeout") { return new Promise(() => {}); }
+            return {id: message.id, unavailable: true};
+        }});
+        await settle();
+        if (failure === "timeout") { await first.runTimer(5000); }
+        const retryAt = storage.get("nativeExecutionJobs")[0].nextMaintenanceAt;
+        assert.equal(retryAt, now + 30_000);
+        assert.equal(storage.get("nativeExecutionJobs")[0].expiresAt, job.expiresAt);
+        const calls = first.executionMessages.length;
+        now = retryAt - 1;
+        await first.runTimer();
+        assert.equal(first.executionMessages.length, calls);
+
+        let missing = false;
+        const resumed = makeHarness({storage, dateNow: () => now,
+            executionNative: message => missing ? {id: message.id, missing: true}
+                : executionStatus(message, "awaitingReview")});
+        await settle();
+        assert.equal(resumed.executionMessages.length, 0);
+        now = retryAt;
+        await resumed.runTimer();
+        assert.equal(storage.get("nativeExecutionJobs").length, 1);
+        missing = true;
+        now = storage.get("nativeExecutionJobs")[0].nextMaintenanceAt;
+        await resumed.runTimer();
+        assert.deepEqual(storage.get("nativeExecutionJobs"), []);
+        assert.equal(resumed.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
+        assert.equal(resumed.tabMessages.length, 0);
+        assert.equal(await resumed.runTimer(), false);
+    }
+});
+
+test("execution expiry during a status read retains maintenance without dispatch", async () => {
+    const job = executionJob();
+    let now = job.expiresAt - 1;
+    const storage = new Map([["nativeExecutionJobs", [job]]]);
+    const harness = makeHarness({storage, dateNow: () => now,
+        sendTabMessage: activeRequestReply,
+        executionNative(message) {
+            if (message.subject === "getExecutionStatus") { now = job.expiresAt; }
+            return executionStatus(message);
+        },
+    });
+    await settle();
+    assert.equal(storage.get("nativeExecutionJobs").length, 1);
+    assert.equal(storage.get("nativeExecutionJobs")[0].attempt, null);
+    assert.deepEqual(harness.executionMessages.map(({message}) => message.subject),
+        ["maintainRequest", "getExecutionStatus"]);
+});
+
+test("expired manual completions are still applied and acknowledged", async () => {
+    const job = executionJob({manual: true, tabId: null});
+    const storage = new Map([["nativeExecutionJobs", [job]]]);
+    const fixture = completedAccountFixture(job.id);
+    const harness = makeHarness({storage, dateNow: () => job.expiresAt,
+        executionNative: message => executionStatus(message, "completed"),
+        native: () => ({...fixture.response, name: "switchAccount", provider: "multiple", result: null}),
+    });
     await settle();
     assert.deepEqual(storage.get("nativeExecutionJobs"), []);
-    assert.equal(harness.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-    assert.equal(await harness.runTimer(), false);
+    assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
+    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject),
+        ["prepareResponseDelivery", "acknowledgeResponse"]);
 });

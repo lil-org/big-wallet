@@ -19,6 +19,7 @@ const INVALID_APPROVAL_LEASE = Symbol("invalidApprovalLease");
 const EXECUTION_JOBS_STORAGE_KEY = "nativeExecutionJobs";
 const EXECUTION_MAINTENANCE_INTERVAL = 30 * 1000;
 const executionLineageFlights = new Set;
+const executionMaintenanceDeadlines = new Map;
 let executionJobsTail = Promise.resolve();
 let executionRecoveryFlight = null;
 let executionTimer = null;
@@ -953,6 +954,8 @@ function removeExecutionJob(context) {
             executionTimer = null;
         }
         return {changed: true, value: undefined};
+    }).then(() => {
+        executionMaintenanceDeadlines.delete(executionJobKey(context));
     });
 }
 
@@ -1024,10 +1027,23 @@ async function acquireExecutionAttempt(job) {
 }
 
 async function driveExecution(job) {
-    if (Date.now() >= job.nextMaintenanceAt) {
+    const key = executionJobKey(job);
+    const nextMaintenanceAt = Math.max(job.nextMaintenanceAt,
+        executionMaintenanceDeadlines.get(key) || 0);
+    const expired = Date.now() >= job.expiresAt;
+    if (expired && Date.now() < nextMaintenanceAt) { return; }
+    if (Date.now() >= nextMaintenanceAt) {
+        job.nextMaintenanceAt = Date.now() + EXECUTION_MAINTENANCE_INTERVAL;
+        executionMaintenanceDeadlines.set(key, job.nextMaintenanceAt);
+        try {
+            if (!await updateExecutionJob(job)) {
+                executionMaintenanceDeadlines.delete(key);
+                return;
+            }
+        } catch {}
         const response = await WIRE.withTimeout(sendNativeMessage({
             ...nativeRequestIdentity(job), subject: "maintainRequest",
-            allowDelivery: await requestStillActive(job),
+            allowDelivery: !expired && await requestStillActive(job),
         }, false), TRANSPORT_TIMEOUT);
         if (!nativeRequestStatus(response, job.id)) { return; }
         if (response.missing) {
@@ -1035,11 +1051,9 @@ async function driveExecution(job) {
             await removeExecutionJob(job);
             return;
         }
-        job.nextMaintenanceAt = Date.now() + EXECUTION_MAINTENANCE_INTERVAL;
-        if (!await updateExecutionJob(job)) { return; }
     }
     const state = await executionState(job);
-    if (state === "missing" || Date.now() >= job.expiresAt) {
+    if (state === "missing") {
         await releaseCompletedExecution(job);
         await removeExecutionJob(job);
         return;
@@ -1055,10 +1069,11 @@ async function driveExecution(job) {
         }
         return;
     }
-    if (state !== "awaitingExecution" && state !== "executing") { return; }
+    if (Date.now() >= job.expiresAt ||
+        state !== "awaitingExecution" && state !== "executing") { return; }
     if (state === "executing" && !job.attempt) { return; }
     const attempt = await acquireExecutionAttempt(job);
-    if (!attempt || !await requestStillActive(job)) { return; }
+    if (!attempt || !await requestStillActive(job) || Date.now() >= job.expiresAt) { return; }
     const response = await WIRE.withTimeout(sendNativeMessage({
         ...nativeRequestIdentity(job),
         subject: "executeNativeApproval",
@@ -1085,6 +1100,10 @@ function recoverExecutions() {
     if (executionRecoveryFlight) { return executionRecoveryFlight; }
     const pending = (async () => {
         const jobs = await withExecutionJobs(values => ({value: values}));
+        const keys = new Set(jobs.map(executionJobKey));
+        for (const key of executionMaintenanceDeadlines.keys()) {
+            if (!keys.has(key)) { executionMaintenanceDeadlines.delete(key); }
+        }
         if (jobs.length === 0) { return; }
         await ensureManualSwitchAlarm();
         for (const job of jobs) {
