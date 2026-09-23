@@ -193,6 +193,8 @@ export function createPopupHarness(options = {}) {
         extension: {inIncognitoContext: false},
         permissions: {contains: async () => true},
         runtime: {
+            id: "wallet-extension",
+            getURL(path) { return `safari-web-extension://wallet/${path}`; },
             onMessage: {addListener(listener) { runtimeListeners.add(listener); }},
             sendMessage(message) {
                 workerMessages.push(normalized(message));
@@ -252,8 +254,17 @@ export function createPopupHarness(options = {}) {
             timer.callback();
             await flushPopup();
         },
-        notify(message = {subject: "pendingRequestAvailable", workflowVersion: 3}) {
-            for (const listener of runtimeListeners) { listener(message); }
+        notify(
+            message = {subject: "pendingRequestAvailable", workflowVersion: 3},
+            sender = {id: browser.runtime.id, url: browser.runtime.getURL("").replace(/\/$/, "")}
+        ) {
+            const delivery = {returns: [], responses: []};
+            for (const listener of runtimeListeners) {
+                delivery.returns.push(listener(message, sender, response => {
+                    delivery.responses.push(response);
+                }));
+            }
+            return delivery;
         },
         clearMessages() {
             nativeMessages.length = 0;

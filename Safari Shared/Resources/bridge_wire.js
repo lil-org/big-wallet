@@ -46,6 +46,31 @@
     const isSafeInteger = Number.isSafeInteger;
     const isFiniteNumber = Number.isFinite;
     const stringIndexOf = Function.prototype.call.bind(String.prototype.indexOf);
+    const RUNTIME_MESSAGE_SUBJECTS = freeze({
+        __proto__: null,
+        worker: freeze({
+            __proto__: null,
+            content: freeze([
+                "rpc", "message-to-wallet", "manualSwitchIntent", "getResponse",
+                "getLatestConfiguration", "disconnect",
+            ]),
+            popup: freeze([
+                "approveRequestWithCurrentRevisions", "applyCompletedResponse",
+                "getLatestConfiguration", "updatePendingRequestBadge", "responseReady",
+            ]),
+        }),
+        content: freeze({
+            __proto__: null,
+            worker: freeze([
+                "workflowProbe", "manualSwitchIntent", "configurationChanged", "responseReady",
+            ]),
+            popup: freeze(["workflowProbe", "manualSwitchIntent"]),
+        }),
+        popup: freeze({
+            __proto__: null,
+            worker: freeze(["pendingRequestAvailable"]),
+        }),
+    });
 
     function pageValue(value, key) {
         const descriptor = ownDescriptor(value, key);
@@ -424,6 +449,59 @@
         return null;
     }
 
+    function authorizeRuntimeMessage(receiver, request, sender, runtime) {
+        try {
+            if (typeof receiver !== "string" || !isRecord(request) || !isRecord(sender)) {
+                return null;
+            }
+            const extensionId = runtime?.id;
+            const subject = pageValue(request, "subject");
+            const url = pageValue(sender, "url");
+            if (typeof extensionId !== "string" || extensionId.length === 0 ||
+                pageValue(sender, "id") !== extensionId || typeof subject !== "string" ||
+                typeof url !== "string") {
+                return null;
+            }
+            const tab = sender.tab;
+            let kind;
+            let identity = null;
+            let tabId = null;
+            let favicon = null;
+            if (tab !== undefined) {
+                if (!hasOwn(sender, "tab") || !isRecord(tab)) { return null; }
+                tabId = pageValue(tab, "id");
+                if (!isSafeInteger(tabId) || tabId < 0 || pageValue(sender, "frameId") !== 0) {
+                    return null;
+                }
+                identity = configurationIdentityForURL(url);
+                if (!identity) { return null; }
+                kind = "content";
+                const faviconURL = tab.favIconUrl;
+                favicon = typeof faviconURL === "string" ? faviconURL : null;
+                freeze(identity);
+            } else if (url === runtime.getURL("popup.html")) {
+                kind = "popup";
+            } else {
+                const rootURL = runtime.getURL("");
+                if (url !== runtime.getURL("service_worker.js") &&
+                    url !== rootURL && `${url}/` !== rootURL) {
+                    return null;
+                }
+                kind = "worker";
+            }
+            if (!RUNTIME_MESSAGE_SUBJECTS[receiver]?.[kind]?.includes(subject)) { return null; }
+            return freeze({
+                kind,
+                identity,
+                privateBrowsing: tab?.incognito === true || sender.incognito === true,
+                tabId,
+                favicon,
+            });
+        } catch {
+            return null;
+        }
+    }
+
     function isProviderRevisions(value) {
         return hasExactKeys(value, ["ethereum", "solana"]) &&
             Number.isSafeInteger(value.ethereum) && value.ethereum >= 0 &&
@@ -554,6 +632,7 @@
         PROVIDER_REPLACED_MESSAGE,
         WORKFLOW_POLICY,
         WORKFLOW_VERSION,
+        authorizeRuntimeMessage,
         configurationIdentityForURL,
         decodeConfigurationSnapshot,
         decodePageResponse,

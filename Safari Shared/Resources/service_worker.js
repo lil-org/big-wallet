@@ -52,10 +52,6 @@ const sendNativeMessage = WIRE.createTrustedNativeMessageSender({
     sendRawNativeMessage,
 });
 
-function privateBrowsing(sender) {
-    return sender?.tab?.incognito === true || sender?.incognito === true;
-}
-
 function privateBrowsingUnsupportedMessage() {
     try {
         const message = browser.i18n.getMessage("private_browsing_unsupported");
@@ -64,24 +60,11 @@ function privateBrowsingUnsupportedMessage() {
     return "Big Wallet requests are unavailable in Private Browsing.";
 }
 
-function senderIdentity(sender) {
-    return WIRE.configurationIdentityForURL(sender?.url || sender?.tab?.url);
-}
-
-function trustedIdentity(request, sender) {
-    const identity = senderIdentity(sender);
-    return identity && request.host === identity.host &&
-        request.configurationKey === identity.configurationKey
-        ? identity
-        : null;
-}
-
-function trustedPopupIdentity(request, sender) {
-    if (sender?.tab || sender?.id !== browser.runtime.id ||
-        sender?.url !== browser.runtime.getURL("popup.html")) {
-        return null;
-    }
-    const identity = WIRE.configurationIdentityForURL(request.configurationKey);
+function requestIdentity(request, context) {
+    const identity = context.kind === "content" ? context.identity
+        : context.kind === "popup"
+            ? WIRE.configurationIdentityForURL(request.configurationKey)
+            : null;
     return identity && request.host === identity.host &&
         request.configurationKey === identity.configurationKey
         ? identity
@@ -488,8 +471,8 @@ function isAuthorized(message, state) {
     return false;
 }
 
-function validatedDappMessage(request, sender, state) {
-    const identity = trustedIdentity(request, sender);
+function validatedDappMessage(request, context, state) {
+    const identity = requestIdentity(request, context);
     const message = request.message;
     if (!identity || !WIRE.hasExactKeys(request, [
             "admissionDeadline", "configurationKey", "enqueueAttempt", "host",
@@ -514,9 +497,8 @@ function validatedDappMessage(request, sender, state) {
         body: {...message.body},
         favicon: identity.configurationKey.startsWith("file:")
             ? ""
-            : typeof sender?.tab?.favIconUrl === "string"
-                && sender.tab.favIconUrl.length <= 16 * 1024
-                ? sender.tab.favIconUrl
+            : context.favicon !== null && context.favicon.length <= 16 * 1024
+                ? context.favicon
                 : "",
         host: identity.host,
         configurationKey: identity.configurationKey,
@@ -1041,9 +1023,9 @@ function beginManualSwitch(identity) {
     return pending;
 }
 
-async function handleManualSwitchIntent(request, sender) {
-    const identity = trustedIdentity(request, sender);
-    if (privateBrowsing(sender) || !Number.isSafeInteger(sender?.tab?.id) ||
+async function handleManualSwitchIntent(request, context) {
+    const identity = requestIdentity(request, context);
+    if (context.privateBrowsing ||
         !identity || !WIRE.hasExactKeys(request, [
             "configurationKey", "host", "subject", "workflowVersion",
         ]) || request.subject !== WIRE.MANUAL_SWITCH_INTENT_SUBJECT ||
@@ -1054,18 +1036,16 @@ async function handleManualSwitchIntent(request, sender) {
         ...identity,
         favicon: identity.configurationKey.startsWith("file:")
             ? ""
-            : typeof sender.tab.favIconUrl === "string"
-                ? sender.tab.favIconUrl
-                : "",
+            : context.favicon || "",
     });
 }
 
-async function handleDappRequest(request, sender) {
-    if (privateBrowsing(sender)) {
+async function handleDappRequest(request, context) {
+    if (context.privateBrowsing) {
         return pageFailure(request?.message?.id, request?.message?.provider,
             request?.message?.name || "request", privateBrowsingUnsupportedMessage(), 4200);
     }
-    const identity = trustedIdentity(request, sender);
+    const identity = requestIdentity(request, context);
     if (!identity) { return undefined; }
     const state = await queueConfigurationOperation(
         identity.configurationKey,
@@ -1075,7 +1055,7 @@ async function handleDappRequest(request, sender) {
         }}),
         identity.legacyConfigurationKey
     );
-    const message = validatedDappMessage(request, sender, state);
+    const message = validatedDappMessage(request, context, state);
     if (!message) { return undefined; }
     const authorized = isAuthorized(message, state);
     const directResponseRevisions = {...message.revisions};
@@ -1104,9 +1084,9 @@ async function handleDappRequest(request, sender) {
     return undefined;
 }
 
-async function handleGetResponse(request, sender) {
-    const identity = senderIdentity(sender);
-    if (privateBrowsing(sender) || !WIRE.hasExactKeys(request, [
+async function handleGetResponse(request, context) {
+    const identity = context.identity;
+    if (context.privateBrowsing || !WIRE.hasExactKeys(request, [
             "configurationKey", "id", "requestToken", "revisions", "subject",
             "workflowVersion",
         ]) || request.workflowVersion !== WORKFLOW_VERSION ||
@@ -1132,7 +1112,7 @@ async function handleGetResponse(request, sender) {
     return completed?.pageResponse || completed?.response;
 }
 
-async function handleRPC(request, sender) {
+async function handleRPC(request, context) {
     if (!WIRE.hasExactKeys(request, [
             "body", "chainId", "id", "subject", "workflowVersion",
         ]) || request.workflowVersion !== WORKFLOW_VERSION ||
@@ -1140,7 +1120,7 @@ async function handleRPC(request, sender) {
         typeof request.chainId !== "string") {
         return pageFailure(request?.id, "ethereum", null);
     }
-    if (privateBrowsing(sender)) { return pageFailure(request.id, "ethereum", null); }
+    if (context.privateBrowsing) { return pageFailure(request.id, "ethereum", null); }
     try {
         const response = await WIRE.withTimeout(
             sendNativeMessage(request, false),
@@ -1154,8 +1134,8 @@ async function handleRPC(request, sender) {
     }
 }
 
-async function approveWithCurrentRevisions(request, sender) {
-    const identity = trustedPopupIdentity(request, sender);
+async function approveWithCurrentRevisions(request, context) {
+    const identity = requestIdentity(request, context);
     if (!WIRE.hasExactKeys(request, [
             "configurationKey", "host", "id", "payload", "privateBrowsing",
             "requestToken", "reviewToken", "subject", "workflowVersion",
@@ -1182,14 +1162,14 @@ async function approveWithCurrentRevisions(request, sender) {
                 revisions: {...lease.revisions},
             },
             workflowVersion: WORKFLOW_VERSION,
-        }, request.privateBrowsing),
+        }, request.privateBrowsing || context.privateBrowsing),
         true
     );
 }
 
-async function applyCompletedResponse(request, sender) {
-    const identity = trustedPopupIdentity(request, sender);
-    if (!WIRE.hasExactKeys(request, [
+async function applyCompletedResponse(request, context) {
+    const identity = requestIdentity(request, context);
+    if (context.privateBrowsing || !WIRE.hasExactKeys(request, [
             "configurationKey", "host", "id", "requestToken", "revisions",
             "subject", "workflowVersion",
         ]) || request.subject !== "applyCompletedResponse" ||
@@ -1216,14 +1196,13 @@ async function applyCompletedResponse(request, sender) {
         : undefined;
 }
 
-async function latestConfiguration(request, sender) {
-    if (privateBrowsing(sender)) {
+async function latestConfiguration(request, context) {
+    if (context.privateBrowsing) {
         return {kind: "configuration", state: {
             ethereum: {address: "", chainId: "0x1"}, solana: null, revisions: {ethereum: 0, solana: 0},
         }};
     }
-    const identity = trustedIdentity(request, sender) ||
-        trustedPopupIdentity(request, sender);
+    const identity = requestIdentity(request, context);
     if (!identity) {
         return pageConfigurationFailure();
     }
@@ -1243,10 +1222,10 @@ function disconnectFailure(request) {
     return pageFailure(request?.id, request?.provider, "revokePermissions", "Failed to revoke permissions");
 }
 
-async function disconnect(request, sender) {
+async function disconnect(request, context) {
     if (!WIRE.isValidDisconnectRequest(request)) { return undefined; }
-    const identity = trustedIdentity(request, sender);
-    if (!identity || privateBrowsing(sender)) {
+    const identity = requestIdentity(request, context);
+    if (!identity || context.privateBrowsing) {
         return disconnectFailure(request);
     }
     return queueConfigurationOperation(identity.configurationKey, async state => {
@@ -1292,8 +1271,8 @@ function notifyPendingRequestAvailable() {
     } catch {}
 }
 
-function updateBadge(request, sender) {
-    if (sender?.tab || privateBrowsing(sender) ||
+function updateBadge(request, context) {
+    if (context.privateBrowsing ||
         !WIRE.hasExactKeys(request, [
             "hasPendingRequests", "subject", "workflowVersion",
         ]) || typeof request.hasPendingRequests !== "boolean" ||
@@ -1336,7 +1315,7 @@ async function openNativeWallet(tab) {
             subject: "openApp",
             id: WIRE.genId(),
             workflowVersion: WORKFLOW_VERSION,
-        }, privateBrowsing({tab})), TRANSPORT_TIMEOUT);
+        }, tab?.incognito === true), TRANSPORT_TIMEOUT);
     } catch {}
 }
 
@@ -1470,8 +1449,7 @@ async function broadcastConfigurationChanged(configurationKey, configurationStat
     }
 }
 
-async function handleMessage(request, sender) {
-    if (!WIRE.isRecord(request)) { return undefined; }
+async function handleMessage(request, context) {
     if (request.subject === "getResponse" && request.workflowVersion === undefined) {
         if (!Number.isFinite(request.id)) { return undefined; }
         return {
@@ -1487,32 +1465,27 @@ async function handleMessage(request, sender) {
     }
     switch (request.subject) {
     case "rpc":
-        return handleRPC(request, sender);
+        return handleRPC(request, context);
     case "message-to-wallet":
-        return handleDappRequest(request, sender);
+        return handleDappRequest(request, context);
     case WIRE.MANUAL_SWITCH_INTENT_SUBJECT:
-        return handleManualSwitchIntent(request, sender);
+        return handleManualSwitchIntent(request, context);
     case "getResponse":
-        return handleGetResponse(request, sender);
+        return handleGetResponse(request, context);
     case "getLatestConfiguration":
-        return latestConfiguration(request, sender);
+        return latestConfiguration(request, context);
     case "approveRequestWithCurrentRevisions":
-        return approveWithCurrentRevisions(request, sender);
+        return approveWithCurrentRevisions(request, context);
     case "applyCompletedResponse":
-        return applyCompletedResponse(request, sender);
+        return applyCompletedResponse(request, context);
     case "disconnect":
-        return disconnect(request, sender);
+        return disconnect(request, context);
     case "updatePendingRequestBadge":
-        await updateBadge(request, sender);
+        await updateBadge(request, context);
         return undefined;
     case "responseReady":
-        if (privateBrowsing(sender)) { return undefined; }
+        if (context.privateBrowsing) { return undefined; }
         await broadcastResponseReady(request);
-        return undefined;
-    case "pendingRequestAvailable":
-        if (WIRE.isPendingRequestAvailable(request)) {
-            cuePopup();
-        }
         return undefined;
     default:
         return undefined;
@@ -1520,7 +1493,9 @@ async function handleMessage(request, sender) {
 }
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    Promise.resolve(handleMessage(request, sender)).then(
+    const context = WIRE.authorizeRuntimeMessage("worker", request, sender, browser.runtime);
+    if (!context) { return false; }
+    Promise.resolve(handleMessage(request, context)).then(
         sendResponse,
         () => sendResponse()
     );

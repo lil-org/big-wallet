@@ -129,7 +129,9 @@ function makeHarness({
     const badgeTexts = [];
     const popupCalls = [];
     const runtimeMessages = [];
+    const runtimeDeliveries = [];
     const tabMessages = [];
+    const storageReads = [];
     const storageWrites = [];
     const storageRemovals = [];
     const timerDelays = [];
@@ -215,6 +217,7 @@ function makeHarness({
         storage: {
             local: {
                 get(keys) {
+                    storageReads.push(clone(keys));
                     const values = {};
                     for (const key of Array.isArray(keys) ? keys : [keys]) {
                         if (storage.has(key)) { values[key] = clone(storage.get(key)); }
@@ -300,6 +303,8 @@ function makeHarness({
     });
     new vm.Script(workerSource).runInContext(context);
     const defaultSender = {
+        id: "extension-id",
+        frameId: 0,
         url: "https://wallet.example/dapp",
         tab: {
             id: 9,
@@ -318,7 +323,9 @@ function makeHarness({
         recoveryMessages,
         popupCalls,
         runtimeMessages,
+        runtimeDeliveries,
         storage,
+        storageReads,
         storageRemovals,
         storageWrites,
         tabMessages,
@@ -351,7 +358,14 @@ function makeHarness({
         },
         dispatch(request, sender = defaultSender) {
             return new Promise(resolve => {
-                assert.equal(listener(request, sender, resolve), true);
+                const delivery = {handled: null, replies: []};
+                runtimeDeliveries.push(delivery);
+                delivery.handled = listener(request, sender, response => {
+                    delivery.replies.push(clone(response));
+                    resolve(response);
+                });
+                if (delivery.handled === false) { resolve(undefined); }
+                else { assert.equal(delivery.handled, true); }
             });
         },
     };
@@ -405,6 +419,8 @@ function recoveryDescriptor(overrides = {}) {
 
 function contentSender(tab = {}) {
     return {
+        id: "extension-id",
+        frameId: 0,
         url: tab.url || "https://wallet.example/dapp",
         tab: {
             id: 9,
@@ -442,6 +458,116 @@ function popupSender(overrides = {}) {
         ...overrides,
     };
 }
+
+function workerSender(overrides = {}) {
+    return {
+        id: "extension-id",
+        url: "safari-web-extension://extension-id",
+        ...overrides,
+    };
+}
+
+function transportEffects(harness) {
+    return clone({
+        native: harness.nativeMessages,
+        recovery: harness.recoveryMessages,
+        reads: harness.storageReads,
+        writes: harness.storageWrites,
+        removals: harness.storageRemovals,
+        runtime: harness.runtimeMessages,
+        tabs: harness.tabMessages,
+        queries: harness.tabQueries(),
+        badges: harness.badgeTexts,
+        popups: harness.popupCalls,
+        timers: harness.timerDelays,
+        alarms: [harness.alarmGets, harness.alarmCreates, harness.alarmClears],
+    });
+}
+
+test("worker denies unauthorized senders before dispatch with no transport effects", async () => {
+    const commands = [
+        {allowed: ["content"], message: {subject: "rpc", id: 7, chainId: "0x1",
+            body: '{"id":7,"method":"eth_blockNumber","jsonrpc":"2.0"}', workflowVersion: 3}},
+        {allowed: ["content"], message: request()},
+        {allowed: ["content"], message: manualSwitchIntent()},
+        {allowed: ["content"], message: {subject: "getResponse", id: 7,
+            configurationKey: "https://wallet.example", requestToken,
+            revisions: {ethereum: 0, solana: 0}, workflowVersion: 3}},
+        {allowed: ["content"], message: {subject: "getResponse", id: 7}},
+        {allowed: ["content", "popup"], message: {subject: "getLatestConfiguration",
+            host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 3}},
+        {allowed: ["content"], message: {subject: "disconnect", id: 7, provider: "ethereum",
+            host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 3}},
+        {allowed: ["popup"], message: approvalProxy()},
+        {allowed: ["popup"], message: {subject: "applyCompletedResponse", id: 7,
+            host: "wallet.example", configurationKey: "https://wallet.example", requestToken,
+            revisions: {ethereum: 0, solana: 0}, workflowVersion: 3}},
+        {allowed: ["popup"], message: {subject: "updatePendingRequestBadge",
+            hasPendingRequests: true, workflowVersion: 3}},
+        {allowed: ["popup"], message: {subject: "responseReady", ids: [7], workflowVersion: 3}},
+        ...["pendingRequestAvailable", "approveRequest", "openApp", "workflowProbe",
+            "constructor", "__proto__", "toString", "unknown"].map(subject => ({
+            allowed: [], message: {subject, workflowVersion: 3},
+        })),
+    ];
+    const senders = [
+        {kind: "content", value: contentSender()},
+        {kind: "popup", value: popupSender()},
+        {kind: "worker", value: workerSender()},
+        ...[null, {},
+            {...contentSender(), id: undefined},
+            {...contentSender(), id: "foreign-extension"},
+            {...contentSender(), frameId: undefined},
+            {...contentSender(), frameId: 1},
+            {...contentSender(), frameId: "0"},
+            {...contentSender(), url: undefined},
+            {...contentSender(), url: "about:blank"},
+            {...contentSender(), url: "data:text/html,test"},
+            {...contentSender(), tab: undefined},
+            contentSender({id: -1}),
+            contentSender({id: 1.5}),
+            popupSender({id: "foreign-extension"}),
+            popupSender({tab: {id: 9}, frameId: 0}),
+            popupSender({url: "https://wallet.example/popup.html"}),
+            popupSender({url: "safari-web-extension://extension-id/popup.html?forged"}),
+            popupSender({url: "safari-web-extension://extension-id/options.html"}),
+        ].map(value => ({kind: "invalid", value})),
+    ];
+    const harness = makeHarness();
+    await settle();
+    const before = transportEffects(harness);
+    for (const sender of senders) {
+        for (const command of commands) {
+            if (command.allowed.includes(sender.kind)) { continue; }
+            assert.equal(await harness.dispatch(command.message, sender.value), undefined);
+            assert.deepEqual(harness.runtimeDeliveries.at(-1), {handled: false, replies: []},
+                `${sender.kind} cannot send ${command.message.subject}`);
+        }
+    }
+    await settle();
+    assert.deepEqual(transportEffects(harness), before);
+    assert.ok(harness.runtimeDeliveries.every(delivery => delivery.replies.length === 0));
+});
+
+test("worker rejects mismatched content origins without touching transport state", async () => {
+    const harness = makeHarness();
+    await settle();
+    const before = transportEffects(harness);
+    const sender = contentSender({url: "https://other.example/dapp"});
+    for (const message of [
+        request(), manualSwitchIntent(),
+        {subject: "getResponse", id: 7, configurationKey: "https://wallet.example",
+            requestToken, revisions: {ethereum: 0, solana: 0}, workflowVersion: 3},
+        {subject: "getLatestConfiguration", host: "wallet.example",
+            configurationKey: "https://wallet.example", workflowVersion: 3},
+        {subject: "disconnect", id: 7, provider: "ethereum", host: "wallet.example",
+            configurationKey: "https://wallet.example", workflowVersion: 3},
+    ]) {
+        await harness.dispatch(message, sender);
+    }
+    await settle();
+    assert.deepEqual(transportEffects(harness), before);
+});
 
 function nativeAcknowledgement(
     id,
@@ -686,13 +812,14 @@ test("broadcasts queued approvals when the popup cannot open", async () => {
     }
 });
 
-test("receiving a pending-request notification does not rebroadcast it", async () => {
+test("worker rejects inbound pending-request notifications", async () => {
     const harness = makeHarness();
     await harness.dispatch({
         subject: "pendingRequestAvailable",
         workflowVersion: 3,
-    }, {});
-    assert.equal(harness.popupCalls.length, 1);
+    }, popupSender());
+    assert.equal(harness.popupCalls.length, 0);
+    assert.deepEqual(harness.runtimeDeliveries.at(-1), {handled: false, replies: []});
     assert.deepEqual(harness.runtimeMessages, []);
 });
 
@@ -714,7 +841,7 @@ test("macOS popup cues stay hidden without a configured extension popup", async 
         subject: "updatePendingRequestBadge",
         hasPendingRequests: true,
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     assert.ok(harness.badgeTexts.every(value => value === ""));
     harness.install({reason: "update"});
     harness.startup();
@@ -1143,8 +1270,8 @@ test("response-ready hints share a live switch read and retries do not repeat a 
     });
     const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
     const hint = {subject: "responseReady", id: admitted.id, workflowVersion: 3};
-    const first = harness.dispatch(hint, {});
-    const second = harness.dispatch(hint, {});
+    const first = harness.dispatch(hint, popupSender());
+    const second = harness.dispatch(hint, popupSender());
     await settle();
     assert.equal(harness.nativeMessages.filter(({message}) =>
         isResponseRead(message)
@@ -1186,7 +1313,7 @@ test("popup and live switch completion share one native read and configuration c
         subject: "responseReady",
         id: admitted.id,
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     await settle();
     const popup = harness.dispatch({
         subject: "applyCompletedResponse",
@@ -1440,7 +1567,7 @@ test("a switch completed before admission expiry survives a delayed completion h
         subject: "responseReady",
         id: admitted.id,
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     await settle();
 
     assert.deepEqual(harness.storage.get("https://wallet.example"), {
@@ -2154,7 +2281,7 @@ test("page configuration reads and response hints discover approved work without
         descriptor.state = "approved";
         await harness.dispatch(trigger === "hint"
             ? {subject: "responseReady", id: descriptor.id, workflowVersion: 3}
-            : {subject: "getLatestConfiguration", host: descriptor.host, configurationKey: descriptor.configurationKey, workflowVersion: 3});
+            : {subject: "getLatestConfiguration", host: descriptor.host, configurationKey: descriptor.configurationKey, workflowVersion: 3}, trigger === "hint" ? popupSender() : contentSender());
         await settle();
         assert.equal(harness.recoveryMessages.length, 2);
         assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject), ["getManualSwitchResponse", "acknowledgeResponse"]);
@@ -2217,7 +2344,7 @@ test("simultaneous wake triggers coalesce discovery and share one quiet response
     });
     await settle();
     const alarm = harness.fireAlarm();
-    const hint = harness.dispatch({subject: "responseReady", id: descriptor.id, workflowVersion: 3});
+    const hint = harness.dispatch({subject: "responseReady", id: descriptor.id, workflowVersion: 3}, popupSender());
     const configuration = harness.dispatch({subject: "getLatestConfiguration", host: descriptor.host, configurationKey: descriptor.configurationKey, workflowVersion: 3});
     const repeated = Array.from({length: 20}, () => harness.fireAlarm());
     discovery.resolve({id: discoveryID, requests: [descriptor]});
@@ -2451,7 +2578,7 @@ test("same-account grants advance revisions through missed delivery, replay, and
             subject: "responseReady",
             id: acknowledged.id,
             workflowVersion: 3,
-        }, {});
+        }, popupSender());
         await settle();
 
         const acceptedRevision = revisions[selected.provider] + 1;
@@ -3763,6 +3890,8 @@ test("response reads require the originating tab identity", async () => {
         throw new Error("must not reach native");
     }});
     const wrongSender = {
+        id: "extension-id",
+        frameId: 0,
         url: "https://other.example/dapp",
         tab: {id: 2, url: "https://other.example/dapp", incognito: false},
     };
@@ -4320,7 +4449,7 @@ test("the finalization ceiling releases a switch lineage for another attempt", a
         subject: "responseReady",
         id: acknowledged.id,
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     await settle();
     const disconnected = await harness.dispatch({
         subject: "disconnect",
@@ -4364,6 +4493,8 @@ test("same-host HTTP and HTTPS configuration operations share a lineage", async 
         configurationKey: "http://wallet.example",
         workflowVersion: 3,
     }, {
+        id: "extension-id",
+        frameId: 0,
         url: "http://wallet.example/dapp",
         tab: {
             id: 10,
@@ -4416,6 +4547,8 @@ test("a hung configuration read does not block an unrelated origin", async () =>
         configurationKey: "https://other.example",
         workflowVersion: 3,
     }, {
+        id: "extension-id",
+        frameId: 0,
         url: "https://other.example/dapp",
         tab: {
             id: 11,
@@ -5082,7 +5215,7 @@ test("manual finalization keeps revisions leased across worker restart", async (
         subject: "responseReady",
         id: acknowledged.id,
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     await settle();
     const read = first.nativeMessages.find(({message}) =>
         isResponseRead(message)
@@ -5356,6 +5489,25 @@ test("popup approval overwrites drifted revisions and preserves add-chain", asyn
     });
 });
 
+test("popup approval cannot override private sender metadata", async () => {
+    const harness = makeHarness({native: message => nativeApprovalCommandResult(message.id)});
+    const response = await harness.dispatch(approvalProxy(95), popupSender({incognito: true}));
+    assert.deepEqual(clone(response), nativeApprovalCommandResult(95));
+    assert.equal(harness.nativeMessages[0].message.__bwPrivateBrowsing, true);
+});
+
+test("private popup completion does not read or apply a stored response", async () => {
+    const harness = makeHarness();
+    await settle();
+    const before = transportEffects(harness);
+    assert.equal(await harness.dispatch({
+        subject: "applyCompletedResponse", id: 7, host: "wallet.example",
+        configurationKey: "https://wallet.example", requestToken,
+        revisions: {ethereum: 0, solana: 0}, workflowVersion: 3,
+    }, popupSender({incognito: true})), undefined);
+    assert.deepEqual(transportEffects(harness), before);
+});
+
 test("malformed or untrusted popup approval proxy never reaches native", async () => {
     const invalidRequests = [
         [approvalProxy(95), undefined],
@@ -5511,7 +5663,7 @@ test("a response-ready tab-query timeout completes without delivery", async () =
         subject: "responseReady",
         ids: [65],
         workflowVersion: 3,
-    }, {}), undefined);
+    }, popupSender()), undefined);
     assert.deepEqual(harness.timerDelays, [1000, 5000, 5000]);
     assert.deepEqual(harness.tabMessages, []);
 });
@@ -5808,12 +5960,12 @@ test("broadcasts response-ready hints and treats badge updates as best effort", 
         subject: "responseReady",
         ids: [1, 2],
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     assert.deepEqual(harness.tabMessages.map(value => value.id), [3, 4]);
     await harness.dispatch({
         subject: "updatePendingRequestBadge",
         hasPendingRequests: false,
         workflowVersion: 3,
-    }, {});
+    }, popupSender());
     assert.equal(harness.badgeTexts.at(-1), "");
 });

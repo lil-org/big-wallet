@@ -1586,8 +1586,13 @@ async function applyCompletedResponse(request) {
 
 document.addEventListener("DOMContentLoaded", () => {
     popupQueue = new PopupQueueController();
-    browser.runtime.onMessage.addListener(request => {
+    browser.runtime.onMessage.addListener((request, sender) => {
+        const senderContext = BigWalletBridgeWire.authorizeRuntimeMessage(
+            "popup", request, sender, browser.runtime
+        );
+        if (!senderContext) { return false; }
         if (isPendingRequestAvailable(request)) { popupQueue.invalidate(); }
+        return false;
     });
     document.getElementById("button-approve").addEventListener("click", () => popupQueue.currentRequest?.approveCurrent());
     document.getElementById("button-reject").addEventListener("click", () => popupQueue.currentRequest?.rejectCurrent());

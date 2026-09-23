@@ -20,6 +20,27 @@ test("popup inventory preserves actual IDs, classes, and fallback localization",
     assert.throws(() => harness.document.querySelectorAll("button"), /Unsupported popup selector/);
 });
 
+test("popup runtime notifications carry realistic and overridable sender metadata", () => {
+    const harness = createPopupHarness();
+    const received = [];
+    harness.browser.runtime.onMessage.addListener((message, sender) => {
+        received.push({message, sender});
+        return false;
+    });
+    assert.deepEqual(harness.notify(), {returns: [false], responses: []});
+    const message = {subject: "pendingRequestAvailable", workflowVersion: 3};
+    assert.deepEqual(received[0], {
+        message,
+        sender: {
+            id: harness.browser.runtime.id,
+            url: harness.browser.runtime.getURL("").replace(/\/$/, ""),
+        },
+    });
+    harness.notify(message, null);
+    assert.equal(received[1].sender, null);
+    assert.equal(harness.browser.runtime.getURL("popup.html"), "safari-web-extension://wallet/popup.html");
+});
+
 test("unsupported inventory assumptions and duplicate IDs fail explicitly", () => {
     assert.throws(() => popupMarkupInventory(popupMarkup.replace(
         'id="screen-idle"', 'id="screen-loading"'

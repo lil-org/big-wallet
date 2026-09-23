@@ -23,9 +23,13 @@ if (bigWalletContentInstalled !== true) {
     const contentBuildVersion = bigWalletWire.BUILD_VERSION;
     const runtimeMessage = bigWalletRuntimeMessage;
     browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        const senderContext = bigWalletWire.authorizeRuntimeMessage(
+            "content", request, sender, browser.runtime
+        );
+        if (!senderContext) { return false; }
         return runtimeMessage(
             request,
-            sender,
+            senderContext,
             sendResponse,
             contentBuildVersion
         );
@@ -528,7 +532,7 @@ async function bigWalletLoadConfiguration(generation, attempt) {
 
 function bigWalletRuntimeMessage(
     request,
-    sender,
+    senderContext,
     sendResponse,
     contentBuildVersion
 ) {

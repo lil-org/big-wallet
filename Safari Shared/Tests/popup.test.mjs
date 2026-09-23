@@ -462,6 +462,66 @@ test("a reopened popup drains every outstanding completion across batches", asyn
     assert.deepEqual(outstanding, []);
 });
 
+test("popup runtime policy rejects unauthorized notifications without queue or UI effects", async () => {
+    for (const activeReview of [false, true]) {
+        const harness = activeReview ? await reviewedPopup() : popupHarness();
+        if (!activeReview) { await harness.boot(); }
+        harness.clearMessages();
+        const worker = {
+            id: harness.browser.runtime.id,
+            url: harness.browser.runtime.getURL(""),
+        };
+        const message = {subject: "pendingRequestAvailable", workflowVersion: 3};
+        const senders = [
+            null,
+            {},
+            {url: worker.url},
+            {...worker, id: ""},
+            {...worker, id: "foreign-extension"},
+            {id: worker.id},
+            {...worker, url: harness.browser.runtime.getURL("popup.html")},
+            {...worker, url: `${worker.url}?spoof=1`},
+            {...worker, url: `${worker.url}#spoof`},
+            {...worker, url: harness.browser.runtime.getURL("unknown.html")},
+            {...worker, tab: {id: 3}},
+            {...worker, url: "https://wallet.example", tab: {id: 3}, frameId: 0},
+            {...worker, url: "https://wallet.example", tab: {id: 3}, frameId: 1},
+            {...worker, url: "data:text/html,hello"},
+        ];
+        const denied = senders.map(sender => ({sender, message}));
+        denied.push(...[
+            "rpc", "message-to-wallet", "getResponse", "getLatestConfiguration", "disconnect",
+            "approveRequestWithCurrentRevisions", "applyCompletedResponse", "updatePendingRequestBadge",
+            "responseReady", "workflowProbe", "manualSwitchIntent", "configurationChanged", "unknown",
+        ].map(subject => ({sender: worker, message: {subject, workflowVersion: 3}})));
+        denied.push(...[null, {...message, extra: true}, {...message, workflowVersion: 2}]
+            .map(message => ({sender: worker, message})));
+        const controller = harness.controller;
+        const snapshot = () => ({
+            revision: harness.queue.revision,
+            snapshot: normalized(harness.queue.snapshot),
+            fresh: harness.queue.isFresh,
+            refresh: harness.queue.refresh,
+            timers: [...harness.timers],
+            timerCount: harness.timerHistory.length,
+            visible: harness.visibleSnapshot(),
+            closed: harness.model.closed,
+        });
+        const before = snapshot();
+        harness.browser.storage.local.get = () => assert.fail("denied notification accessed storage");
+        harness.browser.tabs.query = () => assert.fail("denied notification queried tabs");
+        for (const {sender, message} of denied) {
+            assert.deepEqual(harness.notify(message, sender), {returns: [false], responses: []});
+        }
+        await flushPopup();
+        assert.equal(harness.controller, controller);
+        assert.deepEqual(snapshot(), before);
+        assert.deepEqual(harness.nativeMessages, []);
+        assert.deepEqual(harness.workerMessages, []);
+        assert.deepEqual(harness.tabMessages, []);
+    }
+});
+
 test("a pending-request notification refreshes an already-open idle popup", async () => {
     const harness = popupHarness();
     await harness.boot();

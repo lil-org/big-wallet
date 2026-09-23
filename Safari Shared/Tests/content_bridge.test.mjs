@@ -13,6 +13,11 @@ const [wireSource, contentSource] = await Promise.all([
 ]);
 const requestToken = "123e4567-e89b-12d3-a456-426614174000";
 const probeNonce = "00000001000000020000000300000004";
+const workerSender = {
+    id: "wallet-extension",
+    url: "safari-web-extension://wallet",
+};
+const popupSender = {...workerSender, url: "safari-web-extension://wallet/popup.html"};
 const packagedBuildVersion = wireSource.match(
     /const BUILD_VERSION = "([^"\n]+)";/
 )?.[1];
@@ -47,6 +52,7 @@ function makeHarness({
     url = "https://wallet.example/dapp",
 } = {}) {
     const runtimeMessages = [];
+    const runtimeDeliveries = [];
     const postedMessages = [];
     const timers = [];
     const injectedScripts = [];
@@ -102,8 +108,9 @@ function makeHarness({
     };
     const browser = {
         runtime: {
+            id: "wallet-extension",
             getManifest() { return {version: packagedBuildVersion.split("+")[0]}; },
-            getURL() { return "safari-web-extension://wallet/inpage.js"; },
+            getURL(path) { return `safari-web-extension://wallet/${path}`; },
             onMessage: {addListener(listener) { runtimeListeners.push(listener); }},
             sendMessage(message) {
                 runtimeMessages.push(clone(message));
@@ -155,6 +162,8 @@ function makeHarness({
         injectedScripts,
         postedMessages,
         runtimeMessages,
+        runtimeDeliveries,
+        timerHistory: timers,
         generation: () => context.bigWalletProviderGeneration,
         injectionAttempts: () => injectionAttempts,
         listenerCounts: () => ({
@@ -183,11 +192,17 @@ function makeHarness({
                 });
             }
         },
-        dispatchRuntime(message) {
+        dispatchRuntime(message, sender = workerSender) {
             return new Promise(resolve => {
+                const delivery = {returns: [], responses: []};
+                runtimeDeliveries.push(delivery);
                 for (const listener of runtimeListeners) {
-                    listener(message, {}, resolve);
+                    delivery.returns.push(listener(message, sender, response => {
+                        delivery.responses.push(response);
+                        resolve(response);
+                    }));
                 }
+                if (!delivery.returns.includes(true)) { resolve(undefined); }
             });
         },
         reevaluate() {
@@ -226,6 +241,86 @@ function dappRequest(id = 7) {
         body: {address: "", chainId: "0x1"},
     };
 }
+
+test("content rejects unauthorized runtime messages without effects or a response channel", async () => {
+    const harness = makeHarness({sendMessage: message => message.subject === "message-to-wallet" ? {
+        id: 7,
+        requestToken,
+        approvalRequired: true,
+        revisions: {ethereum: 0, solana: 0},
+    } : undefined});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    const messages = [
+        {subject: "workflowProbe", nonce: probeNonce, workflowVersion: 3},
+        {subject: "manualSwitchIntent", configurationKey: "https://wallet.example", workflowVersion: 3},
+        {subject: "responseReady", id: 7, workflowVersion: 3},
+        {
+            subject: "configurationChanged",
+            configurationKey: "https://wallet.example",
+            workflowVersion: 3,
+            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x2"}, solana: null},
+        },
+    ];
+    const deniedSenders = [
+        null,
+        {},
+        {url: workerSender.url},
+        {...workerSender, id: ""},
+        {...workerSender, id: "foreign-extension"},
+        {id: workerSender.id},
+        {...workerSender, url: "safari-web-extension://wallet/unknown.html"},
+        {...workerSender, url: `${workerSender.url}?spoof=1`},
+        {...workerSender, tab: {id: 3}},
+        {...popupSender, url: `${popupSender.url}#spoof`},
+        {...workerSender, url: "data:text/html,hello"},
+        {...workerSender, url: "https://wallet.example", tab: {id: 3}, frameId: 0},
+        {...workerSender, url: "https://wallet.example", tab: {id: 3}, frameId: 1},
+    ];
+    const snapshot = () => clone({
+        configuration: harness.context.bigWalletConfigurationState,
+        generation: harness.generation(),
+        postedMessages: harness.postedMessages,
+        runtimeMessages: harness.runtimeMessages,
+        requests: [...harness.context.bigWalletRequests.values()],
+        timers: harness.timerHistory,
+    });
+    const before = snapshot();
+    const denied = deniedSenders.flatMap(sender => messages.map(message => ({sender, message})));
+    denied.push(...messages.slice(2).map(message => ({sender: popupSender, message})));
+    denied.push(...[
+        "rpc", "message-to-wallet", "getResponse", "getLatestConfiguration", "disconnect",
+        "approveRequestWithCurrentRevisions", "applyCompletedResponse", "updatePendingRequestBadge",
+        "pendingRequestAvailable", "unknown",
+    ].map(subject => ({sender: workerSender, message: {subject, workflowVersion: 3}})));
+    denied.push({sender: workerSender, message: null});
+    for (const {sender, message} of denied) {
+        assert.equal(await harness.dispatchRuntime(message, sender), undefined);
+        assert.deepEqual(harness.runtimeDeliveries.at(-1), {returns: [false], responses: []});
+    }
+    await settle();
+    assert.deepEqual(snapshot(), before);
+});
+
+test("content accepts popup probes and manual switch intents", async () => {
+    const expected = {accepted: true};
+    const harness = makeHarness({sendMessage: message =>
+        message.subject === "manualSwitchIntent" ? expected : undefined});
+    await settle();
+    assert.deepEqual(clone(await harness.dispatchRuntime({
+        subject: "workflowProbe", nonce: probeNonce, workflowVersion: 3,
+    }, popupSender)), {
+        buildVersion: packagedBuildVersion,
+        nonce: probeNonce,
+        subject: "workflowProbe",
+        workflowVersion: 3,
+    });
+    assert.deepEqual(clone(await harness.dispatchRuntime({
+        subject: "manualSwitchIntent", configurationKey: "https://wallet.example", workflowVersion: 3,
+    }, popupSender)), expected);
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "manualSwitchIntent").length, 1);
+});
 
 test("content reevaluation keeps one provider lifecycle and request bridge", async () => {
     const harness = makeHarness();

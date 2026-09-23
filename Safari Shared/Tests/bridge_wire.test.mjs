@@ -336,6 +336,219 @@ test("derives stable web and file configuration identities", () => {
     );
 });
 
+const runtime = {
+    id: "test-extension",
+    getURL: path => `safari-web-extension://test-extension/${path}`,
+};
+const runtimeSenders = {
+    content: {
+        id: runtime.id,
+        url: "https://wallet.example/path",
+        frameId: 0,
+        tab: {id: 4, url: "https://other.example", favIconUrl: "https://wallet.example/icon.png"},
+    },
+    popup: {id: runtime.id, url: runtime.getURL("popup.html")},
+    worker: {id: runtime.id, url: runtime.getURL("")},
+};
+
+test("runtime sender policy permits only the complete sender receiver subject matrix", () => {
+    const allowed = new Set([
+        "content:worker:rpc",
+        "content:worker:message-to-wallet",
+        "content:worker:manualSwitchIntent",
+        "content:worker:getResponse",
+        "content:worker:getLatestConfiguration",
+        "content:worker:disconnect",
+        "popup:worker:approveRequestWithCurrentRevisions",
+        "popup:worker:applyCompletedResponse",
+        "popup:worker:getLatestConfiguration",
+        "popup:worker:updatePendingRequestBadge",
+        "popup:worker:responseReady",
+        "worker:content:workflowProbe",
+        "worker:content:manualSwitchIntent",
+        "worker:content:configurationChanged",
+        "worker:content:responseReady",
+        "popup:content:workflowProbe",
+        "popup:content:manualSwitchIntent",
+        "worker:popup:pendingRequestAvailable",
+    ]);
+    const subjects = new Set([
+        ...[...allowed].map(entry => entry.split(":")[2]),
+        "unknown", "constructor", "__proto__", "toString", "hasOwnProperty", "",
+    ]);
+    for (const [kind, sender] of Object.entries(runtimeSenders)) {
+        for (const receiver of ["worker", "content", "popup", "unknown", "__proto__", "constructor", "toString"]) {
+            for (const subject of subjects) {
+                const key = `${kind}:${receiver}:${subject}`;
+                const result = wire.authorizeRuntimeMessage(receiver, {subject}, sender, runtime);
+                assert.equal(result !== null, allowed.has(key), key);
+                if (result) { assert.equal(result.kind, kind, key); }
+            }
+        }
+    }
+});
+
+test("runtime authorization recognizes Safari worker roots without widening sender authority", () => {
+    const root = runtime.getURL("");
+    const commands = [
+        ["content", "workflowProbe"],
+        ["content", "manualSwitchIntent"],
+        ["content", "configurationChanged"],
+        ["content", "responseReady"],
+        ["popup", "pendingRequestAvailable"],
+    ];
+    for (const url of [root, root.replace(/\/$/, ""), runtime.getURL("service_worker.js")]) {
+        const sender = {id: runtime.id, url};
+        for (const [receiver, subject] of commands) {
+            assert.equal(wire.authorizeRuntimeMessage(receiver, {subject}, sender, runtime)?.kind, "worker", url);
+            assert.equal(wire.authorizeRuntimeMessage(receiver, {subject}, {...sender, id: "foreign"}, runtime), null);
+            assert.equal(wire.authorizeRuntimeMessage(receiver, {subject}, {...sender, tab: {id: 1}, frameId: 0}, runtime), null);
+        }
+        assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "approveRequestWithCurrentRevisions"}, sender, runtime), null);
+        assert.equal(wire.authorizeRuntimeMessage("content", {subject: "rpc"}, sender, runtime), null);
+    }
+    for (const url of [
+        `${root}?`, `${root}#`, `${root}?query=1`, `${root}#fragment`,
+        `${root}/`, `${root}other.html`, `${root}service_worker.js?query=1`,
+        root.replace(/\/$/, "?"), root.replace(/\/$/, "#"),
+        root.replace("test-extension", "foreign-extension"),
+        root.replace("://", "://user@"),
+        root.replace("safari-web-extension:", "https:"),
+    ]) {
+        for (const [receiver, subject] of commands) {
+            assert.equal(wire.authorizeRuntimeMessage(receiver, {subject}, {id: runtime.id, url}, runtime), null, url);
+        }
+    }
+});
+
+test("runtime authorization snapshots identity exclusively from the content sender URL", () => {
+    for (const [url, expected] of [
+        ["https://Wallet.Example:443/path?query=1#fragment", {
+            host: "wallet.example", configurationKey: "https://wallet.example", legacyConfigurationKey: "wallet.example",
+        }],
+        ["http://wallet.example:8080/path", {
+            host: "wallet.example:8080", configurationKey: "http://wallet.example:8080", legacyConfigurationKey: "wallet.example:8080",
+        }],
+        ["file:///tmp/dapp.html?query=1#fragment", {
+            host: "file:///tmp/dapp.html", configurationKey: "file:///tmp/dapp.html", legacyConfigurationKey: null,
+        }],
+    ]) {
+        const sender = {...runtimeSenders.content, url, tab: {...runtimeSenders.content.tab}};
+        const request = {subject: "getResponse", origin: "https://spoofed.example", configurationKey: "https://spoofed.example"};
+        const result = wire.authorizeRuntimeMessage("worker", request, sender, runtime);
+        assert.deepEqual(normalized(result), {
+            kind: "content", identity: expected, privateBrowsing: false, tabId: 4,
+            favicon: "https://wallet.example/icon.png",
+        });
+        assert.equal(Object.isFrozen(result), true);
+        assert.equal(Object.isFrozen(result.identity), true);
+        sender.url = "https://changed.example";
+        sender.tab.id = 99;
+        sender.tab.favIconUrl = "changed";
+        request.origin = "https://changed.example";
+        assert.deepEqual(normalized(result.identity), expected);
+        assert.equal(result.tabId, 4);
+        assert.equal(result.favicon, "https://wallet.example/icon.png");
+    }
+});
+
+test("runtime authorization retains only browser supplied privacy and optional favicon", () => {
+    for (const tabIncognito of [undefined, false, true, "true"]) {
+        for (const incognito of [undefined, false, true, "true"]) {
+            const sender = {...runtimeSenders.content, incognito, tab: {id: 0, incognito: tabIncognito}};
+            const result = wire.authorizeRuntimeMessage("worker", {
+                subject: "getLatestConfiguration", incognito: true, __bwPrivateBrowsing: true,
+            }, sender, runtime);
+            assert.equal(result.privateBrowsing, tabIncognito === true || incognito === true);
+            assert.equal(result.tabId, 0);
+            assert.equal(result.favicon, null);
+        }
+    }
+    for (const kind of ["popup", "worker"]) {
+        const receiver = kind === "popup" ? "worker" : "content";
+        const subject = kind === "popup" ? "getLatestConfiguration" : "workflowProbe";
+        const result = wire.authorizeRuntimeMessage(receiver, {subject}, {
+            ...runtimeSenders[kind], incognito: true,
+        }, runtime);
+        assert.deepEqual(normalized(result), {kind, identity: null, privateBrowsing: true, tabId: null, favicon: null});
+        assert.equal(Object.isFrozen(result), true);
+    }
+});
+
+test("runtime authorization rejects missing foreign or malformed sender metadata", () => {
+    const valid = runtimeSenders.content;
+    for (const sender of [
+        null, undefined, [], "content", {},
+        {...valid, id: undefined}, {...valid, id: ""}, {...valid, id: "foreign-extension"},
+        {...valid, url: undefined}, {...valid, url: null}, {...valid, url: ""},
+        {...valid, url: "not a URL"}, {...valid, url: "data:text/html,hello"},
+        {...valid, url: "javascript:void(0)"}, {...valid, url: "about:blank"},
+        {...valid, url: "blob:https://wallet.example/token"},
+        {...valid, url: "ftp://wallet.example"}, {...valid, url: runtime.getURL("popup.html")},
+        {...valid, frameId: undefined}, {...valid, frameId: null}, {...valid, frameId: 1},
+        {...valid, frameId: -1}, {...valid, frameId: "0"},
+        {...valid, tab: undefined}, {...valid, tab: null}, {...valid, tab: []},
+        {...valid, tab: {}}, {...valid, tab: {id: -1}}, {...valid, tab: {id: "4"}},
+        {...valid, tab: {id: 0.5}}, {...valid, tab: {id: Infinity}},
+        {...valid, tab: {id: Number.MAX_SAFE_INTEGER + 1}},
+        Object.create(valid),
+        Object.assign(Object.create({tab: valid.tab}), {id: valid.id, url: valid.url, frameId: 0}),
+        {...valid, tab: Object.create({id: 4})},
+    ]) {
+        assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "getResponse"}, sender, runtime), null);
+    }
+    for (const kind of ["popup", "worker"]) {
+        const receiver = kind === "popup" ? "worker" : "popup";
+        const subject = kind === "popup" ? "responseReady" : "pendingRequestAvailable";
+        for (const sender of [
+            {...runtimeSenders[kind], url: `${runtimeSenders[kind].url}?query=1`},
+            {...runtimeSenders[kind], url: `${runtimeSenders[kind].url}#fragment`},
+            {...runtimeSenders[kind], url: `${runtimeSenders[kind].url}/extra`},
+            {...runtimeSenders[kind], url: runtime.getURL("unknown.html")},
+            {...runtimeSenders[kind], url: runtimeSenders[kind].url.replace("test-extension", "foreign-extension")},
+            {...runtimeSenders[kind], url: `https://wallet.example/${kind === "popup" ? "popup.html" : "service_worker.js"}`},
+            {...runtimeSenders[kind], tab: {id: 4}, frameId: 0},
+            {...runtimeSenders[kind], tab: null},
+        ]) {
+            assert.equal(wire.authorizeRuntimeMessage(receiver, {subject}, sender, runtime), null);
+        }
+    }
+});
+
+test("runtime authorization denies malformed requests and unavailable runtime identity", () => {
+    for (const request of [null, undefined, [], "rpc", {}, {subject: null}, {subject: 1}, Object.create({subject: "rpc"})]) {
+        assert.equal(wire.authorizeRuntimeMessage("worker", request, runtimeSenders.content, runtime), null);
+    }
+    for (const receiver of [null, undefined, [], {}, 1]) {
+        assert.equal(wire.authorizeRuntimeMessage(receiver, {subject: "rpc"}, runtimeSenders.content, runtime), null);
+    }
+    for (const invalidRuntime of [null, undefined, {}, {...runtime, id: ""}, {...runtime, id: 1}, {...runtime, id: "foreign-extension"}]) {
+        assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "rpc"}, runtimeSenders.content, invalidRuntime), null);
+    }
+    assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "responseReady"}, runtimeSenders.popup, {id: runtime.id}), null);
+});
+
+test("runtime authorization fails closed on accessors and runtime failures", () => {
+    const fail = () => { throw new Error("unavailable metadata"); };
+    const request = {subject: "rpc"};
+    const sender = runtimeSenders.content;
+    for (const field of ["id", "url", "tab", "frameId", "incognito"]) {
+        const hostileSender = {...sender};
+        Object.defineProperty(hostileSender, field, {get: fail});
+        assert.equal(wire.authorizeRuntimeMessage("worker", request, hostileSender, runtime), null);
+    }
+    for (const field of ["id", "incognito", "favIconUrl"]) {
+        const tab = {...sender.tab};
+        Object.defineProperty(tab, field, {get: fail});
+        assert.equal(wire.authorizeRuntimeMessage("worker", request, {...sender, tab}, runtime), null);
+    }
+    const hostileRequest = Object.defineProperty({}, "subject", {get: fail});
+    assert.equal(wire.authorizeRuntimeMessage("worker", hostileRequest, sender, runtime), null);
+    assert.equal(wire.authorizeRuntimeMessage("worker", request, sender, {get id() { throw new Error("unavailable"); }}), null);
+    assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "responseReady"}, runtimeSenders.popup, {...runtime, getURL: fail}), null);
+    assert.equal(wire.authorizeRuntimeMessage("worker", request, new Proxy(sender, {getOwnPropertyDescriptor: fail}), runtime), null);
+});
+
 test("normalizes bounded response-ready wake hints", () => {
     assert.deepEqual(
         [...wire.responseReadyIds({
