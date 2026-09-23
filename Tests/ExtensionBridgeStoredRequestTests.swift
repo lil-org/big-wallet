@@ -460,7 +460,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testValidatedRequestsAreParsedOnceForSnapshotsAndManualSwitchDiscovery() throws {
         let parsing = RequestParseRecorder()
-        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now },
             parseRequest: parsing.parse
         ))
@@ -524,11 +524,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testValidatedRequestsAreRebuiltAfterAnotherStoreChangesTheProfile() throws {
         let parsing = RequestParseRecorder()
-        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now },
             parseRequest: parsing.parse
         ))
-        let otherStore = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+        let otherStore = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now }
         ))
         let first = try makeFixture(id: 904)
@@ -578,7 +578,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testValidatedRequestsSurviveStateTransitionsWithoutReencodingStoredBytes() throws {
         let parsing = RequestParseRecorder()
-        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now },
             parseRequest: parsing.parse
         ))
@@ -638,7 +638,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testValidatedRequestsAreReusedForExpiryAndAbandonedExecutionRecovery() throws {
         let parsing = RequestParseRecorder()
-        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now },
             parseRequest: parsing.parse
         ))
@@ -690,11 +690,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let parsing = RequestParseRecorder()
         var failBeforeWrite = false
         var failAfterWrite = false
-        let store = ExtensionRequestFileStore(rootURL: rootURL, dependencies: .init(
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now },
             atomicWrite: { data, url in
                 if failBeforeWrite { throw Failure.injectedWrite }
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
                 if failAfterWrite { throw Failure.injectedWrite }
             },
             parseRequest: parsing.parse
@@ -733,7 +733,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         final class WriteControl {
             var shouldThrow = true
             func write(_ data: Data, to url: URL) throws {
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
                 if shouldThrow, url.pathExtension == "state" {
                     shouldThrow = false
                     throw Failure.injectedWrite
@@ -1123,7 +1123,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             var throwsRemaining = 0
 
             func write(_ data: Data, to url: URL) throws {
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
                 if throwsRemaining > 0, url.pathExtension == "state" {
                     throwsRemaining -= 1
                     throw Failure.injectedWrite
@@ -1303,7 +1303,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             var throwsRemaining = 0
 
             func write(_ data: Data, to url: URL) throws {
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
                 if throwsRemaining > 0, url.pathExtension == "state" {
                     throwsRemaining -= 1
                     throw Failure.injectedWrite
@@ -2396,7 +2396,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let ambiguousWriter = makeBridge(
             clock: { self.clock.now },
             atomicWrite: { data, url in
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
                 throw Failure.injectedWrite
             }
         )
@@ -2429,7 +2429,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 clock: { self.clock.now },
                 atomicWrite: { data, url in
                     guard url == targetURL else {
-                        return try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                        return try ApprovalStoreTestPersistence.write(data, url)
                     }
                     recovering = true
                     switch mode {
@@ -2453,7 +2453,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                             format: .binary,
                             options: 0
                         )
-                        try ExtensionRequestFileStore.defaultAtomicWrite(altered, url)
+                        try ApprovalStoreTestPersistence.write(altered, url)
                     case .missing:
                         try FileManager.default.removeItem(at: url)
                     case .symbolicLink:
@@ -2462,7 +2462,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         try FileManager.default.removeItem(at: url)
                         try FileManager.default.createSymbolicLink(at: url, withDestinationURL: otherURL)
                     case .exact, .unreadable, .oversizedFile, .oversizedData, .emptyData:
-                        try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                        try ApprovalStoreTestPersistence.write(data, url)
                     }
                     throw Failure.injectedWrite
                 },
@@ -3253,7 +3253,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         clock: { self.clock.now },
                         atomicWrite: { data, url in
                             if persistsBeforeFailure {
-                                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                                try ApprovalStoreTestPersistence.write(data, url)
                             }
                             throw Failure.injectedWrite
                         }
@@ -3340,7 +3340,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     clock: { self.clock.now },
                     atomicWrite: { data, url in
                         if persistsBeforeFailure {
-                            try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                            try ApprovalStoreTestPersistence.write(data, url)
                         }
                         throw Failure.injectedWrite
                     }
@@ -3394,6 +3394,437 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     )
                 }
             }
+        }
+    }
+
+    func testContainerStoreSynchronizesEveryCreatedAncestorAndRetriesResponseBarrier() throws {
+        let container = rootURL.standardizedFileURL
+        let library = container.appendingPathComponent("Library", isDirectory: true)
+        let support = library.appendingPathComponent("Application Support", isDirectory: true)
+        let storeRoot = support.appendingPathComponent("BigWalletExtensionBridge", isDirectory: true)
+        let profiles = storeRoot.appendingPathComponent("profiles-v7", isDirectory: true)
+        let expectedPaths = [profiles, storeRoot, support, library, container].map(\.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: library.path))
+
+        var operations = DurableProfilePersistence.Operations.live
+        let openDirectory = operations.openDirectory
+        let syncDirectory = operations.syncDirectory
+        var directoryPaths = [Int32: String]()
+        var openedPaths = [String]()
+        var synchronizedPaths = [String]()
+        var failBoundarySynchronization = false
+        operations.openDirectory = { path in
+            let descriptor = try openDirectory(path)
+            directoryPaths[descriptor] = path
+            openedPaths.append(path)
+            return descriptor
+        }
+        operations.syncDirectory = { descriptor in
+            let path = try XCTUnwrap(directoryPaths[descriptor])
+            synchronizedPaths.append(path)
+            if failBoundarySynchronization, path == container.path {
+                throw Failure.injectedWrite
+            }
+            try syncDirectory(descriptor)
+        }
+        let store = ExtensionRequestFileStore(
+            containerURL: container,
+            dependencies: .init(clock: { self.clock.now }, persistenceOperations: operations)
+        )
+        let fixture = try makeFixture(id: 982)
+        let handle = try accepted(store.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        XCTAssertEqual(openedPaths, expectedPaths)
+        XCTAssertEqual(synchronizedPaths, expectedPaths)
+
+        let expectedResponse = response(for: fixture.request)
+        XCTAssertEqual(store.complete(handle: handle, response: expectedResponse), .persisted)
+        openedPaths.removeAll()
+        synchronizedPaths.removeAll()
+        failBoundarySynchronization = true
+        guard case .unavailable = store.readResponse(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey
+        ) else { return XCTFail("Response reads must synchronize through the container boundary") }
+        XCTAssertEqual(openedPaths, expectedPaths)
+        XCTAssertEqual(synchronizedPaths, expectedPaths)
+
+        openedPaths.removeAll()
+        synchronizedPaths.removeAll()
+        failBoundarySynchronization = false
+        let recovered = try responseJSON(store.readResponse(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey
+        ))
+        XCTAssertEqual(recovered as NSDictionary, expectedResponse.json as NSDictionary)
+        XCTAssertEqual(openedPaths, expectedPaths)
+        XCTAssertEqual(synchronizedPaths, expectedPaths)
+    }
+
+    func testAmbiguousAdmissionReplayRequiresPublishedFileSynchronization() async throws {
+        let fixture = try makeFixture(id: 983, revisions: ["ethereum": 2, "solana": 3])
+        try await assertAdmissionRetryRequiresSynchronization(
+            original: fixture,
+            retry: fixture,
+            admissionKind: .replay
+        )
+    }
+
+    func testAmbiguousManualAdmissionCoalescingRequiresPublishedFileSynchronization() async throws {
+        let original = try makeManualFixture(
+            id: 984,
+            enqueueAttempt: attempt(for: 984),
+            latestConfigurations: [],
+            revisions: ["ethereum": 2, "solana": 3]
+        )
+        let retry = try makeManualFixture(
+            id: 985,
+            enqueueAttempt: attempt(for: 985),
+            latestConfigurations: [],
+            revisions: ["ethereum": 9, "solana": 10]
+        )
+        try await assertAdmissionRetryRequiresSynchronization(
+            original: original,
+            retry: retry,
+            admissionKind: .coalesced
+        )
+    }
+
+    func testAmbiguousCompletionAndResponseReadRequirePublishedFileSynchronization()
+        async throws {
+        let fixture = try makeFixture(id: 974)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        let expected = response(for: fixture.request)
+        var failSynchronization = true
+        var synchronizedURLs = [URL]()
+        let observer = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                try data.write(to: url, options: .atomic)
+                throw Failure.injectedWrite
+            },
+            synchronizePublishedFile: { url in
+                synchronizedURLs.append(url)
+                if failSynchronization { throw Failure.injectedWrite }
+                try ApprovalStoreTestPersistence.synchronize(url)
+            }
+        )
+
+        let completion = await observer.complete(handle: handle, response: expected)
+        XCTAssertEqual(completion, .retryablePersistenceFailure)
+        XCTAssertEqual(try firstStoredState("completed")["acknowledged"] as? Bool, false)
+        XCTAssertEqual(synchronizedURLs, [defaultProfileURL])
+        guard case .unavailable = await observer.readResponse(
+            id: handle.id,
+            configurationKey: fixture.request.configurationKey,
+            requestToken: handle.requestToken,
+            profileIdentifier: nil
+        ) else { return XCTFail("Visible response bytes must not bypass failed synchronization") }
+        XCTAssertEqual(synchronizedURLs.count, 2)
+
+        failSynchronization = false
+        let recovered = try responseJSON(await observer.readResponse(
+            id: handle.id,
+            configurationKey: fixture.request.configurationKey,
+            requestToken: handle.requestToken,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(recovered as NSDictionary, expected.json as NSDictionary)
+        XCTAssertEqual(synchronizedURLs.count, 3)
+    }
+
+    func testRepeatedExecutionCommitRequiresSynchronizationAndRetainsItsLeaseOnFailure()
+        async throws {
+        for (index, checkpointsBroadcast) in [false, true].enumerated() {
+            let profileIdentifier = UUID()
+            let fixture = try makeFixture(id: 975 + index)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress,
+                profileIdentifier: profileIdentifier
+            )).handle
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            let permit = try executionPermit(await bridge.begin(claim: claim))
+            defer { permit.releaseLease() }
+            let expected = checkpointsBroadcast
+                ? ambiguousSubmissionResponse(
+                    for: fixture.request,
+                    transactionHash: "0x1234"
+                ).markingApprovalCommitted()
+                : response(for: fixture.request).markingApprovalCommitted()
+            var failSynchronization = true
+            var synchronizationAttempts = 0
+            let writer = makeBridge(
+                clock: { self.clock.now },
+                atomicWrite: { data, url in
+                    try data.write(to: url, options: .atomic)
+                    throw Failure.injectedWrite
+                },
+                synchronizePublishedFile: { url in
+                    synchronizationAttempts += 1
+                    XCTAssertEqual(url, self.profileURL(profileIdentifier))
+                    if failSynchronization { throw Failure.injectedWrite }
+                    try ApprovalStoreTestPersistence.synchronize(url)
+                }
+            )
+            func commit() async -> ExtensionBridge.StoreMutationResult {
+                if checkpointsBroadcast {
+                    return await writer.prepareBroadcast(
+                        permit: permit,
+                        recoveryResponse: expected,
+                        authority: .ordinary
+                    )
+                }
+                return await writer.complete(
+                    permit: permit,
+                    response: expected,
+                    authority: .ordinary
+                )
+            }
+
+            let first = await commit()
+            XCTAssertEqual(first, .retryablePersistenceFailure)
+            let repeated = await commit()
+            XCTAssertEqual(repeated, .retryablePersistenceFailure)
+            XCTAssertEqual(synchronizationAttempts, 1)
+            let competingLock = CrossProcessFileLock(fileURL: operationLockURL(handle))
+            XCTAssertFalse(try competingLock.tryAcquireExisting())
+            competingLock.release()
+
+            failSynchronization = false
+            let retried = await commit()
+            XCTAssertEqual(retried, .persisted)
+            XCTAssertEqual(synchronizationAttempts, 2)
+            if !checkpointsBroadcast {
+                XCTAssertTrue(try competingLock.tryAcquireExisting())
+                competingLock.release()
+            }
+            permit.releaseLease()
+            let recovered = try responseJSON(await bridge.readResponse(
+                id: handle.id,
+                configurationKey: fixture.request.configurationKey,
+                requestToken: handle.requestToken,
+                profileIdentifier: profileIdentifier
+            ))
+            XCTAssertEqual(recovered as NSDictionary, expected.json as NSDictionary)
+        }
+    }
+
+    func testAmbiguousAndRepeatedAcknowledgmentRequirePublishedFileSynchronization()
+        async throws {
+        let fixture = try makeFixture(id: 977)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        let completed = await bridge.complete(
+            handle: handle,
+            response: response(for: fixture.request)
+        )
+        XCTAssertEqual(completed, .persisted)
+        var failSynchronization = true
+        var synchronizationAttempts = 0
+        let writer = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                try data.write(to: url, options: .atomic)
+                throw Failure.injectedWrite
+            },
+            synchronizePublishedFile: { url in
+                synchronizationAttempts += 1
+                if failSynchronization { throw Failure.injectedWrite }
+                try ApprovalStoreTestPersistence.synchronize(url)
+            }
+        )
+        let first = await writer.acknowledgeResponse(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey
+        )
+        XCTAssertEqual(first, .retryablePersistenceFailure)
+        XCTAssertEqual(try firstStoredState("completed")["acknowledged"] as? Bool, true)
+        let repeated = await writer.acknowledgeResponse(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey
+        )
+        XCTAssertEqual(repeated, .retryablePersistenceFailure)
+        XCTAssertEqual(synchronizationAttempts, 2)
+
+        failSynchronization = false
+        let retried = await writer.acknowledgeResponse(
+            handle: handle,
+            configurationKey: fixture.request.configurationKey
+        )
+        XCTAssertEqual(retried, .persisted)
+        XCTAssertEqual(synchronizationAttempts, 3)
+        guard case .available(let listed) = await writer.list(profileIdentifier: nil) else {
+            return XCTFail("Expected synchronized acknowledgment to remain readable")
+        }
+        XCTAssertTrue(listed.isEmpty)
+    }
+
+    func testFailedUnrelatedProfileMutationPreservesBroadcastRecovery()
+        async throws {
+        let fixture = try makeFixture(id: 978)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        let other = try makeFixture(id: 979)
+        let otherHandle = try accepted(await bridge.enqueue(
+            ingress: other.ingress,
+            profileIdentifier: nil
+        )).handle
+        let claim = try approvalClaim(await bridge.claim(handle: handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        defer { permit.releaseLease() }
+        let recovery = ambiguousSubmissionResponse(
+            for: fixture.request,
+            transactionHash: "0x1234"
+        ).markingApprovalCommitted()
+        let prepared = await bridge.prepareBroadcast(
+            permit: permit,
+            recoveryResponse: recovery,
+            authority: .ordinary
+        )
+        XCTAssertEqual(prepared, .persisted)
+        let failingWriter = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                try data.write(to: url, options: .atomic)
+                throw Failure.injectedWrite
+            },
+            synchronizePublishedFile: { _ in throw Failure.injectedWrite }
+        )
+        let rejected = await failingWriter.reject(handle: otherHandle)
+        XCTAssertEqual(rejected, .retryablePersistenceFailure)
+        let repeatedCheckpoint = await failingWriter.prepareBroadcast(
+            permit: permit,
+            recoveryResponse: recovery,
+            authority: .ordinary
+        )
+        XCTAssertEqual(repeatedCheckpoint, .retryablePersistenceFailure)
+
+        permit.releaseLease()
+        let restarted = makeBridge(clock: { self.clock.now })
+        let recovered = try responseJSON(await restarted.readResponse(
+            id: handle.id,
+            configurationKey: fixture.request.configurationKey,
+            requestToken: handle.requestToken,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(recovered as NSDictionary, recovery.json as NSDictionary)
+        let otherResponse = try responseJSON(await restarted.readResponse(
+            id: otherHandle.id,
+            configurationKey: other.request.configurationKey,
+            requestToken: otherHandle.requestToken,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual((otherResponse["error"] as? [String: Any])?["code"] as? Int, 4001)
+    }
+
+    @MainActor
+    func testBroadcastIsNotSentWhenCheckpointPublicationCannotBeSynchronized()
+        async throws {
+        let fixture = try makeFixture(id: 980)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        let claim = try approvalClaim(await bridge.claim(handle: handle))
+        defer { claim.releaseLease() }
+        let recovery = ambiguousSubmissionResponse(
+            for: fixture.request,
+            transactionHash: "0x1234"
+        )
+        var synchronizationAttempts = 0
+        let synchronize: (URL) throws -> Void = { _ in
+            synchronizationAttempts += 1
+            throw Failure.injectedWrite
+        }
+        let writer = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                try data.write(to: url, options: .atomic)
+                try synchronize(url)
+            },
+            synchronizePublishedFile: synchronize
+        )
+        let executor = DurableApprovalExecutor(store: writer)
+        var sends = 0
+        let result = await executor.executeOrdinary(claim: claim) {
+            .broadcast(PreparedBroadcast(recoveryResponse: recovery, send: {
+                sends += 1
+                return self.response(for: fixture.request)
+            }))
+        }
+        XCTAssertEqual(result, .retryablePersistenceFailure)
+        XCTAssertEqual(synchronizationAttempts, 1)
+        XCTAssertEqual(sends, 0)
+
+        claim.releaseLease()
+        let recovered = try responseJSON(await bridge.readResponse(
+            id: handle.id,
+            configurationKey: fixture.request.configurationKey,
+            requestToken: handle.requestToken,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(
+            recovered as NSDictionary,
+            recovery.markingApprovalCommitted().json as NSDictionary
+        )
+        XCTAssertEqual(sends, 0)
+    }
+
+    func testRepeatedNativeReceiptAndStagingRequirePublishedFileSynchronization()
+        async throws {
+        let fixture = try makeFixture(id: 981)
+        let admission = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        ))
+        let owner = storedRequestNativeOwner()
+        let receipt = await bridge.recordNativeDeliveryReceipt(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            owner: owner
+        )
+        XCTAssertEqual(receipt, .persisted)
+        let approvedAt = clock.now
+        let staged = await bridge.markNativeApprovalReady(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier,
+            approvedAt: approvedAt
+        )
+        XCTAssertEqual(staged, .persisted)
+        var failSynchronization = true
+        let observer = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { _, _ in XCTFail("An exact native retry must not rewrite the profile") },
+            synchronizePublishedFile: { url in
+                if failSynchronization { throw Failure.injectedWrite }
+                try ApprovalStoreTestPersistence.synchronize(url)
+            }
+        )
+        for expected in [ExtensionBridge.StoreMutationResult.retryablePersistenceFailure, .persisted] {
+            let repeatedReceipt = await observer.recordNativeDeliveryReceipt(
+                handle: admission.handle,
+                nativeDeliveryNonce: admission.nativeDeliveryNonce,
+                owner: owner
+            )
+            XCTAssertEqual(repeatedReceipt, expected)
+            let repeatedStaging = await observer.markNativeApprovalReady(
+                handle: admission.handle,
+                nativeDeliveryNonce: admission.nativeDeliveryNonce,
+                runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier,
+                approvedAt: approvedAt
+            )
+            XCTAssertEqual(repeatedStaging, expected)
+            failSynchronization = false
         }
     }
 
@@ -3975,7 +4406,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 if failWrites, url.pathExtension == "state" {
                     throw Failure.injectedWrite
                 }
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
             }
         )
         let fixture = try makeFixture(id: 719)
@@ -4095,7 +4526,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         bridge = makeBridge(
             clock: { self.clock.now },
             atomicWrite: { data, url in
-                try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                try ApprovalStoreTestPersistence.write(data, url)
                 throw Failure.injectedWrite
             }
         )
@@ -4213,7 +4644,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var fails = true
         bridge = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
             if fails { throw Failure.injectedWrite }
-            try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+            try ApprovalStoreTestPersistence.write(data, url)
         })
         guard case .unavailable = await bridge.beginNativeExecutionRead(
             handle: handle,
@@ -5975,10 +6406,69 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
     #endif
 
+    private func assertAdmissionRetryRequiresSynchronization(
+        original: Fixture,
+        retry: Fixture,
+        admissionKind: ExtensionBridge.AdmissionKind,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        var writes = 0
+        var synchronizationAttempts = 0
+        var failSynchronization = true
+        let writer = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                writes += 1
+                try data.write(to: url, options: .atomic)
+                throw Failure.injectedWrite
+            },
+            synchronizePublishedFile: { url in
+                synchronizationAttempts += 1
+                XCTAssertEqual(url, self.defaultProfileURL, file: file, line: line)
+                if failSynchronization { throw Failure.injectedWrite }
+                try ApprovalStoreTestPersistence.synchronize(url)
+            }
+        )
+        guard case .unavailable = await writer.enqueue(
+            ingress: original.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("Initial admission must require synchronization", file: file, line: line) }
+        let originalData = try Data(contentsOf: defaultProfileURL)
+        guard case .available(let snapshots) = await writer.list(profileIdentifier: nil),
+              snapshots.count == 1,
+              let snapshot = snapshots.values.first else {
+            return XCTFail("Expected one visible admission", file: file, line: line)
+        }
+
+        for _ in 0..<2 {
+            guard case .unavailable = await writer.enqueue(
+                ingress: retry.ingress,
+                profileIdentifier: nil
+            ) else { return XCTFail("Admission retries must require synchronization", file: file, line: line) }
+        }
+        XCTAssertEqual(synchronizationAttempts, 3, file: file, line: line)
+        failSynchronization = false
+        let recovered = try accepted(await writer.enqueue(
+            ingress: retry.ingress,
+            profileIdentifier: nil
+        ), file: file, line: line)
+        XCTAssertEqual(recovered.admissionKind, admissionKind, file: file, line: line)
+        XCTAssertEqual(recovered.handle, snapshot.handle, file: file, line: line)
+        XCTAssertEqual(recovered.nativeDeliveryNonce, snapshot.nativeDeliveryNonce, file: file, line: line)
+        XCTAssertEqual(recovered.revisions, original.ingress.revisions, file: file, line: line)
+        XCTAssertTrue(recovered.approvalRequired, file: file, line: line)
+        XCTAssertEqual(synchronizationAttempts, 4, file: file, line: line)
+        XCTAssertEqual(writes, 1, file: file, line: line)
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), originalData, file: file, line: line)
+    }
+
     private func makeBridge(
         clock: @escaping () -> Date = Date.init,
         atomicWrite: @escaping ExtensionRequestFileStore.AtomicWrite =
-            ExtensionRequestFileStore.defaultAtomicWrite,
+            ApprovalStoreTestPersistence.write,
+        synchronizePublishedFile: @escaping (URL) throws -> Void =
+            ApprovalStoreTestPersistence.synchronize,
         readData: @escaping ExtensionRequestFileStore.ReadData =
             ExtensionRequestFileStore.defaultReadData,
         readFileSize: @escaping ExtensionRequestFileStore.ReadFileSize =
@@ -5986,9 +6476,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     ) -> ExtensionBridge {
         ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: rootURL,
+            directoryBoundary: rootURL,
             dependencies: .init(
                 clock: clock,
                 atomicWrite: atomicWrite,
+                synchronizePublishedFile: synchronizePublishedFile,
                 readData: readData,
                 readFileSize: readFileSize
             )

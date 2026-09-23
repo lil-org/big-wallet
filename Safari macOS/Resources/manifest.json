@@ -4,6 +4,9 @@
   "name": "__MSG_extension_name__",
   "description": "__MSG_extension_description__",
   "version": "1.0.99",
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+  },
   "icons": {
     "48": "images/icon-48.png",
     "96": "images/icon-96.png",

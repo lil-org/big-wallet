@@ -243,7 +243,7 @@
 
     function decodeReview(review, actions) {
         if (!isRecord(review)) { return null; }
-        const {kind, reviewToken, title, iconURL, primaryTitle} = review;
+        const {kind, reviewToken, title, primaryTitle} = review;
         if (!isRequestToken(reviewToken) || typeof title !== "string" ||
             !isOptionalString(primaryTitle) || actions.includes("retry") ||
             (kind !== "sendTransaction" && (review.alert !== undefined ||
@@ -269,8 +269,7 @@
             default:
                 return null;
         }
-        return content && definedFields({kind, reviewToken, title,
-            iconURL: typeof iconURL === "string" ? iconURL : undefined, primaryTitle, ...content});
+        return content && definedFields({kind, reviewToken, title, primaryTitle, ...content});
     }
 
     function decodeApprovalState(value, expectedRequestID) {

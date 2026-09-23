@@ -4,6 +4,7 @@ import Foundation
 
 final class ExtensionRequestFileStore {
     typealias AtomicWrite = (Data, URL) throws -> Void
+    typealias SynchronizePublishedFile = (URL) throws -> Void
     typealias ReadData = (URL) throws -> Data
     typealias ReadFileSize = (URL) throws -> Int?
     typealias RemoveItem = (URL) throws -> Void
@@ -15,7 +16,9 @@ final class ExtensionRequestFileStore {
         let crossProcessLock: CrossProcessFileLock?
         let crossProcessLockTimeoutNanoseconds: UInt64
         let crossProcessLockPollNanoseconds: UInt64
-        let atomicWrite: AtomicWrite
+        let atomicWrite: AtomicWrite?
+        let synchronizePublishedFile: SynchronizePublishedFile?
+        let persistenceOperations: DurableProfilePersistence.Operations
         let readData: ReadData
         let readFileSize: ReadFileSize
         let removeItem: RemoveItem
@@ -27,7 +30,9 @@ final class ExtensionRequestFileStore {
             crossProcessLock: CrossProcessFileLock? = nil,
             crossProcessLockTimeoutNanoseconds: UInt64 = 1_000_000_000,
             crossProcessLockPollNanoseconds: UInt64 = 10_000_000,
-            atomicWrite: @escaping AtomicWrite = ExtensionRequestFileStore.defaultAtomicWrite,
+            atomicWrite: AtomicWrite? = nil,
+            synchronizePublishedFile: SynchronizePublishedFile? = nil,
+            persistenceOperations: DurableProfilePersistence.Operations = .live,
             readData: @escaping ReadData = ExtensionRequestFileStore.defaultReadData,
             readFileSize: @escaping ReadFileSize = ExtensionRequestFileStore.defaultReadFileSize,
             removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem,
@@ -39,6 +44,8 @@ final class ExtensionRequestFileStore {
             self.crossProcessLockTimeoutNanoseconds = crossProcessLockTimeoutNanoseconds
             self.crossProcessLockPollNanoseconds = crossProcessLockPollNanoseconds
             self.atomicWrite = atomicWrite
+            self.synchronizePublishedFile = synchronizePublishedFile
+            self.persistenceOperations = persistenceOperations
             self.readData = readData
             self.readFileSize = readFileSize
             self.removeItem = removeItem
@@ -276,15 +283,12 @@ final class ExtensionRequestFileStore {
     private let lockTimeout: UInt64
     private let lockPoll: UInt64
     private let atomicWrite: AtomicWrite
+    private let synchronizePublishedFile: SynchronizePublishedFile
     private let readData: ReadData
     private let readFileSize: ReadFileSize
     private let removeItem: RemoveItem
     private let parseRequest: ParseRequest
     private let fileManager = FileManager.default
-
-    static func defaultAtomicWrite(_ data: Data, _ url: URL) throws {
-        try data.write(to: url, options: .atomic)
-    }
 
     static func defaultReadData(_ url: URL) throws -> Data {
         try Data(contentsOf: url)
@@ -299,8 +303,23 @@ final class ExtensionRequestFileStore {
         try FileManager.default.removeItem(at: url)
     }
 
+    convenience init(
+        containerURL: URL?,
+        dependencies: Dependencies = .init()
+    ) {
+        self.init(
+            rootURL: containerURL?
+                .appendingPathComponent("Library", isDirectory: true)
+                .appendingPathComponent("Application Support", isDirectory: true)
+                .appendingPathComponent("BigWalletExtensionBridge", isDirectory: true),
+            directoryBoundary: containerURL,
+            dependencies: dependencies
+        )
+    }
+
     init(
         rootURL: URL?,
+        directoryBoundary: URL?,
         dependencies: Dependencies = .init()
     ) {
         self.rootURL = rootURL
@@ -308,7 +327,20 @@ final class ExtensionRequestFileStore {
         token = dependencies.token
         lockTimeout = dependencies.crossProcessLockTimeoutNanoseconds
         lockPoll = dependencies.crossProcessLockPollNanoseconds
-        atomicWrite = dependencies.atomicWrite
+        let persistence = directoryBoundary.map {
+            DurableProfilePersistence(
+                directoryBoundary: $0,
+                operations: dependencies.persistenceOperations
+            )
+        }
+        atomicWrite = dependencies.atomicWrite ?? { data, url in
+            guard let persistence else { throw CocoaError(.fileWriteUnknown) }
+            try persistence.replace(data, at: url)
+        }
+        synchronizePublishedFile = dependencies.synchronizePublishedFile ?? { url in
+            guard let persistence else { throw CocoaError(.fileWriteUnknown) }
+            try persistence.synchronizePublishedFile(at: url)
+        }
         readData = dependencies.readData
         readFileSize = dependencies.readFileSize
         removeItem = dependencies.removeItem
@@ -355,6 +387,7 @@ final class ExtensionRequestFileStore {
                 } else {
                     approvalRequired = true
                 }
+                guard synchronizeProfileLocked(profileIdentifier) else { return .unavailable }
                 return .accepted(
                     handle: existing.handle,
                     approvalRequired: approvalRequired,
@@ -385,6 +418,7 @@ final class ExtensionRequestFileStore {
                    record.configurationKey == ingress.request.configurationKey &&
                        !record.responseAcknowledged && isManualSwitch(record, in: profile)
                }) {
+                guard synchronizeProfileLocked(profileIdentifier) else { return .unavailable }
                 return .accepted(
                     handle: existing.handle,
                     approvalRequired: existing.state.isActive,
@@ -666,7 +700,8 @@ final class ExtensionRequestFileStore {
                 return .ownershipLost
             }
             if let existing = profile.state.records[index].readyApproval {
-                return existing.approvedAt == approvedAt ? .persisted : .ownershipLost
+                guard existing.approvedAt == approvedAt else { return .ownershipLost }
+                return synchronizedMutationResultLocked(handle.profileIdentifier)
             }
             guard approvedAt >= profile.state.records[index].createdAt,
                   let receipt = profile.state.records[index].nativeDeliveryReceipt else {
@@ -709,7 +744,8 @@ final class ExtensionRequestFileStore {
                 return .ownershipLost
             }
             if let existing = profile.state.records[index].nativeDeliveryReceipt {
-                return existing == receipt ? .persisted : .ownershipLost
+                guard existing == receipt else { return .ownershipLost }
+                return synchronizedMutationResultLocked(handle.profileIdentifier)
             }
             profile.state.records[index].state = .pending(
                 request: request,
@@ -740,7 +776,7 @@ final class ExtensionRequestFileStore {
                 return .ownershipLost
             }
             guard let existing = profile.state.records[index].nativeDeliveryReceipt else {
-                return .persisted
+                return synchronizedMutationResultLocked(handle.profileIdentifier)
             }
             guard existing.nativeDeliveryNonce == nativeDeliveryNonce,
                   existing.owner.runtimeInstanceIdentifier ==
@@ -775,6 +811,9 @@ final class ExtensionRequestFileStore {
                 return .ownershipLost
             }
             if case .completed(_, let response, _) = profile.state.records[index].state {
+                guard synchronizeProfileLocked(handle.profileIdentifier) else {
+                    return .retryablePersistenceFailure
+                }
                 if let json = responseJSON(response, id: handle.id),
                    let terminal = ResponseToExtension(json: json),
                    case .error(let error) = terminal.payload,
@@ -1179,7 +1218,8 @@ final class ExtensionRequestFileStore {
                 guard permit.matches(handle: permit.handle, value: claimID) else {
                     return .ownershipLost
                 }
-                return existing == responseData ? .persisted : .ownershipLost
+                guard existing == responseData else { return .ownershipLost }
+                return synchronizedMutationResultLocked(permit.handle.profileIdentifier)
             case .pending, .completed:
                 return .ownershipLost
             }
@@ -1212,6 +1252,9 @@ final class ExtensionRequestFileStore {
                 claimID = value
                 recoveryResponseData = recoveryResponse
             case .completed:
+                guard synchronizeProfileLocked(permit.handle.profileIdentifier) else {
+                    return .retryablePersistenceFailure
+                }
                 permit.releaseLease()
                 return .persisted
             case .pending:
@@ -1326,7 +1369,8 @@ final class ExtensionRequestFileStore {
             case .pending, .claimed, .broadcastPrepared:
                 return .pending
             case .completed(_, let responseData, _):
-                guard let response = responseJSON(responseData, id: handle.id) else {
+                guard let response = responseJSON(responseData, id: handle.id),
+                      synchronizeProfileLocked(handle.profileIdentifier) else {
                     return .unavailable
                 }
                 return .response(response)
@@ -1352,7 +1396,7 @@ final class ExtensionRequestFileStore {
                 return .retryablePersistenceFailure
             }
             if acknowledged {
-                return .persisted
+                return synchronizedMutationResultLocked(handle.profileIdentifier)
             }
             profile.state.records[index].state = .completed(
                 since: since,
@@ -2087,8 +2131,28 @@ final class ExtensionRequestFileStore {
                   case .data(let persistedData) = readProfileDataLocked(at: url) else {
                 return false
             }
-            return persistedData == data
+            return persistedData == data &&
+                synchronizeProfileLocked(profile.state.profileIdentifier)
         }
+    }
+
+    private func synchronizeProfileLocked(_ profileIdentifier: UUID?) -> Bool {
+        let url = profileURL(profileIdentifier)
+        guard case .regular = regularFileStatusLocked(at: url) else { return false }
+        do {
+            try synchronizePublishedFile(url)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func synchronizedMutationResultLocked(
+        _ profileIdentifier: UUID?
+    ) -> ExtensionBridge.StoreMutationResult {
+        synchronizeProfileLocked(profileIdentifier)
+            ? .persisted
+            : .retryablePersistenceFailure
     }
 
     private static func encode<Value: Encodable>(_ value: Value) throws -> Data {

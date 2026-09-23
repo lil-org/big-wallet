@@ -172,16 +172,14 @@ struct PopupReview: Encodable {
 
     let reviewToken: UUID
     let title: String
-    var iconURL: String?
     var content: Content
 
-    private enum CodingKeys: String, CodingKey { case reviewToken, title, iconURL, kind }
+    private enum CodingKeys: String, CodingKey { case reviewToken, title, kind }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(reviewToken.uuidString.lowercased(), forKey: .reviewToken)
         try container.encode(title, forKey: .title)
-        try container.encodeIfPresent(iconURL, forKey: .iconURL)
         switch content {
         case .selectAccount(let review):
             try container.encode("selectAccount", forKey: .kind)
@@ -202,7 +200,6 @@ struct PopupReview: Encodable {
     }
 
     mutating func removeDecorativeImages() {
-        iconURL = nil
         switch content {
         case .selectAccount(var review):
             review.removeDecorativeImages()

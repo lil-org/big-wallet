@@ -3,6 +3,22 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
+enum ApprovalStoreTestPersistence {
+    static func write(_ data: Data, _ url: URL) throws {
+        try fixturePersistence(for: url).replace(data, at: url)
+    }
+
+    static func synchronize(_ url: URL) throws {
+        try fixturePersistence(for: url).synchronizePublishedFile(at: url)
+    }
+
+    private static func fixturePersistence(for url: URL) -> DurableProfilePersistence {
+        DurableProfilePersistence(directoryBoundary: url
+            .deletingLastPathComponent()
+            .deletingLastPathComponent())
+    }
+}
+
 func makeRequestScopedWalletAccessForTesting(
     _ access: any OwnedWalletSigningAccess = TestWalletSigningAccess(),
     approvedAccount: WalletAccountDescriptor,
@@ -170,7 +186,7 @@ private final class ApprovalStoreWrites: @unchecked Sendable {
     func write(_ data: Data, to url: URL) throws {
         let failure = lock.withLock { failures.isEmpty ? nil : failures.removeFirst() }
         if failure == false { throw CocoaError(.fileWriteUnknown) }
-        try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+        try ApprovalStoreTestPersistence.write(data, url)
         if failure == true { throw CocoaError(.fileWriteUnknown) }
     }
 
@@ -216,6 +232,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         self.writes = writes
         bridge = ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: rootURL,
+            directoryBoundary: rootURL,
             dependencies: .init(clock: clock, atomicWrite: writes.write)
         ))
     }
@@ -263,10 +280,11 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
 
     func makeObserverBridge(
         atomicWrite: @escaping ExtensionRequestFileStore.AtomicWrite =
-            ExtensionRequestFileStore.defaultAtomicWrite
+            ApprovalStoreTestPersistence.write
     ) -> ExtensionBridge {
         ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: rootURL,
+            directoryBoundary: rootURL,
             dependencies: .init(clock: clock, atomicWrite: atomicWrite)
         ))
     }

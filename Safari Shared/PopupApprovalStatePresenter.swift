@@ -145,7 +145,6 @@ final class PopupApprovalStatePresenter {
             content: .review(PopupReview(
                 reviewToken: session.reviewToken,
                 title: title(for: action),
-                iconURL: session.request.favicon,
                 content: content
             ), actions: actions, feedback: error)
         )

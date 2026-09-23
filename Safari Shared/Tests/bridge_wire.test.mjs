@@ -609,6 +609,9 @@ test("keeps the real platform manifests on their intended MV3 routes", async () 
     const project = JSON.parse(projectResult.stdout);
     for (const manifest of [sharedManifest, macManifest]) {
         assert.equal(manifest.manifest_version, 3);
+        assert.deepEqual(manifest.content_security_policy, {
+            extension_pages: "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        });
         assert.equal(manifest.background.service_worker, "service_worker.js");
         assert.deepEqual(manifest.content_scripts[0].js, ["bridge_wire.js", "content.js"]);
         assert.equal(manifest.action.default_icon["16"], "images/toolbar-icon-16.png");

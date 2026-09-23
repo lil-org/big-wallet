@@ -161,8 +161,7 @@
           "croppedAddress": "0x1111…1111",
           "icon": "data:image/png;base64,AA=="
         },
-        "meta": "Hello",
-        "iconURL": "https://wallet.example/icon.png"
+        "meta": "Hello"
       }
     }
   },

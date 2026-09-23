@@ -24,6 +24,15 @@ export function popupMarkupInventory(markup) {
             attributes[attribute[1]] = attribute[2] ?? "";
             remaining = remaining.slice(attribute[0].length);
         }
+        assert.ok(!Object.keys(attributes).some(name => /^on/i.test(name) || name.toLowerCase() === "style"),
+            "Popup markup must not contain inline handlers or styles");
+        if (tag === "link") {
+            assert.equal(attributes.rel, "stylesheet", "Popup links must be stylesheets");
+            assert.match(attributes.href, /^[\w-]+\.css$/, "Popup stylesheets must be local CSS files");
+        }
+        if (tag === "img") {
+            assert.match(attributes.src, /^images\/[\w-]+\.(?:svg|png)$/, "Popup image markup must use bundled images");
+        }
         if (Object.hasOwn(attributes, "id")) {
             assert.ok(attributes.id && !ids.has(attributes.id), `Duplicate or empty popup ID: ${attributes.id}`);
             ids.add(attributes.id);

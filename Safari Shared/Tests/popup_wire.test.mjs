@@ -29,11 +29,9 @@ test("popup decoder projects display fields without admitting new capabilities",
 
 test("popup decoding removes malformed decorative images without changing the source", () => {
     const source = structuredClone(fixtures.signMessage);
-    source.review.iconURL = {invalid: true};
     source.review.account.icon = 7;
     const before = structuredClone(source);
     const decoded = wire.decodeApprovalState(source, source.id);
-    assert.equal(decoded.review.iconURL, undefined);
     assert.equal(decoded.review.account.icon, undefined);
     assert.deepEqual(source, before);
     source.review.meta = null;
@@ -124,12 +122,11 @@ test("popup optional fields omit undefined and reject null except for decorative
     }
 
     const message = structuredClone(fixtures.signMessage);
-    delete message.review.iconURL;
     delete message.review.account.icon;
     const messageWithUndefined = structuredClone(message);
     Object.assign(messageWithUndefined.review, {
         primaryTitle: undefined, alert: undefined, clusters: undefined,
-        requiresClusterSelection: undefined, iconURL: undefined,
+        requiresClusterSelection: undefined,
     });
     messageWithUndefined.review.account.icon = undefined;
     assert.deepEqual(wire.decodeApprovalState(messageWithUndefined, message.id), message);
@@ -138,7 +135,6 @@ test("popup optional fields omit undefined and reject null except for decorative
         source.review[field] = null;
         assert.equal(wire.decodeApprovalState(source, source.id), null);
     }
-    messageWithUndefined.review.iconURL = null;
     messageWithUndefined.review.account.icon = null;
     assert.deepEqual(wire.decodeApprovalState(messageWithUndefined, message.id), message);
 });

@@ -1155,7 +1155,6 @@ test("approval reviews omit malformed images without changing approval content o
                 ...original,
                 review: Object.freeze({
                     ...original.review,
-                    iconURL: image,
                     ...(original.review.account ? {account: Object.freeze({...original.review.account, icon: image})} : {}),
                     ...(original.review.accounts ? {
                         accounts: Object.freeze(original.review.accounts.map(account => Object.freeze({...account, icon: image}))),
@@ -1170,18 +1169,17 @@ test("approval reviews omit malformed images without changing approval content o
             await harness.boot();
 
             assert.deepEqual(normalized(harness.controller.state), original);
-            assert.equal(harness.get("request-favicon").classList.contains("hidden"), true);
+            assert.equal(harness.get("requester-icon").src, "images/requester-globe.svg");
             assert.equal(harness.get("button-approve").disabled, false);
             assert.deepEqual(normalized(response), before);
         }
     }
 });
 
-test("valid and absent approval images retain their existing rendering", async () => {
-    for (const images of [{}, {iconURL: "https://wallet.example/icon.png", icon: "data:image/png;base64,aW1hZ2U="}]) {
+test("approval reviews use a bundled requester icon and preserve account images", async () => {
+    for (const images of [{}, {icon: "data:image/png;base64,aW1hZ2U="}]) {
         const request = pendingRequest();
         const response = messageState(request, {
-            ...(images.iconURL ? {iconURL: images.iconURL} : {}),
             account: {name: "Primary", croppedAddress: "0x1234", ...(images.icon ? {icon: images.icon} : {})},
         });
         const harness = popupHarness({requests: [request]});
@@ -1190,10 +1188,8 @@ test("valid and absent approval images retain their existing rendering", async (
         await harness.boot();
 
         assert.deepEqual(normalized(harness.controller.state), response);
-        assert.equal(harness.get("request-favicon").classList.contains("hidden"), !images.iconURL);
-        if (images.iconURL) {
-            assert.equal(harness.get("request-favicon").src, images.iconURL);
-        }
+        assert.equal(harness.get("requester-icon").classList.contains("hidden"), false);
+        assert.equal(harness.get("requester-icon").src, "images/requester-globe.svg");
         const accountImages = harness.get("signing-account").children.filter(child => child.className === "account-icon");
         assert.equal(accountImages.length, images.icon ? 1 : 0);
         if (images.icon) { assert.equal(accountImages[0].src, images.icon); }
@@ -1204,7 +1200,6 @@ test("poll and transaction edit responses use the same nonfatal image normalizat
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
     const response = transactionState(controller.request, {
-        iconURL: null,
         account: {name: "Primary", croppedAddress: "0x1234", icon: false},
         reviewToken: requestToken(102),
         valueLine: "Value: 1 ETH",
@@ -1239,10 +1234,8 @@ test("poll and transaction edit responses use the same nonfatal image normalizat
     assert.equal(controller.state.review.reviewToken, requestToken(103));
     assert.equal(harness.get("edit-gas-price").value, "3");
     assert.equal(harness.get("button-approve").disabled, false);
-    assert.equal(Object.hasOwn(controller.state.review, "iconURL"), false);
     assert.equal(Object.hasOwn(controller.state.review.account, "icon"), false);
     assert.deepEqual(normalized(response), before);
-    assert.equal(edited.review.iconURL, null);
     assert.equal(edited.review.account.icon, false);
 });
 
@@ -1264,9 +1257,7 @@ test("discarding invalid images never makes malformed approval content actionabl
         messageState(request, {kind: "unknown"}),
     ]) {
         const harness = popupHarness({requests: [request]});
-        harness.setState(request, response.review
-            ? {...response, review: {...response.review, iconURL: null}}
-            : response);
+        harness.setState(request, response);
 
         await harness.boot();
 

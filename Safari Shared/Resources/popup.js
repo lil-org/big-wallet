@@ -569,7 +569,6 @@ class PopupRequestController {
         show("working-overlay");
         setText("request-title", "");
         setText("request-host", this.request.host);
-        hide("request-favicon");
         hide("request-error");
         for (const section of ["accounts", "message", "transaction", "chain"]) {
             hide("section-" + section);
@@ -635,11 +634,6 @@ class PopupRequestController {
 
         setText("request-title", state.review?.title || "");
         setText("request-host", state.host || "");
-        const favicon = document.getElementById("request-favicon");
-        if (state.review?.iconURL && favicon.src !== state.review.iconURL) {
-            favicon.src = state.review.iconURL;
-        }
-        setHidden("request-favicon", !state.review?.iconURL);
         setOptionalText("request-error", "request-error", state.error);
         hide("section-accounts");
         hide("section-message");

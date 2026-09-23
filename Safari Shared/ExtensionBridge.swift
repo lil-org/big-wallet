@@ -488,17 +488,10 @@ actor ExtensionBridge {
     static let privateBrowsingKey = "__bwPrivateBrowsing"
 
     static let shared = ExtensionBridge(store: ExtensionRequestFileStore(
-        rootURL: sharedRootURL
-    ))
-
-    private static var sharedRootURL: URL? {
-        FileManager.default.containerURL(
+        containerURL: FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
-        )?
-        .appendingPathComponent("Library", isDirectory: true)
-        .appendingPathComponent("Application Support", isDirectory: true)
-        .appendingPathComponent("BigWalletExtensionBridge", isDirectory: true)
-    }
+        )
+    ))
 
     private let store: ExtensionRequestFileStore
     init(store: ExtensionRequestFileStore) { self.store = store }

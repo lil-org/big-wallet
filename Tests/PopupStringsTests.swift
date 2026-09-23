@@ -43,7 +43,6 @@ final class PopupStringsTests: XCTestCase {
     private func reviewResponse(
         _ content: PopupReview.Content,
         title: String = "Review",
-        iconURL: String? = nil,
         actions: [PopupApprovalState.Action] = [.approve, .reject]
     ) -> PopupResponse {
         .command(.ok(PopupApprovalState(
@@ -52,7 +51,6 @@ final class PopupStringsTests: XCTestCase {
             content: .review(PopupReview(
                 reviewToken: UUID(uuidString: reviewToken)!,
                 title: title,
-                iconURL: iconURL,
                 content: content
             ), actions: actions, feedback: nil)
         )))
@@ -90,7 +88,7 @@ final class PopupStringsTests: XCTestCase {
             allowsEmptySelection: false,
             emptyMessage: nil,
             primaryTitle: nil
-        )), iconURL: icon)
+        )))
     }
 
     private func boundedResponse(
@@ -382,17 +380,19 @@ final class PopupStringsTests: XCTestCase {
             reviewResponse(.signMessage(.init(
                 meta: "Preserve this message", account: .init(name: "Account", croppedAddress: "1111", icon: icon),
                 clusterSelection: nil
-            )), iconURL: icon),
-            reviewResponse(.sendTransaction(transaction), iconURL: icon),
+            ))),
+            reviewResponse(.sendTransaction(transaction)),
         ] {
             let bounded = try boundedResponse(response, for: approvalStateRequest())
             let review = try XCTUnwrap(bounded["review"] as? [String: Any])
             XCTAssertEqual(bounded["state"] as? String, "review")
-            XCTAssertNil(review["iconURL"])
             XCTAssertNil((review["account"] as? [String: Any])?["icon"])
             XCTAssertNil((review["accounts"] as? [[String: Any]])?.first?["icon"])
             XCTAssertEqual(review["reviewToken"] as? String, reviewToken)
-            XCTAssertEqual((popupApprovalJSON(response)["review"] as? [String: Any])?["iconURL"] as? String, icon)
+            let originalReview = try XCTUnwrap(popupApprovalJSON(response)["review"] as? [String: Any])
+            let originalAccount = originalReview["account"] as? [String: Any] ??
+                (originalReview["accounts"] as? [[String: Any]])?.first
+            XCTAssertEqual(originalAccount?["icon"] as? String, icon)
         }
     }
 
@@ -497,7 +497,6 @@ final class PopupStringsTests: XCTestCase {
         let json = popupApprovalJSON(response)
         let review = try XCTUnwrap(json["review"] as? [String: Any])
         XCTAssertEqual(review["reviewToken"] as? String, token.uuidString.lowercased())
-        XCTAssertNil(review["iconURL"])
         XCTAssertNil(json["error"])
         XCTAssertNil(json["editsError"])
     }
@@ -560,7 +559,7 @@ final class PopupStringsTests: XCTestCase {
             "signMessage": reviewResponse(.signMessage(.init(
                 meta: "Hello", account: .init(name: "Primary", croppedAddress: "0x1111…1111", icon: "data:image/png;base64,AA=="),
                 clusterSelection: nil
-            )), title: "Sign Message", iconURL: "https://wallet.example/icon.png"),
+            )), title: "Sign Message"),
             "solanaSignMessage": reviewResponse(.signMessage(.init(
                 meta: "Transaction", account: .init(name: "Solana", croppedAddress: "1111…1111"),
                 clusterSelection: .init(clusters: [
