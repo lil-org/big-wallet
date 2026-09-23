@@ -51,7 +51,7 @@
         worker: freeze({
             __proto__: null,
             content: freeze([
-                "rpc", "message-to-wallet", "manualSwitchIntent", "getResponse",
+                "rpc", "message-to-wallet", "manualSwitchIntent", "getResponse", "consumeResponse",
                 "getLatestConfiguration", "disconnect",
             ]),
             popup: freeze([
@@ -62,7 +62,7 @@
         content: freeze({
             __proto__: null,
             worker: freeze([
-                "workflowProbe", "manualSwitchIntent", "configurationChanged", "responseReady",
+                "workflowProbe", "manualSwitchIntent", "configurationChanged", "responseReady", "requestActive",
             ]),
             popup: freeze(["workflowProbe", "manualSwitchIntent"]),
         }),

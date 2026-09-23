@@ -278,6 +278,7 @@ actor ExtensionBridge {
     }
     
     struct NativeExecutionContext: Codable, Equatable, Sendable {
+        let attemptID: UUID
         let revisions: ProviderRevisions
         let observedAt: Date
         let executionDeadline: Date
@@ -331,7 +332,7 @@ actor ExtensionBridge {
         deinit { release() }
     }
 
-    final class NativeExecutionReadLease: @unchecked Sendable {
+    final class NativeExecutionLease: @unchecked Sendable {
         let handle: Handle
         let context: NativeExecutionContext
         let nativeDeliveryNonce: NativeDeliveryNonce
@@ -449,8 +450,8 @@ actor ExtensionBridge {
         case notStaged, executing, responded, missing, unavailable
     }
 
-    enum NativeExecutionReadResult {
-        case acquired(NativeExecutionReadLease)
+    enum NativeExecutionResult {
+        case acquired(NativeExecutionLease)
         case needsDelivery(NativeDeliveryNonce)
         case pending, responseReady, missing, unavailable
     }
@@ -468,6 +469,11 @@ actor ExtensionBridge {
     }
 
     enum ResponseReadResult { case response([String: Any]), pending, missing, unavailable }
+    enum ResponseStatusResult: Equatable { case pending, ready, missing, unavailable }
+    enum NativeExecutionStatus: String { case awaitingReview, awaitingExecution, executing, completed }
+    enum ExecutionStatusResult: Equatable {
+        case status(NativeExecutionStatus), missing, unavailable
+    }
 
     static let workflowVersion = 3
     static let maximumPayloadBytes = 256 * 1024
@@ -646,6 +652,28 @@ actor ExtensionBridge {
         store.performMaintenance()
     }
 
+    func performMaintenance(profileIdentifier: UUID?) {
+        store.performMaintenance(profileIdentifier: profileIdentifier)
+    }
+
+    func responseStatus(
+        handle: Handle,
+        configurationKey: String,
+        manualOnly: Bool = false
+    ) -> ResponseStatusResult {
+        store.responseStatus(
+            handle: handle, configurationKey: configurationKey,
+            manualOnly: manualOnly
+        )
+    }
+
+    func executionStatus(
+        handle: Handle,
+        configurationKey: String
+    ) -> ExecutionStatusResult {
+        store.executionStatus(handle: handle, configurationKey: configurationKey)
+    }
+
     func listManualSwitchRequests(
         profileIdentifier: UUID?
     ) -> ManualSwitchRequestsResult {
@@ -678,15 +706,17 @@ actor ExtensionBridge {
         )
     }
 
-    func beginNativeExecutionRead(
+    func beginNativeExecution(
         handle: Handle,
         configurationKey: String,
+        attemptID: UUID,
         revisions: ProviderRevisions,
         executionDeadline: Date
-    ) -> NativeExecutionReadResult {
-        store.beginNativeExecutionRead(
+    ) -> NativeExecutionResult {
+        store.beginNativeExecution(
             handle: handle,
             configurationKey: configurationKey,
+            attemptID: attemptID,
             revisions: revisions,
             executionDeadline: executionDeadline
         )
@@ -812,7 +842,7 @@ actor ExtensionBridge {
         store.rollback(permit: permit)
     }
 
-    func readResponse(
+    func prepareResponseDelivery(
         id: Int,
         configurationKey: String,
         requestToken: String,
@@ -823,7 +853,7 @@ actor ExtensionBridge {
             requestToken: requestToken,
             profileIdentifier: profileIdentifier
         ) else { return .missing }
-        return store.readResponse(handle: handle, configurationKey: configurationKey)
+        return store.prepareResponseDelivery(handle: handle, configurationKey: configurationKey)
     }
 
     func acknowledgeResponse(

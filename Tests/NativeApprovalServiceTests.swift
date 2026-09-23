@@ -20,6 +20,143 @@
             return fixture
         }
 
+        func testStatusAndMaintenanceCommandsAcceptOnlyResponseIdentity() throws {
+            let token = UUID().uuidString.lowercased()
+            for subject in [
+                "getResponse", "getManualSwitchResponse", "getExecutionStatus",
+                "prepareResponseDelivery",
+            ] {
+                let message: [String: Any] = [
+                    "subject": subject, "id": 41,
+                    "workflowVersion": ExtensionBridge.workflowVersion,
+                    "configurationKey": "https://wallet.example", "requestToken": token,
+                ]
+                let decoded = try JSONDecoder().decode(
+                    InternalSafariRequest.self,
+                    from: JSONSerialization.data(withJSONObject: message)
+                )
+                let identity: InternalSafariRequest.ResponseIdentity
+                switch decoded.command {
+                case .page(.getResponse(let value)),
+                     .worker(.getManualSwitchResponse(let value)),
+                     .worker(.getExecutionStatus(let value)),
+                     .worker(.prepareResponseDelivery(let value)):
+                    identity = value
+                default: return XCTFail("Unexpected command for \(subject)")
+                }
+                XCTAssertEqual(identity.token.rawValue, token)
+                XCTAssertEqual(identity.configurationKey, "https://wallet.example")
+                for (key, value) in [
+                    "attemptID": UUID().uuidString.lowercased(),
+                    "revisions": ["ethereum": 0, "solana": 0],
+                    "executionDeadline": 1_800_000_100_000,
+                    "manualOnly": true,
+                    "decision": ["approved": true],
+                ] as [String: Any] {
+                    var invalid = message
+                    invalid[key] = value
+                    XCTAssertThrowsError(try JSONDecoder().decode(
+                        InternalSafariRequest.self,
+                        from: JSONSerialization.data(withJSONObject: invalid)
+                    ), "\(subject) accepted \(key)")
+                }
+            }
+        }
+
+        func testMaintenanceCommandRequiresDeliveryPermission() throws {
+            let message: [String: Any] = [
+                "subject": "maintainRequest", "id": 43,
+                "workflowVersion": ExtensionBridge.workflowVersion,
+                "configurationKey": "https://wallet.example",
+                "requestToken": UUID().uuidString.lowercased(),
+                "allowDelivery": false,
+            ]
+            let decoded = try JSONDecoder().decode(
+                InternalSafariRequest.self,
+                from: JSONSerialization.data(withJSONObject: message)
+            )
+            guard case .worker(.maintainRequest(let maintenance)) = decoded.command else {
+                return XCTFail("Expected maintenance command")
+            }
+            XCTAssertFalse(maintenance.allowDelivery)
+            for value in [nil, 1, "false"] as [Any?] {
+                var invalid = message
+                invalid["allowDelivery"] = value
+                XCTAssertThrowsError(try JSONDecoder().decode(
+                    InternalSafariRequest.self,
+                    from: JSONSerialization.data(withJSONObject: invalid)
+                ))
+            }
+            var extra = message
+            extra["decision"] = ["approved": true]
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                InternalSafariRequest.self,
+                from: JSONSerialization.data(withJSONObject: extra)
+            ))
+        }
+
+        func testPassiveMaintenanceNeverDeliversOrRetiresHelper() async throws {
+            for staged in [false, true] {
+                for exists in [false, true] {
+                    let f = try fixture()
+                    let request = try f.request()
+                    f.deliver(request, runtime: f.runtime(build: "147"), staged: staged)
+                    if !exists { f.processes.removeAll() }
+                    _ = await f.maintain(f.service(), request, allowDelivery: false)
+                    XCTAssertEqual(f.maintainedProfiles.count, 1)
+                    XCTAssertTrue(f.launches.isEmpty)
+                    XCTAssertTrue(f.quits.isEmpty)
+                    XCTAssertEqual(f.clears.count, staged && !exists ? 1 : 0)
+                }
+            }
+        }
+
+        func testNativeExecutionCommandRequiresExactAttemptAndBounds() throws {
+            let attemptID = UUID()
+            let message: [String: Any] = [
+                "subject": "executeNativeApproval", "id": 42,
+                "workflowVersion": ExtensionBridge.workflowVersion,
+                "configurationKey": "https://wallet.example",
+                "requestToken": UUID().uuidString.lowercased(),
+                "attemptID": attemptID.uuidString.lowercased(),
+                "revisions": ["ethereum": 2, "solana": 3],
+                "executionDeadline": 1_800_000_100_000,
+            ]
+            let decoded = try JSONDecoder().decode(
+                InternalSafariRequest.self,
+                from: JSONSerialization.data(withJSONObject: message)
+            )
+            guard case .worker(.executeNativeApproval(let execution)) = decoded.command else {
+                return XCTFail("Expected native execution command")
+            }
+            XCTAssertEqual(execution.attemptID, attemptID)
+            XCTAssertEqual(execution.executionDeadline.timeIntervalSince1970, 1_800_000_100)
+            XCTAssertEqual(execution.revisions.ethereum, 2)
+            for key in message.keys {
+                var missing = message
+                missing[key] = nil
+                XCTAssertThrowsError(try JSONDecoder().decode(
+                    InternalSafariRequest.self,
+                    from: JSONSerialization.data(withJSONObject: missing)
+                ), "Missing \(key) was accepted")
+            }
+            for (key, value) in [
+                ("attemptID", attemptID.uuidString as Any),
+                ("attemptID", "invalid" as Any),
+                ("executionDeadline", 0 as Any),
+                ("executionDeadline", 1.5 as Any),
+                ("revisions", ["ethereum": -1, "solana": 0] as Any),
+                ("decision", ["approved": true] as Any),
+            ] {
+                var invalid = message
+                invalid[key] = value
+                XCTAssertThrowsError(try JSONDecoder().decode(
+                    InternalSafariRequest.self,
+                    from: JSONSerialization.data(withJSONObject: invalid)
+                ), "Invalid \(key) was accepted")
+            }
+        }
+
         func testAdmissionReconcilesReceiptAfterFailedLaunchCallback() async throws {
             for outcome in ["delivered", "completed", "replaced"] {
                 let f = try fixture()
@@ -85,42 +222,41 @@
             XCTAssertTrue(opened)
         }
 
-        func testPendingReadsValidateCodeOnlyAfterDecisionIsStaged() async throws {
+        func testUnstagedExecutionDoesNotRepairOrValidateHelper() async throws {
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
+            f.processes.removeAll()
             let service = f.service()
             for _ in 0..<3 {
-                guard case .pending = await f.read(service, request) else { return XCTFail("Expected pending") }
+                guard case .pending = await f.execute(service, request) else { return XCTFail("Expected pending") }
             }
             XCTAssertTrue(f.validations.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
-            f.deliver(request, staged: true)
-            _ = try await f.finish(afterStarting: {
-                try await f.advanceClock(by: 250_000_000)
-            }) { await f.read(service, request, duration: 0.25) }
-            XCTAssertEqual(f.validations.count, 1)
+            XCTAssertTrue(f.clears.isEmpty)
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.maintainedProfiles.isEmpty)
         }
 
-        func testPendingReadRedeliversAfterHelperExit() async throws {
+        func testMaintenanceRedeliversAfterHelperExit() async throws {
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
             f.processes.removeAll()
             f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
             let service = f.service()
-            let result = try await f.finish { await f.read(service, request) }
+            let result = try await f.finish { await f.maintain(service, request) }
             guard case .pending = result else { return XCTFail("Expected pending review") }
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertEqual(f.launches.count, 1)
         }
 
-        func testPendingReadRejectsChangedRuntimeIdentity() async throws {
+        func testMaintenanceRejectsChangedRuntimeIdentity() async throws {
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
             f.processes[42] = f.runtime(instance: UUID())
-            let result = await f.read(f.service(), request)
+            let result = await f.maintain(f.service(), request)
             guard case .unavailable = result else { return XCTFail("Expected unverified owner") }
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
@@ -135,7 +271,7 @@
             f.unidentifiedProcesses[42] = .init(
                 processIdentifier: 42, bundleURL: f.bundleURL,
                 processStartDate: runtime.launchedAt, isRunning: { true })
-            let result = await f.read(f.service(), request)
+            let result = await f.maintain(f.service(), request)
             guard case .unavailable = result else { return XCTFail("Expected unavailable") }
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.quits.isEmpty)
@@ -143,20 +279,20 @@
 
         func testQuietRecoveryDoesNotReplaceIncompatibleHelper() async throws {
             let f = try fixture()
-            let request = try f.request()
+            let request = try f.request(manual: true)
             f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
-            let result = await f.read(f.service(), request, mode: .manualRecovery)
-            guard case .pending = result else { return XCTFail("Expected quiet pending") }
-            XCTAssertTrue(f.executionReads.isEmpty)
+            let result = await f.maintain(f.service(), request)
+            guard case .unavailable = result else { return XCTFail("Expected quiet unavailability") }
+            XCTAssertTrue(f.executionBegins.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
         }
 
         func testReceiptReplacementAfterClearCannotConfirmOldDelivery() async throws {
-            for mode in [NativeApprovalService.ApprovalReadMode.page, .manualRecovery] {
+            for manual in [false, true] {
                 let f = try fixture()
-                let request = try f.request()
+                let request = try f.request(manual: manual)
                 f.deliver(request, staged: true)
                 f.processes.removeAll()
                 f.onClear = { _, _ in
@@ -164,8 +300,8 @@
                     f.snapshots[request.handle] = replacement
                     return .persisted
                 }
-                let result = await f.read(f.service(), request, mode: mode)
-                if mode == .manualRecovery {
+                let result = await f.maintain(f.service(), request)
+                if manual {
                     guard case .pending = result else { return XCTFail("Expected pending") }
                 } else {
                     guard case .pending = result else { return XCTFail("Replacement has no response") }
@@ -182,12 +318,12 @@
             f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
             f.onQuit = { _ in true }
             let service = f.service()
-            let task = Task { await f.read(service, request) }
+            let task = Task { await f.maintain(service, request) }
             try await f.eventually { f.quits == [42] && !f.clock.deadlines.isEmpty }
             XCTAssertTrue(f.clears.isEmpty)
             f.processes.removeAll()
             f.clock.advance(to: f.clock.deadlines.first!)
-            guard case .response = await task.value else { return XCTFail("Expected interrupted response") }
+            guard case .ready = await task.value else { return XCTFail("Expected interrupted response") }
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertTrue(f.launches.isEmpty)
         }
@@ -198,14 +334,14 @@
             f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
             let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
             f.onLoad = { handle in
-                if f.loads.count == 2 {
+                if f.loads.count == 3 {
                     XCTAssertEqual(f.validations.count, 1)
                     f.processes.removeAll()
                 }
                 return .found(f.snapshots[handle]!)
             }
-            let result = await f.read(f.service(), request)
-            guard case .response = result else { return XCTFail("Expected interrupted response") }
+            let result = await f.maintain(f.service(), request)
+            guard case .ready = result else { return XCTFail("Expected interrupted response") }
             XCTAssertEqual(f.clears, [receipt])
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
@@ -227,16 +363,14 @@
             f.deliver(request, runtime: incompatible, staged: true)
             let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
             f.onLoad = { handle in
-                if f.loads.count == 2 {
+                if f.loads.count == 3 {
                     XCTAssertEqual(f.validations.count, 1)
                     f.processes[compatible.processIdentifier] = compatible
                 }
                 return .found(f.snapshots[handle]!)
             }
             let service = f.service()
-            let result = try await f.finish(afterStarting: {
-                try await f.advanceClock(by: 250_000_000)
-            }) { await f.read(service, request, duration: 0.25) }
+            let result = await f.maintain(service, request)
             guard case .pending = result else { return XCTFail("Expected pending approval") }
             XCTAssertEqual(f.validations.count, 2)
             XCTAssertEqual(f.snapshots[request.handle]?.nativeDeliveryReceipt, receipt)
@@ -284,14 +418,12 @@
                     var reads = 0
                     f.onLoad = { handle in
                         reads += 1
-                        if reads == 2 { f.deliver(request, runtime: f.runtime(pid: 43)) }
+                        if reads == 3 { f.deliver(request, runtime: f.runtime(pid: 43)) }
                         return .found(f.snapshots[handle]!)
                     }
                 }
                 let service = f.service()
-                _ = try await f.finish(afterStarting: {
-                    try await f.advanceClock(by: 250_000_000)
-                }) { await f.read(service, request, duration: 0.25) }
+                _ = await f.maintain(service, request)
                 XCTAssertTrue(f.quits.isEmpty)
                 XCTAssertTrue(f.clears.isEmpty)
                 XCTAssertTrue(f.launches.isEmpty)
@@ -314,14 +446,14 @@
                     f.onValidate = { _ in replaceOrExpire(); return true }
                 } else {
                     f.onLoad = { handle in
-                        if f.loads.count == 2 {
+                        if f.loads.count == 3 {
                             XCTAssertEqual(f.validations.count, 1)
                             replaceOrExpire()
                         }
                         return .found(f.snapshots[handle]!)
                     }
                 }
-                let result = await f.read(f.service(), request)
+                let result = await f.maintain(f.service(), request)
                 guard case .unavailable = result else { return XCTFail("Expected unavailable") }
                 XCTAssertTrue(f.quits.isEmpty)
                 XCTAssertTrue(f.clears.isEmpty)
@@ -336,38 +468,38 @@
             let gate = NativeApprovalServiceTestFixture.Gate()
             defer { gate.open() }
             f.onLoad = { handle in
-                if f.loads.count == 2 {
+                if f.loads.count == 3 {
                     XCTAssertEqual(f.validations.count, 1)
                     await gate.wait()
                 }
                 return .found(f.snapshots[handle]!)
             }
             let service = f.service()
-            let task = Task { await f.read(service, request) }
+            let task = Task { await f.maintain(service, request) }
             defer { task.cancel() }
-            try await f.eventually { f.loads.count == 2 }
+            try await f.eventually { f.loads.count == 3 }
             task.cancel()
             gate.open()
-            guard case .pending = await task.value else { return XCTFail("Expected cancellation") }
+            guard case .unavailable = await task.value else { return XCTFail("Expected cancellation") }
             for _ in 0..<20 { await Task.yield() }
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
         }
 
-        func testCancelledReadCannotRepairAfterSuspension() async throws {
-            for mode in [NativeApprovalService.ApprovalReadMode.page, .manualRecovery] {
+        func testCancelledMaintenanceCannotRepairAfterSuspension() async throws {
+            for manual in [false, true] {
                 let f = try fixture()
-                let request = try f.request()
+                let request = try f.request(manual: manual)
                 f.deliver(request, staged: true)
                 f.processes.removeAll()
                 let gate = NativeApprovalServiceTestFixture.Gate()
                 f.onLoad = { handle in await gate.wait(); return .found(f.snapshots[handle]!) }
                 let service = f.service()
-                let task = Task { await f.read(service, request, mode: mode) }
+                let task = Task { await f.maintain(service, request) }
                 try await f.eventually { !f.loads.isEmpty }
                 task.cancel()
-                guard case .pending = await task.value else { return XCTFail("Expected cancellation") }
+                guard case .unavailable = await task.value else { return XCTFail("Expected cancellation") }
                 gate.open()
                 for _ in 0..<20 { await Task.yield() }
                 XCTAssertTrue(f.quits.isEmpty)
@@ -376,16 +508,16 @@
             }
         }
 
-        func testCancelledReadDoesNotStartWork() async throws {
+        func testCancelledMaintenanceDoesNotStartWork() async throws {
             let f = try fixture()
             let request = try f.request()
             let gate = NativeApprovalServiceTestFixture.Gate()
             let service = f.service()
-            let task = Task { await gate.wait(); return await f.read(service, request) }
+            let task = Task { await gate.wait(); return await f.maintain(service, request) }
             task.cancel()
             gate.open()
             guard case .pending = await task.value else { return XCTFail("Expected pending") }
-            XCTAssertTrue(f.executionReads.isEmpty)
+            XCTAssertTrue(f.executionBegins.isEmpty)
             XCTAssertTrue(f.loads.isEmpty)
         }
 

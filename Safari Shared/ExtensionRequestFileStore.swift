@@ -258,6 +258,10 @@ final class ExtensionRequestFileStore {
         case missing, regular, unsafe, unavailable
     }
 
+    private enum DirectoryStatus {
+        case missing, directory, unsafe, unavailable
+    }
+
     private struct ProfileFileIdentity {
         let identifier: UUID?
     }
@@ -550,21 +554,56 @@ final class ExtensionRequestFileStore {
     func listManualSwitchRequests(
         profileIdentifier: UUID?
     ) -> ExtensionBridge.ManualSwitchRequestsResult {
-        withLock(or: .unavailable) {
-            guard case .state(let profile) = readProfileLocked(
-                profileIdentifier: profileIdentifier,
-                now: clock(),
-                recover: true
-            ) else { return .unavailable }
-            let requests = profile.state.records.filter {
-                !$0.responseAcknowledged && isManualSwitch($0, in: profile)
-            }.sorted {
-                $0.admissionCreatedAt == $1.admissionCreatedAt
-                    ? $0.handle.requestToken < $1.handle.requestToken
-                    : $0.admissionCreatedAt < $1.admissionCreatedAt
-            }.map(manualSwitchRequest)
-            guard manualSwitchRequestsFit(requests) else { return .unavailable }
-            return .available(requests)
+        guard case .state(let profile) = readProfileObservational(
+            profileIdentifier: profileIdentifier
+        ) else { return .unavailable }
+        let requests = profile.state.records.filter {
+            !$0.responseAcknowledged && isManualSwitch($0, in: profile)
+        }.sorted {
+            $0.admissionCreatedAt == $1.admissionCreatedAt
+                ? $0.handle.requestToken < $1.handle.requestToken
+                : $0.admissionCreatedAt < $1.admissionCreatedAt
+        }.map(manualSwitchRequest)
+        guard manualSwitchRequestsFit(requests) else { return .unavailable }
+        return .available(requests)
+    }
+
+    func responseStatus(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String,
+        manualOnly: Bool = false
+    ) -> ExtensionBridge.ResponseStatusResult {
+        guard case .state(let profile) = readProfileObservational(
+            profileIdentifier: handle.profileIdentifier
+        ) else { return .unavailable }
+        guard let record = profile.state.records.first(where: {
+            $0.handle == handle && $0.configurationKey == configurationKey
+        }), !manualOnly || (!record.responseAcknowledged && isManualSwitch(record, in: profile)) else {
+            return .missing
+        }
+        if case .completed = record.state { return .ready }
+        return .pending
+    }
+
+    func executionStatus(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String
+    ) -> ExtensionBridge.ExecutionStatusResult {
+        guard case .state(let profile) = readProfileObservational(
+            profileIdentifier: handle.profileIdentifier
+        ) else { return .unavailable }
+        guard let record = profile.state.records.first(where: {
+            $0.handle == handle && $0.configurationKey == configurationKey
+        }) else { return .missing }
+        switch record.state {
+        case .pending(_, .staged):
+            return .status(.awaitingExecution)
+        case .pending:
+            return .status(.awaitingReview)
+        case .claimed, .broadcastPrepared:
+            return .status(.executing)
+        case .completed:
+            return .status(.completed)
         }
     }
 
@@ -931,12 +970,13 @@ final class ExtensionRequestFileStore {
         }
     }
 
-    func beginNativeExecutionRead(
+    func beginNativeExecution(
         handle: ExtensionBridge.Handle,
         configurationKey: String,
+        attemptID: UUID,
         revisions: ExtensionBridge.ProviderRevisions,
         executionDeadline: Date
-    ) -> ExtensionBridge.NativeExecutionReadResult {
+    ) -> ExtensionBridge.NativeExecutionResult {
         withLock(or: .unavailable) {
             let now = clock()
             guard case .state(var profile) = readProfileLocked(
@@ -951,14 +991,30 @@ final class ExtensionRequestFileStore {
             switch record.state {
             case .completed:
                 return .responseReady
+            case .claimed(_, _, .native(_, let context)):
+                guard context.attemptID == attemptID,
+                      context.revisions == revisions,
+                      context.executionDeadline == executionDeadline else {
+                    return .unavailable
+                }
+                return .pending
             case .claimed, .broadcastPrepared:
                 return .pending
             case .pending(let request, let pendingApproval):
                 guard case .staged(let approval, let previous) = pendingApproval else {
                     return .needsDelivery(record.nativeDeliveryNonce)
                 }
-                let observedAt = max(approval.approvedAt, now)
-                guard executionDeadline >= observedAt,
+                if let previous {
+                    guard previous.attemptID == attemptID,
+                          previous.revisions == revisions,
+                          previous.executionDeadline == executionDeadline else {
+                        return .unavailable
+                    }
+                }
+                let observedAt = previous?.observedAt ?? max(approval.approvedAt, now)
+                guard executionDeadline.timeIntervalSince1970.isFinite,
+                      now < executionDeadline,
+                      executionDeadline >= observedAt,
                       executionDeadline <= now.addingTimeInterval(
                           ExtensionBridge.nativeExecutionTimeout + Self.futureSkew
                       ), let fenceToken = nextID(
@@ -986,6 +1042,7 @@ final class ExtensionRequestFileStore {
                     return .unavailable
                 }
                 let context = ExtensionBridge.NativeExecutionContext(
+                    attemptID: attemptID,
                     revisions: revisions,
                     observedAt: observedAt,
                     executionDeadline: executionDeadline,
@@ -1005,9 +1062,8 @@ final class ExtensionRequestFileStore {
                     context: context,
                     nativeDeliveryNonce: record.nativeDeliveryNonce,
                     finish: {
-                        self.finishNativeExecutionRead(
+                        self.finishNativeExecution(
                             handle: handle,
-                            context: context,
                             fence: fence
                         )
                     }
@@ -1016,34 +1072,17 @@ final class ExtensionRequestFileStore {
         }
     }
 
-    private func finishNativeExecutionRead(
+    private func finishNativeExecution(
         handle: ExtensionBridge.Handle,
-        context: ExtensionBridge.NativeExecutionContext,
         fence: CrossProcessFileLock
     ) {
         guard let storeLock, (try? storeLock.tryAcquire()) == true else {
             fence.release()
             return
         }
-        defer {
-            fence.release()
-            removeNativeExecutionFenceLocked(handle: handle)
-            storeLock.release()
-        }
-        guard case .state(var profile) = readProfileLocked(
-            profileIdentifier: handle.profileIdentifier,
-            now: clock(),
-            recover: false
-        ), let index = profile.state.records.firstIndex(where: {
-            $0.handle == handle
-        }), case .pending(let request, .staged(let approval, let current)) =
-                profile.state.records[index].state,
-              current == context else { return }
-        profile.state.records[index].state = .pending(
-            request: request,
-            approval: .staged(approval, context: nil)
-        )
-        _ = writeProfileLocked(profile, failureRecovery: .readBack)
+        fence.release()
+        removeNativeExecutionFenceLocked(handle: handle)
+        storeLock.release()
     }
 
     func release(
@@ -1353,7 +1392,7 @@ final class ExtensionRequestFileStore {
         return result
     }
 
-    func readResponse(
+    func prepareResponseDelivery(
         handle: ExtensionBridge.Handle,
         configurationKey: String
     ) -> ExtensionBridge.ResponseReadResult {
@@ -1473,12 +1512,57 @@ final class ExtensionRequestFileStore {
         )
     }
 
+    private func readProfileObservational(
+        profileIdentifier: UUID?
+    ) -> ProfileRead {
+        guard let rootURL, let storeLock else { return .unavailable }
+        switch directoryStatus(at: rootURL) {
+        case .missing:
+            return .state(emptyProfile(profileIdentifier))
+        case .directory:
+            break
+        case .unsafe, .unavailable:
+            return .unavailable
+        }
+        let lockURL = rootURL.appendingPathComponent("bridge-v7.lock")
+        switch regularFileStatusLocked(at: lockURL) {
+        case .missing:
+            guard directoryStatus(at: profileDirectoryURL) == .missing else {
+                return .unavailable
+            }
+            return .state(emptyProfile(profileIdentifier))
+        case .regular:
+            break
+        case .unsafe, .unavailable:
+            return .unavailable
+        }
+        guard (try? storeLock.tryAcquireExisting()) == true else { return .unavailable }
+        defer { storeLock.release() }
+        switch directoryStatus(at: profileDirectoryURL) {
+        case .missing:
+            return .state(emptyProfile(profileIdentifier))
+        case .directory:
+            break
+        case .unsafe, .unavailable:
+            return .unavailable
+        }
+        return readProfileFileLocked(
+            at: profileURL(profileIdentifier),
+            profileIdentifier: profileIdentifier,
+            now: clock(),
+            recover: false,
+            removeIfEmpty: false,
+            normalizeDates: false
+        )
+    }
+
     private func readProfileFileLocked(
         at url: URL,
         profileIdentifier: UUID?,
         now: Date,
         recover: Bool,
-        removeIfEmpty: Bool
+        removeIfEmpty: Bool,
+        normalizeDates: Bool = true
     ) -> ProfileRead {
         let data: Data
         switch readProfileDataLocked(at: url) {
@@ -1498,7 +1582,7 @@ final class ExtensionRequestFileStore {
               ) else {
             return .corrupt
         }
-        let normalizedDates = normalizeFutureDates(in: &profile.state, now: now)
+        let normalizedDates = normalizeDates && normalizeFutureDates(in: &profile.state, now: now)
         guard recover else { return .state(profile) }
         var changed = normalizedDates
         var locksToRemove = [ExtensionBridge.Handle]()
@@ -1528,6 +1612,17 @@ final class ExtensionRequestFileStore {
                     break
                 case .unlocked:
                     record.complete(response: recoveryResponse, at: now)
+                    profile.parsedRequests.removeValue(forKey: record.handle)
+                    changed = true
+                    locksToRemove.append(record.handle)
+                }
+            case .pending(_, .staged(_, let context))
+                where context.map({ now >= $0.executionDeadline }) == true:
+                if nativeExecutionFenceStatusLocked(handle: record.handle) == .unlocked {
+                    guard let response = interruptionResponseData(for: profile.request(for: record)) else {
+                        return .unavailable
+                    }
+                    record.complete(response: response, at: now)
                     profile.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     locksToRemove.append(record.handle)
@@ -1603,6 +1698,20 @@ final class ExtensionRequestFileStore {
                 return true
             }
             if !maintained { return }
+        }
+    }
+
+    func performMaintenance(profileIdentifier: UUID?) {
+        _ = withLock(or: false) {
+            guard prepareDirectoriesLocked() else { return false }
+            _ = readProfileFileLocked(
+                at: profileURL(profileIdentifier),
+                profileIdentifier: profileIdentifier,
+                now: clock(),
+                recover: true,
+                removeIfEmpty: true
+            )
+            return true
         }
     }
 
@@ -1706,7 +1815,9 @@ final class ExtensionRequestFileStore {
                         $0.approvedAt >= record.createdAt
                   }) ?? true,
                   record.nativeExecutionContext.map({ context in
-                      record.readyApproval.map {
+                      context.observedAt.timeIntervalSince1970.isFinite &&
+                        context.executionDeadline.timeIntervalSince1970.isFinite &&
+                        record.readyApproval.map {
                             context.observedAt >= $0.approvedAt
                       } == true &&
                         context.executionDeadline >= context.observedAt
@@ -2190,6 +2301,21 @@ final class ExtensionRequestFileStore {
                 return .unsafe
             }
             return fileManager.fileExists(atPath: url.path) ? .unavailable : .missing
+        }
+    }
+
+    private func directoryStatus(at url: URL) -> DirectoryStatus {
+        do {
+            let attributes = try fileManager.attributesOfItem(atPath: url.path)
+            guard let type = attributes[.type] as? FileAttributeType else {
+                return .unavailable
+            }
+            return type == .typeDirectory ? .directory : .unsafe
+        } catch let error as CocoaError where error.code == .fileNoSuchFile ||
+            error.code == .fileReadNoSuchFile {
+            return .missing
+        } catch {
+            return .unavailable
         }
     }
 

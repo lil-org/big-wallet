@@ -2457,21 +2457,18 @@ final class DappRequestProcessorTests: XCTestCase {
             "workflowVersion": ExtensionBridge.workflowVersion,
             "configurationKey": "wallet.example",
             "requestToken": "00000000-0000-0000-0000-000000000001",
-            "executionDeadline": 1_700_000_160_000,
-            "revisions": ["ethereum": 0, "solana": 0],
         ]
         let responseRequest = try decodeInternalRequest(responseMessage)
         guard case .page(.getResponse(let identity)) = responseRequest.command else {
             return XCTFail("expected getResponse")
         }
-        XCTAssertEqual(
-            identity.executionDeadline.timeIntervalSince1970,
-            1_700_000_160,
-            accuracy: 0.001
-        )
-        XCTAssertThrowsError(try decodeInternalRequest(
-            responseMessage.filter { $0.key != "executionDeadline" }
-        ))
+        XCTAssertEqual(identity.configurationKey, "wallet.example")
+        XCTAssertEqual(identity.token.rawValue, "00000000-0000-0000-0000-000000000001")
+        for field in ["executionDeadline", "revisions"] {
+            var malformed = responseMessage
+            malformed[field] = field == "revisions" ? ["ethereum": 0, "solana": 0] : 1_700_000_160_000
+            XCTAssertThrowsError(try decodeInternalRequest(malformed))
+        }
 
         let rpcMessage: [String: Any] = [
             "subject": "rpc",

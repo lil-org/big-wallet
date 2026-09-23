@@ -800,7 +800,8 @@ test("a malformed revisioned terminal fails closed", async () => {
                     revisions: {ethereum: 0, solana: 0},
                 };
             }
-            return message.subject === "getResponse" ? response : undefined;
+            if (message.subject === "getResponse") { return {id: 7, ready: true}; }
+            return message.subject === "consumeResponse" ? response : undefined;
         }});
         await settle();
         harness.dispatchPage("request", dappRequest(7));
@@ -1197,7 +1198,8 @@ test("reads and delivers one retained response", async () => {
                 revisions: {ethereum: 0, solana: 0},
             };
         }
-        if (message.subject === "getResponse") {
+        if (message.subject === "getResponse") { return {id: 9, ready: true}; }
+        if (message.subject === "consumeResponse") {
             return {
                 kind: "result",
                 id: 9,
@@ -1218,7 +1220,11 @@ test("reads and delivers one retained response", async () => {
         return value.message.response?.id === 9;
     });
     assert.equal(delivery.message.kind, "response");
-    assert.equal(harness.runtimeMessages.length, 3);
+    assert.deepEqual(harness.runtimeMessages.map(message => message.subject), [
+        "getLatestConfiguration", "message-to-wallet", "getResponse", "consumeResponse",
+    ]);
+    assert.equal("revisions" in harness.runtimeMessages[2], false);
+    assert.deepEqual(harness.runtimeMessages[3].revisions, {ethereum: 0, solana: 0});
 });
 
 test("an evicted retained response fails immediately", async () => {
@@ -1258,7 +1264,8 @@ test("response-ready hints wake a waiting request", async () => {
                 revisions: {ethereum: 0, solana: 0},
             };
         }
-        if (message.subject === "getResponse" && ready) {
+        if (message.subject === "getResponse" && ready) { return {id: 10, ready: true}; }
+        if (message.subject === "consumeResponse" && ready) {
             return {
                 kind: "result",
                 id: 10,
@@ -1308,6 +1315,12 @@ test("response-ready hints rerun an active response read", async () => {
                 return new Promise(resolve => { resolveSecondRead = resolve; });
             }
         }
+        if (message.subject === "consumeResponse") {
+            return {
+                kind: "result", id: 11, name: "requestAccounts", provider: "ethereum",
+                state: null, result: [], approvalCommitted: false,
+            };
+        }
         return undefined;
     }});
     await settle();
@@ -1324,15 +1337,7 @@ test("response-ready hints rerun an active response read", async () => {
     await settle();
     assert.equal(reads, 2);
     assert.equal(harness.pendingTimers(), 1);
-    resolveSecondRead({
-        kind: "result",
-        id: 11,
-        name: "requestAccounts",
-        provider: "ethereum",
-        state: null,
-        result: [],
-        approvalCommitted: false,
-    });
+    resolveSecondRead({id: 11, ready: true});
     await settle();
     assert.equal(harness.postedMessages.some(value => {
         return value.message.response?.id === 11;
@@ -1355,17 +1360,13 @@ test("late enqueue acknowledgement preserves native-owned work past the recovery
             };
         }
         if (message.subject === "getResponse") {
-            return ready
-                ? {
-                    kind: "result",
-                    id: 15,
-                    name: "requestAccounts",
-                    provider: "ethereum",
-                    state: null,
-                    result: [],
-                    approvalCommitted: false,
-                }
-                : {id: 15, pending: true};
+            return ready ? {id: 15, ready: true} : {id: 15, pending: true};
+        }
+        if (message.subject === "consumeResponse") {
+            return {
+                kind: "result", id: 15, name: "requestAccounts", provider: "ethereum",
+                state: null, result: [], approvalCommitted: false,
+            };
         }
         return undefined;
     }});
@@ -1410,10 +1411,12 @@ test("native results survive suspension past the recovery horizon", async () => 
                     revisions: {ethereum: 0, solana: 0},
                 };
             }
+            if (message.subject === "consumeResponse") { return response; }
+            if (message.subject !== "getResponse") { return undefined; }
             reads += 1;
             return delivery !== "ready" && reads === 1
                 ? new Promise(resolve => { resolveRead = resolve; })
-                : response;
+                : {id: 17, ready: true};
         }});
         await settle();
         harness.dispatchPage("request", {...dappRequest(17), name: "signTransaction"});
@@ -1425,7 +1428,7 @@ test("native results survive suspension past the recovery horizon", async () => 
             assert.equal(harness.context.bigWalletRequests.size, 1);
         }
         if (delivery !== "ready") {
-            resolveRead(response);
+            resolveRead({id: 17, ready: true});
             await settle();
         } else {
             await harness.runTimer();
@@ -1491,6 +1494,9 @@ test("an unresolved response read cannot end a native-owned request", async () =
             if (reads === 1) {
                 return new Promise(resolve => { resolveRead = resolve; });
             }
+            return {id: 16, ready: true};
+        }
+        if (message.subject === "consumeResponse") {
             return {
                 kind: "result",
                 id: 16,
@@ -1857,4 +1863,110 @@ test("file pages use a query-and-fragment-free configuration identity", async ()
         return message.subject === "message-to-wallet";
     });
     assert.equal(enqueue.configurationKey, "file:///tmp/dapp.html");
+});
+
+test("response reads cannot deliver a terminal payload or start completion", async () => {
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {id: 7, requestToken, approvalRequired: true, revisions: {ethereum: 0, solana: 0}};
+        }
+        if (message.subject === "getResponse") {
+            return {
+                kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+                state: null, result: [], approvalCommitted: true,
+            };
+        }
+        throw new Error("unexpected mutation");
+    }});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    await harness.runTimer();
+    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
+    assert.equal(harness.runtimeMessages.some(value => value.subject === "consumeResponse"), false);
+    assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "waiting");
+    const query = harness.runtimeMessages.at(-1);
+    assert.deepEqual(Object.keys(query).sort(), [
+        "configurationKey", "id", "requestToken", "subject", "workflowVersion",
+    ]);
+});
+
+test("completion retries independently and waits for the explicit delivery result", async () => {
+    let resolveCompletion;
+    let completions = 0;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {id: 7, requestToken, approvalRequired: true, revisions: {ethereum: 4, solana: 2}};
+        }
+        if (message.subject === "getResponse") { return {id: 7, ready: true}; }
+        if (message.subject === "consumeResponse") {
+            completions += 1;
+            if (completions === 1) { throw new Error("lost delivery reply"); }
+            return new Promise(resolve => { resolveCompletion = resolve; });
+        }
+    }});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    await harness.runTimer();
+    assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "completing");
+    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
+    await harness.runTimer();
+    assert.equal(completions, 2);
+    assert.equal(harness.runtimeMessages.filter(value => value.subject === "getResponse").length, 1);
+    for (const completion of harness.runtimeMessages.filter(value => value.subject === "consumeResponse")) {
+        assert.equal(completion.requestToken, requestToken);
+        assert.equal(completion.configurationKey, "https://wallet.example");
+        assert.deepEqual(completion.revisions, {ethereum: 4, solana: 2});
+    }
+    await harness.dispatchRuntime({subject: "responseReady", id: 7, workflowVersion: 3});
+    const result = {
+        kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+        state: null, result: [], approvalCommitted: true,
+    };
+    resolveCompletion(result);
+    await settle();
+    assert.equal(completions, 2);
+    assert.deepEqual(harness.postedMessages.at(-1).message.response, result);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
+});
+
+test("execution presence requires the exact live request in its original generation", async () => {
+    let resolveAdmission;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return new Promise(resolve => { resolveAdmission = resolve; });
+        }
+        if (message.subject === "getResponse") { return {id: 7, pending: true}; }
+    }});
+    const probe = {
+        subject: "requestActive", id: 7, configurationKey: "https://wallet.example",
+        requestToken, workflowVersion: 3,
+    };
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    assert.deepEqual(clone(await harness.dispatchRuntime(probe)), {id: 7, requestToken, active: false});
+    resolveAdmission({id: 7, requestToken, approvalRequired: true, revisions: {ethereum: 0, solana: 0}});
+    await settle();
+    harness.context.document.visibilityState = "hidden";
+    assert.deepEqual(clone(await harness.dispatchRuntime(probe)), {id: 7, requestToken, active: true});
+    assert.equal((await harness.dispatchRuntime({...probe, id: 8})).active, false);
+    assert.equal((await harness.dispatchRuntime({...probe, requestToken: "123e4567-e89b-12d3-a456-426614174001"})).active, false);
+    assert.equal((await harness.dispatchRuntime({...probe, configurationKey: "https://other.example"})).active, false);
+    const generation = harness.generation();
+    harness.context.bigWalletProviderGeneration = "replacement";
+    assert.equal((await harness.dispatchRuntime(probe)).active, false);
+    harness.context.bigWalletProviderGeneration = generation;
+    harness.context.window.location.href = "https://other.example";
+    assert.equal((await harness.dispatchRuntime(probe)).active, false);
+    harness.context.window.location.href = "https://wallet.example/dapp";
+    [...harness.context.bigWalletRequests.values()][0].phase = "completing";
+    assert.equal((await harness.dispatchRuntime(probe)).active, false);
+    assert.equal(await harness.dispatchRuntime(probe, popupSender), undefined);
+    assert.equal(await harness.dispatchRuntime({...probe, unexpected: true}), undefined);
+    const freshPage = makeHarness();
+    await settle();
+    assert.equal((await freshPage.dispatchRuntime(probe)).active, false);
 });

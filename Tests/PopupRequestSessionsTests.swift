@@ -654,8 +654,6 @@ final class PopupRequestSessionsTests: XCTestCase {
             "workflowVersion": ExtensionBridge.workflowVersion,
             "configurationKey": "https://wallet.example",
             "requestToken": token,
-            "revisions": ["ethereum": 1, "solana": 2],
-            "executionDeadline": 2_000_000_900_000,
         ]
         guard case .worker(.getManualSwitchResponse(let identity)) =
             try decode(response).command else {
@@ -663,17 +661,14 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
         XCTAssertEqual(identity.token.rawValue, token)
         XCTAssertEqual(identity.configurationKey, "https://wallet.example")
-        XCTAssertEqual(identity.revisions.ethereum, 1)
-        XCTAssertEqual(identity.revisions.solana, 2)
-        XCTAssertEqual(identity.executionDeadline.timeIntervalSince1970, 2_000_000_900)
-        for extra in ["profileIdentifier", "privateBrowsing", "host", "payload"] {
+        for extra in ["profileIdentifier", "privateBrowsing", "host", "payload", "revisions", "executionDeadline"] {
             for original in [listing, response] {
                 var malformed = original
                 malformed[extra] = "untrusted"
                 XCTAssertThrowsError(try decode(malformed))
             }
         }
-        for field in ["configurationKey", "requestToken", "revisions", "executionDeadline"] {
+        for field in ["configurationKey", "requestToken"] {
             var malformed = response
             malformed.removeValue(forKey: field)
             XCTAssertThrowsError(try decode(malformed))
@@ -5419,7 +5414,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(missingContext, .pending)
         XCTAssertTrue(eventsBeforeContext.isEmpty)
 
-        await store.installNativeExecutionRead(
+        await store.installNativeExecution(
             handle: snapshot.handle,
             revisions: snapshot.revisions,
             executionDeadline: now.addingTimeInterval(60)
@@ -5456,7 +5451,7 @@ extension PopupRequestSessionsTests {
         )
 
         nativeClock.now = now
-        await store.installNativeExecutionRead(
+        await store.installNativeExecution(
             handle: snapshot.handle,
             revisions: snapshot.revisions,
             executionDeadline: now.addingTimeInterval(60)
@@ -5468,7 +5463,7 @@ extension PopupRequestSessionsTests {
             ,
             execute: { request, approval, walletAccess in
                 XCTAssertNil(walletAccess)
-                await store.releaseExecutionRead(handle: snapshot.handle)
+                await store.releaseExecutionLease(handle: snapshot.handle)
                 return .response(request.response(error: .userRejected))
             }) { _ in
                 .approval(.addEthereumChain(AddEthereumChainAction(chainToAdd: popupTestNetwork())))
@@ -5751,7 +5746,7 @@ extension PopupRequestSessionsTests {
         let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle, decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
         )
-        await store.installNativeExecutionRead(
+        await store.installNativeExecution(
             handle: snapshot.handle, revisions: snapshot.revisions,
             executionDeadline: Date().addingTimeInterval(120)
         )
@@ -5786,7 +5781,7 @@ extension PopupRequestSessionsTests {
         XCTAssertFalse(events.contains("checkpoint"))
         let repeated = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
         XCTAssertEqual(repeated, .responseReady)
-        await store.releaseExecutionRead(handle: snapshot.handle)
+        await store.releaseExecutionLease(handle: snapshot.handle)
     }
 
     func testNativeFinalizerFailureCannotExecuteAgain() async throws {
@@ -6563,7 +6558,7 @@ extension PopupRequestSessionsTests {
             let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
                 staged, authorization in
                 attempts += 1
-                await store.installNativeExecutionRead(
+                await store.installNativeExecution(
                     handle: staged.handle, revisions: staged.revisions,
                     executionDeadline: Date().addingTimeInterval(120)
                 )
@@ -6580,7 +6575,7 @@ extension PopupRequestSessionsTests {
                 XCTFail("The coordinator must persist interruption before finishing")
                 throw CocoaError(.fileWriteNoPermission)
             }
-            let response = await observer.readResponse(
+            let response = await observer.prepareResponseDelivery(
                 id: snapshot.handle.id, configurationKey: snapshot.configurationKey,
                 requestToken: snapshot.handle.requestToken, profileIdentifier: nil
             )
@@ -6602,7 +6597,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(attempts, 1)
             XCTAssertEqual(executions, failure == "wallet" || failure == "begin" ? 0 : 1)
             XCTAssertEqual(sends, 0)
-            await store.releaseExecutionRead(handle: snapshot.handle)
+            await store.releaseExecutionLease(handle: snapshot.handle)
         }
     }
 
@@ -6621,7 +6616,7 @@ extension PopupRequestSessionsTests {
         let observer = await store.makeObserverBridge()
         let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
             staged, authorization in
-            await store.installNativeExecutionRead(
+            await store.installNativeExecution(
                 handle: staged.handle, revisions: staged.revisions,
                 executionDeadline: Date().addingTimeInterval(120)
             )
@@ -6641,7 +6636,7 @@ extension PopupRequestSessionsTests {
         let response = await store.response(handle: snapshot.handle)
         let terminal = try XCTUnwrap(response)
         XCTAssertEqual(terminal as NSDictionary, try XCTUnwrap(snapshot.request).response(error: .approvalInterrupted).json as NSDictionary)
-        await store.releaseExecutionRead(handle: snapshot.handle)
+        await store.releaseExecutionLease(handle: snapshot.handle)
     }
 
     func testReleasedNativeCoordinatorCannotReplayFailedClaimOrCheckpoint() async throws {
@@ -6683,7 +6678,7 @@ extension PopupRequestSessionsTests {
                 onPresentation: { presentations += 1 }
             ) { staged, authorization in
                 captured = (staged, authorization)
-                await store.installNativeExecutionRead(
+                await store.installNativeExecution(
                     handle: staged.handle, revisions: staged.revisions,
                     executionDeadline: Date().addingTimeInterval(120)
                 )
@@ -6701,7 +6696,7 @@ extension PopupRequestSessionsTests {
             XCTAssertNil(weakCoordinator)
             let presentationCount = presentations
             let observer = await store.makeObserverBridge()
-            let response = await observer.readResponse(
+            let response = await observer.prepareResponseDelivery(
                 id: snapshot.handle.id, configurationKey: snapshot.configurationKey,
                 requestToken: snapshot.handle.requestToken, profileIdentifier: nil
             )
@@ -6720,7 +6715,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(executions, failure == "begin" ? 0 : 1)
             XCTAssertEqual(sends, 0)
             await store.setBeginHook {}
-            await store.releaseExecutionRead(handle: snapshot.handle)
+            await store.releaseExecutionLease(handle: snapshot.handle)
         }
     }
 
@@ -6826,13 +6821,13 @@ extension PopupRequestSessionsTests {
         revisions: ExtensionBridge.ProviderRevisions? = nil,
         observedAt: Date = Date()
     ) async -> NativeApprovalFinalizationResult {
-        await store.installNativeExecutionRead(
+        await store.installNativeExecution(
             handle: snapshot.handle,
             revisions: revisions ?? snapshot.revisions,
             executionDeadline: observedAt.addingTimeInterval(120)
         )
         let result = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
-        await store.releaseExecutionRead(handle: snapshot.handle)
+        await store.releaseExecutionLease(handle: snapshot.handle)
         return result
     }
     #endif

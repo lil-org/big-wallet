@@ -16,6 +16,12 @@ const APPROVAL_EXECUTION_TIMEOUT = 150 * 1000;
 const APPROVAL_LEASE_GRACE = 10 * 1000;
 const APPROVAL_LEASE_STORAGE_PREFIX = "providerApprovalLease:";
 const INVALID_APPROVAL_LEASE = Symbol("invalidApprovalLease");
+const EXECUTION_JOBS_STORAGE_KEY = "nativeExecutionJobs";
+const EXECUTION_MAINTENANCE_INTERVAL = 30 * 1000;
+const executionLineageFlights = new Set;
+let executionJobsTail = Promise.resolve();
+let executionRecoveryFlight = null;
+let executionTimer = null;
 const MANUAL_SWITCH_POLL_DELAY = 1000;
 const MANUAL_SWITCH_RECOVERY_ALARM = "manualSwitchRecovery";
 const ETHEREUM_ACCOUNT_METHODS = new Set([
@@ -35,9 +41,8 @@ const SOLANA_ACCOUNT_METHODS = new Set([
     "signAndSendTransaction",
 ]);
 const configurationOperationTails = new Map;
-const responseReadFlights = new Map;
+const completionFlights = new Map;
 const manualSwitchEnqueues = new Map;
-const manualSwitchDrainingLineages = new Set;
 let manualSwitchAlarmFlight = null;
 let manualSwitchDiscoveryFlight = null;
 let manualSwitchDiscoveryQueued = false;
@@ -115,15 +120,9 @@ async function readLiveApprovalLease(configurationKey) {
     return null;
 }
 
-async function installApprovalLease(
-    configurationKey,
-    revisions,
-    canAcquire = () => true
-) {
-    if (await readLiveApprovalLease(configurationKey)) { return null; }
-    if (!canAcquire()) { return null; }
+function makeApprovalLease(configurationKey, revisions) {
     const now = Date.now();
-    const value = {
+    return {
         configurationKey: approvalLeaseLineageKey(configurationKey),
         executionDeadline: now + APPROVAL_EXECUTION_TIMEOUT,
         expiresAt: now + APPROVAL_EXECUTION_TIMEOUT + APPROVAL_LEASE_GRACE,
@@ -132,6 +131,24 @@ async function installApprovalLease(
         token: WIRE.genPrivateToken(),
         workflowVersion: WORKFLOW_VERSION,
     };
+}
+
+function sameApprovalLease(left, right) {
+    return !!left && left !== INVALID_APPROVAL_LEASE &&
+        Object.keys(right).every(key => key === "revisions"
+            ? left.revisions.ethereum === right.revisions.ethereum &&
+                left.revisions.solana === right.revisions.solana
+            : left[key] === right[key]);
+}
+
+async function installApprovalLease(
+    configurationKey,
+    revisions,
+    canAcquire = () => true
+) {
+    if (await readLiveApprovalLease(configurationKey)) { return null; }
+    if (!canAcquire()) { return null; }
+    const value = makeApprovalLease(configurationKey, revisions);
     await browser.storage.local.set({
         [approvalLeaseStorageKey(configurationKey)]: value,
     });
@@ -730,36 +747,52 @@ async function applyDappResponse(
     );
 }
 
-function readStoredResponse(context) {
-    return withProviderRevisionLease(
-        context.configurationKey,
-        context.legacyConfigurationKey,
-        lease => sendNativeMessage({
-            subject: context.quiet ? "getManualSwitchResponse" : "getResponse",
-            id: context.id,
-            configurationKey: context.configurationKey,
-            requestToken: context.requestToken,
-            executionDeadline: lease.expiresAt,
-            revisions: {...lease.revisions},
-            workflowVersion: WORKFLOW_VERSION,
-        }, false)
-    );
+function nativeRequestIdentity(context) {
+    return {
+        id: context.id,
+        configurationKey: context.configurationKey,
+        requestToken: context.requestToken,
+        workflowVersion: WORKFLOW_VERSION,
+    };
+}
+
+function nativeRequestStatus(response, id) {
+    for (const status of ["pending", "ready", "missing", "unavailable"]) {
+        if (WIRE.hasExactKeys(response, ["id", status]) &&
+            response.id === id && response[status] === true) {
+            return response;
+        }
+    }
+    return undefined;
+}
+
+function prepareStoredResponseDelivery(context) {
+    return WIRE.withTimeout(sendNativeMessage({
+        ...nativeRequestIdentity(context),
+        subject: "prepareResponseDelivery",
+    }, false), TRANSPORT_TIMEOUT);
 }
 
 async function completeResponse(context, terminal) {
+    if (context.requestToken) { await releaseCompletedExecution(context); }
     const applied = await applyDappResponse(
         context.configurationKey, terminal, context.revisions, context.legacyConfigurationKey
     );
     if (!applied) { return undefined; }
-    return {
-        ...applied,
-        acknowledgement: context.requestToken
-            ? acknowledgeCompletedResponse(context.id, context.configurationKey, context.requestToken)
-            : Promise.resolve(true),
-    };
+    const acknowledged = !context.requestToken || await acknowledgeCompletedResponse(
+        context.id, context.configurationKey, context.requestToken
+    );
+    if (!acknowledged) { return undefined; }
+    if (context.requestToken) { await removeExecutionJob(context); }
+    if (applied.pageResponse.state) {
+        const current = await readConfigurationState(context.configurationKey,
+            context.legacyConfigurationKey);
+        applied.pageResponse = pageResponse(applied.response, publicConfigurationState(current));
+    }
+    return {...applied, acknowledgement: Promise.resolve(true)};
 }
 
-async function readAndApplyDappResponse(
+async function consumeDappResponse(
     id,
     configurationKey,
     requestToken,
@@ -768,7 +801,7 @@ async function readAndApplyDappResponse(
     quiet = false
 ) {
     const key = JSON.stringify([configurationKey, id, requestToken]);
-    const existing = responseReadFlights.get(key);
+    const existing = completionFlights.get(key);
     if (existing) {
         if (quiet && !existing.quiet) { return undefined; }
         return existing.revisions.ethereum === revisions.ethereum &&
@@ -780,7 +813,7 @@ async function readAndApplyDappResponse(
         id, configurationKey, requestToken, revisions, legacyConfigurationKey, quiet,
     };
     const promise = (async () => {
-        const response = await readStoredResponse(context);
+        const response = await prepareStoredResponseDelivery(context);
         if (isMissingStoredResponse(response, id)) { return {response}; }
         if (WIRE.hasExactKeys(response, ["id", "pending"]) &&
             response.id === id && response.pending === true) {
@@ -790,10 +823,10 @@ async function readAndApplyDappResponse(
         return terminal ? completeResponse(context, terminal) : undefined;
     })();
     const entry = {promise, configurationKey, revisions: {...revisions}, quiet};
-    responseReadFlights.set(key, entry);
+    completionFlights.set(key, entry);
     const clear = () => {
-        if (responseReadFlights.get(key) === entry) {
-            responseReadFlights.delete(key);
+        if (completionFlights.get(key) === entry) {
+            completionFlights.delete(key);
         }
     };
     promise.then(completed => {
@@ -829,6 +862,259 @@ async function acknowledgeCompletedResponse(id, configurationKey, requestToken) 
 function isMissingStoredResponse(response, id) {
     return WIRE.hasExactKeys(response, ["id", "missing"]) &&
         response.id === id && response.missing === true;
+}
+
+function executionJobKey(job) {
+    return JSON.stringify([job.configurationKey, job.id, job.requestToken]);
+}
+
+function validExecutionJob(job) {
+    const identity = WIRE.configurationIdentityForURL(job?.configurationKey);
+    return WIRE.hasExactKeys(job, [
+        "attempt", "configurationKey", "createdAt", "expiresAt", "id", "manual",
+        "nextMaintenanceAt", "requestToken", "revisions", "tabId", "workflowVersion",
+    ]) && job.workflowVersion === WORKFLOW_VERSION &&
+        identity?.configurationKey === job.configurationKey &&
+        WIRE.isValidRequestId(job.id) && WIRE.isRequestToken(job.requestToken) &&
+        WIRE.isProviderRevisions(job.revisions) && typeof job.manual === "boolean" &&
+        (job.manual ? job.tabId === null : Number.isSafeInteger(job.tabId) && job.tabId >= 0) &&
+        Number.isSafeInteger(job.createdAt) && job.createdAt > 0 &&
+        Number.isSafeInteger(job.expiresAt) && job.expiresAt - job.createdAt ===
+            WIRE.WORKFLOW_POLICY.requestTTLMilliseconds + WIRE.WORKFLOW_POLICY.responseExpiryMilliseconds &&
+        Number.isSafeInteger(job.nextMaintenanceAt) && job.nextMaintenanceAt >= 0 &&
+        (job.attempt === null || WIRE.hasExactKeys(job.attempt, ["attemptID", "lease"]) &&
+            WIRE.isRequestToken(job.attempt.attemptID) &&
+            validApprovalLease(job.attempt.lease, job.configurationKey));
+}
+
+function withExecutionJobs(operation) {
+    const pending = executionJobsTail.catch(() => {}).then(async () => {
+        const stored = await browser.storage.local.get(EXECUTION_JOBS_STORAGE_KEY);
+        const jobs = stored?.[EXECUTION_JOBS_STORAGE_KEY] ?? [];
+        if (!Array.isArray(jobs) || jobs.length > WIRE.WORKFLOW_POLICY.maximumRetainedRequests ||
+            !jobs.every(validExecutionJob) || new Set(jobs.map(executionJobKey)).size !== jobs.length) {
+            throw new Error("Invalid execution jobs");
+        }
+        const result = await operation(jobs);
+        if (result.changed) {
+            await browser.storage.local.set({[EXECUTION_JOBS_STORAGE_KEY]: jobs});
+        }
+        return result.value;
+    });
+    executionJobsTail = pending;
+    return pending;
+}
+
+function persistExecutionJob(context) {
+    return withExecutionJobs(jobs => {
+        const existing = jobs.find(job => executionJobKey(job) === executionJobKey(context));
+        if (existing) { return {value: existing}; }
+        if (jobs.length >= WIRE.WORKFLOW_POLICY.maximumRetainedRequests) {
+            throw new Error("Execution job capacity reached");
+        }
+        const createdAt = Date.now();
+        const job = {
+            attempt: null,
+            configurationKey: context.configurationKey,
+            createdAt,
+            expiresAt: createdAt + WIRE.WORKFLOW_POLICY.requestTTLMilliseconds +
+                WIRE.WORKFLOW_POLICY.responseExpiryMilliseconds,
+            id: context.id,
+            manual: context.manual,
+            nextMaintenanceAt: 0,
+            requestToken: context.requestToken,
+            revisions: {...context.revisions},
+            tabId: context.tabId,
+            workflowVersion: WORKFLOW_VERSION,
+        };
+        if (!validExecutionJob(job)) { throw new Error("Invalid execution job"); }
+        jobs.push(job);
+        return {changed: true, value: job};
+    });
+}
+
+function updateExecutionJob(job) {
+    return withExecutionJobs(jobs => {
+        const index = jobs.findIndex(value => executionJobKey(value) === executionJobKey(job));
+        if (index < 0) { return {value: false}; }
+        if (!validExecutionJob(job)) { throw new Error("Invalid execution job"); }
+        jobs[index] = job;
+        return {changed: true, value: true};
+    });
+}
+
+function removeExecutionJob(context) {
+    return withExecutionJobs(jobs => {
+        const index = jobs.findIndex(job => executionJobKey(job) === executionJobKey(context));
+        if (index < 0) { return {value: undefined}; }
+        jobs.splice(index, 1);
+        if (jobs.length === 0) {
+            clearTimeout(executionTimer);
+            executionTimer = null;
+        }
+        return {changed: true, value: undefined};
+    });
+}
+
+async function releaseCompletedExecution(context) {
+    const job = await withExecutionJobs(jobs => ({value: jobs.find(value =>
+        executionJobKey(value) === executionJobKey(context))}));
+    if (!job?.attempt) { return; }
+    const identity = WIRE.configurationIdentityForURL(job.configurationKey);
+    await queueConfigurationOperation(job.configurationKey, async () => {
+        await clearApprovalLease(job.configurationKey, job.attempt.lease.token);
+        return {value: undefined};
+    }, identity.legacyConfigurationKey);
+}
+
+async function requestStillActive(job) {
+    if (job.manual) { return true; }
+    try {
+        const response = await WIRE.withTimeout(browser.tabs.sendMessage(job.tabId, {
+            ...nativeRequestIdentity(job), subject: "requestActive",
+        }), TAB_QUERY_TIMEOUT);
+        return WIRE.hasExactKeys(response, ["id", "requestToken", "active"]) &&
+            response.id === job.id && response.requestToken === job.requestToken &&
+            response.active === true;
+    } catch { return false; }
+}
+
+async function executionState(job) {
+    const response = await WIRE.withTimeout(sendNativeMessage({
+        ...nativeRequestIdentity(job), subject: "getExecutionStatus",
+    }, false), TRANSPORT_TIMEOUT);
+    if (WIRE.hasExactKeys(response, ["id", "state"]) && response.id === job.id &&
+        ["awaitingReview", "awaitingExecution", "executing", "completed"].includes(response.state)) {
+        return response.state;
+    }
+    return nativeRequestStatus(response, job.id)?.missing === true ? "missing" : null;
+}
+
+async function acquireExecutionAttempt(job) {
+    const identity = WIRE.configurationIdentityForURL(job.configurationKey);
+    return queueConfigurationOperation(job.configurationKey, async state => {
+        let current = await readLiveApprovalLease(job.configurationKey);
+        if (!job.attempt) {
+            if (current || !await requestStillActive(job)) { return {value: null}; }
+            const lease = makeApprovalLease(job.configurationKey, state.revisions);
+            const token = lease.token;
+            job.attempt = {
+                attemptID: `${token.slice(0, 8)}-${token.slice(8, 12)}-${token.slice(12, 16)}-` +
+                    `${token.slice(16, 20)}-${token.slice(20)}`,
+                lease,
+            };
+            if (!await updateExecutionJob(job)) { return {value: null}; }
+        }
+        const lease = job.attempt.lease;
+        if (Date.now() >= lease.expiresAt || current && !sameApprovalLease(current, lease)) {
+            return {value: null};
+        }
+        if (!current) {
+            if (state.revisions.ethereum !== lease.revisions.ethereum ||
+                state.revisions.solana !== lease.revisions.solana) { return {value: null}; }
+            await browser.storage.local.set({[approvalLeaseStorageKey(job.configurationKey)]: lease});
+            current = await readLiveApprovalLease(job.configurationKey);
+        }
+        const persisted = await withExecutionJobs(jobs => ({value: jobs.find(value =>
+            executionJobKey(value) === executionJobKey(job))}));
+        return {value: sameApprovalLease(current, lease) &&
+            persisted?.attempt?.attemptID === job.attempt.attemptID &&
+            sameApprovalLease(persisted.attempt.lease, lease) ? job.attempt : null};
+    }, identity.legacyConfigurationKey);
+}
+
+async function driveExecution(job) {
+    if (Date.now() >= job.nextMaintenanceAt) {
+        const response = await WIRE.withTimeout(sendNativeMessage({
+            ...nativeRequestIdentity(job), subject: "maintainRequest",
+            allowDelivery: await requestStillActive(job),
+        }, false), TRANSPORT_TIMEOUT);
+        if (!nativeRequestStatus(response, job.id)) { return; }
+        if (response.missing) {
+            await releaseCompletedExecution(job);
+            await removeExecutionJob(job);
+            return;
+        }
+        job.nextMaintenanceAt = Date.now() + EXECUTION_MAINTENANCE_INTERVAL;
+        if (!await updateExecutionJob(job)) { return; }
+    }
+    const state = await executionState(job);
+    if (state === "missing" || Date.now() >= job.expiresAt) {
+        await releaseCompletedExecution(job);
+        await removeExecutionJob(job);
+        return;
+    }
+    if (state === "completed") {
+        await releaseCompletedExecution(job);
+        if (job.manual) {
+            const identity = WIRE.configurationIdentityForURL(job.configurationKey);
+            await consumeDappResponse(job.id, job.configurationKey, job.requestToken,
+                job.revisions, identity.legacyConfigurationKey, true);
+        } else {
+            await removeExecutionJob(job);
+        }
+        return;
+    }
+    if (state !== "awaitingExecution" && state !== "executing") { return; }
+    if (state === "executing" && !job.attempt) { return; }
+    const attempt = await acquireExecutionAttempt(job);
+    if (!attempt || !await requestStillActive(job)) { return; }
+    const response = await WIRE.withTimeout(sendNativeMessage({
+        ...nativeRequestIdentity(job),
+        subject: "executeNativeApproval",
+        attemptID: attempt.attemptID,
+        revisions: {...attempt.lease.revisions},
+        executionDeadline: attempt.lease.expiresAt,
+    }, false), NATIVE_OPERATION_TIMEOUT);
+    const status = nativeRequestStatus(response, job.id);
+    if (status?.ready || status?.missing) {
+        await releaseCompletedExecution(job);
+        if (status.missing) { await removeExecutionJob(job); }
+        else if (job.manual) {
+            const identity = WIRE.configurationIdentityForURL(job.configurationKey);
+            await consumeDappResponse(job.id, job.configurationKey, job.requestToken,
+                job.revisions, identity.legacyConfigurationKey, true);
+        } else {
+            await removeExecutionJob(job);
+        }
+    }
+}
+
+function recoverExecutions() {
+    if (browser.extension?.inIncognitoContext === true) { return Promise.resolve(); }
+    if (executionRecoveryFlight) { return executionRecoveryFlight; }
+    const pending = (async () => {
+        const jobs = await withExecutionJobs(values => ({value: values}));
+        if (jobs.length === 0) { return; }
+        await ensureManualSwitchAlarm();
+        for (const job of jobs) {
+            const lineage = approvalLeaseLineageKey(job.configurationKey);
+            if (executionLineageFlights.has(lineage)) { continue; }
+            executionLineageFlights.add(lineage);
+            const candidates = jobs.filter(value => approvalLeaseLineageKey(value.configurationKey) === lineage);
+            const flight = (async () => {
+                for (const candidate of candidates) {
+                    try { await driveExecution(candidate); } catch {}
+                }
+            })();
+            const clear = () => {
+                executionLineageFlights.delete(lineage);
+            };
+            flight.then(clear, clear);
+        }
+        if (executionTimer === null) {
+            executionTimer = setTimeout(() => {
+                executionTimer = null;
+                void recoverExecutions().catch(() => {});
+            }, MANUAL_SWITCH_POLL_DELAY);
+        }
+    })();
+    executionRecoveryFlight = pending;
+    const clear = () => {
+        if (executionRecoveryFlight === pending) { executionRecoveryFlight = null; }
+    };
+    pending.then(clear, clear);
+    return pending;
 }
 
 function ensureManualSwitchAlarm() {
@@ -890,25 +1176,6 @@ async function discoverManualSwitches() {
     return response.requests;
 }
 
-async function drainManualSwitches(lineage, requests) {
-    manualSwitchDrainingLineages.add(lineage);
-    try {
-        for (const request of requests) {
-            if ([...responseReadFlights.values()].some(entry =>
-                approvalLeaseLineageKey(entry.configurationKey) === lineage)) { return; }
-            try {
-                const identity = WIRE.configurationIdentityForURL(request.configurationKey);
-                const completed = await readAndApplyDappResponse(
-                    request.id, request.configurationKey, request.requestToken,
-                    request.revisions, identity.legacyConfigurationKey, true
-                );
-                await completed?.acknowledgement;
-            } catch {}
-        }
-    } finally {
-        manualSwitchDrainingLineages.delete(lineage);
-    }
-}
 
 function recoverManualSwitches() {
     if (browser.extension?.inIncognitoContext === true) { return Promise.resolve(); }
@@ -925,13 +1192,9 @@ function recoverManualSwitches() {
             manualSwitchPollTimer = null;
         }
         for (const request of requests) {
-            if (request.state === "pending") { continue; }
-            const lineage = approvalLeaseLineageKey(request.configurationKey);
-            if (manualSwitchDrainingLineages.has(lineage)) { continue; }
-            void drainManualSwitches(lineage, requests.filter(candidate =>
-                candidate.state !== "pending" &&
-                approvalLeaseLineageKey(candidate.configurationKey) === lineage)).catch(() => {});
+            await persistExecutionJob({...request, tabId: null, manual: true});
         }
+        void recoverExecutions().catch(() => {});
     })();
     manualSwitchDiscoveryFlight = pending;
     const clear = () => {
@@ -988,6 +1251,11 @@ function beginManualSwitch(identity) {
             }, false), TRANSPORT_TIMEOUT);
             if (WIRE.isValidRequestId(response?.id) &&
                 WIRE.isNativeEnqueueAcknowledgement(response, response.id)) {
+                await persistExecutionJob({
+                    ...identity, id: response.id, requestToken: response.requestToken,
+                    revisions: response.revisions, tabId: null, manual: true,
+                });
+                void recoverExecutions().catch(() => {});
                 if (response.approvalRequired) {
                     notifyPendingRequestAvailable();
                     cuePopup();
@@ -1059,11 +1327,17 @@ async function handleDappRequest(request, context) {
     if (!message) { return undefined; }
     const authorized = isAuthorized(message, state);
     const directResponseRevisions = {...message.revisions};
+    await ensureManualSwitchAlarm();
     const response = await WIRE.withTimeout(
         sendNativeMessage(authorized ? message : {...message, replayOnly: true}, false),
         TRANSPORT_TIMEOUT
     );
     if (WIRE.isNativeEnqueueAcknowledgement(response, message.id)) {
+        await persistExecutionJob({
+            ...message, requestToken: response.requestToken, revisions: response.revisions,
+            tabId: context.tabId, manual: false,
+        });
+        void recoverExecutions().catch(() => {});
         if (authorized && response.approvalRequired) {
             notifyPendingRequestAvailable();
             cuePopup();
@@ -1084,31 +1358,30 @@ async function handleDappRequest(request, context) {
     return undefined;
 }
 
+function validContentResponseRequest(request, context, consuming) {
+    const keys = ["configurationKey", "id", "requestToken", "subject", "workflowVersion"];
+    if (consuming) { keys.push("revisions"); }
+    return !context.privateBrowsing && WIRE.hasExactKeys(request, keys) &&
+        request.workflowVersion === WORKFLOW_VERSION &&
+        context.identity?.configurationKey === request.configurationKey &&
+        WIRE.isValidRequestId(request.id) && WIRE.isRequestToken(request.requestToken) &&
+        (!consuming || WIRE.isProviderRevisions(request.revisions));
+}
+
 async function handleGetResponse(request, context) {
-    const identity = context.identity;
-    if (context.privateBrowsing || !WIRE.hasExactKeys(request, [
-            "configurationKey", "id", "requestToken", "revisions", "subject",
-            "workflowVersion",
-        ]) || request.workflowVersion !== WORKFLOW_VERSION ||
-        !WIRE.isConfigurationKey(request.configurationKey) ||
-        identity?.configurationKey !== request.configurationKey ||
-        !WIRE.isValidRequestId(request.id) ||
-        !WIRE.isRequestToken(request.requestToken) ||
-        !WIRE.isProviderRevisions(request.revisions)) {
-        return undefined;
-    }
-    const completed = await readAndApplyDappResponse(
-        request.id,
-        request.configurationKey,
-        request.requestToken,
-        request.revisions,
-        identity.legacyConfigurationKey
+    if (!validContentResponseRequest(request, context, false)) { return undefined; }
+    const response = await WIRE.withTimeout(sendNativeMessage({
+        ...nativeRequestIdentity(request), subject: "getResponse",
+    }, false), TRANSPORT_TIMEOUT);
+    return nativeRequestStatus(response, request.id);
+}
+
+async function consumeResponse(request, context) {
+    if (!validContentResponseRequest(request, context, true)) { return undefined; }
+    const completed = await consumeDappResponse(
+        request.id, request.configurationKey, request.requestToken, request.revisions,
+        context.identity.legacyConfigurationKey
     );
-    if (completed?.response.name === "switchAccount" &&
-        completed.pageResponse?.kind === "configuration") {
-        const state = await readConfigurationState(request.configurationKey, identity.legacyConfigurationKey);
-        return pageResponse(completed.response, publicConfigurationState(state));
-    }
     return completed?.pageResponse || completed?.response;
 }
 
@@ -1180,7 +1453,7 @@ async function applyCompletedResponse(request, context) {
         !WIRE.isProviderRevisions(request.revisions)) {
         return undefined;
     }
-    const completed = await readAndApplyDappResponse(
+    const completed = await consumeDappResponse(
         request.id,
         request.configurationKey,
         request.requestToken,
@@ -1472,6 +1745,8 @@ async function handleMessage(request, context) {
         return handleManualSwitchIntent(request, context);
     case "getResponse":
         return handleGetResponse(request, context);
+    case "consumeResponse":
+        return consumeResponse(request, context);
     case "getLatestConfiguration":
         return latestConfiguration(request, context);
     case "approveRequestWithCurrentRevisions":
@@ -1507,6 +1782,7 @@ try {
         Promise.resolve(persistUpdateRecovery(details)).catch(() => {});
         Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
         void recoverManualSwitches().catch(() => {});
+        void recoverExecutions().catch(() => {});
     });
 } catch {}
 
@@ -1515,18 +1791,20 @@ try {
         Promise.resolve(clearUpdateRecovery()).catch(() => {});
         Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
         void recoverManualSwitches().catch(() => {});
+        void recoverExecutions().catch(() => {});
     });
 } catch {}
 
 try {
     Promise.resolve(clearBadgeWithoutPopup()).catch(() => {});
     void recoverManualSwitches().catch(() => {});
+    void recoverExecutions().catch(() => {});
 } catch {}
 
 try {
     browser.alarms.onAlarm.addListener(alarm => {
         if (alarm?.name !== MANUAL_SWITCH_RECOVERY_ALARM) { return undefined; }
-        return recoverManualSwitches().catch(() => {});
+        return Promise.allSettled([recoverManualSwitches(), recoverExecutions()]);
     });
 } catch {}
 

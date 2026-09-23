@@ -357,6 +357,7 @@ test("runtime sender policy permits only the complete sender receiver subject ma
         "content:worker:message-to-wallet",
         "content:worker:manualSwitchIntent",
         "content:worker:getResponse",
+        "content:worker:consumeResponse",
         "content:worker:getLatestConfiguration",
         "content:worker:disconnect",
         "popup:worker:approveRequestWithCurrentRevisions",
@@ -368,12 +369,14 @@ test("runtime sender policy permits only the complete sender receiver subject ma
         "worker:content:manualSwitchIntent",
         "worker:content:configurationChanged",
         "worker:content:responseReady",
+        "worker:content:requestActive",
         "popup:content:workflowProbe",
         "popup:content:manualSwitchIntent",
         "worker:popup:pendingRequestAvailable",
     ]);
     const subjects = new Set([
         ...[...allowed].map(entry => entry.split(":")[2]),
+        "executeNativeApproval", "getExecutionStatus", "maintainRequest", "prepareResponseDelivery",
         "unknown", "constructor", "__proto__", "toString", "hasOwnProperty", "",
     ]);
     for (const [kind, sender] of Object.entries(runtimeSenders)) {
@@ -395,6 +398,7 @@ test("runtime authorization recognizes Safari worker roots without widening send
         ["content", "manualSwitchIntent"],
         ["content", "configurationChanged"],
         ["content", "responseReady"],
+        ["content", "requestActive"],
         ["popup", "pendingRequestAvailable"],
     ];
     for (const url of [root, root.replace(/\/$/, ""), runtime.getURL("service_worker.js")]) {

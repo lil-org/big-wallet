@@ -12,21 +12,19 @@ actor NativeApprovalService {
     }
 
     private enum ReceiptPolicy {
-        case delivery, pageRead, manualRecovery
+        case delivery, manualRecovery
     }
 
     struct Dependencies {
         let launcher: NativeAgentLauncher
         let load: (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
-        let loadManualSwitch: (
+        let beginExecution: (
+            ExtensionBridge.Handle, String, UUID, ExtensionBridge.ProviderRevisions, Date
+        ) async -> ExtensionBridge.NativeExecutionResult
+        let responseStatus: (
             ExtensionBridge.Handle, String
-        ) async -> ExtensionBridge.SnapshotResult
-        let beginExecutionRead: (
-            ExtensionBridge.Handle, String, ExtensionBridge.ProviderRevisions, Date
-        ) async -> ExtensionBridge.NativeExecutionReadResult
-        let readResponse: (
-            ExtensionBridge.Handle, String
-        ) async -> ExtensionBridge.ResponseReadResult
+        ) async -> ExtensionBridge.ResponseStatusResult
+        let maintainProfile: (UUID?) async -> Void
         let clearReceipt: (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryReceipt
@@ -40,19 +38,19 @@ actor NativeApprovalService {
             Self(
                 launcher: NativeAgentLauncher(),
                 load: { await ExtensionBridge.shared.load(handle: $0) },
-                loadManualSwitch: {
-                    await ExtensionBridge.shared.loadManualSwitch(handle: $0, configurationKey: $1)
-                },
-                beginExecutionRead: {
-                    await ExtensionBridge.shared.beginNativeExecutionRead(
-                        handle: $0, configurationKey: $1, revisions: $2, executionDeadline: $3
+                beginExecution: {
+                    await ExtensionBridge.shared.beginNativeExecution(
+                        handle: $0, configurationKey: $1, attemptID: $2,
+                        revisions: $3, executionDeadline: $4
                     )
                 },
-                readResponse: {
-                    await ExtensionBridge.shared.readResponse(
-                        id: $0.id, configurationKey: $1,
-                        requestToken: $0.requestToken, profileIdentifier: $0.profileIdentifier
+                responseStatus: {
+                    await ExtensionBridge.shared.responseStatus(
+                        handle: $0, configurationKey: $1
                     )
+                },
+                maintainProfile: {
+                    await ExtensionBridge.shared.performMaintenance(profileIdentifier: $0)
                 },
                 clearReceipt: { handle, receipt in
                     await ExtensionBridge.shared.clearNativeDeliveryReceipt(
@@ -133,12 +131,6 @@ actor NativeApprovalService {
             case .owned(let snapshot, let current):
                 if policy == .manualRecovery && !snapshot.hasStagedOrActiveExecution {
                     return .unavailable
-                }
-                if policy == .pageRead,
-                   case .queued(_, .delivered) = snapshot.state,
-                   await dependencies.launcher.hasCompatibleOwner(current.owner),
-                   isPending(until: deadline) {
-                    return .delivered
                 }
                 receipt = current
             case .completed: return .responseReady
@@ -274,10 +266,6 @@ actor NativeApprovalService {
         return await delivery.task.value
     }
 
-    enum ApprovalReadMode {
-        case page, manualRecovery
-    }
-
     private func inspectReceipt(
         handle: ExtensionBridge.Handle,
         nonce: ExtensionBridge.NativeDeliveryNonce,
@@ -336,121 +324,181 @@ actor NativeApprovalService {
         return .pending
     }
 
-    func readApprovalResponse(
+    private struct ExecutionAttempt {
+        let attemptID: UUID
+        let configurationKey: String
+        let revisions: ExtensionBridge.ProviderRevisions
+        let executionDeadline: Date
+        let task: Task<ExtensionBridge.ResponseStatusResult, Never>
+    }
+
+    private var executionAttempts = [ExtensionBridge.Handle: ExecutionAttempt]()
+
+    func executeNativeApproval(
         handle: ExtensionBridge.Handle,
         configurationKey: String,
+        attemptID: UUID,
+        revisions: ExtensionBridge.ProviderRevisions,
+        executionDeadline: Date
+    ) async -> ExtensionBridge.ResponseStatusResult {
+        guard !Task.isCancelled else { return .pending }
+        if let existing = executionAttempts[handle] {
+            guard existing.attemptID == attemptID,
+                  existing.configurationKey == configurationKey,
+                  existing.revisions == revisions,
+                  existing.executionDeadline == executionDeadline else { return .unavailable }
+            return await existing.task.value
+        }
+        let deadline = dependencies.deadline(after: NativeApprovalTiming.responseTimeoutNanoseconds)
+        let operation = Task {
+            await performNativeExecution(
+                handle: handle, configurationKey: configurationKey,
+                attemptID: attemptID, revisions: revisions,
+                executionDeadline: executionDeadline, deadline: deadline
+            )
+        }
+        let task = Task {
+            await boundedResult(of: operation, deadline: deadline, timeoutValue: .pending)
+        }
+        executionAttempts[handle] = ExecutionAttempt(
+            attemptID: attemptID, configurationKey: configurationKey,
+            revisions: revisions, executionDeadline: executionDeadline, task: task
+        )
+        let result = await task.value
+        if executionAttempts[handle]?.attemptID == attemptID {
+            executionAttempts[handle] = nil
+        }
+        return result
+    }
+
+    private func performNativeExecution(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String,
+        attemptID: UUID,
         revisions: ExtensionBridge.ProviderRevisions,
         executionDeadline: Date,
-        mode: ApprovalReadMode
-    ) async -> ExtensionBridge.ResponseReadResult {
-        guard !Task.isCancelled else { return .pending }
-        if mode == .manualRecovery {
-            let loaded = await dependencies.loadManualSwitch(handle, configurationKey)
-            guard !Task.isCancelled else { return .pending }
-            switch loaded {
-            case .found(let snapshot):
-                if snapshot.phase != .responded {
-                    let status = await inspectReceipt(
-                        handle: handle, nonce: snapshot.nativeDeliveryNonce,
-                        policy: .manualRecovery,
-                        deadline: dependencies.deadline(after: launchTimeoutNanoseconds)
-                    )
-                    guard !Task.isCancelled else { return .pending }
-                    switch status {
-                    case .delivered, .responseReady: break
-                    case .needsDelivery, .terminal, .unavailable: return .pending
-                    }
-                }
+        deadline: UInt64
+    ) async -> ExtensionBridge.ResponseStatusResult {
+        guard isPending(until: deadline) else { return .pending }
+        let execution = await dependencies.beginExecution(
+            handle, configurationKey, attemptID, revisions, executionDeadline
+        )
+        guard case .acquired(let lease) = execution else {
+            switch execution {
+            case .responseReady: return .ready
             case .missing: return .missing
             case .unavailable: return .unavailable
+            case .pending, .needsDelivery: return .pending
+            case .acquired: preconditionFailure()
             }
         }
-
-        var executionLease: ExtensionBridge.NativeExecutionReadLease?
-        defer { executionLease?.release() }
-        let execution = await dependencies.beginExecutionRead(
-            handle, configurationKey, revisions, executionDeadline
-        )
-        if case .acquired(let lease) = execution { executionLease = lease }
-        guard !Task.isCancelled else { return .pending }
-        switch execution {
-        case .acquired(let lease):
-            let initialDeadline = dependencies.deadline(after: launchTimeoutNanoseconds)
-            let initialStatus = await inspectReceipt(
-                handle: handle, nonce: lease.nativeDeliveryNonce,
-                policy: mode == .page ? .pageRead : .manualRecovery,
-                deadline: initialDeadline
-            )
-            guard !Task.isCancelled else { return .pending }
-            switch initialStatus {
-            case .responseReady, .terminal:
-                break
-            case .needsDelivery, .unavailable:
-                return mode == .page ? .unavailable : .pending
-            case .delivered:
-                let deadline = dependencies.deadline(after: NativeApprovalTiming.responseTimeoutNanoseconds)
-                var nextDeliveryCheck = dependencies.deadline(after: NativeApprovalTiming.deliveryCheckIntervalNanoseconds)
-                if dependencies.wallClock() >= lease.context.executionDeadline { return .pending }
-                observation: while !Task.isCancelled, dependencies.uptime() < deadline {
-                    let loaded = await dependencies.load(handle)
-                    guard !Task.isCancelled else { return .pending }
-                    switch loaded {
-                    case .found(let snapshot):
-                        guard snapshot.configurationKey == configurationKey,
-                              snapshot.phase != .responded else { break observation }
-                        if snapshot.phase == .queued,
-                           dependencies.wallClock() >= lease.context.executionDeadline { return .pending }
-                        let now = dependencies.uptime()
-                        if case .queued(_, .staged) = snapshot.state, now >= nextDeliveryCheck {
-                            let status = await inspectReceipt(
-                                handle: handle, nonce: lease.nativeDeliveryNonce,
-                                policy: mode == .page ? .pageRead : .manualRecovery,
-                                deadline: min(deadline, dependencies.deadline(after: launchTimeoutNanoseconds))
-                            )
-                            guard !Task.isCancelled else { return .pending }
-                            switch status {
-                            case .responseReady, .terminal: break observation
-                            case .delivered: break
-                            case .needsDelivery, .unavailable: return .pending
-                            }
-                            let next = now.addingReportingOverflow(NativeApprovalTiming.deliveryCheckIntervalNanoseconds)
-                            nextDeliveryCheck = next.overflow ? UInt64.max : next.partialValue
-                        }
-                    case .missing: break observation
-                    case .unavailable: break
-                    }
-                    let wake = dependencies.deadline(after: NativeApprovalTiming.responsePollIntervalNanoseconds)
-                    await dependencies.sleepUntil(min(wake, deadline))
+        defer { lease.release() }
+        guard isPending(until: deadline) else { return .pending }
+        var nextDeliveryCheck: UInt64 = 0
+        while isPending(until: deadline) {
+            let loaded = await dependencies.load(handle)
+            guard isPending(until: deadline) else { return .pending }
+            switch loaded {
+            case .found(let snapshot):
+                guard snapshot.configurationKey == configurationKey,
+                      snapshot.nativeDeliveryNonce == lease.nativeDeliveryNonce else { return .missing }
+                if snapshot.phase == .responded { return .ready }
+                if snapshot.phase == .queued,
+                   snapshot.nativeApproval?.executionContext != lease.context { return .pending }
+                if snapshot.phase == .queued,
+                   dependencies.wallClock() >= lease.context.executionDeadline { return .pending }
+                let now = dependencies.uptime()
+                if case .queued(_, .staged) = snapshot.state, now >= nextDeliveryCheck {
+                    guard let receipt = snapshot.nativeDeliveryReceipt,
+                          await verifyExecutionOwner(receipt.owner, deadline: deadline),
+                          isPending(until: deadline) else { return .unavailable }
+                    nextDeliveryCheck = dependencies.deadline(
+                        after: NativeApprovalTiming.deliveryCheckIntervalNanoseconds
+                    )
                 }
-                guard !Task.isCancelled, dependencies.uptime() < deadline else { return .pending }
+            case .missing: return .missing
+            case .unavailable: break
             }
-        case .needsDelivery(let nonce):
-            let deadline = dependencies.deadline(after: launchTimeoutNanoseconds)
-            let status = await inspectReceipt(
-                handle: handle, nonce: nonce,
-                policy: mode == .page ? .pageRead : .manualRecovery,
-                deadline: deadline
+            let wake = dependencies.deadline(after: NativeApprovalTiming.responsePollIntervalNanoseconds)
+            await dependencies.sleepUntil(min(wake, deadline))
+        }
+        return .pending
+    }
+
+    private func verifyExecutionOwner(
+        _ owner: ExtensionBridge.NativeDeliveryOwner,
+        deadline: UInt64
+    ) async -> Bool {
+        let operation = Task {
+            if case .compatible = await dependencies.launcher.status(owner: owner) {
+                return true
+            }
+            return false
+        }
+        return await boundedResult(
+            of: operation,
+            deadline: min(deadline, dependencies.deadline(after: launchTimeoutNanoseconds)),
+            timeoutValue: false
+        )
+    }
+
+    func maintainRequest(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String,
+        allowDelivery: Bool
+    ) async -> ExtensionBridge.ResponseStatusResult {
+        guard !Task.isCancelled else { return .pending }
+        let deadline = dependencies.deadline(after: launchTimeoutNanoseconds)
+        let operation = Task {
+            await maintainRequest(
+                handle: handle, configurationKey: configurationKey,
+                allowDelivery: allowDelivery, deadline: deadline
             )
-            guard !Task.isCancelled else { return .pending }
-            switch status {
-            case .delivered, .responseReady, .terminal: break
-            case .needsDelivery where mode == .page:
-                let route = NativeAgentRoute.approval(
-                    workflowVersion: ExtensionBridge.workflowVersion,
-                    handle: handle, nativeDeliveryNonce: nonce
-                )
-                let delivered = await open(route, waitDeadline: deadline)
-                guard !Task.isCancelled else { return .pending }
-                guard delivered else { return .unavailable }
-            case .needsDelivery, .unavailable:
-                return mode == .page ? .unavailable : .pending
-            }
-        case .pending, .responseReady, .missing: break
+        }
+        return await boundedResult(of: operation, deadline: deadline, timeoutValue: .unavailable)
+    }
+
+    private func maintainRequest(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String,
+        allowDelivery: Bool,
+        deadline: UInt64
+    ) async -> ExtensionBridge.ResponseStatusResult {
+        await dependencies.maintainProfile(handle.profileIdentifier)
+        guard isPending(until: deadline) else { return .pending }
+        let snapshot: ExtensionBridge.Snapshot
+        switch await dependencies.load(handle) {
+        case .found(let found) where found.configurationKey == configurationKey:
+            snapshot = found
+        case .found, .missing: return .missing
         case .unavailable: return .unavailable
         }
-        guard !Task.isCancelled else { return .pending }
-        let response = await dependencies.readResponse(handle, configurationKey)
-        return Task.isCancelled ? .pending : response
+        guard isPending(until: deadline) else { return .pending }
+        if snapshot.phase == .responded { return .ready }
+        let manual = snapshot.request?.provider == .unknown &&
+            snapshot.request?.name == "switchAccount"
+        let quiet = manual || !allowDelivery
+        if quiet && !snapshot.hasStagedOrActiveExecution { return .pending }
+        let status = await reconcileReceipt(
+            handle: handle, nonce: snapshot.nativeDeliveryNonce,
+            policy: quiet ? .manualRecovery : .delivery, deadline: deadline
+        )
+        guard isPending(until: deadline) else { return .pending }
+        switch status {
+        case .delivered: return .pending
+        case .responseReady: return .ready
+        case .terminal:
+            return await dependencies.responseStatus(handle, configurationKey)
+        case .unavailable: return .unavailable
+        case .needsDelivery:
+            guard !quiet, !snapshot.hasStagedOrActiveExecution else { return .pending }
+            let opened = await open(.approval(
+                workflowVersion: ExtensionBridge.workflowVersion,
+                handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+            ), waitDeadline: deadline)
+            guard isPending(until: deadline), opened else { return .unavailable }
+            return await dependencies.responseStatus(handle, configurationKey)
+        }
     }
 
     func reactivate(

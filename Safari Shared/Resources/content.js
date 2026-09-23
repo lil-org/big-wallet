@@ -263,7 +263,9 @@ function bigWalletRun(state) {
     state.running = true;
     const operation = state.phase === "enqueuing"
         ? bigWalletSendEnqueue(state)
-        : bigWalletReadResponse(state);
+        : state.phase === "completing"
+            ? bigWalletConsumeResponse(state)
+            : bigWalletReadResponse(state);
     Promise.resolve(operation).finally(() => {
         state.running = false;
         if (state.rerunRequested) {
@@ -323,11 +325,40 @@ async function bigWalletReadResponse(state) {
             id: state.message.id,
             configurationKey: state.configurationKey,
             requestToken: state.requestToken,
-            revisions: state.revisions,
             workflowVersion: bigWalletWorkflowVersion,
         }), bigWalletTransportTimeout);
     } catch {}
     if (!bigWalletIsCurrent(state, "waiting")) { return; }
+    if (bigWalletWire.hasExactKeys(response, ["id", "missing"]) &&
+        response.id === state.message.id && response.missing === true) {
+        bigWalletFail(state);
+        return;
+    }
+    if (bigWalletWire.hasExactKeys(response, ["id", "ready"]) &&
+        response.id === state.message.id && response.ready === true) {
+        state.phase = "completing";
+        state.responseFailureMilliseconds = 0;
+        state.lastResponseFailureAt = null;
+        bigWalletSchedule(state, 0);
+        return;
+    }
+    bigWalletRetryResponse(state, response, readStartedAt);
+}
+
+async function bigWalletConsumeResponse(state) {
+    const startedAt = Date.now();
+    let response;
+    try {
+        response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
+            subject: "consumeResponse",
+            id: state.message.id,
+            configurationKey: state.configurationKey,
+            requestToken: state.requestToken,
+            revisions: state.revisions,
+            workflowVersion: bigWalletWorkflowVersion,
+        }), bigWalletTransportTimeout);
+    } catch {}
+    if (!bigWalletIsCurrent(state, "completing")) { return; }
     if (bigWalletWire.hasExactKeys(response, ["id", "missing"]) &&
         response.id === state.message.id && response.missing === true) {
         bigWalletFail(state);
@@ -338,6 +369,10 @@ async function bigWalletReadResponse(state) {
         bigWalletDeliver(state, terminal);
         return;
     }
+    bigWalletRetryResponse(state, response, startedAt);
+}
+
+function bigWalletRetryResponse(state, response, startedAt) {
     const retryDelay = document.visibilityState === "visible" ? 1000 : 5000;
     if (bigWalletWire.hasExactKeys(response, ["id", "pending"]) &&
         response.id === state.message.id && response.pending === true) {
@@ -346,7 +381,7 @@ async function bigWalletReadResponse(state) {
     } else {
         const now = Date.now();
         state.responseFailureMilliseconds += Math.min(
-            Math.max(0, now - (state.lastResponseFailureAt ?? readStartedAt)),
+            Math.max(0, now - (state.lastResponseFailureAt ?? startedAt)),
             bigWalletTransportTimeout + retryDelay
         );
         state.lastResponseFailureAt = now;
@@ -536,6 +571,28 @@ function bigWalletRuntimeMessage(
     sendResponse,
     contentBuildVersion
 ) {
+    if (request?.subject === "requestActive") {
+        if (senderContext.kind !== "worker" ||
+            !bigWalletWire.hasExactKeys(request, [
+                "subject", "id", "configurationKey", "requestToken", "workflowVersion",
+            ]) || request.workflowVersion !== bigWalletWorkflowVersion ||
+            !bigWalletWire.isValidRequestId(request.id) ||
+            !bigWalletWire.isRequestToken(request.requestToken)) {
+            sendResponse();
+            return true;
+        }
+        const identity = bigWalletCurrentIdentity();
+        const active = identity?.configurationKey === request.configurationKey &&
+            [...bigWalletRequests.values()].some(state =>
+                bigWalletIsCurrent(state, "waiting") &&
+                bigWalletMatchesGeneration(state.generation) &&
+                state.message.id === request.id &&
+                state.requestToken === request.requestToken &&
+                state.configurationKey === request.configurationKey
+            );
+        sendResponse({id: request.id, requestToken: request.requestToken, active});
+        return true;
+    }
     if (bigWalletWire.hasExactKeys(request, [
         "nonce", "subject", "workflowVersion",
     ]) &&
@@ -578,7 +635,8 @@ function bigWalletRuntimeMessage(
     const ids = bigWalletWire.responseReadyIds(request);
     if (ids) {
         for (const state of bigWalletRequests.values()) {
-            if (state.phase === "waiting" && ids.includes(state.message.id)) {
+            if ((state.phase === "waiting" || state.phase === "completing") &&
+                ids.includes(state.message.id)) {
                 bigWalletSchedule(state, 0);
             }
         }
@@ -618,7 +676,9 @@ function bigWalletVisibilityChanged(event) {
     if (event?.isTrusted === false) { return; }
     if (document.visibilityState !== "visible") { return; }
     for (const state of bigWalletRequests.values()) {
-        if (state.phase === "waiting") { bigWalletSchedule(state, 0); }
+        if (state.phase === "waiting" || state.phase === "completing") {
+            bigWalletSchedule(state, 0);
+        }
     }
     const generation = bigWalletProviderGeneration;
     if (!bigWalletMatchesGeneration(generation)) { return; }

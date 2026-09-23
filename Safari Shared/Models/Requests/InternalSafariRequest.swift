@@ -160,8 +160,18 @@ struct InternalSafariRequest: Decodable {
     struct ResponseIdentity {
         let configurationKey: String
         let token: ExtensionBridge.RequestToken
+    }
+
+    struct NativeExecutionIdentity {
+        let response: ResponseIdentity
+        let attemptID: UUID
         let executionDeadline: Date
         let revisions: ExtensionBridge.ProviderRevisions
+    }
+
+    struct MaintenanceIdentity {
+        let response: ResponseIdentity
+        let allowDelivery: Bool
     }
 
     struct ResponseAcknowledgmentIdentity {
@@ -184,6 +194,10 @@ struct InternalSafariRequest: Decodable {
     enum WorkerCommand {
         case getManualSwitchRequests
         case getManualSwitchResponse(ResponseIdentity)
+        case getExecutionStatus(ResponseIdentity)
+        case executeNativeApproval(NativeExecutionIdentity)
+        case maintainRequest(MaintenanceIdentity)
+        case prepareResponseDelivery(ResponseIdentity)
     }
 
     enum PopupCommand {
@@ -241,6 +255,7 @@ struct InternalSafariRequest: Decodable {
 
         enum Worker: String {
             case getManualSwitchRequests, getManualSwitchResponse
+            case getExecutionStatus, executeNativeApproval, maintainRequest, prepareResponseDelivery
         }
 
         enum Popup: String {
@@ -309,6 +324,30 @@ struct InternalSafariRequest: Decodable {
             command = .worker(.getManualSwitchResponse(try Self.decodeResponseIdentity(
                 from: decoder,
                 common: common
+            )))
+        case .worker(.getExecutionStatus):
+            command = .worker(.getExecutionStatus(try Self.decodeResponseIdentity(
+                from: decoder, common: common
+            )))
+        case .worker(.maintainRequest):
+            let container = try ExactKeyedContainer(
+                decoder: decoder,
+                required: common.union(["configurationKey", "requestToken", "allowDelivery"])
+            )
+            command = .worker(.maintainRequest(try MaintenanceIdentity(
+                response: ResponseIdentity(
+                    configurationKey: container.decode(String.self, forKey: "configurationKey"),
+                    token: Self.decodeToken(from: container)
+                ),
+                allowDelivery: container.decode(Bool.self, forKey: "allowDelivery")
+            )))
+        case .worker(.prepareResponseDelivery):
+            command = .worker(.prepareResponseDelivery(try Self.decodeResponseIdentity(
+                from: decoder, common: common
+            )))
+        case .worker(.executeNativeApproval):
+            command = .worker(.executeNativeApproval(try Self.decodeNativeExecutionIdentity(
+                from: decoder, common: common
             )))
         case .worker(.getManualSwitchRequests):
             _ = try ExactKeyedContainer(decoder: decoder, required: common)
@@ -418,13 +457,36 @@ struct InternalSafariRequest: Decodable {
     ) throws -> ResponseIdentity {
         let container = try ExactKeyedContainer(
             decoder: decoder,
+            required: common.union(["configurationKey", "requestToken"])
+        )
+        return try ResponseIdentity(
+            configurationKey: container.decode(String.self, forKey: "configurationKey"),
+            token: decodeToken(from: container)
+        )
+    }
+
+    private static func decodeNativeExecutionIdentity(
+        from decoder: Decoder,
+        common: Set<String>
+    ) throws -> NativeExecutionIdentity {
+        let container = try ExactKeyedContainer(
+            decoder: decoder,
             required: common.union([
                 "configurationKey",
+                "attemptID",
                 "executionDeadline",
                 "requestToken",
                 "revisions",
             ])
         )
+        let rawAttemptID = try container.decode(String.self, forKey: "attemptID")
+        guard let attemptID = ExtensionBridge.lowercaseUUID(rawAttemptID) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: InternalCodingKey("attemptID"),
+                in: container.container,
+                debugDescription: "invalid execution attempt"
+            )
+        }
         let milliseconds = try container.decode(
             Int64.self,
             forKey: "executionDeadline"
@@ -436,9 +498,12 @@ struct InternalSafariRequest: Decodable {
                 debugDescription: "invalid execution deadline"
             )
         }
-        return try ResponseIdentity(
-            configurationKey: container.decode(String.self, forKey: "configurationKey"),
-            token: decodeToken(from: container),
+        return try NativeExecutionIdentity(
+            response: ResponseIdentity(
+                configurationKey: container.decode(String.self, forKey: "configurationKey"),
+                token: decodeToken(from: container)
+            ),
+            attemptID: attemptID,
             executionDeadline: Date(
                 timeIntervalSince1970: Double(milliseconds) / 1_000
             ),
