@@ -61,7 +61,7 @@ final class NativeApprovalFinalizer {
             return .responseReady
         case .approving:
             return .pending
-        case .queued(let request, .staged):
+        case .queued(let request, .delivered):
             return await claimAndExecute(
                 snapshot: snapshot,
                 request: request,
@@ -77,8 +77,7 @@ final class NativeApprovalFinalizer {
         request: SafariRequest,
         authorization: ExtensionBridge.NativeApprovalAuthorization
     ) async -> NativeApprovalFinalizationResult {
-        guard snapshot.nativeDeliveryReceipt == authorization.receipt,
-              snapshot.nativeApproval?.approvedAt == authorization.approvedAt else {
+        guard snapshot.nativeDeliveryReceipt == authorization.receipt else {
             return .interruptionRequired
         }
         let nativeClaim: ExtensionBridge.NativeExecutionClaim
@@ -91,11 +90,11 @@ final class NativeApprovalFinalizer {
         switch claimResult {
         case .claimed(let value):
             nativeClaim = value
-        case .notStaged, .executing:
+        case .executing:
             return .pending
         case .responded, .missing:
             return .responseReady
-        case .unavailable:
+        case .ownershipLost, .unavailable:
             return .interruptionRequired
         }
 

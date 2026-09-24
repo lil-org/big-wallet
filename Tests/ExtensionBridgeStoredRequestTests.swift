@@ -729,21 +729,91 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testNativeStageCanExecuteWithoutWorkerAndExpiresOnNativeDeadline() async throws {
+    func testNativeClaimExecutesWithoutWorkerAndExpiresOnNativeDeadline() async throws {
         let fixture = try makeFixture(id: 60_030)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
-        let stageResult = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(stageResult, .persisted)
-        let staged = try await nativeStage(handle: handle)
-        XCTAssertEqual(staged.context.executionDeadline, clock.now.addingTimeInterval(150))
-        let claim = await claimReadyNativeExecution(in: bridge, handle: handle)
+        let delivered = try await recordNativeDelivery(handle: handle)
+        XCTAssertEqual(delivered, .persisted)
+        let claim = await claimDeliveredNativeExecution(in: bridge, handle: handle, approvedAt: clock.now)
         guard case .claimed(let nativeClaim) = claim else { return XCTFail("Native approval must execute directly") }
-        let competing = await claimReadyNativeExecution(in: bridge, handle: handle)
+        XCTAssertEqual(nativeClaim.executionContext.executionDeadline, clock.now.addingTimeInterval(150))
+        let competing = await claimDeliveredNativeExecution(in: bridge, handle: handle, approvedAt: clock.now)
         XCTAssertEqual(competing, .executing)
-        clock.now = staged.context.executionDeadline
+        clock.now = nativeClaim.executionContext.executionDeadline
         let expiredBegin = await bridge.begin(claim: nativeClaim.approvalClaim)
         XCTAssertEqual(expiredBegin, .ownershipLost)
         nativeClaim.approvalClaim.releaseLease()
+    }
+
+    func testNativeClaimCannotReviveApprovalAfterAuthorityRevocation() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 60_032)
+        let signing = try await admittedSigning(account, id: 60_033)
+        _ = try await recordNativeDelivery(handle: signing.handle)
+        let approvedAt = clock.now
+        guard case .found(let delivered) = await bridge.load(handle: signing.handle),
+              let receipt = delivered.nativeDeliveryReceipt,
+              case .snapshot(let current) = await bridge.configurationSnapshot(
+                configurationKey: signing.request.configurationKey, profileIdentifier: nil
+              ), case .revoked = await bridge.revoke(
+                configurationKey: signing.request.configurationKey, provider: .ethereum,
+                attempt: attempt(for: 60_034), expected: current.version, profileIdentifier: nil
+              ) else { return XCTFail("Expected revocation after delivery") }
+        let result = await bridge.claimNativeExecution(
+            handle: signing.handle, nativeDeliveryNonce: receipt.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier, approvedAt: approvedAt
+        )
+        XCTAssertEqual(result, .responded)
+        let response = try await deliveredAuthority(signing.handle)
+        XCTAssertEqual((response.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+    }
+
+    func testConcurrentNativeClaimersPersistOnlyOneAtomicTransition() async throws {
+        let fixture = try makeFixture(id: 60_031)
+        let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        let owner = storedRequestNativeOwner()
+        let delivered = await bridge.recordNativeDeliveryReceipt(
+            handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce, owner: owner
+        )
+        XCTAssertEqual(delivered, .persisted)
+        let now = clock.now
+        var writes = 0
+        let atomicWrite: (Data, URL) throws -> Void = { data, url in
+            writes += 1
+            let profile = try XCTUnwrap(PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil
+            ) as? [String: Any])
+            let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+            let state = try XCTUnwrap(records.first?["state"] as? [String: Any])
+            XCTAssertEqual(Set(state.keys), ["claimed"])
+            try ApprovalStoreTestPersistence.write(data, url)
+        }
+        let first = makeBridge(clock: { now }, atomicWrite: atomicWrite)
+        let second = makeBridge(clock: { now }, atomicWrite: atomicWrite)
+        async let firstResult = first.claimNativeExecution(
+            handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier, approvedAt: now
+        )
+        async let secondResult = second.claimNativeExecution(
+            handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier, approvedAt: now
+        )
+        let results = await [firstResult, secondResult]
+        let claims = results.compactMap { result -> ExtensionBridge.NativeExecutionClaim? in
+            guard case .claimed(let claim) = result else { return nil }
+            return claim
+        }
+        defer { claims.forEach { $0.approvalClaim.releaseLease() } }
+        XCTAssertEqual(claims.count, 1)
+        XCTAssertEqual(results.filter { $0 == .executing }.count, 1)
+        XCTAssertEqual(writes, 1)
+        guard case .found(let snapshot) = await bridge.load(handle: admission.handle) else {
+            return XCTFail("Expected persisted execution")
+        }
+        XCTAssertTrue(snapshot.hasActiveExecution)
+        XCTAssertFalse(snapshot.isQueuedForNativeApproval)
+        XCTAssertEqual(snapshot.nativeApproval?.approvedAt, now)
+        XCTAssertEqual(snapshot.nativeExecutionContext, claims.first?.executionContext)
     }
 
     func testDisconnectedReclamationAdvancesWatermarkAndPreservesProfileEpoch() async throws {
@@ -890,7 +960,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(snapshot.request?.authority, advanced.version)
     }
 
-    func testNativeStageExpiresWhenProfileReadCrossesAdmissionDeadline() async throws {
+    func testNativeClaimExpiresWhenProfileReadCrossesAdmissionDeadline() async throws {
         let account = authorityTestAccount()
         _ = try await grantAuthority(account, id: 60_080)
         let fixture = try makeFixture(id: 60_081, admissionDeadline: clock.now.addingTimeInterval(1))
@@ -903,7 +973,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         clock.now = fixture.request.admissionDeadline.addingTimeInterval(-0.01)
         let approvedAt = clock.now
         var writes = 0
-        let stagingWriter = makeBridge(
+        let claimingWriter = makeBridge(
             clock: { self.clock.now },
             atomicWrite: { data, url in
                 writes += 1
@@ -913,7 +983,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
                 let record = try XCTUnwrap(records.first { $0["id"] as? Int == fixture.request.id })
                 let state = try XCTUnwrap(record["state"] as? [String: Any])
-                XCTAssertNotNil(state["completed"], "Expiry must be written instead of an invalid staged context")
+                XCTAssertNotNil(state["completed"], "Expiry must be written instead of an invalid execution context")
                 try ApprovalStoreTestPersistence.write(data, url)
             },
             readData: { url in
@@ -922,7 +992,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 return data
             }
         )
-        let result = await stagingWriter.markNativeApprovalReady(
+        let result = await claimingWriter.claimNativeExecution(
             handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier, approvedAt: approvedAt
         )
@@ -933,7 +1003,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                        ProviderResponseError.userRejectedCode)
         guard case .snapshot(let readable) = await bridge.configurationSnapshot(
             configurationKey: fixture.request.configurationKey, profileIdentifier: nil
-        ) else { return XCTFail("Expired staging must preserve the readable profile") }
+        ) else { return XCTFail("Expired claiming must preserve the readable profile") }
         XCTAssertEqual(readable.ethereumAccount, account)
     }
 
@@ -1234,9 +1304,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let selectionHandle = try accepted(await bridge.enqueue(ingress: selection.ingress, profileIdentifier: nil)).handle
         let selectionClaim = try approvalClaim(await bridge.claim(handle: selectionHandle))
         let selectionPermit = try executionPermit(await bridge.begin(claim: selectionClaim))
-        let staged = try makeFixture(id: 63_015, name: "requestAccounts", host: "staged.example")
-        let stagedHandle = try accepted(await bridge.enqueue(ingress: staged.ingress, profileIdentifier: nil)).handle
-        _ = try await markNativeApprovalReady(handle: stagedHandle)
+        let native = try makeFixture(id: 63_015, name: "requestAccounts", host: "native.example")
+        let nativeHandle = try accepted(await bridge.enqueue(ingress: native.ingress, profileIdentifier: nil)).handle
+        _ = try await recordNativeDelivery(handle: nativeHandle)
+        guard case .claimed(let nativeClaim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: nativeHandle, approvedAt: clock.now
+        ) else { return XCTFail("Expected native claim") }
+        defer { nativeClaim.approvalClaim.releaseLease() }
         let manual = try makeManualFixture(id: 63_016, enqueueAttempt: attempt(for: 63_016), latestConfigurations: [],
             host: "manual.example", configurationKey: "https://manual.example")
         let manualHandle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
@@ -1249,7 +1323,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let solanaHandle = try accepted(await bridge.enqueue(ingress: solana.ingress, profileIdentifier: nil)).handle
 
         try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {}
-        for handle in [pending.handle, claimed.handle, selectionHandle, stagedHandle, manualHandle, solanaHandle] {
+        for handle in [pending.handle, claimed.handle, selectionHandle, nativeHandle, manualHandle, solanaHandle] {
             let delivery = try await deliveredAuthority(handle)
             XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
         }
@@ -2528,35 +2602,27 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: storedRequestNativeOwner(runtime: secondRuntime)
         )
         XCTAssertEqual(secondRecord, .persisted)
-        let staged = await bridge.markNativeApprovalReady(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: secondRuntime,
-            approvedAt: clock.now
-        )
-        XCTAssertEqual(staged, .persisted)
         bridge = makeBridge(clock: { self.clock.now })
-        guard case .found(let stagedSnapshot) = await bridge.load(
+        guard case .found(let deliveredSnapshot) = await bridge.load(
             handle: admission.handle
-        ) else { return XCTFail("Expected staged delivery after restart") }
-        XCTAssertNotNil(stagedSnapshot.nativeApproval)
+        ) else { return XCTFail("Expected delivery after restart") }
+        XCTAssertNil(deliveredSnapshot.nativeApproval)
+        XCTAssertNil(deliveredSnapshot.nativeExecutionContext)
+        XCTAssertFalse(deliveredSnapshot.hasActiveExecution)
         XCTAssertEqual(
-            stagedSnapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier,
+            deliveredSnapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier,
             secondRuntime
         )
-        XCTAssertNotNil(stagedSnapshot.nativeExecutionContext)
-        let execution = try await nativeStage(handle: admission.handle)
-
-        let claim: ExtensionBridge.NativeExecutionClaim
-        guard case .claimed(let value) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Expected native claim") }
-        claim = value
+        guard case .claimed(let claim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: admission.handle, approvedAt: clock.now
+        ) else { return XCTFail("Expected native claim after fresh approval") }
         let permit = try executionPermit(await bridge.begin(
             claim: claim.approvalClaim
         ))
         let completion = await bridge.complete(
             permit: permit,
             response: response(for: fixture.request),
-            authority: .native(execution.context)
+            authority: .native(claim.executionContext)
         )
         XCTAssertEqual(completion, .persisted)
         bridge = makeBridge(clock: { self.clock.now })
@@ -2699,51 +2765,52 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let wrongRuntime = UUID()
         let wrongNonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
 
-        let stageFixture = try makeFixture(id: 85)
-        let stageAdmission = try accepted(await bridge.enqueue(
-            ingress: stageFixture.ingress,
+        let claimFixture = try makeFixture(id: 85)
+        let claimAdmission = try accepted(await bridge.enqueue(
+            ingress: claimFixture.ingress,
             profileIdentifier: nil
         ))
-        let unownedStage = await bridge.markNativeApprovalReady(
-            handle: stageAdmission.handle,
-            nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
+        let unownedClaim = await bridge.claimNativeExecution(
+            handle: claimAdmission.handle,
+            nativeDeliveryNonce: claimAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: firstRuntime,
             approvedAt: clock.now
         )
-        XCTAssertEqual(unownedStage, .ownershipLost)
-        let recordedStage = await bridge.recordNativeDeliveryReceipt(
-            handle: stageAdmission.handle,
-            nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
+        XCTAssertEqual(unownedClaim, .ownershipLost)
+        let recordedClaim = await bridge.recordNativeDeliveryReceipt(
+            handle: claimAdmission.handle,
+            nativeDeliveryNonce: claimAdmission.nativeDeliveryNonce,
             owner: storedRequestNativeOwner(runtime: firstRuntime)
         )
-        XCTAssertEqual(recordedStage, .persisted)
-        let wrongNonceStage = await bridge.markNativeApprovalReady(
-            handle: stageAdmission.handle,
+        XCTAssertEqual(recordedClaim, .persisted)
+        let wrongNonceClaim = await bridge.claimNativeExecution(
+            handle: claimAdmission.handle,
             nativeDeliveryNonce: wrongNonce,
             runtimeInstanceIdentifier: firstRuntime,
             approvedAt: clock.now
         )
-        XCTAssertEqual(wrongNonceStage, .ownershipLost)
-        let wrongOwnerStage = await bridge.markNativeApprovalReady(
-            handle: stageAdmission.handle,
-            nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
+        XCTAssertEqual(wrongNonceClaim, .ownershipLost)
+        let wrongOwnerClaim = await bridge.claimNativeExecution(
+            handle: claimAdmission.handle,
+            nativeDeliveryNonce: claimAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: wrongRuntime,
             approvedAt: clock.now
         )
-        XCTAssertEqual(wrongOwnerStage, .ownershipLost)
-        let staged = await bridge.markNativeApprovalReady(
-            handle: stageAdmission.handle,
-            nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
+        XCTAssertEqual(wrongOwnerClaim, .ownershipLost)
+        let claimResult = await bridge.claimNativeExecution(
+            handle: claimAdmission.handle,
+            nativeDeliveryNonce: claimAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: firstRuntime,
             approvedAt: clock.now
         )
-        XCTAssertEqual(staged, .persisted)
-        guard case .found(let stagedSnapshot) = await bridge.load(
-            handle: stageAdmission.handle
-        ) else { return XCTFail("Expected staged delivery") }
-        XCTAssertNotNil(stagedSnapshot.nativeApproval)
+        guard case .claimed(let nativeClaim) = claimResult else { return XCTFail("Expected native claim") }
+        defer { nativeClaim.approvalClaim.releaseLease() }
+        guard case .found(let claimedSnapshot) = await bridge.load(
+            handle: claimAdmission.handle
+        ) else { return XCTFail("Expected claimed execution") }
+        XCTAssertNotNil(claimedSnapshot.nativeApproval)
         XCTAssertEqual(
-            stagedSnapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier,
+            claimedSnapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier,
             firstRuntime
         )
 
@@ -2849,25 +2916,32 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         let firstRuntime = UUID()
 
-        let stageFixture = try makeFixture(id: 88)
-        let stageAdmission = try accepted(await bridge.enqueue(
-            ingress: stageFixture.ingress,
+        let claimFixture = try makeFixture(id: 88)
+        let claimAdmission = try accepted(await bridge.enqueue(
+            ingress: claimFixture.ingress,
             profileIdentifier: nil
         ))
-        let stageReceipt = await bridge.recordNativeDeliveryReceipt(
-            handle: stageAdmission.handle,
-            nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
+        let claimReceipt = await bridge.recordNativeDeliveryReceipt(
+            handle: claimAdmission.handle,
+            nativeDeliveryNonce: claimAdmission.nativeDeliveryNonce,
             owner: storedRequestNativeOwner(runtime: firstRuntime)
         )
-        XCTAssertEqual(stageReceipt, .persisted)
+        XCTAssertEqual(claimReceipt, .persisted)
         writes.throwsRemaining = 1
-        let staged = await bridge.markNativeApprovalReady(
-            handle: stageAdmission.handle,
-            nativeDeliveryNonce: stageAdmission.nativeDeliveryNonce,
+        let claimResult = await bridge.claimNativeExecution(
+            handle: claimAdmission.handle,
+            nativeDeliveryNonce: claimAdmission.nativeDeliveryNonce,
             runtimeInstanceIdentifier: firstRuntime,
             approvedAt: clock.now
         )
-        XCTAssertEqual(staged, .persisted)
+        XCTAssertEqual(claimResult, .unavailable)
+        let recovered = try responseJSON(await bridge.prepareResponseDelivery(
+            id: claimAdmission.handle.id,
+            configurationKey: claimFixture.request.configurationKey,
+            requestToken: claimAdmission.handle.requestToken,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual((recovered["error"] as? [String: Any])?["message"] as? String, Strings.approvalInterrupted)
 
         let completeFixture = try makeFixture(id: 89)
         let completeAdmission = try accepted(await bridge.enqueue(
@@ -3336,8 +3410,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: approved.ingress,
             profileIdentifier: nil
         )).handle
-        let staged = try await markNativeApprovalReady(handle: approvedHandle)
-        XCTAssertEqual(staged, .persisted)
+        let delivered = try await recordNativeDelivery(handle: approvedHandle)
+        XCTAssertEqual(delivered, .persisted)
+        guard case .claimed(let nativeClaim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: approvedHandle, approvedAt: clock.now
+        ) else { return XCTFail("Expected native claim") }
+        defer { nativeClaim.approvalClaim.releaseLease() }
         let completed = try makeManualFixture(
             id: 432,
             enqueueAttempt: attempt(for: 432),
@@ -4274,22 +4352,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: owner
         )
         XCTAssertEqual(delivered, .persisted)
-        let staged = await bridge.markNativeApprovalReady(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime,
-            approvedAt: clock.now
-        )
-        XCTAssertEqual(staged, .persisted)
-        let execution = try await nativeStage(handle: admission.handle)
-
-        guard case .claimed(let claim) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Expected native claim") }
+        guard case .claimed(let claim) = await claimDeliveredNativeExecution(in: bridge, handle: admission.handle, approvedAt: clock.now) else { return XCTFail("Expected native claim") }
         let permit = try executionPermit(await bridge.begin(claim: claim.approvalClaim))
         _ = try await fillCompletedByteCapacity()
         let prepared = await bridge.prepareBroadcast(
             permit: permit,
             recoveryResponse: largeResponse(for: fixture.request),
-            authority: .native(execution.context)
+            authority: .native(claim.executionContext)
         )
         XCTAssertEqual(prepared, .persisted)
         guard case .found(let checkpoint) = await bridge.load(handle: admission.handle) else {
@@ -4713,12 +4782,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     )).handle
                     let claim: ExtensionBridge.ApprovalClaim
                     if native {
-                        let staged = try await markNativeApprovalReady(handle: handle)
-                        XCTAssertEqual(staged, .persisted)
-                        _ = try await nativeStage(handle: handle)
-                        guard case .claimed(let nativeClaim) = await claimReadyNativeExecution(
+                        let delivered = try await recordNativeDelivery(handle: handle)
+                        XCTAssertEqual(delivered, .persisted)
+                        guard case .claimed(let nativeClaim) = await claimDeliveredNativeExecution(
                             in: bridge,
-                            handle: handle
+                            handle: handle,
+                            approvedAt: clock.now
                         ) else { return XCTFail("Expected native claim") }
                         claim = nativeClaim.approvalClaim
                     } else {
@@ -5261,7 +5330,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(sends, 0)
     }
 
-    func testRepeatedNativeReceiptAndStagingRequirePublishedFileSynchronization()
+    func testRepeatedNativeReceiptRequiresPublishedFileSynchronization()
         async throws {
         let fixture = try makeFixture(id: 981)
         let admission = try accepted(await bridge.enqueue(
@@ -5275,14 +5344,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: owner
         )
         XCTAssertEqual(receipt, .persisted)
-        let approvedAt = clock.now
-        let staged = await bridge.markNativeApprovalReady(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier,
-            approvedAt: approvedAt
-        )
-        XCTAssertEqual(staged, .persisted)
         var failSynchronization = true
         let observer = makeBridge(
             clock: { self.clock.now },
@@ -5299,13 +5360,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 owner: owner
             )
             XCTAssertEqual(repeatedReceipt, expected)
-            let repeatedStaging = await observer.markNativeApprovalReady(
-                handle: admission.handle,
-                nativeDeliveryNonce: admission.nativeDeliveryNonce,
-                runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier,
-                approvedAt: approvedAt
-            )
-            XCTAssertEqual(repeatedStaging, expected)
             failSynchronization = false
         }
     }
@@ -5798,14 +5852,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try await assertStoredProfileUnavailableAndUnchanged()
     }
 
-    func testMalformedStagedApprovalIsUnavailableWithoutOverwriting()
+    func testMalformedNativeClaimApprovalIsUnavailableWithoutOverwriting()
         async throws {
         let handle = try accepted(await bridge.enqueue(
             ingress: makeFixture(id: 731).ingress,
             profileIdentifier: nil
         )).handle
-        let staged = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(staged, .persisted)
+        let delivered = try await recordNativeDelivery(handle: handle)
+        XCTAssertEqual(delivered, .persisted)
+        guard case .claimed(let claim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: handle, approvedAt: clock.now
+        ) else { return XCTFail("Expected native claim") }
+        defer { claim.approvalClaim.releaseLease() }
         let original = try Data(contentsOf: defaultProfileURL)
         let invalidFields: [(String, Any?)] = [
             ("receipt", nil),
@@ -5815,14 +5873,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ]
         for (field, value) in invalidFields {
             try original.write(to: defaultProfileURL, options: .atomic)
-            try mutateFirstStoredState("pending") { pending in
-                var ownership = try XCTUnwrap(pending["approval"] as? [String: Any])
-                var staged = try XCTUnwrap(ownership["staged"] as? [String: Any])
-                var approval = try XCTUnwrap(staged["_0"] as? [String: Any])
+            try mutateFirstStoredState("claimed") { claimed in
+                var ownership = try XCTUnwrap(claimed["approval"] as? [String: Any])
+                var native = try XCTUnwrap(ownership["native"] as? [String: Any])
+                var approval = try XCTUnwrap(native["_0"] as? [String: Any])
                 approval[field] = value
-                staged["_0"] = approval
-                ownership["staged"] = staged
-                pending["approval"] = ownership
+                native["_0"] = approval
+                ownership["native"] = native
+                claimed["approval"] = ownership
             }
             try await assertStoredProfileUnavailableAndUnchanged()
         }
@@ -5837,14 +5895,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let ownership = try XCTUnwrap(claimed["approval"] as? [String: Any])
         let native = try XCTUnwrap(ownership["native"] as? [String: Any])
         let context = try XCTUnwrap(native["context"] as? [String: Any])
-        var beforeStaging = context
-        beforeStaging["observedAt"] = clock.now.addingTimeInterval(-1)
+        var beforeApproval = context
+        beforeApproval["observedAt"] = clock.now.addingTimeInterval(-1)
         var reversedDeadline = context
         reversedDeadline["executionDeadline"] = clock.now.addingTimeInterval(-1)
         var invalidRevisions = context
         invalidRevisions["revisions"] = ["ethereum": -1, "solana": 0]
         let invalidContexts: [[String: Any]?] = [
-            nil, beforeStaging, reversedDeadline, invalidRevisions,
+            nil, beforeApproval, reversedDeadline, invalidRevisions,
         ]
         for context in invalidContexts {
             try original.write(to: defaultProfileURL, options: .atomic)
@@ -5882,7 +5940,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testNativeDeliveryStagingPreservesApprovalTimeAcrossFailedAndDuplicateWrites()
+    func testNativeClaimPreservesApprovalTimeAcrossFailedWritesAndRejectsDuplicateExecution()
         async throws {
         var failWrites = false
         bridge = makeBridge(
@@ -5896,99 +5954,72 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         let fixture = try makeFixture(id: 719)
         let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
+            ingress: fixture.ingress, profileIdentifier: nil
         ))
-        let runtime = UUID()
-        let receipt = await bridge.recordNativeDeliveryReceipt(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            owner: storedRequestNativeOwner(runtime: runtime)
-        )
-        XCTAssertEqual(receipt, .persisted)
+        let delivered = try await recordNativeDelivery(handle: admission.handle)
+        XCTAssertEqual(delivered, .persisted)
         let approvedAt = clock.now
         failWrites = true
-        let failed = await bridge.markNativeApprovalReady(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime,
-            approvedAt: approvedAt
+        let failed = await claimDeliveredNativeExecution(
+            in: bridge, handle: admission.handle, approvedAt: approvedAt
         )
-        XCTAssertEqual(failed, .retryablePersistenceFailure)
+        XCTAssertEqual(failed, .unavailable)
         clock.now.addTimeInterval(60)
         failWrites = false
-        let staged = await bridge.markNativeApprovalReady(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime,
-            approvedAt: approvedAt
-        )
-        XCTAssertEqual(staged, .persisted)
-        clock.now.addTimeInterval(10)
-        let duplicate = await bridge.markNativeApprovalReady(
-            handle: admission.handle,
-            nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime,
-            approvedAt: clock.now
-        )
-        XCTAssertEqual(duplicate, .ownershipLost)
-        let exactRetry = await bridge.markNativeApprovalReady(
-            handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime, approvedAt: approvedAt
-        )
-        XCTAssertEqual(exactRetry, .persisted)
-        let execution = try await nativeStage(handle: admission.handle)
-
-        guard case .claimed(let claim) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Expected the delayed native decision") }
+        guard case .claimed(let claim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: admission.handle, approvedAt: approvedAt
+        ) else { return XCTFail("Expected the delayed native decision") }
         XCTAssertEqual(claim.approvedAt, approvedAt)
+        XCTAssertEqual(claim.executionContext.observedAt, clock.now)
+        clock.now.addTimeInterval(10)
+        for time in [approvedAt, clock.now] {
+            let duplicate = await claimDeliveredNativeExecution(
+                in: bridge, handle: admission.handle, approvedAt: time
+            )
+            XCTAssertEqual(duplicate, .executing)
+        }
         let released = await bridge.release(claim: claim.approvalClaim)
         XCTAssertEqual(released, .persisted)
     }
 
-    func testNativeReadinessIsProfileScopedAndReleaseIsTerminal() async throws {
+    func testNativeClaimIsProfileScopedAndReleaseIsTerminal() async throws {
         let profile = UUID()
         let fixture = try makeFixture(id: 720)
         let handle = try accepted(await bridge.enqueue(
             ingress: try profileFixture(fixture, profileIdentifier: profile).ingress,
             profileIdentifier: profile
         )).handle
-
-        let staged = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(staged, .persisted)
-        let originalStagedAt = clock.now
-        clock.now = clock.now.addingTimeInterval(10)
-        let changedTime = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(changedTime, .ownershipLost)
+        let delivered = try await recordNativeDelivery(handle: handle)
+        XCTAssertEqual(delivered, .persisted)
+        let approvedAt = clock.now
+        clock.now.addTimeInterval(10)
         guard case .found(let snapshot) = await bridge.load(handle: handle) else {
-            return XCTFail("Expected staged snapshot")
+            return XCTFail("Expected delivered snapshot")
         }
-        XCTAssertNotNil(snapshot.nativeApproval)
+        XCTAssertNil(snapshot.nativeApproval)
+        XCTAssertNil(snapshot.nativeExecutionContext)
+        XCTAssertFalse(snapshot.hasActiveExecution)
         guard case .executing = await bridge.claim(handle: handle) else {
-            return XCTFail("Popup claim must not consume native decision")
+            return XCTFail("Popup claim must not consume native delivery")
         }
-        let execution = try await nativeStage(handle: handle)
-
         let wrongProfileHandle = ExtensionBridge.Handle(
-            id: handle.id,
-            token: handle.token,
-            profileIdentifier: nil
+            id: handle.id, token: handle.token, profileIdentifier: nil
         )
-        guard case .missing = await claimReadyNativeExecution(in: bridge, handle: wrongProfileHandle) else { return XCTFail("Expected profile isolation") }
-
-        guard case .claimed(let nativeClaim) = await claimReadyNativeExecution(in: bridge, handle: handle) else {
-            return XCTFail("Expected native claim")
-        }
-        XCTAssertEqual(nativeClaim.approvedAt, originalStagedAt)
-        let releasedClaim = await bridge.release(
-            claim: nativeClaim.approvalClaim
-        )
+        guard case .missing = await claimDeliveredNativeExecution(
+            in: bridge, handle: wrongProfileHandle, approvedAt: approvedAt
+        ) else { return XCTFail("Expected profile isolation") }
+        guard case .claimed(let nativeClaim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: handle, approvedAt: approvedAt
+        ) else { return XCTFail("Expected native claim") }
+        XCTAssertEqual(nativeClaim.approvedAt, approvedAt)
+        let releasedClaim = await bridge.release(claim: nativeClaim.approvalClaim)
         XCTAssertEqual(releasedClaim, .persisted)
         guard case .found(let released) = await bridge.load(handle: handle) else {
             return XCTFail("Expected released snapshot")
         }
         XCTAssertEqual(released.phase, .responded)
         XCTAssertNil(released.nativeApproval)
-        let reclaimed = await claimReadyNativeExecution(in: bridge, handle: handle)
+        let reclaimed = await claimDeliveredNativeExecution(in: bridge, handle: handle, approvedAt: approvedAt)
         XCTAssertEqual(reclaimed, .responded)
     }
 
@@ -6014,38 +6045,46 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual((received["error"] as? [String: Any])?["message"] as? String, Strings.approvalInterrupted)
     }
 
-    func testNativeExecutionRequiresExactLocalApprovalIdentity() async throws {
+    func testNativeExecutionRequiresExactReceiptAndValidApprovalTime() async throws {
         let fixture = try makeFixture(id: 734)
         let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
-        _ = try await markNativeApprovalReady(handle: admission.handle)
+        _ = try await recordNativeDelivery(handle: admission.handle)
         guard case .found(let snapshot) = await bridge.load(handle: admission.handle) else {
-            return XCTFail("Expected ready request")
+            return XCTFail("Expected delivered request")
         }
-        let approval = try XCTUnwrap(snapshot.nativeApproval)
-        let fields = try firstStoredNativeApproval("pending")
-        XCTAssertEqual(Set(fields.keys), ["approvedAt", "receipt"])
-        let read = try await nativeStage(handle: admission.handle)
-
-        let receipt = approval.receipt
-        for mismatch in ["nonce", "runtime", "time"] {
+        let receipt = try XCTUnwrap(snapshot.nativeDeliveryReceipt)
+        let approvedAt = clock.now
+        let original = try Data(contentsOf: defaultProfileURL)
+        for mismatch in ["nonce", "runtime", "future", "past", "nan", "infinite"] {
+            let timestamp: Date
+            switch mismatch {
+            case "future": timestamp = approvedAt.addingTimeInterval(1)
+            case "past": timestamp = snapshot.createdAt.addingTimeInterval(-1)
+            case "nan": timestamp = Date(timeIntervalSince1970: .nan)
+            case "infinite": timestamp = Date(timeIntervalSince1970: .infinity)
+            default: timestamp = approvedAt
+            }
             let claim = await bridge.claimNativeExecution(
                 handle: admission.handle,
                 nativeDeliveryNonce: mismatch == "nonce" ? .init(value: UUID()) : receipt.nativeDeliveryNonce,
                 runtimeInstanceIdentifier: mismatch == "runtime" ? UUID() : receipt.owner.runtimeInstanceIdentifier,
-                approvedAt: mismatch == "time" ? approval.approvedAt.addingTimeInterval(1) : approval.approvedAt
+                approvedAt: timestamp
             )
-            XCTAssertEqual(claim, .notStaged, mismatch)
+            XCTAssertEqual(claim, .ownershipLost, mismatch)
+            XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original, mismatch)
         }
-        guard case .claimed(let claimed) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else {
-            return XCTFail("Expected exact identity to claim execution")
-        }
+        guard case .claimed(let claimed) = await claimDeliveredNativeExecution(
+            in: bridge, handle: admission.handle, approvedAt: approvedAt
+        ) else { return XCTFail("Expected exact receipt to claim execution") }
+        let fields = try firstStoredNativeApproval("claimed")
+        XCTAssertEqual(Set(fields.keys), ["approvedAt", "receipt"])
         let abandoned = await bridge.release(claim: claimed.approvalClaim)
         XCTAssertEqual(abandoned, .persisted)
-        let lateMarker = await bridge.markNativeApprovalReady(
+        let lateClaim = await bridge.claimNativeExecution(
             handle: admission.handle, nativeDeliveryNonce: receipt.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier, approvedAt: approval.approvedAt
+            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier, approvedAt: approvedAt
         )
-        XCTAssertEqual(lateMarker, .ownershipLost)
+        XCTAssertEqual(lateClaim, .responded)
         let fresh = try accepted(await bridge.enqueue(ingress: makeFixture(id: 735).ingress, profileIdentifier: nil))
         XCTAssertNotEqual(fresh.handle.token, admission.handle.token)
         guard case .found(let freshSnapshot) = await bridge.load(handle: fresh.handle),
@@ -6064,7 +6103,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: execution.handle.requestToken, profileIdentifier: nil
         ))
         XCTAssertEqual((result["error"] as? [String: Any])?["message"] as? String, Strings.approvalInterrupted)
-        let claimed = await claimReadyNativeExecution(in: observer, handle: execution.handle)
+        let claimed = await claimDeliveredNativeExecution(in: observer, handle: execution.handle, approvedAt: clock.now)
         XCTAssertEqual(claimed, .responded)
         let lateCompletion = await bridge.complete(
             permit: execution.permit, response: response(for: execution.request),
@@ -6097,28 +6136,40 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(delivered["error"])
     }
 
-    func testClearingReadyApprovalOwnerInterruptsRatherThanTransfers() async throws {
+    func testClearingNativeDeliveryCannotTransferAnActiveClaim() async throws {
         let fixture = try makeFixture(id: 723)
         let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
-        _ = try await markNativeApprovalReady(handle: admission.handle)
-        guard case .found(let snapshot) = await bridge.load(handle: admission.handle) else {
-            return XCTFail("Expected ready request")
+        _ = try await recordNativeDelivery(handle: admission.handle)
+        guard case .claimed(let claimed) = await claimDeliveredNativeExecution(
+            in: bridge, handle: admission.handle, approvedAt: clock.now
+        ), case .found(let snapshot) = await bridge.load(handle: admission.handle) else {
+            return XCTFail("Expected active native claim")
         }
+        defer { claimed.approvalClaim.releaseLease() }
         let receipt = try XCTUnwrap(snapshot.nativeDeliveryReceipt)
         let cleared = await bridge.clearNativeDeliveryReceipt(
             handle: admission.handle, nativeDeliveryNonce: receipt.nativeDeliveryNonce,
             runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier
         )
-        XCTAssertEqual(cleared, .persisted)
+        XCTAssertEqual(cleared, .ownershipLost)
+        let competing = await claimDeliveredNativeExecution(
+            in: bridge, handle: admission.handle, approvedAt: clock.now
+        )
+        XCTAssertEqual(competing, .executing)
+        let interrupted = await bridge.interruptNativeApproval(
+            handle: admission.handle, nativeDeliveryNonce: receipt.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier
+        )
+        XCTAssertEqual(interrupted, .interrupted)
         let received = try responseJSON(await bridge.prepareResponseDelivery(
             id: admission.handle.id, configurationKey: fixture.request.configurationKey,
             requestToken: admission.handle.requestToken, profileIdentifier: nil
         ))
-        XCTAssertEqual((received["error"] as? [String: Any])?["code"] as? Int, -32603)
         XCTAssertEqual((received["error"] as? [String: Any])?["message"] as? String, Strings.approvalInterrupted)
     }
 
     #if os(macOS)
+
     func testNativeAgentRouteRoundTripsOnlyTheOpaqueHandle() throws {
         let handle = ExtensionBridge.Handle(
             id: 722,
@@ -7787,28 +7838,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         return Fixture(request: request, ingress: ingress)
     }
 
-    private func markNativeApprovalReady(handle: ExtensionBridge.Handle) async throws -> ExtensionBridge.StoreMutationResult {
+    private func recordNativeDelivery(handle: ExtensionBridge.Handle) async throws -> ExtensionBridge.StoreMutationResult {
         guard case .found(let snapshot) = await bridge.load(handle: handle) else {
             throw Failure.expectedValue
         }
         let runtime = snapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier ?? UUID()
-        let recorded = await bridge.recordNativeDeliveryReceipt(
+        return await bridge.recordNativeDeliveryReceipt(
             handle: handle,
             nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
             owner: storedRequestNativeOwner(runtime: runtime)
         )
-        guard recorded == .persisted else { throw Failure.expectedValue }
-        return await bridge.markNativeApprovalReady(
-            handle: handle,
-            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime,
-            approvedAt: clock.now
-        )
     }
 
-    private func claimReadyNativeExecution(
+    private func claimDeliveredNativeExecution(
         in store: ExtensionBridge,
-        handle: ExtensionBridge.Handle
+        handle: ExtensionBridge.Handle,
+        approvedAt: Date
     ) async -> ExtensionBridge.NativeExecutionClaimResult {
         let snapshot: ExtensionBridge.Snapshot
         switch await store.load(handle: handle) {
@@ -7817,23 +7862,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         case .unavailable: return .unavailable
         }
         if snapshot.phase == .responded { return .responded }
-        guard let approval = snapshot.nativeApproval else { return .notStaged }
+        guard let receipt = snapshot.nativeDeliveryReceipt else { return .ownershipLost }
         return await store.claimNativeExecution(
             handle: handle,
-            nativeDeliveryNonce: approval.receipt.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: approval.receipt.owner.runtimeInstanceIdentifier,
-            approvedAt: approval.approvedAt
+            nativeDeliveryNonce: receipt.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier,
+            approvedAt: approvedAt
         )
-    }
-
-    private struct NativeStage {
-        let context: ExtensionBridge.NativeExecutionContext
-    }
-
-    private func nativeStage(handle: ExtensionBridge.Handle) async throws -> NativeStage {
-        guard case .found(let snapshot) = await bridge.load(handle: handle),
-              let context = snapshot.nativeExecutionContext else { throw Failure.expectedValue }
-        return NativeStage(context: context)
     }
 
     private func makeExecutableNativePermit(
@@ -7849,14 +7884,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: fixture.ingress,
             profileIdentifier: nil
         )).handle
-        let staged = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(staged, .persisted)
-        let execution = try await nativeStage(handle: handle)
+        let delivered = try await recordNativeDelivery(handle: handle)
+        XCTAssertEqual(delivered, .persisted)
         let nativeClaim: ExtensionBridge.NativeExecutionClaim
-        switch await claimReadyNativeExecution(in: bridge, handle: handle) {
+        switch await claimDeliveredNativeExecution(in: bridge, handle: handle, approvedAt: clock.now) {
         case .claimed(let value):
             nativeClaim = value
-        case .notStaged, .executing, .responded, .missing, .unavailable:
+        case .ownershipLost, .executing, .responded, .missing, .unavailable:
             throw Failure.expectedValue
         }
         let permit = try executionPermit(await bridge.begin(
@@ -7865,7 +7899,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         return (
             fixture.request,
             handle,
-            execution.context,
+            nativeClaim.executionContext,
             permit
         )
     }
@@ -8140,7 +8174,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let payload = try firstStoredState(state)
         let approval = try XCTUnwrap(payload["approval"] as? [String: Any])
         let native = try XCTUnwrap(
-            approval[state == "pending" ? "staged" : "native"] as? [String: Any]
+            approval["native"] as? [String: Any]
         )
         return try XCTUnwrap(native["_0"] as? [String: Any])
     }

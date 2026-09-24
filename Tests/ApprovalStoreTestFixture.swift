@@ -351,12 +351,6 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         )
         guard delivered == .persisted else { throw CocoaError(.fileWriteUnknown) }
         let approvedAt = approvedAt ?? clock()
-        let marked = await bridge.markNativeApprovalReady(
-            handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtime,
-            approvedAt: approvedAt
-        )
-        guard marked == .persisted else { throw CocoaError(.fileWriteUnknown) }
         return .init(receipt: .init(nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: owner),
                      decision: decision, approvedAt: approvedAt)
     }

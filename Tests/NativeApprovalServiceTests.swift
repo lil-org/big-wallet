@@ -92,18 +92,26 @@
             ))
         }
 
-        func testPassiveMaintenanceNeverDeliversOrRetiresHelper() async throws {
-            for staged in [false, true] {
-                for exists in [false, true] {
-                    let f = try fixture()
-                    let request = try f.request()
-                    f.deliver(request, runtime: f.runtime(build: "147"), staged: staged)
-                    if !exists { f.processes.removeAll() }
-                    _ = await f.maintain(f.service(), request, allowDelivery: false)
-                    XCTAssertEqual(f.maintainedProfiles.count, 1)
-                    XCTAssertTrue(f.launches.isEmpty)
-                    XCTAssertTrue(f.quits.isEmpty)
-                    XCTAssertEqual(f.clears.count, staged && !exists ? 1 : 0)
+        func testQuietMaintenanceRecoversOnlyActiveExecutionWithoutDeliveringOrRetiringHelper() async throws {
+            for (manual, allowDelivery) in [(false, false), (true, true), (true, false)] {
+                for executing in [false, true] {
+                    for exists in [false, true] {
+                        let f = try fixture()
+                        let request = try f.request(manual: manual)
+                        f.deliver(request, runtime: f.runtime(build: "147"), executing: executing)
+                        if !exists { f.processes.removeAll() }
+                        let result = await f.maintain(f.service(), request, allowDelivery: allowDelivery)
+                        switch result {
+                        case .pending: XCTAssertFalse(executing)
+                        case .ready: XCTAssertTrue(executing && !exists)
+                        case .unavailable: XCTAssertTrue(executing && exists)
+                        case .missing: XCTFail("Expected the delivered request to remain present")
+                        }
+                        XCTAssertEqual(f.maintainedProfiles.count, 1)
+                        XCTAssertTrue(f.launches.isEmpty)
+                        XCTAssertTrue(f.quits.isEmpty)
+                        XCTAssertEqual(f.clears.count, executing && !exists ? 1 : 0)
+                    }
                 }
             }
         }
@@ -154,7 +162,7 @@
         func testApprovedAdmissionBypassesUnrelatedLaunchQueue() async throws {
             let f = try fixture()
             let request = try f.request()
-            f.deliver(request, staged: true)
+            f.deliver(request, executing: true)
             let gate = NativeApprovalServiceTestFixture.Gate()
             var firstValidation = true
             f.onValidate = { _ in
@@ -184,6 +192,8 @@
             guard case .pending = result else { return XCTFail("Expected pending review") }
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertEqual(f.launches.count, 1)
+            XCTAssertNil(f.snapshots[request.handle]?.nativeApproval)
+            XCTAssertNil(f.responses[request.handle])
         }
 
         func testMaintenanceRejectsChangedRuntimeIdentity() async throws {
@@ -215,7 +225,7 @@
         func testQuietRecoveryDoesNotReplaceIncompatibleHelper() async throws {
             let f = try fixture()
             let request = try f.request(manual: true)
-            f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+            f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
             let result = await f.maintain(f.service(), request)
             guard case .unavailable = result else { return XCTFail("Expected quiet unavailability") }
             XCTAssertTrue(f.clears.isEmpty)
@@ -227,7 +237,7 @@
             for manual in [false, true] {
                 let f = try fixture()
                 let request = try f.request(manual: manual)
-                f.deliver(request, staged: true)
+                f.deliver(request, executing: true)
                 f.processes.removeAll()
                 f.onClear = { _, _ in
                     let replacement = try! f.request(id: 2)
@@ -249,7 +259,7 @@
         func testIncompatibleOwnerExitsBeforeReceiptClear() async throws {
             let f = try fixture()
             let request = try f.request()
-            f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+            f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
             f.onQuit = { _ in true }
             let service = f.service()
             let task = Task { await f.maintain(service, request) }
@@ -265,7 +275,7 @@
         func testOwnerExitDuringReceiptReloadClearsWithoutQuitting() async throws {
             let f = try fixture()
             let request = try f.request()
-            f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+            f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
             let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
             f.onLoad = { handle in
                 if f.loads.count == 3 {
@@ -294,7 +304,7 @@
                 supportedWorkflowVersions: compatible.supportedWorkflowVersions,
                 launchedAt: compatible.launchedAt
             )
-            f.deliver(request, runtime: incompatible, staged: true)
+            f.deliver(request, runtime: incompatible, executing: true)
             let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
             f.onLoad = { handle in
                 if f.loads.count == 3 {
@@ -341,7 +351,7 @@
             for replacementPoint in ["validation", "reload"] {
                 let f = try fixture()
                 let request = try f.request()
-                f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+                f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
                 if replacementPoint == "validation" {
                     var replaced = false
                     f.onValidate = { _ in
@@ -371,7 +381,7 @@
             ] {
                 let f = try fixture()
                 let request = try f.request()
-                f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+                f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
                 let replaceOrExpire = {
                     if expires { f.clock.advance(to: f.clock.now + 6_000_000_000) }
                     else { f.processes[42] = f.runtime(instance: UUID()) }
@@ -398,7 +408,7 @@
         func testCancellationDuringReceiptReloadPreventsRetirement() async throws {
             let f = try fixture()
             let request = try f.request()
-            f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
+            f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
             let gate = NativeApprovalServiceTestFixture.Gate()
             defer { gate.open() }
             f.onLoad = { handle in
@@ -425,7 +435,7 @@
             for manual in [false, true] {
                 let f = try fixture()
                 let request = try f.request(manual: manual)
-                f.deliver(request, staged: true)
+                f.deliver(request, executing: true)
                 f.processes.removeAll()
                 let gate = NativeApprovalServiceTestFixture.Gate()
                 f.onLoad = { handle in await gate.wait(); return .found(f.snapshots[handle]!) }
@@ -454,27 +464,17 @@
             XCTAssertTrue(f.loads.isEmpty)
         }
 
-        func testStagedApprovalCanBeExplicitlyReactivated() async throws {
+        func testActiveExecutionCannotBeExplicitlyReactivated() async throws {
             let f = try fixture()
             let request = try f.request()
-            f.deliver(request)
-            let delivered = f.snapshots[request.handle]!
-            f.setState(.queued(
-                request: request.request!,
-                approval: .staged(.init(receipt: delivered.nativeDeliveryReceipt!, approvedAt: f.clock.date, executionContext: nil))
-            ), for: request)
+            f.deliver(request, executing: true)
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service()
             let result = try await f.finish { await service.reactivate(f.route(request)) }
-            XCTAssertTrue(result)
-            XCTAssertEqual(f.launches.count, 1)
-            f.setState(.approving(
-                request: request.request!,
-                nativeApproval: .init(receipt: delivered.nativeDeliveryReceipt!, approvedAt: f.clock.date, executionContext: nil)
-            ), for: request)
-            let executing = await service.reactivate(f.route(request))
-            XCTAssertFalse(executing)
-            XCTAssertEqual(f.launches.count, 1)
+            XCTAssertFalse(result)
+            XCTAssertTrue(f.launches.isEmpty)
+            XCTAssertTrue(f.clears.isEmpty)
+            XCTAssertTrue(f.quits.isEmpty)
         }
 
         func testDeliveredApprovalIsSilentUntilExplicitReactivation() async throws {

@@ -218,7 +218,7 @@
 
         func deliver(
             _ snapshot: ExtensionBridge.Snapshot, runtime: AmbientRuntimeIdentity? = nil,
-            staged: Bool = false, executing: Bool = false
+            executing: Bool = false
         ) {
             let runtime = runtime ?? self.runtime()
             processes[runtime.processIdentifier] = runtime
@@ -233,7 +233,7 @@
                 executing
                     ? .approving(request: snapshot.request!, nativeApproval: approval)
                     : .queued(
-                        request: snapshot.request!, approval: staged ? .staged(approval) : .delivered(receipt)
+                        request: snapshot.request!, approval: .delivered(receipt)
                     ),
                 for: snapshot)
         }

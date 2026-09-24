@@ -185,7 +185,6 @@ actor ExtensionBridge {
         enum QueuedApproval {
             case unowned
             case delivered(NativeDeliveryReceipt)
-            case staged(NativeApproval)
         }
 
         struct NativeApproval {
@@ -221,7 +220,6 @@ actor ExtensionBridge {
 
         var nativeApproval: NativeApproval? {
             switch state {
-            case .queued(_, .staged(let approval)): return approval
             case .approving(_, let approval): return approval
             case .queued, .responded: return nil
             }
@@ -238,14 +236,14 @@ actor ExtensionBridge {
 
         var isQueuedForNativeApproval: Bool {
             switch state {
-            case .queued(_, .delivered), .queued(_, .staged): return true
+            case .queued(_, .delivered): return true
             case .queued, .approving, .responded: return false
             }
         }
 
-        var hasStagedOrActiveExecution: Bool {
+        var hasActiveExecution: Bool {
             switch state {
-            case .queued(_, .staged), .approving: return true
+            case .approving: return true
             case .queued, .responded: return false
             }
         }
@@ -507,7 +505,7 @@ actor ExtensionBridge {
 
     enum NativeExecutionClaimResult: Equatable {
         case claimed(NativeExecutionClaim)
-        case notStaged, executing, responded, missing, unavailable
+        case ownershipLost, executing, responded, missing, unavailable
     }
 
     enum StoreMutationResult: Equatable {
@@ -769,20 +767,6 @@ actor ExtensionBridge {
         approvedAt: Date
     ) -> NativeExecutionClaimResult {
         store.claimNativeExecution(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            approvedAt: approvedAt
-        )
-    }
-
-    func markNativeApprovalReady(
-        handle: Handle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        approvedAt: Date
-    ) -> StoreMutationResult {
-        store.markNativeApprovalReady(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier,

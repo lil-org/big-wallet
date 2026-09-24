@@ -153,7 +153,7 @@ final class ExtensionRequestFileStore {
     }
 
     private struct Record: Codable {
-        struct ReadyApproval: Codable {
+        struct NativeApproval: Codable {
             let approvedAt: Date
             let receipt: ExtensionBridge.NativeDeliveryReceipt
         }
@@ -161,13 +161,11 @@ final class ExtensionRequestFileStore {
         enum PendingApproval: Codable {
             case unowned
             case delivered(ExtensionBridge.NativeDeliveryReceipt)
-            case staged(ReadyApproval, context: ExtensionBridge.NativeExecutionContext?)
-
         }
 
         enum ClaimedApproval: Codable {
             case ordinary
-            case native(ReadyApproval, context: ExtensionBridge.NativeExecutionContext)
+            case native(NativeApproval, context: ExtensionBridge.NativeExecutionContext)
 
             var broadcast: BroadcastApproval {
                 switch self {
@@ -181,7 +179,7 @@ final class ExtensionRequestFileStore {
 
         enum BroadcastApproval: Codable {
             case ordinary
-            case native(ReadyApproval)
+            case native(NativeApproval)
         }
 
         enum State: Codable {
@@ -241,10 +239,9 @@ final class ExtensionRequestFileStore {
         var state: State
         let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
 
-        var readyApproval: ReadyApproval? {
+        var nativeApproval: NativeApproval? {
             switch state {
-            case .pending(_, .staged(let approval, _)),
-                 .claimed(_, _, .native(let approval, _)),
+            case .claimed(_, _, .native(let approval, _)),
                  .broadcastPrepared(_, _, _, .native(let approval)):
                 return approval
             case .pending, .claimed, .broadcastPrepared, .completed:
@@ -256,13 +253,11 @@ final class ExtensionRequestFileStore {
             if case .pending(_, .delivered(let receipt)) = state {
                 return receipt
             }
-            return readyApproval?.receipt
+            return nativeApproval?.receipt
         }
 
         var nativeExecutionContext: ExtensionBridge.NativeExecutionContext? {
             switch state {
-            case .pending(_, .staged(_, let context)):
-                return context
             case .claimed(_, _, .native(_, let context)):
                 return context
             case .pending, .claimed, .broadcastPrepared, .completed:
@@ -1312,7 +1307,7 @@ final class ExtensionRequestFileStore {
         case .claimed, .broadcastPrepared:
             state = .approved
         case .pending:
-            state = record.readyApproval == nil ? .pending : .approved
+            state = .pending
         }
         return .init(
             handle: record.handle,
@@ -1373,70 +1368,6 @@ final class ExtensionRequestFileStore {
         }
     }
 
-    func markNativeApprovalReady(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        approvedAt: Date
-    ) -> ExtensionBridge.StoreMutationResult {
-        guard approvedAt.timeIntervalSince1970.isFinite else { return .ownershipLost }
-        return withLock(or: .retryablePersistenceFailure) {
-            guard case .state(var profile) = readProfileLocked(
-                profileIdentifier: handle.profileIdentifier,
-                now: clock(),
-                recover: true
-            ) else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == handle
-            }), case .pending(let request, _) = profile.state.records[index].state,
-                  profile.state.records[index].nativeDeliveryReceipt?.matches(
-                    nativeDeliveryNonce: nativeDeliveryNonce,
-                    runtimeInstanceIdentifier: runtimeInstanceIdentifier
-                  ) == true else {
-                return .ownershipLost
-            }
-            if let existing = profile.state.records[index].readyApproval {
-                guard existing.approvedAt == approvedAt else { return .ownershipLost }
-                return synchronizedMutationResultLocked(handle.profileIdentifier)
-            }
-            let now = clock()
-            guard approvedAt >= profile.state.records[index].createdAt,
-                  approvedAt <= now,
-                  authorityIsCurrent(profile.state.records[index], in: profile.state),
-                  let receipt = profile.state.records[index].nativeDeliveryReceipt else {
-                return .ownershipLost
-            }
-            let parsedRequest: SafariRequest
-            switch transitionExpiredPending(in: &profile, at: index, now: now) {
-            case .active(let request):
-                parsedRequest = request
-            case .expired:
-                return writeProfileLocked(profile, failureRecovery: .readBack)
-                    ? .ownershipLost
-                    : .retryablePersistenceFailure
-            case .unavailable:
-                return .retryablePersistenceFailure
-            }
-            let readyApproval = Record.ReadyApproval(
-                approvedAt: approvedAt,
-                receipt: receipt
-            )
-            profile.state.records[index].state = .pending(
-                request: request,
-                approval: .staged(readyApproval, context: .init(
-                    attemptID: token(), revisions: profile.state.records[index].revisions,
-                    observedAt: now,
-                    executionDeadline: min(now.addingTimeInterval(Self.executionLifetime),
-                        parsedRequest.admissionDeadline),
-                    fenceToken: token()
-                ))
-            )
-            return writeProfileLocked(profile, failureRecovery: .readBack)
-                ? .persisted
-                : .retryablePersistenceFailure
-        }
-    }
-
     func recordNativeDeliveryReceipt(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -1486,7 +1417,7 @@ final class ExtensionRequestFileStore {
             ) else { return .retryablePersistenceFailure }
             guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == handle
-            }), case .pending(let request, let approval) = profile.state.records[index].state,
+            }), case .pending(let request, _) = profile.state.records[index].state,
                   profile.state.records[index].nativeDeliveryNonce ==
                     nativeDeliveryNonce else {
                 return .ownershipLost
@@ -1499,13 +1430,7 @@ final class ExtensionRequestFileStore {
                     runtimeInstanceIdentifier else {
                 return .ownershipLost
             }
-            if case .staged = approval {
-                guard interruptNativeRecord(in: &profile, at: index, now: clock()) else {
-                    return .retryablePersistenceFailure
-                }
-            } else {
-                profile.state.records[index].state = .pending(request: request, approval: .unowned)
-            }
+            profile.state.records[index].state = .pending(request: request, approval: .unowned)
             return writeProfileLocked(profile, failureRecovery: .readBack)
                 ? .persisted
                 : .retryablePersistenceFailure
@@ -1605,17 +1530,42 @@ final class ExtensionRequestFileStore {
             }) else { return .missing }
             switch profile.state.records[index].state {
             case .pending(let request, let pendingApproval):
-                guard case .staged(let approval, let context) = pendingApproval,
-                      approval.approvedAt == approvedAt,
-                      approval.receipt.matches(
+                guard case .delivered(let receipt) = pendingApproval,
+                      receipt.matches(
                           nativeDeliveryNonce: nativeDeliveryNonce,
                           runtimeInstanceIdentifier: runtimeInstanceIdentifier
-                      ) else { return .notStaged }
-                guard let executionContext = context,
-                      clock() < executionContext.executionDeadline,
-                      authorityIsCurrent(profile.state.records[index], in: profile.state) else { return .notStaged }
-                guard let lease = acquireOperationLeaseLocked(handle: handle),
-                      let claimID = nextID(excluding: handle.token.value) else {
+                      ) else { return .ownershipLost }
+                let now = clock()
+                guard approvedAt.timeIntervalSince1970.isFinite,
+                      approvedAt >= profile.state.records[index].createdAt,
+                      approvedAt <= now,
+                      authorityIsCurrent(profile.state.records[index], in: profile.state) else {
+                    return .ownershipLost
+                }
+                let parsedRequest: SafariRequest
+                switch transitionExpiredPending(in: &profile, at: index, now: now) {
+                case .active(let request):
+                    parsedRequest = request
+                case .expired:
+                    return writeProfileLocked(profile, failureRecovery: .readBack)
+                        ? .ownershipLost
+                        : .unavailable
+                case .unavailable:
+                    return .unavailable
+                }
+                let approval = Record.NativeApproval(approvedAt: approvedAt, receipt: receipt)
+                let executionContext = ExtensionBridge.NativeExecutionContext(
+                    attemptID: token(),
+                    revisions: profile.state.records[index].revisions,
+                    observedAt: now,
+                    executionDeadline: min(
+                        now.addingTimeInterval(Self.executionLifetime),
+                        parsedRequest.admissionDeadline
+                    ),
+                    fenceToken: token()
+                )
+                guard let claimID = nextID(excluding: handle.token.value),
+                      let lease = acquireOperationLeaseLocked(handle: handle) else {
                     return .unavailable
                 }
                 profile.state.records[index].state = .claimed(
@@ -1732,7 +1682,6 @@ final class ExtensionRequestFileStore {
             guard let index = profile.state.records.firstIndex(where: { $0.handle == handle }),
                   let request = profile.request(for: profile.state.records[index]),
                   case .pending = profile.state.records[index].state,
-                  profile.state.records[index].readyApproval == nil,
                   receiptMatches(
                     profile.state.records[index].nativeDeliveryReceipt,
                     expected: expectedReceipt
@@ -1927,7 +1876,7 @@ final class ExtensionRequestFileStore {
     ) -> ExtensionBridge.StoreMutationResult {
         let handle = profile.state.records[index].handle
         let result: ExtensionBridge.StoreMutationResult
-        if profile.state.records[index].readyApproval != nil {
+        if profile.state.records[index].nativeApproval != nil {
             guard interruptNativeRecord(in: &profile, at: index, now: now),
                   writeProfileLocked(profile, failureRecovery: .readBack) else {
                 return .retryablePersistenceFailure
@@ -2031,7 +1980,6 @@ final class ExtensionRequestFileStore {
                 return .ownershipLost
             }
             guard case .pending = profile.state.records[index].state,
-                  profile.state.records[index].readyApproval == nil,
                   receiptMatches(
                     profile.state.records[index].nativeDeliveryReceipt,
                     expected: expectedReceipt
@@ -2173,7 +2121,7 @@ final class ExtensionRequestFileStore {
                 case .held, .unsafe, .unavailable:
                     break
                 case .unlocked:
-                    if record.readyApproval != nil {
+                    if record.nativeApproval != nil {
                         guard let response = interruptionResponseData(for: profile.request(for: record)) else {
                             return .unavailable
                         }
@@ -2191,17 +2139,6 @@ final class ExtensionRequestFileStore {
                     break
                 case .unlocked:
                     record.complete(response: recoveryResponse, at: now)
-                    profile.parsedRequests.removeValue(forKey: record.handle)
-                    changed = true
-                    locksToRemove.append(record.handle)
-                }
-            case .pending(_, .staged(_, let context))
-                where context.map({ now >= $0.executionDeadline }) == true:
-                do {
-                    guard let response = interruptionResponseData(for: profile.request(for: record)) else {
-                        return .unavailable
-                    }
-                    record.complete(response: response, at: now)
                     profile.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     locksToRemove.append(record.handle)
@@ -2443,14 +2380,14 @@ final class ExtensionRequestFileStore {
                   ),
                   ExtensionBridge.isValidEnqueueAttempt(record.enqueueAttempt),
                   record.createdAt <= record.admissionCreatedAt,
-                  record.readyApproval.map({
+                  record.nativeApproval.map({
                       $0.approvedAt.timeIntervalSince1970.isFinite &&
                         $0.approvedAt >= record.createdAt
                   }) ?? true,
                   record.nativeExecutionContext.map({ context in
                       context.observedAt.timeIntervalSince1970.isFinite &&
                         context.executionDeadline.timeIntervalSince1970.isFinite &&
-                        record.readyApproval.map {
+                        record.nativeApproval.map {
                             context.observedAt >= $0.approvedAt
                       } == true &&
                         context.executionDeadline >= context.observedAt
@@ -2549,19 +2486,13 @@ final class ExtensionRequestFileStore {
                 queuedApproval = .unowned
             case .delivered(let receipt):
                 queuedApproval = .delivered(receipt)
-            case .staged(let staged, let context):
-                queuedApproval = .staged(.init(
-                    receipt: staged.receipt,
-                    approvedAt: staged.approvedAt,
-                    executionContext: context
-                ))
             }
             state = .queued(request: request, approval: queuedApproval)
         case .claimed, .broadcastPrepared:
             guard let request else { return nil }
             state = .approving(
                 request: request,
-                nativeApproval: record.readyApproval.map {
+                nativeApproval: record.nativeApproval.map {
                     .init(receipt: $0.receipt, approvedAt: $0.approvedAt,
                           executionContext: record.nativeExecutionContext)
                 }

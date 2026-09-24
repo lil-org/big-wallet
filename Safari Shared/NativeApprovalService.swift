@@ -118,7 +118,7 @@ actor NativeApprovalService {
                 handle: handle, nonce: nonce, deadline: deadline
             ) {
             case .owned(let snapshot, let current):
-                if policy == .manualRecovery && !snapshot.hasStagedOrActiveExecution {
+                if policy == .manualRecovery && !snapshot.hasActiveExecution {
                     return .unavailable
                 }
                 receipt = current
@@ -281,7 +281,7 @@ actor NativeApprovalService {
               case .found(let snapshot) = loaded,
               snapshot.nativeDeliveryNonce == nativeDeliveryNonce else { return .unavailable }
         if snapshot.phase == .responded { return .responseReady }
-        if snapshot.hasStagedOrActiveExecution {
+        if snapshot.hasActiveExecution {
             let status = await inspectReceipt(
                 handle: handle, nonce: nativeDeliveryNonce,
                 deadline: dependencies.deadline(after: launchTimeoutNanoseconds)
@@ -349,7 +349,7 @@ actor NativeApprovalService {
         let manual = snapshot.request?.provider == .unknown &&
             snapshot.request?.name == "switchAccount"
         let quiet = manual || !allowDelivery
-        if quiet && !snapshot.hasStagedOrActiveExecution { return .pending }
+        if quiet && !snapshot.hasActiveExecution { return .pending }
         let status = await reconcileReceipt(
             handle: handle, nonce: snapshot.nativeDeliveryNonce,
             policy: quiet ? .manualRecovery : .delivery, deadline: deadline
@@ -362,7 +362,7 @@ actor NativeApprovalService {
             return await dependencies.responseStatus(handle, configurationKey)
         case .unavailable: return .unavailable
         case .needsDelivery:
-            guard !quiet, !snapshot.hasStagedOrActiveExecution else { return .pending }
+            guard !quiet, !snapshot.hasActiveExecution else { return .pending }
             let opened = await open(.approval(
                 workflowVersion: ExtensionBridge.workflowVersion,
                 handle: handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce

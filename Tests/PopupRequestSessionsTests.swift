@@ -170,13 +170,13 @@ final class PopupRequestSessionsTests: XCTestCase {
                                      provider: .ethereum, derivationPath: account.derivationPath)],
                     ethereumChainID: network.chainIdHexString
                 ))
-                let staged = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
+                let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
                 let finalizer = NativeApprovalFinalizer(
                     store: store, requestProcessor: processor,
                     refreshWalletCatalog: { access }, networkResolver: { _ in network }
                 )
                 let result = await attemptNativeDecision(
-                    finalizer, store: store, snapshot: snapshot, authorization: staged
+                    finalizer, store: store, snapshot: snapshot, authorization: authorization
                 )
                 let error = await store.completedErrorCode(handle: snapshot.handle)
                 let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
@@ -1514,35 +1514,6 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(preparations, 1)
     }
 
-    func testStagedDecisionReplaySkipsRequestRematerialization() async throws {
-        let store = try makeStore()
-        let snapshot = try await enqueue(popupSnapshot(
-            id: 29,
-            nativeDecisionStaged: true
-        ), in: store)
-        var preparations = 0
-        let admission = DappRequestAdmission(
-            store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparations += 1
-                return .response(request.response(error: .internalError))
-            },
-            reviewCatalog: {
-                XCTFail("A staged decision must not restart admission")
-                return nil
-            }
-        )
-
-        let disposition = await admission.materialize(
-            handle: snapshot.handle
-        )
-
-        XCTAssertEqual(disposition, .approvalRequired)
-        XCTAssertEqual(preparations, 0)
-        let events = await store.events()
-        XCTAssertTrue(events.isEmpty)
-    }
-
     func testImmediateResponsePersistenceShowsWorkingUntilReconciled() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 28), in: store)
@@ -1885,7 +1856,7 @@ extension PopupRequestSessionsTests {
     }
 
     func testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors() async throws {
-        for ownership in ["receipt", "decision", "approving"] {
+        for ownership in ["receipt", "nativeClaim", "approving"] {
             let store = try makeStore()
             let snapshot = try await enqueue(popupSnapshot(id: 483), in: store)
             var preparations = 0
@@ -1910,13 +1881,22 @@ extension PopupRequestSessionsTests {
             _ = await controller.dispatchJSON(
                 request: approve, profileIdentifier: nil
             )
+            var nativeClaim: ExtensionBridge.ApprovalClaim?
+            defer { nativeClaim?.releaseLease() }
             if ownership == "receipt" {
                 await store.setNativeDeliveryReceipt(ExtensionBridge.NativeDeliveryReceipt(
                     nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
                     owner: popupNativeDeliveryOwner(runtime: UUID())
                 ), handle: snapshot.handle)
-            } else if ownership == "decision" {
-                _ = try await store.prepareNativeApproval(handle: snapshot.handle, decision: .addEthereumChain)
+            } else if ownership == "nativeClaim" {
+                let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: .addEthereumChain)
+                guard case .claimed(let claim) = await store.claimNativeExecution(
+                    handle: snapshot.handle,
+                    nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
+                    approvedAt: authorization.approvedAt
+                ) else { return XCTFail("Expected native execution claim") }
+                nativeClaim = claim.approvalClaim
             } else {
                 try await store.holdForeignClaim(handle: snapshot.handle)
             }
@@ -2017,53 +1997,6 @@ extension PopupRequestSessionsTests {
         let restoredToken = try XCTUnwrap((restored["review"] as? [String: Any])?["reviewToken"] as? String)
         XCTAssertNotEqual(restoredToken, initialToken)
         XCTAssertEqual(preparationCount, 2)
-    }
-
-    func testStagedNativeApprovalRemainsPendingAndShowsWorking() async throws {
-        let store = try makeStore()
-        let snapshot = try await enqueue(popupSnapshot(
-            id: 32,
-            nativeDecisionStaged: true
-        ), in: store)
-        var preparationCount = 0
-        let controller = PopupRequestSessions(
-            store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparationCount += 1
-                return .approval(.addEthereumChain(AddEthereumChainAction(
-                    chainToAdd: popupTestNetwork()
-                )))
-            },
-            walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
-        )
-        let stateRequest = try popupCommand(
-            subject: "getApprovalState",
-            id: snapshot.handle.id,
-            requestToken: snapshot.handle.requestToken
-        )
-
-        let state = await controller.dispatchJSON(
-            request: stateRequest,
-            profileIdentifier: nil
-        )
-        let pendingRequest = try popupCommand(
-            subject: "getPendingRequests",
-            id: 99
-        )
-        let pending = await controller.dispatchJSON(
-            request: pendingRequest,
-            profileIdentifier: nil
-        )
-
-        XCTAssertEqual(Set(state.keys), ["id", "state", "actions", "host", "status"])
-        XCTAssertEqual(state["state"] as? String, "working")
-        XCTAssertEqual(state["host"] as? String, snapshot.host)
-        XCTAssertNil((state["review"] as? [String: Any])?["reviewToken"])
-        XCTAssertEqual(preparationCount, 0)
-        let requests = try XCTUnwrap(pending["requests"] as? [[String: Any]])
-        XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(requests[0]["id"] as? Int, snapshot.handle.id)
     }
 
     func testCachedControllerShowsWorkingAfterForeignClaim() async throws {
@@ -5049,7 +4982,7 @@ extension PopupRequestSessionsTests {
             id: 814, provider: .ethereum, method: "signPersonalMessage"
         ), in: store)
         let approvedAccount = popupTestAccountDescriptor()
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .message(.init(approvedAccount: approvedAccount, solanaCluster: nil))
         )
@@ -5077,7 +5010,7 @@ extension PopupRequestSessionsTests {
             }
         )
 
-        let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: staged)
+        let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
         let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
 
@@ -5104,7 +5037,7 @@ extension PopupRequestSessionsTests {
                     transaction, reviewedNetwork: network, approvedAccount: approvedAccount
                 )))
                 : .message(.init(approvedAccount: approvedAccount, solanaCluster: nil))
-            let staged = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
+            let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
             let account = popupTestAccount()
             let replacementWalletID = "replacement-wallet"
             let catalog = WalletReviewCatalog(accounts: [
@@ -5137,7 +5070,7 @@ extension PopupRequestSessionsTests {
                 }
             )
 
-            let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: staged)
+            let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
             let errorCode = await store.completedErrorCode(handle: snapshot.handle)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
 
@@ -5154,7 +5087,7 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(
             id: 813, provider: .ethereum, method: "addEthereumChain"
         ), in: store)
-        let staged = try await store.prepareNativeApproval(handle: snapshot.handle, decision: .addEthereumChain)
+        let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: .addEthereumChain)
         var executions = 0
         let processor = CompactPopupProcessor(execute: { request, approval, signer in
             executions += 1
@@ -5173,7 +5106,7 @@ extension PopupRequestSessionsTests {
             }
         )
 
-        let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: staged)
+        let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
 
         XCTAssertEqual(result, .responseReady)
         XCTAssertEqual(executions, 1)
@@ -5208,7 +5141,7 @@ extension PopupRequestSessionsTests {
                 accounts: scenario.selection,
                 ethereumChainID: network.chainIdHexString
             ))
-            let staged = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
+            let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
 
             var executionCount = 0
             let processor = CompactPopupProcessor(execute: { request, _, _ in
@@ -5229,7 +5162,7 @@ extension PopupRequestSessionsTests {
                 networkResolver: { _ in scenario.network }
             )
 
-            let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: staged)
+            let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
             let errorCode = await store.completedErrorCode(handle: snapshot.handle)
 
@@ -5262,7 +5195,7 @@ extension PopupRequestSessionsTests {
             )],
             ethereumChainID: network.chainIdHexString
         ))
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: decision
         )
@@ -5316,12 +5249,12 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let second = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let events = await store.events()
         let committed = await store.completedApprovalWasCommitted(
@@ -5336,7 +5269,7 @@ extension PopupRequestSessionsTests {
         XCTAssertTrue(committed)
     }
 
-    func testNativeFinalizerExecutesStagedApprovalWithoutWorkerTrigger()
+    func testNativeFinalizerExecutesDeliveredApprovalWithoutWorkerTrigger()
         async throws {
         let now = Date(timeIntervalSince1970: 2_050_000_000)
         let nativeClock = CompactExecutionClock(now)
@@ -5346,7 +5279,7 @@ extension PopupRequestSessionsTests {
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 4, solana: 2)
         ), in: store)
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
         )
@@ -5367,8 +5300,8 @@ extension PopupRequestSessionsTests {
             clock: { now }
         )
 
-        let result = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: staged)
-        let second = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: staged)
+        let result = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
+        let second = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
         let events = await store.events()
 
         XCTAssertEqual(result, .responseReady)
@@ -5396,7 +5329,7 @@ extension PopupRequestSessionsTests {
                 approvedAccount: popupTestAccountDescriptor()
             )
         )
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .transaction(execution)
         )
@@ -5436,7 +5369,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let errorCode = await store.completedErrorCode(
             handle: snapshot.handle
@@ -5464,7 +5397,7 @@ extension PopupRequestSessionsTests {
         ), in: store)
         let account = popupTestAccount()
         let network = popupTransactionNetwork()
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .accountSelection(.init(
                 accounts: [.init(
@@ -5521,11 +5454,11 @@ extension PopupRequestSessionsTests {
         let first = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         guard case .found(let retained) = await store.load(
             handle: snapshot.handle
-        ) else { return XCTFail("Expected retained staged decision") }
+        ) else { return XCTFail("Expected recovered interrupted request") }
         let firstErrorCode = await store.completedErrorCode(
             handle: snapshot.handle
         )
@@ -5543,7 +5476,7 @@ extension PopupRequestSessionsTests {
         let second = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let finalEvents = await store.events()
         let committed = await store.completedApprovalWasCommitted(
@@ -5705,7 +5638,7 @@ extension PopupRequestSessionsTests {
             provider: .ethereum,
             revisions: popupRevisions(ethereum: 3, solana: 8)
         ), in: store)
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
         )
@@ -5728,7 +5661,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         XCTAssertEqual(result, .interruptionRequired)
         let events = await store.events()
@@ -5757,7 +5690,7 @@ extension PopupRequestSessionsTests {
                 approvedAccount: popupTestAccountDescriptor()
             )
         )
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .transaction(execution),
             approvedAt: now.addingTimeInterval(
@@ -5784,7 +5717,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
@@ -5818,7 +5751,7 @@ extension PopupRequestSessionsTests {
                 approvedAccount: popupTestAccountDescriptor()
             )
         )
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .transaction(execution),
             approvedAt: now
@@ -5839,7 +5772,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
@@ -5848,8 +5781,8 @@ extension PopupRequestSessionsTests {
         )
 
         XCTAssertEqual(result, .interruptionRequired)
-        XCTAssertEqual(events, ["nativeClaim"])
-        XCTAssertEqual(errorCode, -32603)
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertNil(errorCode)
         XCTAssertFalse(committed)
     }
 
@@ -5869,7 +5802,7 @@ extension PopupRequestSessionsTests {
                 method: method,
                 revisions: popupRevisions(ethereum: 1, solana: 2)
             ), in: store)
-            let staged = try await store.prepareNativeApproval(
+            let authorization = try await store.prepareNativeApproval(
                 handle: snapshot.handle,
                 decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil)),
                 approvedAt: now.addingTimeInterval(
@@ -5892,7 +5825,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
             let errorCode = await store.completedErrorCode(
                 handle: snapshot.handle
@@ -5922,7 +5855,7 @@ extension PopupRequestSessionsTests {
                 method: method,
                 revisions: popupRevisions(ethereum: 1, solana: 2)
             ), in: store)
-            let staged = try await store.prepareNativeApproval(
+            let authorization = try await store.prepareNativeApproval(
                 handle: snapshot.handle,
                 decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil)),
                 approvedAt: now
@@ -5943,13 +5876,15 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
             let errorCode = await store.completedErrorCode(
                 handle: snapshot.handle
             )
             XCTAssertEqual(result, .interruptionRequired, method)
-            XCTAssertEqual(errorCode, -32603, method)
+            XCTAssertNil(errorCode, method)
+            let events = await store.events()
+            XCTAssertTrue(events.isEmpty, method)
         }
     }
 
@@ -5963,7 +5898,7 @@ extension PopupRequestSessionsTests {
             method: "signMessage",
             revisions: popupRevisions(ethereum: 1, solana: 2)
         ), in: store)
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: popupSolanaTestAccount()), solanaCluster: nil)),
             approvedAt: now.addingTimeInterval(
@@ -5994,7 +5929,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let committed = await store.completedApprovalWasCommitted(
             handle: snapshot.handle
@@ -6024,7 +5959,7 @@ extension PopupRequestSessionsTests {
                 approvedAccount: popupTestAccountDescriptor()
             )
         )
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .transaction(execution),
             approvedAt: nativeClock.now
@@ -6060,7 +5995,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
@@ -6095,7 +6030,7 @@ extension PopupRequestSessionsTests {
                 approvedAccount: popupTestAccountDescriptor()
             )
         )
-        let staged = try await store.prepareNativeApproval(
+        let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .transaction(execution),
             approvedAt: nativeClock.now
@@ -6133,7 +6068,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
@@ -6158,7 +6093,7 @@ extension PopupRequestSessionsTests {
                 method: "signTransaction",
                 revisions: popupRevisions(ethereum: 1, solana: 2)
             ), in: store)
-            let staged = try await store.prepareNativeApproval(
+            let authorization = try await store.prepareNativeApproval(
                 handle: snapshot.handle,
                 decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil)),
                 approvedAt: nativeClock.now
@@ -6203,7 +6138,7 @@ extension PopupRequestSessionsTests {
         let result = await attemptNativeDecision(
             finalizer,
             store: store,
-            snapshot: snapshot, authorization: staged
+            snapshot: snapshot, authorization: authorization
         )
             let errorCode = await store.completedErrorCode(
                 handle: snapshot.handle
@@ -6421,10 +6356,10 @@ extension PopupRequestSessionsTests {
             )
             var attempts = 0
             let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
-                staged, authorization in
+                delivered, authorization in
                 attempts += 1
                 let loads = await store.loadCount()
-                let result = await finalizer.attempt(snapshot: staged, authorization: authorization)
+                let result = await finalizer.attempt(snapshot: delivered, authorization: authorization)
                 let laterLoads = await store.loadCount()
                 XCTAssertEqual(loads, laterLoads, "The finalizer must use the supplied snapshot")
                 XCTAssertEqual(result, .interruptionRequired)
@@ -6461,7 +6396,7 @@ extension PopupRequestSessionsTests {
         }
     }
 
-    func testNativeCoordinatorDoesNotExecuteAfterStagedOwnerIsCleared() async throws {
+    func testNativeCoordinatorRequiresFreshReviewAfterDeliveryOwnerIsCleared() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(
             id: 211, provider: .ethereum, method: "signPersonalMessage"
@@ -6475,14 +6410,14 @@ extension PopupRequestSessionsTests {
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) })
         let observer = await store.makeObserverBridge()
         let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
-            staged, authorization in
+            delivered, authorization in
             let cleared = await observer.clearNativeDeliveryReceipt(
-                handle: staged.handle, nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
+                handle: delivered.handle, nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
                 runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier
             )
             XCTAssertEqual(cleared, .persisted)
-            let result = await finalizer.attempt(snapshot: staged, authorization: authorization)
-            XCTAssertEqual(result, .responseReady)
+            let result = await finalizer.attempt(snapshot: delivered, authorization: authorization)
+            XCTAssertEqual(result, .interruptionRequired)
             return result
         }
         coordinator.start(nativeDeliveryOwner: popupNativeDeliveryOwner())
@@ -6490,8 +6425,11 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
         XCTAssertTrue(events.isEmpty)
         let response = await store.response(handle: snapshot.handle)
-        let terminal = try XCTUnwrap(response)
-        XCTAssertEqual(terminal as NSDictionary, try XCTUnwrap(snapshot.request).response(error: .approvalInterrupted).json as NSDictionary)
+        XCTAssertNil(response)
+        let retained = try await store.snapshot(handle: snapshot.handle)
+        guard case .queued(_, .unowned) = retained.state else {
+            return XCTFail("A cleared delivery must require fresh review")
+        }
     }
 
     func testReleasedNativeCoordinatorCannotReplayFailedClaimOrCheckpoint() async throws {
@@ -6531,9 +6469,9 @@ extension PopupRequestSessionsTests {
             coordinator = makeNativeIntegrationCoordinator(
                 store: store, snapshot: snapshot, action: action,
                 onPresentation: { presentations += 1 }
-            ) { staged, authorization in
-                captured = (staged, authorization)
-                let result = await finalizer.attempt(snapshot: staged, authorization: authorization)
+            ) { delivered, authorization in
+                captured = (delivered, authorization)
+                let result = await finalizer.attempt(snapshot: delivered, authorization: authorization)
                 XCTAssertEqual(result, .interruptionRequired)
                 completed.fulfill()
                 await gate.wait()
@@ -6557,8 +6495,8 @@ extension PopupRequestSessionsTests {
             let expected = failure == "checkpointAfter"
                 ? recovery.markingApprovalCommitted() : request.response(error: .approvalInterrupted)
             XCTAssertEqual(json["response"] as? NSDictionary, expected.json as NSDictionary)
-            let (staged, authorization) = try XCTUnwrap(captured)
-            let repeated = await finalizer.attempt(snapshot: staged, authorization: authorization)
+            let (delivered, authorization) = try XCTUnwrap(captured)
+            let repeated = await finalizer.attempt(snapshot: delivered, authorization: authorization)
             XCTAssertEqual(repeated, .responseReady)
             await gate.open()
             for _ in 0..<30 { await Task.yield() }
@@ -6726,9 +6664,6 @@ extension PopupRequestSessionsTests {
            approvedAccount: request.authorizedAccount)
         if let receipt = template.nativeDeliveryReceipt {
             await store.setNativeDeliveryReceipt(receipt, handle: admitted.handle)
-        }
-        if template.nativeApproval != nil {
-            _ = try await store.prepareNativeApproval(handle: admitted.handle, decision: .addEthereumChain)
         }
         if template.phase == .approving { try await store.holdForeignClaim(handle: admitted.handle) }
         return try await store.snapshot(handle: admitted.handle)
@@ -7123,7 +7058,6 @@ private func popupSnapshot(
     method: String? = nil,
     revisions: ExtensionBridge.ProviderRevisions = popupRevisions(),
     phase: ExtensionBridge.Phase = .queued,
-    nativeDecisionStaged: Bool = false,
     nativeDeliveryReceipt: ExtensionBridge.NativeDeliveryReceipt? = nil
 ) throws -> ExtensionBridge.Snapshot {
     let name: String
@@ -7177,17 +7111,13 @@ private func popupSnapshot(
         profileIdentifier: nil
     )
     let nonce = nativeDeliveryReceipt?.nativeDeliveryNonce ?? ExtensionBridge.NativeDeliveryNonce(value: UUID())
-    let native: ExtensionBridge.Snapshot.NativeApproval? = nativeDecisionStaged
-        ? .init(receipt: nativeDeliveryReceipt ?? .init(
-            nativeDeliveryNonce: nonce, owner: popupNativeDeliveryOwner(runtime: UUID())
-          ), approvedAt: createdAt, executionContext: nil) : nil
     let state: ExtensionBridge.Snapshot.State
     switch phase {
     case .queued:
-        state = .queued(request: request, approval: native.map { .staged($0) } ??
+        state = .queued(request: request, approval:
             nativeDeliveryReceipt.map { .delivered($0) } ?? .unowned)
     case .approving:
-        state = .approving(request: request, nativeApproval: native)
+        state = .approving(request: request, nativeApproval: nil)
     case .responded:
         state = .responded
     }
