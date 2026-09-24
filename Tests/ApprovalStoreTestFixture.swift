@@ -3,6 +3,19 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
+extension ExtensionRequestFileStore {
+    func withRevokedWalletAuthority<Result>(
+        matching removal: WalletAuthorityRemoval,
+        sourceMutation: () throws -> Result
+    ) throws -> Result {
+        try perform(
+            preparing: { PreparedWalletSourceMutation(payload: (), authorityRemovals: [removal]) },
+            beforeCommit: {},
+            commit: { _ in try sourceMutation() }
+        )
+    }
+}
+
 enum ApprovalStoreTestPersistence {
     static func write(_ data: Data, _ url: URL) throws {
         try fixturePersistence(for: url).replace(data, at: url)

@@ -16,6 +16,19 @@ enum WalletAuthorityRemoval: Sendable {
     }
 }
 
+struct PreparedWalletSourceMutation<Payload> {
+    let payload: Payload
+    let authorityRemovals: [WalletAuthorityRemoval]
+}
+
+protocol WalletSourceMutating {
+    func perform<Payload, Result>(
+        preparing: () throws -> PreparedWalletSourceMutation<Payload>,
+        beforeCommit: () throws -> Void,
+        commit: (Payload) throws -> Result
+    ) throws -> Result
+}
+
 enum NativeApprovalTiming {
     static let recoveryTimeout: TimeInterval = 10
     static let recoveryRetryInterval: TimeInterval = 1
@@ -546,13 +559,21 @@ actor ExtensionBridge {
         )
     ))
 
-    static func withWalletSourceMutation<Result>(
-        _ mutation: (_ revokeAuthority: (WalletAuthorityRemoval) throws -> Void) throws -> Result
-    ) throws -> Result {
-        let store = ExtensionRequestFileStore(containerURL: FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
-        ))
-        return try store.withWalletSourceMutation(mutation)
+    struct WalletSourceMutator: WalletSourceMutating {
+        func perform<Payload, Result>(
+            preparing: () throws -> PreparedWalletSourceMutation<Payload>,
+            beforeCommit: () throws -> Void,
+            commit: (Payload) throws -> Result
+        ) throws -> Result {
+            let store = ExtensionRequestFileStore(containerURL: FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
+            ))
+            return try store.perform(
+                preparing: preparing,
+                beforeCommit: beforeCommit,
+                commit: commit
+            )
+        }
     }
 
     private let store: ExtensionRequestFileStore

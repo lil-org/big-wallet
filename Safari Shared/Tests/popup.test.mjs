@@ -960,7 +960,7 @@ function selectionState(request = pendingRequest(), overrides = {}, envelope = {
             }],
             allowsEmptySelection: false,
             canSelectNetwork: false,
-            kind: "selectAccount",
+            kind: "accountSelection",
             reviewToken: requestToken(101),
             title: "Connect",
             ...overrides,
@@ -987,7 +987,7 @@ function transactionState(request = pendingRequest(), overrides = {}, envelope =
             feeLines: ["Network fee: 0.001 ETH"],
             kind: "sendTransaction",
             networkName: "Ethereum",
-            phase: "ready",
+            canBackOffRefresh: true,
             reviewToken: requestToken(101),
             slider: {maximum: 200, position: 100, visible: true},
             title: "Send transaction",
@@ -1937,7 +1937,7 @@ test("an edit error preserves the open editor and typed values", async () => {
     harness.get("edit-nonce").value = "invalid";
     harness.get("edit-nonce").emit("input");
     harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
-        ? commandReply(transactionState(controller.request, {}, {editsError: true})) : fallback(message);
+        ? {...commandReply(transactionState(controller.request)), editsError: true} : fallback(message);
 
     await harness.get("editor-apply").click();
 
@@ -1945,6 +1945,7 @@ test("an edit error preserves the open editor and typed values", async () => {
     assert.equal(harness.get("edit-nonce").value, "invalid");
     assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
     assert.equal(controller.activity.kind, "editing");
+    assert.equal(Object.hasOwn(controller.state, "editsError"), false);
     assert.equal(harness.followUpTimerId(), null);
 
     harness.setState(controller.request, transactionState(controller.request, {
@@ -2039,7 +2040,7 @@ test("account selection belongs to one controller and old rows cannot change its
         state: "review",
         actions: ["approve", "reject"],
         review: {
-            kind: "switchAccount",
+            kind: "accountSelection",
             title: "Switch account",
             reviewToken: requestToken(101),
             accounts: accounts.map(account => ({...account, isSelected: account.coin === selected})),
@@ -2254,7 +2255,10 @@ test("late idle switch replies preserve preparing and working requests", async (
             harness.model.requests = [request];
             harness.setState(request, busy
                 ? {id: request.id, state: "working", actions: []}
-                : transactionState(request, {phase: "preparing"}, {actions: ["reject"]}));
+                : transactionState(request, {
+                    canBackOffRefresh: false,
+                    feeLines: ["Network fee: 0.001 ETH", "Calculating…"],
+                }, {actions: ["reject"]}));
             harness.notify();
             await harness.fire(harness.queue.refresh.timer);
             const controller = harness.controller;
@@ -2317,7 +2321,7 @@ test("reordered approval object keys preserve DOM nodes and transaction backoff"
         return value;
     }
     const harness = await reviewedPopup(request => transactionState(request, {
-        phase: "reviewingFees",
+        canBackOffRefresh: true,
         alert: {
             title: "Review fees",
             message: "Updated estimate",
@@ -2355,7 +2359,11 @@ test("meaningful approval changes still redraw and reset transaction backoff", a
         state => { state.review.valueLine = "Changed value"; },
         state => { state.review.reviewToken = requestToken(102); },
         state => { state.actions = state.actions.filter(action => action !== "setTransactionSpeed"); },
-        state => { state.review.phase = "preparing"; state.actions = ["reject"]; },
+        state => {
+            state.review.canBackOffRefresh = false;
+            state.review.feeLines.push("Calculating…");
+            state.actions = ["reject"];
+        },
         state => { state.review.feeLines.reverse(); },
     ];
     for (const change of changes) {
@@ -2405,7 +2413,10 @@ test("state reads coalesce and transaction polling preserves its backoff", async
     harness.setState(controller.request, transactionState(controller.request, {valueLine: "Changed value"}));
     await harness.fire(harness.followUpTimerId());
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
-    harness.setState(controller.request, transactionState(controller.request, {phase: "preparing"}, {actions: ["reject"]}));
+    harness.setState(controller.request, transactionState(controller.request, {
+        canBackOffRefresh: false,
+        feeLines: ["Network fee: 0.001 ETH", "Calculating…"],
+    }, {actions: ["reject"]}));
     await harness.fire(harness.followUpTimerId());
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     harness.setState(controller.request, {id: controller.request.id, state: "authenticating", actions: []});
@@ -3041,26 +3052,30 @@ test("an alert consumes an old editor request and Retry keeps preparation pollin
         {title: "Retry", action: "retry"}, {title: "Cancel", action: "cancel"},
     ]};
     const harness = await reviewedPopup(request => transactionState(request, {
-        phase: "failed", editorRequestToken: 1, alert,
+        editorRequestToken: 1, alert,
     }));
     const controller = harness.controller;
     assert.equal(harness.get("tx-editor").open, false);
     assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
     harness.handlers.native = (message, fallback) => message.subject === "resolveApprovalAlert"
         ? commandReply(transactionState(controller.request, {
-            phase: "preparing", editorRequestToken: 1, reviewToken: requestToken(102),
+            canBackOffRefresh: false,
+            feeLines: ["Network fee: 0.001 ETH", "Calculating…"],
+            editorRequestToken: 1, reviewToken: requestToken(102),
         }, {actions: ["reject", "setTransactionSpeed"]})) : fallback(message);
 
     await harness.get("alert-buttons").children[0].click();
 
-    assert.equal(controller.state.review.phase, "preparing");
+    assert.equal(controller.state.review.canBackOffRefresh, false);
+    assert.deepEqual(harness.get("tx-fee-lines").children.map(line => line.textContent),
+        ["Network fee: 0.001 ETH", "Calculating…"]);
     assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
     assert.equal(harness.get("screen-request").inert, false);
     harness.setState(controller.request, transactionState(controller.request, {
         editorRequestToken: 1, reviewToken: requestToken(103),
     }));
     await harness.fire(harness.followUpTimerId());
-    assert.equal(controller.state.review.phase, "ready");
+    assert.equal(controller.state.review.canBackOffRefresh, true);
     assert.equal(harness.get("button-approve").disabled, false);
     assert.equal(harness.get("tx-editor").open, false);
 });
@@ -3074,7 +3089,7 @@ test("an alert replaces a stale editor draft and ignored Cancel can refresh it",
         {title: "Edit", action: "edit"}, {title: "Cancel", action: "cancel"},
     ]};
     harness.setState(controller.request, transactionState(controller.request, {
-        phase: "failed", reviewToken: requestToken(102), alert,
+        reviewToken: requestToken(102), alert,
     }));
     harness.handlers.native = (message, fallback) =>
         message.subject === "applyTransactionEdits" || message.subject === "resolveApprovalAlert"
@@ -3099,12 +3114,12 @@ test("a new Edit alert request still opens exclusive advanced editing", async ()
         {title: "Edit", action: "edit"},
     ]};
     const harness = await reviewedPopup(request => transactionState(request, {
-        phase: "failed", editorRequestToken: 1, alert,
+        editorRequestToken: 1, alert,
     }));
     const controller = harness.controller;
     harness.handlers.native = (message, fallback) => message.subject === "resolveApprovalAlert"
         ? commandReply(transactionState(controller.request, {
-            phase: "failed", editorRequestToken: 2, reviewToken: requestToken(102),
+            editorRequestToken: 2, reviewToken: requestToken(102),
         })) : fallback(message);
 
     await harness.get("alert-buttons").children[0].click();

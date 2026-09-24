@@ -60,6 +60,64 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual((pending["completedResponses"] as? [[String: Any]])?.count, 1)
     }
 
+    func testTransactionResponsesOwnLoadingPresentationAndTransientEditFeedback() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 705, provider: .ethereum), in: store)
+        let transaction = popupReadyTransaction()
+        let action = SendTransactionAction(
+            transaction: transaction,
+            resolvedNetwork: ResolvedEthereumNetwork(network: popupTransactionNetwork(), source: .custom),
+            walletId: "wallet", account: popupTestAccount()
+        )
+        var finishPreparation: ((Result<Transaction, TransactionPreparationFailure>) -> Void)?
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor { _ in .approval(.approveTransaction(action)) },
+            walletEnvironment: popupWalletEnvironment(),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: TransactionApprovalOperations(
+                prepare: { _, _, _, _, _, completion in
+                    finishPreparation = completion
+                    return EthereumRequestCancellation()
+                },
+                preflight: { _, _, _ in EthereumRequestCancellation() }
+            )
+        )
+        let read = try popupCommand(
+            subject: "getApprovalState", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        let preparing = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+        let preparingReview = try XCTUnwrap(preparing["review"] as? [String: Any])
+        XCTAssertNil(preparingReview["phase"])
+        XCTAssertEqual(preparingReview["canBackOffRefresh"] as? Bool, false)
+        XCTAssertEqual((preparingReview["feeLines"] as? [String])?.last, Strings.calculating.withEllipsis)
+
+        let complete = try XCTUnwrap(finishPreparation)
+        complete(.success(transaction))
+        let ready = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+        let readyReview = try XCTUnwrap(ready["review"] as? [String: Any])
+        XCTAssertNil(readyReview["phase"])
+        XCTAssertEqual(readyReview["canBackOffRefresh"] as? Bool, true)
+        XCTAssertFalse((readyReview["feeLines"] as? [String] ?? []).contains(Strings.calculating.withEllipsis))
+        let token = try XCTUnwrap(readyReview["reviewToken"] as? String)
+        let edits = try popupCommand(
+            subject: "applyTransactionEdits", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: token,
+            payload: ["mode": "custom", "nonce": "1", "gasPriceGwei": "invalid"]
+        )
+        let invalid = popupResponseJSON(await controller.dispatch(request: edits, profileIdentifier: nil))
+        XCTAssertEqual(Set(invalid.keys), ["status", "approval", "editsError"])
+        XCTAssertEqual(invalid["status"] as? String, "ok")
+        XCTAssertEqual(invalid["editsError"] as? Bool, true)
+        let unchanged = try XCTUnwrap(invalid["approval"] as? [String: Any])
+        XCTAssertNil(unchanged["editsError"])
+        XCTAssertEqual(unchanged as NSDictionary, ready.filter { $0.key != "status" } as NSDictionary)
+        let refreshed = popupResponseJSON(await controller.dispatch(request: read, profileIdentifier: nil))
+        XCTAssertEqual(Set(refreshed.keys), ["status", "approval"])
+        XCTAssertEqual(refreshed["approval"] as? NSDictionary, unchanged as NSDictionary)
+    }
+
     func testPrivatePopupCommandsNeverExposeStoredReview() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 703), in: store)

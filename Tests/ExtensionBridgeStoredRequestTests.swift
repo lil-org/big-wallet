@@ -1145,26 +1145,34 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
         var source = ["original"]
         var competingPreparations = 0
-        let result = try store.withWalletSourceMutation { revoke in
+        var events = [String]()
+        let result = try store.perform(preparing: {
+            events.append("prepare")
             XCTAssertFalse(try competingLock.tryAcquire())
-            XCTAssertThrowsError(try competing.withWalletSourceMutation { _ in
+            XCTAssertThrowsError(try competing.perform(preparing: {
                 competingPreparations += 1
-                source.append("competing")
-            })
+                return PreparedWalletSourceMutation(payload: source + ["competing"], authorityRemovals: [])
+            }, beforeCommit: {}, commit: { source = $0 }))
             XCTAssertEqual(competingPreparations, 0)
-            let prepared = source + ["added"]
-            try revoke(.accounts([]))
+            return PreparedWalletSourceMutation(payload: source + ["added"], authorityRemovals: [.accounts([])])
+        }, beforeCommit: {
+            events.append("invalidate")
+            XCTAssertFalse(try competingLock.tryAcquire())
+            XCTAssertEqual(source, ["original"])
+        }, commit: { prepared in
+            events.append("commit")
             XCTAssertFalse(try competingLock.tryAcquire())
             source = prepared
             return source.count
-        }
+        })
         XCTAssertEqual(result, 2)
+        XCTAssertEqual(events, ["prepare", "invalidate", "commit"])
         XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v8").path))
-        try competing.withWalletSourceMutation { _ in
+        try competing.perform(preparing: {
             competingPreparations += 1
             XCTAssertEqual(source, ["original", "added"])
-            source.append("competing")
-        }
+            return PreparedWalletSourceMutation(payload: source + ["competing"], authorityRemovals: [])
+        }, beforeCommit: {}, commit: { source = $0 })
         XCTAssertEqual(competingPreparations, 1)
         XCTAssertEqual(source, ["original", "added", "competing"])
         XCTAssertTrue(try competingLock.tryAcquire())
@@ -1176,14 +1184,43 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = try await grantAuthority(account, id: 62_980)
         let before = try await removalSnapshot()
         let store = removalStore()
-        XCTAssertThrowsError(try store.withWalletSourceMutation { _ -> Void in
+        XCTAssertThrowsError(try store.perform(preparing: { () throws -> PreparedWalletSourceMutation<Void> in
             throw Failure.expectedValue
-        })
+        }, beforeCommit: {
+            XCTFail("Rejected preparation must not invalidate the source")
+        }, commit: { _ in
+            XCTFail("Rejected preparation must not write the source")
+        }))
         let after = try await removalSnapshot()
         XCTAssertEqual(after.ethereumAccount, account)
         XCTAssertEqual(after.version, before.version)
-        let result = try store.withWalletSourceMutation { _ in 42 }
+        let result = try store.perform(
+            preparing: { PreparedWalletSourceMutation(payload: 42, authorityRemovals: []) },
+            beforeCommit: {},
+            commit: { $0 }
+        )
         XCTAssertEqual(result, 42)
+    }
+
+    func testWalletSourceInvalidationFailurePreservesAuthorityAndSource() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 62_979)
+        let before = try await removalSnapshot()
+        let store = removalStore()
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+        var sourceWrites = 0
+        XCTAssertThrowsError(try store.perform(preparing: {
+            PreparedWalletSourceMutation(payload: (), authorityRemovals: [.accounts([account])])
+        }, beforeCommit: {
+            XCTAssertFalse(try competingLock.tryAcquire())
+            throw Failure.injectedWrite
+        }, commit: { _ in sourceWrites += 1 }))
+        let after = try await removalSnapshot()
+        XCTAssertEqual(after.ethereumAccount, account)
+        XCTAssertEqual(after.version, before.version)
+        XCTAssertEqual(sourceWrites, 0)
+        XCTAssertTrue(try competingLock.tryAcquire())
+        competingLock.release()
     }
 
     func testWalletSourceTransactionRevokesMultipleScopesBeforeWritingSource() async throws {
@@ -1195,14 +1232,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let store = removalStore()
         let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
         var sourceWrites = 0
-        try store.withWalletSourceMutation { revoke in
+        try store.perform(preparing: {
             XCTAssertFalse(try competingLock.tryAcquire())
-            try revoke(.accounts([ethereum]))
+            return PreparedWalletSourceMutation(
+                payload: (),
+                authorityRemovals: [.accounts([ethereum]), .wallet(id: solana.walletID)]
+            )
+        }, beforeCommit: {
             XCTAssertFalse(try competingLock.tryAcquire())
-            try revoke(.wallet(id: solana.walletID))
+        }, commit: { _ in
             XCTAssertFalse(try competingLock.tryAcquire())
             sourceWrites += 1
-        }
+        })
         let after = try await removalSnapshot()
         XCTAssertEqual(sourceWrites, 1)
         XCTAssertNil(after.ethereumAccount)
@@ -1217,16 +1258,21 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let store = removalStore(atomicWrite: { _, _ in throw Failure.injectedWrite })
         var preparations = 0
         var writes = 0
-        XCTAssertThrowsError(try store.withWalletSourceMutation { revoke in
+        XCTAssertThrowsError(try store.perform(preparing: {
             preparations += 1
-            try revoke(.accounts([account]))
+            return PreparedWalletSourceMutation(payload: (), authorityRemovals: [.accounts([account])])
+        }, beforeCommit: {}, commit: { _ in
             writes += 1
-        })
+        }))
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(writes, 0)
         let after = try await removalSnapshot()
         XCTAssertEqual(after.ethereumAccount, account)
-        let result = try removalStore().withWalletSourceMutation { _ in 42 }
+        let result = try removalStore().perform(
+            preparing: { PreparedWalletSourceMutation(payload: 42, authorityRemovals: []) },
+            beforeCommit: {},
+            commit: { $0 }
+        )
         XCTAssertEqual(result, 42)
     }
 

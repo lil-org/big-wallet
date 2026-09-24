@@ -191,6 +191,47 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
 }
 
 #if os(macOS)
+private struct WalletSourceMutationStub: WalletSourceMutating {
+    let onRevoke: (WalletAuthorityRemoval) throws -> Void
+
+    func perform<Payload, Result>(
+        preparing: () throws -> PreparedWalletSourceMutation<Payload>,
+        beforeCommit: () throws -> Void,
+        commit: (Payload) throws -> Result
+    ) throws -> Result {
+        let prepared = try preparing()
+        try beforeCommit()
+        for removal in prepared.authorityRemovals {
+            try onRevoke(removal)
+        }
+        return try commit(prepared.payload)
+    }
+}
+
+private struct ObservedWalletSourceMutator: WalletSourceMutating {
+    let base: any WalletSourceMutating
+    var beforeTransaction: () throws -> Void = {}
+    var beforePreparation: () -> Void = {}
+    var afterTransaction: () -> Void = {}
+
+    func perform<Payload, Result>(
+        preparing: () throws -> PreparedWalletSourceMutation<Payload>,
+        beforeCommit: () throws -> Void,
+        commit: (Payload) throws -> Result
+    ) throws -> Result {
+        try beforeTransaction()
+        defer { afterTransaction() }
+        return try base.perform(
+            preparing: {
+                beforePreparation()
+                return try preparing()
+            },
+            beforeCommit: beforeCommit,
+            commit: commit
+        )
+    }
+}
+
 @MainActor
 final class WalletRemovalIntegrationTests: XCTestCase {
 
@@ -297,19 +338,17 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             WalletsMetadataService.saveAccountName("Removed", wallet: staleWallet, account: removed)
             var transactionEntries = 0
             var insideTransaction = false
-            let manager = fixture.transactionManager { mutation in
-                transactionEntries += 1
-                fixture.keychain.walletData[fixture.walletID] = try fixture.walletData(adding: concurrent)
-                try self.grant(concurrentDescriptor, in: store, id: 2, origin: concurrentOrigin)
-                WalletsMetadataService.saveAccountName("Concurrent", wallet: staleWallet, account: concurrent)
-                return try store.withWalletSourceMutation { revoke in
-                    insideTransaction = true
-                    defer { insideTransaction = false }
-                    return try withoutActuallyEscaping(revoke) { scoped in
-                        try mutation(scoped)
-                    }
-                }
-            }
+            let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+                base: store,
+                beforeTransaction: {
+                    transactionEntries += 1
+                    fixture.keychain.walletData[fixture.walletID] = try fixture.walletData(adding: concurrent)
+                    try self.grant(concurrentDescriptor, in: store, id: 2, origin: concurrentOrigin)
+                    WalletsMetadataService.saveAccountName("Concurrent", wallet: staleWallet, account: concurrent)
+                },
+                beforePreparation: { insideTransaction = true },
+                afterTransaction: { insideTransaction = false }
+            ))
             XCTAssertTrue(manager.reloadFromStore())
             fixture.keychain.beforeWalletRead = { _ in
                 XCTAssertTrue(insideTransaction, "Source accounts must be read after acquiring the transaction")
@@ -347,12 +386,14 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         var transactionEntries = 0
         var revocations = 0
         var insideTransaction = false
-        let manager = fixture.transactionManager { mutation in
-            transactionEntries += 1
-            insideTransaction = true
-            defer { insideTransaction = false }
-            return try mutation { _ in revocations += 1 }
-        }
+        let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+            base: WalletSourceMutationStub(onRevoke: { _ in revocations += 1 }),
+            beforePreparation: {
+                transactionEntries += 1
+                insideTransaction = true
+            },
+            afterTransaction: { insideTransaction = false }
+        ))
         XCTAssertTrue(manager.reloadFromStore())
         let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
         let added = fixture.additionalAccount(index: 2)
@@ -453,9 +494,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             fixture.clearMetadata()
         }
         let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory)
-        let manager = fixture.transactionManager { mutation in
-            try store.withWalletSourceMutation(mutation)
-        }
+        let manager = fixture.transactionManager(store)
         XCTAssertTrue(manager.reloadFromStore())
         let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
         let account = try XCTUnwrap(wallet.accounts.first)
@@ -554,14 +593,14 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         }
 
         func manager(onRevoke: @escaping (WalletAuthorityRemoval) throws -> Void) -> WalletsManager {
-            transactionManager { mutation in try mutation(onRevoke) }
+            transactionManager(WalletSourceMutationStub(onRevoke: onRevoke))
         }
 
-        func transactionManager(_ transaction: @escaping WalletsManager.WalletSourceMutation) -> WalletsManager {
+        func transactionManager(_ mutator: any WalletSourceMutating) -> WalletsManager {
             WalletsManager(
                 keychain: Keychain(copyMatching: keychain.copyMatching, add: keychain.add,
                                    update: keychain.update, delete: keychain.delete),
-                withWalletSourceMutation: transaction
+                walletSourceMutator: mutator
             )
         }
 

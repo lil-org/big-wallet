@@ -100,10 +100,8 @@ final class PopupApprovalStatePresenter {
         var actions: [PopupApprovalState.Action] = [.approve, .reject]
         var error = session.errorText
         switch action {
-        case .selectAccount(let action):
-            content = .selectAccount(selectionReview(action: action, reviewCatalog: session.reviewCatalog))
-        case .switchAccount(let action):
-            content = .switchAccount(selectionReview(action: action, reviewCatalog: session.reviewCatalog))
+        case .selectAccount(let action), .switchAccount(let action):
+            content = .accountSelection(selectionReview(action: action, reviewCatalog: session.reviewCatalog))
         case .approveMessage(let action):
             content = .signMessage(messageReview(action: action))
         case .approveTransaction(let action):
@@ -236,7 +234,7 @@ final class PopupApprovalStatePresenter {
         var alert: PopupTransactionAlert?
         if let activeAlert = transactionSession.activeAlert {
             let presentation = activeAlert.presentation
-            let message = Self.transactionAlertMessage(alert: activeAlert.intent)
+            let message = Self.transactionAlertMessage(alert: activeAlert)
             if mutationAllowed {
                 alert = PopupTransactionAlert(
                     title: presentation.title,
@@ -249,14 +247,25 @@ final class PopupApprovalStatePresenter {
                 error = message.isEmpty ? presentation.title : "\(presentation.title): \(message)"
             }
         }
+        var feeLines = transaction.feeSummaryLines(chain: chain, price: price)
+        if snapshot.phase == .idle || snapshot.phase == .preparing {
+            feeLines.append(Strings.calculating.withEllipsis)
+        }
+        let canBackOffRefresh: Bool
+        switch snapshot.phase {
+        case .ready, .failed, .reviewingFees, .finished:
+            canBackOffRefresh = true
+        case .idle, .preparing, .editing, .authenticating, .preflighting:
+            canBackOffRefresh = false
+        }
         return PopupTransactionReview(
             account: accountModel(walletId: action.walletId, account: action.account),
             networkName: chain.name,
             balance: transactionSession.balance,
             valueLine: transaction.valueWithSymbol(chain: chain, price: price, withLabel: true),
-            feeLines: transaction.feeSummaryLines(chain: chain, price: price),
+            feeLines: feeLines,
             dataInterpretation: transaction.diplayDataInterpretation,
-            phase: snapshot.phase,
+            canBackOffRefresh: canBackOffRefresh,
             slider: PopupTransactionSlider(
                 visible: chain.isEthMainnet && transactionSession.hasGasSpeedInfo,
                 position: transactionSession.gasSliderPosition(for: transaction),

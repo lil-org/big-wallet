@@ -85,7 +85,7 @@
         "reject"
       ],
       "review": {
-        "kind": "selectAccount",
+        "kind": "accountSelection",
         "reviewToken": "00000000-0000-4000-8000-000000000092",
         "title": "Connect Wallet",
         "accounts": [
@@ -124,7 +124,7 @@
         "reject"
       ],
       "review": {
-        "kind": "switchAccount",
+        "kind": "accountSelection",
         "reviewToken": "00000000-0000-4000-8000-000000000092",
         "title": "Switch Account",
         "accounts": [],
@@ -256,7 +256,6 @@
         "feeLines": [
           "Fee: 0.001 ETH"
         ],
-        "phase": "ready",
         "slider": {
           "visible": true,
           "position": 100,
@@ -270,7 +269,8 @@
           "nonce": "2",
           "gasPriceGwei": "10",
           "suggestedGasPriceGwei": "11"
-        }
+        },
+        "canBackOffRefresh": true
       }
     }
   },
@@ -296,7 +296,6 @@
         "feeLines": [
           "Fee: 0.001 ETH"
         ],
-        "phase": "reviewingFees",
         "slider": {
           "visible": true,
           "position": 100,
@@ -324,8 +323,52 @@
               "action": "edit"
             }
           ]
-        }
+        },
+        "canBackOffRefresh": true
       }
     }
+  },
+  "invalidTransactionEdits": {
+    "status": "ok",
+    "approval": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject",
+        "editTransaction",
+        "setTransactionSpeed"
+      ],
+      "review": {
+        "kind": "sendTransaction",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Send Transaction",
+        "account": {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111"
+        },
+        "networkName": "Ethereum",
+        "feeLines": [
+          "Fee: 0.001 ETH"
+        ],
+        "slider": {
+          "visible": true,
+          "position": 100,
+          "maximum": 200
+        },
+        "balance": "1 ETH",
+        "valueLine": "0.1 ETH",
+        "dataInterpretation": "Transfer",
+        "editor": {
+          "usesEIP1559": false,
+          "nonce": "2",
+          "gasPriceGwei": "10",
+          "suggestedGasPriceGwei": "11"
+        },
+        "canBackOffRefresh": true
+      }
+    },
+    "editsError": true
   }
 }

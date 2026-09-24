@@ -22,17 +22,6 @@
     ]);
     const SELECTION_ACCOUNT_COINS = new Set(WORKFLOW_POLICY.selectionAccountCoins);
     const SOLANA_CLUSTER_VALUES = new Set(WORKFLOW_POLICY.solanaClusterValues);
-    const TRANSACTION_PHASES = new Set([
-        "idle",
-        "preparing",
-        "ready",
-        "failed",
-        "editing",
-        "authenticating",
-        "preflighting",
-        "reviewingFees",
-        "finished",
-    ]);
     const ALERT_ACTIONS = new Set(["acknowledge", "retry", "edit", "cancel"]);
 
     function isOptionalString(value) {
@@ -224,8 +213,8 @@
     }
 
     function decodeTransaction(review) {
-        const {networkName, phase, balance, valueLine, dataInterpretation, editorRequestToken, feeLines} = review;
-        if (typeof networkName !== "string" || !TRANSACTION_PHASES.has(phase) ||
+        const {networkName, canBackOffRefresh, balance, valueLine, dataInterpretation, editorRequestToken, feeLines} = review;
+        if (typeof networkName !== "string" || typeof canBackOffRefresh !== "boolean" ||
             ![balance, valueLine, dataInterpretation].every(isOptionalString) ||
             (editorRequestToken !== undefined && !Number.isSafeInteger(editorRequestToken)) ||
             !Array.isArray(feeLines) || !feeLines.every(line => typeof line === "string")) {
@@ -236,7 +225,7 @@
         const editor = decodeEditor(review.editor);
         const alert = review.alert === undefined ? undefined : decodeAlert(review.alert);
         if (!account || !slider || !editor || alert === null) { return null; }
-        return definedFields({account, networkName, phase, balance, valueLine, dataInterpretation,
+        return definedFields({account, networkName, canBackOffRefresh, balance, valueLine, dataInterpretation,
             editorRequestToken, feeLines: feeLines.slice(), slider, editor, alert});
     }
 
@@ -251,8 +240,7 @@
         }
         let content;
         switch (kind) {
-            case "selectAccount":
-            case "switchAccount":
+            case "accountSelection":
                 content = decodeSelection(review);
                 break;
             case "signMessage":
@@ -273,15 +261,15 @@
 
     function decodeApprovalState(value, expectedRequestID) {
         if (!isRecord(value)) { return null; }
-        const {id, state, host, error, editsError, actions} = value;
+        const {id, state, host, error, actions} = value;
         if (!isValidRequestId(id) || id !== expectedRequestID || !APPROVAL_STATES.has(state) ||
             (host !== undefined && (typeof host !== "string" || host.length === 0)) ||
-            !isOptionalString(error) || !isOptionalBoolean(editsError) ||
+            !isOptionalString(error) ||
             !Array.isArray(actions) || !actions.every(action => APPROVAL_ACTIONS.has(action)) ||
             !hasUniqueValues(actions, action => action)) {
             return null;
         }
-        const decoded = definedFields({id, state, host, error, editsError, actions: actions.slice()});
+        const decoded = definedFields({id, state, host, error, actions: actions.slice()});
         if (state !== "review") {
             if (value.review !== undefined || (state === "error"
                 ? typeof error !== "string" || actions.length === 0 ||
@@ -297,8 +285,10 @@
     }
 
     function decodeCommandResult(raw, expectedRequestID) {
-        if (!hasExactKeys(raw, ["status", "approval"]) ||
-            !["ok", "ignored", "unavailable"].includes(raw.status)) {
+        if (!hasExactKeys(raw, raw?.editsError === true
+                ? ["status", "approval", "editsError"] : ["status", "approval"]) ||
+            !["ok", "ignored", "unavailable"].includes(raw.status) ||
+            (raw.editsError !== undefined && (raw.status !== "ok" || raw.editsError !== true))) {
             return null;
         }
         if (raw.approval === null) {
@@ -306,7 +296,7 @@
         }
         if (raw.status === "unavailable") { return null; }
         const approval = decodeApprovalState(raw.approval, expectedRequestID);
-        return approval ? {status: raw.status, approval} : null;
+        return approval ? definedFields({status: raw.status, approval, editsError: raw.editsError}) : null;
     }
 
     return Object.freeze({

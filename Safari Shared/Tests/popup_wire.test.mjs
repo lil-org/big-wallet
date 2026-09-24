@@ -44,6 +44,24 @@ test("popup decoding requires matching identity and complete transaction fields"
     delete source.review.editor.maxFeePerGasGwei;
     assert.equal(wire.decodeApprovalState(source, source.id), null);
     assert.equal(wire.decodeApprovalState({...fixtures.working, review: fixtures.signMessage.review}, 91), null);
+    for (const canBackOffRefresh of [undefined, null, "true"]) {
+        const source = structuredClone(fixtures.legacyTransaction);
+        source.review.canBackOffRefresh = canBackOffRefresh;
+        assert.equal(wire.decodeApprovalState(source, source.id), null);
+    }
+});
+
+test("popup edit feedback is command scoped and only accompanies successful command responses", () => {
+    const approval = fixtures.legacyTransaction;
+    const response = {status: "ok", approval, editsError: true};
+    assert.deepEqual(wire.decodeCommandResult(response, approval.id), response);
+    for (const editsError of [false, null, "true", undefined]) {
+        assert.equal(wire.decodeCommandResult({...response, editsError}, approval.id), null);
+    }
+    for (const status of ["ignored", "unavailable"]) {
+        assert.equal(wire.decodeCommandResult({...response, status}, approval.id), null);
+    }
+    assert.deepEqual(wire.decodeCommandResult({status: "ok", approval}, approval.id), {status: "ok", approval});
 });
 
 test("popup queue and command replies retain their exact identity contracts", () => {
@@ -114,10 +132,10 @@ test("popup optional fields omit undefined and reject null except for decorative
 
     const working = {id: fixtures.working.id, state: "working", actions: []};
     const workingWithUndefined = {
-        ...working, host: undefined, error: undefined, editsError: undefined, review: undefined,
+        ...working, host: undefined, error: undefined, review: undefined,
     };
     assert.deepEqual(wire.decodeApprovalState(workingWithUndefined, working.id), working);
-    for (const field of ["host", "error", "editsError", "review"]) {
+    for (const field of ["host", "error", "review"]) {
         assert.equal(wire.decodeApprovalState({...workingWithUndefined, [field]: null}, working.id), null);
     }
 

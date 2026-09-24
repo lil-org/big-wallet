@@ -38,38 +38,35 @@ enum PopupResponse: Encodable {
     }
 }
 
-enum PopupCommandResponse: Encodable {
-    case ok(PopupApprovalState)
-    case ignored(PopupApprovalState?)
+enum PopupCommandStatus {
+    case ok(editsError: Bool = false)
+    case ignored
     case unavailable
+}
 
-    private enum CodingKeys: String, CodingKey { case status, approval }
+struct PopupCommandResponse: Encodable {
+    let status: PopupCommandStatus
+    var approvalState: PopupApprovalState?
 
-    var approvalState: PopupApprovalState? {
-        switch self {
-        case .ok(let state): return state
-        case .ignored(let state): return state
-        case .unavailable: return nil
-        }
-    }
+    private enum CodingKeys: String, CodingKey { case status, approval, editsError }
 
     fileprivate func replacingApprovalState(_ state: PopupApprovalState) -> Self {
-        switch self {
-        case .ok: return .ok(state)
-        case .ignored: return .ignored(state)
-        case .unavailable: return .unavailable
-        }
+        var response = self
+        response.approvalState = state
+        return response
     }
 
     func encode(to encoder: Encoder) throws {
-        let status: String
-        switch self {
-        case .ok: status = "ok"
-        case .ignored: status = "ignored"
-        case .unavailable: status = "unavailable"
-        }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(status, forKey: .status)
+        switch status {
+        case .ok(let editsError):
+            try container.encode("ok", forKey: .status)
+            if editsError { try container.encode(true, forKey: .editsError) }
+        case .ignored:
+            try container.encode("ignored", forKey: .status)
+        case .unavailable:
+            try container.encode("unavailable", forKey: .status)
+        }
         try container.encode(approvalState, forKey: .approval)
     }
 }
@@ -117,10 +114,9 @@ struct PopupApprovalState: Encodable {
     let id: Int
     var host: String?
     var content: Content
-    var editsError: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case id, host, state, actions, error, review, editsError
+        case id, host, state, actions, error, review
     }
 
     var canReject: Bool {
@@ -135,7 +131,6 @@ struct PopupApprovalState: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         if let host, !host.isEmpty { try container.encode(host, forKey: .host) }
-        try container.encodeIfPresent(editsError, forKey: .editsError)
         switch content {
         case .review(let review, let actions, let feedback):
             try container.encode("review", forKey: .state)
@@ -161,8 +156,7 @@ struct PopupApprovalState: Encodable {
 
 struct PopupReview: Encodable {
     enum Content {
-        case selectAccount(PopupSelectionReview)
-        case switchAccount(PopupSelectionReview)
+        case accountSelection(PopupSelectionReview)
         case signMessage(PopupMessageReview)
         case sendTransaction(PopupTransactionReview)
         case addChain(PopupChainReview)
@@ -179,11 +173,8 @@ struct PopupReview: Encodable {
         try container.encode(reviewToken.uuidString.lowercased(), forKey: .reviewToken)
         try container.encode(title, forKey: .title)
         switch content {
-        case .selectAccount(let review):
-            try container.encode("selectAccount", forKey: .kind)
-            try review.encode(to: encoder)
-        case .switchAccount(let review):
-            try container.encode("switchAccount", forKey: .kind)
+        case .accountSelection(let review):
+            try container.encode("accountSelection", forKey: .kind)
             try review.encode(to: encoder)
         case .signMessage(let review):
             try container.encode("signMessage", forKey: .kind)
@@ -199,12 +190,9 @@ struct PopupReview: Encodable {
 
     mutating func removeDecorativeImages() {
         switch content {
-        case .selectAccount(var review):
+        case .accountSelection(var review):
             review.removeDecorativeImages()
-            content = .selectAccount(review)
-        case .switchAccount(var review):
-            review.removeDecorativeImages()
-            content = .switchAccount(review)
+            content = .accountSelection(review)
         case .signMessage(var review):
             review.account.icon = nil
             content = .signMessage(review)
@@ -304,7 +292,7 @@ struct PopupTransactionReview: Encodable {
     let valueLine: String?
     let feeLines: [String]
     let dataInterpretation: String?
-    let phase: TransactionPreparationState.Phase
+    let canBackOffRefresh: Bool
     let slider: PopupTransactionSlider
     let editor: PopupTransactionEditor
     let alert: PopupTransactionAlert?

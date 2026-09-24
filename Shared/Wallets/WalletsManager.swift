@@ -47,8 +47,6 @@ struct WalletStoreSync {
 
 final class WalletsManager: NSObject {
 
-    typealias WalletSourceMutation = (((WalletAuthorityRemoval) throws -> Void) throws -> WalletContainer) throws -> WalletContainer
-
     enum Error: Swift.Error {
         case keychainAccessFailure
         case invalidInput
@@ -71,7 +69,7 @@ final class WalletsManager: NSObject {
     private let keychain: Keychain
     private let reloadMetadata: () -> Void
     private let publishLocalChange: () -> Void
-    private let withWalletSourceMutation: WalletSourceMutation
+    private let walletSourceMutator: any WalletSourceMutating
     private let defaultCoin = WalletCoin.ethereum
     private let defaultMnemonicCoinDerivations: [(coin: WalletCoin, derivation: WalletDerivation)] = [
         (.ethereum, .default),
@@ -85,9 +83,7 @@ final class WalletsManager: NSObject {
         keychain = .shared
         reloadMetadata = WalletsMetadataService.reload
         publishLocalChange = WalletStoreSync.postLocalChange
-        withWalletSourceMutation = { mutation in
-            try ExtensionBridge.withWalletSourceMutation(mutation)
-        }
+        walletSourceMutator = ExtensionBridge.WalletSourceMutator()
         super.init()
     }
 
@@ -95,14 +91,12 @@ final class WalletsManager: NSObject {
         keychain: Keychain,
         reloadMetadata: @escaping () -> Void = {},
         publishLocalChange: (() -> Void)? = nil,
-        withWalletSourceMutation: @escaping WalletSourceMutation = { mutation in
-            try ExtensionBridge.withWalletSourceMutation(mutation)
-        }
+        walletSourceMutator: any WalletSourceMutating = ExtensionBridge.WalletSourceMutator()
     ) {
         self.keychain = keychain
         self.reloadMetadata = reloadMetadata
         self.publishLocalChange = publishLocalChange ?? WalletStoreSync.postLocalChange
-        self.withWalletSourceMutation = withWalletSourceMutation
+        self.walletSourceMutator = walletSourceMutator
         super.init()
     }
 
@@ -587,9 +581,11 @@ final class WalletsManager: NSObject {
             guard let index = self.wallets.firstIndex(of: wallet) else { throw WalletKeyStoreError.accountNotFound }
             guard var privateKey = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidKey }
             defer { privateKey.resetBytes(in: 0..<privateKey.count) }
-            return index
-        }) { index, revokeAuthority in
-            try revokeAuthority(.wallet(id: wallet.id))
+            return PreparedWalletSourceMutation(
+                payload: index,
+                authorityRemovals: [.wallet(id: wallet.id)]
+            )
+        }) { index in
             try keychain.removeWallet(id: wallet.id)
             wallets.remove(at: index)
             WalletsMetadataService.removeMetadataForWallet(
@@ -685,6 +681,12 @@ final class WalletsManager: NSObject {
         }
     }
 
+    private struct PreparedWalletSave {
+        let wallet: WalletContainer
+        let data: Data
+        let removedAccounts: [WalletAccount]
+    }
+
     @MainActor
     private func save(
         isUpdate: Bool,
@@ -705,24 +707,27 @@ final class WalletsManager: NSObject {
             } else {
                 removedAccounts = []
             }
-            return (wallet: wallet, data: data, removedAccounts: removedAccounts)
-        }) { prepared, revokeAuthority in
-            let (wallet, data, removedAccounts) = prepared
+            let removals: [WalletAuthorityRemoval] = removedAccounts.isEmpty ? [] : [
+                .accounts(Set(removedAccounts.map {
+                    WalletAccountDescriptor(walletID: wallet.id, account: $0)
+                }))
+            ]
+            return PreparedWalletSourceMutation(
+                payload: PreparedWalletSave(wallet: wallet, data: data, removedAccounts: removedAccounts),
+                authorityRemovals: removals
+            )
+        }) { prepared in
+            let wallet = prepared.wallet
+            let removedAccounts = prepared.removedAccounts
             if isUpdate {
-                if !removedAccounts.isEmpty {
-                    let removed = Set(removedAccounts.map {
-                        WalletAccountDescriptor(walletID: wallet.id, account: $0)
-                    })
-                    try revokeAuthority(.accounts(removed))
-                }
-                try keychain.updateWallet(id: wallet.id, data: data)
+                try keychain.updateWallet(id: wallet.id, data: prepared.data)
                 if !removedAccounts.isEmpty {
                     WalletsMetadataService.removeMetadataForAccounts(
                         walletId: wallet.id, accounts: removedAccounts, postChange: false
                     )
                 }
             } else {
-                try keychain.saveWallet(id: wallet.id, data: data)
+                try keychain.saveWallet(id: wallet.id, data: prepared.data)
             }
             if let index = wallets.firstIndex(of: wallet) {
                 wallets[index] = wallet
@@ -735,26 +740,24 @@ final class WalletsManager: NSObject {
 
     @MainActor
     private func performSafariApprovalSourceMutation<Preparation>(
-        preparing prepare: () throws -> Preparation,
-        _ operation: (Preparation, (WalletAuthorityRemoval) throws -> Void) throws -> WalletContainer
+        preparing prepare: () throws -> PreparedWalletSourceMutation<Preparation>,
+        _ commit: (Preparation) throws -> WalletContainer
     ) async throws -> WalletContainer {
         let wallet: WalletContainer
 #if os(iOS) || os(visionOS)
         wallet = try await SafariApprovalVaultHost.shared.performSourceMutation { willMutateSource in
-            try withWalletSourceMutation { revokeAuthority in
-                let prepared = try prepare()
-                try willMutateSource()
-                return try withoutActuallyEscaping(revokeAuthority) { revoke in
-                    try operation(prepared, revoke)
-                }
-            }
+            try walletSourceMutator.perform(
+                preparing: prepare,
+                beforeCommit: willMutateSource,
+                commit: commit
+            )
         }
 #else
-        wallet = try withWalletSourceMutation { revokeAuthority in
-            try withoutActuallyEscaping(revokeAuthority) { revoke in
-                try operation(prepare(), revoke)
-            }
-        }
+        wallet = try walletSourceMutator.perform(
+            preparing: prepare,
+            beforeCommit: {},
+            commit: commit
+        )
 #endif
         postWalletsChangedNotification()
         return wallet

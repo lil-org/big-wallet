@@ -22,7 +22,11 @@ final class RemoteImageLoaderTests: XCTestCase {
         return url
     }
 
-    private func png(width: Int = 1, height: Int = 1) throws -> Data {
+    private func imageData(
+        width: Int = 1,
+        height: Int = 1,
+        format: NSBitmapImageRep.FileType = .png
+    ) throws -> Data {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: width,
@@ -35,7 +39,7 @@ final class RemoteImageLoaderTests: XCTestCase {
             bytesPerRow: width * 4,
             bitsPerPixel: 32
         ))
-        return try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        return try XCTUnwrap(bitmap.representation(using: format, properties: [:]))
     }
 
     private func load(from url: URL, using loader: RemoteImageLoader? = nil) -> NSImage? {
@@ -53,7 +57,7 @@ final class RemoteImageLoaderTests: XCTestCase {
     }
 
     func testLoadsHTTPAndHTTPSImagesAtDimensionLimit() throws {
-        let data = try png(width: 1_024, height: 1_024)
+        let data = try imageData(width: 1_024, height: 1_024)
         for scheme in ["http", "https"] {
             let url = endpoint(scheme: scheme) { request in
                 request.respond(data: data)
@@ -69,27 +73,37 @@ final class RemoteImageLoaderTests: XCTestCase {
         XCTAssertNil(load(from: URL(string: "ftp://favicon-tests.invalid/icon.png")!))
     }
 
-    func testRejectsInvalidStatusMIMEAndImageData() throws {
-        let data = try png()
-        for mime in ["text/html", "application/octet-stream", "image/not-a-real-type"] {
-            let url = endpoint { request in
-                request.respond(data: data, mime: mime)
+    func testLoadsPNGAndJPEGWithoutRecognizedImageMIME() throws {
+        let mimeTypes: [String?] = [nil, "text/html", "application/octet-stream", "image/not-a-real-type"]
+        for format in [NSBitmapImageRep.FileType.png, .jpeg] {
+            let data = try imageData(format: format)
+            for mime in mimeTypes {
+                let url = endpoint { request in
+                    request.respond(data: data, mime: mime)
+                }
+                let image = try XCTUnwrap(load(from: url), mime ?? "missing Content-Type")
+                XCTAssertEqual(image.size, NSSize(width: 1, height: 1))
             }
-            XCTAssertNil(load(from: url), mime)
         }
+    }
+
+    func testRejectsInvalidStatusAndImageDataRegardlessOfMIME() throws {
+        let data = try imageData()
         let failure = endpoint { request in
             request.respond(data: data, status: 500)
         }
         XCTAssertNil(load(from: failure))
-        let malformed = endpoint { request in
-            request.respond(data: Data("not an image".utf8))
+        for mime in [nil, "image/png", "text/html", "application/octet-stream"] as [String?] {
+            let malformed = endpoint { request in
+                request.respond(data: Data("not an image".utf8), mime: mime)
+            }
+            XCTAssertNil(load(from: malformed))
         }
-        XCTAssertNil(load(from: malformed))
     }
 
     func testRejectsImagesExceedingEitherDimension() throws {
         for size in [(1_025, 1), (1, 1_025)] {
-            let data = try png(width: size.0, height: size.1)
+            let data = try imageData(width: size.0, height: size.1)
             let url = endpoint { request in
                 request.respond(data: data)
             }
@@ -98,7 +112,7 @@ final class RemoteImageLoaderTests: XCTestCase {
     }
 
     func testAcceptsExactlyOneMiB() throws {
-        var data = try png()
+        var data = try imageData()
         data.append(Data(repeating: 0, count: 1_048_576 - data.count))
         let payload = data
         let url = endpoint { request in
@@ -130,7 +144,7 @@ final class RemoteImageLoaderTests: XCTestCase {
     }
 
     func testRedirectsAreRestrictedToHTTPAndHTTPS() throws {
-        let data = try png()
+        let data = try imageData()
         let target = endpoint(scheme: "http") { request in request.respond(data: data) }
         let safe = endpoint { request in request.redirect(to: target) }
         XCTAssertNotNil(load(from: safe))
@@ -168,8 +182,8 @@ final class RemoteImageLoaderTests: XCTestCase {
 
     @MainActor
     func testReusingImageViewSuppressesPreviousCompletion() throws {
-        let first = try png()
-        let second = try png(width: 2, height: 2)
+        let first = try imageData()
+        let second = try imageData(width: 2, height: 2)
         let oldURL = endpoint { request in request.respond(data: first) }
         let newURL = endpoint { request in request.respond(data: second) }
         let imageView = NSImageView()
@@ -254,8 +268,9 @@ private final class RemoteImageTestProtocol: URLProtocol {
         handler?.stopped?()
     }
 
-    func sendResponse(mime: String = "image/png", status: Int = 200, contentLength: Int? = nil) {
-        var headers = ["Content-Type": mime]
+    func sendResponse(mime: String? = "image/png", status: Int = 200, contentLength: Int? = nil) {
+        var headers = [String: String]()
+        if let mime { headers["Content-Type"] = mime }
         if let contentLength { headers["Content-Length"] = String(contentLength) }
         let response = HTTPURLResponse(
             url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers
@@ -263,7 +278,7 @@ private final class RemoteImageTestProtocol: URLProtocol {
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
     }
 
-    func respond(data: Data, mime: String = "image/png", status: Int = 200) {
+    func respond(data: Data, mime: String? = "image/png", status: Int = 200) {
         sendResponse(mime: mime, status: status, contentLength: data.count)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)

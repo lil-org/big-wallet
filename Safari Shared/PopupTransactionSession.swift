@@ -11,27 +11,11 @@ final class PopupTransactionSession {
         case invalidated
     }
 
-    struct ActiveAlert {
-        let intent: TransactionApprovalAlertIntent
-
-        var token: TransactionApprovalAlertToken {
-            return intent.token
-        }
-
-        var kind: TransactionApprovalAlertIntent.Kind {
-            return intent.kind
-        }
-
-        var presentation: TransactionApprovalAlertPresentation {
-            return intent.presentation
-        }
-    }
-
     private let coordinator: TransactionApprovalCoordinator
     private var gasSpeedConfiguration = GasSpeedConfiguration()
     private var authenticationToken: TransactionApprovalRequestToken?
     private var preflightContinuation: CheckedContinuation<PreflightOutcome, Never>?
-    private(set) var activeAlert: ActiveAlert?
+    private(set) var activeAlert: TransactionApprovalAlertIntent?
     var editorRequestToken = 0
     var balance: String?
     var onChange: () -> Void = {}
@@ -246,7 +230,7 @@ final class PopupTransactionSession {
         case .verifiedFeeEstimate(let estimate):
             gasSpeedConfiguration.applyFetchedEstimate(estimate)
         case .alert(let intent):
-            activeAlert = ActiveAlert(intent: intent)
+            activeAlert = intent
             finishPreflight(with: .reviewRequired)
         case .editorRequest:
             editorRequestToken += 1

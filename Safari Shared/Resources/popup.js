@@ -12,12 +12,6 @@ const MAX_RESPONSE_READY_IDS = BigWalletBridgeWire.MAX_RESPONSE_READY_IDS;
 const WORKFLOW_VERSION = BigWalletBridgeWire.WORKFLOW_VERSION;
 const BUILD_VERSION = BigWalletBridgeWire.BUILD_VERSION;
 const UPDATE_RECOVERY_STORAGE_KEY = "workflowUpdateRecoveryNeeded";
-const STABLE_TRANSACTION_PHASES = new Set([
-    "ready",
-    "failed",
-    "reviewingFees",
-    "finished",
-]);
 const TRANSACTION_EDITOR_FIELDS = {
     nonce: "edit-nonce",
     gasPriceGwei: "edit-gas-price",
@@ -382,15 +376,15 @@ class PopupRequestController {
     }
 
     async sendCommand({subject, payload, reviewToken}) {
-        if (!this.isActive) { return {status: "cancelled"}; }
+        if (!this.isActive) { return null; }
         try {
             const response = await settleNativeMessage(Promise.resolve(nativeMessage(
                 subject, this.request.id, payload, this.request.requestToken,
                 reviewToken
             )), subject === "approveRequest");
-            return {status: "response", response};
+            return BigWalletPopupWire.decodeCommandResult(response, this.request.id);
         } catch {
-            return {status: "failure"};
+            return null;
         }
     }
 
@@ -412,9 +406,7 @@ class PopupRequestController {
         return flight.promise;
     }
 
-    acceptReply(outcome) {
-        const reply = outcome.status === "response"
-            ? BigWalletPopupWire.decodeCommandResult(outcome.response, this.request.id) : null;
+    acceptReply(reply) {
         if (!reply?.approval) { this.fail(); return null; }
         if (reply.approval.state === "missing") { void this.reconcile(); return null; }
         return reply;
@@ -449,7 +441,7 @@ class PopupRequestController {
         this.nativeState = state;
         const unchanged = canonicalJSONString(state) === this.presentation.lastStateJSON;
         if (!refresh || !unchanged) { this.renderState(state); }
-        this.refreshDelay = refresh && unchanged && STABLE_TRANSACTION_PHASES.has(state.review?.phase)
+        this.refreshDelay = refresh && unchanged && state.review?.canBackOffRefresh === true
             ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
             : TRANSACTION_REFRESH_INTERVAL;
         this.scheduleRead();
@@ -629,8 +621,6 @@ class PopupRequestController {
             }
             this.resetEditorDraft();
             hide("tx-editor");
-        } else if (state.review.kind === "sendTransaction" && state.review.phase === "finished") {
-            this.resetEditorDraft();
         }
 
         setText("request-title", state.review?.title || "");
@@ -642,8 +632,7 @@ class PopupRequestController {
         hide("section-chain");
 
         switch (state.review?.kind) {
-            case "selectAccount":
-            case "switchAccount":
+            case "accountSelection":
                 this.renderAccountSelection(state);
                 break;
             case "signMessage":
@@ -789,7 +778,7 @@ class PopupRequestController {
             approve.disabled = false;
         } else if (!hasApprovalAction(state, "approve")) {
             approve.disabled = true;
-        } else if (state.review.kind === "selectAccount" || state.review.kind === "switchAccount") {
+        } else if (state.review.kind === "accountSelection") {
             approve.disabled = !this.canApproveAccountSelection(state);
         } else if (state.review.kind === "signMessage") {
             approve.disabled = state.review.requiresClusterSelection === true && this.presentation.cluster === null;
@@ -839,13 +828,6 @@ class PopupRequestController {
             div.textContent = line;
             feeLines.appendChild(div);
         }
-        if (review.phase === "preparing" || review.phase === "idle") {
-            const div = document.createElement("div");
-            div.className = "fee-line";
-            div.textContent = localized("calculating", "Calculating...");
-            feeLines.appendChild(div);
-        }
-
         const sliderState = review.slider && review.slider.visible ? review.slider : null;
         setHidden("tx-slider-row", !sliderState);
         if (sliderState) {
@@ -930,7 +912,7 @@ class PopupRequestController {
             return;
         }
         const payload = {};
-        if (this.state.review?.kind === "selectAccount" || this.state.review?.kind === "switchAccount") {
+        if (this.state.review?.kind === "accountSelection") {
             if (!this.canApproveAccountSelection(this.state)) { return; }
             payload.selectedAccounts = this.presentation.accounts;
             if (this.state.review?.canSelectNetwork &&
@@ -1027,7 +1009,7 @@ class PopupRequestController {
             !state.review.alert && hasApprovalAction(state, "editTransaction") &&
             state.review.editor.usesEIP1559 === draft.usesEIP1559;
         let next = {kind: "viewing"};
-        if (preservesDraft && (reply.status === "ignored" || state.editsError)) {
+        if (preservesDraft && (reply.status === "ignored" || reply.editsError)) {
             draft.reviewToken = state.review.reviewToken;
             draft.error = reply.status === "ignored" ? "reviewChanged" : "invalidValues";
             next = {kind: "editing", draft};
@@ -1485,7 +1467,7 @@ function sameAccount(left, right) {
 }
 
 function shouldRefreshAccountSelection(state) {
-    return (state.review?.kind === "selectAccount" || state.review?.kind === "switchAccount") &&
+    return state.review?.kind === "accountSelection" &&
         Array.isArray(state.review?.accounts) && state.review?.accounts.length === 0 &&
         state.review?.allowsEmptySelection === false;
 }

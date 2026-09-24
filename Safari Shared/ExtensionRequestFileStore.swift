@@ -3,7 +3,7 @@
 import Foundation
 import CryptoKit
 
-final class ExtensionRequestFileStore {
+final class ExtensionRequestFileStore: WalletSourceMutating {
     enum WalletAuthorityRemovalError: Error {
         case unavailable
     }
@@ -544,23 +544,18 @@ final class ExtensionRequestFileStore {
         }
     }
 
-    func withWalletSourceMutation<Result>(
-        _ mutation: (_ revokeAuthority: (WalletAuthorityRemoval) throws -> Void) throws -> Result
+    func perform<Payload, Result>(
+        preparing: () throws -> PreparedWalletSourceMutation<Payload>,
+        beforeCommit: () throws -> Void,
+        commit: (Payload) throws -> Result
     ) throws -> Result {
         try withRequiredLock {
-            try mutation { removal in
+            let prepared = try preparing()
+            try beforeCommit()
+            for removal in prepared.authorityRemovals {
                 try revokeWalletAuthorityLocked(matching: removal)
             }
-        }
-    }
-
-    func withRevokedWalletAuthority<Result>(
-        matching removal: WalletAuthorityRemoval,
-        sourceMutation: () throws -> Result
-    ) throws -> Result {
-        try withWalletSourceMutation { revoke in
-            try revoke(removal)
-            return try sourceMutation()
+            return try commit(prepared.payload)
         }
     }
 

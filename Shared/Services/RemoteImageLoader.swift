@@ -2,7 +2,6 @@
 import AppKit
 import ImageIO
 import ObjectiveC
-import UniformTypeIdentifiers
 
 final class RemoteImageLoader {
     
@@ -178,10 +177,7 @@ private final class RemoteImageRequest: NSObject, URLSessionDataDelegate, @unche
         guard let response = response as? HTTPURLResponse,
               RemoteImageLoader.allows(response.url),
               (200...299).contains(response.statusCode),
-              response.expectedContentLength <= RemoteImageLoader.maximumResponseBytes,
-              let mime = response.mimeType?.lowercased(),
-              mime.hasPrefix("image/"),
-              UTType(mimeType: mime)?.conforms(to: .image) == true
+              response.expectedContentLength <= RemoteImageLoader.maximumResponseBytes
         else {
             completionHandler(.cancel)
             finish(image: nil)
