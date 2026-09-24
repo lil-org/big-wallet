@@ -41,7 +41,7 @@ test("popup runtime notifications carry realistic and overridable sender metadat
         return false;
     });
     assert.deepEqual(harness.notify(), {returns: [false], responses: []});
-    const message = {subject: "pendingRequestAvailable", workflowVersion: 3};
+    const message = {subject: "pendingRequestAvailable", workflowVersion: 4};
     assert.deepEqual(received[0], {
         message,
         sender: {

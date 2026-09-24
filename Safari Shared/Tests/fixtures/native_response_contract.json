@@ -8,7 +8,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -20,7 +19,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": true
       }
     },
@@ -35,7 +33,6 @@
           "signature-1",
           "signature-2"
         ],
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -49,15 +46,6 @@
         "result": [
           "0x0000000000000000000000000000000000000001"
         ],
-        "mutation": {
-          "kind": "accounts",
-          "updates": {
-            "ethereum": {
-              "address": "0x0000000000000000000000000000000000000001",
-              "chainId": "0x1"
-            }
-          }
-        },
         "approvalCommitted": false
       }
     },
@@ -71,14 +59,6 @@
         "result": {
           "publicKey": "11111111111111111111111111111111"
         },
-        "mutation": {
-          "kind": "accounts",
-          "updates": {
-            "solana": {
-              "publicKey": "11111111111111111111111111111111"
-            }
-          }
-        },
         "approvalCommitted": false
       }
     },
@@ -90,16 +70,6 @@
         "provider": "multiple",
         "kind": "result",
         "result": null,
-        "mutation": {
-          "kind": "accounts",
-          "updates": {
-            "ethereum": {
-              "address": "0x0000000000000000000000000000000000000001",
-              "chainId": "0x1"
-            },
-            "solana": null
-          }
-        },
         "approvalCommitted": false
       }
     },
@@ -111,13 +81,6 @@
         "provider": "multiple",
         "kind": "result",
         "result": null,
-        "mutation": {
-          "kind": "accounts",
-          "updates": {
-            "ethereum": null,
-            "solana": null
-          }
-        },
         "approvalCommitted": false
       }
     },
@@ -129,10 +92,6 @@
         "provider": "multiple",
         "kind": "result",
         "result": null,
-        "mutation": {
-          "kind": "accounts",
-          "updates": {}
-        },
         "approvalCommitted": false
       }
     },
@@ -144,10 +103,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": null,
-        "mutation": {
-          "kind": "ethereumChain",
-          "chainId": "0x2a"
-        },
         "approvalCommitted": false
       }
     },
@@ -159,10 +114,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": null,
-        "mutation": {
-          "kind": "ethereumChain",
-          "chainId": "0x2a"
-        },
         "approvalCommitted": false
       }
     },
@@ -177,7 +128,6 @@
           "code": -32603,
           "message": "Failed"
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -194,7 +144,6 @@
           "message": "Failed",
           "data": null
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -215,7 +164,6 @@
             "reason"
           ]
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -234,7 +182,6 @@
             "reason": "rejected"
           }
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -253,7 +200,6 @@
             "transactionHash": "0x1234"
           }
         },
-        "mutation": null,
         "approvalCommitted": true,
         "authorizationFailure": false
       }
@@ -272,7 +218,6 @@
             "signature": "signature"
           }
         },
-        "mutation": null,
         "approvalCommitted": true,
         "authorizationFailure": false
       }
@@ -287,10 +232,6 @@
         "error": {
           "code": 4100,
           "message": "Failed"
-        },
-        "mutation": {
-          "kind": "revokeSolana",
-          "publicKey": "11111111111111111111111111111111"
         },
         "approvalCommitted": false,
         "authorizationFailure": true
@@ -307,7 +248,6 @@
           "code": 4100,
           "message": "Failed"
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -323,7 +263,6 @@
           "code": 4001,
           "message": "Canceled"
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -342,7 +281,6 @@
             "reason": "custom"
           }
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -361,7 +299,6 @@
             "reason": "custom"
           }
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -376,7 +313,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -388,7 +324,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -400,7 +335,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -412,7 +346,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": "true"
       }
     },
@@ -424,7 +357,6 @@
         "provider": "unknown",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -436,7 +368,6 @@
         "provider": "ethereum",
         "kind": "success",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -448,7 +379,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false,
         "error": {
           "code": 4001,
@@ -464,7 +394,6 @@
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false,
         "extra": true
       }
@@ -479,7 +408,6 @@
         "result": {
           "unexpected": "field"
         },
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -493,7 +421,6 @@
         "result": [
           1
         ],
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -505,12 +432,11 @@
         "provider": "multiple",
         "kind": "result",
         "result": "0xsigned",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
     {
-      "name": "result-with-revocation",
+      "name": "native-effect-field-result-with-revocation",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -525,7 +451,7 @@
       }
     },
     {
-      "name": "cross-provider-mutation",
+      "name": "native-effect-field-cross-provider-mutation",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -544,7 +470,7 @@
       }
     },
     {
-      "name": "invalid-chain",
+      "name": "native-effect-field-invalid-chain",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -559,7 +485,7 @@
       }
     },
     {
-      "name": "unknown-update",
+      "name": "native-effect-field-unknown-update",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -576,7 +502,7 @@
       }
     },
     {
-      "name": "injected-worker-revision",
+      "name": "native-effect-field-injected-worker-revision",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -597,7 +523,7 @@
       }
     },
     {
-      "name": "bad-solana-key",
+      "name": "native-effect-field-bad-solana-key",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -616,7 +542,7 @@
       }
     },
     {
-      "name": "error-with-accounts",
+      "name": "native-effect-field-error-with-accounts",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -646,7 +572,6 @@
         "error": {
           "code": 4001
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -662,7 +587,6 @@
           "code": true,
           "message": "Failure"
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -678,7 +602,6 @@
           "code": 1.5,
           "message": "Failure"
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }
@@ -694,13 +617,12 @@
           "code": -32603,
           "message": "Failed"
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": 1
       }
     },
     {
-      "name": "revocation-without-authorization",
+      "name": "native-effect-field-revocation-without-authorization",
       "response": {
         "id": 1,
         "name": "signMessage",
@@ -719,24 +641,12 @@
       }
     },
     {
-      "name": "missing-mutation",
-      "response": {
-        "id": 1,
-        "name": "signMessage",
-        "provider": "ethereum",
-        "kind": "result",
-        "result": "0xsigned",
-        "approvalCommitted": false
-      }
-    },
-    {
       "name": "missing-result",
       "response": {
         "id": 1,
         "name": "signMessage",
         "provider": "ethereum",
         "kind": "result",
-        "mutation": null,
         "approvalCommitted": false
       }
     },
@@ -747,20 +657,7 @@
         "name": "signMessage",
         "provider": "ethereum",
         "kind": "result",
-        "result": "0xsigned",
-        "mutation": null
-      }
-    },
-    {
-      "name": "manual-missing-accounts",
-      "response": {
-        "id": 1,
-        "name": "switchAccount",
-        "provider": "multiple",
-        "kind": "result",
-        "result": null,
-        "mutation": null,
-        "approvalCommitted": false
+        "result": "0xsigned"
       }
     },
     {
@@ -771,10 +668,6 @@
         "provider": "multiple",
         "kind": "result",
         "result": "invalid",
-        "mutation": {
-          "kind": "accounts",
-          "updates": {}
-        },
         "approvalCommitted": false
       }
     },
@@ -789,7 +682,6 @@
           "code": 4001,
           "message": ""
         },
-        "mutation": null,
         "approvalCommitted": false,
         "authorizationFailure": false
       }

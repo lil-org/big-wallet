@@ -123,7 +123,7 @@ func approvedWalletSigningOperationForTesting(
     let body: [String: Any] = ethereum
         ? ["address": approvedAccount.normalizedAddress, "chainId": "0x1"]
         : ["publicKey": approvedAccount.normalizedAddress]
-    let request = try XCTUnwrap(SafariRequest(json: [
+    var request = try XCTUnwrap(SafariRequest(json: [
         "id": requestID,
         "name": name,
         "provider": ethereum ? "ethereum" : "solana",
@@ -134,6 +134,7 @@ func approvedWalletSigningOperationForTesting(
         "admissionDeadline": Int(Date().addingTimeInterval(120).timeIntervalSince1970 * 1_000),
         "workflowVersion": ExtensionBridge.workflowVersion,
     ]))
+    request.authorizedAccount = approvedAccount
     let action = SignMessageAction(
         subject: subject,
         walletId: approvedAccount.walletID,
@@ -198,7 +199,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private let clock: @Sendable () -> Date
     private let writes: ApprovalStoreWrites
     private var retainedClaims = [ExtensionBridge.ApprovalClaim]()
-    private var executionLeases = [ExtensionBridge.Handle: ExtensionBridge.NativeExecutionLease]()
+    private var authorityCurrent = true
     private var eventValues = [String]()
     private var loadCountValue = 0
     private var activeOperations = 0
@@ -217,6 +218,8 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var permitCompletionHook: (@Sendable () -> Void)?
     private var broadcastCheckpointHook: (@Sendable () -> Void)?
     private var committedCheckpoints = Set<ExtensionBridge.Handle>()
+    private var suspendAuthorityCheck = false
+    private var authorityCheckContinuation: CheckedContinuation<Void, Never>?
     private var suspendClaim = false
     private var claimContinuation: CheckedContinuation<Void, Never>?
     private var suspendCompletion = false
@@ -239,6 +242,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
 
     func cleanup() async throws {
         isClosing = true
+        resumeAuthorityCheck()
         resumeClaim()
         resumeCompletion(result: .ownershipLost)
         if activeOperations > 0 {
@@ -246,21 +250,27 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         for claim in retainedClaims { _ = await bridge.release(claim: claim) }
         retainedClaims.removeAll()
-        executionLeases.values.forEach { $0.release() }
-        executionLeases.removeAll()
         try FileManager.default.removeItem(at: rootURL)
     }
 
     func enqueue(
         rawObject: [String: Any],
         profileIdentifier: UUID? = nil,
-        revisions: ExtensionBridge.ProviderRevisions
+        approvedAccount: WalletAccountDescriptor? = nil
     ) async throws -> ExtensionBridge.Snapshot {
         var rawObject = rawObject
         rawObject["admissionDeadline"] = Int(clock().addingTimeInterval(
             ExtensionBridge.requestTTL
         ).timeIntervalSince1970 * 1_000)
-        rawObject["revisions"] = revisions.json
+        guard let configurationKey = rawObject["configurationKey"] as? String else { throw CocoaError(.coderInvalidValue) }
+        if let approvedAccount {
+            try await establishGrant(approvedAccount, configurationKey: configurationKey, profileIdentifier: profileIdentifier)
+        }
+        guard case .snapshot(let authority) = await bridge.configurationSnapshot(
+            configurationKey: configurationKey, profileIdentifier: profileIdentifier
+        ) else { throw CocoaError(.fileReadUnknown) }
+        rawObject["revisions"] = nil
+        rawObject["authority"] = authority.version.json
         let request = try XCTUnwrap(SafariRequest(json: rawObject))
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(
             request: request, rawObject: rawObject
@@ -351,28 +361,65 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
                      decision: decision, approvedAt: approvedAt)
     }
 
-    func installNativeExecution(
-        handle: ExtensionBridge.Handle,
-        revisions: ExtensionBridge.ProviderRevisions,
-        executionDeadline: Date
-    ) async {
-        releaseExecutionLease(handle: handle)
-        guard let snapshot = try? await snapshot(handle: handle), snapshot.phase != .responded else { return }
-        guard case .acquired(let lease) = await bridge.beginNativeExecution(
-            handle: handle,
-            configurationKey: snapshot.configurationKey,
-            attemptID: snapshot.nativeExecutionContext?.attemptID ?? UUID(),
-            revisions: revisions,
-            executionDeadline: executionDeadline
-        ) else {
-            XCTFail("Expected native execution lease")
-            return
+    func setAuthorityCurrent(_ value: Bool) { authorityCurrent = value }
+
+    func authorityIsCurrent(handle: ExtensionBridge.Handle) async -> Bool {
+        guard !isClosing else { return false }
+        activeOperations += 1
+        defer { finishOperation() }
+        if suspendAuthorityCheck {
+            suspendAuthorityCheck = false
+            await withCheckedContinuation { continuation in
+                eventValues.append("authorityCheckStarted")
+                authorityCheckContinuation = continuation
+            }
         }
-        executionLeases[handle] = lease
+        guard !isClosing, authorityCurrent else { return false }
+        return await bridge.authorityIsCurrent(handle: handle)
     }
 
-    func releaseExecutionLease(handle: ExtensionBridge.Handle) {
-        executionLeases.removeValue(forKey: handle)?.release()
+    private func establishGrant(
+        _ account: WalletAccountDescriptor,
+        configurationKey: String,
+        profileIdentifier: UUID?
+    ) async throws {
+        guard case .snapshot(let authority) = await bridge.configurationSnapshot(
+            configurationKey: configurationKey, profileIdentifier: profileIdentifier
+        ) else { throw CocoaError(.fileReadUnknown) }
+        if account.coin == .ethereum && authority.ethereumAccount == account ||
+            account.coin == .solana && authority.solanaAccount == account { return }
+        let ethereum = account.coin == .ethereum
+        let id = Int.random(in: 1_000_000...2_000_000)
+        let request = try XCTUnwrap(SafariRequest(json: [
+            "id": id, "name": ethereum ? "requestAccounts" : "connect",
+            "provider": ethereum ? "ethereum" : "solana",
+            "host": configurationKey.components(separatedBy: "://").last!,
+            "configurationKey": configurationKey,
+            "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            "admissionDeadline": Int(clock().addingTimeInterval(ExtensionBridge.requestTTL).timeIntervalSince1970 * 1_000),
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "authority": authority.version.json,
+            "body": ethereum ? ["address": "", "chainId": "0x1"] : ["publicKey": ""],
+        ]))
+        let raw: [String: Any] = [
+            "id": request.id, "name": request.name, "provider": request.provider.rawValue,
+            "host": request.host, "configurationKey": request.configurationKey,
+            "enqueueAttempt": request.enqueueAttempt,
+            "admissionDeadline": Int(request.admissionDeadline.timeIntervalSince1970 * 1_000),
+            "workflowVersion": request.workflowVersion, "authority": authority.version.json,
+            "body": ethereum ? ["address": "", "chainId": "0x1"] : ["publicKey": ""],
+        ]
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
+              case .accepted(let handle, _, _, _, _) = await bridge.enqueue(ingress: ingress, profileIdentifier: profileIdentifier),
+              case .claimed(let claim) = await bridge.claim(handle: handle),
+              case .began(let permit) = await bridge.begin(claim: claim) else { throw CocoaError(.fileWriteUnknown) }
+        let update: ResponseToExtension.AccountUpdate = ethereum
+            ? .ethereum(address: account.normalizedAddress, chainId: "0x1")
+            : .solana(publicKey: account.normalizedAddress)
+        let result: ResponseToExtension.Result = ethereum ? .strings([account.normalizedAddress]) : .solanaPublicKey(account.normalizedAddress)
+        let response = ResponseToExtension(for: request, payload: .result(result), mutation: .accounts([update]), approvedAccounts: [account]).markingApprovalCommitted()
+        guard await bridge.complete(permit: permit, response: response, authority: .ordinary) == .persisted else { throw CocoaError(.fileWriteUnknown) }
+        _ = await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
     }
 
     func transformNextLoad(_ transform: @escaping (ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot) {
@@ -397,7 +444,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
                 id: handle.id, configurationKey: snapshot.configurationKey,
                 requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier
               ) else { return nil }
-        return response
+        return response["response"] as? [String: Any]
     }
 
     func observeNextClaim(_ observer: @escaping @MainActor (ExtensionBridge.ApprovalClaim) -> Void) {
@@ -413,6 +460,12 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     func setBeginHook(_ hook: @escaping @MainActor () -> Void) { beginHook = hook }
     func setPermitCompletionHook(_ hook: @escaping @Sendable () -> Void) { permitCompletionHook = hook }
     func setBroadcastCheckpointHook(_ hook: @escaping @Sendable () -> Void) { broadcastCheckpointHook = hook }
+    func suspendNextAuthorityCheck() { suspendAuthorityCheck = true }
+    func resumeAuthorityCheck() {
+        let continuation = authorityCheckContinuation
+        authorityCheckContinuation = nil
+        continuation?.resume()
+    }
     func suspendNextClaim() { suspendClaim = true }
     func resumeClaim() {
         let continuation = claimContinuation

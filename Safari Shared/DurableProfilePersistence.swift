@@ -151,7 +151,7 @@ struct DurableProfilePersistence {
 
     private func openDirectories(for url: URL) throws -> [Int32] {
         guard url.isFileURL, directoryBoundary.isFileURL else { throw POSIXError(.EINVAL) }
-        let parent = url.standardizedFileURL.deletingLastPathComponent()
+        let parent = url.standardizedFileURL.deletingLastPathComponent().standardizedFileURL
         let boundaryComponents = directoryBoundary.pathComponents
         guard parent.pathComponents.starts(with: boundaryComponents) else { throw POSIXError(.EINVAL) }
         var descriptors = [Int32]()

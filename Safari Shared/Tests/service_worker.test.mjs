@@ -5,8 +5,7 @@ import {webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {deferred, nativeResult, nativeError} from "./test_helpers.mjs";
-import {createPopupHarness} from "./popup_harness.mjs";
+import {nativeResult, nativeError} from "./test_helpers.mjs";
 
 const [wireSource, workerSource, sharedManifestSource, macManifestSource] =
     await Promise.all([
@@ -16,11 +15,8 @@ const [wireSource, workerSource, sharedManifestSource, macManifestSource] =
     readFile(new URL("../../Safari macOS/Resources/manifest.json", import.meta.url), "utf8"),
     ]);
 const requestToken = "123e4567-e89b-12d3-a456-426614174000";
-const reviewToken = "123e4567-e89b-12d3-a456-426614174001";
 const attempt = "00000001000000020000000300000004";
 const admissionDeadline = 1_700_000_900_000;
-const firstSolanaPublicKey = "11111111111111111111111111111111";
-const secondSolanaPublicKey = "So11111111111111111111111111111111111111112";
 const wireContext = vm.createContext({URL, crypto: webcrypto, clearTimeout, setTimeout});
 new vm.Script(wireSource).runInContext(wireContext);
 const packagedBuildVersion = wireContext.BigWalletBridgeWire.BUILD_VERSION;
@@ -31,67 +27,16 @@ const previousBuildVersion = packagedBuildVersion.replace(
     value => String(Math.max(0, Number(value) - 1))
 );
 const recoveryAlarmName = "manualSwitchRecovery";
-const approvalLeaseStoragePrefix = makeHarness().read("APPROVAL_LEASE_STORAGE_PREFIX");
-assert.equal(typeof approvalLeaseStoragePrefix, "string");
-
-test("toolbar relays use distinct probe and manual-switch deadlines", () => {
-    const harness = makeHarness();
-    const transportTimeout = harness.read("TRANSPORT_TIMEOUT");
-    const tabQueryTimeout = harness.read("TAB_QUERY_TIMEOUT");
-    const nativeOperationTimeout = harness.read("NATIVE_OPERATION_TIMEOUT");
-    const approvalExecutionTimeout = harness.read("APPROVAL_EXECUTION_TIMEOUT");
-    const approvalLeaseGrace = harness.read("APPROVAL_LEASE_GRACE");
-    assert.equal(tabQueryTimeout, 1000);
-    assert.ok(tabQueryTimeout < transportTimeout);
-    assert.equal(harness.read("MANUAL_SWITCH_INTENT_TIMEOUT"), 10_000);
-    assert.equal(approvalExecutionTimeout, 150_000);
-    assert.equal(approvalLeaseGrace, 10_000);
-    assert.ok(approvalExecutionTimeout + approvalLeaseGrace <
-        nativeOperationTimeout);
-    assert.equal(nativeOperationTimeout, 180_000);
-    assert.ok(nativeOperationTimeout > 120_000);
-});
-
-test("manual-switch recovery includes alarm permission", () => {
-    const sharedManifest = JSON.parse(sharedManifestSource);
-    const manifest = JSON.parse(macManifestSource);
-    assert.equal(sharedManifest.action.default_popup, "popup.html");
-    assert.equal(sharedManifest.permissions.includes("alarms"), true);
-    assert.equal(manifest.action.default_popup, undefined);
-    assert.equal(manifest.permissions.includes("alarms"), true);
-});
-
 function clone(value) {
     return typeof value === "undefined" ? undefined : JSON.parse(JSON.stringify(value));
 }
 
 function snapshot({ethereum = {address: "", chainId: "0x1"}, solana = null, revisions = {ethereum: 0, solana: 0}} = {}) {
-    return {revisions, ethereum, solana};
+    return {context: "a".repeat(64), revisions, ethereum, solana};
 }
 
 function ethereumState(address, chainId = "0x1") {
     return {address, chainId};
-}
-
-function solanaState(publicKey) {
-    return {publicKey};
-}
-
-function errorResponse(id, provider, name, code, message) {
-    return {kind: "error", id, provider, name, state: null,
-        error: {code, message}};
-}
-
-function providerStateWrites(harness) {
-    return harness.storageWrites.filter(values =>
-        Object.keys(values).some(key => key !== "nativeExecutionJobs" && !key.startsWith(
-            approvalLeaseStoragePrefix
-        ))
-    );
-}
-
-function isResponseRead(message) {
-    return message.subject === "prepareResponseDelivery";
 }
 
 function makeHarness({
@@ -180,7 +125,7 @@ function makeHarness({
             onMessage: {addListener(value) { listener = value; }},
             onStartup: {addListener(value) { startupListener = value; }},
             sendNativeMessage(application, message) {
-                if (message.subject === "getManualSwitchRequests") {
+                if (message.subject === "getRecoveryRequests") {
                     recoveryMessages.push({application, message: clone(message)});
                     return Promise.resolve(recoveryNative
                         ? recoveryNative(message)
@@ -191,30 +136,19 @@ function makeHarness({
                             return response;
                         });
                 }
-                if (["getExecutionStatus", "maintainRequest", "executeNativeApproval"].includes(message.subject)) {
+                if (["getExecutionStatus", "executeNativeApproval"].includes(message.subject)) {
+                    assert.fail("Worker must not drive native execution");
+                }
+                if (message.subject === "maintainRequest") {
                     executionMessages.push({application, message: clone(message)});
                     if (executionNative) { return Promise.resolve(executionNative(message)); }
-                    if (message.subject === "getExecutionStatus") {
-                        const retained = retainedSwitches.get(message.id);
-                        return Promise.resolve({id: message.id, state:
-                            retained && retained.state !== "pending" ? "completed" : "awaitingReview"});
-                    }
                     return Promise.resolve({id: message.id, pending: true});
                 }
                 nativeMessages.push({application, message: clone(message)});
                 return Promise.resolve(message.subject === "acknowledgeResponse"
                     ? acknowledgeResponse(message)
-                    : native?.(message)).then(response => {
-                    if (message.name === "switchAccount" && response?.requestToken) {
-                        retainedSwitches.set(response.id, recoveryDescriptor({
-                            id: response.id,
-                            host: message.host,
-                            configurationKey: message.configurationKey,
-                            requestToken: response.requestToken,
-                            revisions: response.revisions,
-                            state: "approved",
-                        }));
-                    }
+                    : native ? native(message) : message.subject === "getLatestConfiguration"
+                        ? {id: message.id, state: snapshot()} : undefined).then(response => {
                     if (response?.acknowledged === true || response?.missing === true) {
                         retainedSwitches.delete(message.id);
                     }
@@ -398,6 +332,7 @@ function request(id = 7, overrides = {}) {
     const {message: messageOverrides = {}, ...requestOverrides} = overrides;
     return {
         admissionDeadline,
+        authority: {context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}},
         subject: "message-to-wallet",
         message: {
             id,
@@ -409,7 +344,7 @@ function request(id = 7, overrides = {}) {
         host: "wallet.example",
         configurationKey: "https://wallet.example",
         enqueueAttempt: attempt,
-        workflowVersion: 3,
+        workflowVersion: 4,
         ...requestOverrides,
     };
 }
@@ -419,18 +354,24 @@ function manualSwitchIntent(overrides = {}) {
         subject: "manualSwitchIntent",
         host: "wallet.example",
         configurationKey: "https://wallet.example",
-        workflowVersion: 3,
+        workflowVersion: 4,
         ...overrides,
     };
+}
+
+function manualSwitchDenial(id, state) {
+    return {id, state, response: nativeError({
+        id, name: "switchAccount", provider: "multiple",
+        error: {code: 4100, message: "Authorization changed while the request was pending"},
+    })};
 }
 
 function recoveryDescriptor(overrides = {}) {
     return {
         id: 31,
-        host: "wallet.example",
         configurationKey: "https://wallet.example",
         requestToken,
-        revisions: {ethereum: 0, solana: 0},
+        manual: true,
         state: "pending",
         ...overrides,
     };
@@ -451,5599 +392,881 @@ function contentSender(tab = {}) {
     };
 }
 
-function approvalProxy(id = 7, overrides = {}) {
-    return {
-        subject: "approveRequestWithCurrentRevisions",
-        id,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken,
-        reviewToken,
-        payload: {},
-        privateBrowsing: false,
-        workflowVersion: 3,
-        ...overrides,
-    };
-}
-
-function nativeApprovalCommandResult(id, status = "ok") {
-    return {status, approval: {id, state: "working", actions: []}};
-}
 
 function popupSender(overrides = {}) {
-    return {
-        id: "extension-id",
-        url: "safari-web-extension://extension-id/popup.html",
-        ...overrides,
-    };
+    return {id: "extension-id", url: "safari-web-extension://extension-id/popup.html", ...overrides};
+}
+function configurationRequest() {
+    return {subject: "getLatestConfiguration", host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4};
+}
+function responseRequest(subject = "consumeResponse") {
+    return {subject, id: 7, configurationKey: "https://wallet.example", requestToken, workflowVersion: 4};
+}
+function delivery(id = 7, state = snapshot(), result = []) {
+    return {id, state, response: nativeResult({id, name: "requestAccounts", provider: "ethereum", result})};
 }
 
-function workerSender(overrides = {}) {
-    return {
-        id: "extension-id",
-        url: "safari-web-extension://extension-id",
-        ...overrides,
-    };
-}
-
-function transportEffects(harness) {
-    return clone({
-        native: harness.nativeMessages,
-        recovery: harness.recoveryMessages,
-        reads: harness.storageReads,
-        writes: harness.storageWrites,
-        removals: harness.storageRemovals,
-        runtime: harness.runtimeMessages,
-        tabs: harness.tabMessages,
-        queries: harness.tabQueries(),
-        badges: harness.badgeTexts,
-        popups: harness.popupCalls,
-        timers: harness.timerDelays,
-        alarms: [harness.alarmGets, harness.alarmCreates, harness.alarmClears],
-    });
-}
-
-test("worker denies unauthorized senders before dispatch with no transport effects", async () => {
-    const commands = [
-        {allowed: ["content"], message: {subject: "rpc", id: 7, chainId: "0x1",
-            body: '{"id":7,"method":"eth_blockNumber","jsonrpc":"2.0"}', workflowVersion: 3}},
-        {allowed: ["content"], message: request()},
-        {allowed: ["content"], message: manualSwitchIntent()},
-        {allowed: ["content"], message: {subject: "consumeResponse", id: 7,
-            configurationKey: "https://wallet.example", requestToken,
-            revisions: {ethereum: 0, solana: 0}, workflowVersion: 3}},
-        {allowed: ["content"], message: {subject: "getResponse", id: 7,
-            configurationKey: "https://wallet.example", requestToken, workflowVersion: 3}},
-        {allowed: ["content"], message: {subject: "consumeResponse", id: 7}},
-        {allowed: ["content", "popup"], message: {subject: "getLatestConfiguration",
-            host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 3}},
-        {allowed: ["content"], message: {subject: "disconnect", id: 7, provider: "ethereum",
-            host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 3}},
-        {allowed: ["popup"], message: approvalProxy()},
-        {allowed: ["popup"], message: {subject: "applyCompletedResponse", id: 7,
-            host: "wallet.example", configurationKey: "https://wallet.example", requestToken,
-            revisions: {ethereum: 0, solana: 0}, workflowVersion: 3}},
-        {allowed: ["popup"], message: {subject: "updatePendingRequestBadge",
-            hasPendingRequests: true, workflowVersion: 3}},
-        {allowed: ["popup"], message: {subject: "responseReady", ids: [7], workflowVersion: 3}},
-        ...["pendingRequestAvailable", "approveRequest", "openApp", "workflowProbe",
-            "executeNativeApproval", "getExecutionStatus", "maintainRequest", "prepareResponseDelivery", "requestActive",
-            "constructor", "__proto__", "toString", "unknown"].map(subject => ({
-            allowed: [], message: {subject, workflowVersion: 3},
-        })),
-    ];
-    const senders = [
-        {kind: "content", value: contentSender()},
-        {kind: "popup", value: popupSender()},
-        {kind: "worker", value: workerSender()},
-        ...[null, {},
-            {...contentSender(), id: undefined},
-            {...contentSender(), id: "foreign-extension"},
-            {...contentSender(), frameId: undefined},
-            {...contentSender(), frameId: 1},
-            {...contentSender(), frameId: "0"},
-            {...contentSender(), url: undefined},
-            {...contentSender(), url: "about:blank"},
-            {...contentSender(), url: "data:text/html,test"},
-            {...contentSender(), tab: undefined},
-            contentSender({id: -1}),
-            contentSender({id: 1.5}),
-            popupSender({id: "foreign-extension"}),
-            popupSender({tab: {id: 9}, frameId: 0}),
-            popupSender({url: "https://wallet.example/popup.html"}),
-            popupSender({url: "safari-web-extension://extension-id/popup.html?forged"}),
-            popupSender({url: "safari-web-extension://extension-id/options.html"}),
-        ].map(value => ({kind: "invalid", value})),
-    ];
-    const harness = makeHarness();
+test("bootstrap reads native and ignores all old browser authority", async () => {
+    const state = snapshot({ethereum: ethereumState("0x01")});
+    const harness = makeHarness({storage: new Map([["https://wallet.example", {bad: "cached grant"}],
+        ["providerApprovalLease:wallet.example", {bad: "lease"}], ["nativeExecutionJobs", ["untrusted"]]]),
+        native: message => ({id: message.id, state})});
     await settle();
-    const before = transportEffects(harness);
-    for (const sender of senders) {
-        for (const command of commands) {
-            if (command.allowed.includes(sender.kind)) { continue; }
-            assert.equal(await harness.dispatch(command.message, sender.value), undefined);
-            assert.deepEqual(harness.runtimeDeliveries.at(-1), {handled: false, replies: []},
-                `${sender.kind} cannot send ${command.message.subject}`);
-        }
-    }
-    await settle();
-    assert.deepEqual(transportEffects(harness), before);
-    assert.ok(harness.runtimeDeliveries.every(delivery => delivery.replies.length === 0));
+    assert.deepEqual(clone(await harness.dispatch(configurationRequest())), {kind: "configuration", state});
+    assert.deepEqual(harness.storageReads, []);
+    assert.deepEqual(harness.storageWrites, []);
+    assert.deepEqual(harness.storageRemovals, []);
+    assert.equal(harness.nativeMessages.at(-1).message.subject, "getLatestConfiguration");
 });
 
-test("worker rejects mismatched content origins without touching transport state", async () => {
-    const harness = makeHarness();
-    await settle();
-    const before = transportEffects(harness);
-    const sender = contentSender({url: "https://other.example/dapp"});
-    for (const message of [
-        request(), manualSwitchIntent(),
-        {subject: "consumeResponse", id: 7, configurationKey: "https://wallet.example",
-            requestToken, revisions: {ethereum: 0, solana: 0}, workflowVersion: 3},
-        {subject: "getLatestConfiguration", host: "wallet.example",
-            configurationKey: "https://wallet.example", workflowVersion: 3},
-        {subject: "disconnect", id: 7, provider: "ethereum", host: "wallet.example",
-            configurationKey: "https://wallet.example", workflowVersion: 3},
-    ]) {
-        await harness.dispatch(message, sender);
-    }
-    await settle();
-    assert.deepEqual(transportEffects(harness), before);
-});
-
-function nativeAcknowledgement(
-    id,
-    revisions = {ethereum: 0, solana: 0},
-    approvalRequired = true
-) {
-    return {id, requestToken, approvalRequired, revisions};
-}
-
-function completedAccountFixture(id = 23) {
-    const configuration = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    const read = {
-        subject: "consumeResponse",
-        id,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    };
-    return {
-        configuration,
-        read,
-        apply: {...read, subject: "applyCompletedResponse", host: "wallet.example"},
-        response: nativeResult({
-            id,
-            name: "requestAccounts",
-            provider: "ethereum",
-            result: configuration.results,
-            mutation: {
-                kind: "accounts",
-                updates: {
-                    ethereum: {address: configuration.results[0], chainId: configuration.chainId},
-                },
-            },
+test("unreadable browser records cannot block configuration or account switching across origins and worker restarts", async () => {
+    const origins = ["https://wallet.example", "https://other.example", "http://wallet.example"];
+    const storage = new Map([
+        [origins[0], "unreadable permission record"],
+        [origins[1], {schemaVersion: Number.MAX_SAFE_INTEGER, grants: ["opaque"]}],
+        [origins[2], null],
+        ["wallet.example", {permissions: false}],
+        ["other.example", [null]],
+        ["providerApprovalLease:wallet.example", {token: "invalid"}],
+        ["providerApprovalLease:other.example", "unreadable lease"],
+        ["nativeExecutionJobs", {jobs: "unreadable"}],
+    ]);
+    const originalStorage = clone([...storage]);
+    const states = new Map(origins.map((origin, index) => [origin, {
+        ...snapshot({
+            ethereum: index === 0 ? ethereumState(`0x${"1".repeat(40)}`) : ethereumState(""),
+            revisions: {ethereum: index + 2, solana: index + 5},
         }),
-    };
-}
-
-function completedResponseStore(count) {
-    const records = new Map;
-    const pageSizes = [];
-    for (let id = 1; id <= count; id += 1) {
-        const fixture = completedAccountFixture(id);
-        fixture.read.requestToken = `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`;
-        records.set(id, {
-            read: fixture.read,
-            identity: {
-                id,
-                host: "wallet.example",
-                configurationKey: fixture.read.configurationKey,
-                requestToken: fixture.read.requestToken,
-                revisions: fixture.read.revisions,
+        context: "abc"[index].repeat(64),
+    }]));
+    for (let restart = 0; restart < 2; restart += 1) {
+        const harness = makeHarness({storage,
+            storageGet: (keys, values) => {
+                assert.deepEqual(Array.isArray(keys) ? keys : [keys], ["workflowUpdateRecoveryNeeded"]);
+                return values;
             },
-            response: {...fixture.response, approvalCommitted: true},
-            acknowledged: false,
+            native: message => {
+                const state = states.get(message.configurationKey);
+                assert.ok(state);
+                if (message.subject === "getLatestConfiguration") { return {id: message.id, state}; }
+                assert.equal(message.name, "switchAccount");
+                assert.equal(message.host, new URL(message.configurationKey).host);
+                assert.deepEqual(clone(message.authority), {context: state.context, revisions: state.revisions});
+                assert.deepEqual(clone(message.body), {});
+                return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state};
+            },
         });
-    }
-    function matching(message) {
-        const record = records.get(message.id);
-        assert.equal(message.configurationKey, record.identity.configurationKey);
-        assert.equal(message.requestToken, record.identity.requestToken);
-        return record;
-    }
-    return {
-        records,
-        pageSizes,
-        native(message) {
-            if (message.subject === "getPendingRequests") {
-                const completedResponses = [...records.values()]
-                    .filter(record => !record.acknowledged)
-                    .slice(0, 16).map(record => record.identity);
-                pageSizes.push(completedResponses.length);
-                return clone({requests: [], completedResponses});
+        await settle();
+        for (const [index, origin] of origins.entries()) {
+            const identity = {configurationKey: origin, host: new URL(origin).host};
+            const sender = contentSender({id: index + 9, url: `${origin}/dapp`});
+            for (const configurationSender of [sender, popupSender()]) {
+                assert.deepEqual(clone(await harness.dispatch({...configurationRequest(), ...identity}, configurationSender)),
+                    {kind: "configuration", state: states.get(origin)});
             }
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return clone(matching(message).response);
-        },
-        acknowledge(message) {
-            matching(message).acknowledged = true;
-            return {id: message.id, acknowledged: true};
-        },
-    };
-}
+            const response = await harness.dispatch(manualSwitchIntent(identity), sender);
+            assert.equal(response.subject, "manualSwitchAcknowledged");
+            assert.equal(response.configurationKey, origin);
+            assert.equal(response.approvalRequired, true);
+            assert.deepEqual(clone(response.state), states.get(origin));
+        }
+        assert.equal(harness.nativeMessages.filter(({message}) => message.name === "switchAccount").length, origins.length);
+        assert.equal(harness.popupCalls.length, origins.length);
+        assert.deepEqual(harness.storageReads.flat().filter(key => key !== "workflowUpdateRecoveryNeeded"), []);
+        assert.deepEqual(harness.storageWrites, []);
+        assert.deepEqual(harness.storageRemovals, []);
+        assert.deepEqual(clone([...storage]), originalStorage);
+    }
+});
 
-function openRecoveryPopup(worker, native) {
-    const harness = createPopupHarness({
-        tab: contentSender().tab,
-        worker: message => worker.dispatch(clone(message), popupSender()).then(clone),
-        native: message => native(clone(message)),
-        storageGet: async key => ({[key]: worker.storage.get(key)}),
-    });
-    void harness.boot();
-    return {
-        element: id => harness.get(id),
-        close: harness.close,
-        refresh: () => harness.get("idle-check-status").click(),
-        async waitForIdleText(text) {
-            for (let attempt = 0; attempt < 50; attempt += 1) {
-                await settle();
-                if (harness.get("idle-connection").textContent === text) { return; }
-            }
-            assert.equal(harness.get("idle-connection").textContent, text);
-        },
-    };
-}
+test("every bootstrap reaches native, including same-origin callers sharing a worker", async () => {
+    let profile = "a";
+    const harness = makeHarness({native: message => ({id: message.id, state: {...snapshot(), context: profile.repeat(64)}})});
+    const first = await harness.dispatch(configurationRequest());
+    profile = "b";
+    const second = await harness.dispatch(configurationRequest(), contentSender({id: 10}));
+    assert.equal(first.state.context, "a".repeat(64));
+    assert.equal(second.state.context, "b".repeat(64));
+});
 
-test("released content polls receive reload errors for both providers", async () => {
-    const harness = makeHarness();
-    assert.equal(await harness.dispatch({
-        subject: "message-to-wallet",
-        message: {
-            id: 7, name: "requestAccounts", provider: "ethereum",
-            body: {address: "", chainId: "0x1"},
-            host: "wallet.example", favicon: "",
-        },
-        host: "wallet.example", navigate: true, confirm: false,
-    }), undefined);
-    for (const id of [7, 7.5, Number.MAX_SAFE_INTEGER + 1]) {
-        const response = await harness.dispatch({
-            id, subject: "getResponse", host: "wallet.example",
-            navigate: false, confirm: false,
-        });
-        assert.equal(response.id, id);
-        assert.equal(response.provider, "multiple");
-        assert.deepEqual(clone(response.providersToDisconnect), []);
-        assert.deepEqual(clone(response.bodies).map(body => body.provider),
-            ["ethereum", "solana"]);
-        for (const body of response.bodies) {
-            assert.equal(body.errorCode, -32603);
-            assert.match(body.error, /Reload this page/);
+test("cold native unavailability never becomes an empty grant", async () => {
+    for (const native of [() => undefined, () => { throw new Error("offline"); }, message => ({id: message.id, unavailable: true})]) {
+        const harness = makeHarness({native});
+        assert.equal((await harness.dispatch(configurationRequest())).kind, "configurationError");
+    }
+});
+
+test("admission relays native authority preconditions and obtains native ACK", async () => {
+    const state = snapshot();
+    const harness = makeHarness({native: message => ({id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state})});
+    const response = await harness.dispatch(request());
+    assert.deepEqual(clone(response), {id: 7, admissionKind: "new", approvalRequired: true, requestToken, state});
+    const message = harness.nativeMessages.at(-1).message;
+    assert.deepEqual(message.authority, request().authority);
+    assert.equal(message.host, "wallet.example");
+    assert.equal(message.configurationKey, "https://wallet.example");
+    assert.equal(message.__bwPrivateBrowsing, false);
+    assert.equal(Object.hasOwn(message, "revisions"), false);
+    assert.equal(Object.hasOwn(message, "replayOnly"), false);
+    assert.equal(harness.popupCalls.length, 1);
+    assert.equal(harness.alarmCreates.length, 1);
+    assert.deepEqual(harness.storageWrites, []);
+});
+
+test("native rejection wins over a cached account and carries a fresh snapshot", async () => {
+    const state = snapshot({revisions: {ethereum: 9, solana: 0}});
+    const harness = makeHarness({native: message => ({id: message.id, state, response: nativeError({
+        id: message.id, name: message.name, provider: message.provider, error: {code: 4100, message: "Revoked"},
+    })})});
+    const response = await harness.dispatch(request(7, {message: {name: "signMessage", body: {address: "0x01"}}}));
+    assert.equal(response.error.code, 4100);
+    assert.deepEqual(clone(response.state), state);
+    assert.deepEqual(harness.storageWrites, []);
+});
+
+test("malformed Solana trust options return a correlated error without native admission", async () => {
+    const harness = makeHarness({native: () => assert.fail("must not reach native")});
+    await settle();
+    const alarmGets = harness.alarmGets.length;
+    for (const name of ["connect", "signMessage", "signTransaction", "signAllTransactions", "signAndSendTransaction"]) {
+        for (const onlyIfTrusted of [null, "true", 1, [], {}]) {
+            const response = await harness.dispatch(request(7, {message: {
+                name, provider: "solana", body: {publicKey: "", object: {params: {onlyIfTrusted}}},
+            }}));
+            assert.deepEqual(clone(response), {kind: "error", id: 7, provider: "solana", name,
+                state: null, error: {code: -32602, message: "onlyIfTrusted must be a boolean"}});
         }
     }
-    for (const id of [undefined, null, "7", true, NaN, Infinity]) {
-        assert.equal(await harness.dispatch({subject: "getResponse", id}), undefined);
-    }
     assert.equal(harness.nativeMessages.length, 0);
-    assert.equal(harness.storageWrites.length, 0);
+    assert.equal(harness.executionMessages.length, 0);
+    assert.equal(harness.alarmGets.length, alarmGets);
 });
 
-test("registers one production listener and ignores malformed envelopes", async () => {
-    const harness = makeHarness();
-    assert.equal(await harness.dispatch(null), undefined);
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("updates persist recovery until the next browser startup", async () => {
-    const harness = makeHarness();
-    harness.install({reason: "install"});
-    harness.install({reason: "browser_update"});
-    harness.install(null);
-    await settle();
-    assert.equal(harness.storage.has("workflowUpdateRecoveryNeeded"), false);
-    assert.equal(harness.tabQueries(), 0);
-
-    harness.install({reason: "update"});
-    await settle();
-    assert.equal(harness.storage.get("workflowUpdateRecoveryNeeded"), true);
-    assert.deepEqual(harness.storageWrites, [{workflowUpdateRecoveryNeeded: true}]);
-    assert.equal(harness.tabQueries(), 0);
-
-    harness.startup();
-    await settle();
-    assert.equal(harness.storage.has("workflowUpdateRecoveryNeeded"), false);
-    assert.deepEqual(harness.storageRemovals, ["workflowUpdateRecoveryNeeded"]);
-    assert.equal(harness.tabQueries(), 0);
-});
-
-test("stamps trusted sender identity and preserves native-owned revisions", async () => {
-    const harness = makeHarness({native: () => nativeAcknowledgement(
-        7,
-        {ethereum: 4, solana: 5}
-    )});
-    const response = await harness.dispatch(request());
-    assert.deepEqual(clone(response), {
-        id: 7,
-        requestToken,
-        approvalRequired: true,
-        revisions: {ethereum: 4, solana: 5},
-    });
-    assert.deepEqual(harness.nativeMessages[0].message, {
-        admissionDeadline,
-        id: 7,
-        name: "requestAccounts",
-        provider: "ethereum",
-        body: {address: "", chainId: "0x1"},
-        favicon: "https://wallet.example/icon.png",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        revisions: {ethereum: 0, solana: 0},
-        enqueueAttempt: attempt,
-        workflowVersion: 3,
-        __bwPrivateBrowsing: false,
-    });
-    assert.deepEqual(harness.badgeTexts, ["•"]);
-    assert.equal(harness.popupCalls.length, 1);
-    assert.deepEqual(harness.runtimeMessages, [{
-        subject: "pendingRequestAvailable",
-        workflowVersion: 3,
-    }]);
-});
-
-test("dapp admission omits oversized favicons and preserves ordinary favicon URLs", async () => {
-    for (const favicon of [
-        "https://wallet.example/icon.png",
-        "data:image/png;base64," + "A".repeat(300_000),
-        "data:image/svg+xml," + "\u{1F600}".repeat(80_000),
-    ]) {
-        const harness = makeHarness({native: message => {
-            assert.ok(Buffer.byteLength(JSON.stringify(message)) <= 256 * 1024);
-            return nativeAcknowledgement(message.id, message.revisions);
-        }});
-
-        const response = await harness.dispatch(
-            request(), contentSender({favIconUrl: favicon})
-        );
-
+test("Solana trust option validation accepts booleans and ignores missing or inherited values", async () => {
+    const harness = makeHarness({native: message => ({id: message.id, admissionKind: "new", approvalRequired: false, requestToken, state: snapshot()})});
+    const inherited = Object.create({onlyIfTrusted: "invalid inherited value"});
+    for (const params of [undefined, {}, {onlyIfTrusted: undefined},
+        {onlyIfTrusted: false}, {onlyIfTrusted: true}, inherited]) {
+        const response = await harness.dispatch(request(7, {message: {
+            name: "connect", provider: "solana", body: {publicKey: "", object: {params}},
+        }}));
         assert.equal(response.requestToken, requestToken);
-        assert.equal(harness.nativeMessages[0].message.favicon,
-            favicon.startsWith("https:") ? favicon : "");
     }
+    assert.equal(harness.nativeMessages.length, 6);
 });
 
-test("broadcasts queued approvals when the popup cannot open", async () => {
-    for (const options of [
-        {openPopupMissing: true},
-        {openPopupRejects: true},
-    ]) {
-        const harness = makeHarness({
-            ...options,
-            native: () => nativeAcknowledgement(7),
-        });
-        assert.equal((await harness.dispatch(request())).requestToken, requestToken);
-        await settle();
-        assert.deepEqual(harness.runtimeMessages, [{
-            subject: "pendingRequestAvailable",
-            workflowVersion: 3,
-        }]);
+test("sender identity and strict native authority schema precede admission", async () => {
+    const harness = makeHarness({native: () => assert.fail("must not reach native")});
+    await settle();
+    for (const changed of [{authority: undefined}, {authority: {context: "a".repeat(64), revisions: {ethereum: -1, solana: 0}}},
+        {host: "forged.example"}, {configurationKey: "https://forged.example"}, {revisions: {ethereum: 0, solana: 0}},
+        {enqueueAttempt: "bad"}, {workflowVersion: 3}]) {
+        assert.equal(await harness.dispatch(request(7, changed)), undefined);
     }
-});
-
-test("worker rejects inbound pending-request notifications", async () => {
-    const harness = makeHarness();
-    await harness.dispatch({
-        subject: "pendingRequestAvailable",
-        workflowVersion: 3,
-    }, popupSender());
-    assert.equal(harness.popupCalls.length, 0);
-    assert.deepEqual(harness.runtimeDeliveries.at(-1), {handled: false, replies: []});
-    assert.deepEqual(harness.runtimeMessages, []);
-});
-
-test("macOS popup cues stay hidden without a configured extension popup", async () => {
-    const harness = makeHarness({
-        configuredPopup: false,
-        native: () => nativeAcknowledgement(7),
-    });
-    assert.equal((await harness.dispatch(request())).requestToken, requestToken);
-    await settle();
-    assert.ok(harness.badgeTexts.length >= 1);
-    assert.ok(harness.badgeTexts.every(value => value === ""));
-    assert.deepEqual(harness.popupCalls, []);
-    assert.deepEqual(harness.runtimeMessages, [{
-        subject: "pendingRequestAvailable",
-        workflowVersion: 3,
-    }]);
-    await harness.dispatch({
-        subject: "updatePendingRequestBadge",
-        hasPendingRequests: true,
-        workflowVersion: 3,
-    }, popupSender());
-    assert.ok(harness.badgeTexts.every(value => value === ""));
-    harness.install({reason: "update"});
-    harness.startup();
-    await settle();
-    assert.ok(harness.badgeTexts.every(value => value === ""));
-});
-
-test("toolbar requests a switch and preserves native fallback", async () => {
-    const response = {
-        approvalRequired: false,
-        configurationKey: "https://wallet.example",
-        id: 31,
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        subject: "manualSwitchAcknowledged",
-        workflowVersion: 3,
-    };
-    const harness = makeHarness({
-        configuredPopup: false,
-        native: () => ({opened: true}),
-        sendTabMessage: (_id, message) => message.subject === "workflowProbe"
-            ? {
-                buildVersion: packagedBuildVersion,
-                nonce: message.nonce,
-                subject: "workflowProbe",
-                workflowVersion: 3,
-            }
-            : response,
-    });
-    harness.clickToolbar({
-        id: 9,
-        url: "https://wallet.example/dapp",
-        incognito: false,
-    });
-    await settle();
-
-    assert.deepEqual(harness.tabMessages.at(-1), {
-        id: 9,
-        message: {
-            configurationKey: "https://wallet.example",
-            subject: "manualSwitchIntent",
-            workflowVersion: 3,
-        },
-    });
+    for (const sender of [null, {}, popupSender(), {...contentSender(), id: "foreign"},
+        {...contentSender(), frameId: 1}, {...contentSender(), url: "data:text/html,hello"}]) {
+        assert.equal(await harness.dispatch(request(), sender), undefined);
+    }
     assert.equal(harness.nativeMessages.length, 0);
-    assert.equal(harness.timerDelays.includes(10_000), true);
+});
 
-    harness.clickToolbar({id: 10, url: "safari://blank", incognito: false});
+test("private browsing never admits or returns a grant", async () => {
+    for (const localized of [undefined, "Localized Private Browsing explanation"]) {
+        const harness = makeHarness({privateBrowsing: true,
+            localizedMessages: {private_browsing_unsupported: localized},
+            native: () => assert.fail("private native request")});
+        const error = {code: 4200, message: localized ?? "Big Wallet requests are unavailable in Private Browsing."};
+        assert.deepEqual(clone((await harness.dispatch(request())).error), error);
+        assert.deepEqual(clone(await harness.dispatch(configurationRequest())), {kind: "configurationError", error});
+        assert.equal(harness.nativeMessages.length, 0);
+    }
+});
+
+test("completion relays an atomically committed native state and only acknowledges delivery", async () => {
+    const state = snapshot({ethereum: ethereumState("0x01"), revisions: {ethereum: 1, solana: 0}});
+    const harness = makeHarness({native: () => delivery(7, state, ["0x01"]),
+        tabs: [{id: 3, url: "https://wallet.example/a"}, {id: 4, url: "https://other.example"},
+            {id: 5, url: "https://wallet.example/b", incognito: true}]});
+    const response = await harness.dispatch(responseRequest());
+    assert.deepEqual(clone(response.state), state);
+    assert.deepEqual(clone(response.result), ["0x01"]);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
+    assert.deepEqual(harness.storageWrites, []);
+    assert.deepEqual(harness.tabMessages, [{id: 3, message: {
+        subject: "configurationInvalidated", configurationKey: "https://wallet.example", workflowVersion: 4,
+    }}]);
+});
+
+test("a lost acknowledgement retries delivery without reapplying a grant", async () => {
+    let count = 0;
+    const harness = makeHarness({native: () => delivery(), acknowledgeResponse: message => ++count === 1
+        ? undefined : {id: message.id, acknowledged: true}});
+    assert.equal(await harness.dispatch(responseRequest()), undefined);
+    assert.equal((await harness.dispatch(responseRequest())).kind, "result");
+    assert.equal(count, 2);
+    assert.deepEqual(harness.storageWrites, []);
+});
+
+test("malformed or cross-correlated completions are never acknowledged", async () => {
+    for (const response of [delivery(8), {...delivery(), state: {...snapshot(), context: "wrong"}},
+        {...delivery(), response: {...delivery().response, mutation: null}}, nativeResult({id: 7, name: "requestAccounts", provider: "ethereum", result: []})]) {
+        const harness = makeHarness({native: () => response});
+        assert.equal(await harness.dispatch(responseRequest()), undefined);
+        assert.equal(harness.nativeMessages.some(value => value.message.subject === "acknowledgeResponse"), false);
+    }
+});
+
+test("status reads cannot directly deliver a signature", async () => {
+    const harness = makeHarness({executionNative: () => delivery()});
+    assert.equal(await harness.dispatch(responseRequest("getResponse")), undefined);
+});
+
+test("disconnect relays the exact idempotent native CAS and invalidates only on success", async () => {
+    const state = snapshot({revisions: {ethereum: 2, solana: 0}});
+    const harness = makeHarness({native: message => ({id: message.id, state, revoked: true})});
+    const response = await harness.dispatch({subject: "disconnect", id: 7, provider: "ethereum", attempt,
+        authority: request().authority, host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4});
+    assert.equal(response.kind, "result");
+    assert.equal(harness.nativeMessages.at(-1).message.attempt, attempt);
+    assert.deepEqual(harness.nativeMessages.at(-1).message.authority, request().authority);
+    assert.deepEqual(clone(response.state), state);
+    assert.deepEqual(harness.storageWrites, []);
+});
+
+test("stale native disconnect returns current state without inventing authority", async () => {
+    const state = snapshot({revisions: {ethereum: 2, solana: 0}});
+    const harness = makeHarness({native: message => ({id: message.id, state, stale: true})});
+    const response = await harness.dispatch({subject: "disconnect", id: 7, provider: "ethereum", attempt,
+        authority: request().authority, host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4});
+    assert.equal(response.error.code, 4100);
+    assert.deepEqual(clone(response.state), state);
+    assert.equal(harness.nativeMessages.length, 1);
+});
+
+test("popup completion does not accept browser revision or deadline authority", async () => {
+    const harness = makeHarness({native: () => delivery()});
+    const command = {...responseRequest("applyCompletedResponse"), host: "wallet.example"};
+    assert.deepEqual(clone(await harness.dispatch(command, popupSender())), {applied: true});
+    assert.equal(await harness.dispatch({...command, revisions: {ethereum: 0, solana: 0}}, popupSender()), undefined);
+    assert.equal(await harness.dispatch({subject: "approveRequestWithCurrentRevisions"}, popupSender()), undefined);
+});
+
+test("startup and alarm recovery quietly maintain pending approved and manual requests without a live tab", async () => {
+    for (const descriptor of [recoveryDescriptor({manual: false}), recoveryDescriptor({manual: false, state: "approved"}),
+        recoveryDescriptor({state: "pending"}), recoveryDescriptor({state: "approved"})]) {
+        const harness = makeHarness({tabs: [],
+            recoveryNative: message => ({id: message.id, requests: [descriptor]}),
+            executionNative: message => ({id: message.id, pending: true})});
+        await settle();
+        await harness.fireAlarm();
+        assert.equal(harness.recoveryMessages[0].message.subject, "getRecoveryRequests");
+        assert.deepEqual(harness.executionMessages.map(value => value.message.subject), ["maintainRequest", "maintainRequest"]);
+        assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, false]);
+        assert.equal(harness.tabQueries(), 0);
+        assert.equal(harness.tabMessages.length, 0);
+        assert.deepEqual(harness.storageReads, []);
+        assert.deepEqual(harness.storageWrites, []);
+        assert.equal(await harness.runTimer(1000), false);
+    }
+});
+
+test("live content polls permit exact native redelivery at most once every thirty seconds", async () => {
+    let now = 1_700_000_000_000;
+    const descriptor = recoveryDescriptor({id: 7, manual: false});
+    const harness = makeHarness({tabs: [], dateNow: () => now,
+        recoveryNative: message => ({id: message.id, requests: [descriptor]}),
+        executionNative: message => ({id: message.id, pending: true}),
+        native: message => ({id: message.id, pending: true})});
+    await settle();
+    assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
+    assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, true]);
+    assert.deepEqual(harness.executionMessages[1].message, {
+        subject: "maintainRequest", id: descriptor.id, requestToken: descriptor.requestToken,
+        configurationKey: descriptor.configurationKey, workflowVersion: 4,
+        allowDelivery: true, __bwPrivateBrowsing: false,
+    });
+    now += 29_999;
+    assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
+    assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, true]);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["getResponse"]);
+    now += 1;
+    assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
+    assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, true, true]);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["getResponse"]);
+    assert.deepEqual(harness.tabMessages, []);
+});
+
+test("unauthorized and malformed status polls never enable native redelivery", async () => {
+    for (const [command, sender] of [
+        [responseRequest("getResponse"), popupSender()],
+        [responseRequest("getResponse"), contentSender({url: "https://other.example"})],
+        [responseRequest("getResponse"), contentSender({incognito: true})],
+        [{...responseRequest("getResponse"), requestToken: "invalid"}, contentSender()],
+        [{...responseRequest("getResponse"), allowDelivery: true}, contentSender()],
+    ]) {
+        const harness = makeHarness();
+        await settle();
+        assert.equal(await harness.dispatch(command, sender), undefined);
+        assert.deepEqual(harness.executionMessages, []);
+    }
+});
+
+test("idle recovery retains the alarm and no active polling timer", async () => {
+    const harness = makeHarness();
+    await settle();
+    await harness.fireAlarm();
+    assert.equal(harness.alarmCreates.length, 1);
+    assert.deepEqual(harness.alarmClears, []);
+    assert.equal(await harness.runTimer(1000), false);
+});
+
+test("manual switches bootstrap separately even when same-origin callers share the worker", async () => {
+    let reads = 0;
+    const harness = makeHarness({native: message => message.subject === "getLatestConfiguration"
+        ? {id: message.id, state: {...snapshot(), context: (++reads === 1 ? "a" : "b").repeat(64)}}
+        : {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: {...snapshot(), ...message.authority}}});
+    const values = await Promise.all([harness.dispatch(manualSwitchIntent()), harness.dispatch(manualSwitchIntent(), contentSender({id: 10}))]);
+    assert.equal(reads, 2);
+    assert.notEqual(values[0].state.context, values[1].state.context);
+    const switches = harness.nativeMessages.filter(value => value.message.name === "switchAccount");
+    assert.equal(switches.length, 2);
+    assert.deepEqual(switches[0].message.body, {});
+});
+
+test("manual recovery consumes native completion without requiring the original tab", async () => {
+    const descriptor = recoveryDescriptor({state: "completed"});
+    const harness = makeHarness({tabs: [], recoveryNative: message => ({id: message.id, requests: [descriptor]}),
+        native: message => ({id: message.id, state: snapshot(), response: nativeResult({id: message.id, name: "switchAccount", provider: "multiple", result: null})})});
+    await settle();
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
+});
+
+test("native RPC relays preserve error data and reject uncorrelated results", async () => {
+    const command = {subject: "rpc", id: 7, body: '{"method":"eth_call"}', chainId: "0x1", workflowVersion: 4};
+    const error = {code: -32000, message: "revert", data: {reason: "0xab"}};
+    const harness = makeHarness({native: () => ({id: 7, error})});
+    assert.deepEqual(clone((await harness.dispatch(command)).error), error);
+    const wrong = makeHarness({native: () => ({id: 8, result: "0x1"})});
+    assert.equal((await wrong.dispatch(command)).kind, "error");
+});
+
+test("released pages get a reload error without reading old grants", async () => {
+    const harness = makeHarness();
+    const response = await harness.dispatch({subject: "getResponse", id: 7});
+    assert.equal(response.provider, "multiple");
+    assert.ok(response.bodies.every(value => /Reload/.test(value.error)));
+    assert.deepEqual(harness.storageReads, []);
+});
+
+test("toolbar falls back to native app when the content probe fails", async () => {
+    const harness = makeHarness({configuredPopup: false, sendTabMessage: () => undefined});
+    harness.clickToolbar({id: 3, url: "https://wallet.example/dapp"});
     await settle();
     assert.equal(harness.nativeMessages.at(-1).message.subject, "openApp");
-
-    const unavailable = makeHarness({
-        configuredPopup: false,
-        native: () => ({opened: true}),
-        sendTabMessage: (_id, message) => message.subject === "workflowProbe"
-            ? {
-                buildVersion: packagedBuildVersion,
-                nonce: message.nonce,
-                subject: "workflowProbe",
-                workflowVersion: 3,
-            }
-            : undefined,
-    });
-    unavailable.clickToolbar({
-        id: 11,
-        url: "https://wallet.example/dapp",
-        incognito: false,
-    });
-    await settle();
-    assert.equal(unavailable.nativeMessages.at(-1).message.subject, "openApp");
-
-    const stale = makeHarness({
-        configuredPopup: false,
-        native: () => ({opened: true}),
-        sendTabMessage: (_id, message) => ({
-            buildVersion: previousBuildVersion,
-            nonce: message.nonce,
-            subject: "workflowProbe",
-            workflowVersion: 3,
-        }),
-    });
-    stale.clickToolbar({
-        id: 12,
-        url: "https://wallet.example/dapp",
-        incognito: false,
-    });
-    await settle();
-    assert.equal(stale.nativeMessages.at(-1).message.subject, "openApp");
 });
 
-test("toolbar restores the same approval while background polling stays silent", async () => {
-    const polling = deferred();
-    const harness = makeHarness({
-        configuredPopup: false,
-        native: message => {
-            if (isResponseRead(message)) { return polling.promise; }
-            if (message.subject === "showApproval") { return {opened: true}; }
-            return nativeAcknowledgement(31, message.revisions);
-        },
-        sendTabMessage: (_id, message) => message.subject === "workflowProbe"
-            ? {
-                buildVersion: packagedBuildVersion,
-                nonce: message.nonce,
-                subject: "workflowProbe",
-                workflowVersion: 3,
-            }
-            : harness.dispatch(manualSwitchIntent(), contentSender()),
-    });
-    const acknowledged = await harness.dispatch(manualSwitchIntent(), contentSender());
-    const backgroundPoll = harness.runTimer();
-    await settle();
-    assert.equal(harness.nativeMessages.some(({message}) =>
-        isResponseRead(message)
-    ), true);
-    assert.equal(harness.nativeMessages.some(({message}) =>
-        message.subject === "showApproval"
-    ), false);
+test("both manifests retain durable recovery alarm permission", () => {
+    assert.equal(JSON.parse(sharedManifestSource).permissions.includes("alarms"), true);
+    assert.equal(JSON.parse(macManifestSource).permissions.includes("alarms"), true);
+});
 
-    const tab = {id: 9, url: "https://wallet.example/dapp", incognito: false};
-    for (let click = 0; click < 2; click += 1) {
-        harness.clickToolbar(tab);
-        await settle();
+test("all runtime routes enforce their sender matrix before effects", async () => {
+    const harness = makeHarness();
+    await settle();
+    const commands = [
+        [request(), ["content"]], [configurationRequest(), ["content", "popup"]],
+        [responseRequest(), ["content"]], [responseRequest("getResponse"), ["content"]],
+        [{...responseRequest("applyCompletedResponse"), host: "wallet.example"}, ["popup"]],
+        [{subject: "responseReady", ids: [7], workflowVersion: 4}, ["popup"]],
+        [{subject: "updatePendingRequestBadge", hasPendingRequests: true, workflowVersion: 4}, ["popup"]],
+        [manualSwitchIntent(), ["content"]],
+        ...["approveRequest", "executeNativeApproval", "getExecutionStatus", "maintainRequest",
+            "prepareResponseDelivery", "requestActive", "constructor", "__proto__"].map(subject => [{subject, workflowVersion: 4}, []]),
+    ];
+    const senders = {content: contentSender(), popup: popupSender(),
+        worker: {id: "extension-id", url: "safari-web-extension://extension-id/service_worker.js"}};
+    for (const [command, allowed] of commands) {
+        for (const [kind, sender] of Object.entries(senders)) {
+            if (allowed.includes(kind)) { continue; }
+            const count = harness.nativeMessages.length;
+            assert.equal(await harness.dispatch(command, sender), undefined);
+            assert.equal(harness.runtimeDeliveries.at(-1).handled, false);
+            assert.equal(harness.nativeMessages.length, count);
+        }
     }
-    const activations = harness.nativeMessages.filter(({message}) =>
-        message.subject === "showApproval"
-    );
-    assert.equal(activations.length, 2);
-    assert.deepEqual(activations.map(({message}) => message), Array(2).fill({
-        __bwPrivateBrowsing: false,
-        subject: "showApproval",
-        id: acknowledged.id,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        workflowVersion: 3,
-    }));
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.name === "switchAccount"
-    ).length, 3);
-    polling.resolve(undefined);
-    await backgroundPoll;
 });
 
-test("a toolbar admission capacity error opens the native-wallet fallback", async () => {
-    const harness = makeHarness({
-        configuredPopup: false,
-        native: message => {
-            assert.equal(message.subject, "openApp");
-            return {opened: true};
-        },
-        sendTabMessage: (_id, message) => message.subject === "workflowProbe"
-            ? {buildVersion: packagedBuildVersion, nonce: message.nonce,
-                subject: "workflowProbe", workflowVersion: 3}
-            : nativeError({id: 31, name: "switchAccount", provider: "multiple",
-                error: {code: -32000, message: "Finish an existing account switch and try again."}}),
-    });
-    harness.clickToolbar({id: 9, url: "https://wallet.example/dapp", incognito: false});
+test("native read timeout is bounded and does not initialize a cache", async () => {
+    const harness = makeHarness({native: () => new Promise(() => {})});
     await settle();
-    assert.equal(harness.nativeMessages.length, 1);
-    assert.equal(harness.nativeMessages[0].message.subject, "openApp");
-    assert.equal(harness.popupCalls.length, 0);
+    const pending = harness.dispatch(configurationRequest());
+    await settle();
+    assert.equal(await harness.runTimer(5000), true);
+    assert.equal((await pending).kind, "configurationError");
+    assert.deepEqual(harness.storageWrites, []);
 });
 
-test("toolbar probe failures always open the native wallet", async () => {
-    const tab = {id: 13, url: "https://wallet.example/dapp", incognito: false};
-    const malformedResponses = [undefined, {}, {
-        buildVersion: packagedBuildVersion,
-        nonce: "invalid",
-        subject: "workflowProbe",
-        workflowVersion: 3,
-    }];
-    for (const probe of malformedResponses) {
-        const harness = makeHarness({
-            configuredPopup: false,
-            native: () => ({opened: true}),
-            sendTabMessage: () => probe,
-        });
-        harness.clickToolbar(tab);
+test("durable recovery is armed before a native admission and survives its lost reply", async () => {
+    const alarms = new Map;
+    let admitted = false;
+    const first = makeHarness({alarms, native: message => {
+        assert.equal(alarms.has(recoveryAlarmName), true);
+        admitted = true;
+        return new Promise(() => {});
+    }});
+    await settle();
+    const lost = first.dispatch(request());
+    await settle();
+    assert.equal(admitted, true);
+    await first.runTimer(5000);
+    assert.equal(await lost, undefined);
+    const second = makeHarness({alarms,
+        recoveryNative: message => ({id: message.id, requests: [recoveryDescriptor({manual: false, state: "completed"})]}),
+        tabs: [{id: 9, url: "https://wallet.example"}]});
+    await settle();
+    assert.equal(second.alarmCreates.length, 0);
+    assert.ok(second.tabMessages.some(value => value.message.subject === "responseReady"));
+    assert.ok(second.tabMessages.some(value => value.message.subject === "configurationInvalidated"));
+    assert.deepEqual(second.storageReads, []);
+});
+
+test("failed and malformed discovery retains recovery without executing or acknowledging", async () => {
+    for (const recoveryNative of [() => {throw new Error("offline");}, () => undefined,
+        message => ({id: message.id, requests: [{...recoveryDescriptor(), revisions: {ethereum: 0, solana: 0}}]}),
+        message => ({id: message.id + 1, requests: [recoveryDescriptor()]})]) {
+        const harness = makeHarness({recoveryNative});
+        await settle();
+        assert.equal(harness.alarms.has(recoveryAlarmName), true);
+        assert.deepEqual(harness.alarmClears, []);
+        assert.equal(harness.executionMessages.length, 0);
+        assert.equal(harness.nativeMessages.length, 0);
+    }
+});
+
+test("alarm creation failure prevents admission", async () => {
+    const harness = makeHarness({createAlarm: () => {throw new Error("unavailable");},
+        native: () => assert.fail("cannot admit without recovery")});
+    assert.equal(await harness.dispatch(request()), undefined);
+});
+
+test("toolbar authenticates versioned probe before asking for a manual intent", async () => {
+    const harness = makeHarness({configuredPopup: false, sendTabMessage: (_id, message) => {
+        if (message.subject === "workflowProbe") { return {subject: "workflowProbe", nonce: message.nonce, workflowVersion: 4, buildVersion: packagedBuildVersion}; }
+        return {subject: "manualSwitchAcknowledged", configurationKey: message.configurationKey,
+            workflowVersion: 4, id: 7, approvalRequired: true, requestToken, state: snapshot()};
+    }});
+    harness.clickToolbar({id: 3, url: "https://wallet.example/path"});
+    await settle();
+    assert.deepEqual(harness.tabMessages.map(value => value.message.subject), ["workflowProbe", "manualSwitchIntent"]);
+    assert.equal(harness.nativeMessages.at(-1).message.subject, "showApproval");
+    assert.equal(harness.nativeMessages.some(value => value.message.subject === "openApp"), false);
+});
+
+test("toolbar mismatched builds nonces and workflows only open the native wallet", async () => {
+    for (const change of [{buildVersion: previousBuildVersion}, {workflowVersion: 3}, {nonce: "0".repeat(32)}, {extra: true}]) {
+        const harness = makeHarness({configuredPopup: false, sendTabMessage: (_id, message) => ({
+            subject: "workflowProbe", nonce: message.nonce, workflowVersion: 4, buildVersion: packagedBuildVersion, ...change,
+        })});
+        harness.clickToolbar({id: 3, url: "https://wallet.example"});
         await settle();
         assert.equal(harness.nativeMessages.at(-1).message.subject, "openApp");
-    }
-
-    const timedOut = makeHarness({
-        configuredPopup: false,
-        native: () => ({opened: true}),
-        scheduleTimeout(callback, delay) {
-            if (delay === 1000) { queueMicrotask(callback); }
-            return delay;
-        },
-        sendTabMessage: () => new Promise(() => {}),
-    });
-    timedOut.clickToolbar(tab);
-    await settle();
-    assert.equal(timedOut.nativeMessages.at(-1).message.subject, "openApp");
-
-    for (const failIntent of [false, true]) {
-        const rejected = makeHarness({
-            configuredPopup: false,
-            native: () => ({opened: true}),
-            sendTabMessage: (_id, message) => {
-                if (failIntent && message.subject === "workflowProbe") {
-                    return {
-                        buildVersion: packagedBuildVersion,
-                        nonce: message.nonce,
-                        subject: "workflowProbe",
-                        workflowVersion: 3,
-                    };
-                }
-                throw new Error("Unexpected tab messaging failure");
-            },
-        });
-        rejected.clickToolbar(tab);
-        await settle();
-        assert.equal(rejected.nativeMessages.at(-1).message.subject, "openApp");
+        assert.equal(harness.tabMessages.length, 1);
     }
 });
 
-test("a stalled toolbar manual-switch relay falls back after ten seconds", async () => {
-    const harness = makeHarness({
-        configuredPopup: false,
-        native: () => ({opened: true}),
-        scheduleTimeout(callback, delay) {
-            if (delay === 10_000) { queueMicrotask(callback); }
-            return delay;
+test("toolbar private and unidentifiable tabs never ask content for an account", async () => {
+    for (const tab of [{id: 3, url: "https://wallet.example", incognito: true}, {id: 3, url: "about:blank"}, {url: "https://wallet.example"}]) {
+        const harness = makeHarness({configuredPopup: false});
+        harness.clickToolbar(tab);
+        await settle();
+        assert.equal(harness.tabMessages.length, 0);
+        assert.equal(harness.nativeMessages.at(-1).message.subject, "openApp");
+        assert.equal(harness.nativeMessages.at(-1).message.__bwPrivateBrowsing, tab.incognito === true);
+    }
+});
+
+test("RPC rejects malformed input and ambiguous native replies", async () => {
+    for (const response of [undefined, {id: 8, result: true}, {id: 7, result: true, error: "also error"}, {id: 7}]) {
+        const harness = makeHarness({native: () => response});
+        const command = {subject: "rpc", id: 7, body: "{}", chainId: "0x1", workflowVersion: 4};
+        assert.equal((await harness.dispatch(command)).kind, "error");
+        const before = harness.nativeMessages.length;
+        assert.equal((await harness.dispatch({...command, chainId: "0x01"})).kind, "error");
+        assert.equal(harness.nativeMessages.length, before);
+    }
+});
+
+test("a malformed tab query cannot prevent an acknowledged native result", async () => {
+    const harness = makeHarness({native: () => delivery(), queryTabs: () => {throw new Error("closed browser");}});
+    assert.equal((await harness.dispatch(responseRequest())).kind, "result");
+});
+
+test("manual-switch admission accepts the native coalesced handle bound to the bootstrapped origin context", async () => {
+    const retainedID = 19;
+    let attemptedID;
+    const harness = makeHarness({native: message => {
+        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+        attemptedID = message.id;
+        return {id: retainedID, admissionKind: "coalesced", approvalRequired: true, requestToken, state: snapshot()};
+    }});
+    const response = await harness.dispatch(manualSwitchIntent());
+    assert.notEqual(attemptedID, retainedID);
+    assert.deepEqual(clone(response), {
+        id: retainedID, approvalRequired: true, requestToken, state: snapshot(),
+        configurationKey: "https://wallet.example", subject: "manualSwitchAcknowledged", workflowVersion: 4,
+    });
+});
+
+test("a new manual switch drains the previous completion before admitting its own request", async () => {
+    let retained;
+    let admissions = 0;
+    const attempted = [];
+    const harness = makeHarness({configuredPopup: false,
+        recoveryNative: message => ({id: message.id, requests: []}),
+        acknowledgeResponse: message => {
+            assert.equal(message.id, retained.id);
+            retained = null;
+            return {id: message.id, acknowledged: true};
+        },
+        native: message => {
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+            if (message.subject === "prepareResponseDelivery") {
+                return {id: message.id, state: snapshot(), response: nativeResult({
+                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                })};
+            }
+            assert.equal(message.name, "switchAccount");
+            attempted.push(message);
+            const admissionKind = retained ? "coalesced" : "new";
+            if (!retained) {
+                admissions += 1;
+                retained = {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
+            }
+            return {...retained, admissionKind};
+        },
+    });
+    const first = await harness.dispatch(manualSwitchIntent());
+    await settle();
+    retained.approvalRequired = false;
+    const second = await harness.dispatch(manualSwitchIntent());
+    assert.equal(second.approvalRequired, true);
+    assert.notEqual(second.id, first.id);
+    assert.equal(admissions, 2);
+    assert.equal(attempted.length, 3);
+    assert.notEqual(attempted[1].enqueueAttempt, attempted[2].enqueueAttempt);
+    assert.equal(attempted[1].admissionDeadline, attempted[2].admissionDeadline);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject || value.message.name), [
+        "getLatestConfiguration", "switchAccount", "getLatestConfiguration", "switchAccount",
+        "prepareResponseDelivery", "acknowledgeResponse", "getLatestConfiguration", "switchAccount",
+    ]);
+});
+
+test("a manual switch that completes its own admission does not open another request", async () => {
+    let admissions = 0;
+    const harness = makeHarness({native: message => {
+        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+        admissions += 1;
+        return {id: message.id, admissionKind: "new", approvalRequired: false, requestToken, state: snapshot()};
+    }});
+    assert.equal((await harness.dispatch(manualSwitchIntent())).approvalRequired, false);
+    assert.equal(admissions, 1);
+});
+
+test("a coalesced manual completion is drained when separate intents generate the same numeric ID", async () => {
+    let retained;
+    let admissions = 0;
+    const attempted = [];
+    const harness = makeHarness({dateNow: () => 1_700_000_000_000,
+        recoveryNative: message => ({id: message.id, requests: []}),
+        acknowledgeResponse: message => {
+            assert.equal(message.requestToken, retained.requestToken);
+            retained = null;
+            return {id: message.id, acknowledged: true};
+        },
+        native: message => {
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+            if (message.subject === "prepareResponseDelivery") {
+                return {id: message.id, state: snapshot(), response: nativeResult({
+                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                })};
+            }
+            assert.equal(message.name, "switchAccount");
+            attempted.push(message);
+            const admissionKind = retained ? "coalesced" : "new";
+            if (!retained) {
+                admissions += 1;
+                retained = {id: message.id, approvalRequired: true,
+                    requestToken: admissions === 1 ? requestToken : "123e4567-e89b-12d3-a456-426614174001", state: snapshot()};
+            }
+            return {...retained, admissionKind};
+        },
+    });
+    harness.read("Math.random = () => 0");
+    const first = await harness.dispatch(manualSwitchIntent());
+    retained.approvalRequired = false;
+    const second = await harness.dispatch(manualSwitchIntent());
+    assert.equal(attempted[1].id, first.id);
+    assert.notEqual(attempted[1].enqueueAttempt, attempted[0].enqueueAttempt);
+    assert.equal(second.approvalRequired, true);
+    assert.notEqual(second.requestToken, first.requestToken);
+    assert.equal(admissions, 2);
+    assert.equal(attempted.length, 3);
+    assert.equal(harness.nativeMessages.filter(value => value.message.subject === "acknowledgeResponse").length, 1);
+});
+
+test("manual new and replay acknowledgements require the submitted numeric ID", async () => {
+    for (const admissionKind of ["new", "replay"]) {
+        const harness = makeHarness({native: message => message.subject === "getLatestConfiguration"
+            ? {id: message.id, state: snapshot()}
+            : {id: message.id + 1, admissionKind, approvalRequired: true, requestToken, state: snapshot()}});
+        assert.equal(await harness.dispatch(manualSwitchIntent()), undefined);
+        assert.equal(harness.popupCalls.length, 0);
+    }
+});
+
+test("manual-switch completion draining is bounded and requires an acknowledged result", async () => {
+    for (const failure of ["unavailable", "acknowledgement", "coalesced"]) {
+        let admissions = 0;
+        const harness = makeHarness({
+            acknowledgeResponse: message => failure === "acknowledgement"
+                ? undefined : {id: message.id, acknowledged: true},
+            native: message => {
+                if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+                if (message.subject === "prepareResponseDelivery") {
+                    return failure !== "unavailable" ? {id: message.id, state: snapshot(), response: nativeResult({
+                        id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                    })} : {id: message.id, unavailable: true};
+                }
+                admissions += 1;
+                return {id: 19, admissionKind: "coalesced", approvalRequired: false, requestToken, state: snapshot()};
+            },
+        });
+        assert.equal(await harness.dispatch(manualSwitchIntent()), undefined);
+        assert.equal(admissions, failure === "coalesced" ? 2 : 1);
+        assert.equal(harness.popupCalls.length, 0);
+    }
+});
+
+test("coalesced manual handles reject malformed replies and other native origin contexts", async () => {
+    for (const change of [{id: "19"}, {id: 1.5}, {id: Number.MAX_SAFE_INTEGER + 1},
+        {requestToken: "malformed"}, {admissionKind: "new", approvalRequired: 1}, {extra: true},
+        {configurationKey: "https://other.example"}, {state: {...snapshot(), context: "b".repeat(64)}},
+        {state: {...snapshot(), revisions: {ethereum: -1, solana: 0}}}]) {
+        const harness = makeHarness({native: message => message.subject === "getLatestConfiguration"
+            ? {id: message.id, state: snapshot()}
+            : {id: 19, admissionKind: "coalesced", approvalRequired: true, requestToken, state: snapshot(), ...change}});
+        assert.equal(await harness.dispatch(manualSwitchIntent()), undefined);
+        assert.equal(harness.popupCalls.length, 0);
+    }
+});
+
+test("ordinary dapp admission still requires the exact request ID", async () => {
+    const harness = makeHarness({native: () => ({id: 19, admissionKind: "coalesced", approvalRequired: true, requestToken, state: snapshot()})});
+    assert.equal(await harness.dispatch(request(7)), undefined);
+    assert.equal(harness.popupCalls.length, 0);
+});
+
+test("toolbar account selection retries one stale native authority snapshot", async () => {
+    const initial = snapshot({revisions: {ethereum: 3, solana: 4}});
+    const current = snapshot({revisions: {ethereum: 4, solana: 4}});
+    const admissions = [];
+    const harness = makeHarness({configuredPopup: false, dateNow: () => 1_700_000_000_000,
+        native: message => {
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: initial}; }
+            if (message.subject === "showApproval") { return {id: message.id, opened: true}; }
+            assert.equal(message.name, "switchAccount");
+            admissions.push(message);
+            return admissions.length === 1 ? manualSwitchDenial(message.id, current)
+                : {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: current};
         },
         sendTabMessage: (_id, message) => message.subject === "workflowProbe"
-            ? {
-                buildVersion: packagedBuildVersion,
-                nonce: message.nonce,
-                subject: "workflowProbe",
-                workflowVersion: 3,
-            }
-            : new Promise(() => {}),
+            ? {subject: "workflowProbe", nonce: message.nonce, workflowVersion: 4, buildVersion: packagedBuildVersion}
+            : harness.dispatch(manualSwitchIntent()),
     });
-    harness.clickToolbar({
-        id: 14,
-        url: "https://wallet.example/dapp",
-        incognito: false,
-    });
-    await settle();
-
-    assert.equal(harness.timerDelays.includes(10_000), true);
-    assert.equal(harness.nativeMessages.at(-1).message.subject, "openApp");
-});
-
-test("simultaneous manual clicks share one admission and accept its canonical native handle", async () => {
-    const admission = deferred();
-    const harness = makeHarness({native: () => admission.promise});
-    const first = harness.dispatch(manualSwitchIntent(), contentSender());
-    const second = harness.dispatch(manualSwitchIntent(), contentSender({id: 10}));
-    await settle();
-    assert.equal(harness.nativeMessages.length, 1);
-    assert.equal(harness.storageWrites.length, 0);
-    const nativeRequest = harness.nativeMessages[0].message;
-    assert.equal(nativeRequest.name, "switchAccount");
-    assert.deepEqual(nativeRequest.body, {latestConfigurations: []});
-    assert.match(nativeRequest.enqueueAttempt, /^[0-9a-f]{32}$/);
-    const canonicalId = nativeRequest.id === 31 ? 32 : 31;
-    admission.resolve(nativeAcknowledgement(canonicalId, {ethereum: 4, solana: 6}));
-    const responses = await Promise.all([first, second]);
-    assert.deepEqual(clone(responses[0]), clone(responses[1]));
-    assert.equal(responses[0].id, canonicalId);
-    assert.deepEqual(clone(responses[0].revisions), {ethereum: 4, solana: 6});
-});
-
-test("manual admission omits oversized favicons and preserves ordinary favicon URLs", async () => {
-    for (const favicon of [
-        "https://wallet.example/icon.png",
-        "data:image/png;base64," + "A".repeat(300_000),
-        "data:image/svg+xml," + "\u{1F600}".repeat(80_000),
-    ]) {
-        const harness = makeHarness({native: message => {
-            assert.ok(Buffer.byteLength(JSON.stringify(message)) <= 256 * 1024);
-            return nativeAcknowledgement(message.id, message.revisions);
-        }});
-
-        const response = await harness.dispatch(
-            manualSwitchIntent(), contentSender({favIconUrl: favicon})
-        );
-
-        assert.equal(response.subject, "manualSwitchAcknowledged");
-        assert.equal(harness.nativeMessages[0].message.favicon,
-            favicon.startsWith("https:") ? favicon : "");
-    }
-});
-
-test("the first toolbar click after retention expiry starts fresh even before delayed timers run", async () => {
-    let now = 1_700_000_000_000;
-    const tab = {id: 9, url: "https://wallet.example/dapp", incognito: false};
-    let harness;
-    harness = makeHarness({
-        configuredPopup: false,
-        dateNow: () => now,
-        native: message => message.name === "switchAccount"
-            ? nativeAcknowledgement(message.id, message.revisions)
-            : undefined,
-        sendTabMessage: (_, message) => message.subject === "workflowProbe"
-            ? {
-                subject: "workflowProbe",
-                nonce: message.nonce,
-                workflowVersion: 3,
-                buildVersion: packagedBuildVersion,
-            }
-            : harness.dispatch({...message, host: "wallet.example"}, contentSender(tab)),
-    });
-    harness.clickToolbar(tab);
-    await settle();
-    const first = harness.nativeMessages.find(({message}) => message.name === "switchAccount").message;
-    now += 76 * 60 * 1000;
-
-    harness.clickToolbar(tab);
-    await settle();
-
-    const admissions = harness.nativeMessages.filter(({message}) => message.name === "switchAccount");
+    await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
     assert.equal(admissions.length, 2);
-    assert.notEqual(admissions[1].message.id, first.id);
-    const presentations = harness.nativeMessages.filter(({message}) => message.subject === "showApproval");
-    assert.equal(presentations.length, 2);
-    assert.equal(presentations[1].message.id, admissions[1].message.id);
+    assert.notEqual(admissions[0].id, admissions[1].id);
+    assert.notEqual(admissions[0].enqueueAttempt, admissions[1].enqueueAttempt);
+    assert.equal(admissions[0].admissionDeadline, admissionDeadline);
+    assert.equal(admissions[1].admissionDeadline, admissionDeadline);
+    assert.deepEqual(clone(admissions[1].authority), {context: current.context, revisions: current.revisions});
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject || value.message.name), [
+        "getLatestConfiguration", "switchAccount", "switchAccount", "showApproval",
+    ]);
 });
 
-test("a live macOS switch polls after one second and persists before notifying and acknowledging", async () => {
-    const selected = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
+test("toolbar waits for manual-switch retries and completion draining", async () => {
+    const timers = new Map;
+    let nextTimer = 0;
+    const schedule = (callback, delay) => {
+        const id = ++nextTimer;
+        timers.set(id, {callback, delay});
+        return id;
     };
-    const storage = new Map;
     const harness = makeHarness({
         configuredPopup: false,
-        storage,
-        tabs: [
-            {id: 9, url: "https://wallet.example/dapp", incognito: false},
-            {id: 10, url: "https://wallet.example/other", incognito: false},
-            {id: 11, url: "https://other.example", incognito: false},
-            {id: 12, url: "http://wallet.example", incognito: false},
-            {id: 13, url: "https://wallet.example/private", incognito: true},
-        ],
-        native: message => isResponseRead(message) ? nativeResult({
-            id: message.id,
-            name: "switchAccount",
-            provider: "multiple",
-            result: null,
-            mutation: {
-                kind: "accounts",
-                updates: {
-                    [selected.provider]: selected.provider === "ethereum"
-                        ? {address: selected.results[0], chainId: selected.chainId}
-                        : {publicKey: selected.publicKey},
-                },
-            },
-        }) : nativeAcknowledgement(message.id, message.revisions),
-        acknowledgeResponse: message => {
-            assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
-            assert.deepEqual(harness.tabMessages.filter(({message}) =>
-                message.subject === "configurationChanged"
-            ).map(({id}) => id), [9, 10]);
-            return {id: message.id, acknowledged: true};
-        },
+        scheduleTimeout: schedule,
+        cancelTimeout: id => timers.delete(id),
+        native: message => ({id: message.id, opened: true}),
+        sendTabMessage: (_id, message) => message.subject === "workflowProbe"
+            ? {...message, buildVersion: packagedBuildVersion}
+            : new Promise(resolve => schedule(() => resolve({
+                id: 41, requestToken, approvalRequired: true, state: snapshot(),
+                configurationKey: message.configurationKey,
+                subject: "manualSwitchAcknowledged", workflowVersion: 4,
+            }), 37_000)),
     });
-    const response = await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(response.subject, "manualSwitchAcknowledged");
-    assert.equal(harness.nativeMessages.length, 1);
-    assert.equal(await harness.runTimer(), true);
-    assert.deepEqual(harness.popupCalls, []);
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        isResponseRead(message)
-    ).length, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ).length, 1);
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
-    assert.deepEqual(harness.alarmCreates, [{
-        name: recoveryAlarmName,
-        options: {delayInMinutes: 1, periodInMinutes: 1},
-    }]);
-    assert.equal(harness.tabMessages.some(({message}) =>
-        message.subject === "manualSwitchResult"
-    ), false);
-});
-
-test("normal approval completes on the next shared poll without a response-ready hint", async () => {
-    let descriptor;
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
-        native: message => {
-            if (message.name === "switchAccount") {
-                descriptor = recoveryDescriptor({id: message.id});
-                return nativeAcknowledgement(message.id, message.revisions);
-            }
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return nativeResult({id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                mutation: {kind: "accounts", updates: {ethereum: null, solana: null}}});
-        },
-        acknowledgeResponse: message => {
-            descriptor = null;
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
+    const pending = harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
     await settle();
-    assert.equal(harness.nativeMessages.length, 1);
-    assert.equal(await harness.runTimer(), true);
-    assert.equal(harness.nativeMessages.length, 1);
-    descriptor.state = "approved";
-    assert.equal(await harness.runTimer(), true);
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject || message.name), [
-        "switchAccount", "prepareResponseDelivery", "acknowledgeResponse",
-    ]);
-    assert.deepEqual(harness.storage.get("https://wallet.example").revisions, {ethereum: 1, solana: 1});
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
+    const [id, timer] = [...timers].sort((left, right) => left[1].delay - right[1].delay)[0];
+    timers.delete(id);
+    timer.callback();
+    await pending;
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["showApproval"]);
+    assert.equal(timers.size, 0);
 });
 
-test("response-ready hints share a live switch read and retries do not repeat a committed change", async () => {
-    let acknowledge = false;
-    const read = deferred();
-    const harness = makeHarness({
-        tabs: [{id: 9, url: "https://wallet.example/dapp"}],
-        native: message => isResponseRead(message)
-            ? read.promise
-            : nativeAcknowledgement(message.id, message.revisions),
-        acknowledgeResponse: message => acknowledge
-            ? {id: message.id, acknowledged: true}
-            : undefined,
-    });
-    const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
-    const hint = {subject: "responseReady", id: admitted.id, workflowVersion: 3};
-    const first = harness.dispatch(hint, popupSender());
-    const second = harness.dispatch(hint, popupSender());
-    await settle();
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        isResponseRead(message)
-    ).length, 1);
-    read.resolve(nativeResult({
-        id: admitted.id,
-        name: "switchAccount",
-        provider: "multiple",
-        result: null,
-        mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
-    }));
-    await Promise.all([first, second]);
-    await settle();
-    const revisions = clone(harness.storage.get("https://wallet.example").revisions);
-    const writes = providerStateWrites(harness).length;
-    const notifications = harness.tabMessages.filter(({message}) =>
-        message.subject === "configurationChanged"
-    ).length;
-    acknowledge = true;
-    assert.equal(await harness.runTimer(), true);
-    assert.deepEqual(harness.storage.get("https://wallet.example").revisions, revisions);
-    assert.equal(providerStateWrites(harness).length, writes);
-    assert.equal(harness.tabMessages.filter(({message}) =>
-        message.subject === "configurationChanged"
-    ).length, notifications + 1);
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
-});
-
-test("popup and live switch completion share one native read and configuration commit", async () => {
-    const read = deferred();
-    const harness = makeHarness({
-        native: message => isResponseRead(message)
-            ? read.promise
-            : nativeAcknowledgement(message.id, message.revisions),
-    });
-    const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
-    const live = harness.dispatch({
-        subject: "responseReady",
-        id: admitted.id,
-        workflowVersion: 3,
-    }, popupSender());
-    await settle();
-    const popup = harness.dispatch({
-        subject: "applyCompletedResponse",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        id: admitted.id,
-        requestToken,
-        revisions: clone(admitted.revisions),
-        workflowVersion: 3,
-    }, popupSender());
-    await settle();
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        isResponseRead(message)
-    ).length, 1);
-    read.resolve(nativeResult({
-        id: admitted.id,
-        name: "switchAccount",
-        provider: "multiple",
-        result: null,
-        mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
-    }));
-    const [, response] = await Promise.all([live, popup]);
-    assert.deepEqual(clone(response), {applied: true});
-    assert.equal(providerStateWrites(harness).length, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ).length, 1);
-});
-
-test("a missing live switch is forgotten and another click admits again", async () => {
-    const harness = makeHarness({native: message => isResponseRead(message)
-        ? {id: message.id, missing: true}
-        : nativeAcknowledgement(message.id, message.revisions)});
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await harness.runTimer();
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.name === "switchAccount"
-    ).length, 1);
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.name === "switchAccount"
-    ).length, 2);
-});
-
-test("clicking a switch whose native response expired retries admission once", async () => {
-    for (const sharesBackgroundRead of [false, true]) {
-        let now = 1_700_000_000_000;
-        const read = deferred();
-        const harness = makeHarness({
-            dateNow: () => now,
-            native: message => isResponseRead(message)
-                ? read.promise
-                : nativeAcknowledgement(message.id, message.revisions),
-        });
-        const first = await harness.dispatch(manualSwitchIntent(), contentSender());
-        now += 61 * 60 * 1000;
-        if (sharesBackgroundRead) { await harness.runTimer(); }
-
-        await Promise.all([
-            harness.dispatch(manualSwitchIntent(), contentSender()),
-            harness.dispatch(manualSwitchIntent(), contentSender({id: 10})),
-        ]);
-        await settle();
-        assert.equal(harness.nativeMessages.filter(({message}) =>
-            isResponseRead(message)
-        ).length, 1);
-        read.resolve({id: first.id, missing: true});
-        await settle();
-
-        const admissions = harness.nativeMessages.filter(({message}) =>
-            message.name === "switchAccount"
-        );
-        assert.equal(admissions.length, 2);
-        assert.notEqual(admissions[1].message.id, first.id);
-    }
-});
-
-test("later clicks let native coalesce an outstanding switch", async () => {
-    const harness = makeHarness({native: message => message.name === "switchAccount"
-        ? nativeAcknowledgement(31, {ethereum: 0, solana: 0})
-        : undefined});
-    const first = await harness.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    const second = await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(first.id, second.id);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.name === "switchAccount").length, 2);
-});
-
-test("a lost switch admission reply requires another click and resumes the canonical native request", async () => {
-    const storage = new Map;
-    let original;
-    const native = message => {
-        if (message.name !== "switchAccount") { return undefined; }
-        if (!original) {
-            original = clone(message);
-            return undefined;
-        }
-        return nativeAcknowledgement(original.id, original.revisions);
-    };
-    const recoveryNative = message => ({
-        id: message.id,
-        requests: original ? [recoveryDescriptor({id: original.id, revisions: original.revisions})] : [],
-    });
-    const first = makeHarness({storage, native, recoveryNative});
-    assert.equal(await first.dispatch(manualSwitchIntent(), contentSender()), undefined);
-    const restarted = makeHarness({storage, native, recoveryNative});
-    restarted.startup();
-    await settle();
-    assert.equal(restarted.nativeMessages.length, 0);
-    assert.equal(await restarted.runTimer(), true);
-    assert.equal(await restarted.fireAlarm(), undefined);
-    const resumed = await restarted.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(resumed.id, original.id);
-    assert.equal(resumed.requestToken, requestToken);
-    assert.notEqual(restarted.nativeMessages[0].message.enqueueAttempt, original.enqueueAttempt);
-});
-
-test("an admission settling during an older empty discovery starts a fresh scan", async () => {
-    const discovery = deferred();
-    let discoveryID;
-    let descriptor;
-    let scans = 0;
-    const harness = makeHarness({
-        recoveryNative: message => {
-            if (++scans === 1) {
-                discoveryID = message.id;
-                return discovery.promise;
-            }
-            return {id: message.id, requests: descriptor ? [descriptor] : []};
-        },
-        native: message => {
-            if (message.name === "switchAccount") {
-                descriptor = recoveryDescriptor({id: message.id, state: "approved"});
-                return nativeAcknowledgement(message.id, message.revisions);
-            }
-            return nativeError({id: message.id, name: "switchAccount", provider: "multiple",
-                error: {code: 4001, message: "Canceled"}});
-        },
-        acknowledgeResponse: message => {
-            descriptor = null;
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(harness.nativeMessages.length, 1);
-    discovery.resolve({id: discoveryID, requests: []});
-    await settle();
-    assert.equal(scans, 2);
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject || message.name), [
-        "switchAccount", "prepareResponseDelivery", "acknowledgeResponse",
-    ]);
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
-});
-
-test("another click recovers an unacknowledged completed switch before a later click starts a new one", async () => {
-    let acknowledged = false;
-    const native = message => {
-        if (message.name === "switchAccount") {
-            return {...nativeAcknowledgement(acknowledged ? 32 : 31), approvalRequired: false};
-        }
-        if (isResponseRead(message)) {
-            return nativeError({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                error: {code: 4001, message: "Canceled"},
-            });
-        }
-    };
-    const harness = makeHarness({
-        native,
-        acknowledgeResponse: message => {
-            acknowledged = true;
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await settle();
-    assert.equal(harness.nativeMessages.length, 0);
-    const recovered = await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(recovered.id, 31);
-    await harness.runTimer();
-    assert.equal(acknowledged, true);
-    const next = await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(next.id, 32);
-});
-
-test("a failed switch configuration write is retried before acknowledgement", async () => {
-    let failWrite = true;
-    const harness = makeHarness({
-        storageSet: values => {
-            if (failWrite && values["https://wallet.example"]) {
-                throw new Error("storage unavailable");
-            }
-        },
-        native: message => isResponseRead(message) ? nativeResult({
-            id: message.id,
-            name: "switchAccount",
-            provider: "multiple",
-            result: null,
-            mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
-        }) : nativeAcknowledgement(message.id, message.revisions),
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await harness.runTimer();
-    assert.equal(harness.nativeMessages.some(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ), false);
-    failWrite = false;
-    await harness.runTimer();
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ).length, 1);
-});
-
-test("a switch completed before admission expiry survives a delayed completion hint", async () => {
-    let now = 1_700_000_000_000;
-    let terminal;
-    const selected = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    const harness = makeHarness({
-        dateNow: () => now,
-        tabs: [{id: 9, url: "https://wallet.example/dapp"}],
-        native: message => isResponseRead(message)
-            ? terminal
-            : nativeAcknowledgement(message.id, message.revisions),
-    });
-    const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
-    const admissionDeadline = harness.nativeMessages[0].message.admissionDeadline;
-    assert.equal(admissionDeadline, now + 15 * 60 * 1000);
-    now = admissionDeadline - 1;
-    terminal = nativeResult({
-        id: admitted.id,
-        name: "switchAccount",
-        provider: "multiple",
-        result: null,
-        mutation: {
-            kind: "accounts",
-            updates: {
-                [selected.provider]: selected.provider === "ethereum"
-                    ? {address: selected.results[0], chainId: selected.chainId}
-                    : {publicKey: selected.publicKey},
-            },
-        },
-    });
-    now = admissionDeadline + 1;
-    await harness.dispatch({
-        subject: "responseReady",
-        id: admitted.id,
-        workflowVersion: 3,
-    }, popupSender());
-    await settle();
-
-    assert.deepEqual(harness.storage.get("https://wallet.example"), {
-        latestConfigurations: [selected],
-        revisions: {ethereum: 1, solana: 0},
-        workflowVersion: 3,
-    });
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        isResponseRead(message)
-    ).length, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ).length, 1);
-    assert.equal(harness.tabMessages.filter(({message}) =>
-        message.subject === "configurationChanged"
-    ).length, 1);
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
-});
-
-test("manual polling rejects malformed switch terminals and stops when native retention expires", async () => {
-    let now = 1_700_000_000_000;
-    const retentionDeadline = now + (15 + 60) * 60 * 1000;
-    const harness = makeHarness({
-        dateNow: () => now,
-        executionNative: message => now >= retentionDeadline
-            ? {id: message.id, missing: true}
-            : executionStatus(message, "completed"),
-        native: message => isResponseRead(message) ? nativeResult({
-            id: message.id,
-            name: "switchAccount",
-            provider: "ethereum",
-            result: null,
-            mutation: {
-                kind: "accounts",
-                updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
-            },
-        }) : nativeAcknowledgement(message.id, message.revisions),
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await harness.runTimer();
-    assert.equal(providerStateWrites(harness).length, 0);
-    assert.equal(harness.nativeMessages.some(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ), false);
-    now += (15 + 60) * 60 * 1000;
-    const count = harness.nativeMessages.length;
-    await harness.runTimer();
-    assert.equal(harness.nativeMessages.length, count);
-    await harness.runTimer();
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.name === "switchAccount"
-    ).length, 2);
-});
-
-test("startup discovers native work without admitting or changing unrelated storage", async () => {
-    const storage = new Map([["unrelated", true]]);
-    const harness = makeHarness({storage, native: () => assert.fail("no automatic recovery")});
-    harness.startup();
-    await settle();
-    assert.equal(storage.get("unrelated"), true);
-    assert.deepEqual(harness.alarmCreates, [{
-        name: recoveryAlarmName,
-        options: {delayInMinutes: 1, periodInMinutes: 1},
-    }]);
-    assert.deepEqual(harness.alarmClears, []);
-    assert.deepEqual(harness.storageRemovals, ["workflowUpdateRecoveryNeeded"]);
-    assert.equal(harness.recoveryMessages.length, 2);
-    assert.equal(await harness.fireAlarm(), undefined);
-    await harness.runTimer();
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("an alarm recovers an approval after worker termination before its admission reply", async () => {
-    const alarms = new Map;
-    const storage = new Map;
-    const lostReply = deferred();
-    let descriptor;
-    const discovery = message => ({id: message.id, requests: descriptor ? [descriptor] : []});
-    const first = makeHarness({
-        alarms, storage, recoveryNative: discovery,
-        native: message => {
-            assert.equal(alarms.has(recoveryAlarmName), true);
-            descriptor = recoveryDescriptor({id: message.id});
-            return lostReply.promise;
-        },
-    });
-    void first.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    assert.equal(first.nativeMessages.length, 1);
-    const second = makeHarness({
-        alarms, storage, recoveryNative: discovery,
-        tabs: [{id: 9, url: "https://wallet.example/dapp"}],
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            assert.equal(message.id, descriptor.id);
-            return nativeResult({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                result: null,
-                mutation: {
-                    kind: "accounts",
-                    updates: {
-                        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
-                    },
-                },
-            });
-        },
-        acknowledgeResponse: message => {
-            assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
-            descriptor = null;
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await settle();
-    assert.equal(second.nativeMessages.length, 0);
-    assert.equal(second.alarmCreates.length, 0);
-    assert.equal(await second.runTimer(), true);
-    descriptor.state = "approved";
-
-    await second.fireAlarm();
-
-    assert.deepEqual(second.nativeMessages.map(({message}) => message.subject), [
-        "prepareResponseDelivery", "acknowledgeResponse",
-    ]);
-    assert.equal(second.tabMessages.filter(({message}) => message.subject === "configurationChanged").length, 1);
-    assert.equal(await second.runTimer(), false);
-    await second.fireAlarm();
-    assert.equal(alarms.has(recoveryAlarmName), true);
-});
-
-test("recovery rebroadcasts the current stored configuration before acknowledging an already committed switch", async () => {
-    const approved = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    for (const revision of [1, 3]) {
-        const current = {
-            ...approved,
-            results: [revision === 1 ? approved.results[0] : "0x0000000000000000000000000000000000000002"],
-        };
-        const stored = {
-            latestConfigurations: [current],
-            revisions: {ethereum: revision, solana: 0},
-            workflowVersion: 3,
-        };
-        const storage = new Map([["https://wallet.example", stored]]);
-        const descriptor = recoveryDescriptor({state: "completed"});
-        let acknowledged = false;
-        const harness = makeHarness({
-            storage,
-            tabs: [
-                {id: 9, url: "https://wallet.example/dapp", incognito: false, active: true},
-                {id: 10, url: "https://other.example", incognito: false},
-                {id: 11, url: "https://wallet.example/private", incognito: true},
-            ],
-            recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
-            native: message => (nativeResult({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                result: null,
-                mutation: {
-                    kind: "accounts",
-                    updates: {
-                        [approved.provider]: approved.provider === "ethereum"
-                            ? {address: approved.results[0], chainId: approved.chainId}
-                            : {publicKey: approved.publicKey},
-                    },
-                },
-                approvalCommitted: true,
-            })),
-            acknowledgeResponse: message => {
-                assert.deepEqual(harness.tabMessages, [{id: 9, message: {
-                    subject: "configurationChanged",
-                    configurationKey: "https://wallet.example",
-                    state: snapshot({ethereum: ethereumState(current.results[0], current.chainId, revision), revisions: stored.revisions}),
-                    workflowVersion: 3,
-                }}]);
-                acknowledged = true;
-                return {id: message.id, acknowledged: true};
-            },
-        });
-
-        await settle();
-
-        assert.equal(acknowledged, true);
-        assert.equal(providerStateWrites(harness).length, 0);
-        assert.deepEqual(storage.get("https://wallet.example"), stored);
-    }
-});
-
-test("recovery retries unacknowledged completions without a duplicate configuration commit", async () => {
-    let acknowledged = false;
-    let allowAcknowledgement = false;
-    const descriptor = recoveryDescriptor({state: "completed"});
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return nativeResult({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                result: null,
-                mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
-            });
-        },
-        acknowledgeResponse: message => {
-            acknowledged = allowAcknowledgement;
-            return {id: message.id, acknowledged};
-        },
-    });
-    await settle();
-    const state = clone(harness.storage.get("https://wallet.example"));
-    assert.equal(providerStateWrites(harness).length, 1);
-    assert.equal(harness.alarms.has(recoveryAlarmName), true);
-    allowAcknowledgement = true;
-    await harness.fireAlarm();
-    assert.deepEqual(harness.storage.get("https://wallet.example"), state);
-    assert.equal(providerStateWrites(harness).length, 1);
-    assert.equal(acknowledged, true);
-    assert.equal(harness.nativeMessages.some(({message}) => message.name === "switchAccount"), false);
-});
-
-test("pending discovery and unavailable approved helpers are retried by the independent driver without reopening native UI", async () => {
-    const descriptor = recoveryDescriptor();
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: [descriptor]}),
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return {id: message.id, pending: true};
-        },
-    });
-    await settle();
-    await harness.fireAlarm();
-    assert.equal(harness.nativeMessages.length, 0);
-    await harness.runTimer();
-    descriptor.state = "approved";
-    await harness.fireAlarm();
-    assert.ok(harness.nativeMessages.length >= 1);
-    await harness.runTimer();
-    await harness.fireAlarm();
-    assert.ok(harness.nativeMessages.length >= 2);
-    assert.equal(harness.alarmCreates.length, 1);
-    assert.equal(harness.alarms.has(recoveryAlarmName), true);
-});
-
-test("recovery advances past pending or failed reads to a completed switch in the same lineage", async () => {
-    for (const outcome of ["pending", "failure"]) {
-        const address = "0x0000000000000000000000000000000000000001";
-        let descriptors = [
-            recoveryDescriptor({id: 31, configurationKey: "http://wallet.example", state: "approved"}),
-            recoveryDescriptor({id: 32, state: "completed"}),
-        ];
-        const reads = [];
-        const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: descriptors}),
-            native: message => {
-                reads.push(message.id);
-                if (message.id === 31) {
-                    if (outcome === "failure") { throw new Error("Helper unavailable"); }
-                    return {id: message.id, pending: true};
-                }
-                return nativeResult({
-                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                    mutation: {kind: "accounts", updates: {ethereum: {address, chainId: "0x1"}}},
-                });
-            },
-            acknowledgeResponse: message => {
-                descriptors = descriptors.filter(request => request.id !== message.id);
-                return {id: message.id, acknowledged: true};
-            },
-        });
-        await settle();
-        assert.deepEqual(reads, [31, 32]);
-        assert.equal(harness.storage.get("https://wallet.example").latestConfigurations[0].results[0], address);
-        assert.deepEqual(descriptors.map(request => request.id), [31]);
-        await harness.fireAlarm();
-        assert.deepEqual(reads.slice(0, 3), [31, 32, 31]);
-        assert.equal(reads.filter(id => id === 32).length, 1);
-        assert.equal(providerStateWrites(harness).length, 1);
-    }
-});
-
-test("fast discovery retries another origin while a long read stalls and its lineage stays ordered", async () => {
-    let now = 1_700_000_000_000;
-    const stalled = deferred();
-    let descriptors = [
-        recoveryDescriptor({id: 31, state: "approved"}),
-        recoveryDescriptor({id: 32, state: "completed", configurationKey: "http://wallet.example"}),
-        recoveryDescriptor({id: 33, state: "approved", host: "other.example", configurationKey: "https://other.example"}),
-        recoveryDescriptor({id: 34, host: "pending.example", configurationKey: "https://pending.example"}),
-    ];
-    const reads = [];
-    const harness = makeHarness({
-        dateNow: () => now,
-        recoveryNative: message => ({id: message.id, requests: descriptors}),
-        native: message => {
-            if (message.name === "switchAccount") { return nativeAcknowledgement(31); }
-            reads.push(message.id);
-            if (message.id === 31) { return stalled.promise; }
-            if (message.id === 33 && reads.filter(id => id === 33).length === 1) { return undefined; }
-            return nativeError({id: message.id, name: "switchAccount", provider: "multiple",
-                error: {code: 4001, message: "Canceled"}});
-        },
-        acknowledgeResponse: message => {
-            descriptors = descriptors.filter(request => request.id !== message.id);
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await settle();
-    assert.deepEqual(reads, [31, 33]);
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    assert.deepEqual(reads, [31, 33, 33]);
-    now += 170_000;
-    assert.equal(await harness.runTimer(), true);
-    assert.deepEqual(reads, [31, 33, 33]);
-    assert.ok(harness.recoveryMessages.length >= 2);
-    stalled.resolve(nativeError({id: 31, name: "switchAccount", provider: "multiple",
-        error: {code: 4001, message: "Canceled"}}));
-    await settle();
-    assert.equal(await harness.runTimer(), true);
-    assert.deepEqual(reads, [31, 33, 33, 32]);
-    assert.equal(harness.popupCalls.length, 1);
-    assert.equal(descriptors.length, 1);
-    now += 15 * 60 * 1000;
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
-    assert.equal(harness.alarms.has(recoveryAlarmName), true);
-});
-
-test("recovery retries persistence and acknowledgement failures without advancing configuration twice", async () => {
-    for (const failure of ["persistence", "acknowledgement"]) {
-        let failing = true;
-        const descriptor = recoveryDescriptor({state: "completed"});
-        const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: [descriptor]}),
-            native: message => nativeResult({
-                id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
-            }),
-            storageSet: values => {
-                if (failure === "persistence" && failing && values[descriptor.configurationKey]) {
-                    throw new Error("Storage write interrupted");
-                }
-            },
-            acknowledgeResponse: message => ({id: message.id, acknowledged: failure !== "acknowledgement" || !failing}),
-        });
-        await settle();
-        assert.deepEqual(harness.storage.get(descriptor.configurationKey).revisions, {ethereum: 1, solana: 1});
-        assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length,
-            failure === "persistence" ? 0 : 1);
-        failing = false;
-        await harness.fireAlarm();
-        assert.deepEqual(harness.storage.get(descriptor.configurationKey).revisions, {ethereum: 1, solana: 1});
-        assert.equal(providerStateWrites(harness).length, 1);
-        await harness.runTimer();
-    }
-});
-
-test("persisted execution jobs survive unavailable or empty discovery", async () => {
-    for (const invalid of ["transport", "shape", "descriptor"]) {
-        let mode = "initial";
-        const descriptor = recoveryDescriptor();
-        const harness = makeHarness({
-            recoveryNative: message => {
-                if (mode === "invalid") {
-                    if (invalid === "transport") { throw new Error("Discovery failed"); }
-                    return invalid === "shape" ? {id: message.id} : {
-                        id: message.id, requests: [{...descriptor, state: "unknown"}],
-                    };
-                }
-                return {id: message.id, requests: mode === "empty" ? [] : [descriptor]};
-            },
-            native: message => nativeAcknowledgement(31),
-        });
-        await harness.dispatch(manualSwitchIntent(), contentSender());
-        await settle();
-        mode = "invalid";
-        assert.equal(await harness.runTimer(), true);
-        assert.equal(await harness.runTimer(), true);
-        mode = "empty";
-        assert.equal(await harness.runTimer(), true);
-        await harness.runTimer();
-        assert.equal(harness.nativeMessages.filter(({message}) => message.name === "switchAccount").length, 1);
-        assert.equal(harness.storage.get("nativeExecutionJobs").length, 1);
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-    }
-});
-
-test("discovery rejects excess requests and validates the whole bounded snapshot before reading", async () => {
-    for (const requests of [
-        Array.from({length: 9}, (_, index) => recoveryDescriptor({id: 31 + index, state: "approved"})),
-        [recoveryDescriptor({state: "approved"}), recoveryDescriptor({id: 32, state: "unknown"})],
-    ]) {
-        const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests}),
-            native: () => assert.fail("An invalid snapshot must not be published"),
-        });
-        await settle();
-        assert.equal(harness.recoveryMessages.length, 1);
-        assert.equal(harness.nativeMessages.length, 0);
-        await harness.runTimer();
-    }
-});
-
-test("a stale batch tolerates removed handles before the next discovery drains new work", async () => {
-    const reading = deferred();
-    const descriptors = [31, 32, 33].map(id => recoveryDescriptor({
-        id, state: "approved", configurationKey: `${id === 31 ? "https" : "http"}://wallet.example`,
-        requestToken: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
-    }));
-    let snapshot = descriptors.slice(0, 2);
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: snapshot}),
-        native: message => message.id === 31 ? reading.promise : {id: message.id, missing: true},
-    });
-    await settle();
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31]);
-    snapshot = [descriptors[2]];
-    const wake = harness.fireAlarm();
-    await settle();
-    assert.equal(harness.recoveryMessages.length, 2);
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31]);
-    reading.resolve({id: 31, missing: true});
-    await wake;
-    await harness.fireAlarm();
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 32, 33]);
-    await harness.runTimer();
-});
-
-test("a stale discovery snapshot after acknowledgement only performs a harmless missing read", async () => {
-    const reading = deferred();
-    const discovery = deferred();
-    let discoveryID;
-    let scans = 0;
-    let acknowledged = false;
-    const descriptor = recoveryDescriptor({state: "completed"});
-    const harness = makeHarness({
-        recoveryNative: message => {
-            if (++scans === 1) { return {id: message.id, requests: [descriptor]}; }
-            discoveryID = message.id;
-            return discovery.promise;
-        },
-        native: message => acknowledged ? {id: message.id, missing: true} : reading.promise,
-        acknowledgeResponse: message => {
-            acknowledged = true;
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await settle();
-    const wake = harness.fireAlarm();
-    await settle();
-    reading.resolve(nativeResult({id: descriptor.id, name: "switchAccount", provider: "multiple", result: null,
-        mutation: {kind: "accounts", updates: {ethereum: null, solana: null}}}));
-    await settle();
-    discovery.resolve({id: discoveryID, requests: [descriptor]});
-    await wake;
-    assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 2);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-    assert.equal(providerStateWrites(harness).length, 1);
-    await harness.runTimer();
-});
-
-test("HTTP and HTTPS recovery handles serialize through their shared lease lineage", async () => {
-    const reading = deferred();
-    let descriptors = [
-        recoveryDescriptor({id: 31, configurationKey: "http://wallet.example", state: "approved"}),
-        recoveryDescriptor({id: 32, state: "approved"}),
-        recoveryDescriptor({id: 33, host: "other.example", configurationKey: "https://other.example", state: "approved"}),
-    ];
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptors}),
-        native: async message => {
-            const response = message.id === 31 ? await reading.promise : {id: message.id, missing: true};
-            descriptors = descriptors.filter(request => request.id !== message.id);
-            return response;
-        },
-    });
-    await settle();
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 33]);
-    reading.resolve({id: 31, missing: true});
-    await settle();
-    await harness.fireAlarm();
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.id), [31, 33, 32]);
-    await harness.runTimer();
-});
-
-test("lineage batches wait for acknowledgement while other origins and discovery keep progressing", async () => {
-    for (const acknowledged of [true, false]) {
-        const acknowledgement = deferred();
-        let descriptors = [
-            recoveryDescriptor({id: 31, configurationKey: "http://wallet.example", state: "completed"}),
-            recoveryDescriptor({id: 32, state: "completed"}),
-            recoveryDescriptor({id: 33, host: "other.example", configurationKey: "https://other.example", state: "completed"}),
-        ];
-        const reads = [];
-        const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: descriptors}),
-            native: message => {
-                reads.push(message.id);
-                return nativeResult({
-                    id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                    mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
-                });
-            },
-            acknowledgeResponse: async message => {
-                const response = message.id === 31
-                    ? await acknowledgement.promise
-                    : {id: message.id, acknowledged: true};
-                if (response.acknowledged) {
-                    descriptors = descriptors.filter(request => request.id !== message.id);
-                }
-                return response;
-            },
-        });
-        await settle();
-        assert.deepEqual(reads, [31, 33]);
-        await Promise.all([harness.fireAlarm(), harness.fireAlarm()]);
-        assert.deepEqual(reads, [31, 33]);
-        acknowledgement.resolve({id: 31, acknowledged});
-        await settle();
-        assert.deepEqual(reads, [31, 33, 32]);
-        assert.equal(harness.storage.get("https://wallet.example").revisions.ethereum, 1);
-        assert.equal(descriptors.some(request => request.id === 32), false);
-    }
-});
-
-test("clicks and scans share a response through acknowledgement and retry failed acknowledgements", async () => {
-    for (const outcome of ["acknowledged", "failed", "timeout"]) {
-        const acknowledgement = deferred();
-        const descriptor = recoveryDescriptor({state: "completed"});
-        let acknowledged = false;
-        let acknowledgements = 0;
-        const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
-            native: message => message.name === "switchAccount"
-                ? nativeAcknowledgement(descriptor.id, descriptor.revisions, false)
-                : nativeResult({id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                    mutation: {kind: "accounts", updates: {ethereum: null, solana: null}}}),
-            acknowledgeResponse: message => {
-                if (++acknowledgements === 1) {
-                    return acknowledgement.promise.then(response => {
-                        acknowledged = response.acknowledged;
-                        return response;
-                    });
-                }
-                acknowledged = true;
-                return {id: message.id, acknowledged: true};
-            },
-        });
-        await settle();
-        assert.equal(acknowledgements, 1);
-        assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
-        assert.equal(await harness.runTimer(), true);
-        assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-        if (outcome === "timeout") {
-            assert.equal(await harness.runTimer(5000), true);
-        } else {
-            acknowledgement.resolve({id: descriptor.id, acknowledged: outcome === "acknowledged"});
-            await settle();
-        }
-        assert.equal(await harness.runTimer(), true);
-        if (outcome !== "acknowledged") {
-            assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 2);
-            assert.equal(acknowledgements, 2);
-            assert.equal(await harness.runTimer(), true);
-        }
-        await harness.runTimer();
-        assert.equal(providerStateWrites(harness).length, 1);
-        assert.deepEqual(harness.storage.get(descriptor.configurationKey).revisions, {ethereum: 1, solana: 1});
-    }
-});
-
-test("rediscovery and a live click reuse a completion omitted by an intervening snapshot", async () => {
-    const reading = deferred();
-    const descriptor = recoveryDescriptor({state: "completed"});
-    let snapshot = [descriptor];
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: snapshot}),
-        native: message => message.name === "switchAccount"
-            ? nativeAcknowledgement(descriptor.id, descriptor.revisions, false)
-            : reading.promise,
-    });
-    await settle();
-    snapshot = [];
-    await harness.fireAlarm();
-    snapshot = [descriptor];
-    const recovered = harness.fireAlarm();
-    await settle();
-    assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, descriptor.id);
-    assert.equal(await harness.runTimer(), true);
-
-    reading.resolve(nativeError({
-        id: descriptor.id, name: "switchAccount", provider: "multiple",
-        error: {code: 4001, message: "Canceled"},
-    }));
-    await recovered;
-    await settle();
-    snapshot = [];
-
-    assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-    assert.equal(await harness.runTimer(), true);
-});
-
-test("an expired live read finishes before its replacement without forgetting the new admission", async () => {
-    let now = 1_700_000_000_000;
-    const firstRead = deferred();
-    const secondRead = deferred();
+test("manual-switch stale authority retries are bounded", async () => {
     let admissions = 0;
-    const harness = makeHarness({
-        dateNow: () => now,
-        native: message => message.name === "switchAccount"
-            ? nativeAcknowledgement(30 + Math.min(++admissions, 2), message.revisions)
-            : message.id === 31 ? firstRead.promise : secondRead.promise,
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await harness.runTimer();
-    now += 76 * 60 * 1000;
-    assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, 32);
-    await harness.runTimer();
-    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id), [31]);
-
-    firstRead.resolve({id: 31, missing: true});
-    await settle();
-    await harness.runTimer();
-    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id), [31, 32]);
-    assert.equal((await harness.dispatch(manualSwitchIntent(), contentSender())).id, 32);
-    assert.equal(admissions, 3);
-    secondRead.resolve(nativeError({
-        id: 32, name: "switchAccount", provider: "multiple",
-        error: {code: 4001, message: "Canceled"},
-    }));
-    await settle();
-    assert.equal(await harness.runTimer(), true);
-    await harness.runTimer();
-});
-
-test("a discovery queued during a delegated live acknowledgement cannot read or acknowledge it again", async () => {
-    const acknowledgement = deferred();
-    let descriptor;
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
-        native: message => {
-            if (message.name === "switchAccount") { return nativeAcknowledgement(31); }
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return nativeError({id: message.id, name: "switchAccount", provider: "multiple", error: {code: 4001, message: "Canceled"}});
-        },
-        acknowledgeResponse: () => acknowledgement.promise,
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    descriptor = recoveryDescriptor({state: "completed"});
-    const first = harness.fireAlarm();
-    await settle();
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-    const second = harness.fireAlarm();
-    await settle();
-    acknowledgement.resolve({id: descriptor.id, acknowledged: true});
-    await Promise.all([first, second]);
-    assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 1);
-    descriptor = null;
-    await harness.runTimer();
-});
-
-test("discovery immediately drains a completion whose live polling deadline expired", async () => {
-    let now = 1_700_000_000_000;
-    let descriptor;
-    const harness = makeHarness({
-        dateNow: () => now,
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
-        native: message => {
-            if (message.name === "switchAccount") { return nativeAcknowledgement(31); }
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return nativeResult({
-                id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
-            });
-        },
-    });
-    await harness.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    descriptor = recoveryDescriptor({state: "completed"});
-    now += (15 + 60) * 60 * 1000;
-    await harness.fireAlarm();
-    assert.equal(harness.nativeMessages.filter(({message}) => message.name === "switchAccount").length, 1);
-    assert.ok(harness.nativeMessages.some(({message}) => message.subject === "acknowledgeResponse"));
-    assert.equal(providerStateWrites(harness).length, 1);
-    assert.deepEqual(harness.storage.get(descriptor.configurationKey).revisions, {ethereum: 1, solana: 1});
-    await harness.runTimer();
-});
-
-test("page configuration reads and response hints discover approved work without a new click", async () => {
-    for (const trigger of ["configuration", "hint"]) {
-        const descriptor = recoveryDescriptor();
-        const harness = makeHarness({
-            recoveryNative: message => ({id: message.id, requests: [descriptor]}),
-            native: message => {
-                assert.equal(message.subject, "prepareResponseDelivery");
-                return nativeError({
-                    id: message.id,
-                    name: "switchAccount",
-                    provider: "multiple",
-                    error: {code: 4001, message: "Canceled"},
-                });
-            },
-        });
-        await settle();
-        assert.equal(harness.nativeMessages.length, 0);
-        descriptor.state = "approved";
-        await harness.dispatch(trigger === "hint"
-            ? {subject: "responseReady", id: descriptor.id, workflowVersion: 3}
-            : {subject: "getLatestConfiguration", host: descriptor.host, configurationKey: descriptor.configurationKey, workflowVersion: 3}, trigger === "hint" ? popupSender() : contentSender());
-        await settle();
-        assert.equal(harness.recoveryMessages.length, 2);
-        assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
-    }
-});
-
-test("a page returning during stale discovery recovers its completed account switch", async () => {
-    const discovery = deferred();
-    const descriptor = recoveryDescriptor();
-    const address = "0x0000000000000000000000000000000000000001";
-    let discoveryID;
-    const harness = makeHarness({
-        recoveryNative: message => {
-            if (discoveryID) {
-                return {id: message.id, requests: [{...descriptor, state: "completed"}]};
-            }
-            discoveryID = message.id;
-            return discovery.promise;
-        },
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return nativeResult({
-                id: message.id, name: "switchAccount", provider: "multiple", result: null,
-                mutation: {kind: "accounts", updates: {ethereum: {address, chainId: "0x1"}}},
-            });
-        },
-    });
-    await settle();
-    await harness.dispatch({
-        subject: "getLatestConfiguration", host: descriptor.host,
-        configurationKey: descriptor.configurationKey, workflowVersion: 3,
-    }, contentSender());
-    discovery.resolve({id: discoveryID, requests: [descriptor]});
-    await settle();
-    assert.equal(harness.recoveryMessages.length, 2);
-    assert.deepEqual(harness.storage.get(descriptor.configurationKey).latestConfigurations, [
-        {provider: "ethereum", chainId: "0x1", results: [address]},
-    ]);
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ).length, 1);
-    await harness.runTimer();
-});
-
-test("simultaneous wake triggers coalesce discovery and share one quiet response read", async () => {
-    const discovery = deferred();
-    const reading = deferred();
-    let discoveryID;
-    const descriptor = recoveryDescriptor({state: "approved"});
-    const harness = makeHarness({
-        recoveryNative: message => {
-            if (discoveryID) { return {id: message.id, requests: [descriptor]}; }
-            discoveryID = message.id;
-            return discovery.promise;
-        },
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return reading.promise;
-        },
-    });
-    await settle();
-    const alarm = harness.fireAlarm();
-    const hint = harness.dispatch({subject: "responseReady", id: descriptor.id, workflowVersion: 3}, popupSender());
-    const configuration = harness.dispatch({subject: "getLatestConfiguration", host: descriptor.host, configurationKey: descriptor.configurationKey, workflowVersion: 3});
-    const repeated = Array.from({length: 20}, () => harness.fireAlarm());
-    discovery.resolve({id: discoveryID, requests: [descriptor]});
-    await settle();
-    assert.equal(harness.recoveryMessages.length, 2);
-    assert.equal(harness.nativeMessages.length, 1);
-    reading.resolve({id: descriptor.id, missing: true});
-    await Promise.all([alarm, hint, configuration, ...repeated]);
-    assert.equal(harness.nativeMessages.length, 1);
-    await harness.runTimer();
-});
-
-test("bounded discovery drains completions sequentially per lineage and leaves pending pickers alone", async () => {
-    let descriptors = Array.from({length: 8}, (_, index) => {
-        const host = `wallet${Math.floor(index / 2)}.example`;
-        return recoveryDescriptor({
-            id: 200 + index,
-            host,
-            configurationKey: `${index % 2 === 0 ? "https" : "http"}://${host}`,
-            requestToken: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-            state: index === 0 ? "pending" : "completed",
-        });
-    });
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptors}),
-        native: message => nativeError({id: message.id, name: "switchAccount", provider: "multiple",
-            error: {code: 4001, message: "Canceled"}}),
-        acknowledgeResponse: message => {
-            descriptors = descriptors.filter(request => request.id !== message.id);
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await settle();
-    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id).sort(),
-        [201, 202, 203, 204, 205, 206, 207]);
-    await harness.fireAlarm();
-    assert.equal(harness.recoveryMessages.every(({message}) => !Object.hasOwn(message, "cursor")), true);
-    assert.deepEqual(harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id).sort(),
-        [201, 202, 203, 204, 205, 206, 207]);
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 7);
-    const readOrder = harness.nativeMessages.filter(({message}) => isResponseRead(message)).map(({message}) => message.id);
-    for (const [first, second] of [[202, 203], [204, 205], [206, 207]]) {
-        assert.ok(readOrder.indexOf(first) < readOrder.indexOf(second));
-    }
-    assert.equal(descriptors.length, 1);
-    assert.equal(descriptors[0].state, "pending");
-    await harness.runTimer();
-});
-
-test("failed, malformed, and empty discovery all retain the recovery alarm", async () => {
-    for (const failure of ["throw", "shape", "descriptor", "extra-field"]) {
-        let failing = true;
-        const harness = makeHarness({
-            recoveryNative: message => {
-                if (!failing) { return {id: message.id, requests: []}; }
-                if (failure === "throw") { throw new Error("native unavailable"); }
-                if (failure === "shape") { return {id: message.id}; }
-                if (failure === "descriptor") { return {id: message.id, requests: [recoveryDescriptor({state: "unknown"})]}; }
-                return {id: message.id, requests: [], extra: true};
-            },
-            native: () => assert.fail("Failed discovery must not read or admit requests"),
-        });
-        await settle();
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-        failing = false;
-        await harness.fireAlarm();
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-    }
-});
-
-test("idle scans retain one alarm without resetting its scheduled wake", async () => {
-    const alarm = {name: recoveryAlarmName, periodInMinutes: 1, scheduledTime: 1_800_000_000_000};
-    const alarms = new Map([[recoveryAlarmName, alarm]]);
-    const harness = makeHarness({alarms});
-    await settle();
-    harness.startup();
-    await harness.fireAlarm();
-    await harness.fireAlarm();
-    assert.deepEqual(alarms.get(recoveryAlarmName), alarm);
-    assert.equal(harness.alarmCreates.length, 0);
-    assert.equal(harness.alarmClears.includes(recoveryAlarmName), false);
-    assert.equal(harness.nativeMessages.length, 0);
-    assert.ok(harness.recoveryMessages.length >= 3);
-});
-
-test("a native admission committed after the next worker's empty scan is recovered by its next alarm", async () => {
-    const alarms = new Map;
-    const storage = new Map;
-    const abandonedReply = deferred();
-    let descriptor;
-    const discovery = message => ({id: message.id, requests: descriptor ? [descriptor] : []});
-    const first = makeHarness({alarms, storage, recoveryNative: discovery, native: () => abandonedReply.promise});
-    void first.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    const admission = first.nativeMessages[0].message;
-    const second = makeHarness({
-        alarms, storage, recoveryNative: discovery,
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return nativeResult({
-                id: message.id,
-                name: "switchAccount",
-                provider: "multiple",
-                result: null,
-                mutation: {kind: "accounts", updates: {"ethereum": null, "solana": null}},
-            });
-        },
-        acknowledgeResponse: message => {
-            assert.deepEqual(storage.get("https://wallet.example").revisions, {ethereum: 1, solana: 1});
-            descriptor = null;
-            return {id: message.id, acknowledged: true};
-        },
-    });
-    await settle();
-    assert.equal(second.recoveryMessages.length, 1);
-    assert.equal(second.nativeMessages.length, 0);
-    assert.equal(alarms.has(recoveryAlarmName), true);
-    descriptor = recoveryDescriptor({id: admission.id, state: "approved"});
-
-    await second.fireAlarm();
-
-    assert.deepEqual(second.nativeMessages.map(({message}) => message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
-    assert.equal(descriptor, null);
-    assert.equal(second.alarmCreates.length, 0);
-    assert.equal(alarms.has(recoveryAlarmName), true);
-});
-
-test("startup and admission share alarm creation before contacting native", async () => {
-    const creation = deferred();
-    const harness = makeHarness({
-        createAlarm: () => creation.promise,
-        native: message => {
-            assert.equal(harness.alarms.has(recoveryAlarmName), true);
-            return nativeAcknowledgement(message.id, message.revisions);
-        },
-    });
-    const admitted = harness.dispatch(manualSwitchIntent(), contentSender());
-    await settle();
-    assert.equal(harness.nativeMessages.length, 0);
-    assert.equal(harness.recoveryMessages.length, 0);
-    assert.equal(harness.alarmCreates.length, 1);
-    creation.resolve();
-    assert.equal((await admitted).subject, "manualSwitchAcknowledged");
-    assert.equal(harness.alarmCreates.length, 1);
-});
-
-test("failure to arm recovery prevents a new native admission", async () => {
-    const harness = makeHarness({
-        createAlarm: () => { throw new Error("alarm unavailable"); },
-        native: () => assert.fail("Admission must wait for its recovery alarm"),
-    });
-    assert.equal(await harness.dispatch(manualSwitchIntent(), contentSender()), undefined);
-    assert.equal(harness.recoveryMessages.length, 0);
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("quiet recovery never joins or upgrades an interactive response read", async () => {
-    const reading = deferred();
-    let descriptor;
-    const harness = makeHarness({
-        recoveryNative: message => ({id: message.id, requests: descriptor ? [descriptor] : []}),
-        native: message => {
-            assert.equal(message.subject, "prepareResponseDelivery");
-            return reading.promise;
-        },
-    });
-    const interactive = harness.dispatch({subject: "applyCompletedResponse", host: "wallet.example",
-        configurationKey: "https://wallet.example", id: 31, requestToken,
-        revisions: {ethereum: 0, solana: 0}, workflowVersion: 3}, popupSender());
-    await settle();
-    descriptor = recoveryDescriptor({state: "approved"});
-    await harness.fireAlarm();
-    assert.equal(harness.nativeMessages.filter(({message}) => isResponseRead(message)).length, 1);
-    reading.resolve(nativeError({id: 31, name: "switchAccount", provider: "multiple",
-        error: {code: 4001, message: "Canceled"}}));
-    assert.deepEqual(clone(await interactive), {applied: true});
-});
-
-test("worker-private recovery stays silent and native discovery is not a page message API", async () => {
-    const privateHarness = makeHarness({workerPrivateBrowsing: true, privateBrowsing: true});
-    privateHarness.startup();
-    await privateHarness.fireAlarm();
-    await privateHarness.dispatch({subject: "getLatestConfiguration", host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 3});
-    assert.equal(privateHarness.recoveryMessages.length, 0);
-    assert.equal(privateHarness.nativeMessages.length, 0);
-    assert.equal(privateHarness.alarmCreates.length, 0);
-    const harness = makeHarness();
-    await settle();
-    assert.equal(await harness.dispatch({id: 1, subject: "getManualSwitchRequests", workflowVersion: 3}), undefined);
-    assert.equal(harness.recoveryMessages.length, 1);
-});
-
-test("same-account grants advance revisions through missed delivery, replay, and restart", async () => {
-    const configurations = [
-        {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
-        },
-        {provider: "solana", publicKey: firstSolanaPublicKey},
-    ];
-    for (const selected of configurations) {
-        const other = configurations.find(item => item.provider !== selected.provider);
-        const revisions = {ethereum: 4, solana: 6};
-        const storage = new Map([["https://wallet.example", {
-            latestConfigurations: [selected],
-            revisions,
-            workflowVersion: 3,
-        }]]);
-        let terminal;
-        const harness = makeHarness({
-            storage,
-            tabs: [{id: 9, url: "https://wallet.example/dapp", incognito: false}],
-            sendTabMessage: () => Promise.reject(new Error("inactive document")),
-            native: message => isResponseRead(message)
-                ? terminal
-                : nativeAcknowledgement(message.id, message.revisions),
-        });
-        const acknowledged = await harness.dispatch(manualSwitchIntent(), contentSender());
-        terminal = nativeResult({
-            id: acknowledged.id,
-            name: "switchAccount",
-            provider: "multiple",
-            result: null,
-            mutation: {
-                kind: "accounts",
-                updates: {
-                    [selected.provider]: selected.provider === "ethereum"
-                        ? {address: selected.results[0], chainId: selected.chainId}
-                        : {publicKey: selected.publicKey},
-                },
-            },
-        });
-        await harness.dispatch({
-            subject: "responseReady",
-            id: acknowledged.id,
-            workflowVersion: 3,
-        }, popupSender());
-        await settle();
-
-        const acceptedRevision = revisions[selected.provider] + 1;
-        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
-            selected,
-        ]);
-        const manualResult = harness.tabMessages.find(value =>
-            value.message.subject === "configurationChanged"
-        ).message;
-        assert.equal(manualResult.state.revisions[selected.provider],
-            acceptedRevision);
-
-        const afterManual = clone(storage.get("https://wallet.example").revisions);
-        const replay = await harness.dispatch({
-            subject: "consumeResponse",
-            id: acknowledged.id,
-            configurationKey: "https://wallet.example",
-            requestToken,
-            revisions,
-            workflowVersion: 3,
-        });
-        assert.equal(replay.kind, "configuration");
-        assert.equal(replay.state.revisions[selected.provider],
-            acceptedRevision);
-        assert.deepEqual(storage.get("https://wallet.example").revisions, afterManual);
-
-        terminal = nativeResult({
-            id: 71,
-            name: other.provider === "ethereum" ? "requestAccounts" : "connect",
-            provider: other.provider,
-            result: other.provider === "ethereum" ? other.results : {publicKey: other.publicKey},
-            mutation: {
-                kind: "accounts",
-                updates: {
-                    [other.provider]: other.provider === "ethereum"
-                        ? {address: other.results[0], chainId: other.chainId}
-                        : {publicKey: other.publicKey},
-                },
-            },
-        });
-        await harness.dispatch({
-            subject: "consumeResponse",
-            id: terminal.id,
-            configurationKey: "https://wallet.example",
-            requestToken,
-            revisions: afterManual,
-            workflowVersion: 3,
-        });
-        const broadcast = harness.tabMessages.filter(value =>
-            value.message.subject === "configurationChanged"
-        ).at(-1).message;
-        assert.equal(broadcast.state.revisions[selected.provider], acceptedRevision);
-        assert.equal(broadcast.state.revisions[other.provider], afterManual[other.provider] + 1);
-
-        const restarted = makeHarness({storage});
-        const focused = await restarted.dispatch({
-            subject: "getLatestConfiguration",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-        assert.equal(focused.state.revisions[selected.provider], acceptedRevision);
-        assert.deepEqual(clone(focused.state.revisions), broadcast.state.revisions);
-        assert.equal(restarted.nativeMessages.length, 0);
-    }
-});
-
-test("Ethereum disconnect retains the selected chain and advances its revision", async () => {
-    const configuration = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [configuration],
-        revisions: {ethereum: 3, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({storage, native: message => (nativeResult({
-        id: message.id,
-        name: "switchEthereumChain",
-        provider: "ethereum",
-        result: null,
-        mutation: {kind: "ethereumChain", chainId: "0x2"},
-    }))});
-    const switched = await harness.dispatch(request(72, {message: {
-        name: "switchEthereumChain",
-        body: {address: configuration.results[0], chainId: "0x1", object: {chainId: "0x2"}},
-    }}));
-    assert.equal(switched.result, null);
-    assert.equal(switched.state.ethereum.chainId, "0x2");
-    assert.equal(switched.state.revisions.ethereum, 4);
-    assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
-        {...configuration, chainId: "0x2"},
-    ]);
-
-    const disconnected = await harness.dispatch({
-        subject: "disconnect",
-        id: 73,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.deepEqual(clone([disconnected.state.ethereum, disconnected.state.solana]), [ethereumState("", "0x2"), null]);
-    assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, [
-        {provider: "ethereum", chainId: "0x2", results: []},
-    ]);
-    assert.equal(disconnected.state.revisions.ethereum, 5);
-});
-
-test("manual revocation retains the Ethereum chain across replay and restart", async () => {
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "ethereum", chainId: "0xa", results: ["0x0000000000000000000000000000000000000001"],
-        }],
-        revisions: {ethereum: 4, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const read = {
-        subject: "consumeResponse", id: 74, configurationKey: "https://wallet.example",
-        requestToken, revisions: {ethereum: 4, solana: 0}, workflowVersion: 3,
-    };
-    const native = () => nativeResult({
-        id: read.id, provider: "multiple", name: "switchAccount", result: null,
-        mutation: {kind: "accounts", updates: {ethereum: null}},
-    });
-    const first = makeHarness({storage, native});
-    const revoked = await first.dispatch(read);
-    assert.deepEqual(clone(revoked.state), snapshot({
-        ethereum: ethereumState("", "0xa"), revisions: {ethereum: 5, solana: 0},
-    }));
-    assert.deepEqual(storage.get(read.configurationKey).latestConfigurations, [
-        {provider: "ethereum", chainId: "0xa", results: []},
-    ]);
-
-    const restarted = makeHarness({storage, native});
-    const replay = await restarted.dispatch(read);
-    assert.deepEqual(clone(replay), clone(revoked));
-    assert.deepEqual(providerStateWrites(restarted), []);
-    const refreshed = await restarted.dispatch({
-        subject: "getLatestConfiguration", host: "wallet.example",
-        configurationKey: read.configurationKey, workflowVersion: 3,
-    });
-    assert.deepEqual(clone(refreshed), clone(revoked));
-});
-
-test("native configurations and manual replays cannot invent worker revisions", async () => {
-    const configurations = [
-        {
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
-        },
-        {provider: "solana", publicKey: firstSolanaPublicKey},
-    ];
-    for (const configuration of configurations) {
-        let terminal = nativeResult({
-            id: 74,
-            name: configuration.provider === "ethereum" ? "requestAccounts" : "connect",
-            provider: configuration.provider,
-            result: configuration.provider === "ethereum"
-                ? configuration.results
-                : {publicKey: configuration.publicKey},
-            mutation: {
-                kind: "accounts",
-                updates: {
-                    [configuration.provider]: configuration.provider === "ethereum"
-                        ? {
-                            address: configuration.results[0],
-                            chainId: configuration.chainId,
-                            revision: 99,
-                        }
-                        : {publicKey: configuration.publicKey, revision: 99},
-                },
-            },
-        });
-        const harness = makeHarness({native: () => terminal});
-        const read = {
-            subject: "consumeResponse",
-            id: terminal.id,
-            configurationKey: "https://wallet.example",
-            requestToken,
-            revisions: {ethereum: 0, solana: 0},
-            workflowVersion: 3,
-        };
-        const connected = await harness.dispatch(read);
-        assert.equal(connected.error.code, -32603);
-        assert.equal(harness.storage.has("https://wallet.example"), false);
-        terminal = nativeResult({
-            id: read.id,
-            name: "switchAccount",
-            provider: "multiple",
-            result: null,
-            mutation: {
-                kind: "accounts",
-                updates: {
-                    [configuration.provider]: configuration.provider === "ethereum"
-                        ? {
-                            address: configuration.results[0],
-                            chainId: configuration.chainId,
-                            revision: 99,
-                        }
-                        : {publicKey: configuration.publicKey, revision: 99},
-                },
-            },
-        });
-        const replay = await harness.dispatch(read);
-        assert.equal(replay, undefined);
-        assert.equal(harness.storage.has("https://wallet.example"), false);
-        assert.deepEqual(providerStateWrites(harness), []);
-    }
-});
-
-test("manual switch intent requires the exact trusted content identity", async () => {
-    const harness = makeHarness({native: () => {
-        assert.fail("untrusted manual intent must not reach native");
-    }});
-    for (const [message, sender] of [
-        [{...manualSwitchIntent(), extra: true}, contentSender()],
-        [manualSwitchIntent({host: "other.example"}), contentSender()],
-        [manualSwitchIntent(), contentSender({incognito: true})],
-        [manualSwitchIntent(), popupSender()],
-    ]) {
-        assert.equal(await harness.dispatch(message, sender), undefined);
-    }
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("rejects stale account-bound operations when native has no matching attempt", async () => {
     const harness = makeHarness({native: message => {
-        assert.equal(message.replayOnly, true);
-        return nativeError({
-            id: message.id,
-            name: message.name,
-            provider: message.provider,
-            error: {code: -32603, message: "No matching attempt"},
-        });
+        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+        admissions += 1;
+        return manualSwitchDenial(message.id, snapshot({revisions: {ethereum: admissions, solana: 0}}));
     }});
-    const response = await harness.dispatch(request(8, {message: {
-        name: "signMessage",
-        body: {
-            address: "0x0000000000000000000000000000000000000001",
-            chainId: "0x1",
-        },
-    }}));
-    assert.equal(response.id, 8);
-    assert.equal(response.name, "signMessage");
-    assert.equal(response.provider, "ethereum");
-    assert.equal(response.error?.code, 4100);
-    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
-    assert.equal(harness.nativeMessages.length, 1);
-});
-
-test("forwards an account-bound operation with current stored authorization", async () => {
-    const address = "0x0000000000000000000000000000000000000001";
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [address],
-        }],
-        revisions: {ethereum: 2, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({
-        storage,
-        native: () => nativeAcknowledgement(8, {ethereum: 2, solana: 0}),
-    });
-    const response = await harness.dispatch(request(8, {message: {
-        name: "signMessage",
-        body: {address, chainId: "0x1"},
-    }}));
-    assert.equal(response.requestToken, requestToken);
-    assert.equal(harness.nativeMessages.at(-1).message.body.address, address);
-});
-
-test("allows disconnected non-signing Ethereum methods through to native", async () => {
-    for (const name of ["addEthereumChain", "switchEthereumChain", "ecRecover"]) {
-        const harness = makeHarness({native: message => (nativeResult({
-            id: message.id,
-            name: message.name,
-            provider: "ethereum",
-            result: "ok",
-        }))});
-        const response = await harness.dispatch(request(30, {message: {
-            name,
-            body: {address: "", chainId: "0x1"},
-        }}));
-        assert.equal(response.result, "ok", name);
-        assert.equal(harness.nativeMessages.at(-1).message.name, name);
-    }
-});
-
-test("rejects account-bearing chain mutations without stored authorization", async () => {
-    const address = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    for (const [id, name] of [
-        [32, "addEthereumChain"],
-        [33, "switchEthereumChain"],
-    ]) {
-        const harness = makeHarness({native: message => {
-            assert.equal(message.replayOnly, true);
-            return nativeError({
-                id: message.id,
-                name: message.name,
-                provider: message.provider,
-                error: {code: -32603, message: "No matching attempt"},
-            });
-        }});
-        const response = await harness.dispatch(request(id, {message: {
-            name,
-            body: {
-                address,
-                chainId: "0x1",
-                object: {chainId: "0x2"},
-            },
-        }}));
-
-        assert.equal(response.error?.code, 4100, name);
-        assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null], name);
-        assert.equal(harness.nativeMessages.length, 1, name);
-        assert.deepEqual(harness.storageWrites, [], name);
-    }
-});
-
-test("chain mutation authorization matches stored addresses case-insensitively", async () => {
-    const storedAddress = "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-    const requestedAddress = storedAddress.toLowerCase();
-    for (const [id, name] of [
-        [34, "addEthereumChain"],
-        [35, "switchEthereumChain"],
-    ]) {
-        const storage = new Map([["https://wallet.example", {
-            latestConfigurations: [{
-                provider: "ethereum",
-                chainId: "0x1",
-                results: [storedAddress],
-            }],
-            revisions: {ethereum: 0, solana: 0},
-            workflowVersion: 3,
-        }]]);
-        const harness = makeHarness({
-            storage,
-            native: message => nativeAcknowledgement(message.id),
-        });
-        const response = await harness.dispatch(request(id, {message: {
-            name,
-            body: {
-                address: requestedAddress,
-                chainId: "0x1",
-                object: {chainId: "0x2"},
-            },
-        }}));
-
-        assert.equal(response.requestToken, requestToken, name);
-        assert.equal(
-            harness.nativeMessages.at(-1).message.body.address,
-            requestedAddress,
-            name
-        );
-    }
-});
-
-test("chain responses preserve only previously trusted Ethereum accounts", async () => {
-    const firstAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const secondAddress = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    const cases = [
-        {id: 36, name: "addEthereumChain", storedResults: [], requestAddress: ""},
-        {id: 37, name: "switchEthereumChain", storedResults: [], requestAddress: ""},
-        {id: 40, name: "switchEthereumChain", storedResults: [firstAddress, secondAddress], requestAddress: firstAddress},
-        {id: 42, name: "addEthereumChain", storedResults: [""], requestAddress: ""},
-        {
-            id: 38,
-            name: "addEthereumChain",
-            storedResults: [firstAddress],
-            requestAddress: firstAddress,
-        },
-        {
-            id: 39,
-            name: "switchEthereumChain",
-            storedResults: [firstAddress],
-            requestAddress: firstAddress,
-        },
-    ];
-    for (const item of cases) {
-        const latestConfigurations = item.storedResults.length === 0 ? [] : [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: item.storedResults,
-        }];
-        const storage = new Map([["https://wallet.example", {
-            latestConfigurations,
-            revisions: {ethereum: 0, solana: 0},
-            workflowVersion: 3,
-        }]]);
-        const harness = makeHarness({storage, native: message => (nativeResult({
-            id: message.id,
-            name: message.name,
-            provider: "ethereum",
-            result: null,
-            mutation: {kind: "ethereumChain", chainId: "0x2"},
-        }))});
-        const response = await harness.dispatch(request(item.id, {message: {
-            name: item.name,
-            body: {
-                address: item.requestAddress,
-                chainId: "0x1",
-                object: {chainId: "0x2"},
-            },
-        }}));
-        const expectedResults = item.storedResults;
-
-        assert.deepEqual(
-            response.state.ethereum.address,
-            expectedResults[0] || "",
-            item.name
-        );
-        assert.equal(response.result, null, item.name);
-        assert.deepEqual(
-            storage.get("https://wallet.example").latestConfigurations[0].results,
-            expectedResults,
-            item.name
-        );
-        assert.equal(
-            storage.get("https://wallet.example").latestConfigurations[0].chainId,
-            "0x2",
-            item.name
-        );
-    }
-});
-
-test("chain replays use current accounts and stale terminal results expose none", async () => {
-    const nativeAddress = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    const currentAddress = "0xcccccccccccccccccccccccccccccccccccccccc";
-    for (const item of [
-        {chainId: "0x2", expectedError: undefined, expectedResults: null},
-        {chainId: "0x3", expectedError: 4100, expectedResults: undefined},
-    ]) {
-        const storage = new Map([["https://wallet.example", {
-            latestConfigurations: [{
-                provider: "ethereum",
-                chainId: item.chainId,
-                results: [currentAddress],
-            }],
-            revisions: {ethereum: 1, solana: 0},
-            workflowVersion: 3,
-        }]]);
-        const harness = makeHarness({storage, native: message => {
-            if (message.subject !== "prepareResponseDelivery") { return undefined; }
-            return nativeResult({
-                id: 41,
-                name: "switchEthereumChain",
-                provider: "ethereum",
-                result: null,
-                mutation: {kind: "ethereumChain", chainId: "0x2"},
-            });
-        }});
-        const response = await harness.dispatch({
-            subject: "consumeResponse",
-            id: 41,
-            configurationKey: "https://wallet.example",
-            requestToken,
-            revisions: {ethereum: 0, solana: 0},
-            workflowVersion: 3,
-        });
-
-        assert.equal(response.error?.code, item.expectedError);
-        assert.deepEqual(clone(response.result), item.expectedResults);
-        assert.deepEqual(
-            response.state.ethereum.address,
-            currentAddress
-        );
-    }
-});
-
-test("admission deadlines must be positive safe integers", async () => {
-    const invalid = [undefined, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, "1"];
-    for (const value of invalid) {
-        const message = request(40);
-        if (typeof value === "undefined") {
-            delete message.admissionDeadline;
-        } else {
-            message.admissionDeadline = value;
-        }
-        const harness = makeHarness({native: () => {
-            throw new Error("must not reach native");
-        }});
-
-        assert.equal(await harness.dispatch(message), undefined);
-        assert.equal(harness.nativeMessages.length, 0);
-    }
-});
-
-test("generic dapp admission rejects every manual Switch Account shape", async () => {
-    const message = {
-        name: "switchAccount",
-        provider: "unknown",
-        body: {latestConfigurations: []},
-    };
-    const harness = makeHarness({native: () => {
-        assert.fail("generic manual switch must not reach native");
-    }});
-    assert.equal(await harness.dispatch(request(31, {message})), undefined);
-    assert.equal(await harness.dispatch(request(31, {
-        manualSwitch: true,
-        message,
-    })), undefined);
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("manual switch snapshots one current configuration lineage", async () => {
-    const staleConfiguration = {
-        provider: "ethereum",
-        chainId: "0x1",
-        results: ["0x0000000000000000000000000000000000000001"],
-    };
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [staleConfiguration],
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({
-        storage,
-        native: message => nativeAcknowledgement(
-            message.id,
-            message.revisions
-        ),
-    });
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 80,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    const response = await harness.dispatch(
-        manualSwitchIntent(),
-        contentSender()
-    );
-    const admitted = harness.nativeMessages.at(-1).message;
-
-    assert.equal(response.subject, "manualSwitchAcknowledged");
-    assert.deepEqual(admitted.body, {latestConfigurations: [
-        {provider: "ethereum", chainId: "0x1", results: []},
-    ]});
-    assert.deepEqual(admitted.revisions, {ethereum: 1, solana: 0});
-});
-
-test("a blocked switch snapshot does not block another origin", async () => {
-    let releaseBlockedRead;
-    const blockedRead = new Promise(resolve => { releaseBlockedRead = resolve; });
-    let blockedReadStarted = false;
-    const harness = makeHarness({
-        native: message => nativeAcknowledgement(message.id, message.revisions),
-        storageGet(keys, values) {
-            const requested = Array.isArray(keys) ? keys : [keys];
-            if (requested.includes("https://blocked.example")) {
-                blockedReadStarted = true;
-                return blockedRead.then(() => values);
-            }
-            return values;
-        },
-    });
-    const blocked = harness.dispatch(manualSwitchIntent({
-        configurationKey: "https://blocked.example",
-        host: "blocked.example",
-    }), contentSender({
-        id: 91,
-        url: "https://blocked.example/dapp",
-    }));
-    await settle();
-    assert.equal(blockedReadStarted, true);
-
-    let otherSettled = false;
-    const other = harness.dispatch(manualSwitchIntent({
-        configurationKey: "https://other.example",
-        host: "other.example",
-    }), contentSender({
-        id: 92,
-        url: "https://other.example/dapp",
-    })).then(response => {
-        otherSettled = true;
-        return response;
-    });
-    for (let attempt = 0; attempt < 10 && !otherSettled; attempt += 1) {
-        await settle();
-    }
-    const progressedIndependently = otherSettled;
-    releaseBlockedRead();
-    const [blockedResponse, otherResponse] = await Promise.all([blocked, other]);
-
-    assert.equal(progressedIndependently, true);
-    assert.equal(blockedResponse.subject, "manualSwitchAcknowledged");
-    assert.equal(otherResponse.subject, "manualSwitchAcknowledged");
-});
-
-test("lost enqueue replies reuse the same native enqueue attempt after restart", async () => {
-    const storage = new Map;
-    const seen = [];
-    const native = message => {
-        seen.push(message.enqueueAttempt);
-        return seen.length === 1 ? undefined : nativeAcknowledgement(9);
-    };
-    assert.equal(await makeHarness({storage, native}).dispatch(request(9)), undefined);
-    const response = await makeHarness({storage, native}).dispatch(request(9));
-    assert.equal(response.requestToken, requestToken);
-    assert.deepEqual(seen, [attempt, attempt]);
-    assert.equal(storage.get("nativeExecutionJobs")[0].requestToken, requestToken);
-    assert.equal(storage.has("https://wallet.example"), false);
-});
-
-test("lost signing acknowledgments recover committed results after disconnect and restart", async () => {
-    const address = "0x0000000000000000000000000000000000000001";
-    for (const [provider, name, body, configuration] of [
-        ["ethereum", "signTransaction", {address, chainId: "0x1"}, {
-            provider: "ethereum", chainId: "0x1", results: [address],
-        }],
-        ["solana", "signAndSendTransaction", {publicKey: firstSolanaPublicKey}, {
-            provider: "solana", publicKey: firstSolanaPublicKey,
-        }],
-    ]) {
-        const storage = new Map([["https://wallet.example", {
-            latestConfigurations: [configuration],
-            revisions: {ethereum: 0, solana: 0},
-            workflowVersion: 3,
-        }]]);
-        let admitted;
-        const native = message => {
-            if (!message.subject) {
-                if (!admitted) {
-                    assert.equal(message.replayOnly, undefined);
-                    admitted = clone(message);
-                    return undefined;
-                }
-                assert.equal(message.replayOnly, true);
-                assert.equal(message.enqueueAttempt, admitted.enqueueAttempt);
-                assert.deepEqual(clone(message.body), admitted.body);
-                return nativeAcknowledgement(message.id, admitted.revisions, false);
-            }
-            if (isResponseRead(message)) {
-                return nativeResult({
-                    id: message.id,
-                    name,
-                    provider,
-                    result: "committed-transaction",
-                    approvalCommitted: true,
-                });
-            }
-        };
-        const original = request(9, {message: {provider, name, body}});
-        const first = makeHarness({storage, native});
-        assert.equal(await first.dispatch(original), undefined);
-        await first.dispatch({
-            subject: "disconnect", id: 10, provider,
-            host: "wallet.example", configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-
-        const restarted = makeHarness({storage, native});
-        const acknowledgement = await restarted.dispatch(original);
-        assert.equal(acknowledgement.requestToken, requestToken);
-        assert.deepEqual(clone(acknowledgement.revisions), admitted.revisions);
-        assert.equal(acknowledgement.approvalRequired, false);
-        const response = await restarted.dispatch({
-            subject: "consumeResponse", id: 9,
-            configurationKey: "https://wallet.example", requestToken,
-            revisions: acknowledgement.revisions, workflowVersion: 3,
-        });
-        assert.equal(response.result, "committed-transaction");
-        assert.equal(response.approvalCommitted, true);
-        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations,
-            provider === "ethereum" ? [{provider: "ethereum", chainId: "0x1", results: []}] : []);
-        assert.deepEqual(restarted.popupCalls, []);
-    }
-});
-
-test("unauthorized recovery keeps retrying unavailable transport and does not cue active approvals", async () => {
-    for (const reply of [undefined, nativeAcknowledgement(9)]) {
-        const harness = makeHarness({native: message => {
-            assert.equal(message.replayOnly, true);
-            return reply;
-        }});
-        const response = await harness.dispatch(request(9, {message: {
-            name: "signMessage",
-            body: {address: "0x0000000000000000000000000000000000000001"},
-        }}));
-        assert.deepEqual(clone(response), reply);
-        assert.deepEqual(harness.popupCalls, []);
-        assert.deepEqual(harness.runtimeMessages, []);
-    }
-});
-
-test("lost enqueue acknowledgement keeps native revisions across disconnect drift", async () => {
-    const admissions = [];
-    let admitted;
-    const harness = makeHarness({native: message => {
-        if (!message.subject) {
-            admissions.push(clone(message.revisions));
-            if (!admitted) {
-                admitted = nativeAcknowledgement(19, message.revisions);
-                return undefined;
-            }
-            return admitted;
-        }
-        if (isResponseRead(message)) {
-            return nativeResult({
-                id: 19,
-                name: "requestAccounts",
-                provider: "ethereum",
-                result: ["0x0000000000000000000000000000000000000001"],
-                mutation: {
-                    kind: "accounts",
-                    updates: {
-                        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
-                    },
-                },
-            });
-        }
-        return undefined;
-    }});
-    assert.equal(await harness.dispatch(request(19)), undefined);
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 20,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    const acknowledgement = await harness.dispatch(request(19));
-    assert.deepEqual(clone(acknowledgement.revisions), {
-        ethereum: 0,
-        solana: 0,
-    });
-    assert.deepEqual(admissions, [
-        {ethereum: 0, solana: 0},
-        {ethereum: 1, solana: 0},
-    ]);
-    assert.equal(admitted.requestToken, acknowledgement.requestToken);
-
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 19,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: acknowledgement.revisions,
-        workflowVersion: 3,
-    });
-    assert.deepEqual(
-        harness.nativeMessages.findLast(value =>
-            isResponseRead(value.message)
-        ).message.revisions,
-        undefined
-    );
-    assert.equal(response.error?.code, 4100);
-    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
-});
-
-test("reads, applies, and retains a native response", async () => {
-    const storage = new Map;
-    const native = message => {
-        if (isResponseRead(message)) {
-            return nativeResult({
-                id: 10,
-                name: "requestAccounts",
-                provider: "ethereum",
-                result: ["0x0000000000000000000000000000000000000001"],
-                mutation: {
-                    kind: "accounts",
-                    updates: {
-                        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
-                    },
-                },
-            });
-        }
-        return nativeAcknowledgement(10);
-    };
-    const harness = makeHarness({storage, native});
-    const acknowledgement = await harness.dispatch(request(10));
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 10,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: acknowledgement.revisions,
-        workflowVersion: 3,
-    });
-    assert.deepEqual(clone(response), {
-        kind: "result", id: 10, provider: "ethereum", name: "requestAccounts",
-        state: snapshot({
-            ethereum: ethereumState("0x0000000000000000000000000000000000000001"),
-            revisions: {ethereum: 1, solana: 0},
-        }),
-        result: ["0x0000000000000000000000000000000000000001"],
-        approvalCommitted: false,
-    });
-    assert.equal(storage.get("https://wallet.example").workflowVersion, 3);
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-});
-
-test("native errors cannot smuggle configuration mutations", async () => {
-    const storage = new Map;
-    const harness = makeHarness({storage, native: message => (nativeError({
-        id: message.id,
-        name: message.name,
-        provider: message.provider,
-        error: {code: 4001, message: "Canceled"},
-        mutation: {
-            kind: "accounts",
-            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
-        },
-    }))});
-
-    const response = await harness.dispatch(request(24));
-    assert.equal(response.error?.code, -32603);
-    assert.equal(storage.has("https://wallet.example"), false);
-});
-
-test("malformed native configuration mutations fail closed before storage", async () => {
-    const harness = makeHarness({native: message => isResponseRead(message) ? nativeResult({
-        id: 25,
-        name: "requestAccounts",
-        provider: "ethereum",
-        result: ["0x0000000000000000000000000000000000000001"],
-        mutation: {
-            kind: "accounts",
-            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "invalid"}},
-        },
-    }) : undefined});
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 25,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.id, 25);
-    assert.equal(response.error?.code, -32603);
-    assert.equal(response.result, undefined);
-    assert.equal(harness.storage.size, 0);
-    assert.deepEqual(providerStateWrites(harness), []);
-    assert.deepEqual(harness.tabMessages, []);
-});
-
-test("malformed special-chain responses fail closed before storage", async () => {
-    for (const [id, name] of [[26, "addEthereumChain"], [27, "switchEthereumChain"]]) {
-        const harness = makeHarness({native: message => {
-            if (message.subject !== "prepareResponseDelivery") { return undefined; }
-            return nativeResult({
-                id,
-                name,
-                provider: "ethereum",
-                result: null,
-                mutation: {kind: "ethereumChain", chainId: "invalid"},
-            });
-        }});
-        const response = await harness.dispatch({
-            subject: "consumeResponse",
-            id,
-            configurationKey: "https://wallet.example",
-            requestToken,
-            revisions: {ethereum: 0, solana: 0},
-            workflowVersion: 3,
-        });
-
-        assert.equal(response.id, id);
-        assert.equal(response.error?.code, -32603);
-        assert.equal(harness.storage.size, 0);
-        assert.deepEqual(providerStateWrites(harness), []);
-        assert.deepEqual(harness.tabMessages, []);
-    }
-});
-
-test("invalid Solana configuration mutations fail closed before storage", async () => {
-    const harness = makeHarness({native: message => {
-        if (message.subject !== "prepareResponseDelivery") { return undefined; }
-        return nativeResult({
-            id: 28,
-            name: "connect",
-            provider: "solana",
-            result: {publicKey: firstSolanaPublicKey},
-            mutation: {kind: "accounts", updates: {solana: {publicKey: "public-key"}}},
-        });
-    }});
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 28,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.id, 28);
-    assert.equal(response.error?.code, -32603);
-    assert.equal(harness.storage.size, 0);
-    assert.deepEqual(providerStateWrites(harness), []);
-    assert.deepEqual(harness.tabMessages, []);
-});
-
-test("replays an already-applied response without advancing revisions again", async () => {
-    const storage = new Map;
-    const native = message => isResponseRead(message) ? nativeResult({
-        id: 21,
-        name: "requestAccounts",
-        provider: "ethereum",
-        result: ["0x0000000000000000000000000000000000000001"],
-        mutation: {
-            kind: "accounts",
-            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
-        },
-    }) : nativeAcknowledgement(21);
-    const harness = makeHarness({storage, native});
-    const acknowledgement = await harness.dispatch(request(21));
-    const read = {
-        subject: "consumeResponse",
-        id: 21,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: acknowledgement.revisions,
-        workflowVersion: 3,
-    };
-
-    const first = await harness.dispatch(read);
-    const replay = await harness.dispatch(read);
-    assert.equal(first.kind, "result");
-    assert.deepEqual(clone(first.state), snapshot({
-        ethereum: ethereumState("0x0000000000000000000000000000000000000001"),
-        revisions: {ethereum: 1, solana: 0},
-    }));
-    assert.deepEqual(
-        clone(replay.state),
-        clone(first.state)
-    );
-    assert.equal(replay.__bigWalletSuppressProviderUpdate, undefined);
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-});
-
-test("popup applies a completed response without consuming its later content replay", async () => {
-    const storage = new Map;
-    const native = message => isResponseRead(message) ? nativeResult({
-        id: 23,
-        name: "requestAccounts",
-        provider: "ethereum",
-        result: ["0x0000000000000000000000000000000000000001"],
-        mutation: {
-            kind: "accounts",
-            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
-        },
-    }) : undefined;
-    const harness = makeHarness({storage, native});
-    const apply = {
-        subject: "applyCompletedResponse",
-        id: 23,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    };
-    const popupSender = {
-        id: "extension-id",
-        url: "safari-web-extension://extension-id/popup.html",
-    };
-
-    assert.equal(await harness.dispatch(apply), undefined);
-    assert.equal(await harness.dispatch({...apply, extra: true}, popupSender), undefined);
-    assert.equal(harness.nativeMessages.length, 0);
-    assert.deepEqual(clone(await harness.dispatch(apply, popupSender)), {
-        applied: true,
-    });
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-    const replay = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 23,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-    assert.equal(replay.error, undefined);
-    assert.equal(replay.state.ethereum.address, "0x0000000000000000000000000000000000000001");
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
-        "prepareResponseDelivery",
-        "acknowledgeResponse",
-        "prepareResponseDelivery",
-        "acknowledgeResponse",
-    ]);
-});
-
-
-
-
-test("full popup and worker recover interrupted durable batches without reviving disconnected accounts", async () => {
-    const storage = new Map;
-    const nativeStore = completedResponseStore(33);
-    const firstRecord = nativeStore.records.get(1);
-    const configurationKey = firstRecord.identity.configurationKey;
-    const acknowledgementStarted = deferred();
-    const interrupted = makeHarness({
-        storage,
-        native: nativeStore.native,
-        acknowledgeResponse() {
-            acknowledgementStarted.resolve();
-            return new Promise(() => {});
-        },
-    });
-    const firstPopup = openRecoveryPopup(interrupted, nativeStore.native);
-    await acknowledgementStarted.promise;
-    assert.equal(storage.get(configurationKey).revisions.ethereum, 1);
-    assert.equal(firstRecord.acknowledged, false);
-    assert.equal(firstPopup.element("screen-loading").classList.contains("hidden"), false);
-    firstPopup.close();
-
-    let failingAcknowledgment = 17;
-    const restarted = makeHarness({
-        storage,
-        native: nativeStore.native,
-        acknowledgeResponse: message => message.id === failingAcknowledgment
-            ? undefined
-            : nativeStore.acknowledge(message),
-        tabs: [contentSender().tab],
-        sendTabMessage() { throw new Error("Broadcast missed"); },
-    });
-    const disconnected = await restarted.dispatch({
-        subject: "disconnect",
-        id: 100,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey,
-        workflowVersion: 3,
-    });
-    assert.equal(disconnected.result, null);
-    const reopened = openRecoveryPopup(restarted, nativeStore.native);
-    await reopened.waitForIdleText("Failed to load");
-    assert.deepEqual(nativeStore.pageSizes, [16, 16, 16]);
-    assert.deepEqual([...nativeStore.records.values()]
-        .filter(record => record.acknowledged).map(record => record.identity.id),
-    Array.from({length: 16}, (_, index) => index + 1));
-    assert.equal(reopened.element("idle-check-status").classList.contains("hidden"), false);
-    assert.equal(reopened.element("idle-check-status").disabled, false);
-    assert.equal(reopened.element("idle-switch-account").disabled, true);
-    assert.deepEqual(storage.get(configurationKey).latestConfigurations, [{provider: "ethereum", chainId: "0x1", results: []}]);
-    assert.equal(storage.get(configurationKey).revisions.ethereum, 2);
-
-    failingAcknowledgment = null;
-    await reopened.refresh();
-    await reopened.waitForIdleText("Not connected");
-    assert.deepEqual(nativeStore.pageSizes, [16, 16, 16, 16, 1, 0]);
-    assert.equal(reopened.element("idle-check-status").classList.contains("hidden"), true);
-    assert.ok([...nativeStore.records.values()].every(record => record.acknowledged));
-    assert.equal(nativeStore.records.size, 33);
-    const replay = await restarted.dispatch(firstRecord.read);
-    assert.deepEqual(clone([replay.state.ethereum, replay.state.solana]), [ethereumState(""), null]);
-    assert.deepEqual(clone(replay.state.revisions), {ethereum: 2, solana: 0});
-    assert.deepEqual(storage.get(configurationKey).latestConfigurations, [{provider: "ethereum", chainId: "0x1", results: []}]);
-    assert.equal(storage.get(configurationKey).revisions.ethereum, 2);
-    reopened.close();
-});
-
-test("failed configuration persistence never acknowledges a completion", async () => {
-    const fixture = completedAccountFixture();
-    const harness = makeHarness({
-        native: () => fixture.response,
-        storageSet(values) {
-            if (values[fixture.read.configurationKey]) {
-                throw new Error("storage unavailable");
-            }
-        },
-        acknowledgeResponse: () => assert.fail("must persist before acknowledgement"),
-    });
-    assert.equal(await harness.dispatch(fixture.apply, popupSender()), undefined);
-    assert.equal(harness.nativeMessages.some(value =>
-        value.message.subject === "acknowledgeResponse"
-    ), false);
-});
-
-test("failed acknowledgements retry after worker restart without advancing revisions", async () => {
-    const fixture = completedAccountFixture();
-    const failures = [
-        undefined,
-        {id: fixture.read.id, acknowledged: false},
-        {id: fixture.read.id, missing: false},
-        {id: fixture.read.id + 1, acknowledged: true},
-        {id: fixture.read.id, acknowledged: true, state: "working"},
-        new Error("native unavailable"),
-    ];
-    for (const failure of failures) {
-        const storage = new Map;
-        const native = () => fixture.response;
-        const first = makeHarness({
-            storage,
-            native,
-            acknowledgeResponse() {
-                if (failure instanceof Error) { throw failure; }
-                return failure;
-            },
-        });
-        assert.equal(await first.dispatch(fixture.apply, popupSender()), undefined);
-        assert.equal(storage.get(fixture.read.configurationKey).revisions.ethereum, 1);
-
-        const restarted = makeHarness({storage, native});
-        assert.deepEqual(clone(await restarted.dispatch(fixture.apply, popupSender())), {
-            applied: true,
-        });
-        assert.equal(storage.get(fixture.read.configurationKey).revisions.ethereum, 1);
-        assert.deepEqual(providerStateWrites(restarted), []);
-        const replay = await restarted.dispatch(fixture.read);
-        assert.deepEqual(clone(replay.result), fixture.configuration.results);
-    }
-});
-
-test("an already absent acknowledgment completes popup recovery", async () => {
-    const fixture = completedAccountFixture();
-    const harness = makeHarness({
-        native: () => fixture.response,
-        acknowledgeResponse: message => ({id: message.id, missing: true}),
-    });
-    assert.deepEqual(clone(await harness.dispatch(fixture.apply, popupSender())), {
-        applied: true,
-    });
-});
-
-test("acknowledgment timeout leaves an ordinary committed result available for retry", async () => {
-    const fixture = completedAccountFixture();
-    let acknowledge = false;
-    const harness = makeHarness({
-        native: () => nativeResult({id: fixture.read.id, name: "signTransaction",
-            provider: "ethereum", result: "0xsubmitted-transaction-hash", approvalCommitted: true}),
-        acknowledgeResponse: message => acknowledge
-            ? {id: message.id, acknowledged: true} : new Promise(() => {}),
-    });
-    const reading = harness.dispatch(fixture.read);
-    await settle();
-    await harness.runTimer(5000);
-    assert.equal(await reading, undefined);
-    acknowledge = true;
-    const response = await harness.dispatch(fixture.read);
-    assert.equal(response.result, "0xsubmitted-transaction-hash");
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse").length, 2);
-});
-
-test("popup receives an exact missing completed response", async () => {
-    const harness = makeHarness({
-        native: message => isResponseRead(message)
-            ? {id: 24, missing: true}
-            : undefined,
-    });
-    const request = {
-        subject: "applyCompletedResponse",
-        id: 24,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    };
-    const popupSender = {
-        id: "extension-id",
-        url: "safari-web-extension://extension-id/popup.html",
-    };
-
-    assert.deepEqual(clone(await harness.dispatch(request, popupSender)), {
-        id: 24,
-        missing: true,
-    });
-    assert.deepEqual(clone(await harness.dispatch({
-        subject: "consumeResponse",
-        id: 24,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    })), {id: 24, missing: true});
-});
-
-test("response reads require the originating tab identity", async () => {
-    const harness = makeHarness({native: () => {
-        throw new Error("must not reach native");
-    }});
-    const wrongSender = {
-        id: "extension-id",
-        frameId: 0,
-        url: "https://other.example/dapp",
-        tab: {id: 2, url: "https://other.example/dapp", incognito: false},
-    };
-    assert.equal(await harness.dispatch({
-        subject: "consumeResponse",
-        id: 10,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    }, wrongSender), undefined);
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("page response reads relay native pending without committing or acknowledging it", async () => {
-    const harness = makeHarness({native: message => ({id: message.id, pending: true})});
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 10,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-    assert.deepEqual(clone(response), {id: 10, pending: true});
-    assert.equal(providerStateWrites(harness).length, 0);
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject), ["prepareResponseDelivery"]);
-});
-
-test("disconnect revisions fence a stale authorization response", async () => {
-    const native = message => isResponseRead(message) ? nativeResult({
-        id: 11,
-        name: "requestAccounts",
-        provider: "ethereum",
-        result: ["0x0000000000000000000000000000000000000001"],
-        mutation: {
-            kind: "accounts",
-            updates: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}},
-        },
-    }) : nativeAcknowledgement(11);
-    const harness = makeHarness({native});
-    const acknowledgement = await harness.dispatch(request(11));
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 12,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 11,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: acknowledgement.revisions,
-        workflowVersion: 3,
-    });
-    assert.deepEqual(
-        harness.nativeMessages.findLast(value =>
-            isResponseRead(value.message)
-        ).message.revisions,
-        undefined
-    );
-    assert.equal(response.error?.code, 4100);
-    assert.equal(response.__bigWalletSuppressProviderUpdate, undefined);
-    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
-    assert.deepEqual(
-        harness.storage.get("https://wallet.example").latestConfigurations,
-        [{provider: "ethereum", chainId: "0x1", results: []}]
-    );
-});
-
-test("provider revision overflow fails closed without corrupting storage", async () => {
-    const maximum = Number.MAX_SAFE_INTEGER;
-    const originalAddress = "0x0000000000000000000000000000000000000001";
-    const replacementAddress = "0x0000000000000000000000000000000000000002";
-    const initial = {
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [originalAddress],
-        }],
-        revisions: {ethereum: maximum, solana: 0},
-        workflowVersion: 3,
-    };
-    const storage = new Map([["https://wallet.example", clone(initial)]]);
-    const harness = makeHarness({
-        storage,
-        native: message => isResponseRead(message) ? nativeResult({
-            id: 120,
-            name: "requestAccounts",
-            provider: "ethereum",
-            result: [replacementAddress],
-            mutation: {kind: "accounts", updates: {ethereum: {address: replacementAddress, chainId: "0x1"}}},
-        }) : undefined,
-    });
-
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 120,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: maximum, solana: 0},
-        workflowVersion: 3,
-    });
-    const disconnected = await harness.dispatch({
-        subject: "disconnect",
-        id: 121,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    const readable = await harness.dispatch({
-        subject: "getLatestConfiguration",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.error?.code, 4100);
-    assert.equal(disconnected.error?.code, -32603);
-    assert.deepEqual(clone(storage.get("https://wallet.example")), initial);
-    assert.deepEqual(clone(readable.state.revisions), {
-        ethereum: maximum,
-        solana: 0,
-    });
-});
-
-test("a committed approval settles without overwriting a later disconnect", async () => {
-    const address = "0x0000000000000000000000000000000000000001";
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [address],
-        }],
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({
-        storage,
-        native: message => isResponseRead(message) ? nativeResult({
-            id: 49,
-            name: "requestAccounts",
-            provider: "ethereum",
-            result: [address],
-            mutation: {kind: "accounts", updates: {ethereum: {address: address, chainId: "0x1"}}},
-            approvalCommitted: true,
-        }) : undefined,
-    });
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 50,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 49,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.error, undefined);
-    assert.deepEqual(clone(response.result), [address]);
-    assert.equal(response.approvalCommitted, true);
-    assert.equal(response.__bigWalletSuppressProviderUpdate, undefined);
-    assert.deepEqual(clone([response.state.ethereum, response.state.solana]), [ethereumState(""), null]);
-    assert.deepEqual(clone(response.state.revisions), {ethereum: 1, solana: 0});
-    assert.deepEqual(storage.get("https://wallet.example"), {
-        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}],
-        revisions: {ethereum: 1, solana: 0},
-        workflowVersion: 3,
-    });
-});
-
-test("committed multi-provider drift preserves only the drifted provider", async () => {
-    const ethereum = "0x0000000000000000000000000000000000000001";
-    const nextEthereum = "0x0000000000000000000000000000000000000002";
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [
-            {provider: "ethereum", chainId: "0x1", results: [ethereum]},
-            {provider: "solana", publicKey: firstSolanaPublicKey},
-        ],
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const response = nativeResult({
-        id: 51,
-        name: "switchAccount",
-        provider: "multiple",
-        result: null,
-        mutation: {
-            kind: "accounts",
-            updates: {
-                ethereum: {address: nextEthereum, chainId: "0x1"},
-                solana: {publicKey: secondSolanaPublicKey},
-            },
-        },
-        approvalCommitted: true,
-    });
-    const harness = makeHarness({
-        storage,
-        native: message => isResponseRead(message) ? response : undefined,
-    });
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 52,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    const applied = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 51,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-
-    assert.equal(applied.kind, "configuration");
-    assert.equal(applied.error, undefined);
-    assert.equal(applied.__bigWalletSuppressProviderUpdate, undefined);
-    assert.deepEqual(clone(applied.state), snapshot({
-        solana: solanaState(secondSolanaPublicKey, 1), revisions: {ethereum: 1, solana: 1},
-    }));
-    assert.deepEqual(clone(applied.state.revisions), {ethereum: 1, solana: 1});
-    assert.equal(applied.bodies, undefined);
-    assert.equal(applied.providersToDisconnect, undefined);
-    assert.deepEqual(storage.get("https://wallet.example"), {
-        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}, {
-            provider: "solana",
-            publicKey: secondSolanaPublicKey,
-        }],
-        revisions: {ethereum: 1, solana: 1},
-        workflowVersion: 3,
-    });
-});
-
-test("noncommitted multi-provider drift remains atomic", async () => {
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [
-            {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: ["0x0000000000000000000000000000000000000001"],
-            },
-            {provider: "solana", publicKey: firstSolanaPublicKey},
-        ],
-        revisions: {ethereum: 1, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({native: message => isResponseRead(message) ? nativeResult({
-        id: 53,
-        name: "switchAccount",
-        provider: "multiple",
-        result: null,
-        mutation: {
-            kind: "accounts",
-            updates: {
-                ethereum: {address: "0x0000000000000000000000000000000000000002", chainId: "0x1"},
-                solana: {publicKey: secondSolanaPublicKey},
-            },
-        },
-    }) : undefined, storage});
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 53,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.kind, "configurationError");
+    const response = await harness.dispatch(manualSwitchIntent());
+    assert.equal(response.kind, "error");
     assert.equal(response.error.code, 4100);
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-    assert.equal(storage.get("https://wallet.example").latestConfigurations[1].publicKey,
-        firstSolanaPublicKey);
+    assert.equal(admissions, 2);
+    assert.equal(harness.popupCalls.length, 0);
 });
 
-test("one storage lineage serializes a disconnect against response application", async () => {
-    const address = "0x0000000000000000000000000000000000000001";
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: [address],
-        }],
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    let releaseReads;
-    const readBarrier = new Promise(resolve => { releaseReads = resolve; });
-    let readCount = 0;
-    const harness = makeHarness({
-        storage,
-        storageGet(_keys, values) {
-            if (_keys === "nativeExecutionJobs") { return values; }
-            readCount += 1;
-            return readBarrier.then(() => values);
-        },
-        native: message => isResponseRead(message) ? nativeResult({
-            id: 41,
-            name: "requestAccounts",
-            provider: "ethereum",
-            result: [address],
-            mutation: {kind: "accounts", updates: {ethereum: {address: address, chainId: "0x1"}}},
-        }) : undefined,
-    });
-
-    const disconnecting = harness.dispatch({
-        subject: "disconnect",
-        id: 42,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    await settle();
-    assert.equal(readCount, 1);
-    const applying = harness.dispatch({
-        subject: "consumeResponse",
-        id: 41,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    });
-    await settle();
-    assert.equal(readCount, 1);
-    releaseReads();
-
-    const [disconnectResponse, staleResponse] = await Promise.all([
-        disconnecting,
-        applying,
-    ]);
-    assert.equal(disconnectResponse.result, null);
-    assert.equal(staleResponse.error?.code, 4100);
-    assert.deepEqual(clone([staleResponse.state.ethereum, staleResponse.state.solana]), [ethereumState(""), null]);
-    assert.deepEqual(storage.get("https://wallet.example"), {
-        latestConfigurations: [{provider: "ethereum", chainId: "0x1", results: []}],
-        revisions: {ethereum: 1, solana: 0},
-        workflowVersion: 3,
-    });
-});
-
-test("concurrent response polls share one native read and exact revisions", async () => {
-    let resolveNative;
-    const nativeResponse = new Promise(resolve => { resolveNative = resolve; });
-    let nativeReadCount = 0;
-    const harness = makeHarness({native: message => {
-        if (message.subject !== "prepareResponseDelivery") { return undefined; }
-        nativeReadCount += 1;
-        return nativeResponse;
-    }});
-    const read = {
-        subject: "consumeResponse",
-        id: 73,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    };
-    const polls = Array.from({length: 12}, () => harness.dispatch(read));
-    await settle();
-
-    assert.equal(nativeReadCount, 1);
-    assert.equal(await harness.dispatch({
-        ...read,
-        revisions: {ethereum: 1, solana: 0},
-    }), undefined);
-    assert.equal(nativeReadCount, 1);
-
-    resolveNative(nativeError({
-        id: 73,
-        name: "signMessage",
-        provider: "ethereum",
-        error: {code: 4001, message: "Rejected"},
-    }));
-    const responses = await Promise.all(polls);
-    for (const response of responses) {
-        assert.deepEqual(clone(response), clone(responses[0]));
-    }
-    assert.equal((await harness.dispatch(read)).error?.code, 4001);
-    assert.equal(nativeReadCount, 2);
-});
-
-test("a rejected response flight is cleared for the next poll", async () => {
-    let nativeReadCount = 0;
-    const harness = makeHarness({native: message => {
-        if (message.subject !== "prepareResponseDelivery") { return undefined; }
-        nativeReadCount += 1;
-        return Promise.reject(new Error("native unavailable"));
-    }});
-    const read = {
-        subject: "consumeResponse",
-        id: 75,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    };
-
-    assert.deepEqual(await Promise.all([
-        harness.dispatch(read),
-        harness.dispatch(read),
-    ]), [undefined, undefined]);
-    assert.equal(nativeReadCount, 1);
-    assert.equal(await harness.dispatch(read), undefined);
-    assert.equal(nativeReadCount, 2);
-});
-
-
-
-
-test("same-host HTTP and HTTPS configuration operations share a lineage", async () => {
-    let releaseReads;
-    const readBarrier = new Promise(resolve => { releaseReads = resolve; });
-    let readCount = 0;
-    const harness = makeHarness({storageGet(_keys, values) {
-        if (_keys === "nativeExecutionJobs") { return values; }
-        readCount += 1;
-        return readBarrier.then(() => values);
-    }});
-    const httpsOperation = harness.dispatch({
-        subject: "disconnect",
-        id: 70,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    await settle();
-    assert.equal(readCount, 1);
-
-    const httpOperation = harness.dispatch({
-        subject: "disconnect",
-        id: 72,
-        provider: "solana",
-        host: "wallet.example",
-        configurationKey: "http://wallet.example",
-        workflowVersion: 3,
-    }, {
-        id: "extension-id",
-        frameId: 0,
-        url: "http://wallet.example/dapp",
-        tab: {
-            id: 10,
-            url: "http://wallet.example/dapp",
-            incognito: false,
-        },
-    });
-    await settle();
-    assert.equal(readCount, 1);
-
-    releaseReads();
-    const responses = await Promise.all([httpsOperation, httpOperation]);
-    assert.equal(responses[0].result, null);
-    assert.equal(responses[1].result, null);
-    assert.equal(readCount, 6);
-});
-
-test("a hung configuration read does not block an unrelated origin", async () => {
-    let releaseWalletRead;
-    const walletRead = new Promise(resolve => { releaseWalletRead = resolve; });
-    let walletReadStarted = false;
-    const harness = makeHarness({storageGet(keys, values) {
-        const requested = Array.isArray(keys) ? keys : [keys];
-        if (requested.includes("https://wallet.example")) {
-            walletReadStarted = true;
-            return walletRead.then(() => values);
-        }
-        return values;
-    }});
-    let walletSettled = false;
-    const walletOperation = harness.dispatch({
-        subject: "disconnect",
-        id: 74,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    }).then(response => {
-        walletSettled = true;
-        return response;
-    });
-    await settle();
-    assert.equal(walletReadStarted, true);
-
-    const otherResponse = await harness.dispatch({
-        subject: "disconnect",
-        id: 76,
-        provider: "solana",
-        host: "other.example",
-        configurationKey: "https://other.example",
-        workflowVersion: 3,
-    }, {
-        id: "extension-id",
-        frameId: 0,
-        url: "https://other.example/dapp",
-        tab: {
-            id: 11,
-            url: "https://other.example/dapp",
-            incognito: false,
-        },
-    });
-    assert.equal(otherResponse.result, null);
-    assert.equal(walletSettled, false);
-    assert.deepEqual(harness.storage.get("https://other.example").revisions, {
-        ethereum: 0,
-        solana: 1,
-    });
-
-    releaseWalletRead();
-    assert.equal((await walletOperation).result, null);
-});
-
-test("localizes private browsing rejection without forwarding the request", async () => {
-    const harness = makeHarness({
-        localizedMessages: {
-            private_browsing_unsupported: "Localized private browsing error",
-        },
-        privateBrowsing: true,
-    });
-    const response = await harness.dispatch(request(13));
-    assert.equal(response.error?.code, 4200);
-    assert.equal(response.error.message, "Localized private browsing error");
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("reads main host configurations without writes and migrates on the next operation", async () => {
-    const configuration = {
-        provider: "solana",
-        publicKey: firstSolanaPublicKey,
-    };
-    for (const value of [configuration, [configuration], {latestConfigurations: [configuration]}]) {
-        const storage = new Map([["wallet.example", value]]);
-        const harness = makeHarness({storage});
-        const response = await harness.dispatch({
-            subject: "getLatestConfiguration",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-        assert.equal(response.state.solana.publicKey, firstSolanaPublicKey);
-        assert.deepEqual(clone(response.state.revisions), {ethereum: 0, solana: 0});
-        assert.deepEqual(storage.get("wallet.example"), value);
-        assert.equal(storage.has("https://wallet.example"), false);
-        assert.deepEqual(harness.storageWrites, []);
-        assert.deepEqual(harness.storageRemovals, []);
-
-        const disconnected = await harness.dispatch({
-            subject: "disconnect",
-            id: 94,
-            provider: "ethereum",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-        assert.equal(disconnected.result, null);
-        assert.equal(storage.has("wallet.example"), false);
-        assert.deepEqual(storage.get("https://wallet.example"), {
-            latestConfigurations: [configuration, {provider: "ethereum", chainId: "0x1", results: []}],
-            revisions: {ethereum: 1, solana: 0},
-            workflowVersion: 3,
-        });
-        assert.equal(harness.storageWrites.length, 1);
-        assert.deepEqual(harness.storageRemovals, ["wallet.example"]);
-    }
-});
-
-test("main host migration removes the source only after successful persistence", async () => {
-    for (const succeeds of [true, false]) {
-        const value = [{provider: "solana", publicKey: firstSolanaPublicKey}];
-        const storage = new Map([["wallet.example", value]]);
-        const write = deferred();
-        const harness = makeHarness({storage, storageSet: () => write.promise});
-        const operation = harness.dispatch({
-            subject: "disconnect",
-            id: 94,
-            provider: "ethereum",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-        await settle();
-        assert.equal(harness.storageWrites.length, 1);
-        assert.deepEqual(storage.get("wallet.example"), value);
-        assert.deepEqual(harness.storageRemovals, []);
-        if (succeeds) {
-            write.resolve();
-        } else {
-            write.reject(new Error("Storage unavailable"));
-        }
-        const response = await operation;
-        assert.equal(storage.has("wallet.example"), !succeeds);
-        assert.equal(response.error?.code, succeeds ? undefined : -32603);
-    }
-});
-
-test("unpublished stored wrappers fail closed at host and origin keys", async () => {
-    const latestConfigurations = [{provider: "solana", publicKey: firstSolanaPublicKey}];
-    const values = [
-        ...[1, 2, 4].map(workflowVersion => ({
-            latestConfigurations,
-            revisions: {ethereum: 4, solana: 6},
-            workflowVersion,
-        })),
-        {
-            latestConfigurations,
-            bridgeState: {version: 2, revision: 4, solanaAuthorizationEpoch: 6},
-        },
-        {
-            latestConfigurations,
-            bridgeState: {},
-            revisions: {ethereum: 4, solana: 6},
-            workflowVersion: 3,
-        },
+test("manual-switch admission never retries ambiguous or unrelated terminal replies", async () => {
+    const initial = snapshot({revisions: {ethereum: 3, solana: 4}});
+    const current = snapshot({revisions: {ethereum: 4, solana: 4}});
+    const variants = [
+        response => undefined,
+        response => ({...response, extra: true}),
+        response => ({...response, id: response.id + 1}),
+        response => ({...response, response: {...response.response, id: response.id + 1}}),
+        response => ({...response, state: {...current, context: "b".repeat(64)}}),
+        response => ({...response, state: initial}),
+        response => ({...response, state: snapshot({revisions: {ethereum: 4, solana: 3}})}),
+        response => ({...response, response: {...response.response, name: "requestAccounts", provider: "ethereum"}}),
+        response => ({...response, response: {...response.response, error: {code: 4001, message: "Canceled"}}}),
+        response => response.response,
+        () => { throw new Error("Native transport failed"); },
     ];
-    for (const key of ["wallet.example", "https://wallet.example"]) {
-        for (const value of values) {
-            const storage = new Map([[key, value]]);
-            const harness = makeHarness({storage});
-            const response = await harness.dispatch({
-                subject: "getLatestConfiguration",
-                host: "wallet.example",
-                configurationKey: "https://wallet.example",
-                workflowVersion: 3,
-            });
-            assert.equal(response.kind, "configurationError");
-            assert.equal(response.error.code, 4900);
-            assert.deepEqual(storage.get(key), value);
-            assert.deepEqual(harness.storageWrites, []);
-            assert.deepEqual(harness.storageRemovals, []);
-        }
-    }
-});
-
-test("invalid origin state never falls back to main host authorization", async () => {
-    const configuration = {provider: "solana", publicKey: firstSolanaPublicKey};
-    for (const value of [
-        configuration,
-        [configuration],
-        {latestConfigurations: [configuration]},
-        {latestConfigurations: [configuration], revisions: {}, workflowVersion: 3},
-    ]) {
-        const storage = new Map([
-            ["wallet.example", [configuration]],
-            ["https://wallet.example", value],
-        ]);
-        const harness = makeHarness({storage});
-        const response = await harness.dispatch({
-            subject: "getLatestConfiguration",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-        assert.equal(response.kind, "configurationError");
-        assert.equal(response.error.code, 4900);
-        assert.deepEqual(storage.get("wallet.example"), [configuration]);
-        assert.deepEqual(storage.get("https://wallet.example"), value);
-        assert.deepEqual(harness.storageWrites, []);
-        assert.deepEqual(harness.storageRemovals, []);
-    }
-});
-
-test("canonicalizes positive main Ethereum quantities across host storage shapes", async () => {
-    const cases = [
-        {
-            expected: "0xa",
-            value: [{provider: "ethereum", chainId: "0X000A", results: []}],
-        },
-        {
-            expected: "0xb",
-            value: {provider: "ethereum", chainId: "0x000B", results: []},
-        },
-        {
-            expected: "0xc",
-            value: {
-                latestConfigurations: [{
-                    provider: "ethereum",
-                    chainId: "0X000C",
-                    results: [],
-                }],
-            },
-        },
-    ];
-
-    for (const item of cases) {
-        const storage = new Map([["wallet.example", item.value]]);
-        const harness = makeHarness({storage});
-        const response = await harness.dispatch({
-            subject: "getLatestConfiguration",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-
-        assert.equal(response.state.ethereum.chainId, item.expected);
-        assert.deepEqual(storage.get("wallet.example"), item.value);
-        assert.deepEqual(harness.storageWrites, []);
-        assert.deepEqual(harness.storageRemovals, []);
-
-        const disconnected = await harness.dispatch({
-            subject: "disconnect",
-            id: 95,
-            provider: "solana",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-        assert.equal(disconnected.result, null);
-        assert.equal(
-            storage.get("https://wallet.example").latestConfigurations[0].chainId,
-            item.expected
-        );
-        assert.equal(storage.get("https://wallet.example").workflowVersion, 3);
-        assert.equal(harness.storageWrites.length, 1);
-    }
-});
-
-test("main zero malformed and over-native-max chains fail closed", async () => {
-    const values = [
-        [{provider: "ethereum", chainId: "0x0", results: []}],
-        {provider: "ethereum", chainId: "invalid", results: []},
-        {
-            latestConfigurations: [{
-                provider: "ethereum",
-                chainId: "0x8000000000000000",
-                results: [],
-            }],
-        },
-    ];
-
-    for (const value of values) {
-        const storage = new Map([["wallet.example", value]]);
-        const harness = makeHarness({storage});
-        const response = await harness.dispatch({
-            subject: "getLatestConfiguration",
-            host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-        });
-
-        assert.equal(response.kind, "configurationError");
-        assert.equal(response.error.code, 4900);
-        assert.deepEqual(harness.storageWrites, []);
-        assert.deepEqual(storage.get("wallet.example"), value);
-    }
-});
-
-test("v3 storage does not normalize noncanonical Ethereum quantities", async () => {
-    const value = {
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0X000A",
-            results: [],
-        }],
-        revisions: {ethereum: 1, solana: 0},
-        workflowVersion: 3,
-    };
-    const storage = new Map([["https://wallet.example", value]]);
-    const harness = makeHarness({storage});
-    const response = await harness.dispatch({
-        subject: "getLatestConfiguration",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.kind, "configurationError");
-    assert.equal(response.error.code, 4900);
-    assert.deepEqual(harness.storageWrites, []);
-    assert.deepEqual(storage.get("https://wallet.example"), value);
-});
-
-test("trusted popup reads the active tab configuration", async () => {
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "solana",
-            publicKey: firstSolanaPublicKey,
-        }],
-        revisions: {ethereum: 0, solana: 2},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({storage});
-    const response = await harness.dispatch({
-        subject: "getLatestConfiguration",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    }, {
-        id: "extension-id",
-        url: "safari-web-extension://extension-id/popup.html",
-    });
-    assert.deepEqual(clone(response), {
-        kind: "configuration",
-        state: snapshot({solana: solanaState(firstSolanaPublicKey), revisions: {ethereum: 0, solana: 2}}),
-    });
-});
-
-test("popup approval rejects disconnect until native execution settles", async () => {
-    let resolveApproval;
-    const approvalGate = new Promise(resolve => { resolveApproval = resolve; });
-    const harness = makeHarness({native: message => {
-        return message.subject === "approveRequest" ? approvalGate : undefined;
-    }});
-    const approving = harness.dispatch(approvalProxy(91), popupSender());
-    await settle();
-    assert.equal(harness.nativeMessages.length, 1);
-    assert.deepEqual(harness.nativeMessages[0].message.payload.revisions, {
-        ethereum: 0,
-        solana: 0,
-    });
-
-    const blocked = await harness.dispatch({
-        subject: "disconnect",
-        id: 92,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.equal(blocked.error?.code, -32603);
-
-    resolveApproval(nativeApprovalCommandResult(91));
-    assert.deepEqual(clone(await approving), nativeApprovalCommandResult(91));
-    const disconnected = await harness.dispatch({
-        subject: "disconnect",
-        id: 92,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.equal(disconnected.result, null);
-});
-
-function timedApprovalHarness(options = {}) {
-    let now = 1_700_000_000_000;
-    let nextTimer = 0;
-    const timers = new Map;
-    const harness = makeHarness({
-        ...options,
-        dateNow: () => now,
-        scheduleTimeout(callback, delay) {
-            const id = ++nextTimer;
-            timers.set(id, {callback, due: now + delay});
-            return id;
-        },
-        cancelTimeout(id) { timers.delete(id); },
-    });
-    return {
-        ...harness,
-        timers,
-        now: () => now,
-        async advance(milliseconds) {
-            const target = now + milliseconds;
-            await settle();
-            while (true) {
-                const next = [...timers].sort((a, b) => a[1].due - b[1].due)[0];
-                if (!next || next[1].due > target) { break; }
-                now = next[1].due;
-                timers.delete(next[0]);
-                next[1].callback();
-                await settle();
-            }
-            now = target;
-            await settle();
-        },
-    };
-}
-
-
-test("popup approval can acquire a persisted lease after its expiry", async () => {
-    const expiresAt = 1_700_000_000_500;
-    const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-    const storage = new Map([[leaseKey, {
-        configurationKey: "wallet.example",
-        issuedAt: expiresAt - 160_000,
-        executionDeadline: expiresAt - 10_000,
-        expiresAt,
-        revisions: {ethereum: 0, solana: 0},
-        token: attempt,
-        workflowVersion: 3,
-    }]]);
-    const harness = timedApprovalHarness({
-        storage,
-        native: () => nativeApprovalCommandResult(109),
-    });
-    const approving = harness.dispatch(approvalProxy(109), popupSender());
-    await harness.advance(499);
-    assert.equal(harness.nativeMessages.length, 0);
-    await harness.advance(1);
-    assert.deepEqual(clone(await approving), nativeApprovalCommandResult(109));
-    assert.equal(harness.nativeMessages.length, 1);
-    assert.equal(storage.has(leaseKey), false);
-    assert.equal(harness.timers.size, 0);
-});
-
-test("popup approval stops waiting after five seconds without removing another lease", async () => {
-    const issuedAt = 1_700_000_000_000;
-    const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-    const lease = {
-        configurationKey: "wallet.example",
-        issuedAt,
-        executionDeadline: issuedAt + 150_000,
-        expiresAt: issuedAt + 160_000,
-        revisions: {ethereum: 0, solana: 0},
-        token: attempt,
-        workflowVersion: 3,
-    };
-    const storage = new Map([[leaseKey, lease]]);
-    const harness = timedApprovalHarness({
-        storage,
-        native: () => assert.fail("timed-out approval must never reach native"),
-    });
-    let settled = false;
-    const approving = harness.dispatch(approvalProxy(110), popupSender())
-        .then(result => { settled = true; return result; });
-    await harness.advance(4999);
-    assert.equal(settled, false);
-    await harness.advance(1);
-    assert.equal(await approving, undefined);
-    assert.deepEqual(storage.get(leaseKey), lease);
-    assert.equal(harness.timers.size, 0);
-    await harness.advance(190_000);
-    assert.equal(harness.nativeMessages.length, 0);
-});
-
-test("late approval lease storage never dispatches and cleans up only its own lease", async () => {
-    for (const stage of ["read", "write", "replacement"]) {
-        const storage = new Map;
-        const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-        let releaseStorage;
-        const storageGate = new Promise(resolve => { releaseStorage = resolve; });
-        const harness = timedApprovalHarness({
-            storage,
-            storageGet(keys, values) {
-                return stage === "read" && keys === leaseKey
-                    ? storageGate.then(() => values)
-                    : values;
-            },
-            storageSet(values) {
-                return stage !== "read" && values[leaseKey]
-                    ? storageGate
-                    : undefined;
-            },
-            native: () => assert.fail("late storage must never dispatch approval"),
-        });
-        const approving = harness.dispatch(approvalProxy(111), popupSender());
-        await harness.advance(5000);
-        assert.equal(await approving, undefined);
-        const replacementToken = "11111111111111111111111111111111";
-        if (stage === "replacement") {
-            storage.set(leaseKey, {...storage.get(leaseKey), token: replacementToken});
-        }
-        releaseStorage();
-        await settle();
-        await settle();
-        assert.equal(harness.nativeMessages.length, 0);
-        assert.equal(harness.timers.size, 0);
-        if (stage === "replacement") {
-            assert.equal(storage.get(leaseKey).token, replacementToken);
-        } else {
-            assert.equal(storage.has(leaseKey), false);
-        }
-    }
-});
-
-test("a stalled popup approval releases its origin after the long timeout", async () => {
-    const harness = makeHarness({
-        native: message => message.subject === "approveRequest"
-            ? new Promise(() => {})
-            : undefined,
-        scheduleTimeout(callback, delay) {
-            if (delay === 180_000) { queueMicrotask(callback); }
-            return delay;
-        },
-    });
-    const approval = await harness.dispatch(approvalProxy(92), popupSender());
-    const disconnected = await harness.dispatch({
-        subject: "disconnect",
-        id: 93,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(approval, undefined);
-    assert.equal(disconnected.result, null);
-    assert.equal(harness.timerDelays.includes(180_000), true);
-});
-
-test("a durable approval lease blocks revision changes after worker restart", async () => {
-    const now = 1_700_000_000_000;
-    const storage = new Map;
-    let resolveApproval;
-    const approvalGate = new Promise(resolve => { resolveApproval = resolve; });
-    const first = makeHarness({
-        dateNow: () => now,
-        storage,
-        native: message => message.subject === "approveRequest"
-            ? approvalGate
-            : undefined,
-    });
-    const approving = first.dispatch(approvalProxy(96), popupSender());
-    await settle();
-    const leaseEntry = [...storage.entries()].find(([key]) =>
-        key.startsWith(approvalLeaseStoragePrefix)
-    );
-    assert.ok(leaseEntry);
-    assert.deepEqual(Object.keys(leaseEntry[1]).sort(), [
-        "configurationKey", "executionDeadline", "expiresAt", "issuedAt",
-        "revisions", "token", "workflowVersion",
-    ]);
-    assert.equal(leaseEntry[1].issuedAt, now);
-    assert.equal(leaseEntry[1].executionDeadline, now + 150_000);
-    assert.equal(leaseEntry[1].expiresAt, now + 160_000);
-    assert.deepEqual(leaseEntry[1].revisions, {ethereum: 0, solana: 0});
-
-    const restarted = makeHarness({dateNow: () => now, storage});
-    const blocked = await restarted.dispatch({
-        subject: "disconnect",
-        id: 97,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.deepEqual(clone(blocked), errorResponse(
-        97, "ethereum", "revokePermissions", -32603, "Failed to revoke permissions"
-    ));
-    assert.equal(storage.has(leaseEntry[0]), true);
-
-    resolveApproval(nativeApprovalCommandResult(96));
-    assert.deepEqual(clone(await approving), nativeApprovalCommandResult(96));
-    assert.equal(storage.has(leaseEntry[0]), false);
-    const disconnected = await restarted.dispatch({
-        subject: "disconnect",
-        id: 98,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.equal(disconnected.result, null);
-});
-
-
-
-test("expired approval leases are removed before provider mutation", async () => {
-    const now = 1_700_000_200_000;
-    const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-    const storage = new Map([[leaseKey, {
-        configurationKey: "wallet.example",
-        issuedAt: now - 170_000,
-        executionDeadline: now - 20_000,
-        expiresAt: now - 10_000,
-        revisions: {ethereum: 0, solana: 0},
-        token: attempt,
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({dateNow: () => now, storage});
-
-    const disconnected = await harness.dispatch({
-        subject: "disconnect",
-        id: 99,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(disconnected.result, null);
-    assert.equal(storage.has(leaseKey), false);
-});
-
-test("a backward clock change keeps a structurally live approval lease", async () => {
-    const issuedAt = 1_700_000_000_000;
-    const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-    const storage = new Map([[leaseKey, {
-        configurationKey: "wallet.example",
-        issuedAt,
-        executionDeadline: issuedAt + 150_000,
-        expiresAt: issuedAt + 160_000,
-        revisions: {ethereum: 0, solana: 0},
-        token: attempt,
-        workflowVersion: 3,
-    }]]);
-    const restarted = makeHarness({
-        dateNow: () => issuedAt - 25_000,
-        storage,
-    });
-
-    const blocked = await restarted.dispatch({
-        subject: "disconnect",
-        id: 101,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(blocked.error?.code, -32603);
-    assert.equal(storage.has(leaseKey), true);
-    assert.deepEqual(storage.get(leaseKey).revisions, {
-        ethereum: 0,
-        solana: 0,
-    });
-});
-
-test("a malformed approval lease fails closed", async () => {
-    const now = 1_700_000_000_000;
-    const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-    const storage = new Map([[leaseKey, {
-        configurationKey: "wallet.example",
-        issuedAt: now,
-        executionDeadline: now + 151_000,
-        expiresAt: now + 161_000,
-        revisions: {ethereum: 0, solana: 0},
-        token: attempt,
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({dateNow: () => now, storage});
-
-    const blocked = await harness.dispatch({
-        subject: "disconnect",
-        id: 102,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(blocked.error?.code, -32603);
-    assert.equal(storage.has(leaseKey), true);
-});
-
-test("approval cleanup cannot remove a replacement lease", async () => {
-    const now = 1_700_000_000_000;
-    const storage = new Map;
-    const replacementToken = "11111111111111111111111111111111";
-    let leaseKey;
-    const harness = makeHarness({
-        dateNow: () => now,
-        storage,
-        native: () => {
-            leaseKey = [...storage.keys()].find(key =>
-                key.startsWith(approvalLeaseStoragePrefix)
-            );
-            const replacement = clone(storage.get(leaseKey));
-            replacement.token = replacementToken;
-            storage.set(leaseKey, replacement);
-            return nativeApprovalCommandResult(100);
-        },
-    });
-
-    assert.deepEqual(clone(await harness.dispatch(
-        approvalProxy(100),
-        popupSender()
-    )), nativeApprovalCommandResult(100));
-    assert.equal(storage.get(leaseKey).token, replacementToken);
-});
-
-test("approval cleanup serializes with replacement lease installation", async () => {
-    let now = 1_700_000_000_000;
-    const storage = new Map;
-    let resolveFirst;
-    let resolveSecond;
-    const firstResponse = new Promise(resolve => { resolveFirst = resolve; });
-    const secondResponse = new Promise(resolve => { resolveSecond = resolve; });
-    let signalCleanupRead;
-    const cleanupReadStarted = new Promise(resolve => {
-        signalCleanupRead = resolve;
-    });
-    let releaseCleanupRead;
-    const cleanupRead = new Promise(resolve => { releaseCleanupRead = resolve; });
-    let leaseReads = 0;
-    const harness = makeHarness({
-        dateNow: () => now,
-        storage,
-        storageGet(keys, values) {
-            const requested = Array.isArray(keys) ? keys : [keys];
-            if (requested.some(key =>
-                key.startsWith(approvalLeaseStoragePrefix)
-            )) {
-                leaseReads += 1;
-                if (leaseReads === 2) {
-                    signalCleanupRead();
-                    return cleanupRead.then(() => values);
-                }
-            }
-            return values;
-        },
-        native: message => {
-            if (message.subject !== "approveRequest") { return undefined; }
-            return message.id === 103 ? firstResponse : secondResponse;
-        },
-    });
-    const first = harness.dispatch(approvalProxy(103), popupSender());
-    await settle();
-    now += 161_000;
-    resolveFirst(nativeApprovalCommandResult(103));
-    await cleanupReadStarted;
-
-    const second = harness.dispatch(approvalProxy(104), popupSender());
-    await settle();
-    assert.equal(harness.nativeMessages.length, 1);
-
-    releaseCleanupRead();
-    assert.deepEqual(clone(await first), nativeApprovalCommandResult(103));
-    await settle();
-    assert.equal(harness.nativeMessages.length, 2);
-    const leaseEntry = [...storage.entries()].find(([key]) =>
-        key.startsWith(approvalLeaseStoragePrefix)
-    );
-    assert.ok(leaseEntry);
-    assert.equal(leaseEntry[1].issuedAt, now);
-
-    resolveSecond(nativeApprovalCommandResult(104));
-    assert.deepEqual(clone(await second), nativeApprovalCommandResult(104));
-    assert.equal(storage.has(leaseEntry[0]), false);
-});
-
-test("popup approval overwrites drifted revisions and preserves add-chain", async () => {
-    const now = 1_700_000_000_000;
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [],
-        revisions: {ethereum: 4, solana: 9},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({
-        dateNow: () => now,
-        storage,
-        native: message => nativeApprovalCommandResult(message.id),
-    });
-
-    assert.deepEqual(clone(await harness.dispatch(
-        approvalProxy(93, {privateBrowsing: true}),
-        popupSender()
-    )), nativeApprovalCommandResult(93));
-    assert.deepEqual(harness.nativeMessages[0].message, {
-        subject: "approveRequest",
-        id: 93,
-        requestToken,
-        reviewToken,
-        payload: {
-            executionDeadline: now + 150_000,
-            revisions: {ethereum: 4, solana: 9},
-        },
-        workflowVersion: 3,
-        __bwPrivateBrowsing: true,
-    });
-
-    assert.deepEqual(clone(await harness.dispatch(
-        approvalProxy(94),
-        popupSender()
-    )), nativeApprovalCommandResult(94));
-    assert.deepEqual(harness.nativeMessages[1].message.payload, {
-        executionDeadline: now + 150_000,
-        revisions: {ethereum: 4, solana: 9},
-    });
-
-    assert.deepEqual(clone(await harness.dispatch(
-        approvalProxy(95, {payload: {selectedAccounts: [{
-            walletId: "wallet",
-            coin: "ethereum",
-            address: "0x0000000000000000000000000000000000000001",
-            derivationPath: "m/44'/60'/0'/0/0",
-        }]}}),
-        popupSender()
-    )), nativeApprovalCommandResult(95));
-    assert.deepEqual(harness.nativeMessages[2].message.payload, {
-        selectedAccounts: [{
-            walletId: "wallet",
-            coin: "ethereum",
-            address: "0x0000000000000000000000000000000000000001",
-            derivationPath: "m/44'/60'/0'/0/0",
-        }],
-        executionDeadline: now + 150_000,
-        revisions: {ethereum: 4, solana: 9},
-    });
-});
-
-test("popup approval cannot override private sender metadata", async () => {
-    const harness = makeHarness({native: message => nativeApprovalCommandResult(message.id)});
-    const response = await harness.dispatch(approvalProxy(95), popupSender({incognito: true}));
-    assert.deepEqual(clone(response), nativeApprovalCommandResult(95));
-    assert.equal(harness.nativeMessages[0].message.__bwPrivateBrowsing, true);
-});
-
-test("private popup completion does not read or apply a stored response", async () => {
-    const harness = makeHarness();
-    await settle();
-    const before = transportEffects(harness);
-    assert.equal(await harness.dispatch({
-        subject: "applyCompletedResponse", id: 7, host: "wallet.example",
-        configurationKey: "https://wallet.example", requestToken,
-        revisions: {ethereum: 0, solana: 0}, workflowVersion: 3,
-    }, popupSender({incognito: true})), undefined);
-    assert.deepEqual(transportEffects(harness), before);
-});
-
-test("malformed or untrusted popup approval proxy never reaches native", async () => {
-    const invalidRequests = [
-        [approvalProxy(95), undefined],
-        [approvalProxy(95, {reviewToken: "invalid"}), popupSender()],
-        [approvalProxy(95, {payload: {revisions: {ethereum: 0, solana: 0}}}), popupSender()],
-        [approvalProxy(95, {privateBrowsing: "false"}), popupSender()],
-        [{...approvalProxy(95), extra: true}, popupSender()],
-        [approvalProxy(95, {host: "other.example"}), popupSender()],
-        [approvalProxy(95, {payload: {password: "secret"}}), popupSender()],
-        [approvalProxy(95, {payload: {selectedAccounts: [{
-            walletId: "wallet",
-            coin: "ethereum",
-            address: "0x0000000000000000000000000000000000000001",
-        }]}}), popupSender()],
-    ];
-    for (const [message, sender] of invalidRequests) {
-        const harness = makeHarness({native: () => {
-            throw new Error("must not reach native");
+    for (const variant of variants) {
+        let admissions = 0;
+        const harness = makeHarness({native: message => {
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: initial}; }
+            admissions += 1;
+            return variant(manualSwitchDenial(message.id, current));
         }});
-        assert.equal(await harness.dispatch(message, sender), undefined);
-        assert.equal(harness.nativeMessages.length, 0);
+        await harness.dispatch(manualSwitchIntent());
+        assert.equal(admissions, 1);
+        assert.equal(harness.popupCalls.length, 0);
     }
 });
 
-test("semantic configuration writes notify only matching-origin normal tabs", async () => {
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "ethereum",
-            chainId: "0x1",
-            results: ["0x0000000000000000000000000000000000000001"],
-        }],
-        revisions: {ethereum: 2, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({
-        storage,
-        tabs: [
-            {id: 1, url: "https://wallet.example/first", incognito: false},
-            {id: 2, url: "http://wallet.example/second"},
-            {id: 3, url: "https://other.example/"},
-            {id: 4},
-            {id: 5, url: "https://wallet.example/private", incognito: true},
-        ],
-    });
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 43,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    await settle();
-    assert.deepEqual(harness.tabMessages, [{
-        id: 1,
-        message: {
-            subject: "configurationChanged",
-            configurationKey: "https://wallet.example",
-            state: snapshot({revisions: {ethereum: 3, solana: 0}}),
-            workflowVersion: 3,
-        },
-    }]);
-});
-
-test("a blocked tab query keeps its event alive without blocking later storage", async () => {
-    let releaseFirstQuery;
-    const firstQuery = new Promise(resolve => { releaseFirstQuery = resolve; });
-    let queryCount = 0;
-    const matchingTabs = [{id: 1, url: "https://wallet.example/page"}];
-    const harness = makeHarness({queryTabs() {
-        queryCount += 1;
-        return queryCount === 1 ? firstQuery : matchingTabs;
+test("manual-switch transport timeout does not create another admission", async () => {
+    let admissions = 0;
+    const harness = makeHarness({native: message => {
+        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+        admissions += 1;
+        return new Promise(() => {});
     }});
-    let firstSettled = false;
-    const first = harness.dispatch({
-        subject: "disconnect",
-        id: 60,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    }).then(response => {
-        firstSettled = true;
-        return response;
-    });
+    const pending = harness.dispatch(manualSwitchIntent());
     await settle();
-    assert.equal(firstSettled, false);
-    assert.deepEqual(harness.storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-
-    const second = await harness.dispatch({
-        subject: "disconnect",
-        id: 62,
-        provider: "solana",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    assert.equal(second.result, null);
-    assert.deepEqual(clone(second.state.revisions), {ethereum: 1, solana: 1});
-    assert.equal(firstSettled, false);
-    assert.deepEqual(harness.storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 1,
-    });
-
-    releaseFirstQuery(matchingTabs);
-    const firstResponse = await first;
-    assert.equal(firstResponse.result, null);
-    assert.deepEqual(clone([firstResponse.state.ethereum, firstResponse.state.solana]), [ethereumState(""), null]);
-    assert.deepEqual(clone(firstResponse.state.revisions), {ethereum: 1, solana: 0});
-    assert.equal(firstSettled, true);
+    assert.equal(await harness.runTimer(5000), true);
+    assert.equal(await pending, undefined);
+    assert.equal(admissions, 1);
 });
 
-test("a short tab-query timeout returns the persisted mutation", async () => {
-    const harness = makeHarness({
-        queryTabs: () => new Promise(() => {}),
-        scheduleTimeout(callback) {
-            queueMicrotask(callback);
-            return 1;
-        },
-    });
-    const response = await harness.dispatch({
-        subject: "disconnect",
-        id: 64,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-
-    assert.equal(response.result, null);
-    assert.deepEqual(harness.storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
-    assert.deepEqual(harness.timerDelays, [5000, 1000]);
-    assert.deepEqual(harness.tabMessages, []);
-});
-
-test("a response-ready tab-query timeout completes without delivery", async () => {
-    const harness = makeHarness({
-        queryTabs: () => new Promise(() => {}),
-        scheduleTimeout(callback) {
-            queueMicrotask(callback);
-            return 1;
-        },
-    });
-
-    assert.equal(await harness.dispatch({
-        subject: "responseReady",
-        ids: [65],
-        workflowVersion: 3,
-    }, popupSender()), undefined);
-    assert.deepEqual(harness.timerDelays, [1000, 5000, 5000]);
-    assert.deepEqual(harness.tabMessages, []);
-});
-
-test("a hung configuration delivery does not block later broadcasts", async () => {
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [
-            {
-                provider: "ethereum",
-                chainId: "0x1",
-                results: ["0x0000000000000000000000000000000000000001"],
-            },
-            {provider: "solana", publicKey: firstSolanaPublicKey},
-        ],
-        revisions: {ethereum: 0, solana: 0},
-        workflowVersion: 3,
-    }]]);
-    let releaseFirstDelivery;
-    const firstDelivery = new Promise(resolve => {
-        releaseFirstDelivery = resolve;
-    });
-    let queryCount = 0;
-    let deliveryCount = 0;
-    const matchingTabs = [{id: 1, url: "https://wallet.example/page"}];
-    const harness = makeHarness({
-        storage,
-        queryTabs() {
-            queryCount += 1;
-            return matchingTabs;
-        },
-        sendTabMessage() {
-            deliveryCount += 1;
-            return deliveryCount === 1 ? firstDelivery : undefined;
-        },
-    });
-
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 46,
-        provider: "ethereum",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    await settle();
-    await harness.dispatch({
-        subject: "disconnect",
-        id: 48,
-        provider: "solana",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-    });
-    await settle();
-    assert.equal(queryCount, 2);
-    assert.deepEqual(harness.tabMessages.map(value => value.message.state), [
-        snapshot({solana: solanaState(firstSolanaPublicKey), revisions: {ethereum: 1, solana: 0}}),
-        snapshot({revisions: {ethereum: 1, solana: 1}}),
-    ]);
-    assert.deepEqual(harness.tabMessages.map(value => value.message.state.revisions), [
-        {ethereum: 1, solana: 0},
-        {ethereum: 1, solana: 1},
-    ]);
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 1,
-        solana: 1,
-    });
-
-    releaseFirstDelivery();
-    await settle();
-});
-
-test("a generic Solana 4100 does not mutate authorization", async () => {
-    const storage = new Map([["https://wallet.example", {
-        latestConfigurations: [{
-            provider: "solana",
-            publicKey: firstSolanaPublicKey,
-        }],
-        revisions: {ethereum: 0, solana: 3},
-        workflowVersion: 3,
-    }]]);
-    const harness = makeHarness({
-        storage,
-        native: message => isResponseRead(message) ? nativeError({
-            id: 44,
-            name: "signMessage",
-            provider: "solana",
-            error: {code: 4100, message: "Unauthorized"},
-        }) : undefined,
-        tabs: [{id: 1, url: "https://wallet.example/"}],
-    });
-    const response = await harness.dispatch({
-        subject: "consumeResponse",
-        id: 44,
-        configurationKey: "https://wallet.example",
-        requestToken,
-        revisions: {ethereum: 0, solana: 3},
-        workflowVersion: 3,
-    });
-    await settle();
-    assert.equal(response.error?.code, 4100);
-    assert.deepEqual(storage.get("https://wallet.example").revisions, {
-        ethereum: 0,
-        solana: 3,
-    });
-    assert.deepEqual(harness.tabMessages, []);
-});
-
-test("explicit Solana revocation only removes the matching authorized key", async () => {
-    for (const currentPublicKey of [firstSolanaPublicKey, secondSolanaPublicKey]) {
-        const configuration = {provider: "solana", publicKey: currentPublicKey};
-        const storage = new Map([["https://wallet.example", {
-            latestConfigurations: [configuration], revisions: {ethereum: 0, solana: 3}, workflowVersion: 3,
-        }]]);
-        const harness = makeHarness({storage, native: () => nativeError({
-            id: 44, name: "signMessage", provider: "solana",
-            error: {code: 4100, message: "Unauthorized"}, authorizationFailure: true,
-            mutation: {kind: "revokeSolana", publicKey: firstSolanaPublicKey},
-        })});
-        const response = await harness.dispatch({
-            subject: "consumeResponse", id: 44, configurationKey: "https://wallet.example", requestToken,
-            revisions: {ethereum: 0, solana: 3}, workflowVersion: 3,
-        });
-        assert.equal(response.authorizationFailure, undefined);
-        assert.equal(response.error.code, 4100);
-        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations,
-            currentPublicKey === firstSolanaPublicKey ? [] : [configuration]);
-        assert.equal(storage.get("https://wallet.example").revisions.solana, 4);
-    }
-});
-
-test("malformed manual completions remain unacknowledged", async () => {
-    for (const terminal of [
-        nativeResult({id: 44, name: "switchAccount", provider: "multiple", result: null}),
-        nativeResult({id: 44, name: "switchAccount", provider: "multiple", result: "invalid",
-            mutation: {kind: "accounts", updates: {}}}),
-        nativeError({id: 44, name: "switchAccount", provider: "multiple", error: {code: 4001, message: ""}}),
-    ]) {
-        let acknowledgements = 0;
-        const harness = makeHarness({native: () => terminal,
-            acknowledgeResponse: () => { acknowledgements += 1; return {id: 44, acknowledged: true}; }});
-        const response = await harness.dispatch({
-            subject: "consumeResponse", id: 44, configurationKey: "https://wallet.example", requestToken,
-            revisions: {ethereum: 0, solana: 0}, workflowVersion: 3,
-        });
-        assert.equal(response, undefined);
-        assert.equal(acknowledgements, 0);
-        assert.deepEqual(providerStateWrites(harness), []);
-    }
-});
-
-test("ordinary RPC returns failure after the long native-operation timeout", async () => {
-    let resolveRPC;
-    const harness = makeHarness({
-        native: message => message.subject === "rpc"
-            ? new Promise(resolve => { resolveRPC = resolve; })
-            : undefined,
-        scheduleTimeout(callback, delay) {
-            if (delay === 180_000) { queueMicrotask(callback); }
-            return delay;
-        },
-    });
-    const response = await harness.dispatch({
-        subject: "rpc",
-        id: 45,
-        chainId: "0x1",
-        body: "{}",
-        workflowVersion: 3,
-    });
-
-    assert.deepEqual(clone(response), errorResponse(
-        45, "ethereum", null, -32603, "Failed to communicate with Big Wallet"
-    ));
-    assert.equal(harness.timerDelays.includes(180_000), true);
-    resolveRPC({id: 45, result: "ok"});
-    await settle();
-});
-
-test("RPC native responses cross one canonical result or error boundary", async () => {
-    const id = 81;
-    const rpc = {subject: "rpc", id, chainId: "0x1", body: "{}", workflowVersion: 3};
-    for (const result of [null, false, 0, "", [], {items: ["0x1"]}]) {
-        const harness = makeHarness({native: () => ({id, result})});
-        assert.deepEqual(clone(await harness.dispatch(rpc)), {
-            kind: "result", id, provider: "ethereum", name: null,
-            state: null, result, approvalCommitted: false,
-        });
-    }
-    for (const [response, message] of [
-        [{id}, "Failed to communicate with Big Wallet"],
-        [{id, result: null, error: {code: -32000, message: "Rejected"}}, "Failed to process RPC response"],
-        [Object.assign(Object.create({result: "inherited"}), {id}), "Failed to communicate with Big Wallet"],
-    ]) {
-        const harness = makeHarness({native: () => response});
-        assert.deepEqual(clone(await harness.dispatch(rpc)), errorResponse(id, "ethereum", null, -32603, message));
-    }
-    const mismatched = makeHarness({native: () => ({id: id + 1, result: "wrong request"})});
-    assert.deepEqual(clone(await mismatched.dispatch(rpc)), errorResponse(
-        id, "ethereum", null, -32603, "Failed to communicate with Big Wallet"
-    ));
-    const harness = makeHarness({native: () => ({
-        id, error: {code: -32000, message: "Rejected", data: {reason: "nonce"}},
-    })});
-    assert.deepEqual(clone(await harness.dispatch(rpc)), {
-        ...errorResponse(id, "ethereum", null, -32000, "Rejected"),
-        error: {code: -32000, message: "Rejected", data: {reason: "nonce"}},
-    });
-});
-
-test("RPC ignores wallet metadata and leaves stored configuration unchanged", async () => {
-    const id = 85;
-    const rpc = {subject: "rpc", id, chainId: "0x1", body: "{}", workflowVersion: 3};
-    const initial = {latestConfigurations: [], revisions: {ethereum: 0, solana: 0}, workflowVersion: 3};
-    const configurations = [
-        {provider: "ethereum", results: ["0x0000000000000000000000000000000000000001"],
-            chainId: "0x2", revision: 99},
-        {provider: "solana", publicKey: secondSolanaPublicKey, revision: 99},
-    ];
-    for (const metadata of [
-        {latestConfigurations: configurations, revisions: {ethereum: 99, solana: 99}},
-        {latestConfigurations: null, revisions: {ethereum: 99, solana: 99}},
-        {latestConfigurations: configurations, revisions: {ethereum: -1, solana: "invalid"}},
-    ]) {
-        for (const terminal of [
-            {result: {number: "0x12", transactions: []}},
-            {error: {code: 4100, message: "RPC denied", data: {reason: "upstream"}}},
-        ]) {
-            const storage = new Map([["https://wallet.example", clone(initial)]]);
-            const harness = makeHarness({storage, native: () => ({
-                id, ...metadata, ...terminal,
-                provider: "solana", name: "connect", kind: "configuration",
-                mutation: {kind: "accounts", updates: {ethereum: null, solana: null}},
-                state: snapshot({solana: solanaState(secondSolanaPublicKey)}),
-                configurationMatch: true, approvalCommitted: true, authorizationFailure: true,
-            })});
-            assert.deepEqual(clone(await harness.dispatch(rpc)), {
-                id, provider: "ethereum", name: null, state: null,
-                ...(terminal.error
-                    ? {kind: "error", error: terminal.error}
-                    : {kind: "result", result: terminal.result, approvalCommitted: false}),
-            });
-            assert.deepEqual(storage.get("https://wallet.example"), initial);
-            assert.deepEqual(harness.storageWrites, []);
-            assert.deepEqual(harness.storageRemovals, []);
-            assert.deepEqual(harness.tabMessages, []);
-        }
-    }
-});
-
-test("native provider errors preserve canonical error data", async () => {
-    for (const data of [{reason: "rejected"}, {signature: "signed-transaction"},
-        {transactionHash: "0x1234"}, false, null, [1, "reason"]]) {
-        const harness = makeHarness({native: () => nativeError({
-            id: 83,
-            name: "requestAccounts",
-            provider: "ethereum",
-            error: {code: 4001, message: "Rejected", data},
-        })});
-        assert.deepEqual(clone(await harness.dispatch(request(83))), {
-            ...errorResponse(83, "ethereum", "requestAccounts", 4001, "Rejected"),
-            error: {code: 4001, message: "Rejected", data},
-        });
-    }
-});
-
-test("native error data survives numeric expansion during JavaScript serialization", async () => {
-    const encoded = '{"id":84,"name":"signTransaction","provider":"ethereum","kind":"error",' +
-        '"approvalCommitted":true,"mutation":null,"authorizationFailure":false,' +
-        '"error":{"code":-32000,"message":"Rejected","data":[' +
-        Array(13000).fill("1e+20").join(",") + ']}}';
-    const terminal = JSON.parse(encoded);
-    assert.ok(Buffer.byteLength(encoded) < 256 * 1024);
-    assert.ok(JSON.stringify(terminal).length > 256 * 1024);
-    const harness = makeHarness({
-        native: message => isResponseRead(message) ? terminal : undefined,
-    });
-
-    const response = await harness.dispatch({
-        subject: "consumeResponse", id: 84, configurationKey: "https://wallet.example",
-        requestToken, revisions: {ethereum: 0, solana: 0}, workflowVersion: 3,
-    });
-
-    assert.deepEqual(clone(response.error), {
-        code: -32000, message: "Rejected", data: Array(13000).fill(1e20),
-    });
-    assert.equal(harness.nativeMessages.filter(({message}) =>
-        message.subject === "acknowledgeResponse"
-    ).length, 1);
-});
-
-test("broadcasts response-ready hints and treats badge updates as best effort", async () => {
-    const harness = makeHarness();
-    await harness.dispatch({
-        subject: "responseReady",
-        ids: [1, 2],
-        workflowVersion: 3,
-    }, popupSender());
-    assert.deepEqual(harness.tabMessages.map(value => value.id), [3, 4]);
-    await harness.dispatch({
-        subject: "updatePendingRequestBadge",
-        hasPendingRequests: false,
-        workflowVersion: 3,
-    }, popupSender());
-    assert.equal(harness.badgeTexts.at(-1), "");
-});
-
-function executionJob(overrides = {}) {
-    return {
-        attempt: null,
-        configurationKey: "https://wallet.example",
-        createdAt: 1_700_000_000_000,
-        expiresAt: 1_700_004_500_000,
-        id: 7,
-        manual: false,
-        nextMaintenanceAt: 0,
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        tabId: 9,
-        workflowVersion: 3,
-        ...overrides,
-    };
-}
-
-function activeRequestReply(_tabId, message) {
-    return {id: message.id, requestToken: message.requestToken, active: true};
-}
-
-function executionStatus(message, state = "awaitingExecution") {
-    return message.subject === "getExecutionStatus"
-        ? {id: message.id, state} : {id: message.id, pending: true};
-}
-
-test("response queries are observational even with expired jobs and leases", async () => {
-    for (const status of ["pending", "ready", "missing", "unavailable"]) {
-        const harness = makeHarness({native: message => ({id: message.id, [status]: true})});
-        await settle();
-        harness.storage.set("nativeExecutionJobs", [executionJob({expiresAt: 1})]);
-        harness.storage.set(`${approvalLeaseStoragePrefix}wallet.example`, {expired: true});
-        const before = clone([harness.storageWrites, harness.storageRemovals,
-            harness.storageReads, harness.executionMessages, harness.tabMessages]);
-        const query = {subject: "getResponse", id: 7, configurationKey: "https://wallet.example",
-            requestToken, workflowVersion: 3};
-        assert.deepEqual(clone(await harness.dispatch(query)), {id: 7, [status]: true});
-        assert.deepEqual(clone([harness.storageWrites, harness.storageRemovals,
-            harness.storageReads, harness.executionMessages, harness.tabMessages]), before);
-        assert.deepEqual(harness.nativeMessages.at(-1).message, {...query, __bwPrivateBrowsing: false});
-        assert.equal(await harness.dispatch({...query, revisions: {ethereum: 0, solana: 0}}), undefined);
-    }
-});
-
-test("execution is driven after durable admission without any page response poll", async () => {
-    const storage = new Map;
-    const harness = makeHarness({
-        storage, dateNow: () => 1_700_000_000_000,
-        native: message => nativeAcknowledgement(message.id),
-        sendTabMessage: activeRequestReply,
-        executionNative(message) {
-            if (message.subject === "executeNativeApproval") {
-                const job = storage.get("nativeExecutionJobs")[0];
-                assert.equal(job.attempt.attemptID, message.attemptID);
-                assert.deepEqual(job.attempt.lease.revisions, message.revisions);
-                assert.equal(job.attempt.lease.expiresAt, message.executionDeadline);
-                assert.deepEqual(storage.get(`${approvalLeaseStoragePrefix}wallet.example`), job.attempt.lease);
-            }
-            return executionStatus(message);
-        },
-    });
-    assert.equal((await harness.dispatch(request())).requestToken, requestToken);
-    await settle();
-    const commands = harness.executionMessages.map(({message}) => message.subject);
-    assert.deepEqual(commands, ["maintainRequest", "getExecutionStatus", "executeNativeApproval"]);
-    assert.equal(harness.nativeMessages.some(({message}) => message.subject === "getResponse"), false);
-    assert.match(storage.get("nativeExecutionJobs")[0].attempt.attemptID,
-        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
-    assert.ok(storage.has(`${approvalLeaseStoragePrefix}wallet.example`));
-});
-
-test("worker restart resumes an uncertain execution with the same descriptor and retained lease", async () => {
-    const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-    const first = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-        sendTabMessage: activeRequestReply,
-        executionNative: message => message.subject === "executeNativeApproval"
-            ? Promise.reject(new Error("reply lost")) : executionStatus(message)});
-    await settle();
-    const original = first.executionMessages.find(({message}) => message.subject === "executeNativeApproval").message;
-    const originalJob = clone(storage.get("nativeExecutionJobs")[0]);
-    assert.ok(storage.has(`${approvalLeaseStoragePrefix}wallet.example`));
-    const second = makeHarness({storage, dateNow: () => 1_700_000_001_000,
-        sendTabMessage: activeRequestReply,
-        executionNative: message => executionStatus(message, "executing")});
-    await settle();
-    const resumed = second.executionMessages.find(({message}) => message.subject === "executeNativeApproval").message;
-    assert.deepEqual(resumed, original);
-    assert.deepEqual(storage.get("nativeExecutionJobs")[0].attempt, originalJob.attempt);
-    assert.equal(second.tabMessages.filter(({message}) => message.subject === "requestActive").length, 1);
-});
-
-test("a persisted attempt can restore only its original unexpired lease with unchanged revisions", async () => {
-    const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-    const first = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-        sendTabMessage: activeRequestReply, executionNative: executionStatus});
-    await settle();
-    const job = clone(storage.get("nativeExecutionJobs")[0]);
-    for (const changed of [false, true]) {
-        const resumedStorage = new Map([["nativeExecutionJobs", [clone(job)]]]);
-        if (changed) { resumedStorage.set("https://wallet.example", {
-            workflowVersion: 3, latestConfigurations: [], revisions: {ethereum: 1, solana: 0},
-        }); }
-        const resumed = makeHarness({storage: resumedStorage, dateNow: () => 1_700_000_001_000,
-            sendTabMessage: activeRequestReply, executionNative: executionStatus});
-        await settle();
-        assert.equal(resumed.executionMessages.some(({message}) =>
-            message.subject === "executeNativeApproval"), !changed);
-        if (!changed) {
-            assert.deepEqual(resumedStorage.get(`${approvalLeaseStoragePrefix}wallet.example`), job.attempt.lease);
-        }
-    }
-});
-
-test("matching lease tokens do not permit altered immutable attempt fields", async () => {
-    const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-    makeHarness({storage, dateNow: () => 1_700_000_000_000,
-        sendTabMessage: activeRequestReply, executionNative: executionStatus});
-    await settle();
-    const job = clone(storage.get("nativeExecutionJobs")[0]);
-    const altered = {...job.attempt.lease, revisions: {ethereum: 1, solana: 0}};
-    const resumed = makeHarness({dateNow: () => 1_700_000_001_000,
-        storage: new Map([["nativeExecutionJobs", [job]],
-            [`${approvalLeaseStoragePrefix}wallet.example`, altered]]),
-        sendTabMessage: activeRequestReply, executionNative: executionStatus});
-    await settle();
-    assert.equal(resumed.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-});
-
-test("missing or stale page activity never dispatches approval execution", async () => {
-    for (const reply of [undefined, {id: 7, requestToken, active: false},
-        {id: 7, requestToken: reviewToken, active: true}]) {
-        let active = false;
-        const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-        const harness = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-            sendTabMessage: (tabId, message) => active ? activeRequestReply(tabId, message) : reply,
-            executionNative: executionStatus});
-        await settle();
-        assert.equal(harness.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-        assert.equal(storage.get("nativeExecutionJobs")[0].attempt, null);
-        assert.equal(storage.has(`${approvalLeaseStoragePrefix}wallet.example`), false);
-        active = true;
-        await harness.runTimer();
-        assert.equal(harness.executionMessages.filter(({message}) => message.subject === "executeNativeApproval").length, 1);
-    }
-});
-
-test("expired attempts are maintained without renewing execution or deadlines", async () => {
+test("manual-switch stale retries preserve the original deadline", async () => {
     let now = 1_700_000_000_000;
-    const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-    const harness = makeHarness({storage, dateNow: () => now,
-        sendTabMessage: activeRequestReply, executionNative: executionStatus});
-    await settle();
-    const attempt = clone(storage.get("nativeExecutionJobs")[0].attempt);
-    now = attempt.lease.expiresAt + 1;
-    await harness.runTimer();
-    assert.equal(harness.executionMessages.filter(({message}) => message.subject === "executeNativeApproval").length, 1);
-    assert.equal(harness.executionMessages.filter(({message}) => message.subject === "maintainRequest").length, 2);
-    assert.deepEqual(storage.get("nativeExecutionJobs")[0].attempt, attempt);
+    let admissions = 0;
+    const harness = makeHarness({dateNow: () => now, native: message => {
+        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+        admissions += 1;
+        now = message.admissionDeadline;
+        return manualSwitchDenial(message.id, snapshot({revisions: {ethereum: 1, solana: 0}}));
+    }});
+    const response = await harness.dispatch(manualSwitchIntent());
+    assert.equal(response.error.code, 4100);
+    assert.equal(admissions, 1);
 });
 
-test("unowned mobile approvals remain awaiting review without execution", async () => {
-    const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-    const harness = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-        executionNative: message => executionStatus(message, "awaitingReview")});
-    await settle();
-    await harness.runTimer();
-    assert.equal(harness.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-    assert.equal(harness.executionMessages.find(({message}) =>
-        message.subject === "maintainRequest").message.allowDelivery, false);
-    assert.equal(storage.get("nativeExecutionJobs")[0].attempt, null);
-});
-
-for (const writePhase of ["before", "after"]) {
-    test(`execution attempt persistence failure ${writePhase} write never dispatches an unpersisted attempt`, async () => {
-        const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-        let fail = true;
-        const failAttempt = values => {
-            if (values.nativeExecutionJobs?.[0]?.attempt && fail) {
-                fail = false;
-                throw new Error("storage interrupted");
-            }
-        };
-        const first = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-            sendTabMessage: activeRequestReply, executionNative: executionStatus,
-            ...(writePhase === "before" ? {storageBeforeSet: failAttempt} : {storageSet: failAttempt})});
-        await settle();
-        assert.equal(first.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-        const recorded = clone(storage.get("nativeExecutionJobs")[0].attempt);
-        assert.equal(storage.has(`${approvalLeaseStoragePrefix}wallet.example`), false);
-        const second = makeHarness({storage, dateNow: () => 1_700_000_001_000,
-            sendTabMessage: activeRequestReply, executionNative: executionStatus});
-        await settle();
-        const dispatched = second.executionMessages.find(({message}) => message.subject === "executeNativeApproval").message;
-        if (recorded) { assert.equal(dispatched.attemptID, recorded.attemptID); }
-        assert.equal(dispatched.attemptID, storage.get("nativeExecutionJobs")[0].attempt.attemptID);
-    });
-}
-
-test("manual execution needs no page and completes through prepared durable delivery", async () => {
-    const storage = new Map([["nativeExecutionJobs", [executionJob({manual: true, tabId: null})]]]);
-    const fixture = completedAccountFixture(7);
-    const harness = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-        executionNative: message => message.subject === "executeNativeApproval"
-            ? {id: message.id, ready: true} : executionStatus(message),
-        native: () => ({...fixture.response, name: "switchAccount", provider: "multiple", result: null}),
-    });
-    await settle();
-    assert.equal(harness.tabMessages.some(({message}) => message.subject === "requestActive"), false);
-    assert.equal(storage.has(`${approvalLeaseStoragePrefix}wallet.example`), false);
-    assert.deepEqual(storage.get("nativeExecutionJobs"), []);
-    assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject),
-        ["prepareResponseDelivery", "acknowledgeResponse"]);
-});
-
-test("content and popup delivery wait for acknowledgement and return current configuration", async () => {
-    const fixture = completedAccountFixture();
-    const ack = deferred();
-    const harness = makeHarness({native: () => ({...fixture.response, approvalCommitted: true}),
-        acknowledgeResponse: () => ack.promise});
-    let delivered = false;
-    const reading = harness.dispatch(fixture.read).then(response => { delivered = true; return response; });
-    await settle();
-    assert.equal(delivered, false);
-    const applying = harness.dispatch(fixture.apply, popupSender());
-    await harness.dispatch({subject: "disconnect", id: 25, provider: "ethereum",
-        host: "wallet.example", configurationKey: fixture.read.configurationKey, workflowVersion: 3});
-    ack.resolve({id: fixture.read.id, acknowledged: true});
-    const response = await reading;
-    assert.equal(response.state.revisions.ethereum, 2);
-    assert.equal(response.state.ethereum.address, "");
-    assert.deepEqual(clone(await applying), {applied: true});
-    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "prepareResponseDelivery").length, 1);
-});
-
-for (const crashPoint of ["before lease", "after lease"]) {
-    test(`restart recovers a crash ${crashPoint} publication without changing the execution attempt`, async () => {
-        const storage = new Map([["nativeExecutionJobs", [executionJob()]]]);
-        const blockLeaseWrite = values => Object.keys(values).some(key =>
-            key.startsWith(approvalLeaseStoragePrefix)) ? new Promise(() => {}) : undefined;
-        const first = makeHarness({storage, dateNow: () => 1_700_000_000_000,
-            sendTabMessage: activeRequestReply, executionNative: executionStatus,
-            ...(crashPoint === "before lease"
-                ? {storageBeforeSet: blockLeaseWrite} : {storageSet: blockLeaseWrite})});
-        await settle();
-        const recorded = clone(storage.get("nativeExecutionJobs")[0].attempt);
-        assert.ok(recorded);
-        assert.equal(storage.has(`${approvalLeaseStoragePrefix}wallet.example`), crashPoint === "after lease");
-        assert.equal(first.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-        const second = makeHarness({storage, dateNow: () => 1_700_000_001_000,
-            sendTabMessage: activeRequestReply, executionNative: executionStatus});
-        await settle();
-        const resumed = second.executionMessages.find(({message}) => message.subject === "executeNativeApproval").message;
-        assert.equal(resumed.attemptID, recorded.attemptID);
-        assert.equal(resumed.executionDeadline, recorded.lease.expiresAt);
-        assert.deepEqual(resumed.revisions, recorded.lease.revisions);
-    });
-}
-
-test("native admission is not acknowledged until its execution job is durable", async () => {
-    const storage = new Map;
-    let fail = true;
-    const admissions = [];
-    const native = message => {
-        admissions.push(message.enqueueAttempt);
-        return nativeAcknowledgement(message.id);
-    };
-    const first = makeHarness({storage, native, dateNow: () => 1_700_000_000_000,
-        storageBeforeSet(values) {
-            if (values.nativeExecutionJobs && fail) {
-                fail = false;
-                throw new Error("write failed");
-            }
-        }});
-    assert.equal(await first.dispatch(request()), undefined);
-    assert.equal(storage.has("nativeExecutionJobs"), false);
-    assert.equal(first.executionMessages.length, 0);
-    const second = makeHarness({storage, native, dateNow: () => 1_700_000_001_000});
-    assert.equal((await second.dispatch(request())).requestToken, requestToken);
-    assert.equal(storage.get("nativeExecutionJobs")[0].requestToken, requestToken);
-    assert.deepEqual(admissions, [attempt, attempt]);
-});
-
-test("inactive pages allow passive maintenance but cannot request helper redelivery", async () => {
-    const harness = makeHarness({dateNow: () => 1_700_000_000_000,
-        storage: new Map([["nativeExecutionJobs", [executionJob()]]]),
-        sendTabMessage: () => ({id: 7, requestToken, active: false}),
-        executionNative: executionStatus});
-    await settle();
-    assert.deepEqual(harness.executionMessages.map(({message}) => message.subject),
-        ["maintainRequest", "getExecutionStatus"]);
-    assert.equal(harness.executionMessages[0].message.allowDelivery, false);
-});
-
-test("execution recovery rejects malformed and over-capacity persistent jobs before native commands", async () => {
-    for (const jobs of [
-        [executionJob({configurationKey: "https://wallet.example/path"})],
-        [executionJob({requestToken: "invalid"})],
-        [executionJob({expiresAt: Number.MAX_SAFE_INTEGER})],
-        [executionJob(), executionJob()],
-        Array.from({length: 17}, (_, index) => executionJob({id: index})),
-    ]) {
+for (const sequence of [
+    ["stale", "completed", "accepted"],
+    ["completed", "stale", "accepted"],
+    ["stale", "completed", "stale"],
+    ["completed", "stale", "completed"],
+]) {
+    test(`manual-switch stale and completion retries have independent limits: ${sequence.join(", ")}`, async () => {
+        let state = snapshot();
+        const admissions = [];
+        let drains = 0;
         const harness = makeHarness({dateNow: () => 1_700_000_000_000,
-            storage: new Map([["nativeExecutionJobs", jobs]]), executionNative: executionStatus});
-        await settle();
-        assert.equal(harness.executionMessages.length, 0);
-        assert.equal(harness.storageWrites.length, 0);
-    }
-});
-
-test("expired execution jobs settle pending requests even when backoff persistence fails", async () => {
-    for (const hasAttempt of [false, true]) {
-        const job = executionJob();
-        const storage = new Map([["nativeExecutionJobs", [job]]]);
-        const leaseKey = `${approvalLeaseStoragePrefix}wallet.example`;
-        if (hasAttempt) {
-            makeHarness({storage, dateNow: () => job.createdAt,
-                executionNative: executionStatus, sendTabMessage: activeRequestReply});
-            await settle();
-            assert.ok(storage.get("nativeExecutionJobs")[0].attempt);
-            assert.equal(storage.has(leaseKey), true);
-        }
-        let ready = false;
-        const terminal = nativeError({id: job.id, name: "requestAccounts", provider: "ethereum",
-            error: {code: 4001, message: "Request expired"}});
-        const harness = makeHarness({storage, dateNow: () => job.expiresAt,
-            storageBeforeSet(values) {
-                if (values.nativeExecutionJobs?.[0]?.nextMaintenanceAt > 0) {
-                    throw new Error("quota exceeded");
+            recoveryNative: message => ({id: message.id, requests: []}),
+            native: message => {
+                if (message.subject === "getLatestConfiguration") { return {id: message.id, state}; }
+                if (message.subject === "prepareResponseDelivery") {
+                    drains += 1;
+                    return {id: message.id, state, response: nativeResult({
+                        id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                    })};
                 }
-            },
-            executionNative(message) {
-                if (message.subject === "maintainRequest") {
-                    ready = true;
-                    return {id: message.id, ready: true};
+                assert.equal(message.name, "switchAccount");
+                admissions.push(message);
+                const step = sequence[admissions.length - 1];
+                assert.ok(step, "No fourth admission is allowed");
+                if (step === "stale") {
+                    state = snapshot({revisions: {ethereum: state.revisions.ethereum + 1, solana: 0}});
+                    return manualSwitchDenial(message.id, state);
                 }
-                return executionStatus(message, ready ? "completed" : "awaitingReview");
+                return {id: step === "completed" ? 19 : message.id,
+                    admissionKind: step === "completed" ? "coalesced" : "new", approvalRequired: step === "accepted", requestToken, state};
             },
-            native: message => isResponseRead(message) ? terminal
-                : {id: message.id, [ready ? "ready" : "pending"]: true},
         });
-        await settle();
-        const query = {subject: "getResponse", id: job.id, configurationKey: job.configurationKey,
-            requestToken, workflowVersion: 3};
-        assert.deepEqual(clone(await harness.dispatch(query)), {id: job.id, ready: true});
-        const response = await harness.dispatch({...query, subject: "consumeResponse", revisions: job.revisions});
-        assert.deepEqual(clone(response.error), terminal.error);
-        assert.deepEqual(storage.get("nativeExecutionJobs"), []);
-        assert.equal(storage.has(leaseKey), false);
-        assert.deepEqual(harness.executionMessages.map(({message}) => message.subject),
-            ["maintainRequest", "getExecutionStatus"]);
-        assert.equal(harness.executionMessages[0].message.allowDelivery, false);
-        assert.equal(harness.tabMessages.length, 0);
-        assert.equal(await harness.runTimer(), false);
-    }
-});
-
-test("expired maintenance backs off in memory when storage and native messaging fail", async () => {
-    const job = executionJob();
-    let now = job.expiresAt;
-    let nativeAvailable = false;
-    const storage = new Map([["nativeExecutionJobs", [job]]]);
-    const harness = makeHarness({storage, dateNow: () => now,
-        storageBeforeSet(values) {
-            if (values.nativeExecutionJobs?.length) { throw new Error("quota exceeded"); }
-        },
-        executionNative(message) {
-            if (!nativeAvailable) { throw new Error("native unavailable"); }
-            return {id: message.id, missing: true};
-        },
+        const response = await harness.dispatch(manualSwitchIntent());
+        assert.equal(admissions.length, 3);
+        assert.equal(new Set(admissions.map(value => value.id)).size, 3);
+        assert.equal(new Set(admissions.map(value => value.enqueueAttempt)).size, 3);
+        assert.ok(admissions.every(value => value.admissionDeadline === admissionDeadline));
+        assert.equal(drains, 1);
+        assert.equal(harness.nativeMessages.filter(value => value.message.subject === "acknowledgeResponse").length, 1);
+        if (sequence[2] === "accepted") {
+            assert.equal(response.approvalRequired, true);
+            assert.equal(response.id, admissions[2].id);
+            assert.equal(harness.popupCalls.length, 1);
+        } else if (sequence[2] === "stale") {
+            assert.equal(response.error.code, 4100);
+        } else {
+            assert.equal(response, undefined);
+        }
     });
-    await settle();
-    assert.equal(harness.executionMessages.length, 1);
-    assert.equal(storage.get("nativeExecutionJobs")[0].nextMaintenanceAt, 0);
-    now += 29_999;
-    await harness.runTimer();
-    assert.equal(harness.executionMessages.length, 1);
-    nativeAvailable = true;
-    now += 1;
-    await harness.runTimer();
-    assert.equal(harness.executionMessages.length, 2);
-    assert.deepEqual(storage.get("nativeExecutionJobs"), []);
-    assert.equal(await harness.runTimer(), false);
-});
+}
 
-test("expired execution maintenance backs off across failures and restarts until terminal", async () => {
-    for (const failure of ["rejection", "timeout", "unavailable"]) {
-        const job = executionJob();
-        let now = job.expiresAt;
-        const storage = new Map([["nativeExecutionJobs", [job]]]);
-        const first = makeHarness({storage, dateNow: () => now, executionNative: message => {
-            if (failure === "rejection") { throw new Error("native unavailable"); }
-            if (failure === "timeout") { return new Promise(() => {}); }
-            return {id: message.id, unavailable: true};
-        }});
-        await settle();
-        if (failure === "timeout") { await first.runTimer(5000); }
-        const retryAt = storage.get("nativeExecutionJobs")[0].nextMaintenanceAt;
-        assert.equal(retryAt, now + 30_000);
-        assert.equal(storage.get("nativeExecutionJobs")[0].expiresAt, job.expiresAt);
-        const calls = first.executionMessages.length;
-        now = retryAt - 1;
-        await first.runTimer();
-        assert.equal(first.executionMessages.length, calls);
-
-        let missing = false;
-        const resumed = makeHarness({storage, dateNow: () => now,
-            executionNative: message => missing ? {id: message.id, missing: true}
-                : executionStatus(message, "awaitingReview")});
-        await settle();
-        assert.equal(resumed.executionMessages.length, 0);
-        now = retryAt;
-        await resumed.runTimer();
-        assert.equal(storage.get("nativeExecutionJobs").length, 1);
-        missing = true;
-        now = storage.get("nativeExecutionJobs")[0].nextMaintenanceAt;
-        await resumed.runTimer();
-        assert.deepEqual(storage.get("nativeExecutionJobs"), []);
-        assert.equal(resumed.executionMessages.some(({message}) => message.subject === "executeNativeApproval"), false);
-        assert.equal(resumed.tabMessages.length, 0);
-        assert.equal(await resumed.runTimer(), false);
-    }
-});
-
-test("execution expiry during a status read retains maintenance without dispatch", async () => {
-    const job = executionJob();
-    let now = job.expiresAt - 1;
-    const storage = new Map([["nativeExecutionJobs", [job]]]);
-    const harness = makeHarness({storage, dateNow: () => now,
-        sendTabMessage: activeRequestReply,
-        executionNative(message) {
-            if (message.subject === "getExecutionStatus") { now = job.expiresAt; }
-            return executionStatus(message);
-        },
-    });
-    await settle();
-    assert.equal(storage.get("nativeExecutionJobs").length, 1);
-    assert.equal(storage.get("nativeExecutionJobs")[0].attempt, null);
-    assert.deepEqual(harness.executionMessages.map(({message}) => message.subject),
-        ["maintainRequest", "getExecutionStatus"]);
-});
-
-test("expired manual completions are still applied and acknowledged", async () => {
-    const job = executionJob({manual: true, tabId: null});
-    const storage = new Map([["nativeExecutionJobs", [job]]]);
-    const fixture = completedAccountFixture(job.id);
-    const harness = makeHarness({storage, dateNow: () => job.expiresAt,
-        executionNative: message => executionStatus(message, "completed"),
-        native: () => ({...fixture.response, name: "switchAccount", provider: "multiple", result: null}),
-    });
-    await settle();
-    assert.deepEqual(storage.get("nativeExecutionJobs"), []);
-    assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
-    assert.deepEqual(harness.nativeMessages.map(({message}) => message.subject),
-        ["prepareResponseDelivery", "acknowledgeResponse"]);
+test("manual-switch completion refresh cannot extend an expired admission deadline", async () => {
+    let now = 1_700_000_000_000;
+    let reads = 0;
+    let admissions = 0;
+    const harness = makeHarness({dateNow: () => now, native: message => {
+        if (message.subject === "getLatestConfiguration") {
+            reads += 1;
+            if (reads === 2) { now = admissionDeadline; }
+            return {id: message.id, state: snapshot()};
+        }
+        if (message.subject === "prepareResponseDelivery") {
+            return {id: message.id, state: snapshot(), response: nativeResult({
+                id: message.id, name: "switchAccount", provider: "multiple", result: null,
+            })};
+        }
+        admissions += 1;
+        return {id: 19, admissionKind: "coalesced", approvalRequired: false, requestToken, state: snapshot()};
+    }});
+    assert.equal(await harness.dispatch(manualSwitchIntent()), undefined);
+    assert.equal(admissions, 1);
+    assert.equal(reads, 2);
 });

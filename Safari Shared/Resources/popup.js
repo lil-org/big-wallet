@@ -5,7 +5,8 @@ const TRANSACTION_REFRESH_INTERVAL = 600;
 const TRANSACTION_REFRESH_MAX_INTERVAL = 10000;
 const APPROVAL_POLL_INTERVAL = 400;
 const NATIVE_MESSAGE_TIMEOUT = 5000;
-const MANUAL_SWITCH_TIMEOUT = NATIVE_MESSAGE_TIMEOUT * 2;
+const RESPONSE_DELIVERY_TIMEOUT = NATIVE_MESSAGE_TIMEOUT * 3;
+const MANUAL_SWITCH_TIMEOUT = NATIVE_MESSAGE_TIMEOUT * 8;
 const NATIVE_OPERATION_RELAY_TIMEOUT = 190 * 1000;
 const MAX_RESPONSE_READY_IDS = BigWalletBridgeWire.MAX_RESPONSE_READY_IDS;
 const WORKFLOW_VERSION = BigWalletBridgeWire.WORKFLOW_VERSION;
@@ -385,7 +386,7 @@ class PopupRequestController {
         try {
             const response = await settleNativeMessage(Promise.resolve(nativeMessage(
                 subject, this.request.id, payload, this.request.requestToken,
-                reviewToken, this.request
+                reviewToken
             )), subject === "approveRequest");
             return {status: "response", response};
         } catch {
@@ -507,7 +508,7 @@ class PopupRequestController {
         const reviewToken = subject === "approveRequest" ? this.state.review.reviewToken : undefined;
         const operation = this.beginAction(subject);
         const decisionPayload = subject === "approveRequest" ? {...(isRecord(payload) ? payload : {})} : undefined;
-        if (decisionPayload) { delete decisionPayload.revisions; delete decisionPayload.password; }
+        if (decisionPayload) { delete decisionPayload.password; delete decisionPayload.revisions; delete decisionPayload.executionDeadline; }
         const outcome = await this.sendCommand({subject, payload: decisionPayload, reviewToken});
         this.completeAction(operation, outcome);
     }
@@ -1137,8 +1138,7 @@ function nativeMessage(
     id,
     payload,
     requestToken,
-    reviewToken,
-    approvalRequest
+    reviewToken
 ) {
     if (typeof payload !== "undefined" && !isRecord(payload)) {
         return Promise.reject(new TypeError("Invalid popup payload"));
@@ -1162,24 +1162,6 @@ function nativeMessage(
     }
     if (typeof payload !== "undefined") {
         message.payload = payload;
-    }
-    if (subject === "approveRequest") {
-        if (!isRecord(approvalRequest) ||
-            typeof approvalRequest.host !== "string" ||
-            typeof approvalRequest.configurationKey !== "string") {
-            return Promise.reject(new TypeError("Invalid approval request"));
-        }
-        return browser.runtime.sendMessage({
-            subject: "approveRequestWithCurrentRevisions",
-            id,
-            host: approvalRequest.host,
-            configurationKey: approvalRequest.configurationKey,
-            requestToken,
-            reviewToken,
-            payload: payload || {},
-            privateBrowsing: currentPrivateBrowsing(),
-            workflowVersion: WORKFLOW_VERSION,
-        });
     }
     return sendTrustedNativeMessage(message, currentPrivateBrowsing());
 }
@@ -1559,13 +1541,12 @@ async function applyCompletedResponse(request) {
             host: request.host,
             configurationKey: request.configurationKey,
             requestToken: request.requestToken,
-            revisions: request.revisions,
             workflowVersion: WORKFLOW_VERSION,
         });
     } catch {
         return "failure";
     }
-    const outcome = await settleExtensionMessage(pending);
+    const outcome = await settleExtensionMessage(pending, RESPONSE_DELIVERY_TIMEOUT);
     if (outcome.status !== "response") { return "failure"; }
     if (hasExactKeys(outcome.response, ["applied"]) &&
         outcome.response.applied === true) {

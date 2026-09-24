@@ -29,8 +29,6 @@ struct InternalSafariRequest: Decodable {
         let selectedAccounts: [SelectedAccount]?
         let chainId: String?
         let cluster: Solana.Cluster?
-        let executionDeadline: Date?
-        let revisions: ExtensionBridge.ProviderRevisions?
 
         init(from decoder: Decoder) throws {
             let container = try ExactKeyedContainer(
@@ -39,8 +37,6 @@ struct InternalSafariRequest: Decodable {
                     "selectedAccounts",
                     "chainId",
                     "cluster",
-                    "executionDeadline",
-                    "revisions",
                 ]
             )
             selectedAccounts = try container.decodeIfPresent(
@@ -49,27 +45,7 @@ struct InternalSafariRequest: Decodable {
             )
             chainId = try container.decodeIfPresent(String.self, forKey: "chainId")
             cluster = try container.decodeIfPresent(Solana.Cluster.self, forKey: "cluster")
-            if let milliseconds = try container.decodeIfPresent(
-                Int64.self,
-                forKey: "executionDeadline"
-            ) {
-                guard milliseconds > 0 else {
-                    throw DecodingError.dataCorruptedError(
-                        forKey: InternalCodingKey("executionDeadline"),
-                        in: container.container,
-                        debugDescription: "invalid execution deadline"
-                    )
-                }
-                executionDeadline = Date(
-                    timeIntervalSince1970: Double(milliseconds) / 1_000
-                )
-            } else {
-                executionDeadline = nil
-            }
-            revisions = try container.decodeIfPresent(
-                ExtensionBridge.ProviderRevisions.self,
-                forKey: "revisions"
-            )
+
         }
     }
 
@@ -162,11 +138,11 @@ struct InternalSafariRequest: Decodable {
         let token: ExtensionBridge.RequestToken
     }
 
-    struct NativeExecutionIdentity {
-        let response: ResponseIdentity
-        let attemptID: UUID
-        let executionDeadline: Date
-        let revisions: ExtensionBridge.ProviderRevisions
+    struct DisconnectIdentity {
+        let configurationKey: String
+        let provider: InpageProvider
+        let attempt: String
+        let authority: ExtensionBridge.AuthorityVersion
     }
 
     struct MaintenanceIdentity {
@@ -186,16 +162,15 @@ struct InternalSafariRequest: Decodable {
 
     enum PageCommand {
         case rpc(body: String, chainId: String)
+        case getLatestConfiguration(configurationKey: String)
+        case disconnect(DisconnectIdentity)
         case getResponse(ResponseIdentity)
         case acknowledgeResponse(ResponseAcknowledgmentIdentity)
         case showApproval(ResponseAcknowledgmentIdentity)
     }
 
     enum WorkerCommand {
-        case getManualSwitchRequests
-        case getManualSwitchResponse(ResponseIdentity)
-        case getExecutionStatus(ResponseIdentity)
-        case executeNativeApproval(NativeExecutionIdentity)
+        case getRecoveryRequests
         case maintainRequest(MaintenanceIdentity)
         case prepareResponseDelivery(ResponseIdentity)
     }
@@ -251,11 +226,11 @@ struct InternalSafariRequest: Decodable {
 
         enum Page: String {
             case getResponse, acknowledgeResponse, showApproval, rpc
+            case getLatestConfiguration, disconnect
         }
 
         enum Worker: String {
-            case getManualSwitchRequests, getManualSwitchResponse
-            case getExecutionStatus, executeNativeApproval, maintainRequest, prepareResponseDelivery
+            case getRecoveryRequests, maintainRequest, prepareResponseDelivery
         }
 
         enum Popup: String {
@@ -315,19 +290,38 @@ struct InternalSafariRequest: Decodable {
                 body: try container.decode(String.self, forKey: "body"),
                 chainId: try container.decode(String.self, forKey: "chainId")
             ))
+        case .page(.getLatestConfiguration):
+            let container = try ExactKeyedContainer(
+                decoder: decoder,
+                required: common.union(["configurationKey"])
+            )
+            command = .page(.getLatestConfiguration(configurationKey:
+                try container.decode(String.self, forKey: "configurationKey")
+            ))
+        case .page(.disconnect):
+            let container = try ExactKeyedContainer(
+                decoder: decoder,
+                required: common.union(["configurationKey", "provider", "attempt", "authority"])
+            )
+            let provider = try container.decode(InpageProvider.self, forKey: "provider")
+            let attempt = try container.decode(String.self, forKey: "attempt")
+            guard provider == .ethereum || provider == .solana,
+                  ExtensionBridge.isValidEnqueueAttempt(attempt) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "invalid revocation identity"
+                ))
+            }
+            command = .page(.disconnect(try DisconnectIdentity(
+                configurationKey: container.decode(String.self, forKey: "configurationKey"),
+                provider: provider,
+                attempt: attempt,
+                authority: container.decode(ExtensionBridge.AuthorityVersion.self, forKey: "authority")
+            )))
         case .page(.getResponse):
             command = .page(.getResponse(try Self.decodeResponseIdentity(
                 from: decoder,
                 common: common
-            )))
-        case .worker(.getManualSwitchResponse):
-            command = .worker(.getManualSwitchResponse(try Self.decodeResponseIdentity(
-                from: decoder,
-                common: common
-            )))
-        case .worker(.getExecutionStatus):
-            command = .worker(.getExecutionStatus(try Self.decodeResponseIdentity(
-                from: decoder, common: common
             )))
         case .worker(.maintainRequest):
             let container = try ExactKeyedContainer(
@@ -345,13 +339,9 @@ struct InternalSafariRequest: Decodable {
             command = .worker(.prepareResponseDelivery(try Self.decodeResponseIdentity(
                 from: decoder, common: common
             )))
-        case .worker(.executeNativeApproval):
-            command = .worker(.executeNativeApproval(try Self.decodeNativeExecutionIdentity(
-                from: decoder, common: common
-            )))
-        case .worker(.getManualSwitchRequests):
+        case .worker(.getRecoveryRequests):
             _ = try ExactKeyedContainer(decoder: decoder, required: common)
-            command = .worker(.getManualSwitchRequests)
+            command = .worker(.getRecoveryRequests)
         case .page(.acknowledgeResponse), .page(.showApproval):
             let container = try ExactKeyedContainer(
                 decoder: decoder,
@@ -462,55 +452,6 @@ struct InternalSafariRequest: Decodable {
         return try ResponseIdentity(
             configurationKey: container.decode(String.self, forKey: "configurationKey"),
             token: decodeToken(from: container)
-        )
-    }
-
-    private static func decodeNativeExecutionIdentity(
-        from decoder: Decoder,
-        common: Set<String>
-    ) throws -> NativeExecutionIdentity {
-        let container = try ExactKeyedContainer(
-            decoder: decoder,
-            required: common.union([
-                "configurationKey",
-                "attemptID",
-                "executionDeadline",
-                "requestToken",
-                "revisions",
-            ])
-        )
-        let rawAttemptID = try container.decode(String.self, forKey: "attemptID")
-        guard let attemptID = ExtensionBridge.lowercaseUUID(rawAttemptID) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: InternalCodingKey("attemptID"),
-                in: container.container,
-                debugDescription: "invalid execution attempt"
-            )
-        }
-        let milliseconds = try container.decode(
-            Int64.self,
-            forKey: "executionDeadline"
-        )
-        guard milliseconds > 0 else {
-            throw DecodingError.dataCorruptedError(
-                forKey: InternalCodingKey("executionDeadline"),
-                in: container.container,
-                debugDescription: "invalid execution deadline"
-            )
-        }
-        return try NativeExecutionIdentity(
-            response: ResponseIdentity(
-                configurationKey: container.decode(String.self, forKey: "configurationKey"),
-                token: decodeToken(from: container)
-            ),
-            attemptID: attemptID,
-            executionDeadline: Date(
-                timeIntervalSince1970: Double(milliseconds) / 1_000
-            ),
-            revisions: container.decode(
-                ExtensionBridge.ProviderRevisions.self,
-                forKey: "revisions"
-            )
         )
     }
 

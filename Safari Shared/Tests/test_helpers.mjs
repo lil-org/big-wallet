@@ -14,10 +14,10 @@ export function normalized(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
-export function nativeResult({id, name, provider, result, mutation = null, approvalCommitted = false}) {
-    return {id, name, provider, kind: "result", result, mutation, approvalCommitted};
+export function nativeResult({id, name, provider, result, approvalCommitted = false}) {
+    return {id, name, provider, kind: "result", result, approvalCommitted};
 }
 
-export function nativeError({id, name, provider, error, mutation = null, approvalCommitted = false, authorizationFailure = false}) {
-    return {id, name, provider, kind: "error", error, mutation, approvalCommitted, authorizationFailure};
+export function nativeError({id, name, provider, error, approvalCommitted = false, authorizationFailure = false}) {
+    return {id, name, provider, kind: "error", error, approvalCommitted, authorizationFailure};
 }

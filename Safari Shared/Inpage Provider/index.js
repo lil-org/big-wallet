@@ -204,6 +204,8 @@ const transport = freezeObjectNormally({
         const provider = ownValue(message, "provider");
         const id = ownValue(message, "id");
         const name = ownValue(message, "name");
+        const observedRevision = ownValue(message, "observedRevision");
+        if (!isSafeIntegerNormally(observedRevision) || observedRevision < 0) { return false; }
         let body;
         if (provider === "ethereum") {
             body = {
@@ -220,6 +222,7 @@ const transport = freezeObjectNormally({
             direction: PAGE_TO_CONTENT_DIRECTION,
             kind: "request",
             message: {body, id, name, provider},
+            observedRevision,
             providerGeneration: generation,
         };
         return postToPage(envelope);

@@ -14,6 +14,9 @@ struct SafariRequest {
     let enqueueAttempt: String
     let admissionDeadline: Date
     let workflowVersion: Int
+    var authority: ExtensionBridge.AuthorityVersion?
+    var authorizedAccount: WalletAccountDescriptor?
+    var connectedAccounts: [WalletAccountDescriptor] = []
     
     enum Body {
         case unknown(Unknown)
@@ -55,6 +58,8 @@ struct SafariRequest {
             timeIntervalSince1970: TimeInterval(admissionDeadlineMilliseconds) / 1_000
         )
         self.workflowVersion = workflowVersion
+        authority = ExtensionBridge.AuthorityVersion(rawValue: json["authority"])
+        authorizedAccount = nil
         
         if let favicon = json["favicon"] as? String, !favicon.isEmpty {
             if favicon.hasPrefix("//") {

@@ -2,6 +2,7 @@
 
 import CryptoKit
 import Foundation
+import Security
 import XCTest
 @testable import Big_Wallet
 
@@ -188,6 +189,487 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
     }
 
 }
+
+#if os(macOS)
+@MainActor
+final class WalletRemovalIntegrationTests: XCTestCase {
+
+    private enum TestError: Error {
+        case cleanupFailed
+    }
+
+    func testWalletDeletionRevokesBeforeSourceRemovalAndPreservesSiblingMetadata() async throws {
+        let fixture = try RemovalFixture()
+        var removals = [WalletAuthorityRemoval]()
+        let manager = fixture.manager { removal in
+            removals.append(removal)
+            fixture.keychain.events.append("cleanup")
+            XCTAssertNotNil(fixture.keychain.walletData[fixture.walletID])
+        }
+        XCTAssertTrue(manager.reloadFromStore())
+        let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+        let sibling = try XCTUnwrap(manager.wallets.first { $0.id == fixture.siblingID })
+        let account = try XCTUnwrap(wallet.accounts.first)
+        WalletsMetadataService.saveWalletName("Removed wallet", wallet: wallet)
+        WalletsMetadataService.saveAccountName("Removed account", wallet: wallet, account: account)
+        WalletsMetadataService.saveWalletName("Sibling wallet", wallet: sibling)
+        WalletsMetadataService.saveAccountName("Sibling account", wallet: sibling, account: account)
+        defer { fixture.clearMetadata() }
+
+        try await manager.delete(wallet: wallet)
+
+        XCTAssertEqual(removals.count, 1)
+        guard case .wallet(let id)? = removals.first else { return XCTFail("Expected whole-wallet revocation") }
+        XCTAssertEqual(id, fixture.walletID)
+        XCTAssertEqual(fixture.keychain.events, ["cleanup", "delete"])
+        XCTAssertNil(fixture.keychain.walletData[fixture.walletID])
+        XCTAssertNotNil(fixture.keychain.walletData[fixture.siblingID])
+        XCTAssertEqual(manager.wallets.map(\.id), [fixture.siblingID])
+        XCTAssertNil(WalletsMetadataService.getWalletName(wallet: wallet))
+        XCTAssertNil(WalletsMetadataService.getAccountName(walletId: wallet.id, account: account))
+        XCTAssertEqual(WalletsMetadataService.getWalletName(wallet: sibling), "Sibling wallet")
+        XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: sibling.id, account: account), "Sibling account")
+    }
+
+    func testBothAccountRemovalPathsPreserveConcurrentAdditionsAndSiblingMetadata() async throws {
+        for useEnabledAccounts in [false, true] {
+            let fixture = try RemovalFixture()
+            var removedAccounts = Set<WalletAccountDescriptor>()
+            let manager = fixture.manager { removal in
+                guard case .accounts(let accounts) = removal else {
+                    return XCTFail("Expected account-scoped revocation")
+                }
+                removedAccounts.formUnion(accounts)
+                fixture.keychain.events.append("cleanup")
+            }
+            XCTAssertTrue(manager.reloadFromStore())
+            let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+            let sibling = try XCTUnwrap(manager.wallets.first { $0.id == fixture.siblingID })
+            let retained = wallet.accounts[0]
+            let removed = wallet.accounts[1]
+            let concurrent = fixture.additionalAccount(index: 2)
+            fixture.keychain.walletData[fixture.walletID] = try fixture.walletData(adding: concurrent)
+            WalletsMetadataService.saveWalletName("Kept wallet", wallet: wallet)
+            WalletsMetadataService.saveAccountName("Retained", wallet: wallet, account: retained)
+            WalletsMetadataService.saveAccountName("Removed", wallet: wallet, account: removed)
+            WalletsMetadataService.saveAccountName("Concurrent", wallet: wallet, account: concurrent)
+            WalletsMetadataService.saveAccountName("Other wallet", wallet: sibling, account: removed)
+            defer { fixture.clearMetadata() }
+
+            if useEnabledAccounts {
+                try await manager.update(wallet: wallet, enabledAccounts: [retained])
+            } else {
+                try await manager.update(wallet: wallet, removeAccounts: [removed])
+            }
+
+            XCTAssertEqual(removedAccounts, [WalletAccountDescriptor(walletID: wallet.id, account: removed)])
+            XCTAssertEqual(fixture.keychain.events, ["cleanup", "update"])
+            let persisted = try fixture.persistedWallet()
+            XCTAssertEqual(Set(persisted.accounts.map(\.previewAccountKey)), [retained.previewAccountKey, concurrent.previewAccountKey])
+            let current = try XCTUnwrap(manager.wallets.first { $0.id == wallet.id })
+            XCTAssertEqual(current.accounts, persisted.accounts)
+            XCTAssertEqual(WalletsMetadataService.getWalletName(wallet: wallet), "Kept wallet")
+            XCTAssertNil(WalletsMetadataService.getAccountName(walletId: wallet.id, account: removed))
+            XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: wallet.id, account: retained), "Retained")
+            XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: wallet.id, account: concurrent), "Concurrent")
+            XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: sibling.id, account: removed), "Other wallet")
+        }
+    }
+
+    func testAccountAddedAndGrantedAtTransactionEntrySurvivesBothRemovalPaths() async throws {
+        for useEnabledAccounts in [false, true] {
+            let fixture = try RemovalFixture()
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wallet-edit-race-\(UUID().uuidString)")
+            defer {
+                try? FileManager.default.removeItem(at: directory)
+                fixture.clearMetadata()
+            }
+            let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory)
+            let staleWallet = try fixture.persistedWallet()
+            let retained = staleWallet.accounts[0]
+            let removed = staleWallet.accounts[1]
+            let concurrent = fixture.additionalAccount(index: 2)
+            let removedDescriptor = WalletAccountDescriptor(walletID: staleWallet.id, account: removed)
+            let concurrentDescriptor = WalletAccountDescriptor(walletID: staleWallet.id, account: concurrent)
+            let removedOrigin = "https://removed-account.example"
+            let concurrentOrigin = "https://concurrent-account.example"
+            try grant(removedDescriptor, in: store, id: 1, origin: removedOrigin)
+            WalletsMetadataService.saveAccountName("Removed", wallet: staleWallet, account: removed)
+            var transactionEntries = 0
+            var insideTransaction = false
+            let manager = fixture.transactionManager { mutation in
+                transactionEntries += 1
+                fixture.keychain.walletData[fixture.walletID] = try fixture.walletData(adding: concurrent)
+                try self.grant(concurrentDescriptor, in: store, id: 2, origin: concurrentOrigin)
+                WalletsMetadataService.saveAccountName("Concurrent", wallet: staleWallet, account: concurrent)
+                return try store.withWalletSourceMutation { revoke in
+                    insideTransaction = true
+                    defer { insideTransaction = false }
+                    return try withoutActuallyEscaping(revoke) { scoped in
+                        try mutation(scoped)
+                    }
+                }
+            }
+            XCTAssertTrue(manager.reloadFromStore())
+            fixture.keychain.beforeWalletRead = { _ in
+                XCTAssertTrue(insideTransaction, "Source accounts must be read after acquiring the transaction")
+            }
+            fixture.keychain.beforeWalletWrite = {
+                XCTAssertTrue(insideTransaction, "Source accounts must be written before releasing the transaction")
+            }
+
+            if useEnabledAccounts {
+                try await manager.update(wallet: staleWallet, enabledAccounts: [retained])
+            } else {
+                try await manager.update(wallet: staleWallet, removeAccounts: [removed])
+            }
+            fixture.keychain.beforeWalletRead = nil
+            fixture.keychain.beforeWalletWrite = nil
+
+            XCTAssertEqual(transactionEntries, 1)
+            XCTAssertEqual(fixture.keychain.events, ["update"])
+            let persisted = try fixture.persistedWallet()
+            XCTAssertEqual(Set(persisted.accounts.map(\.previewAccountKey)), [retained.previewAccountKey, concurrent.previewAccountKey])
+            XCTAssertEqual(manager.wallets.first { $0.id == staleWallet.id }?.accounts, persisted.accounts)
+            XCTAssertNil(WalletsMetadataService.getAccountName(walletId: staleWallet.id, account: removed))
+            XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: staleWallet.id, account: concurrent), "Concurrent")
+            guard case .snapshot(let removedState) = store.configurationSnapshot(configurationKey: removedOrigin, profileIdentifier: nil),
+                  case .snapshot(let concurrentState) = store.configurationSnapshot(configurationKey: concurrentOrigin, profileIdentifier: nil) else {
+                return XCTFail("Expected current authority snapshots")
+            }
+            XCTAssertNil(removedState.ethereumAccount)
+            XCTAssertEqual(concurrentState.ethereumAccount, concurrentDescriptor)
+        }
+    }
+
+    func testAccountAdditionsAndWalletImportsUseTheSourceMutationBoundary() async throws {
+        let fixture = try RemovalFixture()
+        var transactionEntries = 0
+        var revocations = 0
+        var insideTransaction = false
+        let manager = fixture.transactionManager { mutation in
+            transactionEntries += 1
+            insideTransaction = true
+            defer { insideTransaction = false }
+            return try mutation { _ in revocations += 1 }
+        }
+        XCTAssertTrue(manager.reloadFromStore())
+        let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+        let added = fixture.additionalAccount(index: 2)
+        fixture.keychain.beforeWalletRead = { _ in XCTAssertTrue(insideTransaction) }
+        fixture.keychain.beforeWalletWrite = { XCTAssertTrue(insideTransaction) }
+
+        try await manager.update(wallet: wallet, enabledAccounts: wallet.accounts + [added])
+
+        XCTAssertEqual(transactionEntries, 1)
+        XCTAssertEqual(revocations, 0)
+        XCTAssertEqual(fixture.keychain.events, ["update"])
+        fixture.keychain.beforeWalletRead = nil
+        XCTAssertTrue(try fixture.persistedWallet().accounts.contains { $0.previewAccountKey == added.previewAccountKey })
+        fixture.keychain.beforeWalletRead = { _ in XCTAssertTrue(insideTransaction) }
+
+        let imported = try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey), inputPassword: nil)
+        fixture.keychain.beforeWalletRead = nil
+        fixture.keychain.beforeWalletWrite = nil
+
+        XCTAssertEqual(transactionEntries, 2)
+        XCTAssertEqual(revocations, 0)
+        XCTAssertEqual(fixture.keychain.events, ["update", "delete", "add"])
+        XCTAssertNotNil(fixture.keychain.walletData[imported.id])
+    }
+
+    func testCleanupFailureLeavesSourceAndMetadataUnchanged() async throws {
+        for operation in RemovalOperation.allCases {
+            let fixture = try RemovalFixture()
+            var cleanupAttempts = 0
+            let manager = fixture.manager { _ in
+                cleanupAttempts += 1
+                throw TestError.cleanupFailed
+            }
+            XCTAssertTrue(manager.reloadFromStore())
+            let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+            let originalData = fixture.keychain.walletData
+            let originalAccounts = wallet.accounts
+            let account = wallet.accounts[1]
+            WalletsMetadataService.saveAccountName("Still present", wallet: wallet, account: account)
+            defer { fixture.clearMetadata() }
+
+            do {
+                try await operation.apply(manager: manager, wallet: wallet)
+                XCTFail("Cleanup failure must prevent the source mutation")
+            } catch TestError.cleanupFailed {
+            }
+
+            XCTAssertEqual(cleanupAttempts, 1)
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertEqual(manager.wallets.first { $0.id == wallet.id }?.accounts, originalAccounts)
+            XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: wallet.id, account: account), "Still present")
+        }
+    }
+
+    func testSourceWriteFailureKeepsCleanupAppliedWithoutDeletingMetadata() async throws {
+        for operation in RemovalOperation.allCases {
+            let fixture = try RemovalFixture()
+            fixture.keychain.deleteStatus = errSecInteractionNotAllowed
+            fixture.keychain.updateStatus = errSecInteractionNotAllowed
+            var cleanupApplied = false
+            let manager = fixture.manager { _ in
+                cleanupApplied = true
+                fixture.keychain.events.append("cleanup")
+            }
+            XCTAssertTrue(manager.reloadFromStore())
+            let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+            let originalData = fixture.keychain.walletData
+            let originalAccounts = wallet.accounts
+            let account = wallet.accounts[1]
+            WalletsMetadataService.saveAccountName("Still present", wallet: wallet, account: account)
+            defer { fixture.clearMetadata() }
+
+            do {
+                try await operation.apply(manager: manager, wallet: wallet)
+                XCTFail("Expected the source write failure")
+            } catch is Keychain.KeychainError {
+            }
+
+            XCTAssertTrue(cleanupApplied)
+            XCTAssertEqual(fixture.keychain.events, ["cleanup", operation == .wallet ? "delete" : "update"])
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertEqual(manager.wallets.first { $0.id == wallet.id }?.accounts, originalAccounts)
+            XCTAssertEqual(WalletsMetadataService.getAccountName(walletId: wallet.id, account: account), "Still present")
+        }
+    }
+
+    func testDeletingAndReimportingTheSameKeyRequiresFreshSiteApproval() async throws {
+        let fixture = try RemovalFixture()
+        let key = try XCTUnwrap(WalletStoredKey.importPrivateKey(
+            privateKey: Vectors.onePrivateKey, name: "", password: Vectors.walletCoreJSONMnemonicPassword,
+            coin: .ethereum
+        ))
+        fixture.keychain.walletData[fixture.walletID] = try XCTUnwrap(key.exportJSON())
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wallet-removal-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            fixture.clearMetadata()
+        }
+        let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory)
+        let manager = fixture.transactionManager { mutation in
+            try store.withWalletSourceMutation(mutation)
+        }
+        XCTAssertTrue(manager.reloadFromStore())
+        let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+        let account = try XCTUnwrap(wallet.accounts.first)
+        let descriptor = WalletAccountDescriptor(walletID: wallet.id, account: account)
+        let origin = "https://wallet-removal.example"
+
+        try grant(descriptor, in: store, id: 1, origin: origin)
+        guard case .snapshot(let granted) = store.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+            return XCTFail("Expected the original grant")
+        }
+        XCTAssertEqual(granted.ethereumAccount, descriptor)
+
+        try await manager.delete(wallet: wallet)
+        let reimported = try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey), inputPassword: nil)
+
+        XCTAssertNotEqual(reimported.id, wallet.id)
+        XCTAssertEqual(reimported.accounts.first?.address.lowercased(), descriptor.normalizedAddress)
+        guard case .snapshot(let removed) = store.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+            return XCTFail("Expected the disconnected snapshot")
+        }
+        XCTAssertNil(removed.ethereumAccount)
+        XCTAssertGreaterThan(removed.version.revisions.ethereum, granted.version.revisions.ethereum)
+        let retry = try connection(in: store, id: 2, origin: origin)
+        let retryRequest = try XCTUnwrap(retry.request)
+        XCTAssertNil(retryRequest.authorizedAccount)
+        XCTAssertNil(DappRequestProcessor().prepareWithoutWallets(retryRequest))
+        let catalog = try XCTUnwrap(manager.reviewCatalog())
+        guard case .approval(.selectAccount) = DappRequestProcessor().prepare(retryRequest, catalog: catalog) else {
+            return XCTFail("Reimported keys require a fresh site approval")
+        }
+        XCTAssertTrue(catalog.orderedAccounts.contains { $0.walletId == reimported.id })
+    }
+
+    private func connection(in store: ExtensionRequestFileStore, id: Int, origin: String) throws -> ExtensionBridge.Snapshot {
+        guard case .snapshot(let authority) = store.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        let host = try XCTUnwrap(URL(string: origin)?.host)
+        let raw: [String: Any] = [
+            "id": id, "name": "requestAccounts", "provider": "ethereum",
+            "host": host, "configurationKey": origin,
+            "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            "admissionDeadline": Int(Date().addingTimeInterval(60).timeIntervalSince1970 * 1_000),
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "authority": authority.version.json,
+            "body": ["address": "", "chainId": "0x1"],
+        ]
+        let request = try XCTUnwrap(SafariRequest(json: raw))
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
+              case .accepted(let handle, _, _, _, _) = store.enqueue(ingress: ingress, profileIdentifier: nil),
+              case .found(let snapshot) = store.load(handle: handle) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return snapshot
+    }
+
+    private func grant(_ account: WalletAccountDescriptor, in store: ExtensionRequestFileStore, id: Int, origin: String) throws {
+        let initial = try connection(in: store, id: id, origin: origin)
+        let request = try XCTUnwrap(initial.request)
+        guard case .claimed(let claim) = store.claim(handle: initial.handle),
+              case .began(let permit) = store.begin(claim: claim) else { throw CocoaError(.fileWriteUnknown) }
+        let response = ResponseToExtension(
+            for: request, payload: .result(.strings([account.normalizedAddress])),
+            mutation: .accounts([.ethereum(address: account.normalizedAddress, chainId: "0x1")]),
+            approvedAccounts: [account]
+        ).markingApprovalCommitted()
+        guard store.complete(permit: permit, response: response, authority: .ordinary) == .persisted else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+    }
+
+    private enum RemovalOperation: CaseIterable {
+        case wallet, accounts, enabledAccounts
+
+        @MainActor
+        func apply(manager: WalletsManager, wallet: WalletContainer) async throws {
+            switch self {
+            case .wallet:
+                try await manager.delete(wallet: wallet)
+            case .accounts:
+                try await manager.update(wallet: wallet, removeAccounts: [wallet.accounts[1]])
+            case .enabledAccounts:
+                try await manager.update(wallet: wallet, enabledAccounts: [wallet.accounts[0]])
+            }
+        }
+    }
+
+    private final class RemovalFixture {
+        let walletID = "removal-test-\(UUID().uuidString)"
+        let siblingID = "removal-sibling-\(UUID().uuidString)"
+        let keychain = WalletRemovalKeychainStub()
+
+        init() throws {
+            let data = try walletData()
+            keychain.walletData = [walletID: data, siblingID: data]
+        }
+
+        func manager(onRevoke: @escaping (WalletAuthorityRemoval) throws -> Void) -> WalletsManager {
+            transactionManager { mutation in try mutation(onRevoke) }
+        }
+
+        func transactionManager(_ transaction: @escaping WalletsManager.WalletSourceMutation) -> WalletsManager {
+            WalletsManager(
+                keychain: Keychain(copyMatching: keychain.copyMatching, add: keychain.add,
+                                   update: keychain.update, delete: keychain.delete),
+                withWalletSourceMutation: transaction
+            )
+        }
+
+        func walletData(adding account: WalletAccount? = nil) throws -> Data {
+            let key = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
+            for account in [additionalAccount(index: 1)] + (account.map { [$0] } ?? []) {
+                key.addAccountDerivation(
+                    address: account.address, coin: account.coin, derivation: account.derivation,
+                    derivationPath: account.derivationPath, publicKey: account.publicKey,
+                    extendedPublicKey: account.extendedPublicKey
+                )
+            }
+            return try XCTUnwrap(key.exportJSON())
+        }
+
+        func additionalAccount(index: Int) -> WalletAccount {
+            WalletAccount(
+                address: index == 1 ? Vectors.oneEthereumAddress : Vectors.sequentialEthereumAddress,
+                coin: .ethereum, derivation: .custom, derivationPath: "m/44'/60'/0'/0/\(index)",
+                publicKey: "", extendedPublicKey: ""
+            )
+        }
+
+        func persistedWallet() throws -> WalletContainer {
+            let data = try XCTUnwrap(keychain.walletData[walletID])
+            let key = try XCTUnwrap(WalletStoredKey.importJSON(json: data))
+            return WalletContainer(id: walletID, key: key)
+        }
+
+        func clearMetadata() {
+            for id in [walletID, siblingID] {
+                guard let key = WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture) else { continue }
+                WalletsMetadataService.removeMetadataForWallet(WalletContainer(id: id, key: key), postChange: false)
+            }
+        }
+    }
+}
+
+private final class WalletRemovalKeychainStub {
+    private let walletPrefix = "org.lil.wallet.wallet."
+    var walletData = [String: Data]()
+    var events = [String]()
+    var deleteStatus = errSecSuccess
+    var updateStatus = errSecSuccess
+    var beforeWalletRead: ((String) -> Void)?
+    var beforeWalletWrite: (() -> Void)?
+
+    func copyMatching(_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus {
+        let query = query as NSDictionary
+        if query[kSecReturnAttributes as String] as? Bool == true {
+            result?.pointee = walletData.keys.sorted().map {
+                [kSecAttrAccount as String: walletPrefix + $0]
+            } as CFArray
+            return errSecSuccess
+        }
+        guard let key = query[kSecAttrAccount as String] as? String else { return errSecItemNotFound }
+        if key == "org.lil.wallet.password" {
+            result?.pointee = Vectors.walletCoreJSONMnemonicPassword as CFData
+            return errSecSuccess
+        }
+        guard key.hasPrefix(walletPrefix) else { return errSecItemNotFound }
+        let id = String(key.dropFirst(walletPrefix.count))
+        beforeWalletRead?(id)
+        guard let data = walletData[id] else {
+            return errSecItemNotFound
+        }
+        result?.pointee = data as CFData
+        return errSecSuccess
+    }
+
+    func add(_ attributes: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus {
+        let attributes = attributes as NSDictionary
+        guard let key = attributes[kSecAttrAccount as String] as? String,
+              key.hasPrefix(walletPrefix), let data = attributes[kSecValueData as String] as? Data else {
+            return errSecParam
+        }
+        events.append("add")
+        beforeWalletWrite?()
+        walletData[String(key.dropFirst(walletPrefix.count))] = data
+        return errSecSuccess
+    }
+
+    func update(_ query: CFDictionary, _ attributes: CFDictionary) -> OSStatus {
+        events.append("update")
+        beforeWalletWrite?()
+        guard updateStatus == errSecSuccess else { return updateStatus }
+        let query = query as NSDictionary
+        let attributes = attributes as NSDictionary
+        guard let key = query[kSecAttrAccount as String] as? String,
+              key.hasPrefix(walletPrefix), let data = attributes[kSecValueData as String] as? Data else {
+            return errSecParam
+        }
+        let id = String(key.dropFirst(walletPrefix.count))
+        guard walletData[id] != nil else { return errSecItemNotFound }
+        walletData[id] = data
+        return errSecSuccess
+    }
+
+    func delete(_ query: CFDictionary) -> OSStatus {
+        events.append("delete")
+        beforeWalletWrite?()
+        guard deleteStatus == errSecSuccess else { return deleteStatus }
+        let query = query as NSDictionary
+        guard let key = query[kSecAttrAccount as String] as? String, key.hasPrefix(walletPrefix) else { return errSecParam }
+        return walletData.removeValue(forKey: String(key.dropFirst(walletPrefix.count))) == nil ? errSecItemNotFound : errSecSuccess
+    }
+}
+#endif
 
 @MainActor
 final class WalletSigningScopeTests: XCTestCase {
@@ -490,7 +972,7 @@ final class WalletSigningScopeTests: XCTestCase {
             var final = original
             final.nonce = "0x7"
             final.preparedFee = finalFee
-            let request = try XCTUnwrap(SafariRequest(json: [
+            var request = try XCTUnwrap(SafariRequest(json: [
                 "id": 1, "name": "signTransaction", "provider": "ethereum",
                 "host": "wallet.example", "configurationKey": "https://wallet.example",
                 "enqueueAttempt": String(repeating: "a", count: 32),
@@ -498,6 +980,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 "workflowVersion": ExtensionBridge.workflowVersion,
                 "body": ["address": account.normalizedAddress, "chainId": "0xa"],
             ]))
+            request.authorizedAccount = account
             let operation = try XCTUnwrap(ApprovedWalletSigningOperation(
                 request: request,
                 approval: .transaction(SendTransactionAction(

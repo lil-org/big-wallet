@@ -8,6 +8,9 @@ struct Keychain {
         CFDictionary,
         UnsafeMutablePointer<CFTypeRef?>?
     ) -> OSStatus
+    typealias Add = (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias Update = (CFDictionary, CFDictionary) -> OSStatus
+    typealias Delete = (CFDictionary) -> OSStatus
 
     enum KeychainError: Error {
         case failedToRead(OSStatus)
@@ -17,9 +20,20 @@ struct Keychain {
     }
     
     private let copyMatching: CopyMatching
+    private let add: Add
+    private let update: Update
+    private let delete: Delete
 
-    init(copyMatching: @escaping CopyMatching = SecItemCopyMatching) {
+    init(
+        copyMatching: @escaping CopyMatching = SecItemCopyMatching,
+        add: @escaping Add = SecItemAdd,
+        update: @escaping Update = SecItemUpdate,
+        delete: @escaping Delete = SecItemDelete
+    ) {
         self.copyMatching = copyMatching
+        self.add = add
+        self.update = update
+        self.delete = delete
     }
     
     static let shared = Keychain()
@@ -145,7 +159,7 @@ struct Keychain {
         let attributes: [String: Any] = [
             kSecValueData as String: data
         ]
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        let status = update(query as CFDictionary, attributes as CFDictionary)
         guard status == errSecSuccess else { throw KeychainError.failedToUpdate }
     }
     
@@ -153,12 +167,12 @@ struct Keychain {
         let query = saveQuery(data: data, key: key)
         var deleteQuery = query
         deleteQuery[kSecValueData as String] = nil
-        let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
+        let deleteStatus = delete(deleteQuery as CFDictionary)
         guard deleteStatus == errSecSuccess ||
                 deleteStatus == errSecItemNotFound else {
             throw KeychainError.failedToSave(deleteStatus)
         }
-        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        let addStatus = add(query as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw KeychainError.failedToSave(addStatus)
         }
@@ -166,7 +180,7 @@ struct Keychain {
 
     private func saveIfMissing(data: Data, key: ItemKey) -> Bool {
         let query = saveQuery(data: data, key: key)
-        return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+        return add(query as CFDictionary, nil) == errSecSuccess
     }
 
     private func saveQuery(data: Data, key: ItemKey) -> [String: Any] {
@@ -209,7 +223,7 @@ struct Keychain {
             kSecAttrAccessGroup as String: accessGroup,
             kSecUseDataProtectionKeychain as String: true
         ]
-        let status = SecItemDelete(query as CFDictionary)
+        let status = delete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.failedToDelete(status)
         }

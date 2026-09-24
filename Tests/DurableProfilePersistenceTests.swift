@@ -207,6 +207,42 @@ final class DurableProfilePersistenceTests: XCTestCase {
         }
     }
 
+    func testNewProfileThroughPrivateVarAliasStaysInsideBoundary() throws {
+        let aliasedBoundary = URL(fileURLWithPath: "/private/var", isDirectory: true)
+        let aliasedProfile = aliasedBoundary.appendingPathComponent("profile-\(UUID().uuidString).state")
+        let canonicalPath = aliasedBoundary.standardizedFileURL.appendingPathComponent(aliasedProfile.lastPathComponent).path
+        let disk = DiskModel()
+        let writer = DurableProfilePersistence(directoryBoundary: aliasedBoundary, operations: disk.operations)
+        let checkpoint = Data("checkpoint".utf8)
+
+        try writer.replace(checkpoint, at: aliasedProfile)
+        XCTAssertEqual(disk.contents(at: canonicalPath), checkpoint)
+        try writer.synchronizePublishedFile(at: aliasedProfile)
+        disk.crash()
+        XCTAssertEqual(disk.contents(at: canonicalPath), checkpoint)
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+    }
+
+    func testRealDiskRejectsSymbolicLinkParentDirectory() throws {
+        try withRealDirectory { boundary, profile in
+            let linkedDirectory = boundary.appendingPathComponent("linked", isDirectory: true)
+            try FileManager.default.createSymbolicLink(
+                at: linkedDirectory, withDestinationURL: profile.deletingLastPathComponent()
+            )
+            let linkedProfile = linkedDirectory.appendingPathComponent("profile.state")
+            let writer = DurableProfilePersistence(directoryBoundary: boundary)
+
+            XCTAssertThrowsError(try writer.replace(Data("new".utf8), at: linkedProfile))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: profile.path))
+
+            let original = Data("original".utf8)
+            try original.write(to: profile)
+            XCTAssertThrowsError(try writer.replace(Data("replacement".utf8), at: linkedProfile))
+            XCTAssertThrowsError(try writer.synchronizePublishedFile(at: linkedProfile))
+            XCTAssertEqual(try Data(contentsOf: profile), original)
+        }
+    }
+
     private func persistence(_ disk: DiskModel) -> DurableProfilePersistence {
         DurableProfilePersistence(
             directoryBoundary: boundary,
@@ -254,6 +290,8 @@ final class DurableProfilePersistenceTests: XCTestCase {
         var hasTemporaryEntry: Bool { entries.keys.contains { $0.contains(".profile-write-") } }
         var published: Data? { entries[profilePath].flatMap { files[$0]?.contents } }
         var durablePublished: Data? { durableEntries[profilePath].flatMap { files[$0]?.durableContents } }
+
+        func contents(at path: String) -> Data? { entries[path].flatMap { files[$0]?.contents } }
 
         var operations: DurableProfilePersistence.Operations {
             .init(

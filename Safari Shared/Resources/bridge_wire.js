@@ -9,7 +9,7 @@
     }
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
     const BUILD_VERSION = "1.0.99+148";
-    const WORKFLOW_VERSION = 3;
+    const WORKFLOW_VERSION = 4;
     const PAGE_TO_CONTENT_DIRECTION = "big-wallet-provider-v1";
     const CONTENT_TO_PAGE_DIRECTION = "big-wallet-content-v1";
     const PROVIDER_REPLACED_ERROR_CODE = 4900;
@@ -55,14 +55,14 @@
                 "getLatestConfiguration", "disconnect",
             ]),
             popup: freeze([
-                "approveRequestWithCurrentRevisions", "applyCompletedResponse",
+                "applyCompletedResponse",
                 "getLatestConfiguration", "updatePendingRequestBadge", "responseReady",
             ]),
         }),
         content: freeze({
             __proto__: null,
             worker: freeze([
-                "workflowProbe", "manualSwitchIntent", "configurationChanged", "responseReady", "requestActive",
+                "workflowProbe", "manualSwitchIntent", "configurationInvalidated", "responseReady",
             ]),
             popup: freeze(["workflowProbe", "manualSwitchIntent"]),
         }),
@@ -152,7 +152,9 @@
     }
 
     function configurationSnapshot(value) {
-        pageRecord(value, ["revisions", "ethereum", "solana"]);
+        pageRecord(value, ["context", "revisions", "ethereum", "solana"]);
+        const context = pageValue(value, "context");
+        if (typeof context !== "string" || !/^[0-9a-f]{64}$/.test(context)) { throw new Error("Invalid configuration context"); }
         const rawRevisions = pageRecord(pageValue(value, "revisions"), ["ethereum", "solana"]);
         const revisions = {
             ethereum: pageValue(rawRevisions, "ethereum"),
@@ -181,7 +183,7 @@
             }
             freeze(solana);
         }
-        return freeze({revisions: freeze(revisions), ethereum, solana});
+        return freeze({context, revisions: freeze(revisions), ethereum, solana});
     }
 
     function decodeConfigurationSnapshot(value) {
@@ -265,80 +267,42 @@
         }
     }
 
+    function isAuthorityVersion(value) {
+        return hasExactKeys(value, ["context", "revisions"]) &&
+            typeof value.context === "string" && /^[0-9a-f]{64}$/.test(value.context) &&
+            isProviderRevisions(value.revisions);
+    }
+
     function isNativeEnqueueAcknowledgement(response, id) {
-        return hasExactKeys(response, [
-                "approvalRequired", "id", "requestToken", "revisions",
-            ]) &&
-            response.id === id &&
-            typeof response.approvalRequired === "boolean" &&
-            isRequestToken(response.requestToken) &&
-            isProviderRevisions(response.revisions);
+        return hasExactKeys(response, ["admissionKind", "approvalRequired", "id", "requestToken", "state"]) &&
+            isValidRequestId(response.id) && response.id === id && typeof response.approvalRequired === "boolean" &&
+            ["new", "replay", "coalesced"].includes(response.admissionKind) &&
+            isRequestToken(response.requestToken) && decodeConfigurationSnapshot(response.state) !== null;
     }
 
     function decodeNativeResponse(value, correlationId) {
         try {
-            if (!isRecord(value) ||
-                value.provider === "multiple" && !hasBoundedJSON(value)) { return null; }
-            const common = ["id", "name", "provider", "kind", "approvalCommitted", "mutation"];
+            if (!isRecord(value) || value.provider === "multiple" && !hasBoundedJSON(value)) { return null; }
+            const common = ["id", "name", "provider", "kind", "approvalCommitted"];
             const {id, name, provider, kind, approvalCommitted} = value;
             if (!isValidRequestId(id) || correlationId !== undefined && id !== correlationId ||
                 typeof name !== "string" || !["ethereum", "solana", "multiple"].includes(provider) ||
                 (provider === "multiple") !== (name === "switchAccount") ||
                 typeof approvalCommitted !== "boolean") { return null; }
-            let mutation = null;
-            if (value.mutation !== null) {
-                const raw = value.mutation;
-                if (!isRecord(raw)) { return null; }
-                if (raw.kind === "accounts") {
-                    if (!hasExactKeys(raw, ["kind", "updates"]) || !isRecord(raw.updates) ||
-                        Object.keys(raw.updates).some(key => key !== "ethereum" && key !== "solana")) {
-                        return null;
-                    }
-                    const updates = {};
-                    for (const [coin, account] of Object.entries(raw.updates)) {
-                        if (provider !== "multiple" && provider !== coin) { return null; }
-                        if (account !== null && (coin === "ethereum"
-                            ? !hasExactKeys(account, ["address", "chainId"]) ||
-                                typeof account.address !== "string" || !isCanonicalEthereumChainId(account.chainId)
-                            : !hasExactKeys(account, ["publicKey"]) || !isSolanaPublicKey(account.publicKey))) {
-                            return null;
-                        }
-                        updates[coin] = account === null ? null : {...account};
-                    }
-                    mutation = {kind: "accounts", updates};
-                } else if (raw.kind === "ethereumChain") {
-                    if (!hasExactKeys(raw, ["kind", "chainId"]) || provider !== "ethereum" ||
-                        !isCanonicalEthereumChainId(raw.chainId)) { return null; }
-                    mutation = {kind: "ethereumChain", chainId: raw.chainId};
-                } else if (raw.kind === "revokeSolana") {
-                    if (!hasExactKeys(raw, ["kind", "publicKey"]) || provider !== "solana" ||
-                        typeof raw.publicKey !== "string" || raw.publicKey.length === 0) { return null; }
-                    mutation = {kind: "revokeSolana", publicKey: raw.publicKey};
-                } else { return null; }
-            }
-            const base = {id, name, provider, kind, approvalCommitted, mutation};
+            const base = {id, name, provider, kind, approvalCommitted};
             if (kind === "result") {
-                if (!hasExactKeys(value, [...common, "result"]) || mutation?.kind === "revokeSolana") {
-                    return null;
-                }
+                if (!hasExactKeys(value, [...common, "result"])) { return null; }
                 const result = value.result;
-                if (provider === "multiple" && (result !== null || mutation?.kind !== "accounts")) {
-                    return null;
-                }
+                if (provider === "multiple" && result !== null) { return null; }
                 if (result !== null && typeof result !== "string" &&
                     !(Array.isArray(result) && result.every(item => typeof item === "string")) &&
-                    !(hasExactKeys(result, ["publicKey"]) && typeof result.publicKey === "string")) {
-                    return null;
-                }
+                    !(hasExactKeys(result, ["publicKey"]) && typeof result.publicKey === "string")) { return null; }
                 return {...base, result: pageJSON(result)};
             }
             if (kind !== "error" || !hasExactKeys(value, [...common, "error", "authorizationFailure"]) ||
                 typeof value.authorizationFailure !== "boolean") { return null; }
             const error = pageError(value.error);
-            if (!Number.isInteger(error.code) || provider === "multiple" && error.message.length === 0 || mutation !== null &&
-                (mutation.kind !== "revokeSolana" || error.code !== 4100 || !value.authorizationFailure)) {
-                return null;
-            }
+            if (!Number.isInteger(error.code) || provider === "multiple" && error.message.length === 0) { return null; }
             return {...base, error, authorizationFailure: value.authorizationFailure};
         } catch { return null; }
     }
@@ -387,40 +351,6 @@
         return leadingZeros + significantBytes === 32;
     }
 
-    function isConfiguration(value) {
-        if (!isRecord(value)) { return false; }
-        if (value.provider === "ethereum") {
-            return isCanonicalEthereumChainId(value.chainId) &&
-                Array.isArray(value.results) &&
-                value.results.every(result => typeof result === "string");
-        }
-        return value.provider === "solana" &&
-            isSolanaPublicKey(value.publicKey);
-    }
-
-    function parseLatestConfigurations(value) {
-        let values;
-        if (typeof value === "undefined") {
-            values = [];
-        } else if (Array.isArray(value)) {
-            values = value;
-        } else if (isRecord(value) && Array.isArray(value.latestConfigurations)) {
-            values = value.latestConfigurations;
-        } else if (isConfiguration(value)) {
-            values = [value];
-        } else {
-            return {valid: false, latestConfigurations: []};
-        }
-        if (values.length > 2 || !values.every(isConfiguration) ||
-            new Set(values.map(item => item.provider)).size !== values.length) {
-            return {valid: false, latestConfigurations: []};
-        }
-        return {
-            valid: true,
-            latestConfigurations: values.map(item => ({...item})),
-        };
-    }
-
     function isConfigurationKey(value) {
         return typeof value === "string" && value.length > 0;
     }
@@ -433,7 +363,6 @@
                 return {
                     host: url.host,
                     configurationKey: url.origin,
-                    legacyConfigurationKey: url.host,
                 };
             }
             if (url.protocol === "file:") {
@@ -442,7 +371,6 @@
                 return {
                     host: url.href,
                     configurationKey: url.href,
-                    legacyConfigurationKey: null,
                 };
             }
         } catch {}
@@ -512,7 +440,7 @@
         const identity = configurationIdentityForURL(value?.configurationKey);
         return hasExactKeys(value, [
                 "approvalRequired", "configurationKey", "id", "requestToken",
-                "revisions", "subject", "workflowVersion",
+                "state", "subject", "workflowVersion",
             ]) && value.subject === MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT &&
             value.workflowVersion === WORKFLOW_VERSION && value.id === id &&
             isValidRequestId(value.id) &&
@@ -520,14 +448,14 @@
             identity?.configurationKey === value.configurationKey &&
             typeof value.approvalRequired === "boolean" &&
             isRequestToken(value.requestToken) &&
-            isProviderRevisions(value.revisions) && hasBoundedJSON(value);
+            decodeConfigurationSnapshot(value.state) !== null && hasBoundedJSON(value);
     }
 
     function isManualSwitchTerminalResponse(response, id) {
         const terminal = decodeNativeResponse(response, id);
         return terminal !== null && terminal.name === "switchAccount" &&
             terminal.provider === "multiple" && (terminal.kind === "error" ||
-                terminal.result === null && terminal.mutation?.kind === "accounts");
+                terminal.result === null);
     }
 
     function isValidDisconnectRequest(request) {
@@ -565,13 +493,10 @@
             request.workflowVersion === WORKFLOW_VERSION;
     }
 
-    function isConfigurationChanged(request) {
-        return hasExactKeys(request, [
-                "configurationKey", "state", "subject", "workflowVersion",
-            ]) && request.subject === "configurationChanged" &&
-            request.workflowVersion === WORKFLOW_VERSION &&
-            isConfigurationKey(request.configurationKey) &&
-            decodeConfigurationSnapshot(request.state) !== null;
+    function isConfigurationInvalidated(request) {
+        return hasExactKeys(request, ["subject", "configurationKey", "workflowVersion"]) &&
+            request.subject === "configurationInvalidated" && request.workflowVersion === WORKFLOW_VERSION &&
+            configurationIdentityForURL(request.configurationKey)?.configurationKey === request.configurationKey;
     }
 
     function genId() {
@@ -641,8 +566,8 @@
         genId,
         genPrivateToken,
         hasExactKeys,
-        isConfigurationChanged,
-        isConfiguration,
+        isConfigurationInvalidated,
+        isAuthorityVersion,
         isCanonicalEthereumChainId,
         isConfigurationKey,
         isCorrelatedRPCResponse,
@@ -656,7 +581,6 @@
         isRequestToken,
         isValidDisconnectRequest,
         isValidRequestId,
-        parseLatestConfigurations,
         responseReadyIds,
         rpcFailureResponse,
         withTimeout,

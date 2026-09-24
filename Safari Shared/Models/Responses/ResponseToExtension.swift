@@ -94,81 +94,12 @@ struct ResponseToExtension: Sendable {
             }
         }
 
-        var json: Any {
-            switch self {
-            case .ethereum(let address, let chainId):
-                return ["address": address, "chainId": chainId]
-            case .solana(let publicKey): return ["publicKey": publicKey]
-            case .disconnectEthereum, .disconnectSolana: return NSNull()
-            }
-        }
     }
 
     enum ConfigurationMutation: Equatable, Sendable {
         case accounts([AccountUpdate])
         case ethereumChain(String)
         case revokeSolana(String)
-
-        var json: [String: Any] {
-            switch self {
-            case .accounts(let updates):
-                var values = [String: Any]()
-                for update in updates { values[update.provider.rawValue] = update.json }
-                return ["kind": "accounts", "updates": values]
-            case .ethereumChain(let chainId):
-                return ["kind": "ethereumChain", "chainId": chainId]
-            case .revokeSolana(let publicKey):
-                return ["kind": "revokeSolana", "publicKey": publicKey]
-            }
-        }
-
-        init?(json: [String: Any]) {
-            switch json["kind"] as? String {
-            case "accounts":
-                guard Set(json.keys) == ["kind", "updates"],
-                      let values = json["updates"] as? [String: Any],
-                      Set(values.keys).isSubset(of: ["ethereum", "solana"]) else { return nil }
-                var updates = [AccountUpdate]()
-                if let ethereum = values["ethereum"] {
-                    if ethereum is NSNull { updates.append(.disconnectEthereum) }
-                    else {
-                        guard let value = ethereum as? [String: Any],
-                              Set(value.keys) == ["address", "chainId"],
-                              let address = value["address"] as? String,
-                              let chainId = value["chainId"] as? String,
-                              Self.isCanonicalChainID(chainId) else { return nil }
-                        updates.append(.ethereum(address: address, chainId: chainId))
-                    }
-                }
-                if let solana = values["solana"] {
-                    if solana is NSNull { updates.append(.disconnectSolana) }
-                    else {
-                        guard let value = solana as? [String: Any],
-                              Set(value.keys) == ["publicKey"],
-                              let publicKey = value["publicKey"] as? String,
-                              WalletCrypto.base58Decode(string: publicKey)?.count == 32 else { return nil }
-                        updates.append(.solana(publicKey: publicKey))
-                    }
-                }
-                self = .accounts(updates)
-            case "ethereumChain":
-                guard Set(json.keys) == ["kind", "chainId"],
-                      let chainId = json["chainId"] as? String,
-                      Self.isCanonicalChainID(chainId) else { return nil }
-                self = .ethereumChain(chainId)
-            case "revokeSolana":
-                guard Set(json.keys) == ["kind", "publicKey"],
-                      let publicKey = json["publicKey"] as? String,
-                      !publicKey.isEmpty else { return nil }
-                self = .revokeSolana(publicKey)
-            default: return nil
-            }
-        }
-
-        private static func isCanonicalChainID(_ value: String) -> Bool {
-            guard let number = Int(hexString: value), number > 0 else { return false }
-            return String.hex(number, withPrefix: true) == value
-        }
     }
 
     enum Payload: Sendable {
@@ -181,18 +112,21 @@ struct ResponseToExtension: Sendable {
     let provider: InpageProvider
     let payload: Payload
     let mutation: ConfigurationMutation?
+    let approvedAccounts: [WalletAccountDescriptor]
     private(set) var approvalCommitted = false
     let authorizationFailure: Bool
 
     init(
         for request: SafariRequest,
         payload: Payload,
-        mutation: ConfigurationMutation? = nil
+        mutation: ConfigurationMutation? = nil,
+        approvedAccounts: [WalletAccountDescriptor] = []
     ) {
         id = request.id
         name = request.name
         provider = request.provider == .unknown ? .multiple : request.provider
         self.payload = payload
+        self.approvedAccounts = approvedAccounts
         if case .error(let error) = payload,
            case .unauthorizedPublicKey(let publicKey) = error.context,
            provider == .solana, error.code == 4100 {
@@ -213,8 +147,7 @@ struct ResponseToExtension: Sendable {
     var addsEthereumChain: Bool {
         guard name == SafariRequest.Ethereum.Method.addEthereumChain.rawValue,
               provider == .ethereum,
-              case .result = payload,
-              case .ethereumChain = mutation else { return false }
+              case .result = payload else { return false }
         return true
     }
 
@@ -222,7 +155,6 @@ struct ResponseToExtension: Sendable {
         var json: [String: Any] = [
             "id": id, "name": name, "provider": provider.rawValue,
             "approvalCommitted": approvalCommitted,
-            "mutation": mutation.map { $0.json as Any } ?? NSNull(),
         ]
         switch payload {
         case .result(let result):
@@ -250,31 +182,22 @@ struct ResponseToExtension: Sendable {
     }
 
     init?(json: [String: Any]) {
-        let common: Set<String> = ["id", "name", "provider", "kind", "approvalCommitted", "mutation"]
+        let common: Set<String> = ["id", "name", "provider", "kind", "approvalCommitted"]
         guard let id = Self.integer(json["id"]),
               (-9_007_199_254_740_991...9_007_199_254_740_991).contains(id),
               let name = json["name"] as? String,
               let rawProvider = json["provider"] as? String,
               let provider = InpageProvider(rawValue: rawProvider), provider != .unknown,
               (provider == .multiple) == (name == "switchAccount"),
-              let committed = Self.boolean(json["approvalCommitted"]),
-              let rawMutation = json["mutation"] else { return nil }
-        let mutation: ConfigurationMutation?
-        if rawMutation is NSNull { mutation = nil }
-        else {
-            guard let raw = rawMutation as? [String: Any],
-                  let decoded = ConfigurationMutation(json: raw) else { return nil }
-            mutation = decoded
-        }
+              let committed = Self.boolean(json["approvalCommitted"]) else { return nil }
         let payload: Payload
         let authorizationFailure: Bool
         switch json["kind"] as? String {
         case "result":
             guard Set(json.keys) == common.union(["result"]),
                   let value = json["result"], let result = Result(json: value) else { return nil }
-            if case .revokeSolana = mutation { return nil }
             if provider == .multiple {
-                guard case .null = result, case .accounts = mutation else { return nil }
+                guard case .null = result else { return nil }
             }
             payload = .result(result)
             authorizationFailure = false
@@ -286,10 +209,6 @@ struct ResponseToExtension: Sendable {
                   let message = error["message"] as? String,
                   provider != .multiple || !message.isEmpty,
                   let failure = Self.boolean(json["authorizationFailure"]) else { return nil }
-            if let mutation {
-                guard case .revokeSolana = mutation, provider == .solana,
-                      code == 4100, failure else { return nil }
-            }
             let context: ProviderResponseError.Context?
             if let data = error["data"] {
                 guard let encoded = try? JSONSerialization.data(withJSONObject: data, options: [.fragmentsAllowed, .sortedKeys]),
@@ -300,15 +219,12 @@ struct ResponseToExtension: Sendable {
             authorizationFailure = failure
         default: return nil
         }
-        if case .accounts(let updates) = mutation {
-            guard provider == .multiple || updates.allSatisfy({ $0.provider == provider }) else { return nil }
-        }
-        if case .ethereumChain = mutation, provider != .ethereum { return nil }
         self.id = id
         self.name = name
         self.provider = provider
         self.payload = payload
-        self.mutation = mutation
+        self.mutation = nil
+        self.approvedAccounts = []
         self.approvalCommitted = committed
         self.authorizationFailure = authorizationFailure
     }

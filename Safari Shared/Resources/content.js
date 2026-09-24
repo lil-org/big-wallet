@@ -10,7 +10,13 @@ var bigWalletProviderGenerationSerial;
 var bigWalletContentInstalled;
 var bigWalletConfigurationState;
 var bigWalletFailedConfigurationGeneration;
+var bigWalletConfigurationFlight;
+var bigWalletConfigurationRefreshQueued;
+var bigWalletConfigurationRefreshSerial;
+if (bigWalletConfigurationRefreshQueued !== true) { bigWalletConfigurationRefreshQueued = false; }
+if (!Number.isSafeInteger(bigWalletConfigurationRefreshSerial)) { bigWalletConfigurationRefreshSerial = 0; }
 var bigWalletTransportTimeout = 5000;
+var bigWalletResponseDeliveryTimeout = bigWalletTransportTimeout * 3;
 var bigWalletNativeOperationRelayTimeout = 190 * 1000;
 
 if (!(bigWalletRequests instanceof Map)) { bigWalletRequests = new Map; }
@@ -78,11 +84,46 @@ function bigWalletConfigurationDelivery(
         : decoded.kind !== "configuration")) {
         return null;
     }
+    const originalGeneration = providerGeneration;
     if (decoded.state) {
-        bigWalletConfigurationState = {configurationKey, providerGeneration};
+        const previous = bigWalletConfigurationState;
+        if (previous?.providerGeneration === providerGeneration &&
+            previous.configurationKey === configurationKey && previous.state.context !== decoded.state.context) {
+            const nextGeneration = bigWalletNextGeneration();
+            bigWalletProviderGeneration = nextGeneration;
+            if (!bigWalletInjectProvider(nextGeneration)) {
+                bigWalletProviderGeneration = providerGeneration;
+                return null;
+            }
+            for (const request of bigWalletRequests.values()) { bigWalletFail(request); }
+            providerGeneration = nextGeneration;
+            bigWalletConfigurationState = undefined;
+        }
+        const current = bigWalletConfigurationState?.providerGeneration === providerGeneration
+            ? bigWalletConfigurationState.state : null;
+        let state = decoded.state;
+        if (current && current.context === state.context) {
+            const ethereum = state.revisions.ethereum >= current.revisions.ethereum;
+            const solana = state.revisions.solana >= current.revisions.solana;
+            if (state.revisions.ethereum === current.revisions.ethereum &&
+                (state.ethereum.address !== current.ethereum.address || state.ethereum.chainId !== current.ethereum.chainId) ||
+                state.revisions.solana === current.revisions.solana && state.solana?.publicKey !== current.solana?.publicKey) {
+                return null;
+            }
+            state = {...state, ethereum: ethereum ? state.ethereum : current.ethereum,
+                solana: solana ? state.solana : current.solana,
+                revisions: {ethereum: Math.max(state.revisions.ethereum, current.revisions.ethereum),
+                    solana: Math.max(state.revisions.solana, current.revisions.solana)}};
+        }
+        bigWalletConfigurationState = {configurationKey, providerGeneration, state};
         bigWalletFailedConfigurationGeneration = undefined;
     }
-    return {response: decoded};
+    if (terminal && providerGeneration !== originalGeneration) {
+        window.postMessage({direction: bigWalletContentDirection, kind: "response",
+            response: {kind: "configuration", state: decoded.state}, id: bigWalletWire.genId(), providerGeneration}, "*");
+        return {response: {...decoded, state: null}, providerGeneration: originalGeneration};
+    }
+    return {response: decoded, providerGeneration};
 }
 
 function bigWalletErrorResponse(id, provider, name, message = "Failed to communicate with Big Wallet") {
@@ -145,7 +186,7 @@ function bigWalletPageMessage(event) {
         bigWalletRPC(event.data.message, generation);
     } else if (event.data.kind === "request") {
         if (event.data.message?.provider === "unknown") { return; }
-        bigWalletEnqueue(event.data.message, generation);
+        bigWalletEnqueue(event.data.message, generation, event.data.observedRevision);
     } else if (event.data.kind === "disconnect") {
         bigWalletDisconnect(event.data.message, generation);
     }
@@ -191,14 +232,14 @@ function bigWalletPostRPC(id, response, generation) {
     }, "*");
 }
 
-function bigWalletEnqueue(message, generation) {
+function bigWalletEnqueue(message, generation, observedRevision) {
     if (!bigWalletWire.isRecord(message) || !bigWalletWire.isRecord(message.body) ||
         !bigWalletWire.isValidRequestId(message.id) ||
         typeof message.name !== "string" ||
         !["ethereum", "solana"].includes(message.provider)) {
         return;
     }
-    if (!bigWalletMatchesGeneration(generation)) {
+    if (!bigWalletMatchesGeneration(generation) || !Number.isSafeInteger(observedRevision) || observedRevision < 0) {
         bigWalletDeliverFailure(message, generation);
         return;
     }
@@ -207,6 +248,13 @@ function bigWalletEnqueue(message, generation) {
         bigWalletDeliverFailure(message, generation);
         return;
     }
+    const cached = bigWalletConfigurationState;
+    if (cached?.providerGeneration !== generation || cached.configurationKey !== identity.configurationKey) {
+        bigWalletDeliverFailure(message, generation);
+        return;
+    }
+    const authority = {context: cached.state.context,
+        revisions: {...cached.state.revisions, [message.provider]: observedRevision}};
     const key = `${generation}:${message.provider}:${message.id}`;
     const existing = bigWalletRequests.get(key);
     if (existing) { return; }
@@ -236,7 +284,8 @@ function bigWalletEnqueue(message, generation) {
             bigWalletWire.WORKFLOW_POLICY.responseExpiryMilliseconds,
         responseFailureMilliseconds: 0,
         lastResponseFailureAt: null,
-        revisions: null,
+        authority,
+        authorizationRetryUsed: false,
         rerunRequested: false,
         retryDelay: 500,
         running: false,
@@ -287,6 +336,7 @@ async function bigWalletSendEnqueue(state) {
     try {
         response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
             admissionDeadline: state.admissionDeadline,
+            authority: state.authority,
             subject: "message-to-wallet",
             message: state.message,
             host: state.host,
@@ -302,13 +352,29 @@ async function bigWalletSendEnqueue(state) {
     }
     if (bigWalletWire.isNativeEnqueueAcknowledgement(response, state.message.id)) {
         state.requestToken = response.requestToken;
-        state.revisions = response.revisions;
+        bigWalletPublishConfiguration(response.state, state.configurationKey, state.generation);
+        if (!bigWalletIsCurrent(state, "enqueuing")) { return; }
         state.phase = "waiting";
         bigWalletSchedule(state, response.approvalRequired ? 1000 : 0);
         return;
     }
     const terminal = bigWalletTerminal(response, state.message.id);
     if (terminal) {
+        if (!state.authorizationRetryUsed && terminal.kind === "error" && terminal.error.code === 4100 &&
+            ["requestAccounts", "connect", "switchEthereumChain", "addEthereumChain"].includes(state.message.name) &&
+            terminal.state?.context === state.authority.context && Date.now() < state.admissionDeadline &&
+            (terminal.state.revisions.ethereum > state.authority.revisions.ethereum ||
+                terminal.state.revisions.solana > state.authority.revisions.solana)) {
+            state.authorizationRetryUsed = true;
+            bigWalletPublishConfiguration(terminal.state, state.configurationKey, state.generation);
+            state.authority = {context: terminal.state.context, revisions: {...terminal.state.revisions}};
+            if (state.message.provider === "ethereum" && state.message.name === "switchEthereumChain") {
+                state.message.body.address = terminal.state.ethereum.address;
+            }
+            state.enqueueAttempt = bigWalletWire.genPrivateToken();
+            bigWalletSchedule(state, 0);
+            return;
+        }
         bigWalletDeliver(state, terminal);
         return;
     }
@@ -354,9 +420,8 @@ async function bigWalletConsumeResponse(state) {
             id: state.message.id,
             configurationKey: state.configurationKey,
             requestToken: state.requestToken,
-            revisions: state.revisions,
             workflowVersion: bigWalletWorkflowVersion,
-        }), bigWalletTransportTimeout);
+        }), bigWalletResponseDeliveryTimeout);
     } catch {}
     if (!bigWalletIsCurrent(state, "completing")) { return; }
     if (bigWalletWire.hasExactKeys(response, ["id", "missing"]) &&
@@ -380,9 +445,10 @@ function bigWalletRetryResponse(state, response, startedAt) {
         state.lastResponseFailureAt = null;
     } else {
         const now = Date.now();
+        const timeout = state.phase === "completing" ? bigWalletResponseDeliveryTimeout : bigWalletTransportTimeout;
         state.responseFailureMilliseconds += Math.min(
             Math.max(0, now - (state.lastResponseFailureAt ?? startedAt)),
-            bigWalletTransportTimeout + retryDelay
+            timeout + retryDelay
         );
         state.lastResponseFailureAt = now;
         if (state.responseFailureMilliseconds >=
@@ -435,7 +501,7 @@ function bigWalletDeliver(state, response) {
         kind: "response",
         response: prepared,
         id: state.message.id,
-        providerGeneration: state.generation,
+        providerGeneration: delivery?.providerGeneration || state.generation,
     };
     window.postMessage(envelope, "*");
     bigWalletRequests.delete(state.key);
@@ -464,24 +530,47 @@ function bigWalletDeliverFailure(message, generation) {
 
 function bigWalletDisconnect(message, generation) {
     if (!bigWalletWire.isValidDisconnectRequest(message)) { return; }
-    if (!bigWalletMatchesGeneration(generation)) {
+    const identity = bigWalletCurrentIdentity();
+    const cached = bigWalletConfigurationState;
+    if (!bigWalletMatchesGeneration(generation) || cached?.providerGeneration !== generation ||
+        cached.configurationKey !== identity?.configurationKey) {
         bigWalletPostDisconnect(message, undefined, generation);
         return;
     }
-    const identity = bigWalletCurrentIdentity();
-    bigWalletWire.withTimeout(browser.runtime.sendMessage({
-        subject: "disconnect",
-        id: message.id,
-        provider: message.provider,
-        host: identity?.host || "",
-        configurationKey: identity?.configurationKey || "",
+    const id = typeof message.id === "undefined" ? bigWalletWire.genId() : message.id;
+    let request = {
+        subject: "disconnect", id, provider: message.provider,
+        host: identity.host, configurationKey: identity.configurationKey,
+        attempt: bigWalletWire.genPrivateToken(),
+        authority: {context: cached.state.context, revisions: {...cached.state.revisions}},
         workflowVersion: bigWalletWorkflowVersion,
-    }), bigWalletTransportTimeout).then(
-        response => bigWalletPostDisconnect(
-            message, response, generation, identity?.configurationKey
-        ),
-        () => bigWalletPostDisconnect(message, undefined, generation)
-    );
+    };
+    void (async () => {
+        let response;
+        let staleRetried = false;
+        let lostReplies = 0;
+        for (;;) {
+            response = undefined;
+            try { response = await bigWalletWire.withTimeout(browser.runtime.sendMessage(request), bigWalletResponseDeliveryTimeout); } catch {}
+            if (!bigWalletMatchesGeneration(generation)) { break; }
+            const terminal = bigWalletTerminal(response, id);
+            if (!terminal) {
+                if (lostReplies++ === 0) { continue; }
+                break;
+            }
+            if (!staleRetried && terminal.kind === "error" && terminal.error.code === 4100 &&
+                terminal.state?.context === request.authority.context) {
+                staleRetried = true;
+                lostReplies = 0;
+                bigWalletPublishConfiguration(terminal.state, identity.configurationKey, generation);
+                request = {...request, attempt: bigWalletWire.genPrivateToken(),
+                    authority: {context: terminal.state.context, revisions: {...terminal.state.revisions}}};
+                continue;
+            }
+            break;
+        }
+        bigWalletPostDisconnect({...message, id}, response, generation, identity.configurationKey);
+    })();
 }
 
 function bigWalletPostDisconnect(message, response, generation, configurationKey) {
@@ -502,67 +591,68 @@ function bigWalletPostDisconnect(message, response, generation, configurationKey
     window.postMessage({
         direction: bigWalletContentDirection,
         kind: "response",
-        response: delivery.response,
+        response: delivery?.response || prepared,
         id: message.id,
-        providerGeneration: generation,
+        providerGeneration: delivery?.providerGeneration || generation,
     }, "*");
 }
 
-async function bigWalletLoadConfiguration(generation, attempt) {
-    if (!bigWalletMatchesGeneration(generation)) { return; }
-    if (attempt === 0) { bigWalletFailedConfigurationGeneration = undefined; }
-    const identity = bigWalletCurrentIdentity();
-    if (attempt > 0 && bigWalletHasAcceptedConfiguration(
-        generation,
-        identity?.configurationKey
-    )) {
-        return;
+function bigWalletPublishConfiguration(state, configurationKey, generation) {
+    const response = bigWalletWire.decodePageResponse({kind: "configuration", state});
+    const delivery = bigWalletConfigurationDelivery(response, configurationKey, generation, false);
+    if (!delivery?.response) { return false; }
+    window.postMessage({direction: bigWalletContentDirection, kind: "response",
+        response: delivery.response, id: bigWalletWire.genId(),
+        providerGeneration: delivery.providerGeneration}, "*");
+    return true;
+}
+
+function bigWalletLoadConfiguration(generation, attempt, followup = false) {
+    if (!bigWalletMatchesGeneration(generation)) { return Promise.resolve(); }
+    if (bigWalletConfigurationFlight) {
+        if (followup) { bigWalletConfigurationRefreshQueued = true; }
+        return bigWalletConfigurationFlight;
     }
+    if (attempt === 0) { bigWalletConfigurationRefreshSerial += 1; }
+    const pending = bigWalletReadConfiguration(generation, attempt, bigWalletConfigurationRefreshSerial);
+    bigWalletConfigurationFlight = pending;
+    const finish = () => {
+        if (bigWalletConfigurationFlight !== pending) { return; }
+        bigWalletConfigurationFlight = null;
+        if (bigWalletConfigurationRefreshQueued) {
+            bigWalletConfigurationRefreshQueued = false;
+            void bigWalletLoadConfiguration(bigWalletProviderGeneration, 0);
+        }
+    };
+    pending.then(finish, finish);
+    return pending;
+}
+
+async function bigWalletReadConfiguration(generation, attempt, serial) {
+    const identity = bigWalletCurrentIdentity();
     let response;
     try {
         response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
-            subject: "getLatestConfiguration",
-            host: identity?.host || "",
-            configurationKey: identity?.configurationKey || "",
-            workflowVersion: bigWalletWorkflowVersion,
+            subject: "getLatestConfiguration", host: identity?.host || "",
+            configurationKey: identity?.configurationKey || "", workflowVersion: bigWalletWorkflowVersion,
         }), bigWalletTransportTimeout);
     } catch {}
     if (!bigWalletMatchesGeneration(generation)) { return; }
-    const delivery = identity
-        ? bigWalletConfigurationDelivery(
-            bigWalletWire.decodePageResponse(response),
-            identity.configurationKey,
-            generation,
-            false
-        )
-        : null;
-    if (delivery?.response) {
-        window.postMessage({
-            direction: bigWalletContentDirection,
-            kind: "response",
-            response: delivery.response,
-            id: bigWalletWire.genId(),
-            providerGeneration: generation,
-        }, "*");
-    } else if (bigWalletHasAcceptedConfiguration(
-        generation,
-        identity?.configurationKey
-    )) {
+    const decoded = bigWalletWire.decodePageResponse(response);
+    if (identity && decoded?.kind === "configuration" &&
+        bigWalletPublishConfiguration(decoded.state, identity.configurationKey, generation)) { return; }
+    const unsupported = decoded?.kind === "configurationError" && decoded.error.code === 4200;
+    if (!unsupported && attempt < 2) {
+        setTimeout(() => {
+            if (bigWalletConfigurationRefreshSerial === serial) { void bigWalletLoadConfiguration(generation, attempt + 1); }
+        }, attempt === 0 ? 1000 : 5000);
         return;
-    } else if (attempt < 2) {
-        setTimeout(() => bigWalletLoadConfiguration(generation, attempt + 1),
-            attempt === 0 ? 1000 : 5000);
-    } else {
-        bigWalletFailedConfigurationGeneration = generation;
-        window.postMessage({
-            direction: bigWalletContentDirection,
-            kind: "response",
-            response: {kind: "configurationError", error: {
-                code: 4900, message: "Failed to communicate with Big Wallet",
-            }},
-            providerGeneration: generation,
-        }, "*");
     }
+    if (bigWalletHasAcceptedConfiguration(generation, identity?.configurationKey)) { return; }
+    bigWalletFailedConfigurationGeneration = generation;
+    window.postMessage({direction: bigWalletContentDirection, kind: "response",
+        response: unsupported ? decoded : {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}},
+        providerGeneration: generation}, "*");
 }
 
 function bigWalletRuntimeMessage(
@@ -571,28 +661,7 @@ function bigWalletRuntimeMessage(
     sendResponse,
     contentBuildVersion
 ) {
-    if (request?.subject === "requestActive") {
-        if (senderContext.kind !== "worker" ||
-            !bigWalletWire.hasExactKeys(request, [
-                "subject", "id", "configurationKey", "requestToken", "workflowVersion",
-            ]) || request.workflowVersion !== bigWalletWorkflowVersion ||
-            !bigWalletWire.isValidRequestId(request.id) ||
-            !bigWalletWire.isRequestToken(request.requestToken)) {
-            sendResponse();
-            return true;
-        }
-        const identity = bigWalletCurrentIdentity();
-        const active = identity?.configurationKey === request.configurationKey &&
-            [...bigWalletRequests.values()].some(state =>
-                bigWalletIsCurrent(state, "waiting") &&
-                bigWalletMatchesGeneration(state.generation) &&
-                state.message.id === request.id &&
-                state.requestToken === request.requestToken &&
-                state.configurationKey === request.configurationKey
-            );
-        sendResponse({id: request.id, requestToken: request.requestToken, active});
-        return true;
-    }
+
     if (bigWalletWire.hasExactKeys(request, [
         "nonce", "subject", "workflowVersion",
     ]) &&
@@ -609,25 +678,10 @@ function bigWalletRuntimeMessage(
         });
         return true;
     }
-    if (bigWalletWire.isConfigurationChanged(request)) {
+    if (bigWalletWire.isConfigurationInvalidated(request)) {
         const identity = bigWalletCurrentIdentity();
-        if (identity?.configurationKey === request.configurationKey &&
-            typeof bigWalletProviderGeneration === "string") {
-            const delivery = bigWalletConfigurationDelivery(
-                bigWalletWire.decodePageResponse({kind: "configuration", state: request.state}),
-                identity.configurationKey,
-                bigWalletProviderGeneration,
-                false
-            );
-            if (delivery?.response) {
-                window.postMessage({
-                    direction: bigWalletContentDirection,
-                    kind: "response",
-                    response: delivery.response,
-                    id: bigWalletWire.genId(),
-                    providerGeneration: bigWalletProviderGeneration,
-                }, "*");
-            }
+        if (identity?.configurationKey === request.configurationKey && typeof bigWalletProviderGeneration === "string") {
+            void bigWalletLoadConfiguration(bigWalletProviderGeneration, 0, true);
         }
         sendResponse();
         return true;
@@ -681,10 +735,7 @@ function bigWalletVisibilityChanged(event) {
         }
     }
     const generation = bigWalletProviderGeneration;
-    if (!bigWalletMatchesGeneration(generation)) { return; }
-    const identity = bigWalletCurrentIdentity();
-    if (bigWalletFailedConfigurationGeneration === generation ||
-        bigWalletHasAcceptedConfiguration(generation, identity?.configurationKey)) {
-        void bigWalletLoadConfiguration(generation, 0);
+    if (bigWalletMatchesGeneration(generation)) {
+        void bigWalletLoadConfiguration(generation, 0, true);
     }
 }

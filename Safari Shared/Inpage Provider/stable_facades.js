@@ -316,10 +316,6 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
         const provider = solanaProvider();
         const silent = input?.silent === true;
         if (solanaTarget !== current) { throw unavailable(); }
-        if (silent && provider?.didGetLatestConfiguration &&
-            !provider.publicKey) {
-            return {accounts: []};
-        }
         try {
             await callSolana("connect", [silent
                 ? {onlyIfTrusted: true} : undefined], provider);

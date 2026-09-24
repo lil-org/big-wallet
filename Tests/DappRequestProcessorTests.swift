@@ -36,6 +36,70 @@ private final class CancellableCallbackProbe<Value: Sendable>: @unchecked Sendab
 @MainActor
 final class DappRequestProcessorTests: XCTestCase {
 
+    func testSigningResolvesExactAuthorizedWalletAmongDuplicateAddresses() throws {
+        for coin in [WalletCoin.ethereum, .solana] {
+            let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+            let account = processorAccount(privateKey: key, coin: coin)
+            var request = try coin == .ethereum
+                ? ethereumRequest(method: "signPersonalMessage", address: account.address, parameters: ["data": "0x01"])
+                : solanaRequest(method: "signMessage", publicKey: account.address, parameters: ["message": "01"])
+            let descriptor = WalletAccountDescriptor(walletID: "second", account: account)
+            request.authorizedAccount = descriptor
+            let catalog = WalletReviewCatalog(
+                identity: WalletCatalogIdentity(generation: UUID(), catalogData: Data("duplicate accounts".utf8)),
+                orderedAccounts: [
+                    SpecificWalletAccount(walletId: "first", account: account),
+                    SpecificWalletAccount(walletId: "second", account: account),
+                ]
+            )
+            guard case .approval(.approveMessage(let action)) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+                return XCTFail("Expected the exact authorized account")
+            }
+            XCTAssertEqual(action.walletId, "second")
+            request.authorizedAccount = nil
+            guard case .response = DappRequestProcessor().prepare(request, catalog: catalog) else {
+                return XCTFail("An address match must not substitute for a native grant")
+            }
+        }
+    }
+
+    func testAlreadyGrantedConnectReturnsNativeAccountWithoutAnotherApproval() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            var request = try coin == .ethereum
+                ? ethereumRequest(method: "requestAccounts")
+                : solanaRequest(method: "connect", publicKey: "")
+            request.authorizedAccount = WalletAccountDescriptor(walletID: "wallet", account: account)
+            guard case .response(let response)? = DappRequestProcessor().prepareWithoutWallets(request) else {
+                return XCTFail("Existing native grants must not prompt again")
+            }
+            XCTAssertNil(response.mutation)
+            XCTAssertTrue(response.approvedAccounts.isEmpty)
+            if coin == .ethereum {
+                XCTAssertEqual(response.json["result"] as? [String], [account.address.lowercased()])
+            } else {
+                XCTAssertEqual((response.json["result"] as? [String: String])?["publicKey"], account.address)
+            }
+        }
+    }
+
+    func testTrustedSolanaConnectUsesNativeGrantWithoutApproval() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 2, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .solana)
+        var request = try solanaRequest(method: "connect", publicKey: account.address, parameters: ["onlyIfTrusted": true])
+        request.authorizedAccount = WalletAccountDescriptor(walletID: "wallet", account: account)
+        guard case .response(let response)? = DappRequestProcessor().prepareWithoutWallets(request) else {
+            return XCTFail("Trusted connect must not present an approval")
+        }
+        XCTAssertEqual((response.json["result"] as? [String: String])?["publicKey"], account.address)
+        request.authorizedAccount = nil
+        guard case .response(let denied)? = DappRequestProcessor().prepareWithoutWallets(request) else {
+            return XCTFail("An absent grant must not present an approval")
+        }
+        XCTAssertEqual((denied.json["error"] as? [String: Any])?["code"] as? Int, 4100)
+    }
+
     func testPreparedMessageKeepsReviewedPayloadAndUsesExplicitSigner() async throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: privateKey, coin: .ethereum)
@@ -427,13 +491,14 @@ final class DappRequestProcessorTests: XCTestCase {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         for coin in [WalletCoin.ethereum, .solana] {
             let account = processorAccount(privateKey: key, coin: coin)
-            let request = try coin == .ethereum
+            var request = try coin == .ethereum
                 ? ethereumRequest(method: "signPersonalMessage", address: account.address,
                                   parameters: ["data": "0x7265766965776564"])
                 : solanaRequest(method: "signMessage", publicKey: account.address,
                                 parameters: ["message": "7265766965776564", "messageEncoding": "hex"])
             let original = SpecificWalletAccount(walletId: "reviewed-wallet", account: account)
             let duplicate = SpecificWalletAccount(walletId: "duplicate-wallet", account: account)
+            request.authorizedAccount = WalletAccountDescriptor(walletID: original.walletId, account: original.account)
             let identity = processorCatalog(accounts: [account]).identity
             let processor = DappRequestProcessor()
             guard case .approval(.approveMessage(let reviewed)) = processor.prepare(
@@ -451,16 +516,19 @@ final class DappRequestProcessorTests: XCTestCase {
             ).get()
             XCTAssertEqual(approval.signingAccount, approvedAccount)
 
-            for accounts in [[duplicate, original], [duplicate]] {
-                guard case .approval(let rematerialized) = processor.prepare(
-                    request,
-                    catalog: WalletReviewCatalog(identity: identity, orderedAccounts: accounts)
-                ) else { return XCTFail("Expected the duplicate account to prepare") }
-                guard case .failure(.staleAccount) = DappApprovalValidator.resolve(
-                    action: rematerialized, decision: decision,
-                    accounts: nil, networkResolver: { _ in nil }
-                ) else { return XCTFail("A different wallet must require another approval") }
-            }
+            guard case .approval(let rematerialized) = processor.prepare(
+                request,
+                catalog: WalletReviewCatalog(identity: identity, orderedAccounts: [duplicate, original])
+            ) else { return XCTFail("Reordering must preserve the authorized account") }
+            guard case .success(let repeated) = DappApprovalValidator.resolve(
+                action: rematerialized, decision: decision,
+                accounts: nil, networkResolver: { _ in nil }
+            ) else { return XCTFail("The exact grant must remain valid after reordering") }
+            XCTAssertEqual(repeated.signingAccount, approvedAccount)
+            guard case .response = processor.prepare(
+                request,
+                catalog: WalletReviewCatalog(identity: identity, orderedAccounts: [duplicate])
+            ) else { return XCTFail("A different wallet must not replace the authorized account") }
         }
     }
 
@@ -1008,7 +1076,13 @@ final class DappRequestProcessorTests: XCTestCase {
                 "object": parameters ?? ["chainId": requestedChainId],
             ],
         ])
-        return try XCTUnwrap(SafariRequest(data: requestData))
+        var request = try XCTUnwrap(SafariRequest(data: requestData))
+        request.authorizedAccount = method == "requestAccounts" ? nil : WalletAccountDescriptor(
+            walletID: "wallet", coin: .ethereum,
+            normalizedAddress: WalletCoin.ethereum.normalizedAddress(address),
+            derivationPath: "m/44'/60'/0'/0/0"
+        )
+        return request
     }
 
     private func addEthereumChainRequest(
@@ -1063,7 +1137,12 @@ final class DappRequestProcessorTests: XCTestCase {
                 "object": ["params": parameters],
             ],
         ])
-        return try XCTUnwrap(SafariRequest(data: requestData))
+        var request = try XCTUnwrap(SafariRequest(data: requestData))
+        request.authorizedAccount = method == "connect" ? nil : WalletAccountDescriptor(
+            walletID: "wallet", coin: .solana, normalizedAddress: publicKey,
+            derivationPath: "m/44'/501'/0'/0'"
+        )
+        return request
     }
 
     func testAccountAndChainMutationsAreExplicit() throws {
@@ -1198,7 +1277,8 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(response.json["provider"] as? String, "solana")
         XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, 4100)
         XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, Strings.providerNotReady)
-        XCTAssertEqual((response.json["mutation"] as? [String: Any])?["publicKey"] as? String, publicKey)
+        XCTAssertEqual(response.mutation, .revokeSolana(publicKey))
+        XCTAssertNil(response.json["mutation"])
     }
 
     func testPrepareEthereumAccountRequestReturnsApproval() async throws {
@@ -1384,10 +1464,8 @@ final class DappRequestProcessorTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(
-            (publicKeyResponse.json["mutation"] as? [String: Any])?["publicKey"] as? String,
-            "public-key"
-        )
+        XCTAssertEqual(publicKeyResponse.mutation, .revokeSolana("public-key"))
+        XCTAssertNil(publicKeyResponse.json["mutation"])
         XCTAssertNil((publicKeyResponse.json["error"] as? [String: Any])?["data"])
         XCTAssertNil(((publicKeyResponse.json["error"] as? [String: Any])?["data"] as? [String: Any])?["signature"])
 
@@ -2142,63 +2220,65 @@ final class DappRequestProcessorTests: XCTestCase {
         return SafariRequest.Solana(name: "signMessage", json: json)?.signMessageEncoding
     }
 
-    func testSwitchAccountPreselectionPreservesResolvedAccountsAndFillsStaleProviders() {
-        let ethereumAccount = "ethereum-account"
-        let solanaAccount = "solana-account"
-        let providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration] = [
-            .init(provider: .ethereum, address: "0x0000000000000000000000000000000000000abc", chainId: "0x1"),
-            .init(provider: .solana, address: "stale-solana-public-key", chainId: nil),
-        ]
-
-        let preselectedAccounts: [String] = DappRequestProcessor.preselectedAccounts(for: providerConfigurations,
-                                                                                      accountForConfiguration: { configuration in
-            guard configuration.provider == .ethereum else { return nil }
-            return ethereumAccount
-        }, suggestedValuesForProviders: { providers in
-            XCTAssertEqual(providers, [.solana])
-            return [solanaAccount]
-        }, defaultSuggestedValues: {
-            XCTFail("Expected stale provider fallback, not empty-configuration fallback")
-            return []
-        })
-
-        XCTAssertEqual(preselectedAccounts, [ethereumAccount, solanaAccount])
+    func testSwitchAccountPreselectionPreservesExactNativeGrantForDuplicateAddresses() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            let first = SpecificWalletAccount(walletId: "first", account: account)
+            let granted = SpecificWalletAccount(walletId: "second", account: account)
+            var request = try switchAccountRequest(connectedAccount: account)
+            request.connectedAccounts = [WalletAccountDescriptor(walletID: granted.walletId, account: account)]
+            let catalog = WalletReviewCatalog(
+                identity: WalletCatalogIdentity(generation: nil, catalogData: Data()),
+                orderedAccounts: [first, granted]
+            )
+            guard case .approval(.switchAccount(let action)) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+                return XCTFail("Expected manual account selection")
+            }
+            XCTAssertEqual(action.selectedAccounts, [granted])
+        }
     }
 
-    func testSwitchAccountPreselectionUsesMalformedProviderEntriesForSuggestions() {
-        let solanaAccount = "solana-account"
-        let providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration] = [
-            .init(provider: .solana, address: nil, chainId: nil),
-        ]
-
-        let preselectedAccounts: [String] = DappRequestProcessor.preselectedAccounts(for: providerConfigurations,
-                                                                                      accountForConfiguration: { _ in nil },
-                                                                                      suggestedValuesForProviders: { providers in
-            XCTAssertEqual(providers, [.solana])
-            return [solanaAccount]
-        }, defaultSuggestedValues: {
-            XCTFail("Expected malformed provider fallback, not empty-configuration fallback")
-            return []
-        })
-
-        XCTAssertEqual(preselectedAccounts, [solanaAccount])
+    func testSwitchAccountDoesNotSubstituteDuplicateForUnavailableExactGrant() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        for coin in [WalletCoin.ethereum, .solana] {
+            let account = processorAccount(privateKey: key, coin: coin)
+            var request = try switchAccountRequest(connectedAccount: account)
+            request.connectedAccounts = [WalletAccountDescriptor(walletID: "removed", account: account)]
+            guard case .approval(.switchAccount(let action)) = DappRequestProcessor().prepare(
+                request, catalog: processorCatalog(accounts: [account])
+            ) else { return XCTFail("Expected manual account selection") }
+            XCTAssertTrue(action.selectedAccounts.isEmpty)
+            XCTAssertEqual(action.initiallyConnectedProviders, [coin.correspondingInpageProvider])
+        }
     }
 
-    func testSwitchAccountPreselectionUsesExplicitDefaultForEmptyConfigurations() {
-        let ethereumAccount = "ethereum-account"
+    func testDisconnectedSwitchAccountStillSuggestsDefaultAccount() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let request = try switchAccountRequest(connectedAccount: nil)
+        guard case .approval(.switchAccount(let action)) = DappRequestProcessor().prepare(
+            request, catalog: processorCatalog(accounts: [account])
+        ) else { return XCTFail("Expected manual account selection") }
+        XCTAssertEqual(action.selectedAccounts, [SpecificWalletAccount(walletId: "wallet", account: account)])
+        XCTAssertTrue(action.initiallyConnectedProviders.isEmpty)
+    }
 
-        let preselectedAccounts: [String] = DappRequestProcessor.preselectedAccounts(for: [],
-                                                                                      accountForConfiguration: { _ in
-            XCTFail("Empty configuration should not resolve stored accounts")
-            return nil
-        }, suggestedValuesForProviders: { _ in
-            XCTFail("Empty configuration should use explicit default suggestions")
-            return []
-        }, defaultSuggestedValues: {
-            [ethereumAccount]
-        })
-
-        XCTAssertEqual(preselectedAccounts, [ethereumAccount])
+    private func switchAccountRequest(connectedAccount: WalletAccount?) throws -> SafariRequest {
+        var configuration: [String: Any] = ["provider": "ethereum", "results": [], "chainId": "0x1"]
+        if let account = connectedAccount {
+            configuration = account.coin == .ethereum
+                ? ["provider": "ethereum", "results": [account.address], "chainId": "0x1"]
+                : ["provider": "solana", "publicKey": account.address]
+        }
+        return try XCTUnwrap(SafariRequest(json: [
+            "id": 1, "name": "switchAccount", "provider": "unknown",
+            "host": "example.com", "configurationKey": "https://example.com",
+            "enqueueAttempt": "00000000000000000000000000000001",
+            "admissionDeadline": dappRequestAdmissionDeadline,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "body": ["latestConfigurations": [configuration]],
+        ]))
     }
 
     func testExistingCustomChainAdditionRequiresMatchingDefinition() throws {
@@ -2345,24 +2425,27 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
-    func testConfigurationMutationDecodingUsesOneStrictContract() {
-        XCTAssertEqual(ResponseToExtension.ConfigurationMutation(json: [
-            "kind": "ethereumChain", "chainId": "0x2a",
-        ]), .ethereumChain("0x2a"))
-        XCTAssertEqual(ResponseToExtension.ConfigurationMutation(json: [
-            "kind": "revokeSolana", "publicKey": "public-key",
-        ]), .revokeSolana("public-key"))
-        XCTAssertEqual(ResponseToExtension.ConfigurationMutation(json: [
-            "kind": "accounts", "updates": ["ethereum": NSNull()],
-        ]), .accounts([.disconnectEthereum]))
-        for mutation: [String: Any] in [
-            ["kind": "ethereumChain"],
-            ["kind": "ethereumChain", "chainId": "0x00"],
-            ["kind": "ethereumChain", "chainId": "0x2a", "extra": true],
-            ["kind": "accounts", "updates": ["unknown": NSNull()]],
-            ["kind": "revokeSolana", "publicKey": ""],
-        ] {
-            XCTAssertNil(ResponseToExtension.ConfigurationMutation(json: mutation))
+    func testNativeAuthorityEffectsNeverCrossResponseWire() throws {
+        let request = try ethereumRequest(method: "requestAccounts")
+        let descriptor = WalletAccountDescriptor(
+            walletID: "wallet", coin: .ethereum,
+            normalizedAddress: "0x0000000000000000000000000000000000000001",
+            derivationPath: "m/44'/60'/0'/0/0"
+        )
+        let response = ResponseToExtension(
+            for: request,
+            payload: .result(.strings([descriptor.normalizedAddress])),
+            mutation: .accounts([.ethereum(address: descriptor.normalizedAddress, chainId: "0x1")]),
+            approvedAccounts: [descriptor]
+        )
+        XCTAssertNotNil(response.mutation)
+        XCTAssertEqual(response.approvedAccounts, [descriptor])
+        XCTAssertNil(response.json["mutation"])
+        XCTAssertNil(response.json["approvedAccounts"])
+        for field in ["mutation", "approvedAccounts"] {
+            var injected = response.json
+            injected[field] = ["kind": "accounts"]
+            XCTAssertNil(ResponseToExtension(json: injected))
         }
     }
 

@@ -49,7 +49,7 @@ struct SolanaDappRequestProcessor {
     ) -> DappRequestPreparation {
         switch body.method {
         case .connect:
-            return prepareConnect(catalog: catalog)
+            return prepareConnect(request: request, body: body, catalog: catalog)
         case .signAllTransactions:
             return prepareSignAllTransactions(
                 request: request,
@@ -71,6 +71,12 @@ struct SolanaDappRequestProcessor {
     ) -> DappRequestPreparation? {
         switch body.method {
         case .connect:
+            if let account = request.authorizedAccount, account.coin == .solana {
+                return .response(response(to: request, result: .solanaPublicKey(account.normalizedAddress)))
+            }
+            if body.onlyIfTrusted {
+                return .response(response(to: request, error: .unauthorized(publicKey: body.publicKey)))
+            }
             return nil
         case .signAllTransactions:
             guard body.messages != nil else {
@@ -129,8 +135,11 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func prepareConnect(
+        request: SafariRequest,
+        body: SafariRequest.Solana,
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
+        if let response = prepareWithoutWallets(request: request, body: body) { return response }
         let action = SelectAccountAction(
             coinType: .solana,
             selectedAccounts: Set(catalog.suggestedAccounts(coin: .solana)),
@@ -152,6 +161,7 @@ struct SolanaDappRequestProcessor {
         let walletID: String
         let account: WalletAccount
         switch walletAndAccount(
+            authorizedAccount: request.authorizedAccount,
             publicKey: body.publicKey,
             catalog: catalog
         ) {
@@ -194,6 +204,7 @@ struct SolanaDappRequestProcessor {
         let walletID: String
         let account: WalletAccount
         switch walletAndAccount(
+            authorizedAccount: request.authorizedAccount,
             publicKey: body.publicKey,
             catalog: catalog
         ) {
@@ -402,13 +413,14 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func walletAndAccount(
+        authorizedAccount: WalletAccountDescriptor?,
         publicKey: String,
         catalog: WalletReviewCatalog
     ) -> Result<(String, WalletAccount), ProviderError> {
-        guard let value = catalog.specificAccount(
-            coin: .solana,
-            address: publicKey
-        ) else {
+        guard let authorizedAccount,
+              authorizedAccount.coin == .solana,
+              authorizedAccount.normalizedAddress == publicKey,
+              let value = catalog.specificAccount(descriptor: authorizedAccount) else {
             return .failure(.unauthorized(publicKey: publicKey))
         }
         return .success((value.walletId, value.account))

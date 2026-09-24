@@ -92,7 +92,6 @@ struct PopupPendingRequest: Encodable {
     let enqueueAttempt: String
     let configurationKey: String
     let provider: InpageProvider
-    let revisions: ExtensionBridge.ProviderRevisions
 }
 
 struct PopupCompletedResponse: Encodable {
@@ -100,7 +99,6 @@ struct PopupCompletedResponse: Encodable {
     let host: String
     let configurationKey: String
     let requestToken: String
-    let revisions: ExtensionBridge.ProviderRevisions
 }
 
 struct PopupApprovalState: Encodable {

@@ -144,59 +144,17 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             return
         }
         switch command {
-        case .getManualSwitchRequests:
+        case .getRecoveryRequests:
             Task {
-                switch await Self.bridge.listManualSwitchRequests(
-                    profileIdentifier: profileIdentifier
-                ) {
+                switch await Self.bridge.listRecoveryRequests(profileIdentifier: profileIdentifier) {
                 case .available(let requests):
                     Self.respond(with: [
                         "id": request.id,
                         "requests": requests.map(\.json),
                     ], context: context)
                 case .unavailable:
-                    context.cancelRequest(withError: HandlerError.bridgeUnavailable)
-                }
-            }
-        case .getManualSwitchResponse(let identity):
-            readResponseStatus(
-                id: request.id, identity: identity, profileIdentifier: profileIdentifier,
-                privateBrowsing: privateBrowsing, manualOnly: true, context: context
-            )
-        case .getExecutionStatus(let identity):
-            Task {
-                let handle = ExtensionBridge.Handle(
-                    id: request.id, token: identity.token, profileIdentifier: profileIdentifier
-                )
-                switch await Self.bridge.executionStatus(
-                    handle: handle, configurationKey: identity.configurationKey
-                ) {
-                case .status(let state):
-                    Self.respond(with: ["id": request.id, "state": state.rawValue], context: context)
-                case .missing:
-                    Self.respond(with: ["id": request.id, "missing": true], context: context)
-                case .unavailable:
                     Self.respond(with: ["id": request.id, "unavailable": true], context: context)
                 }
-            }
-        case .executeNativeApproval(let execution):
-            Task {
-#if os(macOS)
-                let handle = ExtensionBridge.Handle(
-                    id: request.id, token: execution.response.token,
-                    profileIdentifier: profileIdentifier
-                )
-                let status = await Self.nativeApprovalService.executeNativeApproval(
-                    handle: handle,
-                    configurationKey: execution.response.configurationKey,
-                    attemptID: execution.attemptID,
-                    revisions: execution.revisions,
-                    executionDeadline: execution.executionDeadline
-                )
-#else
-                let status = ExtensionBridge.ResponseStatusResult.unavailable
-#endif
-                Self.respondStatus(status, id: request.id, context: context)
             }
         case .maintainRequest(let identity):
             Task {
@@ -226,7 +184,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 )
                 switch result {
                 case .response(let response):
-                    if ResponseToExtension(json: response)?.addsEthereumChain == true {
+                    if let terminal = response["response"] as? [String: Any],
+                       ResponseToExtension(json: terminal)?.addsEthereumChain == true {
                         CustomNetworkCache.shared.invalidate()
                     }
                     Self.respond(with: response, context: context)
@@ -289,16 +248,17 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             case .accepted(
                 let handle,
                 let approvalRequired,
-                let revisions,
+                let authority,
                 let admissionKind,
                 let nativeDeliveryNonce
             ):
-                if ingress.replayOnly || !approvalRequired || admissionKind == .coalesced {
+                if !approvalRequired || admissionKind == .coalesced {
                     Self.respond(
                         with: Self.admissionResponse(
                             handle: handle,
                             approvalRequired: approvalRequired,
-                            revisions: revisions
+                            authority: authority,
+                            admissionKind: admissionKind
                         ),
                         context: context
                     )
@@ -315,7 +275,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     case .responseReady:
                         Self.respond(
                             with: Self.admissionResponse(
-                                handle: handle, approvalRequired: false, revisions: revisions
+                                handle: handle, approvalRequired: false, authority: authority,
+                                admissionKind: admissionKind
                             ),
                             context: context
                         )
@@ -329,7 +290,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         with: Self.admissionResponse(
                             handle: handle,
                             approvalRequired: true,
-                            revisions: revisions
+                            authority: authority,
+                            admissionKind: admissionKind
                         ),
                         context: context
                     )
@@ -338,13 +300,24 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         with: Self.admissionResponse(
                             handle: handle,
                             approvalRequired: false,
-                            revisions: revisions
+                            authority: authority,
+                            admissionKind: admissionKind
                         ),
                         context: context
                     )
                 case .unavailable:
                     context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 }
+            case .unauthorized(let authority):
+                let response = ResponseToExtension(
+                    for: request,
+                    payload: .error(.init(message: Strings.providerNotReady, code: 4100))
+                )
+                Self.respond(with: [
+                    "id": request.id,
+                    "response": Self.boundedDappResponse(response, for: request),
+                    "state": authority.json,
+                ], context: context)
             case .expired:
                 Self.respond(
                     with: ResponseToExtension(
@@ -378,13 +351,21 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static func admissionResponse(
         handle: ExtensionBridge.Handle,
         approvalRequired: Bool,
-        revisions: ExtensionBridge.ProviderRevisions
+        authority: ExtensionBridge.AuthoritySnapshot,
+        admissionKind: ExtensionBridge.AdmissionKind
     ) -> [String: Any] {
+        let kind: String
+        switch admissionKind {
+        case .new: kind = "new"
+        case .replay: kind = "replay"
+        case .coalesced: kind = "coalesced"
+        }
         return [
             "id": handle.id,
             "requestToken": handle.requestToken,
             "approvalRequired": approvalRequired,
-            "revisions": revisions.json,
+            "admissionKind": kind,
+            "state": authority.json,
         ]
     }
 
@@ -395,7 +376,44 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         privateBrowsing: Bool,
         context: NSExtensionContext
     ) {
+        guard !privateBrowsing else {
+            context.cancelRequest(withError: HandlerError.unsupportedOperation)
+            return
+        }
         switch command {
+        case .getLatestConfiguration(let configurationKey):
+            Task {
+                switch await Self.bridge.configurationSnapshot(
+                    configurationKey: configurationKey,
+                    profileIdentifier: profileIdentifier
+                ) {
+                case .snapshot(let snapshot):
+                    Self.respond(with: ["id": request.id, "state": snapshot.json], context: context)
+                case .unavailable:
+                    Self.respond(with: ["id": request.id, "unavailable": true], context: context)
+                }
+            }
+        case .disconnect(let identity):
+            Task {
+                switch await Self.bridge.revoke(
+                    configurationKey: identity.configurationKey,
+                    provider: identity.provider,
+                    attempt: identity.attempt,
+                    expected: identity.authority,
+                    profileIdentifier: profileIdentifier
+                ) {
+                case .revoked(let snapshot):
+                    Self.respond(with: [
+                        "id": request.id, "state": snapshot.json, "revoked": true,
+                    ], context: context)
+                case .stale(let snapshot):
+                    Self.respond(with: [
+                        "id": request.id, "state": snapshot.json, "stale": true,
+                    ], context: context)
+                case .unavailable:
+                    Self.respond(with: ["id": request.id, "unavailable": true], context: context)
+                }
+            }
         case .rpc(let body, let chainId):
             rpcRequest(
                 id: request.id,

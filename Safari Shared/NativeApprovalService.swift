@@ -18,9 +18,6 @@ actor NativeApprovalService {
     struct Dependencies {
         let launcher: NativeAgentLauncher
         let load: (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
-        let beginExecution: (
-            ExtensionBridge.Handle, String, UUID, ExtensionBridge.ProviderRevisions, Date
-        ) async -> ExtensionBridge.NativeExecutionResult
         let responseStatus: (
             ExtensionBridge.Handle, String
         ) async -> ExtensionBridge.ResponseStatusResult
@@ -30,7 +27,6 @@ actor NativeApprovalService {
             ExtensionBridge.NativeDeliveryReceipt
         ) async -> ExtensionBridge.StoreMutationResult
         let uptime: () -> UInt64
-        let wallClock: () -> Date
         let sleepUntil: @Sendable (UInt64) async -> Void
 
         @MainActor
@@ -38,12 +34,6 @@ actor NativeApprovalService {
             Self(
                 launcher: NativeAgentLauncher(),
                 load: { await ExtensionBridge.shared.load(handle: $0) },
-                beginExecution: {
-                    await ExtensionBridge.shared.beginNativeExecution(
-                        handle: $0, configurationKey: $1, attemptID: $2,
-                        revisions: $3, executionDeadline: $4
-                    )
-                },
                 responseStatus: {
                     await ExtensionBridge.shared.responseStatus(
                         handle: $0, configurationKey: $1
@@ -60,7 +50,6 @@ actor NativeApprovalService {
                     )
                 },
                 uptime: { DispatchTime.now().uptimeNanoseconds },
-                wallClock: Date.init,
                 sleepUntil: { deadline in
                     let now = DispatchTime.now().uptimeNanoseconds
                     guard deadline > now else { return }
@@ -322,124 +311,6 @@ actor NativeApprovalService {
             }
         }
         return .pending
-    }
-
-    private struct ExecutionAttempt {
-        let attemptID: UUID
-        let configurationKey: String
-        let revisions: ExtensionBridge.ProviderRevisions
-        let executionDeadline: Date
-        let task: Task<ExtensionBridge.ResponseStatusResult, Never>
-    }
-
-    private var executionAttempts = [ExtensionBridge.Handle: ExecutionAttempt]()
-
-    func executeNativeApproval(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        attemptID: UUID,
-        revisions: ExtensionBridge.ProviderRevisions,
-        executionDeadline: Date
-    ) async -> ExtensionBridge.ResponseStatusResult {
-        guard !Task.isCancelled else { return .pending }
-        if let existing = executionAttempts[handle] {
-            guard existing.attemptID == attemptID,
-                  existing.configurationKey == configurationKey,
-                  existing.revisions == revisions,
-                  existing.executionDeadline == executionDeadline else { return .unavailable }
-            return await existing.task.value
-        }
-        let deadline = dependencies.deadline(after: NativeApprovalTiming.responseTimeoutNanoseconds)
-        let operation = Task {
-            await performNativeExecution(
-                handle: handle, configurationKey: configurationKey,
-                attemptID: attemptID, revisions: revisions,
-                executionDeadline: executionDeadline, deadline: deadline
-            )
-        }
-        let task = Task {
-            await boundedResult(of: operation, deadline: deadline, timeoutValue: .pending)
-        }
-        executionAttempts[handle] = ExecutionAttempt(
-            attemptID: attemptID, configurationKey: configurationKey,
-            revisions: revisions, executionDeadline: executionDeadline, task: task
-        )
-        let result = await task.value
-        if executionAttempts[handle]?.attemptID == attemptID {
-            executionAttempts[handle] = nil
-        }
-        return result
-    }
-
-    private func performNativeExecution(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        attemptID: UUID,
-        revisions: ExtensionBridge.ProviderRevisions,
-        executionDeadline: Date,
-        deadline: UInt64
-    ) async -> ExtensionBridge.ResponseStatusResult {
-        guard isPending(until: deadline) else { return .pending }
-        let execution = await dependencies.beginExecution(
-            handle, configurationKey, attemptID, revisions, executionDeadline
-        )
-        guard case .acquired(let lease) = execution else {
-            switch execution {
-            case .responseReady: return .ready
-            case .missing: return .missing
-            case .unavailable: return .unavailable
-            case .pending, .needsDelivery: return .pending
-            case .acquired: preconditionFailure()
-            }
-        }
-        defer { lease.release() }
-        guard isPending(until: deadline) else { return .pending }
-        var nextDeliveryCheck: UInt64 = 0
-        while isPending(until: deadline) {
-            let loaded = await dependencies.load(handle)
-            guard isPending(until: deadline) else { return .pending }
-            switch loaded {
-            case .found(let snapshot):
-                guard snapshot.configurationKey == configurationKey,
-                      snapshot.nativeDeliveryNonce == lease.nativeDeliveryNonce else { return .missing }
-                if snapshot.phase == .responded { return .ready }
-                if snapshot.phase == .queued,
-                   snapshot.nativeApproval?.executionContext != lease.context { return .pending }
-                if snapshot.phase == .queued,
-                   dependencies.wallClock() >= lease.context.executionDeadline { return .pending }
-                let now = dependencies.uptime()
-                if case .queued(_, .staged) = snapshot.state, now >= nextDeliveryCheck {
-                    guard let receipt = snapshot.nativeDeliveryReceipt,
-                          await verifyExecutionOwner(receipt.owner, deadline: deadline),
-                          isPending(until: deadline) else { return .unavailable }
-                    nextDeliveryCheck = dependencies.deadline(
-                        after: NativeApprovalTiming.deliveryCheckIntervalNanoseconds
-                    )
-                }
-            case .missing: return .missing
-            case .unavailable: break
-            }
-            let wake = dependencies.deadline(after: NativeApprovalTiming.responsePollIntervalNanoseconds)
-            await dependencies.sleepUntil(min(wake, deadline))
-        }
-        return .pending
-    }
-
-    private func verifyExecutionOwner(
-        _ owner: ExtensionBridge.NativeDeliveryOwner,
-        deadline: UInt64
-    ) async -> Bool {
-        let operation = Task {
-            if case .compatible = await dependencies.launcher.status(owner: owner) {
-                return true
-            }
-            return false
-        }
-        return await boundedResult(
-            of: operation,
-            deadline: min(deadline, dependencies.deadline(after: launchTimeoutNanoseconds)),
-            timeoutValue: false
-        )
     }
 
     func maintainRequest(

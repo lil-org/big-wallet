@@ -237,11 +237,11 @@ function commitPublicKey(state, publicKeyString, publicKey = publicKeyString ===
 }
 
 function authorizationSnapshot(state) {
-    return {revision: state.workerRevision, publicKey: state.publicKeyString};
+    return {revision: state.nativeRevision, publicKey: state.publicKeyString};
 }
 
 function authorizationMatches(state, authorization) {
-    return !!authorization && authorization.revision === state.workerRevision &&
+    return !!authorization && authorization.revision === state.nativeRevision &&
         authorization.publicKey === state.publicKeyString;
 }
 
@@ -260,7 +260,7 @@ function requireAuthorization(provider, authorization) {
 }
 
 async function bootstrapAuthorization(provider, expected) {
-    await registerOperation(provider, "connect", {onlyIfTrusted: true});
+    await registerOperation(provider, "connect", undefined, undefined, true);
     const state = getProviderState(provider);
     if (state.publicKeyString !== expected.publicKey ||
         state.runtime.phase === "retired" || state.transport.isCurrent() !== true) {
@@ -574,6 +574,7 @@ function createMetadata(method) {
     return {
         adapters: null,
         authorization: null,
+        configurationOnly: false,
         dispatched: false,
         messages: null,
         method,
@@ -585,11 +586,18 @@ function normalizeRequest(method, params) {
     const metadata = createMetadata(method);
     let normalizedParams;
     switch (method) {
-        case "connect":
+        case "connect": {
             normalizedParams = typeof params === "undefined"
                 ? undefined
                 : outboundDataSnapshot(params);
+            const onlyIfTrusted = normalizedParams !== null && typeof normalizedParams === "object"
+                ? getOwnPropertyDescriptorNormally(normalizedParams, "onlyIfTrusted")
+                : undefined;
+            if (onlyIfTrusted && typeof onlyIfTrusted.value !== "boolean") {
+                throw new ProviderRpcError(-32602, "onlyIfTrusted must be a boolean");
+            }
             break;
+        }
         case "signMessage": {
             const raw = params || {};
             if (!("message" in raw)) {
@@ -783,27 +791,12 @@ function dispatchOperation(provider, record) {
         return false;
     }
     const method = record.metadata.method;
+    if (method === "disconnect") { return dispatchDisconnect(state, record); }
+    if (record.metadata.configurationOnly) {
+        return state.publicKeyString ? state.runtime.resolve(record, {publicKey: state.publicKey})
+            : rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
+    }
     if (method !== "connect" && !state.publicKeyString) {
-        rejectOperation(
-            provider,
-            record,
-            new ProviderRpcError(4100, providerNotReadyMessage)
-        );
-        return false;
-    }
-    if (method === "connect" && state.publicKeyString) {
-        const wasConnected = state.isConnected;
-        const settled = state.runtime.resolve(
-            record,
-            {publicKey: state.publicKey}
-        );
-        if (settled && !wasConnected) {
-            emitProvider(provider, "connect", state.publicKey);
-        }
-        return settled;
-    }
-    if (method === "connect" &&
-        record.payload.params?.onlyIfTrusted === true) {
         rejectOperation(
             provider,
             record,
@@ -813,11 +806,15 @@ function dispatchOperation(provider, record) {
     }
     const previousAuthorization = record.metadata.authorization;
     if (previousAuthorization && (previousAuthorization.publicKey !== state.publicKeyString ||
-        previousAuthorization.revision !== null && previousAuthorization.revision !== state.workerRevision)) {
+        previousAuthorization.revision !== null && previousAuthorization.revision !== state.nativeRevision)) {
         rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
         return false;
     }
     const authorization = authorizationSnapshot(state);
+    if (!isSafeIntegerNormally(authorization.revision) || authorization.revision < 0) {
+        rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
+        return false;
+    }
     record.metadata.authorization = authorization;
     const message = {
         body: {
@@ -826,6 +823,7 @@ function dispatchOperation(provider, record) {
         },
         id: record.wireId,
         name: method,
+        observedRevision: authorization.revision,
         provider: "solana",
         providerGeneration: state.generation,
     };
@@ -851,7 +849,25 @@ function dispatchOperation(provider, record) {
     return true;
 }
 
-function registerOperation(provider, method, params, originalId) {
+function dispatchDisconnect(state, record) {
+    record.metadata.authorization = authorizationSnapshot(state);
+    let posted = false;
+    try {
+        record.metadata.dispatched = true;
+        posted = state.transport.postDisconnect({
+            id: record.wireId,
+            provider: "solana",
+            providerGeneration: state.generation,
+        }) === true;
+    } catch (error) {
+        state.runtime.reject(record, error);
+        return false;
+    }
+    if (!posted) { state.runtime.reject(record, providerReplacementError()); }
+    return posted;
+}
+
+function registerOperation(provider, method, params, originalId, configurationOnly = false) {
     const state = getProviderState(provider);
     const authorization = method !== "connect" && state.publicKeyString
         ? authorizationSnapshot(state)
@@ -865,6 +881,7 @@ function registerOperation(provider, method, params, originalId) {
     }
     const normalized = normalizeRequest(method, params);
     normalized.metadata.authorization = authorization;
+    normalized.metadata.configurationOnly = configurationOnly;
     if (state.runtime.phase === "retired" ||
         state.transport.isCurrent() !== true) {
         retire(provider, providerReplacementError());
@@ -984,16 +1001,16 @@ function prepareConfiguration(provider, configuration, revision) {
         !isSafeIntegerNormally(revision) || revision < 0) { return null; }
     const publicKey = configuration?.publicKey ?? null;
     if (publicKey !== null && !validPublicKeyString(publicKey)) { return null; }
-    if (state.workerRevision !== null && revision < state.workerRevision) {
+    if (state.nativeRevision !== null && revision < state.nativeRevision) {
         return {__proto__: null, ignored: true};
     }
-    if (revision === state.workerRevision && publicKey !== state.publicKeyString) {
+    if (revision === state.nativeRevision && publicKey !== state.publicKeyString) {
         return null;
     }
     return {
         __proto__: null,
         publicKey, revision, baseline: state.notificationEpoch,
-        wrapper: publicKey === state.publicKeyString && revision === state.workerRevision ? state.publicKey :
+        wrapper: publicKey === state.publicKeyString && revision === state.nativeRevision ? state.publicKey :
             publicKey === null ? null : new PublicKey(publicKey),
     };
 }
@@ -1014,8 +1031,8 @@ function commitConfiguration(provider, prepared) {
     state.publicKeyString = prepared.publicKey;
     state.publicKey = prepared.wrapper;
     state.isConnected = prepared.publicKey !== null;
-    if (state.workerRevision !== prepared.revision) { state.notificationEpoch += 1; }
-    state.workerRevision = prepared.revision;
+    if (state.nativeRevision !== prepared.revision) { state.notificationEpoch += 1; }
+    state.nativeRevision = prepared.revision;
     state.runtime.activate();
     return {
         epoch: state.notificationEpoch,
@@ -1138,7 +1155,7 @@ function applyDecodedEnvelope(provider, envelope) {
         }
         const resultPublicKey = new PublicKey(publicKeyValue);
         if (envelope.approvalCommitted !== true && (state.publicKeyString !== publicKeyValue ||
-            (envelope.state ? envelope.state.revisions.solana !== state.workerRevision :
+            (envelope.state ? envelope.state.revisions.solana !== state.nativeRevision :
                 !authorizationMatches(state, record.metadata.authorization)))) {
             return rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
         }
@@ -1193,7 +1210,7 @@ function snapshot(provider) {
     const publicKey = state.publicKeyString;
     if (publicKey !== null && !validPublicKeyString(publicKey)) { return null; }
     return freezeObjectNormally({
-        workerRevision: state.workerRevision,
+        nativeRevision: state.nativeRevision,
         isConnected: state.isConnected === true && publicKey !== null,
         publicKey,
     });
@@ -1213,7 +1230,7 @@ function initialAuthorization(initialState) {
     }
     const publicKeyString = validPublicKeyString(initial.publicKey) ? initial.publicKey : null;
     return {
-        workerRevision: null,
+        nativeRevision: null,
         isConnected: publicKeyString !== null && initial.isConnected === true,
         publicKey: publicKeyString === null ? null : new PublicKey(publicKeyString),
         publicKeyString,
@@ -1356,19 +1373,9 @@ class BigWalletSolana {
             }
         );
         metadata.authorization = authorizationSnapshot(state);
-        let posted = false;
-        try {
-            metadata.dispatched = true;
-            posted = state.transport.postDisconnect({
-                id: record.wireId,
-                provider: "solana",
-                providerGeneration: state.generation,
-            }) === true;
-        } catch (error) {
-            state.runtime.reject(record, error);
-            return record.promise;
-        }
-        if (!posted) {
+        if (state.runtime.phase === "ready") {
+            dispatchOperation(this, record);
+        } else if (!state.runtime.enqueue(record)) {
             state.runtime.reject(record, providerReplacementError());
         }
         return record.promise;
@@ -1414,10 +1421,10 @@ class BigWalletSolana {
 
     accountState() {
         const state = getProviderState(this);
-        const {publicKeyString: address, workerRevision} = state;
+        const {publicKeyString: address, nativeRevision} = state;
         if (address === null) { return null; }
         const bytes = new Uint8Array(Base58.decode(address));
-        if (state.publicKeyString !== address || state.workerRevision !== workerRevision) {
+        if (state.publicKeyString !== address || state.nativeRevision !== nativeRevision) {
             throw providerReplacementError();
         }
         return {address, publicKey: bytes};

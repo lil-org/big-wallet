@@ -43,8 +43,7 @@ final class PopupApprovalStatePresenter {
             id: snapshot.handle.id,
             host: snapshot.host,
             configurationKey: snapshot.configurationKey,
-            requestToken: snapshot.handle.requestToken,
-            revisions: snapshot.revisions
+            requestToken: snapshot.handle.requestToken
         )
     }
 
@@ -57,8 +56,7 @@ final class PopupApprovalStatePresenter {
             requestToken: snapshot.handle.requestToken,
             enqueueAttempt: snapshot.enqueueAttempt,
             configurationKey: snapshot.configurationKey,
-            provider: snapshot.request?.provider ?? .unknown,
-            revisions: snapshot.revisions
+            provider: snapshot.request?.provider ?? .unknown
         )
     }
 

@@ -1,5 +1,7 @@
 // ∅ 2026 lil org
 
+import Foundation
+
 extension SafariRequest {
 
     struct Solana {
@@ -36,6 +38,7 @@ extension SafariRequest {
         let displayHex: Bool
         let signMessageEncoding: MessageEncoding?
         let sendOptions: [String: Any]?
+        let onlyIfTrusted: Bool
 
         init?(name: String, json: [String: Any]) {
             guard let method = Method(rawValue: name),
@@ -46,6 +49,13 @@ extension SafariRequest {
             self.publicKey = publicKey
 
             let parameters = (json["object"] as? [String: Any])?["params"] as? [String: Any]
+            if let value = parameters?["onlyIfTrusted"] {
+                guard let flag = value as? Bool,
+                      CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID() else { return nil }
+                onlyIfTrusted = flag
+            } else {
+                onlyIfTrusted = false
+            }
             self.message = parameters?["message"] as? String
             self.transaction = parameters?["transaction"] as? String
             self.messages = parameters?["messages"] as? [String]

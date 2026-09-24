@@ -1,8 +1,13 @@
 // ∅ 2026 lil org
 
 import Foundation
+import CryptoKit
 
 final class ExtensionRequestFileStore {
+    enum WalletAuthorityRemovalError: Error {
+        case unavailable
+    }
+
     typealias AtomicWrite = (Data, URL) throws -> Void
     typealias SynchronizePublishedFile = (URL) throws -> Void
     typealias ReadData = (URL) throws -> Data
@@ -62,7 +67,74 @@ final class ExtensionRequestFileStore {
         let schemaVersion: Int
         let workflowVersion: Int
         let profileIdentifier: UUID?
+        let authorityEpoch: UUID
+        var authoritySequence: Int
+        var origins: [String: OriginState]
+        var mutationReceipts: [MutationReceipt]
         var records: [Record]
+        var invalidOrigins = Set<String>()
+        var invalidOriginsContainer = false
+
+        private enum CodingKeys: String, CodingKey {
+            case schemaVersion, workflowVersion, profileIdentifier, authorityEpoch
+            case authoritySequence, origins, mutationReceipts, records
+        }
+
+        init(profileIdentifier: UUID?, authorityEpoch: UUID) {
+            schemaVersion = ExtensionRequestFileStore.profileSchemaVersion
+            workflowVersion = ExtensionBridge.workflowVersion
+            self.profileIdentifier = profileIdentifier
+            self.authorityEpoch = authorityEpoch
+            authoritySequence = 0
+            origins = [:]
+            mutationReceipts = []
+            records = []
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
+            workflowVersion = try values.decode(Int.self, forKey: .workflowVersion)
+            profileIdentifier = try values.decodeIfPresent(UUID.self, forKey: .profileIdentifier)
+            authorityEpoch = try values.decode(UUID.self, forKey: .authorityEpoch)
+            authoritySequence = try values.decode(Int.self, forKey: .authoritySequence)
+            mutationReceipts = try values.decode([MutationReceipt].self, forKey: .mutationReceipts)
+            records = try values.decode([Record].self, forKey: .records)
+            if let decodedOrigins = try? values.decode([String: DecodedOrigin].self, forKey: .origins) {
+                origins = decodedOrigins.compactMapValues(\.value)
+                invalidOrigins = Set(decodedOrigins.filter { $0.value.value == nil }.keys)
+            } else {
+                origins = [:]
+                invalidOriginsContainer = true
+            }
+        }
+    }
+
+    private struct DecodedOrigin: Decodable {
+        let value: OriginState?
+
+        init(from decoder: Decoder) throws {
+            value = try? OriginState(from: decoder)
+        }
+    }
+
+    private struct OriginState: Codable {
+        var ethereumAccount: WalletAccountDescriptor?
+        var ethereumChainId = "0x1"
+        var solanaAccount: WalletAccountDescriptor?
+        var revisions: ExtensionBridge.ProviderRevisions
+
+        var isDefaultDisconnected: Bool {
+            ethereumAccount == nil && solanaAccount == nil && ethereumChainId == "0x1"
+        }
+    }
+
+    private struct MutationReceipt: Codable {
+        let configurationKey: String
+        let provider: InpageProvider
+        let attempt: String
+        let expected: ExtensionBridge.AuthorityVersion
+        let createdAt: Date
     }
 
     private struct ValidatedProfile {
@@ -160,7 +232,10 @@ final class ExtensionRequestFileStore {
         let host: String
         let configurationKey: String
         let requestFingerprint: Data
-        let revisions: ExtensionBridge.ProviderRevisions
+        let authority: ExtensionBridge.AuthorityVersion
+        let authorizedAccount: WalletAccountDescriptor?
+        var executionDeadline: Date?
+        var revisions: ExtensionBridge.ProviderRevisions { authority.revisions }
         let admissionCreatedAt: Date
         var createdAt: Date
         var state: State
@@ -271,13 +346,18 @@ final class ExtensionRequestFileStore {
         let identity: ProfileFileIdentity
     }
 
-    private static let profileSchemaVersion = 7
-    private static let profileDirectoryName = "profiles-v7"
-    private static let operationLockDirectoryName = "operation-locks-v7"
-    private static let nativeExecutionFenceDirectoryName =
-        "native-execution-fences-v7"
+    private static let profileSchemaVersion = 8
+    private static let profileDirectoryName = "profiles-v8"
+    private static let operationLockDirectoryName = "operation-locks-v8"
     private static let maximumProfileBytes =
-        ExtensionBridge.maximumRetainedBytes + 64 * 1024
+        ExtensionBridge.maximumRetainedBytes + ExtensionRequestFileStore.maximumAuthorityBytes + ExtensionRequestFileStore.maximumMutationReceiptBytes + 64 * 1024
+    private static let maximumOrigins = 512
+    private static let maximumAuthorityBytes = 1_024 * 1_024
+    private static let maximumMutationReceipts = 256
+    private static let maximumMutationReceiptBytes = 256 * 1_024
+    private static let mutationReceiptLifetime: TimeInterval = 60 * 60
+    private static let maximumRevision = 9_007_199_254_740_991
+    private static let executionLifetime: TimeInterval = 150
     private static let futureSkew = ExtensionBridge.admissionDeadlineFutureSkew
 
     private let rootURL: URL?
@@ -350,8 +430,571 @@ final class ExtensionRequestFileStore {
         removeItem = dependencies.removeItem
         parseRequest = dependencies.parseRequest
         storeLock = dependencies.crossProcessLock ?? rootURL.map {
-            CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v7.lock"))
+            CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v8.lock"))
         }
+    }
+
+    private enum AuthorityObservation {
+        case snapshot(ExtensionBridge.AuthoritySnapshot), missing, needsRepair, unavailable
+    }
+
+    private func observeAuthority(configurationKey: String, profileIdentifier: UUID?) -> AuthorityObservation {
+        guard let rootURL, let storeLock else { return .unavailable }
+        switch directoryStatus(at: rootURL) {
+        case .missing: return .missing
+        case .directory: break
+        case .unsafe, .unavailable: return .unavailable
+        }
+        switch regularFileStatusLocked(at: rootURL.appendingPathComponent("bridge-v8.lock")) {
+        case .missing:
+            return directoryStatus(at: profileDirectoryURL) == .missing ? .missing : .unavailable
+        case .regular: break
+        case .unsafe, .unavailable: return .unavailable
+        }
+        guard (try? storeLock.tryAcquireExisting()) == true else { return .unavailable }
+        defer { storeLock.release() }
+        switch directoryStatus(at: profileDirectoryURL) {
+        case .missing: return .missing
+        case .directory: break
+        case .unsafe, .unavailable: return .unavailable
+        }
+        let url = profileURL(profileIdentifier)
+        switch regularFileStatusLocked(at: url) {
+        case .missing: return .missing
+        case .regular: break
+        case .unsafe, .unavailable: return .unavailable
+        }
+        switch readProfileFileLocked(at: url,
+            profileIdentifier: profileIdentifier, now: clock(), recover: false,
+            normalizeDates: false) {
+        case .state(let profile):
+            return .snapshot(authoritySnapshot(profile.state, configurationKey: configurationKey))
+        case .corrupt:
+            return .needsRepair
+        case .unavailable:
+            return .unavailable
+        }
+    }
+
+    func configurationSnapshot(
+        configurationKey: String,
+        profileIdentifier: UUID?
+    ) -> ExtensionBridge.AuthorityReadResult {
+        guard validConfigurationKey(configurationKey) else { return .unavailable }
+        switch observeAuthority(configurationKey: configurationKey, profileIdentifier: profileIdentifier) {
+        case .snapshot(let snapshot): return .snapshot(snapshot)
+        case .unavailable: return .unavailable
+        case .missing, .needsRepair: break
+        }
+        return withLock(or: .unavailable) {
+            guard case .state(let profile) = readProfileLocked(
+                profileIdentifier: profileIdentifier, now: clock(), recover: true
+            ) else { return .unavailable }
+            let url = profileURL(profileIdentifier)
+            if case .missing = regularFileStatusLocked(at: url) {
+                guard writeProfileLocked(profile, failureRecovery: .readBack) else { return .unavailable }
+            }
+            return .snapshot(authoritySnapshot(profile.state, configurationKey: configurationKey))
+        }
+    }
+
+    func revoke(
+        configurationKey: String,
+        provider: InpageProvider,
+        attempt: String,
+        expected: ExtensionBridge.AuthorityVersion,
+        profileIdentifier: UUID?
+    ) -> ExtensionBridge.AuthorityMutationResult {
+        withLock(or: .unavailable) {
+            let now = clock()
+            guard validConfigurationKey(configurationKey),
+                  provider == .ethereum || provider == .solana,
+                  ExtensionBridge.isValidEnqueueAttempt(attempt),
+                  case .state(var profile) = readProfileLocked(
+                    profileIdentifier: profileIdentifier, now: now, recover: true
+                  ) else { return .unavailable }
+            guard persistProfileIdentityIfMissing(profile) else { return .unavailable }
+            let current = authoritySnapshot(profile.state, configurationKey: configurationKey)
+            if let receipt = profile.state.mutationReceipts.first(where: { $0.attempt == attempt }) {
+                guard receipt.configurationKey == configurationKey,
+                      receipt.provider == provider, receipt.expected == expected,
+                      synchronizeProfileLocked(profileIdentifier) else { return .unavailable }
+                return .revoked(current)
+            }
+            guard authorityMatches(expected, current: current.version, provider: provider) else {
+                return .stale(current)
+            }
+            guard pinOrigin(in: &profile.state, configurationKey: configurationKey, now: now),
+                  let revision = nextRevision(in: &profile.state),
+                  var origin = profile.state.origins[configurationKey] else { return .unavailable }
+            if provider == .ethereum {
+                origin.ethereumAccount = nil
+                origin.revisions = revisions(ethereum: revision, solana: origin.revisions.solana)
+            } else {
+                origin.solanaAccount = nil
+                origin.revisions = revisions(ethereum: origin.revisions.ethereum, solana: revision)
+            }
+            profile.state.origins[configurationKey] = origin
+            profile.state.mutationReceipts.append(.init(
+                configurationKey: configurationKey, provider: provider,
+                attempt: attempt, expected: expected, createdAt: now
+            ))
+            while profile.state.mutationReceipts.count > Self.maximumMutationReceipts ||
+                (try? Self.encode(profile.state.mutationReceipts).count).map({ $0 > Self.maximumMutationReceiptBytes }) == true {
+                profile.state.mutationReceipts.removeFirst()
+            }
+            guard invalidateStaleRequests(in: &profile, configurationKey: configurationKey, excluding: nil, now: now),
+                  writeProfileLocked(profile, failureRecovery: .readBack) else { return .unavailable }
+            return .revoked(authoritySnapshot(profile.state, configurationKey: configurationKey))
+        }
+    }
+
+    func withWalletSourceMutation<Result>(
+        _ mutation: (_ revokeAuthority: (WalletAuthorityRemoval) throws -> Void) throws -> Result
+    ) throws -> Result {
+        try withRequiredLock {
+            try mutation { removal in
+                try revokeWalletAuthorityLocked(matching: removal)
+            }
+        }
+    }
+
+    func withRevokedWalletAuthority<Result>(
+        matching removal: WalletAuthorityRemoval,
+        sourceMutation: () throws -> Result
+    ) throws -> Result {
+        try withWalletSourceMutation { revoke in
+            try revoke(removal)
+            return try sourceMutation()
+        }
+    }
+
+    private func revokeWalletAuthorityLocked(matching removal: WalletAuthorityRemoval) throws {
+        switch removal {
+        case .wallet(let id):
+            guard !id.isEmpty, id.utf8.count <= 256 else {
+                throw WalletAuthorityRemovalError.unavailable
+            }
+        case .accounts(let accounts):
+            guard accounts.allSatisfy(\.isValid) else {
+                throw WalletAuthorityRemovalError.unavailable
+            }
+            if accounts.isEmpty { return }
+        }
+        let now = clock()
+        let candidates = try discoverProfileCandidatesForRemovalLocked()
+        var profiles = [ValidatedProfile]()
+        for candidate in candidates {
+            guard case .regular = regularFileStatusLocked(at: candidate.url),
+                  case .state(let profile) = readProfileFileLocked(
+                    at: candidate.url, profileIdentifier: candidate.identity.identifier,
+                    now: now, recover: true, normalizeDates: false
+                  ) else { throw WalletAuthorityRemovalError.unavailable }
+            profiles.append(profile)
+        }
+        for var profile in profiles {
+            var changedOrigins = [String]()
+            for key in profile.state.origins.keys.sorted() {
+                guard var origin = profile.state.origins[key] else { continue }
+                let ethereum = origin.ethereumAccount.map(removal.matches) == true
+                let solana = origin.solanaAccount.map(removal.matches) == true
+                guard ethereum || solana else { continue }
+                if ethereum {
+                    guard let revision = nextRevision(in: &profile.state) else {
+                        throw WalletAuthorityRemovalError.unavailable
+                    }
+                    origin.ethereumAccount = nil
+                    origin.revisions = revisions(ethereum: revision, solana: origin.revisions.solana)
+                }
+                if solana {
+                    guard let revision = nextRevision(in: &profile.state) else {
+                        throw WalletAuthorityRemovalError.unavailable
+                    }
+                    origin.solanaAccount = nil
+                    origin.revisions = revisions(ethereum: origin.revisions.ethereum, solana: revision)
+                }
+                profile.state.origins[key] = origin
+                changedOrigins.append(key)
+            }
+            for key in changedOrigins {
+                guard invalidateStaleRequests(in: &profile, configurationKey: key, excluding: nil, now: now) else {
+                    throw WalletAuthorityRemovalError.unavailable
+                }
+            }
+            var changed = !changedOrigins.isEmpty
+            for index in profile.state.records.indices {
+                let record = profile.state.records[index]
+                switch record.state {
+                case .pending, .claimed:
+                    guard let request = profile.request(for: record),
+                          removalInvalidates(request, matching: removal) else { continue }
+                    guard let response = boundedResponseData(ResponseToExtension(
+                        for: request, payload: .error(.init(message: Strings.providerNotReady, code: 4100))
+                    ), request: request) else { throw WalletAuthorityRemovalError.unavailable }
+                    profile.complete(at: index, response: response, date: now)
+                    changed = true
+                case .broadcastPrepared, .completed:
+                    break
+                }
+            }
+            if changed, !writeProfileLocked(profile, failureRecovery: .readBack) {
+                throw WalletAuthorityRemovalError.unavailable
+            }
+            guard synchronizeProfileLocked(profile.state.profileIdentifier) else {
+                throw WalletAuthorityRemovalError.unavailable
+            }
+        }
+    }
+
+    private func removalInvalidates(_ request: SafariRequest, matching removal: WalletAuthorityRemoval) -> Bool {
+        switch request.body {
+        case .ethereum(let body):
+            switch body.method {
+            case .requestAccounts:
+                return request.authorizedAccount.map(removal.matches) ?? true
+            case .signMessage, .signPersonalMessage, .signTypedMessage, .signTransaction:
+                return request.authorizedAccount.map(removal.matches) == true
+            case .addEthereumChain, .switchEthereumChain, .ecRecover:
+                return false
+            }
+        case .solana(let body):
+            if body.method == .connect {
+                return request.authorizedAccount.map(removal.matches) ?? true
+            }
+            return request.authorizedAccount.map(removal.matches) == true
+        case .unknown:
+            return true
+        }
+    }
+
+    private func discoverProfileCandidatesForRemovalLocked() throws -> [ProfileFileCandidate] {
+        switch directoryStatus(at: profileDirectoryURL) {
+        case .missing: return []
+        case .directory: break
+        case .unsafe, .unavailable: throw WalletAuthorityRemovalError.unavailable
+        }
+        do {
+            return try fileManager.contentsOfDirectory(
+                at: profileDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+            ).sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
+                guard let identity = profileFileIdentity(for: url) else { return nil }
+                return ProfileFileCandidate(url: url, identity: identity)
+            }
+        } catch {
+            throw WalletAuthorityRemovalError.unavailable
+        }
+    }
+
+    func listRecoveryRequests(profileIdentifier: UUID?) -> ExtensionBridge.RecoveryRequestsResult {
+        withLock(or: .unavailable) {
+            guard case .state(let profile) = readProfileLocked(
+                profileIdentifier: profileIdentifier, now: clock(), recover: true
+            ) else { return .unavailable }
+            let active = profile.state.records.filter(\.state.isActive)
+            let completed = profile.state.records.filter { !$0.state.isActive && !$0.responseAcknowledged }
+            let manual = completed.filter { isManualSwitch($0, in: profile) }
+            let ordinary = completed.reversed().filter { !isManualSwitch($0, in: profile) }
+            let recovery = active + (manual + ordinary).prefix(max(0, ExtensionBridge.maximumRetainedRequests - active.count))
+            return .available(recovery.map { record in
+                .init(handle: record.handle, configurationKey: record.configurationKey,
+                      manual: isManualSwitch(record, in: profile), state: manualSwitchRequest(record).state)
+            })
+        }
+    }
+
+    func authorityIsCurrent(handle: ExtensionBridge.Handle) -> Bool {
+        withLock(or: false) {
+            guard case .state(let profile) = readProfileLocked(
+                profileIdentifier: handle.profileIdentifier, now: clock(), recover: true
+            ), let record = profile.state.records.first(where: { $0.handle == handle }),
+               record.state.isActive else { return false }
+            return authorityIsCurrent(record, in: profile.state)
+        }
+    }
+
+    private func persistProfileIdentityIfMissing(_ profile: ValidatedProfile) -> Bool {
+        switch regularFileStatusLocked(at: profileURL(profile.state.profileIdentifier)) {
+        case .missing: return writeProfileLocked(profile, failureRecovery: .readBack)
+        case .regular: return true
+        case .unsafe, .unavailable: return false
+        }
+    }
+
+    private func validConfigurationKey(_ value: String) -> Bool {
+        guard value.utf8.count <= 4_096, let url = URL(string: value) else { return false }
+        let host: String
+        if url.scheme == "file" { host = value }
+        else if let separator = value.range(of: "://") { host = String(value[separator.upperBound...]) }
+        else { return false }
+        return ExtensionBridge.isValidIdentity(host: host, configurationKey: value)
+    }
+
+    private func revisions(ethereum: Int, solana: Int) -> ExtensionBridge.ProviderRevisions {
+        ExtensionBridge.ProviderRevisions(rawValue: ["ethereum": ethereum, "solana": solana])!
+    }
+
+    private func authoritySnapshot(_ profile: ProfileState, configurationKey: String) -> ExtensionBridge.AuthoritySnapshot {
+        let origin = profile.origins[configurationKey]
+        let context = Data(SHA256.hash(data: Data(
+            (profile.authorityEpoch.uuidString.lowercased() + "\n" + configurationKey).utf8
+        ))).map { String(format: "%02x", $0) }.joined()
+        return .init(
+            version: .init(context: context, revisions: origin?.revisions ?? revisions(
+                ethereum: profile.authoritySequence, solana: profile.authoritySequence
+            )),
+            ethereumAccount: origin?.ethereumAccount,
+            ethereumChainId: origin?.ethereumChainId ?? "0x1",
+            solanaAccount: origin?.solanaAccount
+        )
+    }
+
+    private func authorityMatches(
+        _ expected: ExtensionBridge.AuthorityVersion,
+        current: ExtensionBridge.AuthorityVersion,
+        provider: InpageProvider,
+        requestName: String? = nil
+    ) -> Bool {
+        guard expected.context == current.context else { return false }
+        if provider == .ethereum && requestName == SafariRequest.Ethereum.Method.ecRecover.rawValue {
+            return true
+        }
+        switch provider {
+        case .ethereum: return expected.revisions.ethereum == current.revisions.ethereum
+        case .solana: return expected.revisions.solana == current.revisions.solana
+        case .unknown, .multiple: return expected.revisions == current.revisions
+        }
+    }
+
+    private func authorityIsCurrent(_ record: Record, in profile: ProfileState) -> Bool {
+        authorityStatus(record, in: profile) == .current
+    }
+
+    private enum AuthorityStatus { case current, stale, inconsistentGrant }
+
+    private func authorityStatus(_ record: Record, in profile: ProfileState) -> AuthorityStatus {
+        guard let data = record.state.requestData,
+              let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let providerName = raw["provider"] as? String,
+              let provider = InpageProvider(rawValue: providerName),
+              let name = raw["name"] as? String else { return .stale }
+        let snapshot = authoritySnapshot(profile, configurationKey: record.configurationKey)
+        guard authorityMatches(record.authority, current: snapshot.version,
+                               provider: provider, requestName: name) else { return .stale }
+        let account: WalletAccountDescriptor?
+        let requiresGrant: Bool
+        switch provider {
+        case .ethereum:
+            guard let method = SafariRequest.Ethereum.Method(rawValue: name) else { return .stale }
+            switch method {
+            case .ecRecover: return .current
+            case .requestAccounts, .addEthereumChain, .switchEthereumChain: requiresGrant = false
+            default: requiresGrant = true
+            }
+            account = snapshot.ethereumAccount
+        case .solana:
+            requiresGrant = name != SafariRequest.Solana.Method.connect.rawValue
+            account = snapshot.solanaAccount
+        case .unknown, .multiple:
+            return .current
+        }
+        return (!requiresGrant || account != nil) && record.authorizedAccount == account
+            ? .current : .inconsistentGrant
+    }
+
+    private func nextRevision(in profile: inout ProfileState) -> Int? {
+        guard profile.authoritySequence < Self.maximumRevision else { return nil }
+        profile.authoritySequence += 1
+        return profile.authoritySequence
+    }
+
+    @discardableResult
+    private func reclaimAuthority(in profile: inout ProfileState, now: Date) -> Bool {
+        let previousCount = profile.mutationReceipts.count
+        profile.mutationReceipts.removeAll { now.timeIntervalSince($0.createdAt) >= Self.mutationReceiptLifetime }
+        let referenced = Set(profile.records.map(\.configurationKey) + profile.mutationReceipts.map(\.configurationKey))
+        let removable = profile.origins.filter { $0.value.isDefaultDisconnected && !referenced.contains($0.key) }.map(\.key)
+        if !removable.isEmpty, nextRevision(in: &profile) != nil {
+            for key in removable { profile.origins.removeValue(forKey: key) }
+            return true
+        }
+        return previousCount != profile.mutationReceipts.count
+    }
+
+    private func pinOrigin(in profile: inout ProfileState, configurationKey: String, now: Date) -> Bool {
+        if profile.origins[configurationKey] != nil { return true }
+        profile.origins[configurationKey] = .init(revisions: revisions(
+            ethereum: profile.authoritySequence, solana: profile.authoritySequence
+        ))
+        if authorityFits(profile.origins) { return true }
+        let referenced = Set(profile.records.map(\.configurationKey) + profile.mutationReceipts.map(\.configurationKey))
+        let removable = profile.origins.filter { key, origin in
+            key != configurationKey && !referenced.contains(key) &&
+                origin.ethereumAccount == nil && origin.solanaAccount == nil
+        }.map(\.key).sorted()
+        guard !removable.isEmpty, nextRevision(in: &profile) != nil else { return false }
+        for key in removable {
+            profile.origins.removeValue(forKey: key)
+            if authorityFits(profile.origins) { return true }
+        }
+        return false
+    }
+
+    private func authorityFits(_ origins: [String: OriginState]) -> Bool {
+        origins.count <= Self.maximumOrigins &&
+            (try? Self.encode(origins).count).map { $0 <= Self.maximumAuthorityBytes } == true
+    }
+
+    private func requestIsAuthorized(_ request: SafariRequest, by snapshot: ExtensionBridge.AuthoritySnapshot) -> Bool {
+        switch request.body {
+        case .ethereum(let body):
+            switch body.method {
+            case .requestAccounts, .addEthereumChain, .switchEthereumChain, .ecRecover:
+                return true
+            case .signMessage, .signPersonalMessage, .signTypedMessage, .signTransaction:
+                guard let account = snapshot.ethereumAccount,
+                      account.coin.normalizedAddress(body.address) == account.normalizedAddress else { return false }
+                if let chain = body.currentChainId, String.hex(chain, withPrefix: true) != snapshot.ethereumChainId { return false }
+                return body.method != .signTransaction || body.currentChainId != nil
+            }
+        case .solana(let body):
+            return body.method == .connect || snapshot.solanaAccount?.normalizedAddress == body.publicKey
+        case .unknown:
+            return true
+        }
+    }
+
+    private func bind(_ request: SafariRequest, data: Data, authority: ExtensionBridge.AuthoritySnapshot) -> (request: SafariRequest, data: Data)? {
+        if request.provider != .unknown && request.authority == authority.version {
+            var bound = request
+            bound.authorizedAccount = request.provider == .ethereum ? authority.ethereumAccount : authority.solanaAccount
+            return (bound, data)
+        }
+        var raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        raw?["authority"] = authority.version.json
+        if case .unknown = request.body {
+            var configurations = [[String: Any]]()
+            configurations.append([
+                "provider": "ethereum",
+                "results": authority.ethereumAccount.map { [$0.normalizedAddress] } ?? [],
+                "chainId": authority.ethereumChainId,
+            ])
+            if let account = authority.solanaAccount {
+                configurations.append(["provider": "solana", "publicKey": account.normalizedAddress])
+            }
+            raw?["body"] = ["latestConfigurations": configurations]
+        }
+        guard let raw, let data = ExtensionBridge.payloadData(raw, options: [.sortedKeys]),
+              var bound = parseRequest(raw) else { return nil }
+        switch request.body {
+        case .ethereum:
+            bound.authorizedAccount = authority.ethereumAccount
+        case .solana:
+            bound.authorizedAccount = authority.solanaAccount
+        case .unknown:
+            bound.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
+        }
+        return (bound, data)
+    }
+
+    private func invalidateStaleRequests(
+        in profile: inout ValidatedProfile,
+        configurationKey: String,
+        excluding: ExtensionBridge.Handle?,
+        now: Date
+    ) -> Bool {
+        for index in profile.state.records.indices {
+            let record = profile.state.records[index]
+            guard record.configurationKey == configurationKey, record.handle != excluding else { continue }
+            switch record.state {
+            case .pending, .claimed:
+                guard !authorityIsCurrent(record, in: profile.state) else { continue }
+                guard let request = profile.request(for: record),
+                      let response = boundedResponseData(ResponseToExtension(
+                        for: request, payload: .error(.init(message: Strings.providerNotReady, code: 4100))
+                      ), request: request) else { return false }
+                profile.complete(at: index, response: response, date: now)
+            case .broadcastPrepared, .completed:
+                break
+            }
+        }
+        return true
+    }
+
+    private func applyAuthorityEffect(
+        _ response: ResponseToExtension,
+        record: Record,
+        profile: inout ValidatedProfile,
+        now: Date
+    ) -> Bool {
+        guard let mutation = response.mutation else { return response.approvedAccounts.isEmpty }
+        guard var origin = profile.state.origins[record.configurationKey] else { return false }
+        switch mutation {
+        case .accounts(let updates):
+            guard let request = profile.request(for: record) else { return false }
+            switch request.body {
+            case .ethereum(let body):
+                guard body.method == .requestAccounts, updates.count == 1,
+                      updates.first?.provider == .ethereum else { return false }
+            case .solana(let body):
+                guard body.method == .connect, updates.count == 1,
+                      updates.first?.provider == .solana else { return false }
+            case .unknown:
+                break
+            }
+            guard Set(updates.map(\.provider)).count == updates.count,
+                  response.approvedAccounts.allSatisfy(\.isValid),
+                  Set(response.approvedAccounts.map(\.coin)).count == response.approvedAccounts.count else { return false }
+            var matched = Set<WalletAccountDescriptor>()
+            for update in updates {
+                guard let revision = nextRevision(in: &profile.state) else { return false }
+                switch update {
+                case .ethereum(let address, let chainId):
+                    guard let account = response.approvedAccounts.first(where: {
+                        $0.coin == .ethereum && $0.normalizedAddress == WalletCoin.ethereum.normalizedAddress(address)
+                    }), canonicalChainID(chainId) else { return false }
+                    origin.ethereumAccount = account
+                    origin.ethereumChainId = chainId
+                    origin.revisions = revisions(ethereum: revision, solana: origin.revisions.solana)
+                    matched.insert(account)
+                case .solana(let publicKey):
+                    guard let account = response.approvedAccounts.first(where: {
+                        $0.coin == .solana && $0.normalizedAddress == publicKey
+                    }) else { return false }
+                    origin.solanaAccount = account
+                    origin.revisions = revisions(ethereum: origin.revisions.ethereum, solana: revision)
+                    matched.insert(account)
+                case .disconnectEthereum:
+                    origin.ethereumAccount = nil
+                    origin.revisions = revisions(ethereum: revision, solana: origin.revisions.solana)
+                case .disconnectSolana:
+                    origin.solanaAccount = nil
+                    origin.revisions = revisions(ethereum: origin.revisions.ethereum, solana: revision)
+                }
+            }
+            guard matched == Set(response.approvedAccounts) else { return false }
+        case .ethereumChain(let chainId):
+            guard let request = profile.request(for: record), case .ethereum(let body) = request.body,
+                  body.method == .addEthereumChain || body.method == .switchEthereumChain else { return false }
+            guard response.approvedAccounts.isEmpty, canonicalChainID(chainId) else { return false }
+            guard origin.ethereumChainId != chainId else { return true }
+            guard let revision = nextRevision(in: &profile.state) else { return false }
+            origin.ethereumChainId = chainId
+            origin.revisions = revisions(ethereum: revision, solana: origin.revisions.solana)
+        case .revokeSolana(let publicKey):
+            guard response.approvedAccounts.isEmpty else { return false }
+            guard origin.solanaAccount?.normalizedAddress == publicKey else { return true }
+            guard let revision = nextRevision(in: &profile.state) else { return false }
+            origin.solanaAccount = nil
+            origin.revisions = revisions(ethereum: origin.revisions.ethereum, solana: revision)
+        }
+        profile.state.origins[record.configurationKey] = origin
+        guard (try? Self.encode(profile.state.origins).count).map({ $0 <= Self.maximumAuthorityBytes }) == true else { return false }
+        return invalidateStaleRequests(in: &profile, configurationKey: record.configurationKey, excluding: record.handle, now: now)
+    }
+
+    private func canonicalChainID(_ value: String) -> Bool {
+        guard let id = Int(hexString: value), id > 0 else { return false }
+        return String.hex(id, withPrefix: true) == value
     }
 
     func enqueue(
@@ -395,7 +1038,7 @@ final class ExtensionRequestFileStore {
                 return .accepted(
                     handle: existing.handle,
                     approvalRequired: approvalRequired,
-                    revisions: existing.revisions,
+                    authority: authoritySnapshot(profile.state, configurationKey: existing.configurationKey),
                     admissionKind: .replay,
                     nativeDeliveryNonce: existing.nativeDeliveryNonce
                 )
@@ -415,6 +1058,16 @@ final class ExtensionRequestFileStore {
                 return .rejected
             }
 
+            guard persistProfileIdentityIfMissing(profile) else { return .unavailable }
+            let currentAuthority = authoritySnapshot(profile.state, configurationKey: ingress.request.configurationKey)
+            guard authorityMatches(ingress.authority, current: currentAuthority.version,
+                                   provider: ingress.request.provider, requestName: ingress.request.name),
+                  requestIsAuthorized(ingress.request, by: currentAuthority) else {
+                return .unauthorized(currentAuthority)
+            }
+            guard pinOrigin(in: &profile.state, configurationKey: ingress.request.configurationKey, now: now) else {
+                return .unavailable
+            }
             let isManualSwitchRequest = ingress.request.name == "switchAccount" &&
                 ingress.request.provider == .unknown
             if isManualSwitchRequest,
@@ -426,7 +1079,7 @@ final class ExtensionRequestFileStore {
                 return .accepted(
                     handle: existing.handle,
                     approvalRequired: existing.state.isActive,
-                    revisions: existing.revisions,
+                    authority: authoritySnapshot(profile.state, configurationKey: existing.configurationKey),
                     admissionKind: .coalesced,
                     nativeDeliveryNonce: existing.nativeDeliveryNonce
                 )
@@ -453,7 +1106,11 @@ final class ExtensionRequestFileStore {
                 return .rejected
             }
 
-            let record = Record(
+            guard let boundRequest = bind(ingress.request, data: ingress.canonicalData, authority: currentAuthority),
+                  boundRequest.data.count <= ExtensionBridge.maximumPayloadBytes else { return .rejected }
+            let boundData = boundRequest.data
+
+            var record = Record(
                 id: ingress.request.id,
                 profileIdentifier: profileIdentifier,
                 enqueueAttempt: ingress.request.enqueueAttempt,
@@ -461,12 +1118,24 @@ final class ExtensionRequestFileStore {
                 host: ingress.request.host,
                 configurationKey: ingress.request.configurationKey,
                 requestFingerprint: ingress.fingerprint,
-                revisions: ingress.revisions,
+                authority: currentAuthority.version,
+                authorizedAccount: boundRequest.request.authorizedAccount,
+                executionDeadline: nil,
                 admissionCreatedAt: now,
                 createdAt: now,
-                state: .pending(request: ingress.canonicalData, approval: .unowned),
+                state: .pending(request: boundData, approval: .unowned),
                 nativeDeliveryNonce: .init(value: nativeDeliveryNonceValue)
             )
+            if case .ethereum(let body) = boundRequest.request.body,
+               body.method == .switchEthereumChain,
+               let chainId = body.switchToChainId,
+               String.hex(chainId, withPrefix: true) == currentAuthority.ethereumChainId {
+                guard let response = boundedResponseData(
+                    ResponseToExtension(for: boundRequest.request, payload: .result(.null)),
+                    request: boundRequest.request
+                ) else { return .unavailable }
+                record.complete(response: response, at: now)
+            }
             if isManualSwitchRequest,
                !manualSwitchRequestsFit(manualSwitches + [manualSwitchRequest(record)]) {
                 return .manualSwitchCapacityReached
@@ -477,21 +1146,24 @@ final class ExtensionRequestFileStore {
                 now: now
             ) else { return .rejected }
             profile.state.records.append(record)
-            profile.parsedRequests[record.handle] = ingress.request
+            if record.state.isActive {
+                profile.parsedRequests[record.handle] = boundRequest.request
+            }
             for handle in retiredHandles {
                 profile.parsedRequests.removeValue(forKey: handle)
             }
+            reclaimAuthority(in: &profile.state, now: now)
             guard writeProfileLocked(profile, failureRecovery: .readBack) else {
                 return .unavailable
             }
             for handle in retiredHandles {
                 removeOperationLockLocked(handle: handle)
-                removeNativeExecutionFenceLocked(handle: handle)
+
             }
             return .accepted(
                 handle: record.handle,
-                approvalRequired: true,
-                revisions: record.revisions,
+                approvalRequired: record.state.isActive,
+                authority: authoritySnapshot(profile.state, configurationKey: record.configurationKey),
                 admissionKind: .new,
                 nativeDeliveryNonce: record.nativeDeliveryNonce
             )
@@ -585,28 +1257,6 @@ final class ExtensionRequestFileStore {
         return .pending
     }
 
-    func executionStatus(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String
-    ) -> ExtensionBridge.ExecutionStatusResult {
-        guard case .state(let profile) = readProfileObservational(
-            profileIdentifier: handle.profileIdentifier
-        ) else { return .unavailable }
-        guard let record = profile.state.records.first(where: {
-            $0.handle == handle && $0.configurationKey == configurationKey
-        }) else { return .missing }
-        switch record.state {
-        case .pending(_, .staged):
-            return .status(.awaitingExecution)
-        case .pending:
-            return .status(.awaitingReview)
-        case .claimed, .broadcastPrepared:
-            return .status(.executing)
-        case .completed:
-            return .status(.completed)
-        }
-    }
-
     private func manualSwitchRequestsFit(
         _ requests: [ExtensionBridge.ManualSwitchRequest]
     ) -> Bool {
@@ -694,6 +1344,13 @@ final class ExtensionRequestFileStore {
                       let claimID = nextID(excluding: handle.token.value) else {
                     return .unavailable
                 }
+                guard authorityIsCurrent(profile.state.records[index], in: profile.state),
+                      let parsed = profile.request(for: profile.state.records[index]) else {
+                    lease.release()
+                    return .missing
+                }
+                let deadline = min(clock().addingTimeInterval(Self.executionLifetime), parsed.admissionDeadline)
+                profile.state.records[index].executionDeadline = deadline
                 profile.state.records[index].state = .claimed(
                     claimID: claimID,
                     request: request,
@@ -706,7 +1363,7 @@ final class ExtensionRequestFileStore {
                 return .claimed(.init(
                     handle: handle,
                     value: claimID,
-                    lease: lease
+                    lease: lease, executionDeadline: deadline
                 ))
             case .claimed, .broadcastPrepared:
                 return .executing
@@ -742,9 +1399,23 @@ final class ExtensionRequestFileStore {
                 guard existing.approvedAt == approvedAt else { return .ownershipLost }
                 return synchronizedMutationResultLocked(handle.profileIdentifier)
             }
+            let now = clock()
             guard approvedAt >= profile.state.records[index].createdAt,
+                  approvedAt <= now,
+                  authorityIsCurrent(profile.state.records[index], in: profile.state),
                   let receipt = profile.state.records[index].nativeDeliveryReceipt else {
                 return .ownershipLost
+            }
+            let parsedRequest: SafariRequest
+            switch transitionExpiredPending(in: &profile, at: index, now: now) {
+            case .active(let request):
+                parsedRequest = request
+            case .expired:
+                return writeProfileLocked(profile, failureRecovery: .readBack)
+                    ? .ownershipLost
+                    : .retryablePersistenceFailure
+            case .unavailable:
+                return .retryablePersistenceFailure
             }
             let readyApproval = Record.ReadyApproval(
                 approvedAt: approvedAt,
@@ -752,7 +1423,13 @@ final class ExtensionRequestFileStore {
             )
             profile.state.records[index].state = .pending(
                 request: request,
-                approval: .staged(readyApproval, context: nil)
+                approval: .staged(readyApproval, context: .init(
+                    attemptID: token(), revisions: profile.state.records[index].revisions,
+                    observedAt: now,
+                    executionDeadline: min(now.addingTimeInterval(Self.executionLifetime),
+                        parsedRequest.admissionDeadline),
+                    fenceToken: token()
+                ))
             )
             return writeProfileLocked(profile, failureRecovery: .readBack)
                 ? .persisted
@@ -876,7 +1553,7 @@ final class ExtensionRequestFileStore {
                 return .retryablePersistenceFailure
             }
             removeOperationLockLocked(handle: handle)
-            removeNativeExecutionFenceLocked(handle: handle)
+
             return hasBroadcastCheckpoint ? .responseReady : .interrupted
         }
     }
@@ -935,10 +1612,8 @@ final class ExtensionRequestFileStore {
                           runtimeInstanceIdentifier: runtimeInstanceIdentifier
                       ) else { return .notStaged }
                 guard let executionContext = context,
-                      nativeExecutionFenceIsHeldLocked(
-                          handle: handle,
-                          token: executionContext.fenceToken
-                      ) else { return .notStaged }
+                      clock() < executionContext.executionDeadline,
+                      authorityIsCurrent(profile.state.records[index], in: profile.state) else { return .notStaged }
                 guard let lease = acquireOperationLeaseLocked(handle: handle),
                       let claimID = nextID(excluding: handle.token.value) else {
                     return .unavailable
@@ -955,7 +1630,8 @@ final class ExtensionRequestFileStore {
                 let claim = ExtensionBridge.ApprovalClaim(
                     handle: handle,
                     value: claimID,
-                    lease: lease
+                    lease: lease,
+                    executionDeadline: executionContext.executionDeadline
                 )
                 return .claimed(.init(
                     approvalClaim: claim,
@@ -968,121 +1644,6 @@ final class ExtensionRequestFileStore {
                 return .responded
             }
         }
-    }
-
-    func beginNativeExecution(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        attemptID: UUID,
-        revisions: ExtensionBridge.ProviderRevisions,
-        executionDeadline: Date
-    ) -> ExtensionBridge.NativeExecutionResult {
-        withLock(or: .unavailable) {
-            let now = clock()
-            guard case .state(var profile) = readProfileLocked(
-                profileIdentifier: handle.profileIdentifier,
-                now: now,
-                recover: true
-            ) else { return .unavailable }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == handle && $0.configurationKey == configurationKey
-            }) else { return .missing }
-            let record = profile.state.records[index]
-            switch record.state {
-            case .completed:
-                return .responseReady
-            case .claimed(_, _, .native(_, let context)):
-                guard context.attemptID == attemptID,
-                      context.revisions == revisions,
-                      context.executionDeadline == executionDeadline else {
-                    return .unavailable
-                }
-                return .pending
-            case .claimed, .broadcastPrepared:
-                return .pending
-            case .pending(let request, let pendingApproval):
-                guard case .staged(let approval, let previous) = pendingApproval else {
-                    return .needsDelivery(record.nativeDeliveryNonce)
-                }
-                if let previous {
-                    guard previous.attemptID == attemptID,
-                          previous.revisions == revisions,
-                          previous.executionDeadline == executionDeadline else {
-                        return .unavailable
-                    }
-                }
-                let observedAt = previous?.observedAt ?? max(approval.approvedAt, now)
-                guard executionDeadline.timeIntervalSince1970.isFinite,
-                      now < executionDeadline,
-                      executionDeadline >= observedAt,
-                      executionDeadline <= now.addingTimeInterval(
-                          ExtensionBridge.nativeExecutionTimeout + Self.futureSkew
-                      ), let fenceToken = nextID(
-                          excluding: previous?.fenceToken ?? handle.token.value
-                      ) else { return .unavailable }
-                let url = nativeExecutionFenceURL(handle)
-                let ownerURL = nativeExecutionFenceOwnerURL(handle)
-                for candidate in [url, ownerURL] {
-                    switch regularFileStatusLocked(at: candidate) {
-                    case .missing, .regular:
-                        break
-                    case .unsafe, .unavailable:
-                        return .unavailable
-                    }
-                }
-                let fence = CrossProcessFileLock(fileURL: url)
-                do {
-                    guard try fence.tryAcquire() else { return .pending }
-                    try Data(fenceToken.uuidString.lowercased().utf8).write(
-                        to: ownerURL,
-                        options: .atomic
-                    )
-                } catch {
-                    fence.release()
-                    return .unavailable
-                }
-                let context = ExtensionBridge.NativeExecutionContext(
-                    attemptID: attemptID,
-                    revisions: revisions,
-                    observedAt: observedAt,
-                    executionDeadline: executionDeadline,
-                    fenceToken: fenceToken
-                )
-                profile.state.records[index].state = .pending(
-                    request: request,
-                    approval: .staged(approval, context: context)
-                )
-                guard writeProfileLocked(profile, failureRecovery: .readBack) else {
-                    fence.release()
-                    removeNativeExecutionFenceLocked(handle: handle)
-                    return .unavailable
-                }
-                return .acquired(.init(
-                    handle: handle,
-                    context: context,
-                    nativeDeliveryNonce: record.nativeDeliveryNonce,
-                    finish: {
-                        self.finishNativeExecution(
-                            handle: handle,
-                            fence: fence
-                        )
-                    }
-                ))
-            }
-        }
-    }
-
-    private func finishNativeExecution(
-        handle: ExtensionBridge.Handle,
-        fence: CrossProcessFileLock
-    ) {
-        guard let storeLock, (try? storeLock.tryAcquire()) == true else {
-            fence.release()
-            return
-        }
-        fence.release()
-        removeNativeExecutionFenceLocked(handle: handle)
-        storeLock.release()
     }
 
     func release(
@@ -1205,6 +1766,8 @@ final class ExtensionRequestFileStore {
                 $0.handle == claim.handle
             }), case .claimed(let claimID, _, _) = record.state,
                   claim.matches(handle: claim.handle, value: claimID),
+                  authorityIsCurrent(record, in: profile.state),
+                  executionDeadlineIsCurrent(record.nativeExecutionContext?.executionDeadline ?? record.executionDeadline, now: clock()),
                   let lease = claim.lease,
                   lease.consume() else { return .ownershipLost }
             return .began(.init(
@@ -1239,6 +1802,7 @@ final class ExtensionRequestFileStore {
                 let authorizationTime = clock()
                 guard permit.matches(handle: permit.handle, value: claimID),
                       permit.lease != nil,
+                      authorityIsCurrent(profile.state.records[index], in: profile.state),
                       executionAuthorityAuthorizesLocked(
                           record: profile.state.records[index],
                           authority: authority,
@@ -1301,6 +1865,7 @@ final class ExtensionRequestFileStore {
             }
             let authorizationTime = clock()
             guard permit.matches(handle: permit.handle, value: claimID),
+                  (recoveryResponseData != nil || authorityIsCurrent(profile.state.records[index], in: profile.state)),
                   executionAuthorityAuthorizesLocked(
                       record: profile.state.records[index],
                       authority: authority,
@@ -1314,17 +1879,17 @@ final class ExtensionRequestFileStore {
                   ) else {
                 return .ownershipLost
             }
-            profile.complete(
-                at: index,
-                response: responseData,
-                date: authorizationTime
-            )
+            let completing = profile.state.records[index]
+            if recoveryResponseData == nil {
+                guard applyAuthorityEffect(response, record: completing, profile: &profile, now: authorizationTime) else { return .ownershipLost }
+            }
+            profile.complete(at: index, response: responseData, date: authorizationTime)
             guard writeProfileLocked(profile) else {
                 return .retryablePersistenceFailure
             }
             permit.releaseLease()
             removeOperationLockLocked(handle: permit.handle)
-            removeNativeExecutionFenceLocked(handle: permit.handle)
+
             return .persisted
         }
     }
@@ -1388,7 +1953,7 @@ final class ExtensionRequestFileStore {
         }
         releaseLease()
         removeOperationLockLocked(handle: handle)
-        removeNativeExecutionFenceLocked(handle: handle)
+
         return result
     }
 
@@ -1412,7 +1977,8 @@ final class ExtensionRequestFileStore {
                       synchronizeProfileLocked(handle.profileIdentifier) else {
                     return .unavailable
                 }
-                return .response(response)
+                return .response(["id": handle.id, "response": response,
+                    "state": authoritySnapshot(profile.state, configurationKey: configurationKey).json])
             }
         }
     }
@@ -1490,6 +2056,8 @@ final class ExtensionRequestFileStore {
             guard let responseData = boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }
+            guard authorityIsCurrent(profile.state.records[index], in: profile.state),
+                  applyAuthorityEffect(response, record: profile.state.records[index], profile: &profile, now: now) else { return .ownershipLost }
             profile.complete(at: index, response: responseData, date: now)
             return writeProfileLocked(profile, failureRecovery: .readBack)
                 ? .persisted
@@ -1507,8 +2075,7 @@ final class ExtensionRequestFileStore {
             at: profileURL(profileIdentifier),
             profileIdentifier: profileIdentifier,
             now: now,
-            recover: recover,
-            removeIfEmpty: false
+            recover: recover
         )
     }
 
@@ -1524,7 +2091,7 @@ final class ExtensionRequestFileStore {
         case .unsafe, .unavailable:
             return .unavailable
         }
-        let lockURL = rootURL.appendingPathComponent("bridge-v7.lock")
+        let lockURL = rootURL.appendingPathComponent("bridge-v8.lock")
         switch regularFileStatusLocked(at: lockURL) {
         case .missing:
             guard directoryStatus(at: profileDirectoryURL) == .missing else {
@@ -1551,7 +2118,6 @@ final class ExtensionRequestFileStore {
             profileIdentifier: profileIdentifier,
             now: clock(),
             recover: false,
-            removeIfEmpty: false,
             normalizeDates: false
         )
     }
@@ -1561,7 +2127,6 @@ final class ExtensionRequestFileStore {
         profileIdentifier: UUID?,
         now: Date,
         recover: Bool,
-        removeIfEmpty: Bool,
         normalizeDates: Bool = true
     ) -> ProfileRead {
         let data: Data
@@ -1575,11 +2140,25 @@ final class ExtensionRequestFileStore {
         case .unavailable:
             return .unavailable
         }
-        guard let state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
-              var profile = validateAndParse(
-                  state,
-                  expectedIdentifier: profileIdentifier
-              ) else {
+        guard var state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
+              state.authoritySequence >= 0, state.authoritySequence <= Self.maximumRevision else { return .corrupt }
+        for record in state.records {
+            switch record.state {
+            case .pending, .claimed:
+                if authorityStatus(record, in: state) == .inconsistentGrant {
+                    state.invalidOrigins.insert(record.configurationKey)
+                }
+            case .broadcastPrepared, .completed:
+                break
+            }
+        }
+        var profile: ValidatedProfile
+        if let validated = validateAndParse(state, expectedIdentifier: profileIdentifier) {
+            profile = validated
+        } else if recover, let repaired = repairAuthority(state, expectedIdentifier: profileIdentifier, now: now) {
+            guard writeProfileLocked(repaired, failureRecovery: .readBack) else { return .unavailable }
+            profile = repaired
+        } else {
             return .corrupt
         }
         let normalizedDates = normalizeDates && normalizeFutureDates(in: &profile.state, now: now)
@@ -1618,7 +2197,7 @@ final class ExtensionRequestFileStore {
                 }
             case .pending(_, .staged(_, let context))
                 where context.map({ now >= $0.executionDeadline }) == true:
-                if nativeExecutionFenceStatusLocked(handle: record.handle) == .unlocked {
+                do {
                     guard let response = interruptionResponseData(for: profile.request(for: record)) else {
                         return .unavailable
                     }
@@ -1663,22 +2242,13 @@ final class ExtensionRequestFileStore {
                 kept.append(record)
             }
         }
-        guard changed else {
-            if removeIfEmpty, profile.state.records.isEmpty,
-               !removeProfileFileLocked(at: url) {
-                return .unavailable
-            }
-            return .state(profile)
-        }
         profile.state.records = kept
-        if removeIfEmpty, profile.state.records.isEmpty {
-            guard removeProfileFileLocked(at: url) else { return .unavailable }
-        } else {
-            guard writeProfileLocked(profile) else { return .unavailable }
-        }
+        changed = reclaimAuthority(in: &profile.state, now: now) || changed
+        guard changed else { return .state(profile) }
+        guard writeProfileLocked(profile) else { return .unavailable }
         for handle in locksToRemove {
             removeOperationLockLocked(handle: handle)
-            removeNativeExecutionFenceLocked(handle: handle)
+
         }
         return .state(profile)
     }
@@ -1692,8 +2262,7 @@ final class ExtensionRequestFileStore {
                     at: candidate.url,
                     profileIdentifier: candidate.identity.identifier,
                     now: clock(),
-                    recover: true,
-                    removeIfEmpty: true
+                    recover: true
                 )
                 return true
             }
@@ -1708,8 +2277,7 @@ final class ExtensionRequestFileStore {
                 at: profileURL(profileIdentifier),
                 profileIdentifier: profileIdentifier,
                 now: clock(),
-                recover: true,
-                removeIfEmpty: true
+                recover: true
             )
             return true
         }
@@ -1779,6 +2347,47 @@ final class ExtensionRequestFileStore {
         return .expired
     }
 
+    private func validOrigin(_ origin: OriginState, sequence: Int) -> Bool {
+        canonicalChainID(origin.ethereumChainId) &&
+            origin.revisions.ethereum <= sequence && origin.revisions.solana <= sequence &&
+            (origin.ethereumAccount.map { $0.isValid && $0.coin == .ethereum } ?? true) &&
+            (origin.solanaAccount.map { $0.isValid && $0.coin == .solana } ?? true)
+    }
+
+    private func repairAuthority(
+        _ stored: ProfileState,
+        expectedIdentifier: UUID?,
+        now: Date
+    ) -> ValidatedProfile? {
+        guard stored.schemaVersion == Self.profileSchemaVersion,
+              stored.workflowVersion == ExtensionBridge.workflowVersion,
+              stored.profileIdentifier == expectedIdentifier,
+              stored.authoritySequence >= 0, stored.authoritySequence < Self.maximumRevision,
+              stored.records.allSatisfy({
+                  $0.revisions.ethereum <= stored.authoritySequence && $0.revisions.solana <= stored.authoritySequence
+              }) else { return nil }
+        let referencedOrigins = Set(stored.records.map(\.configurationKey) + stored.mutationReceipts.map(\.configurationKey))
+        let invalidOrigins = stored.invalidOrigins
+            .union(stored.origins.filter { !validOrigin($0.value, sequence: stored.authoritySequence) }.keys)
+            .union(referencedOrigins.subtracting(stored.origins.keys))
+        guard stored.invalidOriginsContainer || !invalidOrigins.isEmpty,
+              invalidOrigins.allSatisfy(validConfigurationKey),
+              Set(stored.origins.keys).union(invalidOrigins).count <= Self.maximumOrigins else { return nil }
+
+        var state = stored
+        guard let revision = nextRevision(in: &state) else { return nil }
+        for key in invalidOrigins {
+            state.origins[key] = OriginState(revisions: revisions(ethereum: revision, solana: revision))
+        }
+        state.invalidOrigins.removeAll()
+        state.invalidOriginsContainer = false
+        guard var profile = validateAndParse(state, expectedIdentifier: expectedIdentifier) else { return nil }
+        for key in invalidOrigins {
+            guard invalidateStaleRequests(in: &profile, configurationKey: key, excluding: nil, now: now) else { return nil }
+        }
+        return profile
+    }
+
     private func validateAndParse(
         _ profile: ProfileState,
         expectedIdentifier: UUID?
@@ -1787,6 +2396,24 @@ final class ExtensionRequestFileStore {
         guard profile.schemaVersion == Self.profileSchemaVersion,
               profile.workflowVersion == ExtensionBridge.workflowVersion,
               profile.profileIdentifier == expectedIdentifier,
+              profile.invalidOrigins.isEmpty, !profile.invalidOriginsContainer,
+              profile.authoritySequence >= 0, profile.authoritySequence <= Self.maximumRevision,
+              profile.origins.count <= Self.maximumOrigins,
+              (try? Self.encode(profile.origins).count).map({ $0 <= Self.maximumAuthorityBytes }) == true,
+              profile.mutationReceipts.count <= Self.maximumMutationReceipts,
+              Set(profile.mutationReceipts.map(\.attempt)).count == profile.mutationReceipts.count,
+              profile.mutationReceipts.allSatisfy({ receipt in
+                  validConfigurationKey(receipt.configurationKey) &&
+                    (receipt.provider == .ethereum || receipt.provider == .solana) &&
+                    ExtensionBridge.isValidEnqueueAttempt(receipt.attempt) &&
+                    receipt.createdAt.timeIntervalSince1970.isFinite &&
+                    receipt.expected.context == authoritySnapshot(profile, configurationKey: receipt.configurationKey).version.context &&
+                    profile.origins[receipt.configurationKey] != nil
+              }),
+              (try? Self.encode(profile.mutationReceipts).count).map({ $0 <= Self.maximumMutationReceiptBytes }) == true,
+              profile.origins.allSatisfy({ key, origin in
+                  validConfigurationKey(key) && validOrigin(origin, sequence: profile.authoritySequence)
+              }),
               active.count <= ExtensionBridge.maximumRequests,
               Dictionary(grouping: active, by: \.configurationKey).values.allSatisfy({
                   $0.count <= ExtensionBridge.maximumRequestsPerHost
@@ -1804,6 +2431,12 @@ final class ExtensionRequestFileStore {
         for record in profile.records {
             guard record.profileIdentifier == expectedIdentifier,
                   !record.host.isEmpty,
+                  record.authority.context == authoritySnapshot(profile, configurationKey: record.configurationKey).version.context,
+                  record.authorizedAccount.map(\.isValid) ?? true,
+                  record.revisions.ethereum <= profile.authoritySequence,
+                  record.revisions.solana <= profile.authoritySequence,
+                  record.executionDeadline.map({ $0.timeIntervalSince1970.isFinite }) ?? true,
+                  profile.origins[record.configurationKey] != nil,
                   ExtensionBridge.isValidIdentity(
                       host: record.host,
                       configurationKey: record.configurationKey
@@ -1833,12 +2466,10 @@ final class ExtensionRequestFileStore {
                       let rawObject = try? JSONSerialization.jsonObject(
                           with: requestData
                       ) as? [String: Any],
-                      ExtensionBridge.ProviderRevisions(
-                          rawValue: rawObject["revisions"]
-                      ) == record.revisions,
+                      ExtensionBridge.AuthorityVersion(rawValue: rawObject["authority"]) == record.authority,
                       ExtensionBridge.correlationFingerprint(rawObject) ==
                         record.requestFingerprint,
-                      let request = parseRequest(rawObject),
+                      var request = parseRequest(rawObject),
                       request.id == record.id,
                       request.host == record.host,
                       request.configurationKey == record.configurationKey,
@@ -1849,6 +2480,13 @@ final class ExtensionRequestFileStore {
                       ) == .admissible,
                       request.workflowVersion == ExtensionBridge.workflowVersion else {
                     return nil
+                }
+                request.authorizedAccount = record.authorizedAccount
+                if case .unknown = request.body {
+                    let authority = authoritySnapshot(profile, configurationKey: record.configurationKey)
+                    if record.authority == authority.version {
+                        request.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
+                    }
                 }
                 parsedRequests[record.handle] = request
             }
@@ -2069,25 +2707,10 @@ final class ExtensionRequestFileStore {
         operationLockStatusLocked(at: operationLockURL(handle))
     }
 
-    private func nativeExecutionFenceStatusLocked(
-        handle: ExtensionBridge.Handle
-    ) -> OperationLockStatus {
-        operationLockStatusLocked(at: nativeExecutionFenceURL(handle))
-    }
-
-    private func nativeExecutionFenceIsHeldLocked(
-        handle: ExtensionBridge.Handle,
-        token: UUID
-    ) -> Bool {
-        guard nativeExecutionFenceStatusLocked(handle: handle) == .held,
-              case .regular = regularFileStatusLocked(
-                  at: nativeExecutionFenceOwnerURL(handle)
-              ), let data = try? Data(
-                  contentsOf: nativeExecutionFenceOwnerURL(handle)
-              ), data.count == 36,
-              String(data: data, encoding: .utf8) ==
-                token.uuidString.lowercased() else { return false }
-        return true
+    private func executionDeadlineIsCurrent(_ deadline: Date?, now: Date) -> Bool {
+        guard let deadline else { return false }
+        let remaining = deadline.timeIntervalSince(now)
+        return remaining > 0 && remaining <= Self.executionLifetime
     }
 
     private func executionAuthorityAuthorizesLocked(
@@ -2097,17 +2720,14 @@ final class ExtensionRequestFileStore {
     ) -> Bool {
         switch authority {
         case .ordinary:
-            return record.nativeExecutionContext == nil
+            if case .broadcastPrepared = record.state { return true }
+            return record.nativeExecutionContext == nil && executionDeadlineIsCurrent(record.executionDeadline, now: now)
         case .mobileSigning(let deadline):
-            return record.nativeExecutionContext == nil && now < deadline
+            return record.nativeExecutionContext == nil && deadline == record.executionDeadline && executionDeadlineIsCurrent(deadline, now: now)
         case .native(let expected):
             return !Task.isCancelled && record.nativeExecutionContext == expected &&
                 now >= expected.observedAt &&
-                now < expected.executionDeadline &&
-                nativeExecutionFenceIsHeldLocked(
-                    handle: record.handle,
-                    token: expected.fenceToken
-                )
+                now < expected.executionDeadline
         }
     }
 
@@ -2134,20 +2754,6 @@ final class ExtensionRequestFileStore {
 
     private func removeOperationLockLocked(handle: ExtensionBridge.Handle) {
         removeOperationLockLocked(at: operationLockURL(handle))
-    }
-
-    private func removeNativeExecutionFenceLocked(
-        handle: ExtensionBridge.Handle
-    ) {
-        guard nativeExecutionFenceStatusLocked(handle: handle) == .unlocked else {
-            return
-        }
-        removeOperationLockLocked(at: nativeExecutionFenceURL(handle))
-        let ownerURL = nativeExecutionFenceOwnerURL(handle)
-        guard case .regular = regularFileStatusLocked(at: ownerURL) else {
-            return
-        }
-        try? removeItem(ownerURL)
     }
 
     private func removeOperationLockLocked(at url: URL) {
@@ -2232,7 +2838,9 @@ final class ExtensionRequestFileStore {
         case .unsafe, .unavailable:
             return false
         }
-        guard let data = try? Self.encode(profile.state),
+        guard let authorityData = try? Self.encode(profile.state.origins),
+              authorityData.count <= Self.maximumAuthorityBytes,
+              let data = try? Self.encode(profile.state),
               data.count <= Self.maximumProfileBytes else { return false }
         do {
             try atomicWrite(data, url)
@@ -2272,23 +2880,6 @@ final class ExtensionRequestFileStore {
         return try encoder.encode(value)
     }
 
-    private func removeProfileFileLocked(at url: URL) -> Bool {
-        switch regularFileStatusLocked(at: url) {
-        case .missing:
-            return true
-        case .regular:
-            break
-        case .unsafe, .unavailable:
-            return false
-        }
-        do {
-            try removeItem(url)
-            return true
-        } catch {
-            return false
-        }
-    }
-
     private func regularFileStatusLocked(at url: URL) -> RegularFileStatus {
         do {
             let attributes = try fileManager.attributesOfItem(atPath: url.path)
@@ -2322,10 +2913,8 @@ final class ExtensionRequestFileStore {
     private func emptyProfile(_ profileIdentifier: UUID?) -> ValidatedProfile {
         ValidatedProfile(
             state: ProfileState(
-                schemaVersion: Self.profileSchemaVersion,
-                workflowVersion: ExtensionBridge.workflowVersion,
                 profileIdentifier: profileIdentifier,
-                records: []
+                authorityEpoch: token()
             ),
             parsedRequests: [:]
         )
@@ -2352,32 +2941,26 @@ final class ExtensionRequestFileStore {
                 ),
                 withIntermediateDirectories: true
             )
-            try fileManager.createDirectory(
-                at: rootURL.appendingPathComponent(
-                    Self.nativeExecutionFenceDirectoryName,
-                    isDirectory: true
-                ),
-                withIntermediateDirectories: true
-            )
             let profileAttributes = try fileManager.attributesOfItem(
                 atPath: profileDirectoryURL.path
             )
             let lockAttributes = try fileManager.attributesOfItem(
                 atPath: operationLockDirectoryURL.path
             )
-            let fenceAttributes = try fileManager.attributesOfItem(
-                atPath: nativeExecutionFenceDirectoryURL.path
-            )
             return profileAttributes[.type] as? FileAttributeType == .typeDirectory &&
-                lockAttributes[.type] as? FileAttributeType == .typeDirectory &&
-                fenceAttributes[.type] as? FileAttributeType == .typeDirectory
+                lockAttributes[.type] as? FileAttributeType == .typeDirectory
         } catch {
             return false
         }
     }
 
     private func withLock<T>(or fallback: T, _ body: () -> T) -> T {
-        guard let rootURL, let storeLock else { return fallback }
+        do { return try withRequiredLock(body) }
+        catch { return fallback }
+    }
+
+    private func withRequiredLock<T>(_ body: () throws -> T) throws -> T {
+        guard let rootURL, let storeLock else { throw WalletAuthorityRemovalError.unavailable }
         do {
             try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
             var resourceValues = URLResourceValues()
@@ -2389,10 +2972,10 @@ final class ExtensionRequestFileStore {
                 pollNanoseconds: lockPoll
             )
         } catch {
-            return fallback
+            throw WalletAuthorityRemovalError.unavailable
         }
         defer { storeLock.release() }
-        return body()
+        return try body()
     }
 
     private func profileURL(_ profileIdentifier: UUID?) -> URL {
@@ -2409,22 +2992,6 @@ final class ExtensionRequestFileStore {
             .appendingPathExtension("lock")
     }
 
-    private func nativeExecutionFenceURL(
-        _ handle: ExtensionBridge.Handle
-    ) -> URL {
-        let profile = handle.profileIdentifier?.uuidString.lowercased() ??
-            "default"
-        return nativeExecutionFenceDirectoryURL
-            .appendingPathComponent("\(profile)-\(handle.token.rawValue)")
-            .appendingPathExtension("lock")
-    }
-
-    private func nativeExecutionFenceOwnerURL(
-        _ handle: ExtensionBridge.Handle
-    ) -> URL {
-        nativeExecutionFenceURL(handle).appendingPathExtension("owner")
-    }
-
     private var profileDirectoryURL: URL {
         rootURL!.appendingPathComponent(Self.profileDirectoryName, isDirectory: true)
     }
@@ -2432,13 +2999,6 @@ final class ExtensionRequestFileStore {
     private var operationLockDirectoryURL: URL {
         rootURL!.appendingPathComponent(
             Self.operationLockDirectoryName,
-            isDirectory: true
-        )
-    }
-
-    private var nativeExecutionFenceDirectoryURL: URL {
-        rootURL!.appendingPathComponent(
-            Self.nativeExecutionFenceDirectoryName,
             isDirectory: true
         )
     }

@@ -29,6 +29,7 @@ const solanaPublicKey = "11111111111111111111111111111111";
 const execFileAsync = promisify(execFile);
 
 const pageState = {
+    context: "a".repeat(64),
     revisions: {ethereum: 2, solana: 3},
     ethereum: {
         address: "0x0000000000000000000000000000000000000001",
@@ -167,11 +168,11 @@ const manifestPathForTarget = (project, targetName) => {
     return [...segments, "manifest.json"].join("/");
 };
 
-test("publishes the small immutable workflow v3 contract", () => {
+test("publishes the small immutable workflow v4 contract", () => {
     assert.equal(Object.isFrozen(wire), true);
     assert.match(wire.BUILD_VERSION, /^.+\+[0-9]+$/);
     assert.equal(source.match(/const BUILD_VERSION = "[^"\n]+";/g)?.length, 1);
-    assert.equal(wire.WORKFLOW_VERSION, 3);
+    assert.equal(wire.WORKFLOW_VERSION, 4);
     assert.equal(wire.PAGE_TO_CONTENT_DIRECTION, "big-wallet-provider-v1");
     assert.equal(wire.CONTENT_TO_PAGE_DIRECTION, "big-wallet-content-v1");
     assert.equal(wire.MANUAL_SWITCH_INTENT_SUBJECT, "manualSwitchIntent");
@@ -184,9 +185,9 @@ test("validates exact manual-switch acknowledgements", () => {
         configurationKey,
         id: 31,
         requestToken: token,
-        revisions: {ethereum: 2, solana: 3},
+        state: pageState,
         subject: wire.MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
-        workflowVersion: 3,
+        workflowVersion: 4,
     };
 
     assert.equal(wire.isManualSwitchAcknowledgement(
@@ -218,7 +219,7 @@ test("requires substantive bounded manual-switch terminals", () => {
     const rejected = nativeError({
         id: 31, name: "switchAccount", provider: "multiple", error: {code: 4001, message: "Canceled"},
     });
-    const empty = {...success, mutation: {kind: "accounts", updates: {}}};
+    const empty = {...success};
     for (const response of [success, empty, rejected]) {
         assert.equal(wire.isManualSwitchTerminalResponse(response, 31), true);
     }
@@ -260,10 +261,20 @@ test("validates enqueue and response correlations", () => {
     const native = {
         id: 7,
         requestToken: token,
+        admissionKind: "new",
         approvalRequired: true,
-        revisions: {ethereum: 2, solana: 3},
+        state: pageState,
     };
     assert.equal(wire.isNativeEnqueueAcknowledgement(native, 7), true);
+    for (const admissionKind of ["new", "replay", "coalesced"]) {
+        assert.equal(wire.isNativeEnqueueAcknowledgement({...native, admissionKind}, 7), true);
+    }
+    for (const admissionKind of [undefined, null, "", "unknown", true]) {
+        assert.equal(wire.isNativeEnqueueAcknowledgement({...native, admissionKind}, 7), false);
+    }
+    const missingKind = {...native};
+    delete missingKind.admissionKind;
+    assert.equal(wire.isNativeEnqueueAcknowledgement(missingKind, 7), false);
     assert.equal(wire.isNativeEnqueueAcknowledgement({...native, extra: true}, 7), false);
     assert.equal(wire.isNativeEnqueueAcknowledgement({
         ...native,
@@ -274,19 +285,14 @@ test("validates enqueue and response correlations", () => {
     assert.equal(wire.decodeNativeResponse(response, 8), null);
 });
 
-test("parses plain and wrapped configuration arrays without workflow metadata", () => {
-    const configurations = [{provider: "ethereum", chainId: "0x1", results: []}];
-    assert.deepEqual(
-        JSON.parse(JSON.stringify(wire.parseLatestConfigurations(configurations))),
-        {valid: true, latestConfigurations: configurations}
-    );
-    assert.equal(wire.parseLatestConfigurations({
-        latestConfigurations: configurations,
-    }).valid, true);
-    assert.equal(wire.parseLatestConfigurations([
-        ...configurations,
-        {...configurations[0]},
-    ]).valid, false);
+test("native authority versions require an exact context and nonnegative revisions", () => {
+    const version = {context: "a".repeat(64), revisions: {ethereum: 1, solana: 2}};
+    assert.equal(wire.isAuthorityVersion(version), true);
+    for (const value of [{...version, context: "a".repeat(63)}, {...version, context: "A".repeat(64)},
+        {...version, revisions: {ethereum: -1, solana: 0}}, {...version, profileIdentifier: "forged"},
+        {...version, revisions: {ethereum: 1.5, solana: 0}}]) {
+        assert.equal(wire.isAuthorityVersion(value), false);
+    }
 });
 
 test("validates canonical Ethereum chains and 32-byte Solana keys", () => {
@@ -295,18 +301,9 @@ test("validates canonical Ethereum chains and 32-byte Solana keys", () => {
     assert.equal(wire.isCanonicalEthereumChainId("0x0"), false);
     assert.equal(wire.isCanonicalEthereumChainId("0x01"), false);
     assert.equal(wire.isCanonicalEthereumChainId("0x8000000000000000"), false);
-    assert.equal(wire.isConfiguration({
-        provider: "solana",
-        publicKey: solanaPublicKey,
-    }), true);
-    assert.equal(wire.isConfiguration({
-        provider: "solana",
-        publicKey: "public-key",
-    }), false);
-    assert.equal(wire.isConfiguration({
-        provider: "solana",
-        publicKey: `${solanaPublicKey}1`,
-    }), false);
+    for (const publicKey of [solanaPublicKey, "public-key", `${solanaPublicKey}1`]) {
+        assert.equal(wire.decodeConfigurationSnapshot({...pageState, solana: {publicKey}}) !== null, publicKey === solanaPublicKey);
+    }
 });
 
 test("derives stable web and file configuration identities", () => {
@@ -316,8 +313,7 @@ test("derives stable web and file configuration identities", () => {
         ))),
         {
             host: "wallet.example",
-            configurationKey: "https://wallet.example",
-            legacyConfigurationKey: "wallet.example",
+            configurationKey: "https://wallet.example"
         }
     );
     assert.notEqual(
@@ -330,8 +326,7 @@ test("derives stable web and file configuration identities", () => {
         ))),
         {
             host: "file:///tmp/dapp.html",
-            configurationKey: "file:///tmp/dapp.html",
-            legacyConfigurationKey: null,
+            configurationKey: "file:///tmp/dapp.html"
         }
     );
 });
@@ -360,16 +355,16 @@ test("runtime sender policy permits only the complete sender receiver subject ma
         "content:worker:consumeResponse",
         "content:worker:getLatestConfiguration",
         "content:worker:disconnect",
-        "popup:worker:approveRequestWithCurrentRevisions",
+
         "popup:worker:applyCompletedResponse",
         "popup:worker:getLatestConfiguration",
         "popup:worker:updatePendingRequestBadge",
         "popup:worker:responseReady",
         "worker:content:workflowProbe",
         "worker:content:manualSwitchIntent",
-        "worker:content:configurationChanged",
+        "worker:content:configurationInvalidated",
         "worker:content:responseReady",
-        "worker:content:requestActive",
+
         "popup:content:workflowProbe",
         "popup:content:manualSwitchIntent",
         "worker:popup:pendingRequestAvailable",
@@ -396,9 +391,9 @@ test("runtime authorization recognizes Safari worker roots without widening send
     const commands = [
         ["content", "workflowProbe"],
         ["content", "manualSwitchIntent"],
-        ["content", "configurationChanged"],
+        ["content", "configurationInvalidated"],
         ["content", "responseReady"],
-        ["content", "requestActive"],
+
         ["popup", "pendingRequestAvailable"],
     ];
     for (const url of [root, root.replace(/\/$/, ""), runtime.getURL("service_worker.js")]) {
@@ -428,13 +423,13 @@ test("runtime authorization recognizes Safari worker roots without widening send
 test("runtime authorization snapshots identity exclusively from the content sender URL", () => {
     for (const [url, expected] of [
         ["https://Wallet.Example:443/path?query=1#fragment", {
-            host: "wallet.example", configurationKey: "https://wallet.example", legacyConfigurationKey: "wallet.example",
+            host: "wallet.example", configurationKey: "https://wallet.example"
         }],
         ["http://wallet.example:8080/path", {
-            host: "wallet.example:8080", configurationKey: "http://wallet.example:8080", legacyConfigurationKey: "wallet.example:8080",
+            host: "wallet.example:8080", configurationKey: "http://wallet.example:8080"
         }],
         ["file:///tmp/dapp.html?query=1#fragment", {
-            host: "file:///tmp/dapp.html", configurationKey: "file:///tmp/dapp.html", legacyConfigurationKey: null,
+            host: "file:///tmp/dapp.html", configurationKey: "file:///tmp/dapp.html"
         }],
     ]) {
         const sender = {...runtimeSenders.content, url, tab: {...runtimeSenders.content.tab}};
@@ -558,26 +553,26 @@ test("normalizes bounded response-ready wake hints", () => {
         [...wire.responseReadyIds({
             subject: "responseReady",
             ids: [1, 1, 2],
-            workflowVersion: 3,
+            workflowVersion: 4,
         })],
         [1, 2]
     );
     assert.equal(wire.responseReadyIds({
         subject: "responseReady",
         ids: [],
-        workflowVersion: 3,
+        workflowVersion: 4,
     }), null);
 });
 
 test("validates exact passive configuration notifications", () => {
     const notification = {
-        subject: "configurationChanged", configurationKey: "https://wallet.example",
-        state: pageState, workflowVersion: 3,
+        subject: "configurationInvalidated", configurationKey: "https://wallet.example",
+        workflowVersion: 4,
     };
-    assert.equal(wire.isConfigurationChanged(notification), true);
-    assert.equal(wire.isConfigurationChanged({...notification, extra: true}), false);
-    assert.equal(wire.isConfigurationChanged({...notification, state: undefined}), false);
-    assert.equal(wire.isConfigurationChanged({
+    assert.equal(wire.isConfigurationInvalidated(notification), true);
+    assert.equal(wire.isConfigurationInvalidated({...notification, extra: true}), false);
+    assert.equal(wire.isConfigurationInvalidated({...notification, state: undefined}), false);
+    assert.equal(wire.isConfigurationInvalidated({
         ...notification, state: {...pageState, revisions: {ethereum: -1, solana: 0}},
     }), false);
 });

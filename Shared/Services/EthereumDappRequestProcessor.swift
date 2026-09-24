@@ -27,15 +27,20 @@ struct EthereumDappRequestProcessor {
         body: SafariRequest.Ethereum,
         catalog: WalletReviewCatalog?
     ) -> DappRequestPreparation? {
-        lazy var walletAndAccount = catalog?.specificAccount(
-            coin: .ethereum,
-            address: body.address
-        ).map { ($0.walletId, $0.account) }
+        lazy var walletAndAccount = request.authorizedAccount.flatMap { descriptor in
+            guard descriptor.coin == .ethereum,
+                  descriptor.normalizedAddress == WalletCoin.ethereum.normalizedAddress(body.address)
+            else { return nil as SpecificWalletAccount? }
+            return catalog?.specificAccount(descriptor: descriptor)
+        }.map { ($0.walletId, $0.account) }
 
         switch body.method {
         case .addEthereumChain:
             return prepareAddChain(request: request, body: body)
         case .requestAccounts:
+            if let account = request.authorizedAccount, account.coin == .ethereum {
+                return .response(response(to: request, result: .strings([account.normalizedAddress])))
+            }
             guard let catalog else { return nil }
             let action = SelectAccountAction(
                 coinType: .ethereum,

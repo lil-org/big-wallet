@@ -272,7 +272,7 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertNil(review["reviewToken"])
 
         let token = try XCTUnwrap(session.beginApproval())
-        let claim = ExtensionBridge.ApprovalClaim(handle: handle, value: UUID())
+        let claim = ExtensionBridge.ApprovalClaim(handle: handle, value: UUID(), executionDeadline: Date().addingTimeInterval(150))
         for expectedState in ["working", "authenticating"] {
             if expectedState == "authenticating" {
                 XCTAssertTrue(session.acceptClaim(claim, token: token))
@@ -524,18 +524,17 @@ final class PopupStringsTests: XCTestCase {
     }
 
     func testTypedResponsesMatchSharedPopupContract() throws {
-        let revisions = try XCTUnwrap(ExtensionBridge.ProviderRevisions(rawValue: ["ethereum": 2, "solana": 3]))
         let responses: [String: PopupResponse] = [
             "queue": .queue(.init(
                 requests: [.init(
                     id: 91, host: "wallet.example", receivedAt: 1_700_000_000.25, sequence: 1,
                     requestToken: "00000000-0000-4000-8000-000000000091",
                     enqueueAttempt: String(repeating: "01", count: 16),
-                    configurationKey: "https://wallet.example", provider: .ethereum, revisions: revisions
+                    configurationKey: "https://wallet.example", provider: .ethereum
                 )],
                 completedResponses: [.init(
                     id: 92, host: "wallet.example", configurationKey: "https://wallet.example",
-                    requestToken: reviewToken, revisions: revisions
+                    requestToken: reviewToken
                 )], strings: ["ok": "OK"], layoutDirection: .ltr
             )),
             "missing": .command(.ok(.init(id: 91, content: .missing))),

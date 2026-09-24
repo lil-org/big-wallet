@@ -151,13 +151,13 @@ function notifyReadiness(provider, flushed) {
 
 function authorizationSnapshot(state) {
     return {
-        revision: state.workerRevision,
+        revision: state.nativeRevision,
         address: state.address,
     };
 }
 
 function authorizationIsCurrent(state, authorization) {
-    return authorization?.revision === state.workerRevision &&
+    return authorization?.revision === state.nativeRevision &&
         authorization.address === state.address;
 }
 
@@ -323,11 +323,13 @@ function walletMessage(state, record, name, data) {
         id: record.wireId,
         kind: "request",
         name,
+        observedRevision: record.metadata.authorization.revision,
         provider: "ethereum",
     };
 }
 
 function postWalletRequest(provider, state, record, name, data) {
+    if (!isSafeIntegerNormally(state.nativeRevision) || state.nativeRevision < 0) { throw providerStateError(); }
     setDispatchAuthorization(state, record);
     record.metadata.responseName = name;
     const message = walletMessage(state, record, name, data);
@@ -445,21 +447,13 @@ function dispatchOperation(provider, record) {
             return settleResult(state, record, state.networkVersion);
         case "eth_chainId":
             return settleResult(state, record, state.chainId);
-        case "wallet_requestPermissions":
         case "wallet_getPermissions":
-            return settleResult(state, record, [{
-                parentCapability: "eth_accounts",
-            }]);
+            return settleResult(state, record, state.address ? [{parentCapability: "eth_accounts"}] : []);
+        case "wallet_requestPermissions":
+            if (!validPermissions(params)) { throw invalidParameters(); }
+            return postWalletRequest(provider, state, record, "requestAccounts", {});
         case "eth_requestAccounts":
-            return state.address
-                ? settleResult(state, record, localAccounts(state))
-                : postWalletRequest(
-                    provider,
-                    state,
-                    record,
-                    "requestAccounts",
-                    {}
-                );
+            return postWalletRequest(provider, state, record, "requestAccounts", {});
         case "eth_sign": {
             const buffer = Utils.messageToBuffer(requireParameter(params, 1));
             const hex = Utils.bufferToHex(buffer);
@@ -528,9 +522,6 @@ function dispatchOperation(provider, record) {
             const name = method === "wallet_switchEthereumChain"
                 ? "switchEthereumChain"
                 : "addEthereumChain";
-            if (name === "switchEthereumChain" && request.chainId === state.chainId) {
-                return settleResult(state, record, null);
-            }
             record.metadata.requestedChainId = request.chainId;
             return postWalletRequest(
                 provider,
@@ -591,10 +582,10 @@ function prepareConfiguration(provider, configuration, revision) {
     const address = normalizedAddress(configuration.address);
     const chainId = configuration.chainId;
     if (!validChainId(chainId)) { return null; }
-    if (state.workerRevision !== null && revision < state.workerRevision) {
+    if (state.nativeRevision !== null && revision < state.nativeRevision) {
         return {__proto__: null, ignored: true};
     }
-    if (revision === state.workerRevision &&
+    if (revision === state.nativeRevision &&
         (address !== state.address || chainId !== state.chainId)) {
         return null;
     }
@@ -628,8 +619,8 @@ function commitConfiguration(provider, prepared) {
     state.chainId = prepared.chainId;
     state.networkVersion = prepared.networkVersion;
     state.rpc = prepared.rpc;
-    if (state.workerRevision !== prepared.revision) { state.stateEpoch += 1; }
-    state.workerRevision = prepared.revision;
+    if (state.nativeRevision !== prepared.revision) { state.stateEpoch += 1; }
+    state.nativeRevision = prepared.revision;
     state.runtime.activate();
     return {
         epoch: state.stateEpoch,
@@ -697,13 +688,14 @@ function applyResultEnvelope(provider, state, envelope) {
     if (envelope.approvalCommitted !== true && (
         signingResponse(name) && !authorizationIsCurrent(state, record.metadata.authorization) ||
         name === "requestAccounts" && (normalizedAddress(result[0]) !== state.address ||
-            (envelope.state ? envelope.state.revisions.ethereum !== state.workerRevision :
+            (envelope.state ? envelope.state.revisions.ethereum !== state.nativeRevision :
                 !authorizationIsCurrent(state, record.metadata.authorization)))
     )) {
         return settleError(state, record, authorizationChangedError());
     }
-    return settleResult(state, record,
-        name === "switchEthereumChain" || name === "addEthereumChain" ? null : result);
+    return settleResult(state, record, record.payload.method === "wallet_requestPermissions"
+        ? [{parentCapability: "eth_accounts"}]
+        : name === "switchEthereumChain" || name === "addEthereumChain" ? null : result);
 }
 
 function applyErrorEnvelope(provider, state, envelope) {
@@ -758,7 +750,7 @@ function snapshot(provider) {
     const state = stateFor(provider);
     if (!state) { return null; }
     return freezeObjectNormally({
-        workerRevision: state.workerRevision,
+        nativeRevision: state.nativeRevision,
         address: state.address,
         chainId: state.chainId,
         generation: state.runtime.generation,
@@ -794,7 +786,7 @@ class BigWalletEthereum {
             ? initial.chainId
             : "0x1";
         const state = {
-            workerRevision: null,
+            nativeRevision: null,
             address: normalizedAddress(initial?.address),
             chainId,
             copiedStateBaseline: null,
@@ -877,9 +869,7 @@ class BigWalletEthereum {
 
     enable() {
         return this.request({
-            method: this.selectedAddress
-                ? "eth_accounts"
-                : "eth_requestAccounts",
+            method: "eth_requestAccounts",
             params: [],
         });
     }

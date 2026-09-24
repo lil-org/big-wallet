@@ -41,7 +41,7 @@ function clone(value) {
 }
 
 async function settle() {
-    for (let index = 0; index < 20; index += 1) { await Promise.resolve(); }
+    for (let index = 0; index < 80; index += 1) { await Promise.resolve(); }
 }
 
 function makeHarness({
@@ -120,7 +120,7 @@ function makeHarness({
                             ? configurationResponse(message)
                             : configurationResponse || {
                                 kind: "configuration",
-                                state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+                                state: {context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
                             }
                     );
                 }
@@ -179,7 +179,8 @@ function makeHarness({
             return timer ? Math.max(0, timer.due - clock) : null;
         },
         now: () => clock,
-        dispatchPage(kind, message, generation = context.bigWalletProviderGeneration) {
+        dispatchPage(kind, message, generation = context.bigWalletProviderGeneration,
+            observedRevision = context.bigWalletConfigurationState?.state.revisions[message.provider]) {
             for (const listener of pageListeners) {
                 listener({
                     source: window,
@@ -187,6 +188,7 @@ function makeHarness({
                         direction: "big-wallet-provider-v1",
                         kind,
                         message,
+                        observedRevision,
                         providerGeneration: generation,
                     },
                 });
@@ -233,6 +235,10 @@ function makeHarness({
     };
 }
 
+function configurationState(revisions = {ethereum: 0, solana: 0}, context = "a".repeat(64)) {
+    return {context, revisions, ethereum: {address: "", chainId: "0x1"}, solana: null};
+}
+
 function dappRequest(id = 7) {
     return {
         id,
@@ -246,21 +252,21 @@ test("content rejects unauthorized runtime messages without effects or a respons
     const harness = makeHarness({sendMessage: message => message.subject === "message-to-wallet" ? {
         id: 7,
         requestToken,
-        approvalRequired: true,
-        revisions: {ethereum: 0, solana: 0},
+        admissionKind: "new", approvalRequired: true,
+        state: configurationState(),
     } : undefined});
     await settle();
     harness.dispatchPage("request", dappRequest());
     await settle();
     const messages = [
-        {subject: "workflowProbe", nonce: probeNonce, workflowVersion: 3},
-        {subject: "manualSwitchIntent", configurationKey: "https://wallet.example", workflowVersion: 3},
-        {subject: "responseReady", id: 7, workflowVersion: 3},
+        {subject: "workflowProbe", nonce: probeNonce, workflowVersion: 4},
+        {subject: "manualSwitchIntent", configurationKey: "https://wallet.example", workflowVersion: 4},
+        {subject: "responseReady", id: 7, workflowVersion: 4},
         {
             subject: "configurationChanged",
             configurationKey: "https://wallet.example",
-            workflowVersion: 3,
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x2"}, solana: null},
+            workflowVersion: 4,
+            state: {context: "a".repeat(64), revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x2"}, solana: null},
         },
     ];
     const deniedSenders = [
@@ -293,7 +299,7 @@ test("content rejects unauthorized runtime messages without effects or a respons
         "rpc", "message-to-wallet", "getResponse", "getLatestConfiguration", "disconnect",
         "approveRequestWithCurrentRevisions", "applyCompletedResponse", "updatePendingRequestBadge",
         "pendingRequestAvailable", "unknown",
-    ].map(subject => ({sender: workerSender, message: {subject, workflowVersion: 3}})));
+    ].map(subject => ({sender: workerSender, message: {subject, workflowVersion: 4}})));
     denied.push({sender: workerSender, message: null});
     for (const {sender, message} of denied) {
         assert.equal(await harness.dispatchRuntime(message, sender), undefined);
@@ -309,15 +315,15 @@ test("content accepts popup probes and manual switch intents", async () => {
         message.subject === "manualSwitchIntent" ? expected : undefined});
     await settle();
     assert.deepEqual(clone(await harness.dispatchRuntime({
-        subject: "workflowProbe", nonce: probeNonce, workflowVersion: 3,
+        subject: "workflowProbe", nonce: probeNonce, workflowVersion: 4,
     }, popupSender)), {
         buildVersion: packagedBuildVersion,
         nonce: probeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
     assert.deepEqual(clone(await harness.dispatchRuntime({
-        subject: "manualSwitchIntent", configurationKey: "https://wallet.example", workflowVersion: 3,
+        subject: "manualSwitchIntent", configurationKey: "https://wallet.example", workflowVersion: 4,
     }, popupSender)), expected);
     assert.equal(harness.runtimeMessages.filter(message => message.subject === "manualSwitchIntent").length, 1);
 });
@@ -328,7 +334,7 @@ test("content reevaluation keeps one provider lifecycle and request bridge", asy
     const firstGeneration = harness.generation();
     assert.equal(typeof firstGeneration, "string");
     assert.equal(harness.runtimeMessages[0].subject, "getLatestConfiguration");
-    assert.equal(harness.runtimeMessages[0].workflowVersion, 3);
+    assert.equal(harness.runtimeMessages[0].workflowVersion, 4);
     assert.deepEqual(harness.postedMessages[0].message.response.state.ethereum, {address: "", chainId: "0x1"});
     harness.reevaluate();
     await settle();
@@ -346,12 +352,12 @@ test("content scripts publish their captured per-build version", async () => {
     assert.deepEqual(clone(await harness.dispatchRuntime({
         nonce: probeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     })), {
         buildVersion: packagedBuildVersion,
         nonce: probeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
     assert.equal(harness.runtimeMessages.length, runtimeMessageCount);
 
@@ -364,22 +370,22 @@ test("content scripts publish their captured per-build version", async () => {
     assert.deepEqual(clone(await harness.dispatchRuntime({
         nonce: probeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     })), {
         buildVersion: packagedBuildVersion,
         nonce: probeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
 
     for (const probe of [
-        {subject: "workflowProbe", workflowVersion: 3},
-        {nonce: "forged", subject: "workflowProbe", workflowVersion: 3},
+        {subject: "workflowProbe", workflowVersion: 4},
+        {nonce: "forged", subject: "workflowProbe", workflowVersion: 4},
         {nonce: probeNonce, subject: "workflowProbe", workflowVersion: 2},
         {
             nonce: probeNonce,
             subject: "workflowProbe",
-            workflowVersion: 3,
+            workflowVersion: 4,
             extra: true,
         },
     ]) {
@@ -442,6 +448,37 @@ test("three failed configuration reads emit one bootstrap failure", async () => 
     assert.equal(await harness.runTimer(), false);
 });
 
+test("unsupported bootstrap preserves its explanation without retries", async () => {
+    const response = {kind: "configurationError", error: {code: 4200, message: "Localized Private Browsing explanation"}};
+    const harness = makeHarness({configurationResponse: response});
+    await settle();
+
+    assert.deepEqual(harness.postedMessages, [{message: {
+        direction: "big-wallet-content-v1", kind: "response", response,
+        providerGeneration: harness.generation(),
+    }, target: "*"}]);
+    assert.equal(harness.runtimeMessages.length, 1);
+    assert.equal(harness.context.bigWalletConfigurationState, undefined);
+    assert.equal(harness.context.bigWalletFailedConfigurationGeneration, harness.generation());
+    assert.equal(await harness.runTimer(), false);
+});
+
+test("unsupported warm refresh preserves the accepted snapshot without retries", async () => {
+    let reads = 0;
+    const state = configurationState({ethereum: 3, solana: 0});
+    const harness = makeHarness({configurationResponse: () => ++reads === 1
+        ? {kind: "configuration", state}
+        : {kind: "configurationError", error: {code: 4200, message: "Unsupported"}}});
+    await settle();
+    harness.focus();
+    await settle();
+
+    assert.equal(reads, 2);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), state);
+    assert.equal(harness.postedMessages.some(value => value.message.response.kind === "configurationError"), false);
+    assert.equal(await harness.runTimer(), false);
+});
+
 test("failed bootstrap retries on focus or visibility without reinjection", async () => {
     for (const trigger of ["focus", "show"]) {
         let nativeAvailable = false;
@@ -466,8 +503,11 @@ test("failed bootstrap retries on focus or visibility without reinjection", asyn
 
         const configuration = {
             kind: "configuration",
-            state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         };
+        resolveRecovery(configuration);
+        await settle();
+        assert.equal(harness.runtimeMessages.length, 5);
         resolveRecovery(configuration);
         await settle();
         assert.equal(harness.postedMessages.at(-1).message.kind, "response");
@@ -484,12 +524,7 @@ test("a configuration broadcast recovers an exhausted bootstrap", async () => {
     await harness.runTimer();
     await harness.runTimer();
 
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-    });
+    harness.context.bigWalletPublishConfiguration({context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null}, "https://wallet.example", harness.generation());
     assert.equal(harness.postedMessages.at(-1).message.kind, "response");
     assert.equal(harness.postedMessages.at(-1).message.providerGeneration, harness.generation());
     assert.equal(harness.runtimeMessages.length, 3);
@@ -527,87 +562,93 @@ test("malformed configuration responses follow the existing retry path", async (
     }
 });
 
-test("a passive configuration cancels a scheduled bootstrap retry", async () => {
-    const harness = makeHarness({
-        configurationResponse: {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}},
-    });
+test("an invalidation hint rereads native rather than supplying accounts", async () => {
+    let reads = 0;
+    const harness = makeHarness({configurationResponse: () => ({kind: "configuration", state: configurationState({ethereum: reads++, solana: 0})})});
     await settle();
-    assert.equal(harness.runtimeMessages.filter(message => {
-        return message.subject === "getLatestConfiguration";
-    }).length, 1);
+    await harness.dispatchRuntime({subject: "configurationInvalidated", configurationKey: "https://wallet.example", workflowVersion: 4});
+    await settle();
+    assert.equal(reads, 2);
+    assert.equal(harness.postedMessages.at(-1).message.response.state.revisions.ethereum, 1);
+    await harness.dispatchRuntime({subject: "configurationInvalidated", configurationKey: "https://wallet.example", workflowVersion: 4, state: configurationState()});
+    assert.equal(reads, 2);
+});
 
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-    });
-    assert.equal(await harness.runTimer(), true);
+test("invalidation during bootstrap schedules a fresh native read", async () => {
+    let resolveFirst;
+    let reads = 0;
+    const harness = makeHarness({configurationResponse: () => ++reads === 1 ? new Promise(resolve => {resolveFirst = resolve;})
+        : {kind: "configuration", state: configurationState({ethereum: 1, solana: 0})}});
+    await harness.dispatchRuntime({subject: "configurationInvalidated", configurationKey: "https://wallet.example", workflowVersion: 4});
+    resolveFirst({kind: "configuration", state: configurationState()});
+    await settle();
+    assert.equal(reads, 2);
+    assert.equal(harness.context.bigWalletConfigurationState.state.revisions.ethereum, 1);
+});
 
-    assert.equal(harness.runtimeMessages.filter(message => {
-        return message.subject === "getLatestConfiguration";
-    }).length, 1);
-    assert.equal(harness.postedMessages.some(value => {
-        return value.message.response?.kind === "configurationError";
-    }), false);
+test("focus and visibility coalesce into one follow-up native refresh", async () => {
+    let reads = 0;
+    let finish;
+    const harness = makeHarness({configurationResponse: () => ++reads === 2
+        ? new Promise(resolve => {finish = resolve;})
+        : {kind: "configuration", state: configurationState()}});
+    await settle();
+    harness.focus(); harness.show(); harness.focus(); harness.show();
+    assert.equal(reads, 2);
+    finish({kind: "configuration", state: configurationState()});
+    await settle();
+    assert.equal(reads, 3);
     assert.equal(await harness.runTimer(), false);
 });
 
-test("a passive configuration satisfies an in-flight bootstrap retry", async () => {
-    let resolveRetry;
-    let readCount = 0;
-    const harness = makeHarness({configurationResponse() {
-        readCount += 1;
-        if (readCount === 1) { return {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}}; }
-        return new Promise(resolve => { resolveRetry = resolve; });
-    }});
+test("foreground transition rereads native after an older refresh completes", async () => {
+    let reads = 0;
+    let finish;
+    const connected = configurationState({ethereum: 1, solana: 0});
+    connected.ethereum.address = "0x0000000000000000000000000000000000000001";
+    let nativeState = connected;
+    const harness = makeHarness({configurationResponse: () => ++reads === 2
+        ? new Promise(resolve => {finish = resolve;})
+        : {kind: "configuration", state: nativeState}});
     await settle();
-    assert.equal(await harness.runTimer(), true);
-    assert.equal(readCount, 2);
+    harness.focus();
+    harness.context.document.visibilityState = "hidden";
+    nativeState = configurationState({ethereum: 2, solana: 0});
+    harness.show();
+    assert.equal(reads, 2);
 
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-    });
-    resolveRetry({kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}});
+    finish({kind: "configuration", state: connected});
     await settle();
 
-    assert.equal(readCount, 2);
-    assert.equal(harness.postedMessages.some(value => {
-        return value.message.response?.kind === "configurationError";
-    }), false);
+    assert.equal(reads, 3);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), nativeState);
+    assert.deepEqual(harness.postedMessages.at(-1).message.response.state, nativeState);
     assert.equal(await harness.runTimer(), false);
 });
 
-test("an explicit attempt-zero refresh still reads accepted configuration", async () => {
-    let readCount = 0;
-    const harness = makeHarness({configurationResponse() {
-        readCount += 1;
-        return {
-            kind: "configuration",
-            state: {revisions: {ethereum: readCount - 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-        };
-    }});
+test("foreground transition also refreshes a pending initial snapshot", async () => {
+    let reads = 0;
+    let finish;
+    const oldState = configurationState({ethereum: 1, solana: 0});
+    oldState.ethereum.address = "0x0000000000000000000000000000000000000001";
+    const currentState = configurationState({ethereum: 2, solana: 0});
+    const harness = makeHarness({configurationResponse: () => ++reads === 1
+        ? new Promise(resolve => {finish = resolve;})
+        : {kind: "configuration", state: currentState}});
+    harness.context.document.visibilityState = "hidden";
+    harness.show();
+    finish({kind: "configuration", state: oldState});
     await settle();
-    assert.equal(readCount, 1);
 
-    harness.dispatchPage("disconnect", {provider: "solana"});
-    await settle();
-
-    assert.equal(readCount, 2);
-    assert.deepEqual(harness.postedMessages.at(-1).message.response.state.revisions, {
-        ethereum: 1,
-        solana: 0,
-    });
+    assert.equal(reads, 2);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), currentState);
 });
 
 test("focus and visibility reconcile configuration after a missed broadcast", async () => {
     let ethereumRevision = 0;
     const harness = makeHarness({configurationResponse: () => ({
         kind: "configuration",
-        state: {revisions: {ethereum: ethereumRevision, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+        state: {context: "a".repeat(64), revisions: {ethereum: ethereumRevision, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     })});
     await settle();
 
@@ -650,7 +691,7 @@ test("a replacement generation accepts its own lower revision baseline", async (
         readCount += 1;
         return {
             kind: "configuration",
-            state: {revisions: {ethereum: readCount === 1 ? 5 : 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), revisions: {ethereum: readCount === 1 ? 5 : 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         };
     }});
     await settle();
@@ -664,59 +705,31 @@ test("a replacement generation accepts its own lower revision baseline", async (
         kind: "response",
         response: {
             kind: "configuration",
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         },
         id: harness.postedMessages.at(-1).message.id,
         providerGeneration: replacementGeneration,
     });
 
     await harness.context.bigWalletLoadConfiguration(replacementGeneration, 1);
-    assert.equal(readCount, 2);
+    assert.equal(readCount, 3);
     assert.equal(harness.postedMessages.some(value => {
         return value.message.response?.kind === "configurationError";
     }), false);
 });
 
-test("matching passive configuration notifications update the current page", async () => {
-    const harness = makeHarness();
+test("a new native context replaces the provider generation before publishing accounts", async () => {
+    let context = "a".repeat(64);
+    const harness = makeHarness({configurationResponse: () => ({kind: "configuration", state: configurationState({ethereum: 0, solana: 0}, context)})});
     await settle();
-    const before = harness.postedMessages.length;
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
-    });
-    assert.equal(harness.postedMessages.length, before + 1);
-    assert.deepEqual(harness.postedMessages.at(-1), {
-        message: {
-            direction: "big-wallet-content-v1",
-            kind: "response",
-            response: {
-                kind: "configuration",
-                state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
-            },
-            id: harness.postedMessages.at(-1).message.id,
-            providerGeneration: harness.generation(),
-        },
-        target: "*",
-    });
-
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "http://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 3, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-    });
-    assert.equal(harness.postedMessages.length, before + 1);
-
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-    });
-    assert.equal(harness.postedMessages.length, before + 2);
+    const previous = harness.generation();
+    context = "b".repeat(64);
+    harness.focus();
+    await settle();
+    assert.notEqual(harness.generation(), previous);
+    assert.equal(harness.injectedScripts.length, 2);
+    assert.equal(harness.postedMessages.at(-1).message.providerGeneration, harness.generation());
+    assert.equal(harness.context.bigWalletConfigurationState.state.context, context);
 });
 
 test("stale terminal snapshots reach the provider with their original revisions", async () => {
@@ -728,24 +741,20 @@ test("stale terminal snapshots reach the provider with their original revisions"
             id: 7,
             name: "requestAccounts",
             provider: "ethereum",
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: address, chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), revisions: {ethereum: 1, solana: 0}, ethereum: {address: address, chainId: "0x1"}, solana: null},
             result: [address],
             approvalCommitted: false,
         };
     }});
     await settle();
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 2, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
-    });
+    harness.context.bigWalletPublishConfiguration({context: "a".repeat(64), revisions: {ethereum: 2, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null}, "https://wallet.example", harness.generation());
     harness.dispatchPage("request", dappRequest(7));
     await settle();
 
     const terminal = harness.postedMessages.at(-1).message;
     assert.equal(terminal.response.id, 7);
     assert.deepEqual(terminal.response.state, {
+        context: "a".repeat(64),
         revisions: {ethereum: 1, solana: 0},
         ethereum: {address, chainId: "0x1"}, solana: null,
     });
@@ -757,6 +766,7 @@ test("mixed provider revisions cross the content relay unchanged", async () => {
     const harness = makeHarness({configurationResponse: {
         kind: "configuration",
         state: {
+            context: "a".repeat(64),
             revisions: {ethereum: 5, solana: 2},
             ethereum: {address: "", chainId: "0x2"},
             solana: null,
@@ -764,16 +774,12 @@ test("mixed provider revisions cross the content relay unchanged", async () => {
     }});
     await settle();
     const state = {
+        context: "a".repeat(64),
         revisions: {ethereum: 4, solana: 3},
         ethereum: {address: "", chainId: "0x1"},
         solana: {publicKey: "11111111111111111111111111111111"},
     };
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state,
-    });
+    harness.context.bigWalletPublishConfiguration(state, "https://wallet.example", harness.generation());
     assert.deepEqual(harness.postedMessages.at(-1).message.response, {
         kind: "configuration", state,
     });
@@ -787,7 +793,7 @@ test("a malformed revisioned terminal fails closed", async () => {
             id: 7,
             name: "requestAccounts",
             provider: "ethereum",
-            state: {ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
             result: ["0x0000000000000000000000000000000000000001"],
             approvalCommitted: false,
         };
@@ -796,8 +802,8 @@ test("a malformed revisioned terminal fails closed", async () => {
                 return delivery === "immediate" ? response : {
                     id: 7,
                     requestToken,
-                    approvalRequired: false,
-                    revisions: {ethereum: 0, solana: 0},
+                    admissionKind: "new", approvalRequired: false,
+                    state: configurationState(),
                 };
             }
             if (message.subject === "getResponse") { return {id: 7, ready: true}; }
@@ -829,7 +835,7 @@ test("page-authored unknown provider requests never enter the relay", async () =
         provider: "unknown",
         body: {
             kind: "configuration",
-            state: {ethereum: {address: "", chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), ethereum: {address: "", chainId: "0x1"}, solana: null},
         },
     });
     await settle();
@@ -843,8 +849,8 @@ test("enqueues a trusted transient request with one generated attempt", async ()
         "message-to-wallet" ? {
             id: 7,
             requestToken,
-            approvalRequired: true,
-            revisions: {ethereum: 0, solana: 0},
+            admissionKind: "new", approvalRequired: true,
+            state: configurationState(),
         } : undefined});
     await settle();
     harness.dispatchPage("request", dappRequest());
@@ -871,8 +877,8 @@ test("a lost enqueue reply retries the identical attempt", async () => {
         return calls === 1 ? undefined : {
             id: 8,
             requestToken,
-            approvalRequired: true,
-            revisions: {ethereum: 0, solana: 0},
+            admissionKind: "new", approvalRequired: true,
+            state: configurationState(),
         };
     }});
     await settle();
@@ -905,6 +911,7 @@ test("replacement generations do not alias an old pending request ID", async () 
     const replacementGeneration =
         "inpage:replacement:00000001000000020000000300000004";
     harness.context.bigWalletProviderGeneration = replacementGeneration;
+    await harness.context.bigWalletLoadConfiguration(replacementGeneration, 0);
     harness.dispatchPage("request", request, replacementGeneration);
     await settle();
 
@@ -990,8 +997,8 @@ test("a hung enqueue transport cannot deliver after horizon cleanup", async () =
     resolveEnqueue({
         id: 21,
         requestToken,
-        approvalRequired: true,
-        revisions: {ethereum: 0, solana: 0},
+        admissionKind: "new", approvalRequired: true,
+        state: configurationState(),
     });
     await settle();
 
@@ -1009,8 +1016,8 @@ test("enqueue results arriving at the recovery deadline fail closed", async () =
             response: {
                 id: 22,
                 requestToken,
-                approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             },
         },
         {
@@ -1080,8 +1087,8 @@ test("persistent failed response reads release acknowledged request slots", asyn
             return {
                 id: message.message.id,
                 requestToken,
-                approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse") {
@@ -1194,8 +1201,8 @@ test("reads and delivers one retained response", async () => {
             return {
                 id: 9,
                 requestToken,
-                approvalRequired: false,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: false,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse") { return {id: 9, ready: true}; }
@@ -1224,7 +1231,31 @@ test("reads and delivers one retained response", async () => {
         "getLatestConfiguration", "message-to-wallet", "getResponse", "consumeResponse",
     ]);
     assert.equal("revisions" in harness.runtimeMessages[2], false);
-    assert.deepEqual(harness.runtimeMessages[3].revisions, {ethereum: 0, solana: 0});
+    assert.equal("revisions" in harness.runtimeMessages[3], false);
+});
+
+test("completion allows the full native preparation and acknowledgement round trip", async () => {
+    const result = {
+        kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+        state: null, result: [], approvalCommitted: true,
+    };
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {id: 7, requestToken, admissionKind: "new", approvalRequired: false, state: configurationState()};
+        }
+        if (message.subject === "getResponse") { return {id: 7, ready: true}; }
+        if (message.subject === "consumeResponse") {
+            return new Promise(resolve => harness.context.setTimeout(() => resolve(result), 11_000));
+        }
+    }});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    await harness.runTimer();
+    assert.deepEqual(harness.postedMessages.at(-1).message.response, result);
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "consumeResponse").length, 1);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
 });
 
 test("an evicted retained response fails immediately", async () => {
@@ -1233,8 +1264,8 @@ test("an evicted retained response fails immediately", async () => {
             return {
                 id: 18,
                 requestToken,
-                approvalRequired: false,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: false,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse") {
@@ -1260,8 +1291,8 @@ test("response-ready hints wake a waiting request", async () => {
             return {
                 id: 10,
                 requestToken,
-                approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse" && ready) { return {id: 10, ready: true}; }
@@ -1285,7 +1316,7 @@ test("response-ready hints wake a waiting request", async () => {
     await harness.dispatchRuntime({
         subject: "responseReady",
         id: 10,
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
     await harness.runTimer();
     assert.equal(harness.postedMessages.some(value => {
@@ -1302,8 +1333,8 @@ test("response-ready hints rerun an active response read", async () => {
             return {
                 id: 11,
                 requestToken,
-                approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse") {
@@ -1330,7 +1361,7 @@ test("response-ready hints rerun an active response read", async () => {
     await harness.dispatchRuntime({
         subject: "responseReady",
         id: 11,
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
 
     resolveFirstRead();
@@ -1355,8 +1386,8 @@ test("late enqueue acknowledgement preserves native-owned work past the recovery
             return {
                 id: 15,
                 requestToken,
-                approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse") {
@@ -1407,8 +1438,8 @@ test("native results survive suspension past the recovery horizon", async () => 
         const harness = makeHarness({sendMessage: message => {
             if (message.subject === "message-to-wallet") {
                 return {
-                    id: 17, requestToken, approvalRequired: true,
-                    revisions: {ethereum: 0, solana: 0},
+                    id: 17, requestToken, admissionKind: "new", approvalRequired: true,
+                    state: configurationState(),
                 };
             }
             if (message.subject === "consumeResponse") { return response; }
@@ -1445,8 +1476,8 @@ test("native pending replies reset the communication failure budget", async () =
     const harness = makeHarness({sendMessage: message => {
         if (message.subject === "message-to-wallet") {
             return {
-                id: 18, requestToken, approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                id: 18, requestToken, admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             };
         }
         return pending ? {id: 18, pending: true} : undefined;
@@ -1485,8 +1516,8 @@ test("an unresolved response read cannot end a native-owned request", async () =
             return {
                 id: 16,
                 requestToken,
-                approvalRequired: true,
-                revisions: {ethereum: 0, solana: 0},
+                admissionKind: "new", approvalRequired: true,
+                state: configurationState(),
             };
         }
         if (message.subject === "getResponse") {
@@ -1601,7 +1632,7 @@ test("relays correlated disconnects with trusted page identity", async () => {
             name: "revokePermissions",
             provider: "ethereum",
             result: null,
-            state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+            state: {context: "a".repeat(64), revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
             approvalCommitted: false,
         }
         : undefined});
@@ -1615,20 +1646,42 @@ test("relays correlated disconnects with trusted page identity", async () => {
     assert.equal(disconnect.configurationKey, "https://wallet.example");
     assert.equal(harness.postedMessages.at(-1).message.response.result, null);
     const before = harness.postedMessages.length;
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: {revisions: {ethereum: 0, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null},
-    });
+    harness.context.bigWalletPublishConfiguration({context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null}, "https://wallet.example", harness.generation());
     assert.equal(harness.postedMessages.length, before + 1);
+});
+
+test("disconnect waits for native revocation and tab notification", async () => {
+    const connected = {...configurationState({ethereum: 1, solana: 0}),
+        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}};
+    const result = {
+        kind: "result", id: 12, name: "revokePermissions", provider: "ethereum",
+        result: null, state: configurationState({ethereum: 2, solana: 0}), approvalCommitted: false,
+    };
+    const harness = makeHarness({
+        configurationResponse: {kind: "configuration", state: connected},
+        sendMessage: async message => {
+            if (message.subject !== "disconnect") { return undefined; }
+            await new Promise(resolve => harness.context.setTimeout(resolve, 4500));
+            await new Promise(resolve => harness.context.setTimeout(resolve, 1000));
+            return result;
+        },
+    });
+    await settle();
+    harness.dispatchPage("disconnect", {id: 12, provider: "ethereum"});
+    await settle();
+    await harness.runTimer();
+    await harness.runTimer();
+    assert.deepEqual(harness.postedMessages.at(-1).message.response, result);
+    assert.equal(harness.context.bigWalletConfigurationState.state.ethereum.address, "");
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "disconnect").length, 1);
+    assert.equal(harness.pendingTimers(), 0);
 });
 
 test("delayed disconnect snapshots reach the provider for ordered reconciliation", async () => {
     const address = "0x0000000000000000000000000000000000000001";
     const configuration = revision => ({
         kind: "configuration",
-        state: {revisions: {ethereum: revision, solana: 0}, ethereum: {address: address, chainId: "0x1"}, solana: null},
+        state: {context: "a".repeat(64), revisions: {ethereum: revision, solana: 0}, ethereum: {address: address, chainId: "0x1"}, solana: null},
     });
     let resolveDisconnect;
     const harness = makeHarness({
@@ -1640,23 +1693,13 @@ test("delayed disconnect snapshots reach the provider for ordered reconciliation
     await settle();
     harness.dispatchPage("disconnect", {id: 12, provider: "ethereum"});
     await settle();
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: configuration(2).state,
-    });
+    harness.context.bigWalletPublishConfiguration(configuration(2).state, "https://wallet.example", harness.generation());
     const before = harness.postedMessages.length;
     const revokedState = {
         kind: "configuration",
-        state: {revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
+        state: {context: "a".repeat(64), revisions: {ethereum: 1, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
     };
-    await harness.dispatchRuntime({
-        subject: "configurationChanged",
-        configurationKey: "https://wallet.example",
-        workflowVersion: 3,
-        state: revokedState.state,
-    });
+    harness.context.bigWalletPublishConfiguration(revokedState.state, "https://wallet.example", harness.generation());
     assert.equal(harness.postedMessages.length, before + 1);
     resolveDisconnect({
         kind: "result",
@@ -1681,6 +1724,7 @@ test("disconnect failures do not revoke local authorization", async () => {
             configurationResponse: {
                 kind: "configuration",
                 state: {
+                    context: "a".repeat(64),
                     revisions: {ethereum: 2, solana: 0},
                     ethereum: {
                         address: "0x0000000000000000000000000000000000000001",
@@ -1696,7 +1740,7 @@ test("disconnect failures do not revoke local authorization", async () => {
                     id: 14,
                     name: "revokePermissions",
                     provider: "ethereum",
-                    state: {ethereum: {address: "", chainId: "0x1"}, solana: null},
+                    state: {context: "a".repeat(64), ethereum: {address: "", chainId: "0x1"}, solana: null},
                     result: null,
                     approvalCommitted: false,
                 };
@@ -1707,7 +1751,7 @@ test("disconnect failures do not revoke local authorization", async () => {
 
         harness.dispatchPage("disconnect", {id: 14, provider: "ethereum"});
         await settle();
-        if (failure === "timeout") { assert.equal(await harness.runTimer(), true); }
+        if (failure === "timeout") { assert.equal(await harness.runTimer(), true); assert.equal(await harness.runTimer(), true); }
 
         assert.deepEqual(harness.postedMessages.at(-1).message.response, {
             kind: "error",
@@ -1735,7 +1779,7 @@ test("manual switch intent forwards exact trusted identity and worker status", a
             requestToken,
             revisions: {ethereum: 1, solana: 2},
             subject: "manualSwitchAcknowledged",
-            workflowVersion: 3,
+            workflowVersion: 4,
         },
         nativeError({
             id: 30,
@@ -1751,7 +1795,7 @@ test("manual switch intent forwards exact trusted identity and worker status", a
         const response = await harness.dispatchRuntime({
             configurationKey: "https://wallet.example",
             subject: "manualSwitchIntent",
-            workflowVersion: 3,
+            workflowVersion: 4,
         });
 
         assert.deepEqual(clone(response), expected);
@@ -1761,7 +1805,7 @@ test("manual switch intent forwards exact trusted identity and worker status", a
             configurationKey: "https://wallet.example",
             host: "wallet.example",
             subject: "manualSwitchIntent",
-            workflowVersion: 3,
+            workflowVersion: 4,
         }]);
     }
 });
@@ -1776,13 +1820,13 @@ test("manual switch intent rejects mismatched and inexact messages", async () =>
     const base = {
         configurationKey: "https://wallet.example",
         subject: "manualSwitchIntent",
-        workflowVersion: 3,
+        workflowVersion: 4,
     };
     for (const message of [
         {...base, extra: true},
         {...base, configurationKey: "https://other.example"},
         {...base, workflowVersion: 2},
-        {subject: "manualSwitchIntent", workflowVersion: 3},
+        {subject: "manualSwitchIntent", workflowVersion: 4},
         {name: "switchAccount", id: 31},
     ]) {
         assert.equal(await harness.dispatchRuntime(message), undefined);
@@ -1813,7 +1857,7 @@ test("legacy manual-switch result broadcasts are ignored", async () => {
             revisions: {ethereum: 1, solana: 0},
         },
         subject: "manualSwitchResult",
-        workflowVersion: 3,
+        workflowVersion: 4,
     }), undefined);
     assert.equal(harness.postedMessages.length, before);
 });
@@ -1826,7 +1870,7 @@ test("manual switch adapter remains single across content reevaluation", async (
         requestToken,
         revisions: {ethereum: 0, solana: 0},
         subject: "manualSwitchAcknowledged",
-        workflowVersion: 3,
+        workflowVersion: 4,
     };
     const harness = makeHarness({sendMessage: message =>
         message.subject === "manualSwitchIntent" ? status : undefined});
@@ -1836,7 +1880,7 @@ test("manual switch adapter remains single across content reevaluation", async (
     const response = await harness.dispatchRuntime({
         configurationKey: "https://wallet.example",
         subject: "manualSwitchIntent",
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
 
     assert.deepEqual(clone(response), status);
@@ -1852,8 +1896,8 @@ test("file pages use a query-and-fragment-free configuration identity", async ()
         sendMessage: message => message.subject === "message-to-wallet" ? {
             id: 14,
             requestToken,
-            approvalRequired: true,
-            revisions: {ethereum: 0, solana: 0},
+            admissionKind: "new", approvalRequired: true,
+            state: configurationState(),
         } : undefined,
     });
     await settle();
@@ -1868,7 +1912,7 @@ test("file pages use a query-and-fragment-free configuration identity", async ()
 test("response reads cannot deliver a terminal payload or start completion", async () => {
     const harness = makeHarness({sendMessage: message => {
         if (message.subject === "message-to-wallet") {
-            return {id: 7, requestToken, approvalRequired: true, revisions: {ethereum: 0, solana: 0}};
+            return {id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: configurationState()};
         }
         if (message.subject === "getResponse") {
             return {
@@ -1896,7 +1940,7 @@ test("completion retries independently and waits for the explicit delivery resul
     let completions = 0;
     const harness = makeHarness({sendMessage: message => {
         if (message.subject === "message-to-wallet") {
-            return {id: 7, requestToken, approvalRequired: true, revisions: {ethereum: 4, solana: 2}};
+            return {id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: configurationState({ethereum: 4, solana: 2})};
         }
         if (message.subject === "getResponse") { return {id: 7, ready: true}; }
         if (message.subject === "consumeResponse") {
@@ -1917,9 +1961,9 @@ test("completion retries independently and waits for the explicit delivery resul
     for (const completion of harness.runtimeMessages.filter(value => value.subject === "consumeResponse")) {
         assert.equal(completion.requestToken, requestToken);
         assert.equal(completion.configurationKey, "https://wallet.example");
-        assert.deepEqual(completion.revisions, {ethereum: 4, solana: 2});
+        assert.equal("revisions" in completion, false);
     }
-    await harness.dispatchRuntime({subject: "responseReady", id: 7, workflowVersion: 3});
+    await harness.dispatchRuntime({subject: "responseReady", id: 7, workflowVersion: 4});
     const result = {
         kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
         state: null, result: [], approvalCommitted: true,
@@ -1932,41 +1976,170 @@ test("completion retries independently and waits for the explicit delivery resul
     assert.equal(harness.pendingTimers(), 0);
 });
 
-test("execution presence requires the exact live request in its original generation", async () => {
-    let resolveAdmission;
+test("content has no execution-liveness protocol after native approval", async () => {
+    const harness = makeHarness();
+    await settle();
+    const before = harness.runtimeMessages.length;
+    assert.equal(await harness.dispatchRuntime({subject: "requestActive", id: 7, requestToken,
+        configurationKey: "https://wallet.example", workflowVersion: 4}), undefined);
+    assert.equal(harness.runtimeMessages.length, before);
+});
+
+test("failed warm refresh retains the last snapshot and retries a bounded number of times", async () => {
+    let reads = 0;
+    const state = configurationState({ethereum: 3, solana: 0});
+    const harness = makeHarness({configurationResponse: () => ++reads === 1
+        ? {kind: "configuration", state} : {kind: "configurationError", error: {code: 4900, message: "Offline"}}});
+    await settle();
+    assert.equal(harness.nextTimerDelay(), null);
+    harness.focus();
+    await settle();
+    await harness.runTimer();
+    await harness.runTimer();
+    assert.equal(reads, 4);
+    assert.equal(harness.nextTimerDelay(), null);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), state);
+    assert.equal(harness.postedMessages.some(value => value.message.response.kind === "configurationError"), false);
+});
+
+for (const name of ["requestAccounts", "switchEthereumChain", "addEthereumChain"]) {
+    test(`${name} retries a stale native snapshot with a fresh admission attempt`, async () => {
+        const state = configurationState({ethereum: 1, solana: 1});
+        let admissions = 0;
+        const harness = makeHarness({sendMessage: message => {
+            if (message.subject !== "message-to-wallet") { return undefined; }
+            return ++admissions === 1 ? {kind: "error", id: message.message.id, provider: "ethereum", name,
+                state, error: {code: 4100, message: "Changed"}}
+                : {id: message.message.id, requestToken, admissionKind: "new", approvalRequired: true, state};
+        }});
+        await settle();
+        const request = {...dappRequest(), name};
+        if (name !== "requestAccounts") { request.body.object = {chainId: "0xa"}; }
+        harness.dispatchPage("request", request);
+        await settle();
+        const sent = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
+        assert.equal(sent.length, 2);
+        assert.notEqual(sent[0].enqueueAttempt, sent[1].enqueueAttempt);
+        assert.equal(sent[0].admissionDeadline, sent[1].admissionDeadline);
+        assert.deepEqual(sent[1].message, sent[0].message);
+        assert.deepEqual(sent[1].authority, {context: state.context, revisions: state.revisions});
+        assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "waiting");
+    });
+}
+
+for (const address of ["0x" + "2".repeat(40), ""]) {
+    test(`chain-switch retry refreshes the account after ${address ? "an account change" : "disconnect"}`, async () => {
+        const initial = {...configurationState(), ethereum: {address: "0x" + "1".repeat(40), chainId: "0x1"}};
+        const state = {...configurationState({ethereum: 1, solana: 0}), ethereum: {address, chainId: "0x1"}};
+        let admissions = 0;
+        const harness = makeHarness({configurationResponse: {kind: "configuration", state: initial}, sendMessage: message => {
+            if (message.subject !== "message-to-wallet") { return undefined; }
+            return ++admissions === 1 ? {kind: "error", id: message.message.id, provider: "ethereum",
+                name: "switchEthereumChain", state, error: {code: 4100, message: "Changed"}}
+                : {id: message.message.id, requestToken, admissionKind: "new", approvalRequired: true, state};
+        }});
+        await settle();
+        const request = {...dappRequest(), name: "switchEthereumChain",
+            body: {...initial.ethereum, object: {chainId: "0xa"}}};
+        harness.dispatchPage("request", request);
+        await settle();
+        const sent = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
+        assert.equal(sent.length, 2);
+        assert.deepEqual(sent[0].message, request);
+        assert.deepEqual(sent[1].message, {...request, body: {...request.body, address}});
+        assert.deepEqual(sent[1].authority, {context: state.context, revisions: state.revisions});
+    });
+}
+
+test("signing and ambiguous admissions never retry with refreshed authority", async () => {
+    const harness = makeHarness({sendMessage: message => message.subject === "message-to-wallet" ? {
+        kind: "error", id: message.message.id, provider: "ethereum", name: "signMessage",
+        state: configurationState({ethereum: 1, solana: 0}), error: {code: 4100, message: "Changed"},
+    } : undefined});
+    await settle();
+    harness.dispatchPage("request", {...dappRequest(), name: "signMessage"});
+    await settle();
+    assert.equal(harness.runtimeMessages.filter(value => value.subject === "message-to-wallet").length, 1);
+    assert.equal(harness.postedMessages.at(-1).message.response.error.code, 4100);
+});
+
+test("disconnect retries one stale precondition and replays a lost reply with the same new attempt", async () => {
+    let calls = 0;
+    const revised = configurationState({ethereum: 1, solana: 0});
+    const reconnected = {...configurationState({ethereum: 3, solana: 0}),
+        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}};
     const harness = makeHarness({sendMessage: message => {
-        if (message.subject === "message-to-wallet") {
-            return new Promise(resolve => { resolveAdmission = resolve; });
-        }
-        if (message.subject === "getResponse") { return {id: 7, pending: true}; }
+        if (message.subject !== "disconnect") { return undefined; }
+        calls += 1;
+        if (calls === 1) { return {id: message.id, provider: "ethereum", name: "revokePermissions", kind: "error",
+            error: {code: 4100, message: "Changed"}, state: revised}; }
+        if (calls === 2) { return undefined; }
+        return {id: message.id, provider: "ethereum", name: "revokePermissions", kind: "result",
+            result: null, approvalCommitted: false, state: reconnected};
     }});
-    const probe = {
-        subject: "requestActive", id: 7, configurationKey: "https://wallet.example",
-        requestToken, workflowVersion: 3,
-    };
     await settle();
-    harness.dispatchPage("request", dappRequest());
+    harness.dispatchPage("disconnect", {id: 7, provider: "ethereum"});
     await settle();
-    assert.deepEqual(clone(await harness.dispatchRuntime(probe)), {id: 7, requestToken, active: false});
-    resolveAdmission({id: 7, requestToken, approvalRequired: true, revisions: {ethereum: 0, solana: 0}});
+    const sent = harness.runtimeMessages.filter(value => value.subject === "disconnect");
+    assert.equal(sent.length, 3);
+    assert.notEqual(sent[0].attempt, sent[1].attempt);
+    assert.equal(sent[1].attempt, sent[2].attempt);
+    assert.deepEqual(sent[1].authority, sent[2].authority);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), reconnected);
+    assert.equal(harness.postedMessages.at(-1).message.response.kind, "result");
+});
+
+test("disconnect never retries a precondition from another native context", async () => {
+    const harness = makeHarness({sendMessage: message => message.subject === "disconnect" ? {
+        id: message.id, provider: "ethereum", name: "revokePermissions", kind: "error",
+        error: {code: 4100, message: "Different context"}, state: configurationState({ethereum: 1, solana: 0}, "b".repeat(64)),
+    } : undefined});
     await settle();
-    harness.context.document.visibilityState = "hidden";
-    assert.deepEqual(clone(await harness.dispatchRuntime(probe)), {id: 7, requestToken, active: true});
-    assert.equal((await harness.dispatchRuntime({...probe, id: 8})).active, false);
-    assert.equal((await harness.dispatchRuntime({...probe, requestToken: "123e4567-e89b-12d3-a456-426614174001"})).active, false);
-    assert.equal((await harness.dispatchRuntime({...probe, configurationKey: "https://other.example"})).active, false);
     const generation = harness.generation();
-    harness.context.bigWalletProviderGeneration = "replacement";
-    assert.equal((await harness.dispatchRuntime(probe)).active, false);
-    harness.context.bigWalletProviderGeneration = generation;
-    harness.context.window.location.href = "https://other.example";
-    assert.equal((await harness.dispatchRuntime(probe)).active, false);
-    harness.context.window.location.href = "https://wallet.example/dapp";
-    [...harness.context.bigWalletRequests.values()][0].phase = "completing";
-    assert.equal((await harness.dispatchRuntime(probe)).active, false);
-    assert.equal(await harness.dispatchRuntime(probe, popupSender), undefined);
-    assert.equal(await harness.dispatchRuntime({...probe, unexpected: true}), undefined);
-    const freshPage = makeHarness();
+    harness.dispatchPage("disconnect", {id: 7, provider: "ethereum"});
     await settle();
-    assert.equal((await freshPage.dispatchRuntime(probe)).active, false);
+    assert.equal(harness.runtimeMessages.filter(value => value.subject === "disconnect").length, 1);
+    assert.notEqual(harness.generation(), generation);
+    const terminal = harness.postedMessages.at(-1).message;
+    assert.equal(terminal.providerGeneration, generation);
+    assert.equal(terminal.response.state, null);
+});
+
+for (const provider of ["ethereum", "solana"]) {
+    test(`${provider} queued page signing keeps its observed revision after same-account revoke and regrant`, async () => {
+        const observed = 1;
+        const current = 3;
+        const initialState = configurationState({ethereum: 1, solana: 1});
+        const refreshedState = configurationState({ethereum: 3, solana: 3});
+        const harness = makeHarness({configurationResponse: {kind: "configuration", state: initialState},
+            sendMessage: message => {
+                if (message.subject !== "message-to-wallet") { return undefined; }
+                assert.equal(message.authority.revisions[provider], observed);
+                assert.equal(message.authority.revisions[provider === "ethereum" ? "solana" : "ethereum"], current);
+                assert.deepEqual(Object.keys(message.message).sort(), ["body", "id", "name", "provider"]);
+                return {kind: "error", id: message.message.id, provider, name: "signMessage",
+                    state: refreshedState, error: {code: 4100, message: "Authorization changed"}};
+            }});
+        await settle();
+        const generation = harness.generation();
+        const queued = {id: 7, provider, name: "signMessage", body: provider === "ethereum"
+            ? {address: "", chainId: "0x1", object: {data: "0x01"}}
+            : {publicKey: "", object: {message: "2"}}};
+        harness.context.bigWalletPublishConfiguration(refreshedState, "https://wallet.example", generation);
+        harness.dispatchPage("request", queued, generation, observed);
+        await settle();
+        assert.equal(harness.runtimeMessages.filter(message => message.subject === "message-to-wallet").length, 1);
+        assert.equal(harness.postedMessages.at(-1).message.response.error.code, 4100);
+    });
+}
+
+test("page requests reject missing malformed and overflowing observed revisions", async () => {
+    const harness = makeHarness();
+    await settle();
+    for (const observedRevision of [null, -1, 1.5, "1", Number.MAX_SAFE_INTEGER + 1]) {
+        harness.dispatchPage("request", dappRequest(), harness.generation(), observedRevision);
+    }
+    harness.context.bigWalletEnqueue(dappRequest(), harness.generation(), undefined);
+    await settle();
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "message-to-wallet").length, 0);
 });

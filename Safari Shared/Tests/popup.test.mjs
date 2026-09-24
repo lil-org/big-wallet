@@ -46,11 +46,11 @@ test("configuration reads carry trusted tab identity", async () => {
         subject: "getLatestConfiguration",
         host: "wallet.example",
         configurationKey: "https://wallet.example",
-        workflowVersion: 3,
+        workflowVersion: 4,
     }]);
 });
 
-test("native approve uses the worker proxy while other commands stay direct", async () => {
+test("popup approval and rejection use native directly", async () => {
     const harness = popupHarness();
     const request = pendingRequest();
     await harness.call(
@@ -64,33 +64,22 @@ test("native approve uses the worker proxy while other commands stay direct", as
         request.requestToken, requestToken(101), request
     ), /Password payloads are not supported/);
 
-    assert.deepEqual(harness.workerMessages, [{
-        subject: "approveRequestWithCurrentRevisions",
-        id: 7,
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
-        requestToken: request.requestToken,
-        reviewToken: requestToken(101),
-        payload: {cluster: "devnet"},
-        privateBrowsing: false,
-        workflowVersion: 3,
-    }]);
+    assert.deepEqual(harness.workerMessages, []);
     assert.deepEqual(harness.nativeMessages, [{
-        subject: "rejectRequest",
-        id: 7,
-        requestToken: request.requestToken,
-        workflowVersion: 3,
+        subject: "approveRequest", id: 7, requestToken: request.requestToken,
+        reviewToken: requestToken(101), payload: {cluster: "devnet"}, workflowVersion: 4,
         __bwPrivateBrowsing: false,
-    }]);
+    }, {subject: "rejectRequest", id: 7, requestToken: request.requestToken,
+        workflowVersion: 4, __bwPrivateBrowsing: false}]);
 });
 
 test("pending and completed queue entries require exact trusted identities", () => {
     const harness = popupHarness();
-    const request = {...pendingRequest(), revisions: {ethereum: 1, solana: 2}};
+    const request = pendingRequest();
     assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeQueue", {requests: [request], completedResponses: []})), true);
     assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeQueue", {requests: [{...request, configurationKey: undefined}], completedResponses: []})), false);
     assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeQueue", {requests: [{...request, provider: "other"}], completedResponses: []})), false);
-    assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeQueue", {requests: [{...request, revisions: undefined}], completedResponses: []})), false);
+    assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeQueue", {requests: [{...request, sequence: undefined}], completedResponses: []})), false);
 
     const completed = completedResponse(8);
     assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeQueue", {requests: [], completedResponses: [completed]})), true);
@@ -180,7 +169,7 @@ test("update recovery checks the exact content build response", async () => {
         buildVersion: packagedBuildVersion,
         nonce: updateProbeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     }});
     assert.equal(await current.probe(), null);
     assert.deepEqual(current.tabMessages, [{
@@ -188,7 +177,7 @@ test("update recovery checks the exact content build response", async () => {
         message: {
             nonce: updateProbeNonce,
             subject: "workflowProbe",
-            workflowVersion: 3,
+            workflowVersion: 4,
         },
     }]);
     assert.deepEqual(current.permissionQueries, [{origins: ["https://wallet.example/*"]}]);
@@ -197,7 +186,7 @@ test("update recovery checks the exact content build response", async () => {
         buildVersion: previousBuildVersion,
         nonce: updateProbeNonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     }});
     assert.equal(await oldBuild.probe(), oldBuild.tab);
     for (const response of [undefined, updateProbeTimeout]) {
@@ -209,13 +198,13 @@ test("update recovery checks the exact content build response", async () => {
             buildVersion: previousBuildVersion,
             nonce: "00000005000000060000000700000008",
             subject: "workflowProbe",
-            workflowVersion: 3,
+            workflowVersion: 4,
         },
         {
             buildVersion: previousBuildVersion,
             nonce: updateProbeNonce,
             subject: "workflowProbe",
-            workflowVersion: 3,
+            workflowVersion: 4,
             extra: true,
         },
     ]) {
@@ -242,7 +231,7 @@ async function idleRecoveryRefreshHarness(reload = async () => {}) {
         buildVersion: previousBuildVersion,
         nonce: message.nonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     })});
     await harness.boot();
     harness.clearMessages();
@@ -323,7 +312,7 @@ test("queue notifications win the click probe without clearing recovery", async 
         buildVersion: packagedBuildVersion,
         nonce: raced.tabMessages.at(-1).message.nonce,
         subject: "workflowProbe",
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
     await refresh;
     assert.deepEqual(raced.reloaded, []);
@@ -339,14 +328,14 @@ function completedResponse(id) {
         host: "wallet.example",
         configurationKey: "https://wallet.example",
         requestToken: requestToken(id),
-        revisions: {ethereum: 0, solana: 0},
+
     };
 }
 
 test("completed-response apply uses the exact worker contract", async () => {
     let workerResponse = {applied: true};
     const harness = popupHarness({worker: () => workerResponse});
-    const request = {...completedResponse(7), revisions: {ethereum: 3, solana: 5}};
+    const request = completedResponse(7);
     assert.equal(await harness.call("applyCompletedResponse", request), "applied");
     workerResponse = {id: 7, missing: true};
     assert.equal(await harness.call("applyCompletedResponse", request), "missing");
@@ -355,8 +344,21 @@ test("completed-response apply uses the exact worker contract", async () => {
     assert.deepEqual(harness.workerMessages[0], {
         subject: "applyCompletedResponse",
         ...request,
-        workflowVersion: 3,
+        workflowVersion: 4,
     });
+});
+
+test("completed-response apply waits for the full native delivery round trip", async () => {
+    const harness = popupHarness({worker: () => new Promise(resolve => {
+        harness.context.setTimeout(() => resolve({applied: true}), 11_000);
+    })});
+    const pending = harness.call("applyCompletedResponse", completedResponse(7));
+    await flushPopup();
+    const next = [...harness.timers.values()].sort((left, right) => left.delay - right.delay)[0];
+    await harness.fire(next.id);
+    assert.equal(await pending, "applied");
+    assert.equal(harness.workerMessages.length, 1);
+    assert.equal(harness.timers.size, 0);
 });
 
 function recoveredQueueHarness({failedID, includeCompletions = true, missingID} = {}) {
@@ -471,7 +473,7 @@ test("popup runtime policy rejects unauthorized notifications without queue or U
             id: harness.browser.runtime.id,
             url: harness.browser.runtime.getURL(""),
         };
-        const message = {subject: "pendingRequestAvailable", workflowVersion: 3};
+        const message = {subject: "pendingRequestAvailable", workflowVersion: 4};
         const senders = [
             null,
             {},
@@ -491,9 +493,9 @@ test("popup runtime policy rejects unauthorized notifications without queue or U
         const denied = senders.map(sender => ({sender, message}));
         denied.push(...[
             "rpc", "message-to-wallet", "getResponse", "getLatestConfiguration", "disconnect",
-            "approveRequestWithCurrentRevisions", "applyCompletedResponse", "updatePendingRequestBadge",
+            "approveRequest", "applyCompletedResponse", "updatePendingRequestBadge",
             "responseReady", "workflowProbe", "manualSwitchIntent", "configurationChanged", "unknown",
-        ].map(subject => ({sender: worker, message: {subject, workflowVersion: 3}})));
+        ].map(subject => ({sender: worker, message: {subject, workflowVersion: 4}})));
         denied.push(...[null, {...message, extra: true}, {...message, workflowVersion: 2}]
             .map(message => ({sender: worker, message})));
         const controller = harness.controller;
@@ -733,9 +735,9 @@ function manualSwitchAcknowledgement(overrides = {}) {
         configurationKey: "https://wallet.example",
         id: 41,
         requestToken: requestToken(41),
-        revisions: {ethereum: 0, solana: 0},
+        state: {context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}, ethereum: {address: "", chainId: "0x1"}, solana: null},
         subject: "manualSwitchAcknowledged",
-        workflowVersion: 3,
+        workflowVersion: 4,
         ...overrides,
     };
 }
@@ -751,20 +753,35 @@ test("manual Switch Account sends one exact stateless intent with a full native 
         message: {
             configurationKey: "https://wallet.example",
             subject: "manualSwitchIntent",
-            workflowVersion: 3,
+            workflowVersion: 4,
         },
     }]);
     assert.equal(harness.nativeMessages.length, 1);
     assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
     assert.equal(harness.get("idle-switch-account").disabled, true);
-    assert.equal(harness.timerHistory[0].delay, 10_000);
+    assert.equal(harness.timerHistory[0].delay, 40_000);
     queue.resolve({completedResponses: [], requests: []});
     await switching;
 });
 
+test("manual Switch Account waits for retries and completion draining", async () => {
+    const harness = await manualSwitchHarness(() => new Promise(resolve => {
+        harness.context.setTimeout(() => resolve(manualSwitchAcknowledgement()), 37_000);
+    }));
+    const pending = harness.queue.switchAccountFromIdle();
+    await flushPopup();
+    const next = [...harness.timers.values()].sort((left, right) => left.delay - right.delay)[0];
+    await harness.fire(next.id);
+    await pending;
+    assert.equal(harness.tabMessages.length, 1);
+    assert.equal(harness.nativeMessages[0]?.subject, "getPendingRequests");
+    assert.notEqual(harness.get("idle-connection").textContent, "Failed to load");
+    assert.equal(harness.timers.size, 0);
+});
+
 test("manual Switch Account accepts canonical native handles and terminal success", async () => {
     const responses = [
-        manualSwitchAcknowledgement({approvalRequired: false, id: 17, revisions: {ethereum: 3, solana: 2}}),
+        manualSwitchAcknowledgement({approvalRequired: false, id: 17}),
         manualSwitchAcknowledgement(),
         nativeResult({
             id: 41,
@@ -815,8 +832,9 @@ test("an earlier idle configuration read cannot overwrite a manual Switch Accoun
     await harness.boot();
     await harness.get("idle-switch-account").click();
     configuration.resolve({kind: "configuration", state: {
+        context: "a".repeat(64),
         ethereum: {address: "", chainId: "0x1"}, solana: null,
-        revisions: {ethereum: 0, solana: 0},
+
     }});
     await flushPopup();
     assert.equal(harness.get("idle-connection").textContent, error.message);
@@ -828,7 +846,7 @@ test("manual Switch Account rejects undefined malformed and cross-key replies", 
         undefined,
         {id: 41, name: "switchAccount"},
         {admissionDeadline: Date.now() + 60_000, configurationKey: "https://wallet.example",
-            id: 41, subject: "manualSwitchInFlight", workflowVersion: 3},
+            id: 41, subject: "manualSwitchInFlight", workflowVersion: 4},
         manualSwitchAcknowledgement({configurationKey: "https://other.example"}),
         manualSwitchAcknowledgement({id: "41"}),
     ]) {
@@ -867,7 +885,7 @@ for (const recovery of ["queue failure", "extension update"]) {
                 buildVersion: previousBuildVersion,
                 nonce: message.nonce,
                 subject: "workflowProbe",
-                workflowVersion: 3,
+                workflowVersion: 4,
             }),
         });
         await harness.boot();
@@ -901,7 +919,7 @@ function pendingRequest(id = 7, token = 1) {
         provider: "ethereum",
         receivedAt: Date.now(),
         requestToken: requestToken(token),
-        revisions: {ethereum: 0, solana: 0},
+
         sequence: 0,
     };
 }
@@ -979,6 +997,8 @@ function transactionState(request = pendingRequest(), overrides = {}, envelope =
     };
 }
 
+function approvalMessages(harness) { return harness.nativeMessages.filter(message => message.subject === "approveRequest"); }
+
 function popupHarness(options = {}) {
     const states = new Map;
     const handlers = {native: options.native, worker: options.worker, tab: options.tab};
@@ -998,13 +1018,12 @@ function popupHarness(options = {}) {
     };
     const defaultWorker = message => {
         if (message.subject === "getLatestConfiguration") {
-            return {kind: "configuration", state: {ethereum: {address: "", chainId: "0x1"}, solana: null, revisions: {ethereum: 0, solana: 0}}};
+            return {kind: "configuration", state: {context: "a".repeat(64), ethereum: {address: "", chainId: "0x1"}, solana: null, revisions: {ethereum: 0, solana: 0}}};
         }
         if (message.subject === "applyCompletedResponse") {
             model.completed = model.completed.filter(item => item.requestToken !== message.requestToken);
             return {applied: true};
         }
-        if (message.subject === "approveRequestWithCurrentRevisions") { return defaultNative(message); }
         return {status: "ok"};
     };
     const harness = createPopupHarness({
@@ -1017,7 +1036,7 @@ function popupHarness(options = {}) {
             buildVersion: packagedBuildVersion,
             nonce: message.nonce,
             subject: "workflowProbe",
-            workflowVersion: 3,
+            workflowVersion: 4,
         },
     });
     const {context, nativeMessages, timers} = harness;
@@ -1114,8 +1133,8 @@ test("additional approval display fields leave rendering and approval payloads u
         await baseline.get("button-approve").click();
         await extended.get("button-approve").click();
 
-        const approvals = harness => harness.workerMessages.filter(message =>
-            message.subject === "approveRequestWithCurrentRevisions"
+        const approvals = harness => harness.nativeMessages.filter(message =>
+            message.subject === "approveRequest"
         );
         assert.equal(approvals(baseline).length, 1);
         assert.deepEqual(approvals(extended), approvals(baseline));
@@ -1275,7 +1294,7 @@ test("discarding invalid images never makes malformed approval content actionabl
     }
 });
 
-test("controller approval strips caller revisions and passwords at the actual worker boundary", async () => {
+test("controller approval strips caller revisions and passwords at the native boundary", async () => {
     for (const kind of ["signMessage", "addChain"]) {
         const harness = await reviewedPopup(request => kind === "addChain" ? {
             id: request.id,
@@ -1297,17 +1316,15 @@ test("controller approval strips caller revisions and passwords at the actual wo
             revisions: {ethereum: 99, solana: 99},
         });
 
-        assert.deepEqual(harness.nativeMessages, []);
-        assert.deepEqual(harness.workerMessages, [{
-            subject: "approveRequestWithCurrentRevisions",
+        assert.deepEqual(harness.workerMessages, []);
+        assert.deepEqual(harness.nativeMessages, [{
+            subject: "approveRequest",
             id: request.id,
-            host: request.host,
-            configurationKey: request.configurationKey,
             requestToken: request.requestToken,
             reviewToken: requestToken(101),
             payload: {},
-            privateBrowsing: false,
-            workflowVersion: 3,
+            __bwPrivateBrowsing: false,
+            workflowVersion: 4,
         }]);
         assert.equal(harness.followUpTimerId(), null);
         assert.equal(harness.controller.state.state, "review");
@@ -1328,7 +1345,7 @@ test("controller errors explicitly retry the visible request without entering th
     assert.deepEqual(harness.nativeMessages, [{
         subject: "retryApproval",
         id: controller.request.id,
-        workflowVersion: 3,
+        workflowVersion: 4,
         requestToken: controller.request.requestToken,
         __bwPrivateBrowsing: false,
     }]);
@@ -1343,7 +1360,7 @@ test("decisions adopt their current reply immediately without rereading or resub
         const fresh = messageState(controller.request, {
             title: "Current review", reviewToken: requestToken(102),
         });
-        harness.handlers.worker = (message, fallback) => message.subject === "approveRequestWithCurrentRevisions"
+        harness.handlers.native = (message, fallback) => message.subject === "approveRequest"
             ? commandReply(fresh, status) : fallback(message);
 
         await controller.approve({});
@@ -1355,16 +1372,16 @@ test("decisions adopt their current reply immediately without rereading or resub
         assert.equal((controller.presentationActivity.kind === "failed"), false);
         assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
         assert.equal(harness.followUpTimerId(), null);
-        assert.deepEqual(harness.nativeMessages, []);
-        assert.equal(harness.workerMessages.length, 1);
+        assert.deepEqual(harness.workerMessages, []);
+        assert.equal(approvalMessages(harness).length, 1);
     }
 });
 
 test("a completed decision immediately reconciles and acknowledges its durable response", async () => {
     const harness = await reviewedPopup();
     const controller = harness.controller;
-    harness.handlers.worker = (message, fallback) => {
-        if (message.subject !== "approveRequestWithCurrentRevisions") { return fallback(message); }
+    harness.handlers.native = (message, fallback) => {
+        if (message.subject !== "approveRequest") { return fallback(message); }
         harness.model.requests = [];
         harness.model.completed = [{
             ...completedResponse(controller.request.id),
@@ -1379,10 +1396,10 @@ test("a completed decision immediately reconciles and acknowledges its durable r
     assert.equal(controller.activity.kind, "disposed");
     assert.deepEqual(harness.model.completed, []);
     assert.equal(harness.followUpTimerId(), null);
-    assert.ok(harness.nativeMessages.every(message => message.subject === "getPendingRequests"));
+    assert.ok(harness.nativeMessages.every(message => ["approveRequest", "getPendingRequests"].includes(message.subject)));
     assert.deepEqual(harness.workerMessages.filter(message =>
-        ["approveRequestWithCurrentRevisions", "applyCompletedResponse", "responseReady"].includes(message.subject)
-    ).map(message => message.subject), ["approveRequestWithCurrentRevisions", "applyCompletedResponse", "responseReady"]);
+        ["applyCompletedResponse", "responseReady"].includes(message.subject)
+    ).map(message => message.subject), ["applyCompletedResponse", "responseReady"]);
 });
 
 test("unavailable approval storage retains the request instead of reconciling a false completion", async () => {
@@ -1421,7 +1438,7 @@ test("rejectable errors submit tokenless Reject without a refresh", async () => 
     assert.deepEqual(harness.nativeMessages, [{
         subject: "rejectRequest",
         id: controller.request.id,
-        workflowVersion: 3,
+        workflowVersion: 4,
         requestToken: controller.request.requestToken,
         __bwPrivateBrowsing: false,
     }]);
@@ -1498,11 +1515,9 @@ test("terminal decisions fence an older read and poll only after their native re
         const controller = harness.controller;
         harness.handlers.native = (message, fallback) => {
             if (message.subject === "getApprovalState" || message.subject === "retryApproval") { return readGate.promise; }
-            if (message.subject === "rejectRequest") { return actionGate.promise; }
+            if (["rejectRequest", "approveRequest"].includes(message.subject)) { return actionGate.promise; }
             return fallback(message);
         };
-        harness.handlers.worker = (message, fallback) =>
-            message.subject === "approveRequestWithCurrentRevisions" ? actionGate.promise : fallback(message);
         const refresh = controller.readState({refresh: true});
         await flushPopup();
         const decision = controller[subject === "approveRequest" ? "approve" : "reject"](subject === "approveRequest" ? {} : undefined);
@@ -1532,6 +1547,7 @@ test("replacement with the same numeric id disposes old reads actions and mutati
         const replacement = pendingRequest(first.request.id, 2);
         const gate = deferred();
         harness.handlers.native = (message, fallback) => {
+            if (operation === "approval" && message.subject === "approveRequest") { return gate.promise; }
             if (message.requestToken === first.request.requestToken) {
                 const subject = operation === "read" ? "getApprovalState"
                     : operation === "speed" ? "setTransactionSpeed" : "applyTransactionEdits";
@@ -1539,9 +1555,6 @@ test("replacement with the same numeric id disposes old reads actions and mutati
             }
             return fallback(message);
         };
-        harness.handlers.worker = (message, fallback) =>
-            operation === "approval" && message.subject === "approveRequestWithCurrentRevisions"
-                ? gate.promise : fallback(message);
         if (operation === "mutation") {
             harness.get("tx-editor").open = true;
             harness.get("tx-editor").emit("toggle");
@@ -1655,7 +1668,7 @@ test("update recovery renders pending approvals first and keeps a drained popup 
             buildVersion: previousBuildVersion,
             nonce: message.nonce,
             subject: "workflowProbe",
-            workflowVersion: 3,
+            workflowVersion: 4,
         }),
     });
     harness.setState(request, messageState(request));
@@ -1701,7 +1714,7 @@ test("keyboard slider input stays local and one terminal command adopts its rota
     assert.deepEqual(harness.nativeMessages, [{
         subject: "setTransactionSpeed",
         id: controller.request.id,
-        workflowVersion: 3,
+        workflowVersion: 4,
         requestToken: controller.request.requestToken,
         reviewToken: requestToken(101),
         payload: {interaction: "ended", value: 145},
@@ -1751,14 +1764,14 @@ test("approval requires a fresh click after the drag result is displayed", async
     assert.deepEqual(harness.workerMessages, []);
     await harness.get("button-approve").click();
 
-    assert.equal(harness.workerMessages[0].subject, "approveRequestWithCurrentRevisions");
-    assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
+    assert.equal(approvalMessages(harness)[0].subject, "approveRequest");
+    assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(102));
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     slider.emit("pointerup");
     slider.emit("change");
     await flushPopup();
     assert.equal(harness.nativeMessages.filter(message => message.subject === "setTransactionSpeed").length, 1);
-    assert.equal(harness.workerMessages.length, 1);
+    assert.equal(approvalMessages(harness).length, 1);
 });
 
 test("stale or ignored terminal slider commands block approval until a fresh review is displayed", async () => {
@@ -1793,7 +1806,7 @@ test("stale or ignored terminal slider commands block approval until a fresh rev
         assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
         assert.deepEqual(harness.workerMessages, []);
         await harness.get("button-approve").click();
-        assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
+        assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(102));
     }
 });
 
@@ -1963,7 +1976,7 @@ test("alert clicks send the click-time review token and ignore a superseded resp
     assert.deepEqual(harness.nativeMessages, [{
         subject: "resolveApprovalAlert",
         id: controller.request.id,
-        workflowVersion: 3,
+        workflowVersion: 4,
         requestToken: controller.request.requestToken,
         reviewToken: requestToken(101),
         payload: {action: "cancel"},
@@ -2051,8 +2064,8 @@ test("account selection belongs to one controller and old rows cannot change its
     assert.equal(harness.focusCalls.length, focusCount);
     harness.clearMessages();
     await harness.get("button-approve").click();
-    assert.equal(harness.workerMessages[0].requestToken, replacement.requestToken);
-    assert.deepEqual(harness.workerMessages[0].payload, {
+    assert.equal(approvalMessages(harness)[0].requestToken, replacement.requestToken);
+    assert.deepEqual(approvalMessages(harness)[0].payload, {
         chainId: "0x1",
         selectedAccounts: [{
             address: accounts[1].address,
@@ -2072,7 +2085,7 @@ test("approval reads have one token-only shape for refresh and polling", async (
     assert.deepEqual(harness.nativeMessages, Array.from({length: 2}, () => ({
         subject: "getApprovalState",
         id: controller.request.id,
-        workflowVersion: 3,
+        workflowVersion: 4,
         requestToken: controller.request.requestToken,
         __bwPrivateBrowsing: false,
     })));
@@ -2085,7 +2098,7 @@ test("an empty required account selection refreshes without retrying", async () 
     assert.equal(harness.get("button-approve").disabled, false);
     await harness.get("button-approve").click();
     assert.deepEqual(harness.nativeMessages, [{
-        subject: "getApprovalState", id: request.id, workflowVersion: 3,
+        subject: "getApprovalState", id: request.id, workflowVersion: 4,
         requestToken: request.requestToken, __bwPrivateBrowsing: false,
     }]);
     assert.deepEqual(harness.workerMessages, []);
@@ -2235,7 +2248,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             await harness.boot();
             const switching = harness.queue.switchAccountFromIdle();
             await flushPopup();
-            const switchTimeout = [...harness.timers.values()].find(timer => timer.delay === 10_000);
+            const switchTimeout = [...harness.timers.values()].find(timer => timer.delay === 40_000);
             assert.ok(switchTimeout);
             const request = pendingRequest();
             harness.model.requests = [request];
@@ -2254,9 +2267,9 @@ test("late idle switch replies preserve preparing and working requests", async (
                     configurationKey: request.configurationKey,
                     id: 8,
                     requestToken: requestToken(2),
-                    revisions: {ethereum: 0, solana: 0},
+
                     subject: "manualSwitchAcknowledged",
-                    workflowVersion: 3,
+                    workflowVersion: 4,
                 });
             } else if (outcome === "terminal error") {
                 intent.resolve(nativeError({
@@ -2412,7 +2425,7 @@ test("late idle status lookups probes and reloads cannot replace an active reque
                     buildVersion: previousBuildVersion,
                     nonce: message.nonce,
                     subject: "workflowProbe",
-                    workflowVersion: 3,
+                    workflowVersion: 4,
                 }),
             });
             await harness.boot();
@@ -2443,7 +2456,7 @@ test("late idle status lookups probes and reloads cannot replace an active reque
                     buildVersion: changed ? packagedBuildVersion : previousBuildVersion,
                     nonce: harness.tabMessages.at(-1).message.nonce,
                     subject: "workflowProbe",
-                    workflowVersion: 3,
+                    workflowVersion: 4,
                 });
             } else if (changed) {
                 gate.reject(new Error("Late reload failure"));
@@ -2472,7 +2485,7 @@ test("a new empty idle presentation releases Refresh without disturbing its next
                 buildVersion: previousBuildVersion,
                 nonce: message.nonce,
                 subject: "workflowProbe",
-                workflowVersion: 3,
+                workflowVersion: 4,
             });
             const harness = popupHarness({updateRecovery: true, tab: probe});
             await harness.boot();
@@ -2834,7 +2847,7 @@ test("a hung approval disables Cancel without blocking replacement requests", as
     const harness = await reviewedPopup(transactionState);
     const original = harness.controller;
     const gate = deferred();
-    harness.handlers.worker = (message, fallback) => message.subject === "approveRequestWithCurrentRevisions" ? gate.promise : fallback(message);
+    harness.handlers.native = (message, fallback) => message.subject === "approveRequest" ? gate.promise : fallback(message);
     const approving = original.approveCurrent();
     await flushPopup();
     assert.equal(harness.timerHistory.at(-1).delay, 190_000);
@@ -2876,8 +2889,8 @@ test("clicks during a pending fee update are discarded and failure never approve
         if (success) {
             assert.equal(harness.get("button-approve").disabled, false);
             await harness.get("button-approve").click();
-            assert.equal(harness.workerMessages.length, 1);
-            assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
+            assert.equal(approvalMessages(harness).length, 1);
+            assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(102));
         } else {
             assert.equal((controller.presentationActivity.kind === "failed"), true);
             await controller.approve({});
@@ -2890,6 +2903,7 @@ test("idle connection text uses only the canonical decoded provider snapshot", a
     const harness = popupHarness({worker: (message, fallback) => message.subject === "getLatestConfiguration" ? {
         kind: "configuration",
         state: {
+            context: "a".repeat(64),
             revisions: {ethereum: 1, solana: 2},
             ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
             solana: {publicKey: "11111111111111111111111111111111"},
@@ -2906,6 +2920,7 @@ test("idle connection text ignores a chain-only Ethereum configuration", async (
         const harness = popupHarness({worker: (message, fallback) => message.subject === "getLatestConfiguration" ? {
             kind: "configuration",
             state: {
+                context: "a".repeat(64),
                 revisions: {ethereum: 1, solana: solana ? 1 : 0},
                 ethereum: {address: "", chainId: "0x2"},
                 solana,
@@ -2960,7 +2975,7 @@ test("closing a recovered stale draft cannot approve a token whose summary is st
     harness.get("tx-editor").open = false;
     harness.get("tx-editor").emit("toggle");
     await harness.get("button-approve").click();
-    assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
+    assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(102));
 });
 
 test("modal Cancel supersedes a hung alert action only with the native reject capability", async () => {
@@ -3002,7 +3017,7 @@ test("a pending approval locks selection and Cancel until review resumes", async
     const harness = await reviewedPopup(selectionState);
     const controller = harness.controller;
     const gate = deferred();
-    harness.handlers.worker = (message, fallback) => message.subject === "approveRequestWithCurrentRevisions" ? gate.promise : fallback(message);
+    harness.handlers.native = (message, fallback) => message.subject === "approveRequest" ? gate.promise : fallback(message);
     const row = harness.get("accounts-list").children[0];
     const selected = normalized(controller.presentation.accounts);
     const approving = controller.approveCurrent();

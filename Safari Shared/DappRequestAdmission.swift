@@ -57,6 +57,7 @@ final class DappRequestAdmission {
         case .queued:
             return .approvalRequired
         }
+        guard await store.authorityIsCurrent(handle: handle) else { return .unavailable }
         let preparation: DappRequestPreparation
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent

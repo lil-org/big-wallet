@@ -832,6 +832,9 @@
 		FACA00000000000000000011 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000001 /* RemoteImageLoader.swift */; };
 		FACA00000000000000000012 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000001 /* RemoteImageLoader.swift */; };
 		FACA00000000000000000013 /* RemoteImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000002 /* RemoteImageLoaderTests.swift */; };
+		C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
+		C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
+		C0DE0A900000000000000013 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1150,6 +1153,7 @@
 		F5043FECAA8BA2EEB19DA712 /* PeerMeta.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
 		FACA00000000000000000001 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
 		FACA00000000000000000002 /* RemoteImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoaderTests.swift; sourceTree = "<group>"; };
+		C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAuthorityTransportTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1249,6 +1253,7 @@
 				2FA200000000000000000001 /* CustomNetworkStorageTests.swift */,
 				2C0000012FA7000000000001 /* BigUIntTests.swift */,
 				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
+				C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */,
 				BF4000012FB6000000000000 /* PopupStringsTests.swift */,
 				C0DE00900000000000000002 /* ApprovalResolutionTests.swift */,
 				BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */,
@@ -3210,6 +3215,7 @@
 				D0A301012FD1000000000001 /* SafariApprovalVaultTests.swift in Sources */,
 				BF5C00112FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00012FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
+				C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */,
 				BF4000112FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */,
 				2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */,
@@ -3451,6 +3457,7 @@
 				C0DE00500000000000000013 /* NativeApprovalResponseTests.swift in Sources */,
 				BF5C00122FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00022FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
+				C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */,
 				BF4000122FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */,
 				2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */,
@@ -3491,6 +3498,7 @@
 				D0A301022FD1000000000001 /* SafariApprovalVaultTests.swift in Sources */,
 				BF5C00132FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00032FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
+				C0DE0A900000000000000013 /* NativeAuthorityTransportTests.swift in Sources */,
 				BF4000132FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000023 /* ApprovalResolutionTests.swift in Sources */,
 				2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */,

@@ -262,6 +262,7 @@ struct ApprovedWalletSigningOperation: Sendable {
               deadline.timeIntervalSince1970.isFinite,
               let approvedAccount = approval.signingAccount,
               approvedAccount.isValid,
+              request.authorizedAccount == approvedAccount,
               approvedAccount.coin.correspondingInpageProvider == request.provider
         else { return nil }
         self.handle = handle
@@ -446,6 +447,38 @@ final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
     }
 }
 
+final class AuthorityBoundWalletSigner: WalletSigning {
+
+    let signer: any WalletSigning
+    private let authorityIsCurrent: @MainActor () async -> Bool
+
+    init(
+        signer: any WalletSigning,
+        authorityIsCurrent: @escaping @MainActor () async -> Bool
+    ) {
+        self.signer = signer
+        self.authorityIsCurrent = authorityIsCurrent
+    }
+
+    @MainActor
+    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        guard !Task.isCancelled, await authorityIsCurrent() else {
+            invalidate()
+            return .failure(.authorizationUnavailable)
+        }
+        let result = await signer.sign()
+        guard !Task.isCancelled, await authorityIsCurrent() else {
+            invalidate()
+            return .failure(.authorizationUnavailable)
+        }
+        return result
+    }
+
+    func invalidate() {
+        signer.invalidate()
+    }
+}
+
 struct WalletReviewCatalog {
 
     let identity: WalletCatalogIdentity
@@ -459,6 +492,12 @@ struct WalletReviewCatalog {
         return orderedAccounts.first { candidate in
             candidate.account.coin == coin &&
                 coin.normalizedAddress(candidate.account.address) == normalized
+        }
+    }
+
+    func specificAccount(descriptor: WalletAccountDescriptor) -> SpecificWalletAccount? {
+        orderedAccounts.first {
+            descriptor.matches(walletID: $0.walletId, account: $0.account)
         }
     }
 

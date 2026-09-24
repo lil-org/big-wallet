@@ -75,7 +75,11 @@ final class DurableApprovalExecutor {
     ) async -> Result {
         await execute(
             claim: claim,
-            plan: .ordinary,
+            plan: ExecutionPlan(
+                authority: .ordinary,
+                deadline: claim.executionDeadline,
+                acquireWalletLease: nil
+            ),
             operation: operation
         )
     }
@@ -89,7 +93,7 @@ final class DurableApprovalExecutor {
         await execute(
             claim: claim,
             plan: .signing(
-                deadline: deadline,
+                deadline: min(deadline, claim.executionDeadline),
                 acquireWalletLease: acquireWalletLease
             ),
             operation: operation
@@ -113,6 +117,7 @@ final class DurableApprovalExecutor {
         plan: ExecutionPlan,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
+        guard await store.authorityIsCurrent(handle: claim.handle) else { return .ownershipLost }
         let permit: ExtensionBridge.ExecutionPermit
         switch await store.begin(claim: claim) {
         case .began(let value):
@@ -138,6 +143,9 @@ final class DurableApprovalExecutor {
             operationResult = await operation()
         }
         if case .rollback = operationResult {
+            return await rollback(permit: permit)
+        }
+        guard await store.authorityIsCurrent(handle: claim.handle) else {
             return await rollback(permit: permit)
         }
         var acquiredExecutionLease: WalletExecutionLease?
@@ -207,28 +215,6 @@ final class DurableApprovalExecutor {
         }
         guard let deadline = plan.deadline, clock() >= deadline else { return nil }
         return await rollback(permit: permit)
-    }
-
-    static func approvalRevisionsMatch(
-        action: DappRequestAction? = nil,
-        request: SafariRequest,
-        stored: ExtensionBridge.ProviderRevisions,
-        current: ExtensionBridge.ProviderRevisions?
-    ) -> Bool {
-        if let action, case .addEthereumChain = action { return true }
-        if case .ethereum(let body) = request.body,
-           body.method == .addEthereumChain {
-            return true
-        }
-        guard let current else { return false }
-        switch request.provider {
-        case .ethereum:
-            return stored.ethereum == current.ethereum
-        case .solana:
-            return stored.solana == current.solana
-        case .unknown, .multiple:
-            return stored == current
-        }
     }
 
     private func complete(

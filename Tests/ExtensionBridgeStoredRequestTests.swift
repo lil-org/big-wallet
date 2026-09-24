@@ -68,22 +68,1418 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    func testAuthorityBootstrapPersistsOnlyProfileIdentityAndWarmReadsAreReadOnly() throws {
+        var writes = 0
+        var synchronizations = 0
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in writes += 1; try ApprovalStoreTestPersistence.write(data, url) },
+            synchronizePublishedFile: { _ in synchronizations += 1 }
+        ))
+        guard case .snapshot(let first) = store.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil) else {
+            return XCTFail("Expected initial authority snapshot")
+        }
+        var observedRoot = try XCTUnwrap(rootURL)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = false
+        try observedRoot.setResourceValues(values)
+        guard case .snapshot(let second) = store.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil),
+              case .snapshot(let other) = store.configurationSnapshot(configurationKey: "https://other.example", profileIdentifier: nil) else {
+            return XCTFail("Expected observational authority snapshots")
+        }
+        XCTAssertEqual(try observedRoot.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, false)
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(synchronizations, 0)
+        XCTAssertEqual(first.version, second.version)
+        XCTAssertNotEqual(first.version.context, other.version.context)
+        XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
+        XCTAssertNil(first.ethereumAccount)
+        XCTAssertNil(first.solanaAccount)
+    }
+
+    func testMissingOrMismatchedGrantInvalidatesSigningButPreservesCommittedResults() async throws {
+        let accounts = [authorityTestAccount(), WalletAccountDescriptor(
+            walletID: "solana-wallet", coin: .solana, normalizedAddress: String(repeating: "1", count: 32),
+            derivationPath: "m/44'/501'/0'/0'")]
+        for (providerIndex, account) in accounts.enumerated() {
+            let baseID = 68_000 + providerIndex * 20
+            let grant = try await grantAuthority(account, id: baseID)
+            let originalData = try Data(contentsOf: defaultProfileURL)
+            let grantResponse = try await deliveredAuthority(grant.handle)
+            for (index, replaceAccount) in [false, true].enumerated() {
+                try originalData.write(to: defaultProfileURL, options: .atomic)
+                func admit(_ id: Int) async throws -> (request: SafariRequest, handle: ExtensionBridge.Handle) {
+                    let fixture = try makeFixture(id: id)
+                    var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+                    if account.coin == .ethereum {
+                        raw["name"] = "signPersonalMessage"
+                    } else {
+                        raw["provider"] = "solana"
+                        raw["name"] = "signMessage"
+                        raw["body"] = ["publicKey": account.normalizedAddress, "object": ["params": ["message": "1111"]]]
+                    }
+                    let signing = try authorityFixture(raw)
+                    let handle = try accepted(await bridge.enqueue(ingress: signing.ingress, profileIdentifier: nil)).handle
+                    return (signing.request, handle)
+                }
+                let pending = try await admit(baseID + index * 5 + 1)
+                let claimed = try await admit(baseID + index * 5 + 2)
+                let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
+                let permit = try executionPermit(await bridge.begin(claim: claim))
+                let broadcast = try await admit(baseID + index * 5 + 3)
+                let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
+                let broadcastPermit = try executionPermit(await bridge.begin(claim: broadcastClaim))
+                let recovery = ambiguousSubmissionResponse(for: broadcast.request, transactionHash: "0xgrant-check")
+                    .markingApprovalCommitted()
+                let checkpoint = await bridge.prepareBroadcast(permit: broadcastPermit, recoveryResponse: recovery, authority: .ordinary)
+                XCTAssertEqual(checkpoint, .persisted)
+                let before = try await removalSnapshot()
+                try mutateStoredPermissions { origins in
+                    var origin = try XCTUnwrap(origins["https://wallet.example"] as? [String: Any])
+                    let key = account.coin == .ethereum ? "ethereumAccount" : "solanaAccount"
+                    if replaceAccount {
+                        var replacement = try XCTUnwrap(origin[key] as? [String: Any])
+                        replacement["walletID"] = "different-wallet"
+                        origin[key] = replacement
+                    } else {
+                        origin.removeValue(forKey: key)
+                    }
+                    origins["https://wallet.example"] = origin
+                }
+                let current = await bridge.authorityIsCurrent(handle: claimed.handle)
+                XCTAssertFalse(current)
+                let disconnected = try await removalSnapshot()
+                XCTAssertNil(disconnected.ethereumAccount)
+                XCTAssertNil(disconnected.solanaAccount)
+                XCTAssertGreaterThan(disconnected.version.revisions.ethereum, before.version.revisions.ethereum)
+                XCTAssertGreaterThan(disconnected.version.revisions.solana, before.version.revisions.solana)
+                guard case .responded = await bridge.claim(handle: pending.handle) else {
+                    return XCTFail("Missing grants must retire pending signing")
+                }
+                _ = await bridge.complete(permit: permit, response: response(for: claimed.request).markingApprovalCommitted(), authority: .ordinary)
+                for handle in [pending.handle, claimed.handle] {
+                    let delivery = try await deliveredAuthority(handle)
+                    XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+                }
+                broadcastPermit.releaseLease()
+                let broadcastDelivery = try await deliveredAuthority(broadcast.handle)
+                XCTAssertTrue(NSDictionary(dictionary: recovery.json).isEqual(to: broadcastDelivery.response))
+                let retainedGrant = try await deliveredAuthority(grant.handle)
+                XCTAssertTrue(NSDictionary(dictionary: grantResponse.response).isEqual(to: retainedGrant.response))
+            }
+        }
+    }
+
+    func testWalletRemovalRepairsPermissionsInInactiveProfiles() async throws {
+        let inactiveProfile = UUID()
+        _ = try await grantAuthority(authorityTestAccount(), id: 68_100, profileIdentifier: inactiveProfile)
+        let url = profileURL(inactiveProfile)
+        var profile = try XCTUnwrap(PropertyListSerialization.propertyList(
+            from: Data(contentsOf: url), options: [], format: nil) as? [String: Any])
+        var origins = try XCTUnwrap(profile["origins"] as? [String: Any])
+        origins["https://wallet.example"] = "unreadable permissions"
+        profile["origins"] = origins
+        try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+            .write(to: url, options: .atomic)
+
+        var removed = false
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "unrelated-wallet")) { removed = true }
+        XCTAssertTrue(removed)
+        let recovered = try await removalSnapshot(profileIdentifier: inactiveProfile)
+        XCTAssertNil(recovered.ethereumAccount)
+        XCTAssertNil(recovered.solanaAccount)
+    }
+
+    @MainActor
+    func testManualSwitchPreservesExactDuplicateWalletGrantsAfterReload() async throws {
+        let ethereum = WalletAccountDescriptor(walletID: "second-wallet", coin: .ethereum,
+            normalizedAddress: authorityTestAccount().normalizedAddress, derivationPath: "m/44'/60'/0'/0/0")
+        let solana = WalletAccountDescriptor(walletID: "second-wallet", coin: .solana,
+            normalizedAddress: String(repeating: "1", count: 32), derivationPath: "m/44'/501'/0'/0'")
+        let granted = [ethereum, solana]
+        let duplicates = granted.map {
+            WalletAccountDescriptor(walletID: "first-wallet", account: $0.account)
+        }
+        let descriptors = duplicates + granted
+        let catalog = WalletReviewCatalog(
+            identity: .init(generation: nil, catalogData: try WalletAccountCatalog(accounts: descriptors).canonicalData()),
+            orderedAccounts: descriptors.map(\.specificAccount)
+        )
+        _ = try await grantAuthority(ethereum, id: 68_110)
+        _ = try await grantAuthority(solana, id: 68_111)
+        let processor = DappRequestProcessor()
+
+        for (id, chainID) in [(68_112, "0x1"), (68_113, "0xa")] {
+            let manual = try makeManualFixture(id: id, enqueueAttempt: attempt(for: id), latestConfigurations: [])
+            let handle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
+            let testClock = try XCTUnwrap(clock)
+            bridge = makeBridge(clock: { testClock.now })
+            guard case .found(let snapshot) = await bridge.load(handle: handle),
+                  let request = snapshot.request,
+                  case .approval(.switchAccount(let action)) = processor.prepare(request, catalog: catalog) else {
+                return XCTFail("Expected the persisted manual switch")
+            }
+            XCTAssertEqual(Set(action.selectedAccounts.map {
+                WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
+            }), Set(granted))
+            let missingGrantedAccounts = WalletReviewCatalog(
+                identity: catalog.identity, orderedAccounts: duplicates.map(\.specificAccount)
+            )
+            guard case .approval(.switchAccount(let unavailable)) = processor.prepare(request, catalog: missingGrantedAccounts) else {
+                return XCTFail("Expected manual selection without the granted wallets")
+            }
+            XCTAssertTrue(unavailable.selectedAccounts.isEmpty)
+
+            let decision = DappApprovalDecision.accountSelection(.init(
+                accounts: action.selectedAccounts.map {
+                    .init(walletID: $0.walletId, address: $0.account.address,
+                          provider: $0.account.coin.correspondingInpageProvider, derivationPath: $0.account.derivationPath)
+                },
+                ethereumChainID: chainID
+            ))
+            let approval = try DappApprovalValidator.resolve(
+                action: .switchAccount(action), decision: decision, accounts: catalog.orderedAccounts,
+                networkResolver: { Networks.withChainIdHex($0) }
+            ).get()
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            let permit = try executionPermit(await bridge.begin(claim: claim))
+            guard case .response(let response, _) = await processor.execute(request: request, approval: approval, signer: nil) else {
+                return XCTFail("Expected the approved account selection")
+            }
+            let completion = await bridge.complete(permit: permit, response: response.markingApprovalCommitted(), authority: .ordinary)
+            XCTAssertEqual(completion, .persisted)
+            let current = try await removalSnapshot()
+            XCTAssertEqual(current.ethereumAccount, ethereum)
+            XCTAssertEqual(current.solanaAccount, solana)
+            XCTAssertEqual(current.ethereumChainId, chainID)
+            let acknowledged = await bridge.acknowledgeResponse(handle: handle, configurationKey: request.configurationKey)
+            XCTAssertEqual(acknowledged, .persisted)
+        }
+
+        let beforeRemoval = try await removalSnapshot()
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "first-wallet")) {}
+        let afterRemoval = try await removalSnapshot()
+        XCTAssertEqual(afterRemoval.version, beforeRemoval.version)
+        XCTAssertEqual(afterRemoval.ethereumAccount, ethereum)
+        XCTAssertEqual(afterRemoval.solanaAccount, solana)
+    }
+
+    func testMalformedPermissionsDisconnectOnlyAffectedOriginAndPermitReconnection() async throws {
+        let account = authorityTestAccount()
+        let solana = WalletAccountDescriptor(walletID: account.walletID, coin: .solana,
+            normalizedAddress: String(repeating: "1", count: 32), derivationPath: "m/44'/501'/0'/0'")
+        _ = try await grantAuthority(account, id: 64_000, chainId: "0xa")
+        _ = try await grantAuthority(solana, id: 64_001)
+        _ = try await grantAuthority(account, id: 64_002, host: "healthy.example", chainId: "0xa")
+        _ = try await grantAuthority(account, id: 64_005, host: "second.example")
+        let otherProfile = UUID()
+        _ = try await grantAuthority(account, id: 64_003, profileIdentifier: otherProfile)
+        let before = try await removalSnapshot()
+        let secondBefore = try await removalSnapshot(host: "second.example")
+        let healthy = try await removalSnapshot(host: "healthy.example")
+        let otherProfileData = try Data(contentsOf: profileURL(otherProfile))
+        let originalData = try Data(contentsOf: defaultProfileURL)
+        let original = try storedProfile()
+        let origins = try XCTUnwrap(original["origins"] as? [String: Any])
+        let originalOrigin = try XCTUnwrap(origins["https://wallet.example"] as? [String: Any])
+        let originalSequence = try XCTUnwrap(original["authoritySequence"] as? Int)
+        var malformedValues: [Any] = ["unreadable permissions", ["unknown": true]]
+        for (key, value): (String, Any) in [
+            ("ethereumAccount", "invalid account"),
+            ("solanaAccount", ["walletID": "incomplete"]),
+            ("ethereumChainId", "0X1"),
+            ("revisions", ["ethereum": -1, "solana": 0]),
+            ("revisions", ["ethereum": originalSequence + 1, "solana": 0]),
+        ] {
+            var origin = originalOrigin
+            origin[key] = value
+            malformedValues.append(origin)
+        }
+
+        for (index, value) in malformedValues.enumerated() {
+            try originalData.write(to: defaultProfileURL, options: .atomic)
+            try mutateStoredPermissions {
+                $0["https://wallet.example"] = value
+                $0["https://second.example"] = ["unknown": true]
+            }
+            if index % 3 == 1 {
+                guard case .available = await bridge.list(profileIdentifier: nil) else {
+                    return XCTFail("Request listing must recover incompatible permissions")
+                }
+            } else if index % 3 == 2 {
+                await bridge.performMaintenance(profileIdentifier: nil)
+                let maintained = try XCTUnwrap(storedProfile()["origins"] as? [String: Any])
+                let origin = try XCTUnwrap(maintained["https://wallet.example"] as? [String: Any])
+                XCTAssertNil(origin["ethereumAccount"])
+            }
+            let recovered = try await removalSnapshot()
+            XCTAssertNil(recovered.ethereumAccount)
+            XCTAssertNil(recovered.solanaAccount)
+            XCTAssertEqual(recovered.ethereumChainId, "0x1")
+            XCTAssertEqual(recovered.version.context, before.version.context)
+            XCTAssertGreaterThan(recovered.version.revisions.ethereum, originalSequence)
+            XCTAssertEqual(recovered.version.revisions.solana, recovered.version.revisions.ethereum)
+            let secondRecovered = try await removalSnapshot(host: "second.example")
+            XCTAssertNil(secondRecovered.ethereumAccount)
+            XCTAssertEqual(secondRecovered.version.context, secondBefore.version.context)
+            XCTAssertEqual(secondRecovered.version.revisions, recovered.version.revisions)
+            let retained = try await removalSnapshot(host: "healthy.example")
+            XCTAssertEqual(retained.ethereumAccount, account)
+            XCTAssertEqual(retained.ethereumChainId, healthy.ethereumChainId)
+            XCTAssertEqual(retained.version, healthy.version)
+            XCTAssertEqual(try Data(contentsOf: profileURL(otherProfile)), otherProfileData)
+            let repeated = try await removalSnapshot()
+            XCTAssertEqual(repeated.version, recovered.version)
+        }
+
+        _ = try await grantAuthority(account, id: 64_004)
+        let reconnected = try await removalSnapshot()
+        XCTAssertEqual(reconnected.ethereumAccount, account)
+        XCTAssertNil(reconnected.solanaAccount)
+    }
+
+    func testIncompatiblePermissionContainerDisconnectsAllOriginsWithoutDiscardingRequestHistory() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 64_050)
+        _ = try await grantAuthority(account, id: 64_051, host: "second.example")
+        let completed = try makeFixture(id: 64_052)
+        let completedHandle = try accepted(await bridge.enqueue(ingress: completed.ingress, profileIdentifier: nil)).handle
+        let completion = await bridge.complete(handle: completedHandle, response: response(for: completed.request))
+        XCTAssertEqual(completion, .persisted)
+        let before = try await removalSnapshot()
+        let secondBefore = try await removalSnapshot(host: "second.example")
+        let original = try storedProfile()
+        let originalSequence = try XCTUnwrap(original["authoritySequence"] as? Int)
+        let records = try XCTUnwrap(original["records"] as? [[String: Any]])
+        let malformedContainers: [Any?] = [nil, "incompatible permissions", ["invalid", "container"]]
+
+        for retainHistory in [true, false] {
+            for container in malformedContainers {
+                var profile = original
+                profile["origins"] = container
+                if !retainHistory { profile["records"] = [[String: Any]]() }
+                try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+                    .write(to: defaultProfileURL, options: .atomic)
+
+                let recovered = try await removalSnapshot()
+                let second = try await removalSnapshot(host: "second.example")
+                XCTAssertNil(recovered.ethereumAccount)
+                XCTAssertNil(second.ethereumAccount)
+                XCTAssertEqual(recovered.version.context, before.version.context)
+                XCTAssertEqual(second.version.context, secondBefore.version.context)
+                XCTAssertGreaterThan(recovered.version.revisions.ethereum, originalSequence)
+                XCTAssertEqual(recovered.version.revisions.solana, recovered.version.revisions.ethereum)
+                XCTAssertEqual(second.version.revisions, recovered.version.revisions)
+                let persisted = try storedProfile()
+                XCTAssertEqual(persisted["authoritySequence"] as? Int, recovered.version.revisions.ethereum)
+                let persistedRecords = try XCTUnwrap(persisted["records"] as? [[String: Any]])
+                if retainHistory {
+                    XCTAssertTrue(NSArray(array: records).isEqual(to: persistedRecords))
+                    let replay = try accepted(await bridge.enqueue(ingress: completed.ingress, profileIdentifier: nil))
+                    XCTAssertEqual(replay.handle, completedHandle)
+                    XCTAssertFalse(replay.approvalRequired)
+                    let delivery = try await deliveredAuthority(completedHandle)
+                    XCTAssertEqual(delivery.response["result"] as? String, "0xsigned")
+                    XCTAssertEqual((delivery.state["ethereum"] as? [String: String])?["address"], "")
+                } else {
+                    XCTAssertTrue(persistedRecords.isEmpty)
+                }
+                let repeated = try await removalSnapshot()
+                XCTAssertEqual(repeated.version, recovered.version)
+            }
+        }
+    }
+
+    func testPermissionRecoveryFencesOutstandingApprovalsWithoutLosingBroadcastOrCompletedResponses() async throws {
+        let account = authorityTestAccount()
+        let grant = try await grantAuthority(account, id: 64_010)
+        let completed = try makeFixture(id: 64_011)
+        let completedHandle = try accepted(await bridge.enqueue(ingress: completed.ingress, profileIdentifier: nil)).handle
+        let completion = await bridge.complete(handle: completedHandle, response: response(for: completed.request))
+        XCTAssertEqual(completion, .persisted)
+        let completedResponse = try await deliveredAuthority(completedHandle)
+        let pending = try await admittedSigning(account, id: 64_012)
+        let claimed = try await admittedSigning(account, id: 64_013)
+        let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        let selection = try makeFixture(id: 64_014, name: "requestAccounts")
+        let selectionHandle = try accepted(await bridge.enqueue(ingress: selection.ingress, profileIdentifier: nil)).handle
+        let selectionClaim = try approvalClaim(await bridge.claim(handle: selectionHandle))
+        let selectionPermit = try executionPermit(await bridge.begin(claim: selectionClaim))
+        let broadcast = try makeFixture(id: 64_015, name: "signPersonalMessage")
+        let broadcastHandle = try accepted(await bridge.enqueue(ingress: broadcast.ingress, profileIdentifier: nil)).handle
+        let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcastHandle))
+        let broadcastPermit = try executionPermit(await bridge.begin(claim: broadcastClaim))
+        let recovery = ambiguousSubmissionResponse(for: broadcast.request, transactionHash: "0xpermission-recovery")
+            .markingApprovalCommitted()
+        let checkpoint = await bridge.prepareBroadcast(permit: broadcastPermit, recoveryResponse: recovery, authority: .ordinary)
+        XCTAssertEqual(checkpoint, .persisted)
+        let originalRecords = try XCTUnwrap(storedProfile()["records"] as? [[String: Any]])
+        let originalCheckpoint = try XCTUnwrap(originalRecords.first { $0["id"] as? Int == broadcast.request.id })
+        let originalCompleted = try XCTUnwrap(originalRecords.first { $0["id"] as? Int == completed.request.id })
+
+        try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
+        let disconnected = try await removalSnapshot()
+        XCTAssertNil(disconnected.ethereumAccount)
+        for handle in [pending.handle, claimed.handle, selectionHandle] {
+            let delivery = try await deliveredAuthority(handle)
+            XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+        }
+        let recoveredRecords = try XCTUnwrap(storedProfile()["records"] as? [[String: Any]])
+        let retainedCheckpoint = try XCTUnwrap(recoveredRecords.first { $0["id"] as? Int == broadcast.request.id })
+        let retainedCompleted = try XCTUnwrap(recoveredRecords.first { $0["id"] as? Int == completed.request.id })
+        XCTAssertTrue(NSDictionary(dictionary: originalCheckpoint).isEqual(to: retainedCheckpoint))
+        XCTAssertTrue(NSDictionary(dictionary: originalCompleted).isEqual(to: retainedCompleted))
+
+        let obsoleteGrant = ResponseToExtension(for: selection.request,
+            payload: .result(.strings([account.normalizedAddress])),
+            mutation: .accounts([.ethereum(address: account.normalizedAddress, chainId: "0x1")]),
+            approvedAccounts: [account]).markingApprovalCommitted()
+        _ = await bridge.complete(permit: selectionPermit, response: obsoleteGrant, authority: .ordinary)
+        _ = await bridge.complete(permit: permit, response: response(for: claimed.request), authority: .ordinary)
+        let stillDisconnected = try await removalSnapshot()
+        XCTAssertNil(stillDisconnected.ethereumAccount)
+        let completedReplay = try accepted(await bridge.enqueue(ingress: completed.ingress, profileIdentifier: nil))
+        XCTAssertEqual(completedReplay.handle, completedHandle)
+        XCTAssertFalse(completedReplay.approvalRequired)
+        let retainedResponse = try await deliveredAuthority(completedHandle)
+        XCTAssertTrue(NSDictionary(dictionary: completedResponse.response).isEqual(to: retainedResponse.response))
+        let retainedGrant = try await deliveredAuthority(grant.handle)
+        XCTAssertEqual(retainedGrant.response["result"] as? [String], [account.normalizedAddress])
+        XCTAssertEqual((retainedGrant.state["ethereum"] as? [String: String])?["address"], "")
+
+        broadcastPermit.releaseLease()
+        let deliveredBroadcast = try await deliveredAuthority(broadcastHandle)
+        XCTAssertEqual((deliveredBroadcast.response["error"] as? [String: Any])?["code"] as? Int,
+            ProviderResponseError.transactionSubmissionUnknownCode)
+        XCTAssertEqual(deliveredBroadcast.response["approvalCommitted"] as? Bool, true)
+        let broadcastReplay = try accepted(await bridge.enqueue(ingress: broadcast.ingress, profileIdentifier: nil))
+        XCTAssertEqual(broadcastReplay.handle, broadcastHandle)
+        XCTAssertFalse(broadcastReplay.approvalRequired)
+    }
+
+    func testPermissionRecoveryDoesNotPublishSnapshotWhenStorageIsUnavailable() async throws {
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_020)
+        try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
+        let corruptedData = try Data(contentsOf: defaultProfileURL)
+        var writes = 0
+        let unreadable = makeBridge(clock: { self.clock.now }, atomicWrite: { _, _ in
+            writes += 1
+            throw Failure.injectedWrite
+        }, readData: { _ in throw Failure.injectedWrite })
+        guard case .unavailable = await unreadable.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ) else { return XCTFail("Read failures must not fabricate disconnected authority") }
+        XCTAssertEqual(writes, 0)
+        let unwritable = makeBridge(clock: { self.clock.now }, atomicWrite: { _, _ in
+            writes += 1
+            throw Failure.injectedWrite
+        })
+        guard case .unavailable = await unwritable.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ) else { return XCTFail("Recovery must persist before returning disconnected authority") }
+        XCTAssertGreaterThan(writes, 0)
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), corruptedData)
+        let recovered = try await removalSnapshot()
+        XCTAssertNil(recovered.ethereumAccount)
+    }
+
+    func testPermissionRecoveryRequiresSynchronizationAfterAmbiguousPublication() async throws {
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_030)
+        try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
+        let corruptedData = try Data(contentsOf: defaultProfileURL)
+        var synchronizations = 0
+        for synchronizationSucceeds in [false, true] {
+            try corruptedData.write(to: defaultProfileURL, options: .atomic)
+            let observer = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
+                try ApprovalStoreTestPersistence.write(data, url)
+                throw Failure.injectedWrite
+            }, synchronizePublishedFile: { _ in
+                synchronizations += 1
+                if !synchronizationSucceeds { throw Failure.injectedWrite }
+            })
+            let result = await observer.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil)
+            if synchronizationSucceeds {
+                guard case .snapshot(let recovered) = result else {
+                    return XCTFail("Durable read-back should accept a published recovery")
+                }
+                XCTAssertNil(recovered.ethereumAccount)
+            } else {
+                guard case .unavailable = result else {
+                    return XCTFail("An unsynchronized recovery must remain unavailable")
+                }
+            }
+        }
+        XCTAssertEqual(synchronizations, 2)
+    }
+
+    func testPermissionRecoveryDoesNotMaskUnsupportedEnvelopeOrDamagedRequestHistory() async throws {
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_040)
+        try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
+        let original = try storedProfile()
+        var invalidProfiles = [[String: Any]]()
+        for (key, value): (String, Any) in [
+            ("schemaVersion", Int.max),
+            ("workflowVersion", Int.max),
+            ("profileIdentifier", UUID().uuidString),
+            ("authorityEpoch", "not-an-epoch"),
+        ] {
+            var profile = original
+            profile[key] = value
+            invalidProfiles.append(profile)
+        }
+        var invalidRecord = original
+        var records = try XCTUnwrap(invalidRecord["records"] as? [[String: Any]])
+        records[0]["requestFingerprint"] = "invalid transaction history"
+        invalidRecord["records"] = records
+        invalidProfiles.append(invalidRecord)
+
+        for profile in invalidProfiles {
+            let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+            try data.write(to: defaultProfileURL, options: .atomic)
+            guard case .unavailable = await bridge.configurationSnapshot(
+                configurationKey: "https://wallet.example", profileIdentifier: nil
+            ) else { return XCTFail("Permission recovery cannot discard an invalid envelope or request history") }
+            guard case .unavailable = await bridge.list(profileIdentifier: nil) else {
+                return XCTFail("Maintenance cannot repair an invalid envelope or request history")
+            }
+            XCTAssertEqual(try Data(contentsOf: defaultProfileURL), data)
+        }
+    }
+
+    func testNativeAuthorityRejectsClientInventedGrantsAndRevisions() async throws {
+        let template = try makeFixture(id: 60_001)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        object["name"] = "signPersonalMessage"
+        let unauthorized = try authorityFixture(object)
+        guard case .unauthorized = await bridge.enqueue(ingress: unauthorized.ingress, profileIdentifier: nil) else {
+            return XCTFail("Disconnected origin cannot request a signature")
+        }
+        var authority = template.ingress.authority.json
+        authority["revisions"] = ["ethereum": 7, "solana": 0]
+        object["name"] = "requestAccounts"
+        object["authority"] = authority
+        let forged = try authorityFixture(object)
+        guard case .unauthorized = await bridge.enqueue(ingress: forged.ingress, profileIdentifier: nil) else {
+            return XCTFail("Client revisions cannot create authority")
+        }
+        guard case .snapshot(let current) = await bridge.configurationSnapshot(configurationKey: template.request.configurationKey, profileIdentifier: nil) else {
+            return XCTFail("Expected authority")
+        }
+        XCTAssertEqual(current.version.revisions.ethereum, 0)
+        XCTAssertNil(current.ethereumAccount)
+    }
+
+    func testNativeGrantCommitIsAtomicAndReplayNeverRestoresRevokedAccount() async throws {
+        let account = authorityTestAccount()
+        let grant = try await grantAuthority(account, id: 60_010)
+        let first = try await deliveredAuthority(grant.handle)
+        XCTAssertEqual(first.state["ethereum"] as? [String: String], ["address": account.normalizedAddress, "chainId": "0x1"])
+        guard case .snapshot(let current) = await bridge.configurationSnapshot(configurationKey: grant.request.configurationKey, profileIdentifier: nil),
+              case .revoked(let revoked) = await bridge.revoke(configurationKey: grant.request.configurationKey,
+                provider: .ethereum, attempt: attempt(for: 60_011), expected: current.version, profileIdentifier: nil) else {
+            return XCTFail("Expected native revocation")
+        }
+        XCTAssertNil(revoked.ethereumAccount)
+        XCTAssertGreaterThan(revoked.version.revisions.ethereum, current.version.revisions.ethereum)
+        let replay = try await deliveredAuthority(grant.handle)
+        XCTAssertEqual((replay.state["ethereum"] as? [String: String])?["address"], "")
+        XCTAssertEqual(replay.response["result"] as? [String], [account.normalizedAddress])
+        guard case .revoked(let repeated) = await bridge.revoke(configurationKey: grant.request.configurationKey,
+            provider: .ethereum, attempt: attempt(for: 60_011), expected: current.version, profileIdentifier: nil) else {
+            return XCTFail("Expected replayed revocation")
+        }
+        XCTAssertEqual(repeated.version, revoked.version)
+    }
+
+    func testRevocationAbortsClaimBeforeSignatureCommitButRetainsBroadcastCheckpoint() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 60_020)
+        let first = try await admittedSigning(account, id: 60_021)
+        let firstClaim = try approvalClaim(await bridge.claim(handle: first.handle))
+        XCTAssertEqual(firstClaim.executionDeadline, clock.now.addingTimeInterval(150))
+        let firstPermit = try executionPermit(await bridge.begin(claim: firstClaim))
+        let broadcast = try await admittedSigning(account, id: 60_022)
+        let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
+        let broadcastPermit = try executionPermit(await bridge.begin(claim: broadcastClaim))
+        let recovery = ambiguousSubmissionResponse(for: broadcast.request, transactionHash: "0xpending").markingApprovalCommitted()
+        let checkpoint = await bridge.prepareBroadcast(permit: broadcastPermit, recoveryResponse: recovery, authority: .ordinary)
+        XCTAssertEqual(checkpoint, .persisted)
+        guard case .snapshot(let current) = await bridge.configurationSnapshot(configurationKey: first.request.configurationKey, profileIdentifier: nil),
+              case .revoked = await bridge.revoke(configurationKey: first.request.configurationKey,
+                provider: .ethereum, attempt: attempt(for: 60_023), expected: current.version, profileIdentifier: nil) else {
+            return XCTFail("Expected revocation")
+        }
+        let isCurrent = await bridge.authorityIsCurrent(handle: first.handle)
+        XCTAssertFalse(isCurrent)
+        _ = await bridge.complete(permit: firstPermit, response: response(for: first.request).markingApprovalCommitted(), authority: .ordinary)
+        let firstDelivery = try await deliveredAuthority(first.handle)
+        XCTAssertEqual((firstDelivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+        let completed = await bridge.complete(permit: broadcastPermit,
+            response: response(for: broadcast.request).markingApprovalCommitted(), authority: .ordinary)
+        XCTAssertEqual(completed, .persisted)
+        let broadcastDelivery = try await deliveredAuthority(broadcast.handle)
+        XCTAssertEqual(broadcastDelivery.response["approvalCommitted"] as? Bool, true)
+        XCTAssertEqual((broadcastDelivery.state["ethereum"] as? [String: String])?["address"], "")
+    }
+
+    @MainActor
+    func testSameChainSwitchPreservesSigningClaimButChangedChainInvalidatesIt() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 60_100)
+        let signing = try await admittedSigning(account, id: 60_101)
+        let claim = try approvalClaim(await bridge.claim(handle: signing.handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        guard case .snapshot(let original) = await bridge.configurationSnapshot(
+            configurationKey: signing.request.configurationKey, profileIdentifier: nil
+        ) else { return XCTFail("Expected original authority") }
+        let admission = DappRequestAdmission(store: bridge, requestProcessor: DappRequestProcessor())
+
+        for (id, chainId) in [(60_102, "0x1"), (60_103, "0xa")] {
+            let template = try makeFixture(id: id, name: "switchEthereumChain")
+            var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+            raw["body"] = ["address": account.normalizedAddress, "chainId": chainId,
+                           "object": ["chainId": chainId]]
+            let switching = try authorityFixture(raw)
+            let enqueued = try accepted(await bridge.enqueue(ingress: switching.ingress, profileIdentifier: nil))
+            let handle = enqueued.handle
+            let unchanged = chainId == original.ethereumChainId
+            XCTAssertEqual(enqueued.approvalRequired, !unchanged)
+            let disposition = await admission.materialize(handle: handle)
+            XCTAssertEqual(disposition, unchanged ? .responseReady : .approvalRequired)
+            if unchanged {
+                let replay = try accepted(await bridge.enqueue(ingress: switching.ingress, profileIdentifier: nil))
+                XCTAssertEqual(replay.handle, handle)
+                XCTAssertEqual(replay.admissionKind, .replay)
+                XCTAssertFalse(replay.approvalRequired)
+            } else {
+                let completion = await bridge.complete(handle: handle, response: ResponseToExtension(
+                    for: switching.request, payload: .result(.null), mutation: .ethereumChain(chainId)
+                ))
+                XCTAssertEqual(completion, .persisted)
+            }
+            let delivery = try await deliveredAuthority(handle)
+            XCTAssertTrue(delivery.response["result"] is NSNull)
+            guard case .snapshot(let current) = await bridge.configurationSnapshot(
+                configurationKey: signing.request.configurationKey, profileIdentifier: nil
+            ), case .found(let storedSigning) = await bridge.load(handle: signing.handle) else {
+                return XCTFail("Expected readable requests and authority")
+            }
+            let authorityCurrent = await bridge.authorityIsCurrent(handle: signing.handle)
+            XCTAssertEqual(authorityCurrent, unchanged)
+            XCTAssertEqual(storedSigning.phase, unchanged ? .approving : .responded)
+            XCTAssertEqual(current.ethereumChainId, chainId)
+            if unchanged {
+                XCTAssertEqual(current.version, original.version)
+            } else {
+                XCTAssertGreaterThan(current.version.revisions.ethereum, original.version.revisions.ethereum)
+            }
+        }
+        _ = await bridge.complete(permit: permit, response: response(for: signing.request), authority: .ordinary)
+        let signingDelivery = try await deliveredAuthority(signing.handle)
+        XCTAssertEqual((signingDelivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+    }
+
+    func testECRecoverSurvivesUnrelatedWatermarkAndLocalGrantChanges() async throws {
+        let first = try makeFixture(id: 60_110)
+        let second = try makeFixture(id: 60_111)
+        guard case .snapshot(let other) = await bridge.configurationSnapshot(
+            configurationKey: "https://other.example", profileIdentifier: nil
+        ), case .revoked = await bridge.revoke(configurationKey: "https://other.example", provider: .ethereum,
+            attempt: attempt(for: 60_112), expected: other.version, profileIdentifier: nil),
+           case .snapshot(let advanced) = await bridge.configurationSnapshot(
+            configurationKey: first.request.configurationKey, profileIdentifier: nil
+        ) else { return XCTFail("Expected unrelated authority advance") }
+        XCTAssertGreaterThan(advanced.version.revisions.ethereum, first.ingress.authority.revisions.ethereum)
+        let firstHandle = try accepted(await bridge.enqueue(ingress: first.ingress, profileIdentifier: nil)).handle
+        let secondHandle = try accepted(await bridge.enqueue(ingress: second.ingress, profileIdentifier: nil)).handle
+        let firstClaim = try approvalClaim(await bridge.claim(handle: firstHandle))
+        let firstPermit = try executionPermit(await bridge.begin(claim: firstClaim))
+
+        let grant = try await grantAuthority(authorityTestAccount(), id: 60_113)
+        let secondClaim = try approvalClaim(await bridge.claim(handle: secondHandle))
+        let secondPermit = try executionPermit(await bridge.begin(claim: secondClaim))
+        guard case .snapshot(let granted) = await bridge.configurationSnapshot(
+            configurationKey: grant.request.configurationKey, profileIdentifier: nil
+        ), case .revoked = await bridge.revoke(configurationKey: grant.request.configurationKey, provider: .ethereum,
+            attempt: attempt(for: 60_114), expected: granted.version, profileIdentifier: nil) else {
+            return XCTFail("Expected local grant revocation")
+        }
+        for (fixture, handle, permit) in [(first, firstHandle, firstPermit), (second, secondHandle, secondPermit)] {
+            let authorityCurrent = await bridge.authorityIsCurrent(handle: handle)
+            XCTAssertTrue(authorityCurrent)
+            let completion = await bridge.complete(permit: permit, response: response(for: fixture.request), authority: .ordinary)
+            XCTAssertEqual(completion, .persisted)
+            let delivery = try await deliveredAuthority(handle)
+            XCTAssertEqual(delivery.response["kind"] as? String, "result")
+        }
+    }
+
+    func testECRecoverStillRejectsForeignOriginAndProfileContexts() async throws {
+        let fixture = try makeFixture(id: 60_120)
+        guard case .snapshot(let other) = await bridge.configurationSnapshot(
+            configurationKey: "https://other.example", profileIdentifier: nil
+        ) else { return XCTFail("Expected other origin authority") }
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+        raw["authority"] = other.version.json
+        let wrongOrigin = try authorityFixture(raw)
+        guard case .unauthorized = await bridge.enqueue(ingress: wrongOrigin.ingress, profileIdentifier: nil),
+              case .unauthorized = await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: UUID()) else {
+            return XCTFail("Permission-free requests must retain origin and profile binding")
+        }
+    }
+
+    func testNativeStageCanExecuteWithoutWorkerAndExpiresOnNativeDeadline() async throws {
+        let fixture = try makeFixture(id: 60_030)
+        let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
+        let stageResult = try await markNativeApprovalReady(handle: handle)
+        XCTAssertEqual(stageResult, .persisted)
+        let staged = try await nativeStage(handle: handle)
+        XCTAssertEqual(staged.context.executionDeadline, clock.now.addingTimeInterval(150))
+        let claim = await claimReadyNativeExecution(in: bridge, handle: handle)
+        guard case .claimed(let nativeClaim) = claim else { return XCTFail("Native approval must execute directly") }
+        let competing = await claimReadyNativeExecution(in: bridge, handle: handle)
+        XCTAssertEqual(competing, .executing)
+        clock.now = staged.context.executionDeadline
+        let expiredBegin = await bridge.begin(claim: nativeClaim.approvalClaim)
+        XCTAssertEqual(expiredBegin, .ownershipLost)
+        nativeClaim.approvalClaim.releaseLease()
+    }
+
+    func testDisconnectedReclamationAdvancesWatermarkAndPreservesProfileEpoch() async throws {
+        let fixture = try makeFixture(id: 60_040)
+        let origin = fixture.request.configurationKey
+        let before = fixture.ingress.authority
+        guard case .revoked(let revoked) = await bridge.revoke(configurationKey: origin, provider: .ethereum,
+            attempt: attempt(for: 60_041), expected: before, profileIdentifier: nil) else { return XCTFail("Expected revoke") }
+        clock.now.addTimeInterval(3_601)
+        await bridge.performMaintenance(profileIdentifier: nil)
+        guard case .snapshot(let absent) = await bridge.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+            return XCTFail("Expected absent-origin authority")
+        }
+        XCTAssertEqual(absent.version.context, before.context)
+        XCTAssertGreaterThan(absent.version.revisions.ethereum, revoked.version.revisions.ethereum)
+        XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
+        guard case .stale = await bridge.revoke(configurationKey: origin, provider: .ethereum,
+            attempt: attempt(for: 60_041), expected: before, profileIdentifier: nil) else {
+            return XCTFail("An expired receipt cannot make an old revoke fresh again")
+        }
+    }
+
+    func testPinnedOriginDoesNotDriftWhenOtherOriginAdvancesWatermark() async throws {
+        let fixture = try makeFixture(id: 60_050, name: "requestAccounts")
+        let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
+        guard case .snapshot(let other) = await bridge.configurationSnapshot(configurationKey: "https://other.example", profileIdentifier: nil),
+              case .revoked = await bridge.revoke(configurationKey: "https://other.example", provider: .solana,
+                attempt: attempt(for: 60_051), expected: other.version, profileIdentifier: nil) else {
+            return XCTFail("Expected unrelated revocation")
+        }
+        let authorityCurrent = await bridge.authorityIsCurrent(handle: handle)
+        XCTAssertTrue(authorityCurrent)
+        let pinnedClaim = try approvalClaim(await bridge.claim(handle: handle))
+        XCTAssertEqual(pinnedClaim.executionDeadline, clock.now.addingTimeInterval(150))
+    }
+
+    func testOriginCapacityEvictsUnusedChainPreferencesWithoutRevokingProtectedOrigins() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 62_000)
+        clock.now.addTimeInterval(3_601)
+        await bridge.performMaintenance(profileIdentifier: nil)
+        let pending = try makeFixture(id: 62_001, name: "requestAccounts", host: "pending.example")
+        let pendingHandle = try accepted(await bridge.enqueue(ingress: pending.ingress, profileIdentifier: nil)).handle
+        guard case .snapshot(let receiptAuthority) = await bridge.configurationSnapshot(
+            configurationKey: "https://receipt.example", profileIdentifier: nil
+        ), case .revoked = await bridge.revoke(
+            configurationKey: "https://receipt.example", provider: .ethereum,
+            attempt: attempt(for: 62_002), expected: receiptAuthority.version, profileIdentifier: nil
+        ) else { return XCTFail("Expected retained revocation receipt") }
+
+        var profile = try storedProfile()
+        var origins = try XCTUnwrap(profile["origins"] as? [String: Any])
+        let sequence = try XCTUnwrap(profile["authoritySequence"] as? Int)
+        let unused: [String: Any] = [
+            "ethereumChainId": "0xa", "revisions": ["ethereum": sequence, "solana": sequence],
+        ]
+        for index in 0..<(512 - origins.count) { origins["https://z\(index).example"] = unused }
+        profile["origins"] = origins
+        try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+            .write(to: defaultProfileURL, options: .atomic)
+        let evictedVersion = try authorityVersion("https://z0.example")
+        let incoming = try makeFixture(id: 62_003, name: "requestAccounts", host: "new.example")
+        let admitted = try accepted(await bridge.enqueue(ingress: incoming.ingress, profileIdentifier: nil))
+        XCTAssertEqual(admitted.revisions, incoming.ingress.authority.revisions)
+        let claim = try approvalClaim(await bridge.claim(handle: admitted.handle))
+        let released = await bridge.release(claim: claim)
+        XCTAssertEqual(released, .persisted)
+
+        let retained = try XCTUnwrap(try storedProfile()["origins"] as? [String: Any])
+        XCTAssertEqual(retained.count, 512)
+        XCTAssertNil(retained["https://z0.example"])
+        XCTAssertNotNil(retained["https://pending.example"])
+        XCTAssertNotNil(retained["https://receipt.example"])
+        guard case .snapshot(let connected) = await bridge.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ), case .found = await bridge.load(handle: pendingHandle),
+           case .stale(let evicted) = await bridge.revoke(
+            configurationKey: "https://z0.example", provider: .ethereum,
+            attempt: attempt(for: 62_004), expected: evictedVersion, profileIdentifier: nil
+        ) else { return XCTFail("Protected origins must survive and evicted authority must be stale") }
+        XCTAssertEqual(connected.ethereumAccount, account)
+        XCTAssertEqual(evicted.ethereumChainId, "0x1")
+        XCTAssertEqual(evicted.version.context, evictedVersion.context)
+        XCTAssertGreaterThan(evicted.version.revisions.ethereum, evictedVersion.revisions.ethereum)
+    }
+
+    func testAdmissionRejectsPayloadThatExceedsLimitAfterAuthorityBinding() async throws {
+        let pinned = try makeFixture(id: 60_060)
+        let pinnedHandle = try accepted(await bridge.enqueue(ingress: pinned.ingress, profileIdentifier: nil)).handle
+        guard case .snapshot(var current) = await bridge.configurationSnapshot(
+            configurationKey: pinned.request.configurationKey, profileIdentifier: nil
+        ) else { return XCTFail("Expected authority") }
+        for id in 60_061...60_069 {
+            guard case .revoked(let next) = await bridge.revoke(
+                configurationKey: pinned.request.configurationKey, provider: .solana,
+                attempt: attempt(for: id), expected: current.version, profileIdentifier: nil
+            ) else { return XCTFail("Expected Solana revision to advance") }
+            current = next
+        }
+        XCTAssertEqual(current.version.revisions.solana, 9)
+        let template = try makeFixture(id: 60_070)
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        raw["name"] = "requestAccounts"
+        raw["body"] = ["address": "", "padding": ""]
+        let emptySize = try XCTUnwrap(ExtensionBridge.payloadData(raw, options: [.sortedKeys])).count
+        let paddingCount = ExtensionBridge.maximumPayloadBytes - emptySize
+        raw["body"] = ["address": "", "padding": String(repeating: "x", count: paddingCount)]
+        let oversizedAfterBinding = try authorityFixture(raw)
+        XCTAssertEqual(oversizedAfterBinding.ingress.canonicalData.count, ExtensionBridge.maximumPayloadBytes)
+        guard case .revoked(let advanced) = await bridge.revoke(
+            configurationKey: pinned.request.configurationKey, provider: .solana,
+            attempt: attempt(for: 60_071), expected: current.version, profileIdentifier: nil
+        ) else { return XCTFail("Expected Solana revision to gain a digit") }
+        XCTAssertEqual(advanced.version.revisions.ethereum, current.version.revisions.ethereum)
+        XCTAssertEqual(advanced.version.revisions.solana, 10)
+        var boundRaw = raw
+        boundRaw["authority"] = advanced.version.json
+        XCTAssertEqual(try XCTUnwrap(ExtensionBridge.payloadData(boundRaw, options: [.sortedKeys])).count,
+                       ExtensionBridge.maximumPayloadBytes + 1)
+        let original = try Data(contentsOf: defaultProfileURL)
+        let rejectingWriter = makeBridge(clock: { self.clock.now }, atomicWrite: { _, _ in
+            XCTFail("Oversized bound requests must not write the profile")
+            throw Failure.injectedWrite
+        })
+        guard case .rejected = await rejectingWriter.enqueue(
+            ingress: oversizedAfterBinding.ingress, profileIdentifier: nil
+        ) else { return XCTFail("Expected oversized bound payload to be rejected") }
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
+        guard case .snapshot(let readable) = await bridge.configurationSnapshot(
+            configurationKey: pinned.request.configurationKey, profileIdentifier: nil
+        ), case .found = await bridge.load(handle: pinnedHandle) else {
+            return XCTFail("Rejected admission must preserve the readable profile")
+        }
+        XCTAssertEqual(readable.version, advanced.version)
+
+        raw["body"] = ["address": "", "padding": String(repeating: "x", count: paddingCount - 1)]
+        let exactlyAtLimitAfterBinding = try authorityFixture(raw)
+        let admitted = try accepted(await bridge.enqueue(
+            ingress: exactlyAtLimitAfterBinding.ingress, profileIdentifier: nil
+        ))
+        guard case .found(let snapshot) = await bridge.load(handle: admitted.handle) else {
+            return XCTFail("A bound payload exactly at the limit must remain readable")
+        }
+        XCTAssertEqual(snapshot.request?.authority, advanced.version)
+    }
+
+    func testNativeStageExpiresWhenProfileReadCrossesAdmissionDeadline() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 60_080)
+        let fixture = try makeFixture(id: 60_081, admissionDeadline: clock.now.addingTimeInterval(1))
+        let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        let owner = storedRequestNativeOwner()
+        let receipt = await bridge.recordNativeDeliveryReceipt(
+            handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce, owner: owner
+        )
+        XCTAssertEqual(receipt, .persisted)
+        clock.now = fixture.request.admissionDeadline.addingTimeInterval(-0.01)
+        let approvedAt = clock.now
+        var writes = 0
+        let stagingWriter = makeBridge(
+            clock: { self.clock.now },
+            atomicWrite: { data, url in
+                writes += 1
+                let profile = try XCTUnwrap(PropertyListSerialization.propertyList(
+                    from: data, options: [], format: nil
+                ) as? [String: Any])
+                let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+                let record = try XCTUnwrap(records.first { $0["id"] as? Int == fixture.request.id })
+                let state = try XCTUnwrap(record["state"] as? [String: Any])
+                XCTAssertNotNil(state["completed"], "Expiry must be written instead of an invalid staged context")
+                try ApprovalStoreTestPersistence.write(data, url)
+            },
+            readData: { url in
+                let data = try Data(contentsOf: url)
+                self.clock.now = fixture.request.admissionDeadline.addingTimeInterval(0.01)
+                return data
+            }
+        )
+        let result = await stagingWriter.markNativeApprovalReady(
+            handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier, approvedAt: approvedAt
+        )
+        XCTAssertEqual(result, .ownershipLost)
+        XCTAssertEqual(writes, 1)
+        let delivery = try await deliveredAuthority(admission.handle)
+        XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int,
+                       ProviderResponseError.userRejectedCode)
+        guard case .snapshot(let readable) = await bridge.configurationSnapshot(
+            configurationKey: fixture.request.configurationKey, profileIdentifier: nil
+        ) else { return XCTFail("Expired staging must preserve the readable profile") }
+        XCTAssertEqual(readable.ethereumAccount, account)
+    }
+
+    func testBoundedRevocationReceiptsCannotReplayAcrossLaterGrant() async throws {
+        let origin = "https://wallet.example"
+        guard case .snapshot(let initial) = await bridge.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+            return XCTFail("Expected initial authority")
+        }
+        var current = initial
+        for id in 61_000...61_256 {
+            guard case .revoked(let next) = await bridge.revoke(configurationKey: origin, provider: .ethereum,
+                attempt: attempt(for: id), expected: current.version, profileIdentifier: nil) else {
+                return XCTFail("Expected durable revocation")
+            }
+            current = next
+        }
+        XCTAssertEqual((try storedProfile()["mutationReceipts"] as? [Any])?.count, 256)
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 61_300)
+        guard case .stale(let unchanged) = await bridge.revoke(configurationKey: origin, provider: .ethereum,
+            attempt: attempt(for: 61_000), expected: initial.version, profileIdentifier: nil) else {
+            return XCTFail("An evicted receipt must not authorize replay against a newer grant")
+        }
+        XCTAssertEqual(unchanged.ethereumAccount, account)
+    }
+
+    func testRevocationCannotPersistAuthorityBeyondItsReadableByteLimit() async throws {
+        struct Origin: Codable {
+            var ethereumAccount: WalletAccountDescriptor?
+            var ethereumChainId = "0xa"
+            var solanaAccount: WalletAccountDescriptor?
+            var revisions: ExtensionBridge.ProviderRevisions
+        }
+        let limit = 1_024 * 1_024
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        func originKey(_ index: Int, length: Int) -> String {
+            var key = "file:///tmp/\(index)/"
+            while key.utf8.count + 235 < length {
+                key += String(repeating: "%E4%B8%AD", count: 26) + "/"
+            }
+            let remaining = length - key.utf8.count
+            return key + String(repeating: "%E4%B8%AD", count: remaining / 9) +
+                String(repeating: "b", count: remaining % 9)
+        }
+        func origin(_ index: Int) throws -> Origin {
+            Origin(revisions: try XCTUnwrap(ExtensionBridge.ProviderRevisions(
+                rawValue: ["ethereum": index + 1, "solana": index]
+            )))
+        }
+        func maximumLength(budget: Int, makeOrigins: (Int) throws -> [String: Origin]) throws -> Int {
+            var lower = 1_000
+            var upper = 3_000
+            while lower < upper {
+                let middle = (lower + upper + 1) / 2
+                if try encoder.encode(makeOrigins(middle)).count <= budget { lower = middle }
+                else { upper = middle - 1 }
+            }
+            return lower
+        }
+        func baseOrigins(length: Int) throws -> [String: Origin] {
+            try Dictionary(uniqueKeysWithValues: (0..<399).map {
+                (originKey($0, length: length), try origin($0))
+            })
+        }
+        let ordinaryLength = try maximumLength(budget: limit - 2_000, makeOrigins: baseOrigins)
+        let base = try baseOrigins(length: ordinaryLength)
+        func paddedOrigins(length: Int) throws -> [String: Origin] {
+            var origins = base
+            origins[originKey(399, length: length)] = try origin(399)
+            return origins
+        }
+        let finalLength = try maximumLength(budget: limit, makeOrigins: paddedOrigins)
+        var origins = try paddedOrigins(length: finalLength)
+        let key = originKey(0, length: ordinaryLength)
+        XCTAssertTrue(origins.keys.allSatisfy {
+            guard let url = URL(string: $0) else { return false }
+            return $0.utf8.count <= 4_096 && url.absoluteString == $0 &&
+                url.path.utf8.count <= 1_024 && url.pathComponents.allSatisfy { $0.utf8.count <= 255 }
+        })
+        XCTAssertLessThanOrEqual(try encoder.encode(origins).count, limit)
+        var revokedOrigins = origins
+        revokedOrigins[key]?.revisions = try XCTUnwrap(ExtensionBridge.ProviderRevisions(
+            rawValue: ["ethereum": 401, "solana": 0]
+        ))
+        XCTAssertGreaterThan(try encoder.encode(revokedOrigins).count, limit)
+
+        guard case .snapshot = await bridge.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
+            return XCTFail("Expected profile bootstrap")
+        }
+        var profile = try storedProfile()
+        profile["authoritySequence"] = 400
+        func seed(_ origins: [String: Origin]) throws {
+            profile["origins"] = try PropertyListSerialization.propertyList(
+                from: encoder.encode(origins), options: [], format: nil
+            )
+            try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+                .write(to: defaultProfileURL, options: .atomic)
+        }
+        try seed(origins)
+        let original = try Data(contentsOf: defaultProfileURL)
+        var writes = 0
+        let tested = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
+            writes += 1
+            try ApprovalStoreTestPersistence.write(data, url)
+        })
+        guard case .snapshot(let before) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
+            return XCTFail("Expected valid profile at the authority byte limit")
+        }
+        guard case .unavailable = await tested.revoke(configurationKey: key, provider: .ethereum,
+            attempt: attempt(for: 61_400), expected: before.version, profileIdentifier: nil) else {
+            return XCTFail("An oversized authority mutation must not persist")
+        }
+        XCTAssertEqual(writes, 0)
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
+        guard case .snapshot(let unchanged) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
+            return XCTFail("Rejected revocation must preserve a readable profile")
+        }
+        XCTAssertEqual(unchanged.version, before.version)
+        XCTAssertEqual(unchanged.ethereumChainId, "0xa")
+
+        origins.removeValue(forKey: originKey(399, length: finalLength))
+        try seed(origins)
+        guard case .revoked(let revoked) = await tested.revoke(configurationKey: key, provider: .ethereum,
+            attempt: attempt(for: 61_400), expected: before.version, profileIdentifier: nil),
+              case .snapshot(let readable) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
+            return XCTFail("A revocation that fits must persist and remain readable")
+        }
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(revoked.version.revisions.ethereum, 401)
+        XCTAssertEqual(readable.version, revoked.version)
+    }
+
+    func testWalletSourceMutationSerializesPreparationAndWritesWithoutRevocation() throws {
+        let store = removalStore()
+        let competing = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            crossProcessLockTimeoutNanoseconds: 0, crossProcessLockPollNanoseconds: 0
+        ))
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+        var source = ["original"]
+        var competingPreparations = 0
+        let result = try store.withWalletSourceMutation { revoke in
+            XCTAssertFalse(try competingLock.tryAcquire())
+            XCTAssertThrowsError(try competing.withWalletSourceMutation { _ in
+                competingPreparations += 1
+                source.append("competing")
+            })
+            XCTAssertEqual(competingPreparations, 0)
+            let prepared = source + ["added"]
+            try revoke(.accounts([]))
+            XCTAssertFalse(try competingLock.tryAcquire())
+            source = prepared
+            return source.count
+        }
+        XCTAssertEqual(result, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v8").path))
+        try competing.withWalletSourceMutation { _ in
+            competingPreparations += 1
+            XCTAssertEqual(source, ["original", "added"])
+            source.append("competing")
+        }
+        XCTAssertEqual(competingPreparations, 1)
+        XCTAssertEqual(source, ["original", "added", "competing"])
+        XCTAssertTrue(try competingLock.tryAcquire())
+        competingLock.release()
+    }
+
+    func testWalletSourcePreparationFailureReleasesLockWithoutRevokingAuthority() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 62_980)
+        let before = try await removalSnapshot()
+        let store = removalStore()
+        XCTAssertThrowsError(try store.withWalletSourceMutation { _ -> Void in
+            throw Failure.expectedValue
+        })
+        let after = try await removalSnapshot()
+        XCTAssertEqual(after.ethereumAccount, account)
+        XCTAssertEqual(after.version, before.version)
+        let result = try store.withWalletSourceMutation { _ in 42 }
+        XCTAssertEqual(result, 42)
+    }
+
+    func testWalletSourceTransactionRevokesMultipleScopesBeforeWritingSource() async throws {
+        let ethereum = authorityTestAccount()
+        let solana = WalletAccountDescriptor(walletID: "another-wallet", coin: .solana,
+            normalizedAddress: String(repeating: "1", count: 32), derivationPath: "m/44'/501'/0'/0'")
+        _ = try await grantAuthority(ethereum, id: 62_981)
+        _ = try await grantAuthority(solana, id: 62_982)
+        let store = removalStore()
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+        var sourceWrites = 0
+        try store.withWalletSourceMutation { revoke in
+            XCTAssertFalse(try competingLock.tryAcquire())
+            try revoke(.accounts([ethereum]))
+            XCTAssertFalse(try competingLock.tryAcquire())
+            try revoke(.wallet(id: solana.walletID))
+            XCTAssertFalse(try competingLock.tryAcquire())
+            sourceWrites += 1
+        }
+        let after = try await removalSnapshot()
+        XCTAssertEqual(sourceWrites, 1)
+        XCTAssertNil(after.ethereumAccount)
+        XCTAssertNil(after.solanaAccount)
+        XCTAssertTrue(try competingLock.tryAcquire())
+        competingLock.release()
+    }
+
+    func testScopedRevocationFailurePreventsSourceWriteAndReleasesTransactionLock() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 62_983)
+        let store = removalStore(atomicWrite: { _, _ in throw Failure.injectedWrite })
+        var preparations = 0
+        var writes = 0
+        XCTAssertThrowsError(try store.withWalletSourceMutation { revoke in
+            preparations += 1
+            try revoke(.accounts([account]))
+            writes += 1
+        })
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(writes, 0)
+        let after = try await removalSnapshot()
+        XCTAssertEqual(after.ethereumAccount, account)
+        let result = try removalStore().withWalletSourceMutation { _ in 42 }
+        XCTAssertEqual(result, 42)
+    }
+
+    func testAccountRemovalMatchesExactIdentityAcrossProfilesAndWalletRemovalClearsRemainingGrants() async throws {
+        let account = authorityTestAccount()
+        let otherWallet = WalletAccountDescriptor(walletID: "other-wallet", coin: account.coin,
+            normalizedAddress: account.normalizedAddress, derivationPath: account.derivationPath)
+        let otherPath = WalletAccountDescriptor(walletID: account.walletID, coin: account.coin,
+            normalizedAddress: account.normalizedAddress, derivationPath: "m/44'/60'/0'/0/1")
+        let solana = WalletAccountDescriptor(walletID: account.walletID, coin: .solana,
+            normalizedAddress: String(repeating: "1", count: 32), derivationPath: "m/44'/501'/0'/0'")
+        let secondProfile = UUID()
+        let otherWalletProfile = UUID()
+        let otherPathProfile = UUID()
+        let original = try await grantAuthority(account, id: 63_000, chainId: "0xa")
+        _ = try await grantAuthority(solana, id: 63_001)
+        _ = try await grantAuthority(account, id: 63_002, profileIdentifier: secondProfile, host: "second.example")
+        _ = try await grantAuthority(otherWallet, id: 63_003, profileIdentifier: otherWalletProfile)
+        _ = try await grantAuthority(otherPath, id: 63_004, profileIdentifier: otherPathProfile)
+        let before = try await removalSnapshot()
+        let store = removalStore()
+        var sourceMutations = 0
+        try store.withRevokedWalletAuthority(matching: .accounts([account])) {
+            sourceMutations += 1
+            let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+            XCTAssertFalse(try competingLock.tryAcquire())
+            competingLock.release()
+        }
+        XCTAssertEqual(sourceMutations, 1)
+        let after = try await removalSnapshot()
+        XCTAssertNil(after.ethereumAccount)
+        XCTAssertEqual(after.solanaAccount, solana)
+        XCTAssertEqual(after.ethereumChainId, "0xa")
+        XCTAssertEqual(after.version.context, before.version.context)
+        XCTAssertGreaterThan(after.version.revisions.ethereum, before.version.revisions.ethereum)
+        XCTAssertEqual(after.version.revisions.solana, before.version.revisions.solana)
+        let second = try await removalSnapshot(profileIdentifier: secondProfile, host: "second.example")
+        let unrelated = try await removalSnapshot(profileIdentifier: otherWalletProfile)
+        let alternate = try await removalSnapshot(profileIdentifier: otherPathProfile)
+        XCTAssertNil(second.ethereumAccount)
+        XCTAssertEqual(unrelated.ethereumAccount, otherWallet)
+        XCTAssertEqual(alternate.ethereumAccount, otherPath)
+        let replay = try await deliveredAuthority(original.handle)
+        XCTAssertEqual(replay.response["result"] as? [String], [account.normalizedAddress])
+        XCTAssertEqual((replay.state["ethereum"] as? [String: String])?["address"], "")
+
+        try store.withRevokedWalletAuthority(matching: .accounts([account])) {}
+        let repeated = try await removalSnapshot()
+        XCTAssertEqual(repeated.version, after.version)
+        try store.withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {}
+        let removedWallet = try await removalSnapshot()
+        let removedPath = try await removalSnapshot(profileIdentifier: otherPathProfile)
+        let retainedWallet = try await removalSnapshot(profileIdentifier: otherWalletProfile)
+        XCTAssertNil(removedWallet.solanaAccount)
+        XCTAssertNil(removedPath.ethereumAccount)
+        XCTAssertEqual(retainedWallet.version, unrelated.version)
+        XCTAssertEqual(retainedWallet.ethereumAccount, otherWallet)
+    }
+
+    func testWalletRemovalFencesSigningAndUncommittedSelectionsButKeepsBroadcastAndCompletedResults() async throws {
+        let account = authorityTestAccount()
+        let grant = try await grantAuthority(account, id: 63_010)
+        let pending = try await admittedSigning(account, id: 63_011)
+        let claimed = try await admittedSigning(account, id: 63_012)
+        let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        let broadcast = try await admittedSigning(account, id: 63_013)
+        let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
+        let broadcastPermit = try executionPermit(await bridge.begin(claim: broadcastClaim))
+        let checkpoint = await bridge.prepareBroadcast(permit: broadcastPermit,
+            recoveryResponse: ambiguousSubmissionResponse(for: broadcast.request, transactionHash: "0xpending").markingApprovalCommitted(),
+            authority: .ordinary)
+        XCTAssertEqual(checkpoint, .persisted)
+        let selection = try makeFixture(id: 63_014, name: "requestAccounts", host: "selection.example")
+        let selectionHandle = try accepted(await bridge.enqueue(ingress: selection.ingress, profileIdentifier: nil)).handle
+        let selectionClaim = try approvalClaim(await bridge.claim(handle: selectionHandle))
+        let selectionPermit = try executionPermit(await bridge.begin(claim: selectionClaim))
+        let staged = try makeFixture(id: 63_015, name: "requestAccounts", host: "staged.example")
+        let stagedHandle = try accepted(await bridge.enqueue(ingress: staged.ingress, profileIdentifier: nil)).handle
+        _ = try await markNativeApprovalReady(handle: stagedHandle)
+        let manual = try makeManualFixture(id: 63_016, enqueueAttempt: attempt(for: 63_016), latestConfigurations: [],
+            host: "manual.example", configurationKey: "https://manual.example")
+        let manualHandle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
+        let solanaTemplate = try makeFixture(id: 63_017, host: "solana.example")
+        var solanaRaw = try XCTUnwrap(JSONSerialization.jsonObject(with: solanaTemplate.ingress.canonicalData) as? [String: Any])
+        solanaRaw["name"] = "connect"
+        solanaRaw["provider"] = "solana"
+        solanaRaw["body"] = ["publicKey": ""]
+        let solana = try authorityFixture(solanaRaw)
+        let solanaHandle = try accepted(await bridge.enqueue(ingress: solana.ingress, profileIdentifier: nil)).handle
+
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {}
+        for handle in [pending.handle, claimed.handle, selectionHandle, stagedHandle, manualHandle, solanaHandle] {
+            let delivery = try await deliveredAuthority(handle)
+            XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+        }
+        let obsoleteGrant = ResponseToExtension(for: selection.request, payload: .result(.strings([account.normalizedAddress])),
+            mutation: .accounts([.ethereum(address: account.normalizedAddress, chainId: "0x1")]), approvedAccounts: [account])
+        _ = await bridge.complete(permit: selectionPermit, response: obsoleteGrant, authority: .ordinary)
+        _ = await bridge.complete(permit: permit, response: response(for: claimed.request), authority: .ordinary)
+        let selectionState = try await removalSnapshot(host: "selection.example")
+        XCTAssertNil(selectionState.ethereumAccount)
+        let broadcastCompletion = await bridge.complete(permit: broadcastPermit,
+            response: response(for: broadcast.request).markingApprovalCommitted(), authority: .ordinary)
+        XCTAssertEqual(broadcastCompletion, .persisted)
+        let broadcastDelivery = try await deliveredAuthority(broadcast.handle)
+        XCTAssertEqual(broadcastDelivery.response["approvalCommitted"] as? Bool, true)
+        let completedGrant = try await deliveredAuthority(grant.handle)
+        XCTAssertEqual(completedGrant.response["kind"] as? String, "result")
+    }
+
+    func testWalletRemovalPreservesWarmConnectionsForUnrelatedEthereumAndSolanaGrants() async throws {
+        let removedAccount = authorityTestAccount()
+        let ethereum = WalletAccountDescriptor(walletID: "retained-ethereum-wallet", coin: .ethereum,
+            normalizedAddress: "0x0000000000000000000000000000000000000043", derivationPath: "m/44'/60'/0'/0/0")
+        let solana = WalletAccountDescriptor(walletID: "retained-solana-wallet", coin: .solana,
+            normalizedAddress: String(repeating: "1", count: 32), derivationPath: "m/44'/501'/0'/0'")
+        _ = try await grantAuthority(removedAccount, id: 63_060, host: "removed.example")
+        _ = try await grantAuthority(ethereum, id: 63_061)
+        _ = try await grantAuthority(solana, id: 63_062)
+        let before = try await removalSnapshot()
+        let ethereumRequest = try makeFixture(id: 63_063, name: "requestAccounts")
+        let ethereumHandle = try accepted(await bridge.enqueue(ingress: ethereumRequest.ingress, profileIdentifier: nil)).handle
+        let solanaTemplate = try makeFixture(id: 63_064)
+        var solanaRaw = try XCTUnwrap(JSONSerialization.jsonObject(with: solanaTemplate.ingress.canonicalData) as? [String: Any])
+        solanaRaw["name"] = "connect"
+        solanaRaw["provider"] = "solana"
+        solanaRaw["body"] = ["publicKey": solana.normalizedAddress]
+        let solanaRequest = try authorityFixture(solanaRaw)
+        let solanaHandle = try accepted(await bridge.enqueue(ingress: solanaRequest.ingress, profileIdentifier: nil)).handle
+
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: removedAccount.walletID)) {}
+        for (handle, account) in [(ethereumHandle, ethereum), (solanaHandle, solana)] {
+            guard case .found(let snapshot) = await bridge.load(handle: handle) else {
+                return XCTFail("An unrelated warm connection must remain available")
+            }
+            XCTAssertEqual(snapshot.phase, .queued)
+            XCTAssertEqual(snapshot.request?.authorizedAccount, account)
+            let current = await bridge.authorityIsCurrent(handle: handle)
+            XCTAssertTrue(current)
+        }
+        let after = try await removalSnapshot()
+        XCTAssertEqual(after.version, before.version)
+        XCTAssertEqual(after.ethereumAccount, ethereum)
+        XCTAssertEqual(after.solanaAccount, solana)
+    }
+
+    func testWalletRemovalRequiresReconnectEvenWhenTheIdenticalDescriptorReturns() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 63_020)
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {}
+        let removed = try await removalSnapshot()
+        let signing = try makeFixture(id: 63_021, name: "signPersonalMessage")
+        guard case .unauthorized = await bridge.enqueue(ingress: signing.ingress, profileIdentifier: nil) else {
+            return XCTFail("Returning the same wallet must not restore its old grant")
+        }
+        _ = try await grantAuthority(account, id: 63_022)
+        let reconnected = try await removalSnapshot()
+        XCTAssertEqual(reconnected.ethereumAccount, account)
+        XCTAssertGreaterThan(reconnected.version.revisions.ethereum, removed.version.revisions.ethereum)
+    }
+
+    func testWalletRemovalRunsWithoutProfilesAndRejectsUnsafeOrCorruptProfilesBeforeSourceMutation() async throws {
+        var sourceMutations = 0
+        let result = try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
+            sourceMutations += 1
+            return 42
+        }
+        XCTAssertEqual(result, 42)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v8").path))
+        try Data([1]).write(to: rootURL.appendingPathComponent("profiles-v8"))
+        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
+            sourceMutations += 1
+        })
+        try FileManager.default.removeItem(at: rootURL.appendingPathComponent("profiles-v8"))
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 63_030)
+        try Data([1]).write(to: profileURL(UUID()))
+        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {
+            sourceMutations += 1
+        })
+        XCTAssertEqual(sourceMutations, 1)
+        let unchanged = try await removalSnapshot()
+        XCTAssertEqual(unchanged.ethereumAccount, account)
+    }
+
+    func testWalletRemovalPersistenceFailureBlocksSourceAndRetriesPartialCleanup() async throws {
+        let account = authorityTestAccount()
+        let secondProfile = try XCTUnwrap(UUID(uuidString: "00000000-0000-4000-8000-000000000001"))
+        _ = try await grantAuthority(account, id: 63_040)
+        _ = try await grantAuthority(account, id: 63_041, profileIdentifier: secondProfile)
+        var sourceMutations = 0
+        var writes = 0
+        let failingStore = removalStore(atomicWrite: { data, url in
+            writes += 1
+            if writes == 2 { throw Failure.injectedWrite }
+            try ApprovalStoreTestPersistence.write(data, url)
+        })
+        XCTAssertThrowsError(try failingStore.withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {
+            sourceMutations += 1
+        })
+        XCTAssertEqual(sourceMutations, 0)
+        let partiallyRemoved = try await removalSnapshot(profileIdentifier: secondProfile)
+        let stillGranted = try await removalSnapshot()
+        XCTAssertNil(partiallyRemoved.ethereumAccount)
+        XCTAssertEqual(stillGranted.ethereumAccount, account)
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) { sourceMutations += 1 }
+        let retried = try await removalSnapshot(profileIdentifier: secondProfile)
+        let fullyRemoved = try await removalSnapshot()
+        XCTAssertEqual(sourceMutations, 1)
+        XCTAssertEqual(retried.version, partiallyRemoved.version)
+        XCTAssertNil(fullyRemoved.ethereumAccount)
+    }
+
+    func testWalletRemovalSynchronizesUnchangedProfilesAndKeepsRevocationWhenSourceFails() async throws {
+        _ = try authorityVersion("https://empty.example")
+        var sourceMutations = 0
+        let failingStore = removalStore(synchronizePublishedFile: { _ in throw Failure.injectedWrite })
+        XCTAssertThrowsError(try failingStore.withRevokedWalletAuthority(matching: .wallet(id: "absent-wallet")) {
+            sourceMutations += 1
+        })
+        XCTAssertEqual(sourceMutations, 0)
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 63_050)
+        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {
+            sourceMutations += 1
+            throw Failure.injectedWrite
+        })
+        let removed = try await removalSnapshot()
+        XCTAssertNil(removed.ethereumAccount)
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) { sourceMutations += 1 }
+        let retried = try await removalSnapshot()
+        XCTAssertEqual(sourceMutations, 2)
+        XCTAssertEqual(retried.version, removed.version)
+    }
+
+    private func removalStore(
+        atomicWrite: ExtensionRequestFileStore.AtomicWrite? = ApprovalStoreTestPersistence.write,
+        synchronizePublishedFile: ExtensionRequestFileStore.SynchronizePublishedFile? = nil
+    ) -> ExtensionRequestFileStore {
+        ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            clock: { self.clock.now }, atomicWrite: atomicWrite, synchronizePublishedFile: synchronizePublishedFile
+        ))
+    }
+
+    private func removalSnapshot(profileIdentifier: UUID? = nil, host: String = "wallet.example") async throws -> ExtensionBridge.AuthoritySnapshot {
+        guard case .snapshot(let snapshot) = await bridge.configurationSnapshot(
+            configurationKey: "https://\(host)", profileIdentifier: profileIdentifier
+        ) else { throw Failure.expectedValue }
+        return snapshot
+    }
+
+    private func authorityTestAccount() -> WalletAccountDescriptor {
+        .init(walletID: "native-store-wallet", coin: .ethereum,
+              normalizedAddress: "0x0000000000000000000000000000000000000042", derivationPath: "m/44'/60'/0'/0/0")
+    }
+
+    private func authorityFixture(_ object: [String: Any]) throws -> Fixture {
+        let request = try XCTUnwrap(SafariRequest(json: object))
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: object) else { throw Failure.expectedValue }
+        return Fixture(request: request, ingress: ingress)
+    }
+
+    private func grantAuthority(
+        _ account: WalletAccountDescriptor, id: Int, profileIdentifier: UUID? = nil,
+        host: String = "wallet.example", chainId: String = "0x1"
+    ) async throws -> (request: SafariRequest, handle: ExtensionBridge.Handle) {
+        let fixture = try makeFixture(id: id, host: host)
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+        raw["authority"] = try authorityVersion(fixture.request.configurationKey, profileIdentifier: profileIdentifier).json
+        raw["name"] = account.coin == .ethereum ? "requestAccounts" : "connect"
+        raw["provider"] = account.coin == .ethereum ? "ethereum" : "solana"
+        raw["body"] = account.coin == .ethereum ? ["address": "", "chainId": chainId] : ["publicKey": ""]
+        let connection = try authorityFixture(raw)
+        let handle = try accepted(await bridge.enqueue(ingress: connection.ingress, profileIdentifier: profileIdentifier)).handle
+        let claim = try approvalClaim(await bridge.claim(handle: handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        let result: ResponseToExtension.Result = account.coin == .ethereum
+            ? .strings([account.normalizedAddress]) : .solanaPublicKey(account.normalizedAddress)
+        let update: ResponseToExtension.AccountUpdate = account.coin == .ethereum
+            ? .ethereum(address: account.normalizedAddress, chainId: chainId) : .solana(publicKey: account.normalizedAddress)
+        let response = ResponseToExtension(for: connection.request, payload: .result(result),
+            mutation: .accounts([update]), approvedAccounts: [account]).markingApprovalCommitted()
+        let completion = await bridge.complete(permit: permit, response: response, authority: .ordinary)
+        XCTAssertEqual(completion, .persisted)
+        return (connection.request, handle)
+    }
+
+    private func admittedSigning(_ account: WalletAccountDescriptor, id: Int) async throws -> (request: SafariRequest, handle: ExtensionBridge.Handle) {
+        let fixture = try makeFixture(id: id)
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+        raw["name"] = "signPersonalMessage"
+        let signing = try authorityFixture(raw)
+        let handle = try accepted(await bridge.enqueue(ingress: signing.ingress, profileIdentifier: nil)).handle
+        guard case .found(let stored) = await bridge.load(handle: handle) else { throw Failure.expectedValue }
+        XCTAssertEqual(stored.request?.authorizedAccount, account)
+        return (signing.request, handle)
+    }
+
+    private func deliveredAuthority(_ handle: ExtensionBridge.Handle) async throws -> (response: [String: Any], state: [String: Any]) {
+        guard case .found(let snapshot) = await bridge.load(handle: handle),
+              case .response(let envelope) = await bridge.prepareResponseDelivery(id: handle.id,
+                configurationKey: snapshot.configurationKey, requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier) else {
+            throw Failure.expectedValue
+        }
+        return (try XCTUnwrap(envelope["response"] as? [String: Any]), try XCTUnwrap(envelope["state"] as? [String: Any]))
+    }
+
     func testObservationalReadsDoNotCreateFreshStorage() async throws {
         try FileManager.default.removeItem(at: rootURL)
         let handle = ExtensionBridge.Handle(id: 1, token: .init(value: UUID()), profileIdentifier: nil)
         let response = await bridge.responseStatus(handle: handle, configurationKey: "https://wallet.example")
-        let execution = await bridge.executionStatus(handle: handle, configurationKey: "https://wallet.example")
+
         let switches = await bridge.listManualSwitchRequests(profileIdentifier: nil)
         XCTAssertEqual(response, .missing)
-        XCTAssertEqual(execution, .missing)
+
         XCTAssertEqual(switches, .available([]))
         XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.path))
     }
 
     func testObservationalReadsDoNotRecoverExpiredOrAbandonedRequests() async throws {
         let manual = try makeManualFixture(
-            id: 950, enqueueAttempt: attempt(for: 950), latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            id: 950, enqueueAttempt: attempt(for: 950), latestConfigurations: []
         )
         let manualHandle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
         let ordinary = try makeFixture(id: 951)
@@ -103,15 +1499,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let manualStatus = await observer.responseStatus(
             handle: manualHandle, configurationKey: manual.request.configurationKey, manualOnly: true
         )
-        let ordinaryStatus = await observer.executionStatus(
-            handle: ordinaryHandle, configurationKey: ordinary.request.configurationKey
-        )
+
         let nonManual = await observer.responseStatus(
             handle: ordinaryHandle, configurationKey: ordinary.request.configurationKey, manualOnly: true
         )
         let switches = try manualSwitchRequests(await observer.listManualSwitchRequests(profileIdentifier: nil))
         XCTAssertEqual(manualStatus, .pending)
-        XCTAssertEqual(ordinaryStatus, .status(.executing))
+
         XCTAssertEqual(nonManual, .missing)
         XCTAssertEqual(switches.map(\.state), [.pending])
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
@@ -131,10 +1525,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             synchronizePublishedFile: { _ in synchronizations += 1; throw Failure.injectedWrite }
         )
         let status = await observer.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
-        let execution = await observer.executionStatus(handle: handle, configurationKey: fixture.request.configurationKey)
+
         let wrongIdentity = await observer.responseStatus(handle: handle, configurationKey: "https://other.example")
         XCTAssertEqual(status, .ready)
-        XCTAssertEqual(execution, .status(.completed))
+
         XCTAssertEqual(wrongIdentity, .missing)
         XCTAssertEqual(synchronizations, 0)
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
@@ -148,24 +1542,23 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testObservationalReadsRejectMissingAndUnsafeExistingStoreLocks() async throws {
         let fixture = try makeFixture(id: 953)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
-        let lockURL = rootURL.appendingPathComponent("bridge-v7.lock")
+        let lockURL = rootURL.appendingPathComponent("bridge-v8.lock")
         try FileManager.default.removeItem(at: lockURL)
         let missingLock = await bridge.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
         XCTAssertEqual(missingLock, .unavailable)
         XCTAssertFalse(FileManager.default.fileExists(atPath: lockURL.path))
         try FileManager.default.createSymbolicLink(at: lockURL, withDestinationURL: defaultProfileURL)
         let original = try Data(contentsOf: defaultProfileURL)
-        let unsafeLock = await bridge.executionStatus(handle: handle, configurationKey: fixture.request.configurationKey)
+
         let unsafeDiscovery = await bridge.listManualSwitchRequests(profileIdentifier: nil)
-        XCTAssertEqual(unsafeLock, .unavailable)
+
         XCTAssertEqual(unsafeDiscovery, .unavailable)
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
     }
 
     func testObservationalReadsPreserveFutureDatesAndExpiredCompletedResponses() async throws {
         let fixture = try makeManualFixture(
-            id: 958, enqueueAttempt: attempt(for: 958), latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            id: 958, enqueueAttempt: attempt(for: 958), latestConfigurations: []
         )
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let completed = await bridge.complete(handle: handle, response: response(for: fixture.request))
@@ -209,7 +1602,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertEqual(checkpoint, .persisted)
         execution.permit.releaseLease()
-        execution.lease.release()
+
         let original = try Data(contentsOf: defaultProfileURL)
         let originalPaths = try FileManager.default.subpathsOfDirectory(atPath: rootURL.path).sorted()
         let observer = makeBridge(
@@ -220,11 +1613,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let response = await observer.responseStatus(
             handle: execution.handle, configurationKey: execution.request.configurationKey
         )
-        let status = await observer.executionStatus(
-            handle: execution.handle, configurationKey: execution.request.configurationKey
-        )
+
         XCTAssertEqual(response, .pending)
-        XCTAssertEqual(status, .status(.executing))
+
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
         XCTAssertEqual(try FileManager.default.subpathsOfDirectory(atPath: rootURL.path).sorted(), originalPaths)
         await bridge.performMaintenance(profileIdentifier: nil)
@@ -238,7 +1629,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeFixture(id: 954)
         let profile = UUID()
         let first = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
-        let second = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: profile)).handle
+        let second = try accepted(await bridge.enqueue(ingress: try profileFixture(fixture, profileIdentifier: profile).ingress, profileIdentifier: profile)).handle
         clock.now = fixture.request.admissionDeadline
         let otherData = try Data(contentsOf: profileURL(profile))
         await bridge.performMaintenance(profileIdentifier: nil)
@@ -255,15 +1646,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let original = try Data(contentsOf: defaultProfileURL)
         try await CrossProcessLockTestFixture.withHeldLock(
-            at: rootURL.appendingPathComponent("bridge-v7.lock"),
+            at: rootURL.appendingPathComponent("bridge-v8.lock"),
             readyURL: rootURL.appendingPathComponent("observation-holder-ready")
         ) {
             let started = ContinuousClock.now
             let response = await self.bridge.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
-            let execution = await self.bridge.executionStatus(handle: handle, configurationKey: fixture.request.configurationKey)
+
             let switches = await self.bridge.listManualSwitchRequests(profileIdentifier: nil)
             XCTAssertEqual(response, .unavailable)
-            XCTAssertEqual(execution, .unavailable)
+
             XCTAssertEqual(switches, .unavailable)
             XCTAssertLessThan(started.duration(to: .now), .milliseconds(500))
         }
@@ -271,15 +1662,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 #endif
 
-    func testWorkflowPolicyIsV3AndPrivateBrowsingRemainsUnsupported() async throws {
-        XCTAssertEqual(ExtensionBridge.workflowVersion, 3)
+    func testWorkflowPolicyIsV4AndPrivateBrowsingRemainsUnsupported() async throws {
+        XCTAssertEqual(ExtensionBridge.workflowVersion, 4)
         XCTAssertEqual(ExtensionBridge.maximumRequests, 8)
         XCTAssertEqual(ExtensionBridge.maximumRequestsPerHost, 4)
         XCTAssertEqual(ExtensionBridge.maximumRetainedRequests, 16)
         XCTAssertEqual(ExtensionBridge.maximumRetainedRequestsPerOrigin, 12)
         XCTAssertEqual(ExtensionBridge.requestTTL, 15 * 60)
         XCTAssertEqual(ExtensionBridge.responseExpiry, 60 * 60)
-        XCTAssertEqual(ExtensionBridge.nativeExecutionTimeout, 160)
 
         let fixture = try makeFixture(id: 1)
         guard case .rejected = await bridge.enqueue(
@@ -354,71 +1744,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testInternalRequestsDecodeValidatedProviderRevisions() throws {
-        let revisions: [String: Any] = ["ethereum": 0, "solana": 9_007_199_254_740_991]
-        let expected = try XCTUnwrap(ExtensionBridge.ProviderRevisions(rawValue: revisions))
-        let token = UUID().uuidString.lowercased()
-        for subject in ["executeNativeApproval", "approveRequest"] {
-            var object: [String: Any] = [
-                "id": 1,
-                "workflowVersion": ExtensionBridge.workflowVersion,
-                "subject": subject,
-                "requestToken": token,
-            ]
-            if subject == "approveRequest" {
-                object["reviewToken"] = UUID().uuidString.lowercased()
-                object["payload"] = ["revisions": revisions]
-            } else {
-                object["configurationKey"] = "https://wallet.example"
-                object["executionDeadline"] = 1_700_000_160_000
-                object["attemptID"] = UUID().uuidString.lowercased()
-                object["revisions"] = revisions
-            }
-            let request = try JSONDecoder().decode(
-                InternalSafariRequest.self,
-                from: JSONSerialization.data(withJSONObject: object)
-            )
-            switch request.command {
-            case .worker(.executeNativeApproval(let identity)):
-                XCTAssertEqual(identity.revisions, expected)
-            case .popup(.approveRequest(_, let payload)):
-                XCTAssertEqual(payload.revisions, expected)
-            default:
-                XCTFail("Expected command carrying provider revisions")
-            }
-            for rawValue in invalidProviderRevisionValues {
-                var invalid = object
-                if subject == "approveRequest" {
-                    if rawValue is NSNull { continue }
-                    invalid["payload"] = ["revisions": rawValue]
-                } else {
-                    invalid["revisions"] = rawValue
-                }
-                XCTAssertThrowsError(try JSONDecoder().decode(
-                    InternalSafariRequest.self,
-                    from: JSONSerialization.data(withJSONObject: invalid)
-                ), "\(subject): \(rawValue)")
-            }
-            if subject == "approveRequest" {
-                for payload: [String: Any] in [[:], ["revisions": NSNull()]] {
-                    object["payload"] = payload
-                    let request = try JSONDecoder().decode(
-                        InternalSafariRequest.self,
-                        from: JSONSerialization.data(withJSONObject: object)
-                    )
-                    guard case .popup(.approveRequest(_, let approval)) = request.command else {
-                        return XCTFail("Expected approval payload")
-                    }
-                    XCTAssertNil(approval.revisions)
-                }
-            } else {
-                object.removeValue(forKey: "revisions")
-                XCTAssertThrowsError(try JSONDecoder().decode(
-                    InternalSafariRequest.self,
-                    from: JSONSerialization.data(withJSONObject: object)
-                ))
-            }
-        }
+    func testInternalRequestsRejectWorkerExecutionAuthority() throws {
+        let execution: [String: Any] = [
+            "id": 1, "workflowVersion": ExtensionBridge.workflowVersion,
+            "subject": "executeNativeApproval", "requestToken": UUID().uuidString.lowercased(),
+            "configurationKey": "https://wallet.example",
+            "executionDeadline": 1_700_000_160_000,
+            "attemptID": UUID().uuidString.lowercased(), "revisions": ["ethereum": 0, "solana": 0],
+        ]
+        XCTAssertThrowsError(try JSONDecoder().decode(InternalSafariRequest.self,
+            from: JSONSerialization.data(withJSONObject: execution)))
     }
 
     private var invalidProviderRevisionValues: [Any] {
@@ -544,22 +1879,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         let profile = try storedProfile()
-        XCTAssertEqual(profile["schemaVersion"] as? Int, 7)
+        XCTAssertEqual(profile["schemaVersion"] as? Int, 8)
         _ = await bridge.list(profileIdentifier: nil)
         for (url, data) in preservedFiles {
             XCTAssertEqual(try Data(contentsOf: url), data)
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: defaultProfileURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent("operation-locks-v7", isDirectory: true)
+            .appendingPathComponent("operation-locks-v8", isDirectory: true)
             .path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL
             .appendingPathComponent(
                 "native-execution-fences-v7",
                 isDirectory: true
             ).path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent("bridge-v7.lock").path))
+            .appendingPathComponent("bridge-v8.lock").path))
     }
 
     func testStoreExcludesBridgeRootFromBackup() async throws {
@@ -580,7 +1915,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(values.isExcludedFromBackup, true)
     }
 
-    func testV7OrdinaryStatesRoundTripWithoutChangingRequestOrResponseBytes()
+    func testV8OrdinaryStatesRoundTripWithoutChangingRequestOrResponseBytes()
         async throws {
         let fixture = try makeFixture(id: 85)
         let handle = try accepted(await bridge.enqueue(
@@ -672,8 +2007,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let manual = try makeManualFixture(
             id: 902,
             enqueueAttempt: attempt(for: 902),
-            latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            latestConfigurations: []
         )
         let ordinaryHandle = try accepted(store.enqueue(
             ingress: ordinary.ingress,
@@ -684,7 +2018,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: manual.ingress,
             profileIdentifier: nil
         )).handle
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id])
+        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
 
         guard case .available(let snapshots) = store.list(profileIdentifier: nil) else {
             return XCTFail("Expected validated snapshots")
@@ -714,8 +2048,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let coalescing = try makeManualFixture(
             id: 903,
             enqueueAttempt: attempt(for: 903),
-            latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            latestConfigurations: []
         )
         let admission = try accepted(store.enqueue(
             ingress: coalescing.ingress,
@@ -797,7 +2130,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             request: fixture.request,
             canonicalData: originalData,
             fingerprint: fixture.ingress.fingerprint,
-            revisions: fixture.ingress.revisions,
+            authority: fixture.ingress.authority,
             replayOnly: false
         )
         let handle = try accepted(store.enqueue(ingress: ingress, profileIdentifier: nil)).handle
@@ -1003,7 +2336,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             (replay, UUID()),
         ] {
             guard case .rejected = await bridge.enqueue(
-                ingress: fixture.ingress,
+                ingress: try profileFixture(fixture, profileIdentifier: profile).ingress,
                 profileIdentifier: profile
             ) else { return XCTFail("Recovery must match the request and profile") }
         }
@@ -1017,7 +2350,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeFixture(id: 2)
         let replay = try makeFixture(
             id: 2,
-            revisions: ["ethereum": 1, "solana": 0],
             replayOnly: true
         )
         let original = try accepted(await bridge.enqueue(
@@ -1053,7 +2385,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: recovered.handle.requestToken,
             profileIdentifier: nil
         ) else { return XCTFail("Expected the stored result") }
-        XCTAssertEqual(response["result"] as? String, "signed")
+        XCTAssertEqual((response["response"] as? [String: Any])?["result"] as? String, "signed")
     }
 
     func testReplayOnlyWaitsForClaimResolutionAndRecoversDroppedBroadcast() async throws {
@@ -1212,13 +2544,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             stagedSnapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier,
             secondRuntime
         )
-        XCTAssertNil(stagedSnapshot.nativeExecutionContext)
-        let execution = try await makeNativeDecisionExecutable(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: admission.revisions
-        )
-        defer { execution.lease.release() }
+        XCTAssertNotNil(stagedSnapshot.nativeExecutionContext)
+        let execution = try await nativeStage(handle: admission.handle)
+
         let claim: ExtensionBridge.NativeExecutionClaim
         guard case .claimed(let value) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Expected native claim") }
         claim = value
@@ -1694,19 +3022,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let attempt = String(repeating: "2", count: 32)
         let original = try makeFixture(
             id: 4,
+            name: "requestAccounts",
             enqueueAttempt: attempt,
             favicon: "https://wallet.example/first.png"
         )
         let changedFavicon = try makeFixture(
             id: 4,
+            name: "requestAccounts",
             enqueueAttempt: attempt,
             favicon: "https://wallet.example/second.png"
         )
-        let changedRevisions = try makeFixture(
-            id: 4,
-            enqueueAttempt: attempt,
-            revisions: ["ethereum": 1, "solana": 0]
-        )
+        var changedAuthority = try XCTUnwrap(JSONSerialization.jsonObject(with: original.ingress.canonicalData) as? [String: Any])
+        changedAuthority["authority"] = ["context": original.ingress.authority.context, "revisions": ["ethereum": 1, "solana": 0]]
+        let changedRevisions = try authorityFixture(changedAuthority)
         let admitted = try accepted(await bridge.enqueue(
             ingress: original.ingress,
             profileIdentifier: nil
@@ -1739,7 +3067,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testStoredRequestRevisionMismatchFailsClosed() async throws {
         _ = try accepted(await bridge.enqueue(
-            ingress: try makeFixture(id: 5).ingress,
+            ingress: try makeFixture(id: 5, name: "requestAccounts").ingress,
             profileIdentifier: nil
         ))
         try mutateFirstStoredRecord { record in
@@ -1749,7 +3077,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             var request = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: requestData) as? [String: Any]
             )
-            request["revisions"] = ["ethereum": 1, "solana": 0]
+            var authority = try XCTUnwrap(request["authority"] as? [String: Any])
+            authority["revisions"] = ["ethereum": 1, "solana": 0]
+            request["authority"] = authority
             pending["request"] = try JSONSerialization.data(
                 withJSONObject: request,
                 options: [.sortedKeys]
@@ -1772,14 +3102,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 "provider": "ethereum",
                 "chainId": "0x1",
                 "results": ["0x0000000000000000000000000000000000000001"],
-            ]],
-            revisions: ["ethereum": 0, "solana": 0]
+            ]]
         )
         let drifted = try makeManualFixture(
             id: 405,
             enqueueAttempt: attempt,
-            latestConfigurations: [],
-            revisions: ["ethereum": 1, "solana": 0]
+            latestConfigurations: []
         )
 
         let admitted = try accepted(await bridge.enqueue(
@@ -1806,14 +3134,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let first = try makeManualFixture(
             id: 410,
             enqueueAttempt: attempt(for: 410),
-            latestConfigurations: [],
-            revisions: ["ethereum": 2, "solana": 3]
+            latestConfigurations: []
         )
         let second = try makeManualFixture(
             id: 411,
             enqueueAttempt: attempt(for: 411),
-            latestConfigurations: [],
-            revisions: ["ethereum": 2, "solana": 3]
+            latestConfigurations: []
         )
         let firstBridge = try XCTUnwrap(bridge)
         let now = clock.now
@@ -1844,8 +3170,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 "provider": "ethereum",
                 "chainId": "0x1",
                 "results": ["0x0000000000000000000000000000000000000001"],
-            ]],
-            revisions: ["ethereum": 2, "solana": 3]
+            ]]
         )
         let first = try accepted(await bridge.enqueue(
             ingress: original.ingress,
@@ -1854,8 +3179,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let next = try makeManualFixture(
             id: 413,
             enqueueAttempt: attempt(for: 413),
-            latestConfigurations: [],
-            revisions: ["ethereum": 9, "solana": 10]
+            latestConfigurations: []
         )
         let observer = makeBridge(clock: { self.clock.now })
         let resumed = try accepted(await observer.enqueue(
@@ -1877,8 +3201,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let mismatchedAttempt = try makeManualFixture(
             id: 414,
             enqueueAttempt: original.request.enqueueAttempt,
-            latestConfigurations: [],
-            revisions: ["ethereum": 2, "solana": 3]
+            latestConfigurations: []
         )
         guard case .rejected = await observer.enqueue(
             ingress: mismatchedAttempt.ingress,
@@ -1890,8 +3213,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try makeManualFixture(
             id: 415,
             enqueueAttempt: attempt(for: 415),
-            latestConfigurations: [],
-            revisions: ["ethereum": 1, "solana": 2]
+            latestConfigurations: []
         )
         let first = try accepted(await bridge.enqueue(
             ingress: original.ingress,
@@ -1905,8 +3227,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let next = try makeManualFixture(
             id: 416,
             enqueueAttempt: attempt(for: 416),
-            latestConfigurations: [],
-            revisions: ["ethereum": 3, "solana": 4]
+            latestConfigurations: []
         )
         let recovered = try accepted(await bridge.enqueue(
             ingress: next.ingress,
@@ -1934,16 +3255,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let first = try makeManualFixture(
             id: 417,
             enqueueAttempt: attempt(for: 417),
-            latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            latestConfigurations: []
         )
         let original = try accepted(await bridge.enqueue(
             ingress: first.ingress,
             profileIdentifier: nil
         ))
+        let otherIdentifier = UUID()
         let otherProfile = try accepted(await bridge.enqueue(
-            ingress: first.ingress,
-            profileIdentifier: UUID()
+            ingress: try profileFixture(first, profileIdentifier: otherIdentifier).ingress,
+            profileIdentifier: otherIdentifier
         ))
         XCTAssertEqual(otherProfile.admissionKind, .new)
         XCTAssertNotEqual(otherProfile.handle, original.handle)
@@ -1952,7 +3273,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: 418,
             enqueueAttempt: attempt(for: 418),
             latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0],
             configurationKey: "http://wallet.example"
         )
         let otherOrigin = try accepted(await bridge.enqueue(
@@ -1976,8 +3296,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try makeManualFixture(
             id: 421,
             enqueueAttempt: attempt(for: 421),
-            latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            latestConfigurations: []
         )
         _ = try accepted(await bridge.enqueue(
             ingress: original.ingress,
@@ -1987,7 +3306,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: 422,
             enqueueAttempt: attempt(for: 422),
             latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0],
             admissionDeadline: clock.now.addingTimeInterval(-1)
         )
         guard case .expired = await bridge.enqueue(
@@ -2001,8 +3319,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let pending = try makeManualFixture(
             id: 430,
             enqueueAttempt: attempt(for: 430),
-            latestConfigurations: [],
-            revisions: ["ethereum": 2, "solana": 3]
+            latestConfigurations: []
         )
         let pendingHandle = try accepted(await bridge.enqueue(
             ingress: pending.ingress,
@@ -2012,7 +3329,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: 431,
             enqueueAttempt: attempt(for: 431),
             latestConfigurations: [],
-            revisions: ["ethereum": 4, "solana": 5],
             host: "approved.example",
             configurationKey: "https://approved.example"
         )
@@ -2026,7 +3342,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: 432,
             enqueueAttempt: attempt(for: 432),
             latestConfigurations: [],
-            revisions: ["ethereum": 6, "solana": 7],
             host: "completed.example",
             configurationKey: "https://completed.example"
         )
@@ -2045,7 +3360,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )).handle
         let foreignProfile = UUID()
         let foreign = try accepted(await bridge.enqueue(
-            ingress: pending.ingress,
+            ingress: try profileFixture(pending, profileIdentifier: foreignProfile).ingress,
             profileIdentifier: foreignProfile
         )).handle
 
@@ -2061,7 +3376,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ])
         }
         let pendingDescriptor = try XCTUnwrap(page.first { $0.handle == pendingHandle })
-        XCTAssertEqual(pendingDescriptor.revisions, pending.ingress.revisions)
+        XCTAssertEqual(pendingDescriptor.revisions, pending.ingress.authority.revisions)
         XCTAssertEqual(pendingDescriptor.host, pending.request.host)
         XCTAssertEqual(pendingDescriptor.configurationKey, pending.request.configurationKey)
         guard case .found(let completedSnapshot) = await bridge.loadManualSwitch(
@@ -2111,7 +3426,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 id: id,
                 enqueueAttempt: attempt(for: id),
                 latestConfigurations: [],
-                revisions: ["ethereum": 0, "solana": 0],
                 host: "wallet\(id).example",
                 configurationKey: "https://wallet\(id).example"
             )
@@ -2136,7 +3450,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: 490,
             enqueueAttempt: attempt(for: 490),
             latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0],
             host: "next.example",
             configurationKey: "https://next.example"
         )
@@ -2149,7 +3462,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: 491,
             enqueueAttempt: attempt(for: 491),
             latestConfigurations: [],
-            revisions: ["ethereum": 1, "solana": 2],
             host: "wallet470.example",
             configurationKey: "https://wallet470.example"
         )
@@ -2175,7 +3487,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 id: id,
                 enqueueAttempt: attempt(for: id),
                 latestConfigurations: [],
-                revisions: ["ethereum": 0, "solana": 0],
                 host: "pending\(id).example",
                 configurationKey: "https://pending\(id).example"
             )
@@ -2194,8 +3505,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let manual = try makeManualFixture(
             id: 810,
             enqueueAttempt: attempt(for: 810),
-            latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            latestConfigurations: []
         )
         let handle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
         let completed = await bridge.complete(
@@ -2219,52 +3529,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(retained.phase, .responded)
     }
 
-    func testManualSwitchAdmissionBoundsEntireDiscoveryResponse() async throws {
-        var handles = [ExtensionBridge.Handle]()
-        var rejected = false
-        for id in 500..<503 {
-            let baseOrigin = "file:///tmp/entry-\(id)-"
-            let baseline = try makeManualFixture(
-                id: id,
-                enqueueAttempt: attempt(for: id),
-                latestConfigurations: [],
-                revisions: ["ethereum": 0, "solana": 0],
-                host: baseOrigin,
-                configurationKey: baseOrigin
-            )
-            let padding = (ExtensionBridge.maximumPayloadBytes - baseline.ingress.canonicalData.count - 64) / 2
-            let origin = baseOrigin + String(repeating: "a", count: padding)
-            let manual = try makeManualFixture(
-                id: id,
-                enqueueAttempt: attempt(for: id),
-                latestConfigurations: [],
-                revisions: ["ethereum": 0, "solana": 0],
-                host: origin,
-                configurationKey: origin
-            )
-            let result = await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)
-            if case .manualSwitchCapacityReached = result {
-                rejected = true
-                break
-            }
-            let handle = try accepted(result).handle
-            handles.append(handle)
-            let completed = await bridge.complete(
-                handle: handle,
-                response: ResponseToExtension(for: manual.request, payload: .error(.userRejected))
-            )
-            XCTAssertEqual(completed, .persisted)
-            clock.now.addTimeInterval(0.125)
+    func testAuthorityOriginLengthIsBoundedBeforeAllocatingRows() async throws {
+        let origin = "file:///tmp/" + String(repeating: "a", count: 4_096)
+        guard case .unavailable = await bridge.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+            return XCTFail("Oversized origin must not allocate authority state")
         }
-        XCTAssertTrue(rejected)
-        XCTAssertFalse(handles.isEmpty)
-        let requests = try manualSwitchRequests(await bridge.listManualSwitchRequests(profileIdentifier: nil))
-        XCTAssertEqual(requests.map(\.handle), handles)
-        let encoded = try XCTUnwrap(ExtensionBridge.payloadData([
-            "id": Int.min,
-            "requests": requests.map(\.json),
-        ]))
-        XCTAssertLessThanOrEqual(encoded.count, ExtensionBridge.maximumManualSwitchResponseBytes)
+        let fixture = try makeFixture(id: 500)
+        XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
+        XCTAssertEqual(fixture.ingress.authority.revisions.ethereum, 0)
     }
 
     func testManualSwitchDiscoveryLeavesExpirationToExplicitMaintenance()
@@ -2272,8 +3544,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let manual = try makeManualFixture(
             id: 490,
             enqueueAttempt: attempt(for: 490),
-            latestConfigurations: [],
-            revisions: ["ethereum": 0, "solana": 0]
+            latestConfigurations: []
         )
         let handle = try accepted(await bridge.enqueue(
             ingress: manual.ingress,
@@ -2314,7 +3585,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertEqual(completion, .persisted)
         try mutateFirstStoredRecord { record in
-            record["revisions"] = ["ethereum": -1, "solana": 0]
+            var authority = try XCTUnwrap(record["authority"] as? [String: Any])
+            authority["revisions"] = ["ethereum": -1, "solana": 0]
+            record["authority"] = authority
         }
 
         guard case .unavailable = await bridge.list(profileIdentifier: nil) else {
@@ -2627,7 +3900,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let profileIdentifier = UUID()
             let fixture = try makeFixture(id: 741)
             let handle = try accepted(await bridge.enqueue(
-                ingress: fixture.ingress,
+                ingress: try profileFixture(fixture, profileIdentifier: profileIdentifier).ingress,
                 profileIdentifier: profileIdentifier
             )).handle
             let targetURL = profileURL(profileIdentifier)
@@ -3008,12 +4281,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             approvedAt: clock.now
         )
         XCTAssertEqual(staged, .persisted)
-        let execution = try await makeNativeDecisionExecutable(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: admission.revisions
-        )
-        defer { execution.lease.release() }
+        let execution = try await nativeStage(handle: admission.handle)
+
         guard case .claimed(let claim) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Expected native claim") }
         let permit = try executionPermit(await bridge.begin(claim: claim.approvalClaim))
         _ = try await fillCompletedByteCapacity()
@@ -3133,11 +4402,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let firstProfile = UUID()
         let secondProfile = UUID()
         let first = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
+            ingress: try profileFixture(fixture, profileIdentifier: firstProfile).ingress,
             profileIdentifier: firstProfile
         )).handle
         let second = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
+            ingress: try profileFixture(fixture, profileIdentifier: secondProfile).ingress,
             profileIdentifier: secondProfile
         )).handle
         XCTAssertNotEqual(first, second)
@@ -3160,11 +4429,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("Expected second profile pending") }
     }
 
-    func testMaintenanceRemovesExpiredInactiveProfile() async throws {
+    func testMaintenanceRetainsAuthorityEpochAfterRequestsExpire() async throws {
         let inactiveProfile = UUID()
         let fixture = try makeFixture(id: 31)
         let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
+            ingress: try profileFixture(fixture, profileIdentifier: inactiveProfile).ingress,
             profileIdentifier: inactiveProfile
         )).handle
         let completion = await bridge.complete(
@@ -3177,14 +4446,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
         await bridge.performMaintenance()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: inactiveURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
     }
 
     func testQueueAccessDoesNotSweepExpiredInactiveProfile() async throws {
         let inactiveProfile = UUID()
         let fixture = try makeFixture(id: 35)
         let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
+            ingress: try profileFixture(fixture, profileIdentifier: inactiveProfile).ingress,
             profileIdentifier: inactiveProfile
         )).handle
         let completion = await bridge.complete(
@@ -3219,14 +4488,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
         await bridge.performMaintenance()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: inactiveURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
     }
 
-    func testMaintenanceRemovesAlreadyEmptyInactiveProfile() async throws {
+    func testMaintenanceRetainsAlreadyEmptyAuthorityProfile() async throws {
         let inactiveProfile = UUID()
         let inactiveURL = profileURL(inactiveProfile)
         _ = try accepted(await bridge.enqueue(
-            ingress: try makeFixture(id: 34).ingress,
+            ingress: try profileFixture(makeFixture(id: 34), profileIdentifier: inactiveProfile).ingress,
             profileIdentifier: inactiveProfile
         ))
         var profile = try XCTUnwrap(
@@ -3244,7 +4513,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ).write(to: inactiveURL, options: .atomic)
 
         await bridge.performMaintenance()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: inactiveURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
     }
 
     func testUnavailableInactiveProfileDoesNotBlockCurrentProfile() async throws {
@@ -3280,7 +4549,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let identifier = UUID()
             let fixture = try makeFixture(id: 200 + index)
             let handle = try accepted(await bridge.enqueue(
-                ingress: fixture.ingress, profileIdentifier: identifier
+                ingress: try profileFixture(fixture, profileIdentifier: identifier).ingress, profileIdentifier: identifier
             )).handle
             if index < 2 {
                 heldClaims.append(try approvalClaim(await bridge.claim(handle: handle)))
@@ -3294,7 +4563,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
         await bridge.performMaintenance()
         XCTAssertTrue(heldURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
-        XCTAssertTrue(expiredURLs.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) })
+        XCTAssertTrue(expiredURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        for url in expiredURLs {
+            let profile = try XCTUnwrap(PropertyListSerialization.propertyList(from: Data(contentsOf: url), options: [], format: nil) as? [String: Any])
+            XCTAssertEqual((profile["records"] as? [Any])?.count, 0)
+            XCTAssertNotNil(profile["authorityEpoch"])
+        }
         XCTAssertFalse(FileManager.default.fileExists(atPath: defaultProfileURL.deletingLastPathComponent().appendingPathComponent("sweep.cursor").path))
     }
 
@@ -3394,12 +4668,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     profileIdentifier: nil
                 )).handle
                 let claim = try approvalClaim(await bridge.claim(handle: handle))
+                let permit = rollsBack ? try executionPermit(await bridge.begin(claim: claim)) : nil
                 if expires { clock.now.addTimeInterval(ExtensionBridge.requestTTL) }
 
                 let result: ExtensionBridge.StoreMutationResult
                 if rollsBack {
-                    let permit = try executionPermit(await bridge.begin(claim: claim))
-                    result = await bridge.rollback(permit: permit)
+                    result = await bridge.rollback(permit: try XCTUnwrap(permit))
                 } else {
                     result = await bridge.release(claim: claim)
                 }
@@ -3437,17 +4711,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         ingress: fixture.ingress,
                         profileIdentifier: nil
                     )).handle
-                    var nativeRead: ExtensionBridge.NativeExecutionLease?
-                    defer { nativeRead?.release() }
                     let claim: ExtensionBridge.ApprovalClaim
                     if native {
                         let staged = try await markNativeApprovalReady(handle: handle)
                         XCTAssertEqual(staged, .persisted)
-                        nativeRead = try await makeNativeDecisionExecutable(
-                            handle: handle,
-                            configurationKey: fixture.request.configurationKey,
-                            revisions: fixture.ingress.revisions
-                        ).lease
+                        _ = try await nativeStage(handle: handle)
                         guard case .claimed(let nativeClaim) = await claimReadyNativeExecution(
                             in: bridge,
                             handle: handle
@@ -3610,7 +4878,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let library = container.appendingPathComponent("Library", isDirectory: true)
         let support = library.appendingPathComponent("Application Support", isDirectory: true)
         let storeRoot = support.appendingPathComponent("BigWalletExtensionBridge", isDirectory: true)
-        let profiles = storeRoot.appendingPathComponent("profiles-v7", isDirectory: true)
+        let profiles = storeRoot.appendingPathComponent("profiles-v8", isDirectory: true)
         let expectedPaths = [profiles, storeRoot, support, library, container].map(\.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: library.path))
 
@@ -3639,7 +4907,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             containerURL: container,
             dependencies: .init(clock: { self.clock.now }, persistenceOperations: operations)
         )
-        let fixture = try makeFixture(id: 982)
+        let template = try makeFixture(id: 982)
+        guard case .snapshot(let snapshot) = store.configurationSnapshot(configurationKey: template.request.configurationKey, profileIdentifier: nil) else { return XCTFail("Expected container authority") }
+        XCTAssertEqual(openedPaths, expectedPaths)
+        XCTAssertEqual(synchronizedPaths, expectedPaths)
+        openedPaths.removeAll()
+        synchronizedPaths.removeAll()
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        raw["authority"] = snapshot.version.json
+        let fixture = try authorityFixture(raw)
         let handle = try accepted(store.enqueue(
             ingress: fixture.ingress,
             profileIdentifier: nil
@@ -3672,7 +4948,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     func testAmbiguousAdmissionReplayRequiresPublishedFileSynchronization() async throws {
-        let fixture = try makeFixture(id: 983, revisions: ["ethereum": 2, "solana": 3])
+        let fixture = try makeFixture(id: 983)
         try await assertAdmissionRetryRequiresSynchronization(
             original: fixture,
             retry: fixture,
@@ -3684,14 +4960,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try makeManualFixture(
             id: 984,
             enqueueAttempt: attempt(for: 984),
-            latestConfigurations: [],
-            revisions: ["ethereum": 2, "solana": 3]
+            latestConfigurations: []
         )
         let retry = try makeManualFixture(
             id: 985,
             enqueueAttempt: attempt(for: 985),
-            latestConfigurations: [],
-            revisions: ["ethereum": 9, "solana": 10]
+            latestConfigurations: []
         )
         try await assertAdmissionRetryRequiresSynchronization(
             original: original,
@@ -3752,7 +5026,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let profileIdentifier = UUID()
             let fixture = try makeFixture(id: 975 + index)
             let handle = try accepted(await bridge.enqueue(
-                ingress: fixture.ingress,
+                ingress: try profileFixture(fixture, profileIdentifier: profileIdentifier).ingress,
                 profileIdentifier: profileIdentifier
             )).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
@@ -4046,7 +5320,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             )).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
             let permit = try executionPermit(await bridge.begin(claim: claim))
-            let deadline = clock.now.addingTimeInterval(1)
+            let deadline = claim.executionDeadline
             clock.now = deadline
 
             let result: ExtensionBridge.StoreMutationResult
@@ -4076,7 +5350,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testHeldClaimSurvivesPendingDeadline() async throws {
+    func testExpiredHeldClaimRetainsOwnershipButCannotBeginExecution() async throws {
         let fixture = try makeFixture(id: 42)
         let handle = try accepted(await bridge.enqueue(
             ingress: fixture.ingress,
@@ -4091,7 +5365,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertEqual(active.phase, .approving)
 
-        _ = try executionPermit(await bridge.begin(claim: claim))
+        let begin = await bridge.begin(claim: claim)
+        XCTAssertEqual(begin, .ownershipLost)
+        claim.releaseLease()
     }
 
     func testHeldPreparedBroadcastDoesNotExpireUntilItsLeaseEnds() async throws {
@@ -4138,7 +5414,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
     }
 
-    func testCheckpointAfterPendingDeadlineRemainsOwned() async throws {
+    func testExpiredNativeDeadlinePreventsBroadcastCheckpoint() async throws {
         let fixture = try makeFixture(id: 44)
         let handle = try accepted(await bridge.enqueue(
             ingress: fixture.ingress,
@@ -4159,7 +5435,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             recoveryResponse: recovery,
             authority: .ordinary
         )
-        XCTAssertEqual(preparation, .persisted)
+        XCTAssertEqual(preparation, .ownershipLost)
         guard case .pending = await bridge.prepareResponseDelivery(
             id: handle.id,
             configurationKey: fixture.request.configurationKey,
@@ -4168,12 +5444,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("Expected checkpoint ownership") }
         permit?.releaseLease()
         permit = nil
-        _ = try responseJSON(await bridge.prepareResponseDelivery(
+        let expired = try responseJSON(await bridge.prepareResponseDelivery(
             id: handle.id,
             configurationKey: fixture.request.configurationKey,
             requestToken: handle.requestToken,
             profileIdentifier: nil
         ))
+        XCTAssertEqual((expired["error"] as? [String: Any])?["code"] as? Int, 4001)
     }
 
     func testDroppedPreparedBroadcastCompletesWithUnknownSubmissionResponse() async throws {
@@ -4554,7 +5831,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testNativeClaimRequiresAValidExecutionContextAfterRestart()
         async throws {
         let execution = try await makeExecutableNativePermit(id: 732)
-        defer { execution.lease.release() }
+
         let original = try Data(contentsOf: defaultProfileURL)
         let claimed = try firstStoredState("claimed")
         let ownership = try XCTUnwrap(claimed["approval"] as? [String: Any])
@@ -4660,12 +5937,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             runtimeInstanceIdentifier: runtime, approvedAt: approvedAt
         )
         XCTAssertEqual(exactRetry, .persisted)
-        let execution = try await makeNativeDecisionExecutable(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: admission.revisions
-        )
-        defer { execution.lease.release() }
+        let execution = try await nativeStage(handle: admission.handle)
+
         guard case .claimed(let claim) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Expected the delayed native decision") }
         XCTAssertEqual(claim.approvedAt, approvedAt)
         let released = await bridge.release(claim: claim.approvalClaim)
@@ -4676,7 +5949,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let profile = UUID()
         let fixture = try makeFixture(id: 720)
         let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
+            ingress: try profileFixture(fixture, profileIdentifier: profile).ingress,
             profileIdentifier: profile
         )).handle
 
@@ -4693,12 +5966,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .executing = await bridge.claim(handle: handle) else {
             return XCTFail("Popup claim must not consume native decision")
         }
-        let execution = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: snapshot.revisions
-        )
-        defer { execution.lease.release() }
+        let execution = try await nativeStage(handle: handle)
+
         let wrongProfileHandle = ExtensionBridge.Handle(
             id: handle.id,
             token: handle.token,
@@ -4723,391 +5992,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(reclaimed, .responded)
     }
 
-    func testNativeExecutionContextVerifiesAmbiguousWrites() async throws {
-        let fixture = try makeFixture(id: 742)
-        let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        )).handle
-        let staged = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(staged, .persisted)
-        bridge = makeBridge(
-            clock: { self.clock.now },
-            atomicWrite: { data, url in
-                try ApprovalStoreTestPersistence.write(data, url)
-                throw Failure.injectedWrite
-            }
-        )
-        let execution = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        defer { execution.lease.release() }
-        guard case .found(let recorded) = await bridge.load(handle: handle) else {
-            return XCTFail("Expected retained native context")
-        }
-        XCTAssertEqual(recorded.nativeExecutionContext, execution.context)
-        execution.lease.release()
-        guard case .found(let retained) = await bridge.load(handle: handle) else {
-            return XCTFail("Expected retained staged decision")
-        }
-        XCTAssertNotNil(retained.nativeApproval)
-        XCTAssertEqual(retained.nativeExecutionContext, execution.context)
-    }
-
-    func testNativeExecutionRequiresDecisionAndPreservesExclusiveAttempt() async throws {
-        let fixture = try makeFixture(id: 726)
-        let admission = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        ))
-        let deadline = clock.now.addingTimeInterval(120)
-        let premature = await bridge.beginNativeExecution(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            attemptID: admission.handle.token.value,
-            revisions: fixture.ingress.revisions,
-            executionDeadline: deadline
-        )
-        guard case .needsDelivery(let nonce) = premature else {
-            return XCTFail("Expected delivery before a decision")
-        }
-        XCTAssertEqual(nonce, admission.nativeDeliveryNonce)
-        let staged = try await markNativeApprovalReady(handle: admission.handle)
-        XCTAssertEqual(staged, .persisted)
-        let beforeRead = await claimReadyNativeExecution(in: bridge, handle: admission.handle)
-        XCTAssertEqual(beforeRead, .notStaged)
-        let first = try await makeNativeDecisionExecutable(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        let other = makeBridge(clock: { self.clock.now })
-        let started = ContinuousClock.now
-        guard case .pending = await other.beginNativeExecution(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            attemptID: admission.handle.token.value,
-            revisions: fixture.ingress.revisions,
-            executionDeadline: deadline
-        ) else { return XCTFail("Only one reader may authorize execution") }
-        XCTAssertLessThan(started.duration(to: .now), .milliseconds(500))
-        first.lease.release()
-        let afterRelease = await claimReadyNativeExecution(in: bridge, handle: admission.handle)
-        XCTAssertEqual(afterRelease, .notStaged)
-        clock.now = clock.now.addingTimeInterval(1)
-        let revisions = first.context.revisions
-        let second = try await makeNativeDecisionExecutable(
-            handle: admission.handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: revisions,
-            executionDeadline: first.context.executionDeadline
-        )
-        defer { second.lease.release() }
-        XCTAssertNotEqual(first.context.fenceToken, second.context.fenceToken)
-        XCTAssertEqual(second.context.revisions, revisions)
-        first.lease.release()
-        guard case .claimed(let claim) = await claimReadyNativeExecution(in: bridge, handle: admission.handle) else { return XCTFail("Old cleanup must not revoke a successor") }
-        XCTAssertEqual(claim.executionContext, second.context)
-        let released = await bridge.release(claim: claim.approvalClaim)
-        XCTAssertEqual(released, .persisted)
-    }
-
-    func testNativeExecutionDeinitPreservesAttemptAndReleasesFence() async throws {
-        let fixture = try makeFixture(id: 743)
-        let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        )).handle
-        _ = try await markNativeApprovalReady(handle: handle)
-        var execution: (
-            context: ExtensionBridge.NativeExecutionContext,
-            lease: ExtensionBridge.NativeExecutionLease
-        )? = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        let retainedContext = try XCTUnwrap(execution?.context)
-        execution = nil
-        guard case .found(let snapshot) = await bridge.load(handle: handle) else {
-            return XCTFail("Missing request")
-        }
-        XCTAssertEqual(snapshot.nativeExecutionContext, retainedContext)
-        let next = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        next.lease.release()
-    }
-
-    func testNativeExecutionRetryCannotReplaceAttemptRevisionsOrDeadline() async throws {
-        let fixture = try makeFixture(id: 956)
-        let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
-        _ = try await markNativeApprovalReady(handle: handle)
-        let attemptID = UUID()
-        let first = try await makeNativeDecisionExecutable(
-            handle: handle, configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions, attemptID: attemptID
-        )
-        first.lease.release()
-        let original = try Data(contentsOf: defaultProfileURL)
-        clock.now.addTimeInterval(5)
-        let changedRevisions = try XCTUnwrap(ExtensionBridge.ProviderRevisions(
-            rawValue: ["ethereum": 1, "solana": 0]
-        ))
-        let changedAuthorities = [
-            (UUID(), first.context.revisions, first.context.executionDeadline),
-            (attemptID, changedRevisions, first.context.executionDeadline),
-            (attemptID, first.context.revisions, first.context.executionDeadline.addingTimeInterval(5)),
-            (attemptID, first.context.revisions, first.context.executionDeadline.addingTimeInterval(-5)),
-        ]
-        for (attempt, revisions, deadline) in changedAuthorities {
-            guard case .unavailable = await bridge.beginNativeExecution(
-                handle: handle, configurationKey: fixture.request.configurationKey,
-                attemptID: attempt, revisions: revisions, executionDeadline: deadline
-            ) else { return XCTFail("A retry must preserve the original execution authority") }
-            XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
-        }
-        let retry = try await makeNativeDecisionExecutable(
-            handle: handle, configurationKey: fixture.request.configurationKey,
-            revisions: first.context.revisions, attemptID: attemptID,
-            executionDeadline: first.context.executionDeadline
-        )
-        defer { retry.lease.release() }
-        XCTAssertEqual(retry.context.attemptID, first.context.attemptID)
-        XCTAssertEqual(retry.context.revisions, first.context.revisions)
-        XCTAssertEqual(retry.context.observedAt, first.context.observedAt)
-        XCTAssertEqual(retry.context.executionDeadline, first.context.executionDeadline)
-        XCTAssertNotEqual(retry.context.fenceToken, first.context.fenceToken)
-    }
-
-    func testExpiredNativeAttemptRequiresMaintenanceAndCannotBeRenewed() async throws {
-        let fixture = try makeFixture(id: 957)
-        let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
-        _ = try await markNativeApprovalReady(handle: handle)
-        let execution = try await makeNativeDecisionExecutable(
-            handle: handle, configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        execution.lease.release()
-        clock.now = execution.context.executionDeadline
-        let original = try Data(contentsOf: defaultProfileURL)
-        let observed = await bridge.executionStatus(handle: handle, configurationKey: fixture.request.configurationKey)
-        XCTAssertEqual(observed, .status(.awaitingExecution))
-        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
-        await bridge.performMaintenance(profileIdentifier: nil)
-        let maintained = await bridge.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
-        XCTAssertEqual(maintained, .ready)
-        guard case .responseReady = await bridge.beginNativeExecution(
-            handle: handle, configurationKey: fixture.request.configurationKey,
-            attemptID: UUID(), revisions: execution.context.revisions,
-            executionDeadline: clock.now.addingTimeInterval(120)
-        ) else { return XCTFail("Expired authorization must remain terminal") }
-        let delivered = try responseJSON(await bridge.prepareResponseDelivery(
-            id: handle.id, configurationKey: fixture.request.configurationKey,
-            requestToken: handle.requestToken, profileIdentifier: nil
-        ))
-        XCTAssertEqual((delivered["error"] as? [String: Any])?["message"] as? String, Strings.approvalInterrupted)
-    }
-
-    func testClaimedNativeExecutionRejectsReplacementAuthorityAfterStoreRestart() async throws {
-        let execution = try await makeExecutableNativePermit(id: 960)
-        defer { execution.lease.release() }
-        let restarted = makeBridge(clock: { self.clock.now })
-        let original = try Data(contentsOf: defaultProfileURL)
-        let changedRevisions = try XCTUnwrap(ExtensionBridge.ProviderRevisions(rawValue: ["ethereum": 1, "solana": 0]))
-        let changedAuthorities = [
-            (UUID(), execution.context.revisions, execution.context.executionDeadline),
-            (execution.context.attemptID, changedRevisions, execution.context.executionDeadline),
-            (execution.context.attemptID, execution.context.revisions, execution.context.executionDeadline.addingTimeInterval(1)),
-        ]
-        for (attemptID, revisions, deadline) in changedAuthorities {
-            guard case .unavailable = await restarted.beginNativeExecution(
-                handle: execution.handle, configurationKey: execution.request.configurationKey,
-                attemptID: attemptID, revisions: revisions, executionDeadline: deadline
-            ) else { return XCTFail("A claimed execution must reject replacement authority") }
-            XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
-        }
-        guard case .pending = await restarted.beginNativeExecution(
-            handle: execution.handle, configurationKey: execution.request.configurationKey,
-            attemptID: execution.context.attemptID, revisions: execution.context.revisions,
-            executionDeadline: execution.context.executionDeadline
-        ) else { return XCTFail("An exact retry must observe the active execution") }
-        let completed = await bridge.complete(
-            permit: execution.permit, response: response(for: execution.request),
-            authority: .native(execution.context)
-        )
-        XCTAssertEqual(completed, .persisted)
-    }
-
-    func testNativeExecutionReadReleasesFenceAfterPublicationOrCleanupFailure() async throws {
-        let fixture = try makeFixture(id: 744)
-        let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        )).handle
-        _ = try await markNativeApprovalReady(handle: handle)
-        var fails = true
-        bridge = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
-            if fails { throw Failure.injectedWrite }
-            try ApprovalStoreTestPersistence.write(data, url)
-        })
-        guard case .unavailable = await bridge.beginNativeExecution(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            attemptID: handle.token.value,
-            revisions: fixture.ingress.revisions,
-            executionDeadline: clock.now.addingTimeInterval(120)
-        ) else { return XCTFail("Expected publication failure") }
-        fails = false
-        let execution = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        fails = true
-        execution.lease.release()
-        let cannotClaim = await claimReadyNativeExecution(in: bridge, handle: handle)
-        XCTAssertEqual(cannotClaim, .notStaged)
-        fails = false
-        let next = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        defer { next.lease.release() }
-        XCTAssertNotEqual(next.context.fenceToken, execution.context.fenceToken)
-    }
-
-    func testReleasedNativeReadCannotCompleteClaimedExecution()
-        async throws {
-        let execution = try await makeExecutableNativePermit(id: 727)
-        execution.lease.release()
-        guard case .pending = await bridge.beginNativeExecution(
-            handle: execution.handle,
-            configurationKey: execution.request.configurationKey,
-            attemptID: execution.handle.token.value,
-            revisions: execution.context.revisions,
-            executionDeadline: clock.now.addingTimeInterval(120)
-        ) else { return XCTFail("A live executor cannot receive replacement authority") }
-
-        let unboundCompletion = await bridge.complete(
-            permit: execution.permit,
-            response: response(for: execution.request),
-            authority: .ordinary
-        )
-        XCTAssertEqual(unboundCompletion, .ownershipLost)
-        let completion = await bridge.complete(
-            permit: execution.permit,
-            response: response(for: execution.request),
-            authority: .native(execution.context)
-        )
-        XCTAssertEqual(completion, .ownershipLost)
-        let rollback = await bridge.rollback(permit: execution.permit)
-        XCTAssertEqual(rollback, .persisted)
-        guard case .found(let snapshot) = await bridge.load(
-            handle: execution.handle
-        ) else { return XCTFail("Expected rolled-back request") }
-        XCTAssertEqual(snapshot.phase, .responded)
-    }
-
-    func testReleasedNativeReadCannotCheckpointBroadcast()
-        async throws {
-        let execution = try await makeExecutableNativePermit(id: 728)
-        execution.lease.release()
-        guard case .pending = await bridge.beginNativeExecution(
-            handle: execution.handle,
-            configurationKey: execution.request.configurationKey,
-            attemptID: execution.handle.token.value,
-            revisions: execution.context.revisions,
-            executionDeadline: clock.now.addingTimeInterval(120)
-        ) else { return XCTFail("A live executor cannot receive replacement authority") }
-
-        let unboundCheckpoint = await bridge.prepareBroadcast(
-            permit: execution.permit,
-            recoveryResponse: response(for: execution.request),
-            authority: .ordinary
-        )
-        XCTAssertEqual(unboundCheckpoint, .ownershipLost)
-        let checkpoint = await bridge.prepareBroadcast(
-            permit: execution.permit,
-            recoveryResponse: response(for: execution.request),
-            authority: .native(execution.context)
-        )
-        XCTAssertEqual(checkpoint, .ownershipLost)
-        let rollback = await bridge.rollback(permit: execution.permit)
-        XCTAssertEqual(rollback, .persisted)
-        guard case .found(let snapshot) = await bridge.load(
-            handle: execution.handle
-        ) else { return XCTFail("Expected rolled-back request") }
-        XCTAssertEqual(snapshot.phase, .responded)
-    }
-
-    func testBroadcastCheckpointTransfersNativeFenceAuthority()
-        async throws {
-        let execution = try await makeExecutableNativePermit(id: 729)
-        let checkpoint = await bridge.prepareBroadcast(
-            permit: execution.permit,
-            recoveryResponse: response(for: execution.request),
-            authority: .native(execution.context)
-        )
-        XCTAssertEqual(checkpoint, .persisted)
-        guard case .found(let prepared) = await bridge.load(
-            handle: execution.handle
-        ) else { return XCTFail("Expected prepared broadcast") }
-        XCTAssertNil(prepared.nativeExecutionContext)
-
-        execution.lease.release()
-        let response = response(for: execution.request)
-        let completionTask = Task {
-            withUnsafeCurrentTask { $0?.cancel() }
-            return await bridge.complete(
-                permit: execution.permit, response: response, authority: .ordinary
-            )
-        }
-        let completion = await completionTask.value
-        XCTAssertEqual(completion, .persisted)
-        guard case .found(let completed) = await bridge.load(
-            handle: execution.handle
-        ) else { return XCTFail("Expected completed request") }
-        XCTAssertEqual(completed.phase, .responded)
-    }
-
-    func testFutureNativeDecisionTimestampCannotBecomeExecutable() async throws {
-        let fixture = try makeFixture(id: 725)
-        let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        )).handle
-        let staged = try await markNativeApprovalReady(handle: handle)
-        XCTAssertEqual(staged, .persisted)
-        let future = clock.now.addingTimeInterval(60 * 60)
-        try mutateFirstStoredState("pending") { pending in
-            var ownership = try XCTUnwrap(pending["approval"] as? [String: Any])
-            var staged = try XCTUnwrap(ownership["staged"] as? [String: Any])
-            var approval = try XCTUnwrap(staged["_0"] as? [String: Any])
-            approval["approvedAt"] = future
-            staged["_0"] = approval
-            ownership["staged"] = staged
-            pending["approval"] = ownership
-        }
-        guard case .unavailable = await bridge.beginNativeExecution(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            attemptID: handle.token.value,
-            revisions: fixture.ingress.revisions,
-            executionDeadline: clock.now.addingTimeInterval(120)
-        ) else { return XCTFail("Expected invalid future decision") }
-        let claim = await claimReadyNativeExecution(in: bridge, handle: handle)
-        XCTAssertEqual(claim, .notStaged)
-    }
-
     func testCanceledNativeStoreHopCannotCheckpoint() async throws {
         let execution = try await makeExecutableNativePermit(id: 733)
-        defer { execution.lease.release() }
+
         let recovery = response(for: execution.request)
         let checkpointTask = Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -5137,11 +6024,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let approval = try XCTUnwrap(snapshot.nativeApproval)
         let fields = try firstStoredNativeApproval("pending")
         XCTAssertEqual(Set(fields.keys), ["approvedAt", "receipt"])
-        let read = try await makeNativeDecisionExecutable(
-            handle: admission.handle, configurationKey: fixture.request.configurationKey,
-            revisions: admission.revisions
-        )
-        defer { read.lease.release() }
+        let read = try await nativeStage(handle: admission.handle)
+
         let receipt = approval.receipt
         for mismatch in ["nonce", "runtime", "time"] {
             let claim = await bridge.claimNativeExecution(
@@ -5172,7 +6056,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testOrphanedNativeExecutionIsInterruptedWithoutReplay() async throws {
         let execution = try await makeExecutableNativePermit(id: 721)
-        defer { execution.lease.release() }
+
         execution.permit.releaseLease()
         let observer = makeBridge(clock: { self.clock.now })
         let result = try responseJSON(await observer.prepareResponseDelivery(
@@ -5196,7 +6080,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testOrphanedNativeBroadcastPreservesRecoveryResponse() async throws {
         let execution = try await makeExecutableNativePermit(id: 722)
-        defer { execution.lease.release() }
+
         let recovery = response(for: execution.request).markingApprovalCommitted()
         let checkpoint = await bridge.prepareBroadcast(
             permit: execution.permit, recoveryResponse: recovery, authority: .native(execution.context)
@@ -6637,55 +7521,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(helperReads, 1)
     }
 
-    func testNativeReadReleaseDoesNotWaitForContendedStoreLock() async throws {
-        let fixture = try makeFixture(id: 745)
-        let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress,
-            profileIdentifier: nil
-        )).handle
-        _ = try await markNativeApprovalReady(handle: handle)
-        let execution = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        let released = expectation(description: "Release while the store is locked")
-        var cleanup: Task<Void, Never>?
-        try await CrossProcessLockTestFixture.withHeldLock(
-            at: rootURL.appendingPathComponent("bridge-v7.lock"),
-            readyURL: rootURL.appendingPathComponent("holder-ready")
-        ) {
-            cleanup = Task.detached {
-                execution.lease.release()
-                released.fulfill()
-            }
-            await self.fulfillment(of: [released], timeout: 0.5)
-        }
-        await cleanup?.value
-
-        let staleClaim = await claimReadyNativeExecution(in: bridge, handle: handle)
-        XCTAssertEqual(staleClaim, .notStaged)
-        let next = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: fixture.ingress.revisions
-        )
-        defer { next.lease.release() }
-        XCTAssertNotEqual(next.context.fenceToken, execution.context.fenceToken)
-        execution.lease.release()
-        guard case .claimed(let claim) = await claimReadyNativeExecution(
-            in: bridge,
-            handle: handle
-        ) else { return XCTFail("Old cleanup must not revoke a successor") }
-        let result = await bridge.release(claim: claim.approvalClaim)
-        XCTAssertEqual(result, .persisted)
-    }
-
     func testMaintenanceStopsAtStoreLockContention() async throws {
         let profileIdentifier = UUID()
         let fixture = try makeFixture(id: 81)
         let handle = try accepted(await bridge.enqueue(
-            ingress: fixture.ingress, profileIdentifier: profileIdentifier
+            ingress: try profileFixture(fixture, profileIdentifier: profileIdentifier).ingress, profileIdentifier: profileIdentifier
         )).handle
         let completed = await bridge.complete(handle: handle, response: response(for: fixture.request))
         XCTAssertEqual(completed, .persisted)
@@ -6693,20 +7533,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try Data(contentsOf: url)
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
         try await CrossProcessLockTestFixture.withHeldLock(
-            at: rootURL.appendingPathComponent("bridge-v7.lock"),
+            at: rootURL.appendingPathComponent("bridge-v8.lock"),
             readyURL: rootURL.appendingPathComponent("holder-ready")
         ) {
             await self.bridge.performMaintenance()
             XCTAssertEqual(try Data(contentsOf: url), original)
         }
         await bridge.performMaintenance()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        let profile = try XCTUnwrap(PropertyListSerialization.propertyList(from: Data(contentsOf: url), options: [], format: nil) as? [String: Any])
+        XCTAssertEqual((profile["records"] as? [Any])?.count, 0)
     }
 
     func testSeparateProcessStoreLockFencesAccess() async throws {
         let fixture = try makeFixture(id: 80)
         let readyURL = rootURL.appendingPathComponent("holder-ready")
-        let lockURL = rootURL.appendingPathComponent("bridge-v7.lock")
+        let lockURL = rootURL.appendingPathComponent("bridge-v8.lock")
         try await CrossProcessLockTestFixture.withHeldLock(
             at: lockURL,
             readyURL: readyURL
@@ -6769,7 +7611,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(recovered.admissionKind, admissionKind, file: file, line: line)
         XCTAssertEqual(recovered.handle, snapshot.handle, file: file, line: line)
         XCTAssertEqual(recovered.nativeDeliveryNonce, snapshot.nativeDeliveryNonce, file: file, line: line)
-        XCTAssertEqual(recovered.revisions, original.ingress.revisions, file: file, line: line)
+        XCTAssertEqual(recovered.revisions, original.ingress.authority.revisions, file: file, line: line)
         XCTAssertTrue(recovered.approvalRequired, file: file, line: line)
         XCTAssertEqual(synchronizationAttempts, 4, file: file, line: line)
         XCTAssertEqual(writes, 1, file: file, line: line)
@@ -6884,21 +7726,41 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
     #endif
 
+    private var knownAuthority = [String: ExtensionBridge.AuthorityVersion]()
+
+    private func profileFixture(_ fixture: Fixture, profileIdentifier: UUID?) throws -> Fixture {
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+        raw["authority"] = try authorityVersion(fixture.request.configurationKey, profileIdentifier: profileIdentifier).json
+        if fixture.ingress.replayOnly { raw["replayOnly"] = true }
+        return try authorityFixture(raw)
+    }
+
+    private func authorityVersion(_ configurationKey: String, profileIdentifier: UUID? = nil) throws -> ExtensionBridge.AuthorityVersion {
+        let key = (profileIdentifier?.uuidString ?? "default") + configurationKey
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL,
+            dependencies: .init(clock: { self.clock.now }, atomicWrite: ApprovalStoreTestPersistence.write))
+        if case .snapshot(let snapshot) = store.configurationSnapshot(configurationKey: configurationKey, profileIdentifier: profileIdentifier) {
+            knownAuthority[key] = snapshot.version
+            return snapshot.version
+        }
+        return try XCTUnwrap(knownAuthority[key])
+    }
+
     private func makeFixture(
         id: Int,
+        name: String = "ecRecover",
         host: String = "wallet.example",
         configurationKey: String? = nil,
         enqueueAttempt: String? = nil,
         admissionDeadline: Date? = nil,
         message: String = "0x48656c6c6f",
         favicon: String = "",
-        revisions: [String: Int] = ["ethereum": 0, "solana": 0],
         replayOnly: Bool = false
     ) throws -> Fixture {
         let configurationKey = configurationKey ?? "https://\(host)"
         var object: [String: Any] = [
             "id": id,
-            "name": "signPersonalMessage",
+            "name": name,
             "provider": "ethereum",
             "host": host,
             "configurationKey": configurationKey,
@@ -6910,7 +7772,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "favicon": favicon,
-            "revisions": revisions,
+            "authority": try authorityVersion(configurationKey).json,
             "body": [
                 "address": "0x0000000000000000000000000000000000000042",
                 "object": ["data": message],
@@ -6964,24 +7826,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
     }
 
-    private func makeNativeDecisionExecutable(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        revisions: ExtensionBridge.ProviderRevisions,
-        attemptID: UUID? = nil,
-        executionDeadline: Date? = nil
-    ) async throws -> (
-        context: ExtensionBridge.NativeExecutionContext,
-        lease: ExtensionBridge.NativeExecutionLease
-    ) {
-        guard case .acquired(let lease) = await bridge.beginNativeExecution(
-            handle: handle,
-            configurationKey: configurationKey,
-            attemptID: attemptID ?? handle.token.value,
-            revisions: revisions,
-            executionDeadline: executionDeadline ?? clock.now.addingTimeInterval(120)
-        ) else { throw Failure.expectedValue }
-        return (lease.context, lease)
+    private struct NativeStage {
+        let context: ExtensionBridge.NativeExecutionContext
+    }
+
+    private func nativeStage(handle: ExtensionBridge.Handle) async throws -> NativeStage {
+        guard case .found(let snapshot) = await bridge.load(handle: handle),
+              let context = snapshot.nativeExecutionContext else { throw Failure.expectedValue }
+        return NativeStage(context: context)
     }
 
     private func makeExecutableNativePermit(
@@ -6990,7 +7842,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         request: SafariRequest,
         handle: ExtensionBridge.Handle,
         context: ExtensionBridge.NativeExecutionContext,
-        lease: ExtensionBridge.NativeExecutionLease,
         permit: ExtensionBridge.ExecutionPermit
     ) {
         let fixture = try makeFixture(id: id)
@@ -7000,14 +7851,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )).handle
         let staged = try await markNativeApprovalReady(handle: handle)
         XCTAssertEqual(staged, .persisted)
-        let execution = try await makeNativeDecisionExecutable(
-            handle: handle,
-            configurationKey: fixture.request.configurationKey,
-            revisions: try XCTUnwrap(.init(rawValue: [
-                "ethereum": 0,
-                "solana": 0,
-            ]))
-        )
+        let execution = try await nativeStage(handle: handle)
         let nativeClaim: ExtensionBridge.NativeExecutionClaim
         switch await claimReadyNativeExecution(in: bridge, handle: handle) {
         case .claimed(let value):
@@ -7022,7 +7866,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             fixture.request,
             handle,
             execution.context,
-            execution.lease,
             permit
         )
     }
@@ -7031,7 +7874,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         id: Int,
         enqueueAttempt: String,
         latestConfigurations: [[String: Any]],
-        revisions: [String: Int],
         host: String = "wallet.example",
         configurationKey: String = "https://wallet.example",
         admissionDeadline: Date? = nil
@@ -7050,7 +7892,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "favicon": "",
-            "revisions": revisions,
+            "authority": try authorityVersion(configurationKey).json,
             "body": ["latestConfigurations": latestConfigurations],
         ]
         let request = try XCTUnwrap(SafariRequest(json: object))
@@ -7102,7 +7944,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         return (
             handle,
             approvalRequired,
-            revisions,
+            revisions.version.revisions,
             admissionKind,
             nativeDeliveryNonce
         )
@@ -7149,8 +7991,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     ) async throws -> [(fixture: Fixture, handle: ExtensionBridge.Handle)] {
         var completed = [(fixture: Fixture, handle: ExtensionBridge.Handle)]()
         for id in startingID..<(startingID + 64) {
-            let fixture = try makeFixture(id: id, host: host ?? "capacity-\(id).example")
-            let result = await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)
+            var fixture = try makeFixture(id: id, host: host ?? "capacity-\(id).example")
+            var result = await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)
+            if case .unauthorized = result {
+                fixture = try makeFixture(id: id, host: host ?? "capacity-\(id).example")
+                result = await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)
+            }
             if case .rejected = result { return completed }
             let handle = try accepted(result).handle
             let completion = await bridge.complete(
@@ -7209,7 +8055,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             XCTFail("Expected response", file: file, line: line)
             throw Failure.expectedValue
         }
-        return response
+        return try XCTUnwrap(response["response"] as? [String: Any], file: file, line: line)
     }
 
     private var defaultProfileURL: URL {
@@ -7219,7 +8065,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func profileURL(_ profileIdentifier: UUID?) -> URL {
         let name = profileIdentifier?.uuidString.lowercased() ?? "default"
         return rootURL
-            .appendingPathComponent("profiles-v7", isDirectory: true)
+            .appendingPathComponent("profiles-v8", isDirectory: true)
             .appendingPathComponent(name)
             .appendingPathExtension("state")
     }
@@ -7227,7 +8073,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func operationLockURL(_ handle: ExtensionBridge.Handle) -> URL {
         let profile = handle.profileIdentifier?.uuidString.lowercased() ?? "default"
         return rootURL
-            .appendingPathComponent("operation-locks-v7", isDirectory: true)
+            .appendingPathComponent("operation-locks-v8", isDirectory: true)
             .appendingPathComponent("\(profile)-\(handle.token.rawValue)")
             .appendingPathExtension("lock")
     }
@@ -7236,6 +8082,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let profile = try storedProfile()
         let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
         return try XCTUnwrap(records.first?["createdAt"] as? Date)
+    }
+
+    private func mutateStoredPermissions(
+        _ mutation: (inout [String: Any]) throws -> Void
+    ) throws {
+        var profile = try storedProfile()
+        var origins = try XCTUnwrap(profile["origins"] as? [String: Any])
+        try mutation(&origins)
+        profile["origins"] = origins
+        let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+        try data.write(to: defaultProfileURL, options: .atomic)
     }
 
     private func mutateFirstStoredRecord(

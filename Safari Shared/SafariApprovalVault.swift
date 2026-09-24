@@ -1287,13 +1287,24 @@ final class SafariApprovalVaultHost {
         preparing prepare: () throws -> Preparation,
         _ operation: (Preparation) throws -> Result
     ) async throws -> Result {
+        try await performSourceMutation { willMutateSource in
+            let prepared = try prepare()
+            try willMutateSource()
+            return try operation(prepared)
+        }
+    }
+
+    @MainActor
+    func performSourceMutation<Result>(
+        _ operation: (_ willMutateSource: () throws -> Void) throws -> Result
+    ) async throws -> Result {
         var remainingExecutionWait = Duration.nanoseconds(
             Int64(SafariApprovalVault.coordinationLockTimeoutNanoseconds)
         )
         var executionWaitStarted: ContinuousClock.Instant?
         while true {
             try Task.checkCancellation()
-            let attempt = try tryPerformSourceMutation(preparing: prepare, operation)
+            let attempt = try tryPerformSourceMutation(operation)
             let now = ContinuousClock.now
             if let executionWaitStarted {
                 remainingExecutionWait -= executionWaitStarted.duration(to: now)
@@ -1315,9 +1326,8 @@ final class SafariApprovalVaultHost {
     }
 
     @MainActor
-    private func tryPerformSourceMutation<Preparation, Result>(
-        preparing prepare: () throws -> Preparation,
-        _ operation: (Preparation) throws -> Result
+    private func tryPerformSourceMutation<Result>(
+        _ operation: (_ willMutateSource: () throws -> Void) throws -> Result
     ) throws -> MutationAttempt<Result> {
         guard lock.try() else { return .publishing }
         defer { lock.unlock() }
@@ -1332,15 +1342,20 @@ final class SafariApprovalVaultHost {
             throw SafariApprovalVault.Error.unavailable
         }
         defer { coordinationLease.release() }
-        let prepared = try prepare()
+        var attemptedSourceMutation = false
+        var didInvalidateSource = false
         defer {
-            cancelReconciliationRetryLocked()
-            reconcile()
+            if attemptedSourceMutation {
+                cancelReconciliationRetryLocked()
+                reconcile()
+            }
         }
-        try willMutateSourceLocked(
-            coordinationLease: coordinationLease
-        )
-        return .completed(try operation(prepared))
+        return .completed(try operation {
+            guard !didInvalidateSource else { return }
+            attemptedSourceMutation = true
+            try willMutateSourceLocked(coordinationLease: coordinationLease)
+            didInvalidateSource = true
+        })
     }
 
     private func reconcileLocked(

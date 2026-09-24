@@ -158,10 +158,9 @@ struct DappRequestProcessor: DappRequestProcessing {
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         let initiallyConnectedProviders = connectedProviders(in: body.providerConfigurations)
-        let preselectedAccounts = preselectedAccounts(
-            for: body.providerConfigurations,
-            catalog: catalog
-        )
+        let preselectedAccounts = initiallyConnectedProviders.isEmpty
+            ? catalog.suggestedAccounts()
+            : request.connectedAccounts.compactMap { catalog.specificAccount(descriptor: $0) }
         let chainId = body.providerConfigurations.compactMap(\.chainId).first
         let network = Networks.withChainIdHex(chainId)
         let action = SelectAccountAction(
@@ -180,6 +179,7 @@ struct DappRequestProcessor: DappRequestProcessing {
     ) -> ResponseToExtension {
         let accounts = selection.accounts
         let network = selection.network
+        let descriptors = accounts.map { WalletAccountDescriptor(walletID: $0.walletId, account: $0.account) }
 
         switch request.body {
         case .unknown:
@@ -201,7 +201,8 @@ struct DappRequestProcessor: DappRequestProcessing {
                 }
             }
             return ResponseToExtension(
-                for: request, payload: .result(.null), mutation: .accounts(updates)
+                for: request, payload: .result(.null), mutation: .accounts(updates),
+                approvedAccounts: descriptors
             )
         case .ethereum(let body) where body.method == .requestAccounts:
             guard let network, let account = accounts.first?.account,
@@ -211,7 +212,8 @@ struct DappRequestProcessor: DappRequestProcessing {
             return ResponseToExtension(
                 for: request,
                 payload: .result(.strings([account.address])),
-                mutation: .accounts([.ethereum(address: account.address, chainId: network.chainIdHexString)])
+                mutation: .accounts([.ethereum(address: account.address, chainId: network.chainIdHexString)]),
+                approvedAccounts: descriptors
             )
         case .solana(let body) where body.method == .connect:
             guard let account = accounts.first?.account, account.coin == .solana else {
@@ -220,7 +222,8 @@ struct DappRequestProcessor: DappRequestProcessing {
             return ResponseToExtension(
                 for: request,
                 payload: .result(.solanaPublicKey(account.address)),
-                mutation: .accounts([.solana(publicKey: account.address)])
+                mutation: .accounts([.solana(publicKey: account.address)]),
+                approvedAccounts: descriptors
             )
         case .ethereum, .solana:
             return response(to: request, error: .internalError)
@@ -238,71 +241,6 @@ struct DappRequestProcessor: DappRequestProcessing {
         case .solana:
             return .solana(publicKey: account.address)
         }
-    }
-
-    private static func preselectedAccounts(
-        for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration],
-        catalog: WalletReviewCatalog
-    ) -> [SpecificWalletAccount] {
-        return preselectedAccounts(
-            for: providerConfigurations,
-            accountForConfiguration: { configuration in
-                guard let coin = WalletCoin.correspondingToInpageProvider(configuration.provider),
-                      let address = configuration.address,
-                      !address.isEmpty else {
-                    return nil
-                }
-                return catalog.specificAccount(coin: coin, address: address)
-            },
-            suggestedAccountsForProviders: { providers in
-                catalog.suggestedAccounts(providers: providers)
-            },
-            defaultSuggestedAccounts: {
-                catalog.suggestedAccounts()
-            }
-        )
-    }
-
-    static func preselectedAccounts(
-        for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration],
-        accountForConfiguration: (SafariRequest.Unknown.ProviderConfiguration) -> SpecificWalletAccount?,
-        suggestedAccountsForProviders: (Set<InpageProvider>) -> [SpecificWalletAccount],
-        defaultSuggestedAccounts: () -> [SpecificWalletAccount]
-    ) -> [SpecificWalletAccount] {
-        return preselectedAccounts(
-            for: providerConfigurations,
-            accountForConfiguration: accountForConfiguration,
-            suggestedValuesForProviders: suggestedAccountsForProviders,
-            defaultSuggestedValues: defaultSuggestedAccounts
-        )
-    }
-
-    static func preselectedAccounts<Value>(
-        for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration],
-        accountForConfiguration: (SafariRequest.Unknown.ProviderConfiguration) -> Value?,
-        suggestedValuesForProviders: (Set<InpageProvider>) -> [Value],
-        defaultSuggestedValues: () -> [Value]
-    ) -> [Value] {
-        let connectedProviders = connectedProviders(in: providerConfigurations)
-        guard !connectedProviders.isEmpty else {
-            return defaultSuggestedValues()
-        }
-
-        var values = [Value]()
-        var resolvedProviders = Set<InpageProvider>()
-        for configuration in providerConfigurations {
-            guard !resolvedProviders.contains(configuration.provider),
-                  WalletCoin.correspondingToInpageProvider(configuration.provider) != nil,
-                  let value = accountForConfiguration(configuration) else {
-                continue
-            }
-            values.append(value)
-            resolvedProviders.insert(configuration.provider)
-        }
-
-        let missingProviders = connectedProviders.subtracting(resolvedProviders)
-        guard !missingProviders.isEmpty else { return values }
-        return values + suggestedValuesForProviders(missingProviders)
     }
 
     private static func disconnectedProviders(

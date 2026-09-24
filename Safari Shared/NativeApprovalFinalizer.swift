@@ -116,17 +116,8 @@ final class NativeApprovalFinalizer {
             )
         }
 
-        guard DurableApprovalExecutor.approvalRevisionsMatch(
-            request: request,
-            stored: snapshot.revisions,
-            current: executionContext.revisions
-        ) else {
-            return await execute(
-                claim: nativeClaim.approvalClaim,
-                executionContext: executionContext
-            ) {
-                .response(Self.staleResponse(for: request), approvalCommitted: false)
-            }
+        guard await store.authorityIsCurrent(handle: snapshot.handle) else {
+            return .interruptionRequired
         }
 
         let preparation: DappRequestPreparation
@@ -187,7 +178,10 @@ final class NativeApprovalFinalizer {
                             request: request, approval: approval,
                             handle: snapshot.handle, deadline: deadline
                         ) else { return .rollback }
-                        executionSigner = self.makeSigner(operation)
+                        executionSigner = AuthorityBoundWalletSigner(
+                            signer: self.makeSigner(operation),
+                            authorityIsCurrent: { await self.store.authorityIsCurrent(handle: snapshot.handle) }
+                        )
                     } else {
                         executionSigner = nil
                     }

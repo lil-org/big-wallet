@@ -179,7 +179,7 @@ function ethereumHarness(initialState = null) {
         ...module,
         disconnects,
         applyDecodedEnvelope: envelope => module.exports.applyDecodedEnvelope(engine, decodedDelivery(envelope)),
-        applyConfiguration: (configuration, revision = (Ethereum.snapshot(engine).workerRevision ?? -1) + 1) =>
+        applyConfiguration: (configuration, revision = (Ethereum.snapshot(engine).nativeRevision ?? -1) + 1) =>
             applyTestConfiguration(module.exports, engine, configuration, revision),
         snapshot: () => Ethereum.snapshot(engine),
         retire: error => Ethereum.retire(engine, error),
@@ -263,26 +263,43 @@ const secondSolanaKey = "So11111111111111111111111111111111111111112";
 const validSignature = "1".repeat(64);
 
 function applySolanaConfiguration(harness, {
-    workerRevision = (harness.Solana.snapshot(harness.provider).workerRevision ?? -1) + 1,
+    nativeRevision = (harness.Solana.snapshot(harness.provider).nativeRevision ?? -1) + 1,
     publicKey = null,
 } = {}) {
     return applyTestConfiguration(
-        harness.exports, harness.provider, publicKey === null ? null : {publicKey}, workerRevision
+        harness.exports, harness.provider, publicKey === null ? null : {publicKey}, nativeRevision
     );
 }
 
 function grantEthereum(harness, id, address, chainId = harness.provider.chainId) {
     applyEthereumConfiguration(harness, address, chainId);
-    const state = {revisions: {ethereum: harness.snapshot().workerRevision, solana: 0},
+    const state = {context: "a".repeat(64), revisions: {ethereum: harness.snapshot().nativeRevision, solana: 0},
         ethereum: {address, chainId}, solana: null};
     harness.applyDecodedEnvelope({id, name: "requestAccounts", kind: "result", result: address ? [address] : [], state});
 }
 
 function grantSolana(harness, id, publicKey) {
     applySolanaConfiguration(harness, {publicKey});
-    const state = {revisions: {ethereum: 0, solana: harness.Solana.snapshot(harness.provider).workerRevision},
+    const state = {context: "a".repeat(64), revisions: {ethereum: 0, solana: harness.Solana.snapshot(harness.provider).nativeRevision},
         ethereum: {address: "", chainId: "0x1"}, solana: {publicKey}};
     harness.applyDecodedEnvelope(harness.provider, {id, name: "connect", kind: "result", result: {publicKey}, state});
+}
+
+function completeSolanaConnect(harness, pending) {
+    if (harness.requests) {
+        const message = harness.requests.at(-1);
+        const publicKey = harness.Solana.snapshot(harness.provider).publicKey;
+        harness.applyDecodedEnvelope(harness.provider, {id: message.id, name: "connect", kind: "result", result: {publicKey}});
+    } else {
+        const message = pageMessages(harness, "request", "solana").at(-1).message;
+        const publicKey = harness.window.bigWalletInpageStableFacadeRecord.snapshots().solana.publicKey;
+        dispatchProviderResponse(harness, {id: message.id, provider: "solana", name: "connect", result: {publicKey}});
+    }
+    return pending;
+}
+
+function nativeSolanaConnect(harness, provider = harness.provider || harness.window.solana) {
+    return completeSolanaConnect(harness, provider.connect());
 }
 
 function publicKey(value = firstSolanaKey) {
@@ -313,7 +330,7 @@ function connectedSolanaHarness(publicKey = firstSolanaKey, extraGlobals = {}) {
     applySolanaConfiguration(harness, {
         publicKey: configuration.publicKey,
         isConnected: configuration.isConnected,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     return harness;
 }
@@ -1390,7 +1407,7 @@ test("Ethereum chain results settle without modifying account or network state",
     }
 });
 
-test("Ethereum same-chain switches preserve pending signing without wallet transport", async () => {
+test("Ethereum same-chain switches consult native while preserving pending signing", async () => {
     const harness = ethereumHarness();
     const address = "0x0000000000000000000000000000000000000001";
     applyEthereumConfiguration(harness, address, "0x1");
@@ -1404,13 +1421,10 @@ test("Ethereum same-chain switches preserve pending signing without wallet trans
     harness.provider.on("accountsChanged", accounts => events.push(accounts));
     harness.provider.on("chainChanged", chainId => events.push(chainId));
 
-    const result = await harness.provider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{chainId: "0x1"}],
-    });
-
-    assert.equal(result, null);
-    assert.equal(harness.requests.length, 1);
+    const switching = harness.provider.request({method: "wallet_switchEthereumChain", params: [{chainId: "0x1"}]});
+    harness.applyDecodedEnvelope({id: harness.requests.at(-1).id, kind: "result", name: "switchEthereumChain", result: null});
+    assert.equal(await switching, null);
+    assert.equal(harness.requests.length, 2);
     assert.deepEqual(normalized(harness.snapshot()), before);
     assert.deepEqual(events, []);
     harness.applyDecodedEnvelope({
@@ -1436,9 +1450,10 @@ test("Ethereum queued switches compare the loaded chain without granting account
 
     applyEthereumConfiguration(harness, "", "0x2");
 
+    harness.applyDecodedEnvelope({id: harness.requests[0].id, kind: "result", name: "switchEthereumChain", result: null});
     assert.equal(await sameChain, null);
-    assert.equal(harness.requests.length, 1);
-    const request = harness.requests[0];
+    assert.equal(harness.requests.length, 2);
+    const request = harness.requests[1];
     assert.equal(request.data.chainId, "0x1");
     applyEthereumConfiguration(harness, "", "0x1");
     harness.applyDecodedEnvelope({
@@ -1481,12 +1496,11 @@ test("Ethereum normalizes external chain IDs without mutating caller data", asyn
 test("Ethereum normalizes uppercase IDs before comparing the current chain", async () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0xa");
-    const result = await harness.provider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{chainId: "0xA"}],
-    });
-    assert.equal(result, null);
-    assert.equal(harness.requests.length, 0);
+    const pending = harness.provider.request({method: "wallet_switchEthereumChain", params: [{chainId: "0xA"}]});
+    assert.equal(harness.requests[0].data.chainId, "0xa");
+    harness.applyDecodedEnvelope({id: harness.requests[0].id, kind: "result", name: "switchEthereumChain", result: null});
+    assert.equal(await pending, null);
+    assert.equal(harness.requests.length, 1);
     assert.equal(harness.provider.chainId, "0xa");
 });
 
@@ -1708,14 +1722,14 @@ test("Ethereum snapshots grant and revoke the same account with increasing revis
     const h = ethereumHarness();
     const address = "0x0000000000000000000000000000000000000001";
     applyEthereumConfiguration(h, address);
-    const revision = h.snapshot().workerRevision;
+    const revision = h.snapshot().nativeRevision;
     applyEthereumConfiguration(h);
     assert.equal(h.provider.selectedAddress, null);
     const pending = h.provider.request({method: "eth_requestAccounts"});
     grantEthereum(h, h.requests.at(-1).id, address);
     assert.deepEqual(normalized(await pending), [address]);
     assert.equal(h.provider.selectedAddress, address);
-    assert.equal(h.snapshot().workerRevision, revision + 2);
+    assert.equal(h.snapshot().nativeRevision, revision + 2);
 });
 
 test("Ethereum rejects signing results after account authorization drifts", async () => {
@@ -2092,7 +2106,7 @@ test("Ethereum connect replay waits for raw bootstrap failure recovery", async (
 test("invalid initial Solana revision preserves the loading queue", async () => {
     const h = solanaHarness();
     const pending = h.provider.connect();
-    assert.equal(applySolanaConfiguration(h, {workerRevision: -1}), false);
+    assert.equal(applySolanaConfiguration(h, {nativeRevision: -1}), false);
     assert.equal(h.requests.length, 0);
     applySolanaConfiguration(h);
     grantSolana(h, h.requests[0].id, firstSolanaKey);
@@ -2107,17 +2121,20 @@ test("Solana bounds loading work without retiring the ready provider", async () 
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
+    for (const request of harness.requests) {
+        harness.applyDecodedEnvelope(harness.provider, {id: request.id, kind: "result", name: "connect", result: {publicKey: firstSolanaKey}});
+    }
     const connected = await Promise.all(connections.slice(0, 64));
     assert.deepEqual(
         connected.map(value => value.publicKey.toString()),
         Array(64).fill(firstSolanaKey)
     );
     await overflow;
-    assert.equal(harness.requests.length, 0);
+    assert.equal(harness.requests.length, 64);
     assert.equal(
-        (await harness.provider.connect()).publicKey.toString(),
+        (await nativeSolanaConnect(harness)).publicKey.toString(),
         firstSolanaKey
     );
 });
@@ -2145,7 +2162,7 @@ test("Solana late connect cannot overwrite newer authorization", async () => {
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: secondSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     harness.applyDecodedEnvelope(harness.provider, {
         id: harness.requests[0].id,
@@ -2166,22 +2183,92 @@ test("Solana connect without a snapshot cannot authorize an account", async () =
     assert.equal(h.provider.publicKey, null);
 });
 
-test("Solana silent connect never posts without a trusted account", async () => {
+test("Solana silent connect checks native grants without requiring a cached account", async () => {
     const harness = solanaHarness();
     const connection = harness.standardProvider.standardConnect({silent: true});
     assert.equal(harness.requests.length, 0);
     applySolanaConfiguration(harness);
+    assert.equal(harness.requests.length, 1);
+    assert.equal(harness.requests[0].body.object.params.onlyIfTrusted, true);
+    harness.applyDecodedEnvelope(harness.provider, {id: harness.requests[0].id, kind: "error", name: "connect", error: {code: 4100, message: "Not authorized"}});
     assert.deepEqual(normalized(await connection), {accounts: []});
-    assert.equal(harness.requests.length, 0);
 });
 
-test("Solana connect uses an existing authoritative account without another event", async () => {
+test("Solana rejects malformed trust options before registering or dispatching connections", async () => {
+    for (const ready of [false, true]) {
+        const harness = solanaHarness();
+        if (ready) { applySolanaConfiguration(harness); }
+        for (const onlyIfTrusted of [null, "true", 1, [], {}]) {
+            for (const request of [
+                () => harness.provider.connect({onlyIfTrusted}),
+                () => harness.provider.request({method: "connect", params: {onlyIfTrusted}}),
+            ]) {
+                let pending;
+                assert.doesNotThrow(() => { pending = request(); });
+                await assert.rejects(pending, error => error.code === -32602);
+                assert.equal(harness.requests.length, 0);
+            }
+        }
+        const connection = harness.provider.connect({onlyIfTrusted: true});
+        if (!ready) { applySolanaConfiguration(harness); }
+        assert.equal(harness.requests.length, 1);
+        assert.equal(harness.requests[0].id, 2);
+        grantSolana(harness, harness.requests[0].id, firstSolanaKey);
+        assert.equal((await connection).publicKey.toString(), firstSolanaKey);
+    }
+});
+
+test("Solana accepts missing undefined and boolean trust options", async () => {
+    for (const params of [undefined, {}, {onlyIfTrusted: undefined},
+        {onlyIfTrusted: false}, {onlyIfTrusted: true}]) {
+        const harness = solanaHarness();
+        applySolanaConfiguration(harness);
+        const connection = harness.provider.connect(params);
+        assert.equal(harness.requests.length, 1);
+        const forwarded = harness.requests[0].body.object.params;
+        assert.deepEqual(forwarded === undefined ? undefined : normalized(forwarded),
+            params === undefined ? undefined : normalized(params));
+        grantSolana(harness, harness.requests[0].id, firstSolanaKey);
+        assert.equal((await connection).publicKey.toString(), firstSolanaKey);
+    }
+});
+
+test("Solana validates only the own trust option in its admission snapshot", async () => {
+    const harness = solanaHarness();
+    let reads = 0;
+    const connection = harness.provider.connect({
+        get onlyIfTrusted() { reads += 1; return true; },
+    });
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    Object.defineProperty(prototype, "onlyIfTrusted", {
+        configurable: true,
+        get() { throw new Error("Inherited trust option accessed"); },
+    });
+    let withoutOption;
+    try {
+        withoutOption = harness.provider.connect({});
+        applySolanaConfiguration(harness);
+    } finally {
+        delete prototype.onlyIfTrusted;
+    }
+    assert.equal(reads, 1);
+    assert.equal(harness.requests.length, 2);
+    assert.equal(harness.requests[0].body.object.params.onlyIfTrusted, true);
+    assert.deepEqual(normalized(harness.requests[1].body.object.params), {});
+    grantSolana(harness, harness.requests[0].id, firstSolanaKey);
+    grantSolana(harness, harness.requests[1].id, firstSolanaKey);
+    for (const pending of [connection, withoutOption]) {
+        assert.equal((await pending).publicKey.toString(), firstSolanaKey);
+    }
+});
+
+test("Solana connect checks an existing native account without another event", async () => {
     const h = connectedSolanaHarness();
     let events = 0;
     h.standardProvider.on("connect", () => events++);
-    const result = await h.provider.connect();
+    const result = await nativeSolanaConnect(h);
     assert.equal(result.publicKey.toString(), firstSolanaKey);
-    assert.equal(h.requests.length, 0);
+    assert.equal(h.requests.length, 1);
     assert.equal(events, 0);
 });
 
@@ -2214,11 +2301,62 @@ test("Solana shares disconnect work and waits for authoritative revocation", asy
     assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
 });
 
+test("Solana disconnect waits for bootstrap before revoking the retained grant", async () => {
+    const h = solanaHarness();
+    const first = h.provider.disconnect();
+    assert.equal(h.provider.disconnect(), first);
+    assert.equal(h.disconnects.length, 0);
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 3});
+    assert.equal(h.disconnects.length, 1);
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
+    applySolanaConfiguration(h, {nativeRevision: 4});
+    h.applyDecodedEnvelope(h.provider, {
+        id: h.disconnects[0].id, name: "revokePermissions", kind: "result", result: null,
+    });
+    assert.equal(await first, true);
+    assert.equal(h.provider.publicKey, null);
+});
+
+test("a queued Solana disconnect propagates bootstrap failure without native work", async () => {
+    const h = solanaHarness();
+    const pending = h.provider.disconnect();
+    h.applyDecodedEnvelope(h.provider, {
+        kind: "configurationError", error: {code: 4900, message: "Native unavailable"},
+    });
+    await assert.rejects(pending, error => error.code === 4900 && error.message === "Native unavailable");
+    assert.equal(h.disconnects.length, 0);
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey});
+    assert.equal(h.disconnects.length, 0);
+});
+
+test("a queued Solana disconnect reaches native even when bootstrap has no grant", async () => {
+    const h = solanaHarness();
+    const pending = h.provider.disconnect();
+    assert.equal(h.disconnects.length, 0);
+    applySolanaConfiguration(h);
+    assert.equal(h.disconnects.length, 1);
+    assert.equal(h.requests.length, 0);
+    h.applyDecodedEnvelope(h.provider, {
+        id: h.disconnects[0].id, name: "revokePermissions", kind: "result", result: null,
+    });
+    assert.equal(await pending, true);
+});
+
+test("a queued Solana disconnect cannot dispatch after provider replacement", async () => {
+    const h = solanaHarness();
+    const pending = h.provider.disconnect();
+    h.provider.retire();
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey});
+    await assert.rejects(pending, error => error.code === 4900);
+    assert.equal(h.disconnects.length, 0);
+});
+
 test("Solana starts a new disconnect after authorization changes", async () => {
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 0,
+        nativeRevision: 0,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
@@ -2229,7 +2367,7 @@ test("Solana starts a new disconnect after authorization changes", async () => {
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: secondSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const second = harness.provider.disconnect();
 
@@ -2259,12 +2397,12 @@ test("Solana failed disconnect preserves authorization and concurrent signing", 
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 4,
+        nativeRevision: 4,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 4,
+        nativeRevision: 4,
     });
     const before = harness.Solana.snapshot(harness.provider);
     const disconnect = harness.provider.disconnect();
@@ -2294,7 +2432,7 @@ test("Solana failed disconnect preserves authorization and concurrent signing", 
     applySolanaConfiguration(transportFailure, {
         publicKey: before.publicKey,
         isConnected: before.isConnected,
-        workerRevision: before.workerRevision,
+        nativeRevision: before.nativeRevision,
     });
     transportFailure.setDisconnectPost(false);
     await assert.rejects(
@@ -2312,12 +2450,12 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 2,
+        nativeRevision: 2,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 2,
+        nativeRevision: 2,
     });
     const disconnect = harness.provider.disconnect();
     const signing = harness.provider.signMessage(new Uint8Array([1]));
@@ -2335,7 +2473,7 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
         result: null,
     });
     assert.equal(await disconnect, true);
-    assert.equal(harness.Solana.snapshot(harness.provider).workerRevision, 3);
+    assert.equal(harness.Solana.snapshot(harness.provider).nativeRevision, 3);
     assert.equal(harness.provider.publicKey, null);
 
     harness.applyDecodedEnvelope(harness.provider, {
@@ -2348,19 +2486,19 @@ test("successful Solana disconnect fences concurrent uncommitted signing", async
 });
 
 test("a fresh generation accepts a lower authoritative revision than its copied baseline", () => {
-    const h = solanaHarness({publicKey: firstSolanaKey, isConnected: true, workerRevision: 10});
-    applySolanaConfiguration(h, {publicKey: secondSolanaKey, workerRevision: 0});
+    const h = solanaHarness({publicKey: firstSolanaKey, isConnected: true, nativeRevision: 10});
+    applySolanaConfiguration(h, {publicKey: secondSolanaKey, nativeRevision: 0});
     assert.equal(h.provider.publicKey.toString(), secondSolanaKey);
-    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 0);
+    assert.equal(h.Solana.snapshot(h.provider).nativeRevision, 0);
 });
 
 test("stale Solana snapshots cannot restore a revoked account", () => {
     const h = connectedSolanaHarness();
-    applySolanaConfiguration(h, {workerRevision: 3});
-    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 2});
+    applySolanaConfiguration(h, {nativeRevision: 3});
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 2});
     assert.equal(h.provider.publicKey, null);
-    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 3);
-    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+    assert.equal(h.Solana.snapshot(h.provider).nativeRevision, 3);
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 4});
     assert.equal(h.provider.publicKey.toString(), firstSolanaKey);
 });
 
@@ -2369,30 +2507,30 @@ test("same-account Solana revisions fence operations without duplicate account e
     let events = 0;
     h.standardProvider.on("accountChanged", () => events++);
     const signing = h.provider.signMessage(new Uint8Array([1]));
-    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
-    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 4});
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 4});
     h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature});
     await assert.rejects(signing, error => error.code === 4100);
     assert.equal(events, 0);
-    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 4);
+    assert.equal(h.Solana.snapshot(h.provider).nativeRevision, 4);
 });
 
 test("disconnected Solana snapshots advance authority without reconnecting from terminals", async () => {
     const h = solanaHarness();
     applySolanaConfiguration(h);
     const connecting = h.provider.connect();
-    applySolanaConfiguration(h, {workerRevision: 7});
+    applySolanaConfiguration(h, {nativeRevision: 7});
     h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "connect", kind: "result", result: {publicKey: firstSolanaKey}, approvalCommitted: true});
     assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
     assert.equal(h.provider.publicKey, null);
-    assert.equal(h.Solana.snapshot(h.provider).workerRevision, 7);
+    assert.equal(h.Solana.snapshot(h.provider).nativeRevision, 7);
 });
 
 test("Solana rejects invalid worker revisions without changing authorization", () => {
     const h = connectedSolanaHarness();
     const before = h.Solana.snapshot(h.provider);
     for (const revision of [-1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
-        assert.equal(applySolanaConfiguration(h, {workerRevision: revision}), false);
+        assert.equal(applySolanaConfiguration(h, {nativeRevision: revision}), false);
         assert.deepEqual(h.Solana.snapshot(h.provider), before);
     }
 });
@@ -2410,12 +2548,12 @@ test("Solana accepts raw ArrayBuffer messages", async () => {
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const bytes = new Uint8Array([1, 2, 3]);
     const signing = harness.provider.signMessage(bytes.buffer);
@@ -2465,7 +2603,7 @@ test("queued Solana connect and message requests retain admission snapshots", as
         applySolanaConfiguration(harness, method === "connect" ? {} : {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         assert.equal(harness.requests.length, 1, method);
         const request = harness.requests[0];
@@ -2510,7 +2648,7 @@ test("Solana message dispatch removes non-cloneable values added by normalizatio
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     assert.equal(calls, 1);
     assert.equal(harness.requests.length, 1);
@@ -2545,7 +2683,7 @@ test("queued Solana connect removes non-cloneable values added by dispatch hooks
     } finally {
         delete prototype.onlyIfTrusted;
     }
-    assert.equal(calls, 1);
+    assert.equal(calls, 0);
     assert.equal(harness.requests.length, 1);
     assert.deepEqual(posted.body.object.params, {});
     harness.applyDecodedEnvelope(harness.provider, {
@@ -2569,7 +2707,7 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
         const authorization = {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const pending = harness.provider.request({method, params});
@@ -2592,7 +2730,7 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
                 isConnected: authorization.isConnected,
-                workerRevision: authorization.workerRevision,
+                nativeRevision: authorization.nativeRevision,
             });
             assert.equal(harness.requests.length, 1, method);
             assert.deepEqual(normalized(harness.requests[0].body.object.params), expected);
@@ -2620,7 +2758,7 @@ test("Solana send options remain private when generated fields have inherited se
         const authorization = {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const prototype = vm.runInContext("Object.prototype", harness.context);
@@ -2652,7 +2790,7 @@ test("Solana send options remain private when generated fields have inherited se
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            workerRevision: authorization.workerRevision,
+            nativeRevision: authorization.nativeRevision,
         });
         assert.equal(harness.requests[0].body.object.params.options.skipPreflight, false, field);
         harness.applyDecodedEnvelope(harness.provider, {
@@ -2670,7 +2808,7 @@ test("Solana batch construction preserves messages with inherited array accessor
         const authorization = {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const prototype = vm.runInContext("Array.prototype", harness.context);
@@ -2694,7 +2832,7 @@ test("Solana batch construction preserves messages with inherited array accessor
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
                 isConnected: authorization.isConnected,
-                workerRevision: authorization.workerRevision,
+                nativeRevision: authorization.nativeRevision,
             });
             assert.deepEqual(structuredClone(harness.requests[0].body.object.params), {
                 messages: ["2"],
@@ -2719,7 +2857,7 @@ test("Solana rejects adapter messages corrupted by inherited setters before disp
             const authorization = {
                 isConnected: true,
                 publicKey: firstSolanaKey,
-                workerRevision: 1,
+                nativeRevision: 1,
             };
             const harness = solanaHarness(authorization);
             const transaction = versioned
@@ -2749,7 +2887,7 @@ test("Solana rejects adapter messages corrupted by inherited setters before disp
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
                 isConnected: authorization.isConnected,
-                workerRevision: authorization.workerRevision,
+                nativeRevision: authorization.nativeRevision,
             });
             assert.equal(harness.requests.length, 0);
         }
@@ -2768,7 +2906,7 @@ test("Solana rejects non-string encoder results before dispatch", async () => {
         const authorization = {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const prototype = vm.runInContext("String.prototype", harness.context);
@@ -2787,7 +2925,7 @@ test("Solana rejects non-string encoder results before dispatch", async () => {
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            workerRevision: authorization.workerRevision,
+            nativeRevision: authorization.nativeRevision,
         });
         assert.equal(harness.requests.length, 0, method);
     }
@@ -2798,7 +2936,7 @@ test("Solana rejects a falsy transaction encoding instead of falling back to a m
         const authorization = {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         const harness = solanaHarness(authorization);
         const transaction = legacyTransaction(1).transaction;
@@ -2823,7 +2961,7 @@ test("Solana rejects a falsy transaction encoding instead of falling back to a m
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            workerRevision: authorization.workerRevision,
+            nativeRevision: authorization.nativeRevision,
         });
         assert.equal(harness.requests.length, 0);
     }
@@ -2834,13 +2972,13 @@ test("Wallet Standard rejects non-string encoder results before dispatch", async
         const authorization = {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         const harness = solanaHarness(authorization);
         applySolanaConfiguration(harness, {
             publicKey: authorization.publicKey,
             isConnected: authorization.isConnected,
-            workerRevision: authorization.workerRevision,
+            nativeRevision: authorization.nativeRevision,
         });
         const account = harness.standardProvider.standardAccounts()[0];
         harness.provider.preparedStandardTransaction = () => ({
@@ -2872,19 +3010,19 @@ test("Solana settles a committed signature after later authorization drift", asy
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const signing = harness.provider.signMessage(new Uint8Array([1]));
     const request = harness.requests.at(-1);
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: secondSolanaKey,
-        workerRevision: 2,
+        nativeRevision: 2,
     });
     harness.applyDecodedEnvelope(harness.provider, {
         approvalCommitted: true,
@@ -2904,12 +3042,12 @@ test("Solana applies a committed transaction signature after authorization drift
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const transaction = legacyTransaction(1);
     const signing = harness.provider.signTransaction(transaction.transaction);
@@ -2917,7 +3055,7 @@ test("Solana applies a committed transaction signature after authorization drift
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: secondSolanaKey,
-        workerRevision: 2,
+        nativeRevision: 2,
     });
     harness.applyDecodedEnvelope(harness.provider, {
         approvalCommitted: true,
@@ -2937,12 +3075,12 @@ test("Wallet Standard settles committed single-item signing after authorization 
         const harness = solanaHarness({
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         const account = harness.standardProvider.standardAccounts()[0];
         let signing;
@@ -2973,7 +3111,7 @@ test("Wallet Standard settles committed single-item signing after authorization 
         applySolanaConfiguration(harness, {
             isConnected: true,
             publicKey: secondSolanaKey,
-            workerRevision: 2,
+            nativeRevision: 2,
         });
         harness.applyDecodedEnvelope(harness.provider, {
             approvalCommitted: true,
@@ -3000,14 +3138,14 @@ test("Solana settles committed connect without replacing newer state", async () 
     applySolanaConfiguration(harness, {
         isConnected: false,
         publicKey: null,
-        workerRevision: 0,
+        nativeRevision: 0,
     });
     const connecting = harness.provider.connect();
     const request = harness.requests.at(-1);
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: secondSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     harness.applyDecodedEnvelope(harness.provider, {
         approvalCommitted: true,
@@ -3031,7 +3169,7 @@ test("Wallet Standard committed connect returns current authorization", async ()
             applySolanaConfiguration(harness, {
                 isConnected: true,
                 publicKey: currentPublicKey,
-                workerRevision: 1,
+                nativeRevision: 1,
             });
         } else {
             applySolanaConfiguration(harness);
@@ -3057,12 +3195,12 @@ test("Solana signs explicit legacy and versioned transactions", async () => {
         const harness = solanaHarness({
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         const signed = harness.provider.signTransaction(transaction.transaction);
         harness.applyDecodedEnvelope(harness.provider, {
@@ -3179,7 +3317,7 @@ test("Solana supports legacy messages wrapped in versioned transactions", async 
         applySolanaConfiguration(harness, {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         const transaction = {
             message: new LegacyMessage(),
@@ -3210,12 +3348,12 @@ test("Solana rejects replacement of a versioned transaction message", async () =
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const transaction = versionedTransaction(1);
     const replacement = versionedTransaction(2);
@@ -3260,12 +3398,12 @@ test("Solana rejects transaction serializer replacement", async () => {
         const harness = solanaHarness({
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         const request = harness.provider.signTransaction(
             transaction.transaction
@@ -3291,12 +3429,12 @@ test("Solana final message validation rechecks authorization", async () => {
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const transaction = legacyTransaction(1);
     let changeAuthorization = false;
@@ -3306,7 +3444,7 @@ test("Solana final message validation rechecks authorization", async () => {
             applySolanaConfiguration(harness, {
                 isConnected: true,
                 publicKey: secondSolanaKey,
-                workerRevision: 2,
+                nativeRevision: 2,
             });
         }
         return new Uint8Array([1]);
@@ -3327,12 +3465,12 @@ test("Solana rejects invalid signatures, mutation, custom shapes, and oversized 
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const mutable = legacyTransaction(1);
     let byte = 1;
@@ -3482,12 +3620,12 @@ test("Solana rejects a later batch setter that mutates an earlier message", asyn
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     let firstByte = 1;
     const first = legacyTransaction(1);
@@ -3581,12 +3719,12 @@ test("Solana preflights a whole batch before applying signatures", async () => {
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const first = legacyTransaction(1);
     const second = legacyTransaction(2);
@@ -3661,7 +3799,7 @@ test("Solana rechecks operation currentness around response callbacks", async ()
                     applySolanaConfiguration(harness, {
                         isConnected: true,
                         publicKey: secondSolanaKey,
-                        workerRevision: 2,
+                        nativeRevision: 2,
                     });
                 }
             };
@@ -3712,7 +3850,7 @@ for (const method of ["signMessage", "signTransaction", "signAndSendTransaction"
         const authorization = {
             isConnected: true,
             publicKey: wallet.publicKey.toBase58(),
-            workerRevision: 1,
+            nativeRevision: 1,
         };
         for (const change of ["none", "account", "revision"]) {
             const harness = solanaHarness(authorization);
@@ -3738,7 +3876,7 @@ for (const method of ["signMessage", "signTransaction", "signAndSendTransaction"
                 publicKey: change === "account"
                     ? cosigner.publicKey.toBase58()
                     : authorization.publicKey,
-                workerRevision: change === "none" ? 1 : 2,
+                nativeRevision: change === "none" ? 1 : 2,
             });
             for (let turn = 0; turn < 5; turn++) { await Promise.resolve(); }
             if (rejected) {
@@ -3855,12 +3993,12 @@ test("Wallet Standard signing preflights and caps every input", async () => {
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const account = harness.standardProvider.standardAccounts()[0];
     let messageCalls = 0;
@@ -3911,12 +4049,12 @@ test("Wallet Standard signing rejects authorization drift between awaits", async
         const harness = solanaHarness({
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         applySolanaConfiguration(harness, {
             isConnected: true,
             publicKey: firstSolanaKey,
-            workerRevision: 1,
+            nativeRevision: 1,
         });
         const account = harness.standardProvider.standardAccounts()[0];
         let calls = 0;
@@ -3925,7 +4063,7 @@ test("Wallet Standard signing rejects authorization drift between awaits", async
             applySolanaConfiguration(harness, {
                 isConnected: true,
                 publicKey: secondSolanaKey,
-                workerRevision: 2,
+                nativeRevision: 2,
             });
             return {signature};
         };
@@ -3973,12 +4111,12 @@ test("Solana retires all work when a generation transport returns false", async 
     const requestHarness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(requestHarness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const first = requestHarness.provider.signMessage(new Uint8Array([1]));
     const firstRejected = assert.rejects(first, error => error.code === 4900);
@@ -4012,29 +4150,29 @@ test("Solana external disconnect transport failure leaves authorization unchange
 
 test("Solana accepts the maximum authoritative revision without a local counter", async () => {
     const h = connectedSolanaHarness();
-    applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: Number.MAX_SAFE_INTEGER});
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: Number.MAX_SAFE_INTEGER});
     const pending = h.provider.signMessage(new Uint8Array([1]));
     h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature});
     assert.equal((await pending).signature.length, 64);
-    assert.equal(h.Solana.snapshot(h.provider).workerRevision, Number.MAX_SAFE_INTEGER);
+    assert.equal(h.Solana.snapshot(h.provider).nativeRevision, Number.MAX_SAFE_INTEGER);
 });
 
 test("Solana fences stale authorization and retires pending work", async () => {
     const harness = solanaHarness({
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: firstSolanaKey,
-        workerRevision: 1,
+        nativeRevision: 1,
     });
     const pending = harness.provider.signMessage(new Uint8Array([1]));
     applySolanaConfiguration(harness, {
         isConnected: true,
         publicKey: secondSolanaKey,
-        workerRevision: 2,
+        nativeRevision: 2,
     });
     harness.applyDecodedEnvelope(harness.provider, {
         authorizationFailure: true,
@@ -4164,7 +4302,7 @@ function solanaFacadeTarget(name, address = firstSolanaKey) {
             return {
                 isConnected: true,
                 publicKey: address,
-                workerRevision: 0,
+                nativeRevision: 0,
             };
         },
     };
@@ -4400,7 +4538,7 @@ test("Solana account reads and snapshots ignore mutable public key methods and d
 
         assert.equal(harness.provider.publicKey, key);
         assert.equal(harness.standardProvider.publicKey, key);
-        assert.equal((await harness.provider.connect()).publicKey, key);
+        assert.equal((await nativeSolanaConnect(harness)).publicKey, key);
         assert.equal(harness.wallet.accounts[0], account);
         assert.equal(harness.standardProvider.standardAccounts()[0], account);
         assert.equal(account.address, firstSolanaKey);
@@ -4850,7 +4988,7 @@ function inpageHarness({beforeEvaluate} = {}) {
             return true;
         },
         postMessage(message) {
-            postedMessages.push(normalized(message));
+            postedMessages.push(structuredClone(message));
         },
     };
     window.addEventListener("wallet-standard:register-wallet", event => {
@@ -4953,6 +5091,7 @@ function configurationSnapshot(configurations, revisions = {ethereum: 0, solana:
     const ethereum = configurations.find(item => item.provider === "ethereum");
     const solana = configurations.find(item => item.provider === "solana");
     return {
+        context: "a".repeat(64),
         revisions,
         ethereum: {address: ethereum?.address ?? "", chainId: ethereum?.chainId ?? "0x1"},
         solana: solana ? {publicKey: solana.publicKey} : null,
@@ -4969,9 +5108,10 @@ function dispatchConfigurations(
     harness.dispatch({
         generation, kind: "response",
         response: {kind: "configuration", state: {
+            context: "a".repeat(64),
             revisions: {
-                ethereum: ethereumRevision ?? (current.ethereum.workerRevision ?? -1) + 1,
-                solana: solanaRevision ?? (current.solana.workerRevision ?? -1) + 1,
+                ethereum: ethereumRevision ?? (current.ethereum.nativeRevision ?? -1) + 1,
+                solana: solanaRevision ?? (current.solana.nativeRevision ?? -1) + 1,
             },
             ethereum: {address, chainId},
             solana: publicKey ? {publicKey} : null,
@@ -5021,9 +5161,9 @@ for (const timing of ["before installation", "after configuration"]) {
                 const snapshots = harness.window.bigWalletInpageStableFacadeAnchorV1.record.snapshots();
                 assert.equal(snapshots.ethereum.address, secondAddress);
                 assert.equal(snapshots.ethereum.chainId, "0x2");
-                assert.equal(snapshots.ethereum.workerRevision, 1);
+                assert.equal(snapshots.ethereum.nativeRevision, 1);
                 assert.equal(snapshots.solana.publicKey, secondSolanaKey);
-                assert.equal(snapshots.solana.workerRevision, 4);
+                assert.equal(snapshots.solana.nativeRevision, 4);
                 assert.deepEqual(normalized(await harness.window.ethereum.request({method: "eth_accounts"})), [secondAddress]);
                 assert.equal(await harness.window.ethereum.request({method: "eth_chainId"}), "0x2");
 
@@ -5061,6 +5201,7 @@ test("decoded configurations and Solana terminals do not invoke inherited serial
     try {
         dispatchConfigurations(harness, {chainId: "0x2", publicKey: firstSolanaKey});
         assert.equal(await chain, "0x2");
+        completeSolanaConnect(harness, connecting);
         assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
         assert.equal(vm.runInContext("inboundSerializerCalls", harness.context), 0);
     } finally {
@@ -5201,7 +5342,7 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
     });
     assert.equal(solanaRequest.message.name, "connect");
     assert.deepEqual(Object.keys(solanaRequest).sort(), [
-        "direction", "kind", "message", "providerGeneration",
+        "direction", "kind", "message", "observedRevision", "providerGeneration",
     ]);
     dispatchProviderResponse(harness, {
         id: ethereumRequest.message.id,
@@ -5251,7 +5392,7 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
     assert.deepEqual(Object.keys(disconnectRequest).sort(), [
         "direction", "kind", "message", "providerGeneration",
     ]);
-    const beforeRevision = window.bigWalletInpageStableFacadeRecord.snapshots().solana.workerRevision;
+    const beforeRevision = window.bigWalletInpageStableFacadeRecord.snapshots().solana.nativeRevision;
     const postedCount = harness.postedMessages.length;
     dispatchProviderResponse(harness, {
         id: disconnectRequest.message.id,
@@ -5261,7 +5402,7 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
         state: pageSnapshot({solana: beforeRevision + 1}),
     });
     assert.equal(await disconnect, true);
-    assert.equal(window.bigWalletInpageStableFacadeRecord.snapshots().solana.workerRevision, beforeRevision + 1);
+    assert.equal(window.bigWalletInpageStableFacadeRecord.snapshots().solana.nativeRevision, beforeRevision + 1);
     assert.equal(harness.postedMessages.length, postedCount);
     assert.deepEqual(harness.listenerErrors, []);
 });
@@ -5328,7 +5469,7 @@ test("locked Ethereum aliases preserve provider activation and discovery on rein
             });
             dispatchConfigurations(harness, {publicKey: firstSolanaKey});
             assert.equal(await ethereum.request({method: "eth_chainId"}), "0x1");
-            assert.equal((await solana.connect()).publicKey.toString(), firstSolanaKey);
+            assert.equal((await nativeSolanaConnect(harness, solana)).publicKey.toString(), firstSolanaKey);
             assert.equal(wallet.accounts[0].address, firstSolanaKey);
             window.dispatchEvent(new HarnessEvent("eip6963:requestProvider"));
             assert.equal(harness.announcements.at(-1).provider, ethereum);
@@ -5372,7 +5513,7 @@ test("an unwritable Phantom namespace cannot abort provider activation", async (
 });
 
 function pageSnapshot({address = "", chainId = "0x1", publicKey = null, ethereum = 0, solana = 0} = {}) {
-    return {revisions: {ethereum, solana}, ethereum: {address, chainId}, solana: publicKey ? {publicKey} : null};
+    return {context: "a".repeat(64), revisions: {ethereum, solana}, ethereum: {address, chainId}, solana: publicKey ? {publicKey} : null};
 }
 
 function publishSnapshot(harness, state) {
@@ -5476,7 +5617,7 @@ for (const provider of ["ethereum", "solana"]) {
                 const result = await pending;
                 assert.deepEqual(provider === "ethereum" ? normalized(result) : result.publicKey.toString(), provider === "ethereum" ? [firstEthereumAddress] : firstSolanaKey);
             } else { await assert.rejects(pending, error => error.code === 4100); }
-            assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots()[provider].workerRevision, 3);
+            assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots()[provider].nativeRevision, 3);
         });
     }
 }
@@ -5569,7 +5710,7 @@ test("replacement keeps public identities and establishes a fresh lower revision
     assert.equal(h.window.solana, solana);
     assert.equal(ethereum.selectedAddress, secondEthereumAddress);
     assert.equal(solana.publicKey.toString(), secondSolanaKey);
-    assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().ethereum.workerRevision, 0);
+    assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().ethereum.nativeRevision, 0);
 });
 
 test("committed chain terminal settles null without rolling back a newer network", async () => {
@@ -5643,14 +5784,15 @@ test("bootstrap failure rejects work and recovers the same providers", async () 
     assert.equal(ethereumConnects.length, 1);
     assert.equal(solanaConnects.length, 1);
     assert.equal(solanaConnects[0].connected, true);
+    completeSolanaConnect(harness, reentrantConnect);
     assert.equal((await reentrantConnect).publicKey.toString(), firstSolanaKey);
     assert.equal(accountChanges.length, 1);
     assert.equal(wallet.accounts[0].address, firstSolanaKey);
     assert.deepEqual(normalized(await ethereumProvider.request({
         method: "eth_accounts",
     })), ["0x1234"]);
-    assert.equal((await solanaProvider.connect()).publicKey.toString(), firstSolanaKey);
-    assert.equal(pageMessages(harness, "request").length, 0);
+    assert.equal((await nativeSolanaConnect(harness, solanaProvider)).publicKey.toString(), firstSolanaKey);
+    assert.equal(pageMessages(harness, "request").length, 2);
 
     const ethereumSigning = ethereumProvider.request({
         method: "personal_sign",
@@ -5658,7 +5800,7 @@ test("bootstrap failure rejects work and recovers the same providers", async () 
     });
     const solanaSigning = solanaProvider.signMessage(new Uint8Array([1]));
     const ethereumRequest = pageMessages(harness, "request", "ethereum")[0].message;
-    const solanaRequest = pageMessages(harness, "request", "solana")[0].message;
+    const solanaRequest = pageMessages(harness, "request", "solana").at(-1).message;
     assert.ok(ethereumRequest.id > 1);
     assert.ok(solanaRequest.id > 2);
     harness.dispatch({kind: "response", response: {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}}});
@@ -5727,7 +5869,7 @@ test("bootstrap recovery reconnects copied connections without revoking accounts
     assert.equal(solana.publicKey.toString(), firstSolanaKey);
     assert.equal(wallet.accounts[0], account);
     for (const provider of ["ethereum", "solana"]) {
-        assert.equal(failed[provider].workerRevision, null);
+        assert.equal(failed[provider].nativeRevision, null);
     }
     harness.dispatch({kind: "response", response: {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}}});
     dispatchConfigurations(harness, configuration);
@@ -5744,7 +5886,7 @@ test("bootstrap recovery reconnects copied connections without revoking accounts
     assert.equal(wallet.accounts[0], account);
     assert.deepEqual(accountChanges, []);
     assert.deepEqual(normalized(await ethereum.request({method: "eth_accounts"})), ["0x1234"]);
-    assert.equal((await solana.connect()).publicKey.toString(), firstSolanaKey);
+    assert.equal((await nativeSolanaConnect(harness, solana)).publicKey.toString(), firstSolanaKey);
 
     harness.dispatch({kind: "response", response: {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}}});
     dispatchConfigurations(harness, configuration);
@@ -5771,7 +5913,7 @@ test("bootstrap errors ignore a throwing inherited Error serializer", async () =
     await assert.rejects(solana, isBootstrapFailure);
     dispatchConfigurations(harness, {publicKey: firstSolanaKey});
     assert.equal(await harness.window.ethereum.request({method: "eth_chainId"}), "0x1");
-    assert.equal((await harness.window.solana.connect()).publicKey.toString(), firstSolanaKey);
+    assert.equal((await nativeSolanaConnect(harness)).publicKey.toString(), firstSolanaKey);
 });
 
 test("inpage delivers one authoritative connect to early and late listeners", () => {
@@ -5888,7 +6030,7 @@ test("inpage rejects missing and ambiguous terminals and bounds bridge arrays", 
         id: malformedMessage.message.id,
         kind: "response",
         response: terminalResponse({id: malformedMessage.message.id,
-            state: {ethereum: null, solana: null},
+            state: {context: "a".repeat(64), ethereum: null, solana: null},
             name: malformedMessage.message.name,
             provider: "ethereum",
             result: "0xhash"}),
@@ -5914,6 +6056,7 @@ test("inpage configuration descriptor reentry preserves the newer configuration"
         };
         const ethereum = {address: staleAddress, chainId: "0x2"};
         let response = {kind: "configuration", state: {
+            context: "a".repeat(64),
             ethereum: surface === "address" ? new Proxy(ethereum, {getOwnPropertyDescriptor: trap}) : ethereum,
             solana: null, revisions: {ethereum: 0, solana: 0},
         }};
@@ -5944,7 +6087,7 @@ test("Solana configuration ignores public key overrides and preserves wrapper re
         const refreshedKey = provider.publicKey;
         assert.notEqual(refreshedKey, firstKey);
         assert.equal(refreshedKey.toString(), firstSolanaKey);
-        assert.equal((await provider.connect()).publicKey, refreshedKey);
+        assert.equal((await nativeSolanaConnect(harness, provider)).publicKey, refreshedKey);
         assert.equal(wallet.accounts[0], account);
         assert.deepEqual(events, []);
         assert.equal(reads(), 0);
@@ -5971,7 +6114,7 @@ test("Solana clearing authorization does not read the public key wrapper", async
             harness.standardProvider.on("accountChanged", key => events.push(["accountChanged", key]));
             harness.standardProvider.on("disconnect", () => events.push(["disconnect"]));
             if (trigger === "configuration") {
-                applySolanaConfiguration(harness, {workerRevision: 2});
+                applySolanaConfiguration(harness, {nativeRevision: 2});
             } else if (trigger === "external") {
                 applySolanaConfiguration(harness);
             } else if (trigger === "retirement") {
@@ -6009,7 +6152,7 @@ test("Solana accepted connections preserve public wrapper identity", async () =>
     const {publicKey: key} = await connecting;
     assert.equal(harness.provider.publicKey, key);
     assert.equal(harness.standardProvider.publicKey, key);
-    assert.equal((await harness.provider.connect()).publicKey, key);
+    assert.equal((await nativeSolanaConnect(harness)).publicKey, key);
     assert.deepEqual(events, [["accountChanged", key], ["connect", key]]);
     assert.equal(key.toString(), firstSolanaKey);
     assert.equal(key.toBase58(), firstSolanaKey);
@@ -6044,7 +6187,7 @@ test("Solana facade snapshots and reinjection retain canonical identity after wr
         assert.notEqual(provider.publicKey, key);
         assert.equal(provider.publicKey.toString(), firstSolanaKey);
         assert.equal(record.wallet.accounts[0], account);
-        assert.deepEqual(normalized(record.snapshots().solana), {...before, workerRevision: null});
+        assert.deepEqual(normalized(record.snapshots().solana), {...before, nativeRevision: null});
         assert.equal(reads(), 0);
     }
 });
@@ -6054,6 +6197,7 @@ test("invalid nested ingress cannot suppress a valid outer configuration", () =>
     let didReenter = false;
     const response = new Proxy({
         kind: "configuration", state: {
+            context: "a".repeat(64),
             ethereum: {address: "", chainId: "0x2"},
             solana: null, revisions: {ethereum: 0, solana: 0},
         },
@@ -6076,7 +6220,7 @@ test("invalid nested ingress cannot suppress a valid outer configuration", () =>
                         }], undefined)},
                 });
                 const throwingResponse = new Proxy({
-                    kind: "configuration", state: {ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0}},
+                    kind: "configuration", state: {context: "a".repeat(64), ethereum: null, solana: null, revisions: {ethereum: 0, solana: 0}},
                 }, {
                     getOwnPropertyDescriptor(nestedTarget, nestedName) {
                         if (nestedName === "state") {
@@ -6308,7 +6452,7 @@ test("Solana unauthorized response changes accounts only through its authoritati
     dispatchProviderResponse(h, {id, provider: "solana", name: "signMessage", error: {code: 4100, message: "Unauthorized"}, state: pageSnapshot({solana: 2})});
     await assert.rejects(pending, error => error.code === 4100);
     assert.equal(h.window.solana.publicKey, null);
-    assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().solana.workerRevision, 2);
+    assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().solana.nativeRevision, 2);
 });
 
 test("Solana 4100 without an account marker leaves authorization intact", async () => {
@@ -6671,11 +6815,11 @@ for (const changeAfterFirst of [false, true]) {
         const pending = h.provider.standardSignMessage(input, input);
         const result = pending.then(value => ({value}), error => ({error}));
         assert.equal(h.requests.length, 0);
-        applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 3});
+        applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 3});
         for (let i = 0; i < 5; i++) { await Promise.resolve(); }
         assert.equal(h.requests.length, 1);
         if (changeAfterFirst) {
-            applySolanaConfiguration(h, {publicKey: firstSolanaKey, workerRevision: 4});
+            applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 4});
         }
         h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature, approvalCommitted: true});
         for (let i = 0; i < 5; i++) { await Promise.resolve(); }
@@ -6749,8 +6893,8 @@ test("reentrant Ethereum preparation preserves an independent Solana connect", a
     assert.equal(h.window.solana.publicKey?.toString(), firstSolanaKey);
     assert.equal(h.window.solana.isConnected, true);
     const snapshots = h.window.bigWalletInpageStableFacadeRecord.snapshots();
-    assert.equal(snapshots.ethereum.workerRevision, 2);
-    assert.equal(snapshots.solana.workerRevision, 1);
+    assert.equal(snapshots.ethereum.nativeRevision, 2);
+    assert.equal(snapshots.solana.nativeRevision, 1);
 });
 
 test("configuration preparation errors settle correlated requests without partial updates", async () => {
@@ -6803,3 +6947,110 @@ for (const inheritedFlag of ["true", "throwing getter"]) {
         assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
     });
 }
+
+test("warm Ethereum reads stay local while enable and permissions consult native", async () => {
+    const h = ethereumHarness();
+    const address = "0x0000000000000000000000000000000000000001";
+    applyEthereumConfiguration(h, address);
+    assert.deepEqual(normalized(await h.provider.request({method: "eth_accounts"})), [address]);
+    assert.equal(await h.provider.request({method: "eth_chainId"}), "0x1");
+    assert.deepEqual(normalized(await h.provider.request({method: "wallet_getPermissions"})), [{parentCapability: "eth_accounts"}]);
+    assert.equal(h.requests.length, 0);
+    for (const pending of [h.provider.enable(), h.provider.request({method: "wallet_requestPermissions", params: [{eth_accounts: {}}]})]) {
+        const request = h.requests.find(value => !value.testSettled);
+        request.testSettled = true;
+        assert.equal(request.name, "requestAccounts");
+        h.applyDecodedEnvelope({id: request.id, kind: "result", name: request.name, result: [address]});
+        await pending;
+    }
+    assert.equal(h.requests.length, 2);
+});
+
+test("wallet-standard silent connect revalidates a disconnected cache with native", async () => {
+    const h = solanaHarness();
+    applySolanaConfiguration(h);
+    const pending = h.wallet.features["standard:connect"].connect({silent: true});
+    assert.equal(h.requests.length, 1);
+    assert.equal(h.requests[0].body.object.params.onlyIfTrusted, true);
+    grantSolana(h, h.requests[0].id, firstSolanaKey);
+    assert.equal((await pending).accounts[0].address, firstSolanaKey);
+});
+
+test("page wallet envelopes capture the provider revision at dispatch outside the native message", async () => {
+    const h = inpageHarness();
+    dispatchConfigurations(h, {publicKey: firstSolanaKey, ethereumRevision: 1, solanaRevision: 2});
+    const ethereum = h.window.ethereum.request({method: "personal_sign", params: ["0x01"]});
+    const solana = h.window.solana.signMessage(new Uint8Array([1]));
+    const ethereumMessage = pageMessages(h, "request", "ethereum").at(-1);
+    const solanaMessage = pageMessages(h, "request", "solana").at(-1);
+    dispatchConfigurations(h, {publicKey: firstSolanaKey, ethereumRevision: 3, solanaRevision: 4});
+    assert.equal(ethereumMessage.observedRevision, 1);
+    assert.equal(solanaMessage.observedRevision, 2);
+    for (const envelope of [ethereumMessage, solanaMessage]) {
+        assert.deepEqual(Object.keys(envelope.message).sort(), ["body", "id", "name", "provider"]);
+        dispatchProviderResponse(h, {id: envelope.message.id, provider: envelope.message.provider,
+            name: envelope.message.name, error: {code: 4100, message: "Authorization changed"}});
+    }
+    await assert.rejects(ethereum, error => error.code === 4100);
+    await assert.rejects(solana, error => error.code === 4100);
+});
+
+test("inherited configuration-only accessors cannot bypass Solana requests", async () => {
+    const h = solanaHarness();
+    applySolanaConfiguration(h, {publicKey: firstSolanaKey});
+    const prototype = vm.runInContext("Object.prototype", h.context);
+    let accesses = 0;
+    Object.defineProperty(prototype, "configurationOnly", {
+        configurable: true,
+        get() { accesses += 1; return true; },
+        set() { accesses += 1; },
+    });
+    const methods = ["connect", "signMessage", "signTransaction", "signAllTransactions", "signAndSendTransaction"];
+    const pending = [];
+    try {
+        pending.push(h.provider.connect());
+        pending.push(h.provider.signMessage(new Uint8Array([1])));
+        pending.push(h.provider.request({method: "signTransaction", params: {message: "2"}}));
+        pending.push(h.provider.request({method: "signAllTransactions", params: {messages: ["2"]}}));
+        pending.push(h.provider.signAndSendTransaction("2"));
+    } finally {
+        delete prototype.configurationOnly;
+    }
+    assert.equal(accesses, 0);
+    assert.deepEqual(h.requests.map(value => value.name), methods);
+    const rejected = pending.map(value => assert.rejects(value, error => error.code === 4001));
+    for (const request of h.requests) {
+        h.applyDecodedEnvelope(h.provider, {
+            id: request.id, kind: "error", name: request.name,
+            error: {code: 4001, message: "Canceled"},
+        });
+    }
+    await Promise.all(rejected);
+});
+
+test("Solana signing bootstrap keeps its own configuration-only flag", async () => {
+    const h = solanaHarness({publicKey: firstSolanaKey, isConnected: true});
+    const account = h.wallet.accounts[0];
+    const prototype = vm.runInContext("Object.prototype", h.context);
+    let accesses = 0;
+    Object.defineProperty(prototype, "configurationOnly", {
+        configurable: true,
+        get() { accesses += 1; return false; },
+        set() { accesses += 1; },
+    });
+    try {
+        const pending = h.provider.standardSignMessage({account, message: new Uint8Array([1])});
+        assert.equal(h.requests.length, 0);
+        applySolanaConfiguration(h, {publicKey: firstSolanaKey, nativeRevision: 3});
+        for (let index = 0; index < 5; index += 1) { await Promise.resolve(); }
+        assert.equal(accesses, 0);
+        assert.deepEqual(h.requests.map(value => value.name), ["signMessage"]);
+        h.applyDecodedEnvelope(h.provider, {
+            id: h.requests[0].id, name: "signMessage", kind: "result", result: validSignature,
+        });
+        const [result] = await pending;
+        assert.equal(result.signature.length, 64);
+    } finally {
+        delete prototype.configurationOnly;
+    }
+});

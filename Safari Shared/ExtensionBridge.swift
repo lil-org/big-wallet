@@ -4,6 +4,18 @@ import CryptoKit
 import CoreFoundation
 import Foundation
 
+enum WalletAuthorityRemoval: Sendable {
+    case wallet(id: String)
+    case accounts(Set<WalletAccountDescriptor>)
+
+    func matches(_ account: WalletAccountDescriptor) -> Bool {
+        switch self {
+        case .wallet(let id): return account.walletID == id
+        case .accounts(let accounts): return accounts.contains(account)
+        }
+    }
+}
+
 enum NativeApprovalTiming {
     static let recoveryTimeout: TimeInterval = 10
     static let recoveryRetryInterval: TimeInterval = 1
@@ -277,6 +289,81 @@ actor ExtensionBridge {
         }
     }
     
+    struct AuthorityVersion: Codable, Equatable, Sendable {
+        let context: String
+        let revisions: ProviderRevisions
+
+        init(context: String, revisions: ProviderRevisions) {
+            self.context = context
+            self.revisions = revisions
+        }
+
+        init?(rawValue: Any?) {
+            guard let value = rawValue as? [String: Any],
+                  Set(value.keys) == ["context", "revisions"],
+                  let context = value["context"] as? String,
+                  context.count == 64,
+                  context.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+                  let revisions = ProviderRevisions(rawValue: value["revisions"]) else { return nil }
+            self.init(context: context, revisions: revisions)
+        }
+
+        private struct Field: CodingKey {
+            let stringValue: String
+            var intValue: Int? { nil }
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { return nil }
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: Field.self)
+            guard Set(values.allKeys.map(\.stringValue)) == ["context", "revisions"] else {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "invalid authority fields"))
+            }
+            let context = try values.decode(String.self, forKey: Field(stringValue: "context")!)
+            let revisions = try values.decode(ProviderRevisions.self, forKey: Field(stringValue: "revisions")!)
+            guard let version = Self(rawValue: ["context": context, "revisions": revisions.json]) else {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "invalid authority context"))
+            }
+            self = version
+        }
+
+        var json: [String: Any] { ["context": context, "revisions": revisions.json] }
+    }
+
+    struct AuthoritySnapshot: Sendable {
+        let version: AuthorityVersion
+        let ethereumAccount: WalletAccountDescriptor?
+        let ethereumChainId: String
+        let solanaAccount: WalletAccountDescriptor?
+
+        var json: [String: Any] {
+            [
+                "context": version.context,
+                "revisions": version.revisions.json,
+                "ethereum": ["address": ethereumAccount?.normalizedAddress ?? "", "chainId": ethereumChainId],
+                "solana": solanaAccount.map { ["publicKey": $0.normalizedAddress] as Any } ?? NSNull(),
+            ]
+        }
+    }
+
+    enum AuthorityReadResult { case snapshot(AuthoritySnapshot), unavailable }
+    enum AuthorityMutationResult { case revoked(AuthoritySnapshot), stale(AuthoritySnapshot), unavailable }
+
+    struct RecoveryRequest: Sendable {
+        let handle: Handle
+        let configurationKey: String
+        let manual: Bool
+        let state: ManualSwitchRequestState
+
+        var json: [String: Any] {
+            ["id": handle.id, "requestToken": handle.requestToken,
+             "configurationKey": configurationKey, "manual": manual, "state": state.rawValue]
+        }
+    }
+
+    enum RecoveryRequestsResult { case available([RecoveryRequest]), unavailable }
+
     struct NativeExecutionContext: Codable, Equatable, Sendable {
         let attemptID: UUID
         let revisions: ProviderRevisions
@@ -295,7 +382,7 @@ actor ExtensionBridge {
         let request: SafariRequest
         let canonicalData: Data
         let fingerprint: Data
-        let revisions: ProviderRevisions
+        let authority: AuthorityVersion
         let replayOnly: Bool
     }
 
@@ -332,45 +419,17 @@ actor ExtensionBridge {
         deinit { release() }
     }
 
-    final class NativeExecutionLease: @unchecked Sendable {
-        let handle: Handle
-        let context: NativeExecutionContext
-        let nativeDeliveryNonce: NativeDeliveryNonce
-        private let lock = NSLock()
-        private var finish: (() -> Void)?
-
-        init(
-            handle: Handle,
-            context: NativeExecutionContext,
-            nativeDeliveryNonce: NativeDeliveryNonce,
-            finish: @escaping () -> Void
-        ) {
-            self.handle = handle
-            self.context = context
-            self.nativeDeliveryNonce = nativeDeliveryNonce
-            self.finish = finish
-        }
-
-        func release() {
-            lock.lock()
-            let finish = finish
-            self.finish = nil
-            lock.unlock()
-            finish?()
-        }
-
-        deinit { release() }
-    }
-
     struct ApprovalClaim: Equatable, Sendable {
         let handle: Handle
         fileprivate let value: UUID
         let lease: OperationLease?
+        let executionDeadline: Date
 
-        init(handle: Handle, value: UUID, lease: OperationLease? = nil) {
+        init(handle: Handle, value: UUID, lease: OperationLease? = nil, executionDeadline: Date) {
             self.handle = handle
             self.value = value
             self.lease = lease
+            self.executionDeadline = executionDeadline
         }
 
         func matches(handle: Handle, value: UUID) -> Bool {
@@ -426,10 +485,11 @@ actor ExtensionBridge {
         case accepted(
             handle: Handle,
             approvalRequired: Bool,
-            revisions: ProviderRevisions,
+            authority: AuthoritySnapshot,
             admissionKind: AdmissionKind,
             nativeDeliveryNonce: NativeDeliveryNonce
         )
+        case unauthorized(AuthoritySnapshot)
         case expired, rejected, manualSwitchCapacityReached, unavailable
     }
 
@@ -450,12 +510,6 @@ actor ExtensionBridge {
         case notStaged, executing, responded, missing, unavailable
     }
 
-    enum NativeExecutionResult {
-        case acquired(NativeExecutionLease)
-        case needsDelivery(NativeDeliveryNonce)
-        case pending, responseReady, missing, unavailable
-    }
-
     enum StoreMutationResult: Equatable {
         case persisted, ownershipLost, retryablePersistenceFailure
     }
@@ -470,12 +524,8 @@ actor ExtensionBridge {
 
     enum ResponseReadResult { case response([String: Any]), pending, missing, unavailable }
     enum ResponseStatusResult: Equatable { case pending, ready, missing, unavailable }
-    enum NativeExecutionStatus: String { case awaitingReview, awaitingExecution, executing, completed }
-    enum ExecutionStatusResult: Equatable {
-        case status(NativeExecutionStatus), missing, unavailable
-    }
 
-    static let workflowVersion = 3
+    static let workflowVersion = 4
     static let maximumPayloadBytes = 256 * 1024
     static let maximumRequestsPerHost = 4
     static let maximumRequests = 8
@@ -490,7 +540,6 @@ actor ExtensionBridge {
     static let requestTTL: TimeInterval = 15 * 60
     static let admissionDeadlineFutureSkew: TimeInterval = 60
     static let responseExpiry: TimeInterval = 60 * 60
-    static let nativeExecutionTimeout: TimeInterval = 160
     static let privateBrowsingKey = "__bwPrivateBrowsing"
 
     static let shared = ExtensionBridge(store: ExtensionRequestFileStore(
@@ -498,6 +547,15 @@ actor ExtensionBridge {
             forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
         )
     ))
+
+    static func withWalletSourceMutation<Result>(
+        _ mutation: (_ revokeAuthority: (WalletAuthorityRemoval) throws -> Void) throws -> Result
+    ) throws -> Result {
+        let store = ExtensionRequestFileStore(containerURL: FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
+        ))
+        return try store.withWalletSourceMutation(mutation)
+    }
 
     private let store: ExtensionRequestFileStore
     init(store: ExtensionRequestFileStore) { self.store = store }
@@ -529,7 +587,7 @@ actor ExtensionBridge {
         }
         let allowedFields = Set([
             "id", "name", "provider", "body", "host", "configurationKey",
-            "favicon", "enqueueAttempt", "admissionDeadline", "revisions",
+            "favicon", "enqueueAttempt", "admissionDeadline", "authority",
             "workflowVersion",
         ])
         guard Set(rawObject.keys).isSubset(of: allowedFields),
@@ -541,7 +599,7 @@ actor ExtensionBridge {
               ),
               rawObject["configurationKey"] as? String == request.configurationKey,
               isValidEnqueueAttempt(request.enqueueAttempt),
-              let revisions = ProviderRevisions(rawValue: rawObject["revisions"]),
+              let authority = AuthorityVersion(rawValue: rawObject["authority"]),
               let canonicalData = payloadData(rawObject, options: [.sortedKeys]) else {
             return .invalid
         }
@@ -553,7 +611,7 @@ actor ExtensionBridge {
             request: request,
             canonicalData: canonicalData,
             fingerprint: fingerprint,
-            revisions: revisions,
+            authority: authority,
             replayOnly: replayOnly
         ))
     }
@@ -561,7 +619,8 @@ actor ExtensionBridge {
     static func correlationFingerprint(_ rawObject: [String: Any]) -> Data? {
         var correlationObject = rawObject
         correlationObject.removeValue(forKey: "favicon")
-        correlationObject.removeValue(forKey: "revisions")
+        correlationObject.removeValue(forKey: "authority")
+
         if correlationObject["provider"] as? String == InpageProvider.unknown.rawValue,
            correlationObject["name"] as? String == "switchAccount" {
             correlationObject["body"] = ["latestConfigurations": []]
@@ -644,6 +703,24 @@ actor ExtensionBridge {
         return store.enqueue(ingress: ingress, profileIdentifier: profileIdentifier)
     }
 
+    func configurationSnapshot(configurationKey: String, profileIdentifier: UUID?) -> AuthorityReadResult {
+        store.configurationSnapshot(configurationKey: configurationKey, profileIdentifier: profileIdentifier)
+    }
+
+    func revoke(configurationKey: String, provider: InpageProvider, attempt: String,
+                expected: AuthorityVersion, profileIdentifier: UUID?) -> AuthorityMutationResult {
+        store.revoke(configurationKey: configurationKey, provider: provider, attempt: attempt,
+                     expected: expected, profileIdentifier: profileIdentifier)
+    }
+
+    func listRecoveryRequests(profileIdentifier: UUID?) -> RecoveryRequestsResult {
+        store.listRecoveryRequests(profileIdentifier: profileIdentifier)
+    }
+
+    func authorityIsCurrent(handle: Handle) -> Bool {
+        store.authorityIsCurrent(handle: handle)
+    }
+
     func list(profileIdentifier: UUID?) -> SnapshotsResult {
         store.list(profileIdentifier: profileIdentifier)
     }
@@ -665,13 +742,6 @@ actor ExtensionBridge {
             handle: handle, configurationKey: configurationKey,
             manualOnly: manualOnly
         )
-    }
-
-    func executionStatus(
-        handle: Handle,
-        configurationKey: String
-    ) -> ExecutionStatusResult {
-        store.executionStatus(handle: handle, configurationKey: configurationKey)
     }
 
     func listManualSwitchRequests(
@@ -703,22 +773,6 @@ actor ExtensionBridge {
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier,
             approvedAt: approvedAt
-        )
-    }
-
-    func beginNativeExecution(
-        handle: Handle,
-        configurationKey: String,
-        attemptID: UUID,
-        revisions: ProviderRevisions,
-        executionDeadline: Date
-    ) -> NativeExecutionResult {
-        store.beginNativeExecution(
-            handle: handle,
-            configurationKey: configurationKey,
-            attemptID: attemptID,
-            revisions: revisions,
-            executionDeadline: executionDeadline
         )
     }
 
@@ -869,6 +923,7 @@ actor ExtensionBridge {
 }
 
 protocol PopupRequestStore: AnyObject {
+    func authorityIsCurrent(handle: ExtensionBridge.Handle) async -> Bool
     func list(profileIdentifier: UUID?) async -> ExtensionBridge.SnapshotsResult
     func load(handle: ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
     func claim(handle: ExtensionBridge.Handle) async -> ExtensionBridge.ApprovalClaimResult

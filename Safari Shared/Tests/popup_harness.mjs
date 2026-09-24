@@ -264,7 +264,7 @@ export function createPopupHarness(options = {}) {
             await flushPopup();
         },
         notify(
-            message = {subject: "pendingRequestAvailable", workflowVersion: 3},
+            message = {subject: "pendingRequestAvailable", workflowVersion: 4},
             sender = {id: browser.runtime.id, url: browser.runtime.getURL("").replace(/\/$/, "")}
         ) {
             const delivery = {returns: [], responses: []};

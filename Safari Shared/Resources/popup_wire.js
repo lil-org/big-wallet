@@ -11,7 +11,7 @@
 
     const {
         WORKFLOW_POLICY, hasExactKeys, isCanonicalEthereumChainId,
-        isPrivateToken, isProviderRevisions, isRecord, isRequestToken,
+        isPrivateToken, isRecord, isRequestToken,
         isValidRequestId,
     } = wire;
 
@@ -69,32 +69,31 @@
     function decodePendingRequest(value) {
         if (!isRecord(value)) { return null; }
         const {id, requestToken, enqueueAttempt, sequence, host,
-            configurationKey, provider, revisions, receivedAt} = value;
+            configurationKey, provider, receivedAt} = value;
         if (!isValidRequestId(id) || !isRequestToken(requestToken) ||
             (enqueueAttempt !== undefined && !isPrivateToken(enqueueAttempt)) ||
             !Number.isSafeInteger(sequence) || sequence < 0 ||
             typeof host !== "string" || host.length === 0 ||
             typeof configurationKey !== "string" || configurationKey.length === 0 ||
             !["ethereum", "solana", "unknown"].includes(provider) ||
-            !isProviderRevisions(revisions) || !Number.isFinite(receivedAt)) {
+            !Number.isFinite(receivedAt)) {
             return null;
         }
         return definedFields({id, requestToken, enqueueAttempt, sequence, host,
-            configurationKey, provider, revisions, receivedAt});
+            configurationKey, provider, receivedAt});
     }
 
     function decodeCompletedResponse(value) {
-        if (!hasExactKeys(value, ["configurationKey", "host", "id", "requestToken", "revisions"])) {
+        if (!hasExactKeys(value, ["configurationKey", "host", "id", "requestToken"])) {
             return null;
         }
-        const {id, host, configurationKey, requestToken, revisions} = value;
+        const {id, host, configurationKey, requestToken} = value;
         if (!isValidRequestId(id) || !isRequestToken(requestToken) ||
             typeof host !== "string" || host.length === 0 ||
-            typeof configurationKey !== "string" || configurationKey.length === 0 ||
-            !isProviderRevisions(revisions)) {
+            typeof configurationKey !== "string" || configurationKey.length === 0) {
             return null;
         }
-        return {id, host, configurationKey, requestToken, revisions};
+        return {id, host, configurationKey, requestToken};
     }
 
     function decodeQueue(value) {

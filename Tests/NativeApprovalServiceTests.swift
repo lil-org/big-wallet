@@ -23,8 +23,7 @@
         func testStatusAndMaintenanceCommandsAcceptOnlyResponseIdentity() throws {
             let token = UUID().uuidString.lowercased()
             for subject in [
-                "getResponse", "getManualSwitchResponse", "getExecutionStatus",
-                "prepareResponseDelivery",
+                "getResponse", "prepareResponseDelivery",
             ] {
                 let message: [String: Any] = [
                     "subject": subject, "id": 41,
@@ -38,8 +37,6 @@
                 let identity: InternalSafariRequest.ResponseIdentity
                 switch decoded.command {
                 case .page(.getResponse(let value)),
-                     .worker(.getManualSwitchResponse(let value)),
-                     .worker(.getExecutionStatus(let value)),
                      .worker(.prepareResponseDelivery(let value)):
                     identity = value
                 default: return XCTFail("Unexpected command for \(subject)")
@@ -111,52 +108,6 @@
             }
         }
 
-        func testNativeExecutionCommandRequiresExactAttemptAndBounds() throws {
-            let attemptID = UUID()
-            let message: [String: Any] = [
-                "subject": "executeNativeApproval", "id": 42,
-                "workflowVersion": ExtensionBridge.workflowVersion,
-                "configurationKey": "https://wallet.example",
-                "requestToken": UUID().uuidString.lowercased(),
-                "attemptID": attemptID.uuidString.lowercased(),
-                "revisions": ["ethereum": 2, "solana": 3],
-                "executionDeadline": 1_800_000_100_000,
-            ]
-            let decoded = try JSONDecoder().decode(
-                InternalSafariRequest.self,
-                from: JSONSerialization.data(withJSONObject: message)
-            )
-            guard case .worker(.executeNativeApproval(let execution)) = decoded.command else {
-                return XCTFail("Expected native execution command")
-            }
-            XCTAssertEqual(execution.attemptID, attemptID)
-            XCTAssertEqual(execution.executionDeadline.timeIntervalSince1970, 1_800_000_100)
-            XCTAssertEqual(execution.revisions.ethereum, 2)
-            for key in message.keys {
-                var missing = message
-                missing[key] = nil
-                XCTAssertThrowsError(try JSONDecoder().decode(
-                    InternalSafariRequest.self,
-                    from: JSONSerialization.data(withJSONObject: missing)
-                ), "Missing \(key) was accepted")
-            }
-            for (key, value) in [
-                ("attemptID", attemptID.uuidString as Any),
-                ("attemptID", "invalid" as Any),
-                ("executionDeadline", 0 as Any),
-                ("executionDeadline", 1.5 as Any),
-                ("revisions", ["ethereum": -1, "solana": 0] as Any),
-                ("decision", ["approved": true] as Any),
-            ] {
-                var invalid = message
-                invalid[key] = value
-                XCTAssertThrowsError(try JSONDecoder().decode(
-                    InternalSafariRequest.self,
-                    from: JSONSerialization.data(withJSONObject: invalid)
-                ), "Invalid \(key) was accepted")
-            }
-        }
-
         func testAdmissionReconcilesReceiptAfterFailedLaunchCallback() async throws {
             for outcome in ["delivered", "completed", "replaced"] {
                 let f = try fixture()
@@ -222,22 +173,6 @@
             XCTAssertTrue(opened)
         }
 
-        func testUnstagedExecutionDoesNotRepairOrValidateHelper() async throws {
-            let f = try fixture()
-            let request = try f.request()
-            f.deliver(request)
-            f.processes.removeAll()
-            let service = f.service()
-            for _ in 0..<3 {
-                guard case .pending = await f.execute(service, request) else { return XCTFail("Expected pending") }
-            }
-            XCTAssertTrue(f.validations.isEmpty)
-            XCTAssertTrue(f.launches.isEmpty)
-            XCTAssertTrue(f.clears.isEmpty)
-            XCTAssertTrue(f.quits.isEmpty)
-            XCTAssertTrue(f.maintainedProfiles.isEmpty)
-        }
-
         func testMaintenanceRedeliversAfterHelperExit() async throws {
             let f = try fixture()
             let request = try f.request()
@@ -283,7 +218,6 @@
             f.deliver(request, runtime: f.runtime(build: "147"), staged: true)
             let result = await f.maintain(f.service(), request)
             guard case .unavailable = result else { return XCTFail("Expected quiet unavailability") }
-            XCTAssertTrue(f.executionBegins.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
@@ -517,7 +451,6 @@
             task.cancel()
             gate.open()
             guard case .pending = await task.value else { return XCTFail("Expected pending") }
-            XCTAssertTrue(f.executionBegins.isEmpty)
             XCTAssertTrue(f.loads.isEmpty)
         }
 
@@ -724,7 +657,7 @@
                     "enqueueAttempt": String(repeating: "a", count: 32),
                     "workflowVersion": ExtensionBridge.workflowVersion,
                     "body": ["address": ""],
-                ], revisions: ExtensionBridge.ProviderRevisions(rawValue: ["ethereum": 0, "solana": 0])!)
+                ])
             let bridge = store.bridge
             let boundary = f.launcherDependencies
             let runtime = f.runtime()

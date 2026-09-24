@@ -9,10 +9,6 @@
         "host": "wallet.example",
         "configurationKey": "https://wallet.example",
         "provider": "ethereum",
-        "revisions": {
-          "ethereum": 2,
-          "solana": 3
-        },
         "receivedAt": 1700000000.25
       }
     ],
@@ -21,11 +17,7 @@
         "id": 92,
         "requestToken": "00000000-0000-4000-8000-000000000092",
         "host": "wallet.example",
-        "configurationKey": "https://wallet.example",
-        "revisions": {
-          "ethereum": 2,
-          "solana": 3
-        }
+        "configurationKey": "https://wallet.example"
       }
     ],
     "strings": {

@@ -26,14 +26,12 @@
     func approvalServiceTestDependencies(
         launcher: NativeAgentLauncher? = nil,
         load: @escaping @MainActor (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult = { _ in .missing },
-        beginExecution: @escaping @MainActor (ExtensionBridge.Handle, String, UUID, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionResult = { _, _, _, _, _ in .missing },
         responseStatus: @escaping @MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseStatusResult = { _, _ in .missing },
         maintainProfile: @escaping @MainActor (UUID?) async -> Void = { _ in },
         clearReceipt:
             @escaping @MainActor (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
             ExtensionBridge.StoreMutationResult = { _, _ in .ownershipLost },
         uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
-        wallClock: @escaping () -> Date = Date.init,
         sleepUntil: @escaping @Sendable (UInt64) async -> Void = { deadline in
             let now = DispatchTime.now().uptimeNanoseconds
             if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
@@ -42,35 +40,14 @@
         .init(
             launcher: launcher ?? NativeAgentLauncher(dependencies: launcherTestDependencies()),
             load: { await load($0) },
-            beginExecution: { await beginExecution($0, $1, $2, $3, $4) },
             responseStatus: { await responseStatus($0, $1) },
             maintainProfile: { await maintainProfile($0) },
             clearReceipt: { await clearReceipt($0, $1) },
-            uptime: uptime, wallClock: wallClock, sleepUntil: sleepUntil)
+            uptime: uptime, sleepUntil: sleepUntil)
     }
 
     @MainActor
     final class NativeApprovalServiceTestFixture {
-        final class ExecutionLeases: @unchecked Sendable {
-            private let lock = NSLock()
-            private var active = Set<ExtensionBridge.Handle>()
-            private var released = [ExtensionBridge.Handle]()
-
-            var activeHandles: Set<ExtensionBridge.Handle> { lock.withLock { active } }
-            var releasedHandles: [ExtensionBridge.Handle] { lock.withLock { released } }
-
-            func acquire(_ handle: ExtensionBridge.Handle) -> Bool {
-                lock.withLock { active.insert(handle).inserted }
-            }
-
-            func release(_ handle: ExtensionBridge.Handle) {
-                lock.withLock {
-                    active.remove(handle)
-                    released.append(handle)
-                }
-            }
-        }
-
         final class Clock: @unchecked Sendable {
             private let lock = NSLock()
             private var uptime: UInt64 = 1_000_000_000
@@ -147,13 +124,8 @@
         var validations = [URL]()
         var loads = [(ExtensionBridge.Handle, UInt64)]()
         var maintainedProfiles = [UUID?]()
-        var executionBegins = [ExtensionBridge.Handle]()
         var responseStatusReads = [ExtensionBridge.Handle]()
-        private let executionLeaseState = ExecutionLeases()
-        var releasedExecutions: [ExtensionBridge.Handle] { executionLeaseState.releasedHandles }
-        var activeExecutions: Set<ExtensionBridge.Handle> { executionLeaseState.activeHandles }
         var responses = [ExtensionBridge.Handle: [String: Any]]()
-        var onBeginExecution: (@MainActor (ExtensionBridge.Handle, String, UUID, ExtensionBridge.ProviderRevisions, Date) async -> ExtensionBridge.NativeExecutionResult)?
         var onResponseStatus: (@MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseStatusResult)?
         var onValidate: (@MainActor (URL) async -> Bool)?
         var onLoad: (@MainActor (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult)?
@@ -304,40 +276,6 @@
                     if let onLoad = self.onLoad { return await onLoad(handle) }
                     return self.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
                 },
-                beginExecution: { handle, key, attemptID, revisions, deadline in
-                    self.executionBegins.append(handle)
-                    if let onBeginExecution = self.onBeginExecution {
-                        return await onBeginExecution(handle, key, attemptID, revisions, deadline)
-                    }
-                    guard let snapshot = self.snapshots[handle], snapshot.configurationKey == key else { return .missing }
-                    switch snapshot.state {
-                    case .responded: return .responseReady
-                    case .approving: return .pending
-                    case .queued(let request, .staged(let approval)):
-                        if let existing = approval.executionContext {
-                            guard existing.attemptID == attemptID,
-                                  existing.revisions == revisions,
-                                  existing.executionDeadline == deadline else { return .unavailable }
-                        }
-                        guard deadline > self.clock.date else { return .unavailable }
-                        let executionLeases = self.executionLeaseState
-                        guard executionLeases.acquire(handle) else { return .pending }
-                        let context = ExtensionBridge.NativeExecutionContext(
-                            attemptID: attemptID, revisions: revisions, observedAt: self.clock.date,
-                            executionDeadline: deadline, fenceToken: UUID()
-                        )
-                        self.setState(.queued(request: request, approval: .staged(.init(
-                            receipt: approval.receipt, approvedAt: approval.approvedAt,
-                            executionContext: context
-                        ))), for: snapshot)
-                        return .acquired(.init(
-                            handle: handle, context: context,
-                            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
-                            finish: { executionLeases.release(handle) }
-                        ))
-                    case .queued: return .needsDelivery(snapshot.nativeDeliveryNonce)
-                    }
-                },
                 responseStatus: { handle, key in
                     self.responseStatusReads.append(handle)
                     if let onResponseStatus = self.onResponseStatus { return await onResponseStatus(handle, key) }
@@ -361,26 +299,13 @@
                     }
                     return .persisted
                 },
-                uptime: { [clock] in clock.now }, wallClock: { [clock] in clock.date },
+                uptime: { [clock] in clock.now },
                 sleepUntil: { [clock] in await clock.sleepUntil($0) }
             )
         }
 
         func service(timeout: UInt64 = 5_000_000_000) -> NativeApprovalService {
             .init(dependencies: dependencies, launchTimeoutNanoseconds: timeout)
-        }
-
-        func execute(
-            _ service: NativeApprovalService,
-            _ snapshot: ExtensionBridge.Snapshot,
-            attemptID: UUID = UUID(),
-            duration: TimeInterval = 2.25
-        ) async -> ExtensionBridge.ResponseStatusResult {
-            await service.executeNativeApproval(
-                handle: snapshot.handle, configurationKey: snapshot.configurationKey,
-                attemptID: attemptID, revisions: snapshot.revisions,
-                executionDeadline: clock.date.addingTimeInterval(duration)
-            )
         }
 
         func maintain(

@@ -234,6 +234,11 @@ final class PopupRequestSessions {
         case superseded
     }
 
+    @MainActor
+    private final class AuthenticationAttempt {
+        var outcome: AuthenticationOutcome?
+    }
+
     private enum SigningValidation {
         case valid
         case reviewChanged
@@ -284,6 +289,7 @@ final class PopupRequestSessions {
     private let selectionNetworkResolver: (String) -> EthereumNetwork?
     private let signingNetworkResolver: (Int) -> ResolvedEthereumNetwork?
     private let clock: () -> Date
+    private let waitForAuthenticationDeadline: @MainActor (Date) async -> Void
     private let durableApprovalExecutor: DurableApprovalExecutor
     private let presenter: PopupApprovalStatePresenter
     private var sessions = [ExtensionBridge.Handle: PopupRequestSession]()
@@ -307,7 +313,8 @@ final class PopupRequestSessions {
         },
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping () -> Date = Date.init
+        clock: @escaping () -> Date = Date.init,
+        waitForAuthenticationDeadline: (@MainActor (Date) async -> Void)? = nil
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
@@ -318,6 +325,9 @@ final class PopupRequestSessions {
         self.selectionNetworkResolver = selectionNetworkResolver
         self.signingNetworkResolver = signingNetworkResolver
         self.clock = clock
+        self.waitForAuthenticationDeadline = waitForAuthenticationDeadline ?? { deadline in
+            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSince(clock()))))
+        }
         durableApprovalExecutor = DurableApprovalExecutor(
             store: store,
             broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds,
@@ -756,24 +766,16 @@ final class PopupRequestSessions {
               session.canBeginApproval else {
             return .ignored
         }
-        let action = session.reviewAction
-        guard DurableApprovalExecutor.approvalRevisionsMatch(
-            action: action,
-            request: session.request,
-            stored: snapshot.revisions,
-            current: payload.revisions
-        ) else {
-            return await completeStaleApproval(
-                snapshot: snapshot,
-                session: session
-            )
-        }
-        guard providerRevisionLeaseIsAdmissible(
-            action: action,
-            deadline: payload.executionDeadline
-        ) else {
+        let authorityIsCurrent = await store.authorityIsCurrent(handle: snapshot.handle)
+        guard sessions[snapshot.handle] === session,
+              reviewToken(for: request) == session.reviewToken,
+              session.canBeginApproval else {
             return .ignored
         }
+        guard authorityIsCurrent else {
+            return await completeStaleApproval(snapshot: snapshot, session: session)
+        }
+        let action = session.reviewAction
         switch action {
         case .selectAccount(let selectAction), .switchAccount(let selectAction):
             guard let selectedAccounts = payload.selectedAccounts else {
@@ -786,25 +788,19 @@ final class PopupRequestSessions {
                 chainId: payload.chainId
             ) ? .applied() : .ignored
         case .approveMessage(let signAction):
-            guard let executionDeadline = payload.executionDeadline,
-                  await approveMessageSigning(
+            guard await approveMessageSigning(
                 session: session,
                 action: signAction,
-                cluster: payload.cluster,
-                expectedRevisions: payload.revisions,
-                executionDeadline: executionDeadline
+                cluster: payload.cluster
             ) else { return .ignored }
         case .approveTransaction:
-            guard let executionDeadline = payload.executionDeadline,
-                  session.transaction?.snapshot.canApprove == true else {
+            guard session.transaction?.snapshot.canApprove == true else {
                 return .ignored
             }
             guard await runSigningApproval(
                 session: session,
                 action: action,
-                cluster: nil,
-                expectedRevisions: payload.revisions,
-                executionDeadline: executionDeadline
+                cluster: nil
             ) else { return .ignored }
         case .addEthereumChain:
             guard let approval = await beginAndClaimApproval(for: session) else {
@@ -944,9 +940,7 @@ final class PopupRequestSessions {
     private func approveMessageSigning(
         session: PopupRequestSession,
         action: SignMessageAction,
-        cluster: Solana.Cluster?,
-        expectedRevisions: ExtensionBridge.ProviderRevisions?,
-        executionDeadline: Date
+        cluster: Solana.Cluster?
     ) async -> Bool {
         guard case .success = DappApprovalValidator.resolve(
             action: .approveMessage(action),
@@ -963,18 +957,14 @@ final class PopupRequestSessions {
         return await runSigningApproval(
             session: session,
             action: .approveMessage(action),
-            cluster: cluster,
-            expectedRevisions: expectedRevisions,
-            executionDeadline: executionDeadline
+            cluster: cluster
         )
     }
 
     private func runSigningApproval(
         session: PopupRequestSession,
         action: DappRequestAction,
-        cluster: Solana.Cluster?,
-        expectedRevisions: ExtensionBridge.ProviderRevisions?,
-        executionDeadline: Date
+        cluster: Solana.Cluster?
     ) async -> Bool {
         let reason: String
         let approvedAccount: WalletAccountDescriptor
@@ -993,6 +983,7 @@ final class PopupRequestSessions {
             return false
         }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
+        let executionDeadline = approval.claim.executionDeadline
         let transactionToken = transactionSession?.beginApproval()
         if transactionSession != nil && transactionToken == nil {
             await releaseApproval(approval.claim, for: session, token: approval.token)
@@ -1094,7 +1085,6 @@ final class PopupRequestSessions {
             approval: approval,
             catalog: catalog,
             signer: signer,
-            expectedRevisions: expectedRevisions,
             executionDeadline: executionDeadline
         ) else {
             await releaseApproval(
@@ -1122,51 +1112,12 @@ final class PopupRequestSessions {
         return true
     }
 
-    private func providerRevisionLeaseIsAdmissible(
-        action: DappRequestAction,
-        deadline: Date?
-    ) -> Bool {
-        switch action {
-        case .approveMessage, .approveTransaction:
-            guard let deadline else { return false }
-            let remaining = deadline.timeIntervalSince(clock())
-            return remaining > 0 && remaining <= 180
-        case .selectAccount, .switchAccount, .addEthereumChain:
-            return true
-        }
-    }
-
-    private func providerRevisionLeaseIsCurrent(
-        for session: PopupRequestSession,
-        action: DappRequestAction,
-        expectedRevisions: ExtensionBridge.ProviderRevisions?,
-        executionDeadline: Date
-    ) async -> Bool {
-        guard providerRevisionLeaseIsAdmissible(
-                  action: action,
-                  deadline: executionDeadline
-              ),
-              case .found(let snapshot) = await store.load(
-                  handle: session.handle
-              ),
-              snapshot.phase == .approving else {
-            return false
-        }
-        return DurableApprovalExecutor.approvalRevisionsMatch(
-            action: action,
-            request: session.request,
-            stored: snapshot.revisions,
-            current: expectedRevisions
-        )
-    }
-
     private func validateSigningAccess(
         for session: PopupRequestSession,
         reviewedAction: DappRequestAction,
         approval: ClaimedApproval,
         catalog: WalletReviewCatalog,
         signer: RequestScopedWalletAccess,
-        expectedRevisions: ExtensionBridge.ProviderRevisions?,
         executionDeadline: Date
     ) async -> SigningValidation {
         guard isCurrent(session, token: approval.token) else { return .superseded }
@@ -1179,12 +1130,8 @@ final class PopupRequestSessions {
         case .selectAccount, .switchAccount, .addEthereumChain:
             return .reviewChanged
         }
-        let revisionIsCurrent = await providerRevisionLeaseIsCurrent(
-            for: session,
-            action: reviewedAction,
-            expectedRevisions: expectedRevisions,
-            executionDeadline: executionDeadline
-        )
+        let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
+        guard clock() < executionDeadline else { return .reviewChanged }
         let walletsAvailable = refreshWalletsAndNetworks() != nil
         let networkMatches: Bool
         if case .approveTransaction(let action) = reviewedAction {
@@ -1197,7 +1144,7 @@ final class PopupRequestSessions {
         } else {
             networkMatches = true
         }
-        guard revisionIsCurrent,
+        guard authorityIsCurrent,
               walletsAvailable,
               session.reviewCatalog?.identity == catalog.identity,
               signer.approvedAccount == approvedAccount,
@@ -1262,7 +1209,10 @@ final class PopupRequestSessions {
             claim: approval.claim,
             token: approval.token
         ) else { return .superseded }
-        let outcome = await authenticate(session: session, reason: reason, approvedAccount: approvedAccount)
+        let deadline = approval.claim.executionDeadline
+        let outcome = await boundedAuthentication(
+            session: session, reason: reason, approvedAccount: approvedAccount, deadline: deadline
+        )
         guard isCurrent(session, token: approval.token),
               session.finishAuthentication(
                 claim: approval.claim,
@@ -1272,6 +1222,47 @@ final class PopupRequestSessions {
                 signer.invalidate()
             }
             return .superseded
+        }
+        return outcome
+    }
+
+    private func boundedAuthentication(
+        session: PopupRequestSession,
+        reason: String,
+        approvedAccount: WalletAccountDescriptor,
+        deadline: Date
+    ) async -> AuthenticationOutcome {
+        guard clock() < deadline else { return .cancelled }
+        let attempt = AuthenticationAttempt()
+        let resolution = ApprovalResolution<Bool>()
+        let operation = Task { @MainActor in
+            let outcome = await self.authenticate(
+                session: session, reason: reason, approvedAccount: approvedAccount
+            )
+            guard !Task.isCancelled, self.clock() < deadline else {
+                if case .unlocked(_, let signer) = outcome { signer.invalidate() }
+                await resolution.resolve(false)
+                return
+            }
+            attempt.outcome = outcome
+            if !(await resolution.resolve(true)) {
+                if case .unlocked(_, let signer) = outcome { signer.invalidate() }
+                attempt.outcome = nil
+            }
+        }
+        let timeout = Task { @MainActor in
+            await waitForAuthenticationDeadline(deadline)
+            guard !Task.isCancelled else { return }
+            await resolution.resolve(false) { operation.cancel() }
+        }
+        let completed = await resolution.value()
+        timeout.cancel()
+        operation.cancel()
+        let outcome = attempt.outcome
+        attempt.outcome = nil
+        guard completed, let outcome else {
+            if case .unlocked(_, let signer)? = outcome { signer.invalidate() }
+            return .cancelled
         }
         return outcome
     }
@@ -1355,7 +1346,10 @@ final class PopupRequestSessions {
                     request: request, approval: approval,
                     handle: signing.handle, deadline: signing.deadline
                   ), let bound = signing.access.bind(operation: operation) else { return .rollback }
-            executionSigner = bound
+            executionSigner = AuthorityBoundWalletSigner(
+                signer: bound,
+                authorityIsCurrent: { await self.store.authorityIsCurrent(handle: signing.handle) }
+            )
         } else {
             executionSigner = nil
         }
