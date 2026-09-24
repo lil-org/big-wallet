@@ -7,16 +7,20 @@ const WORKFLOW_VERSION = WIRE.WORKFLOW_VERSION;
 const BUILD_VERSION = WIRE.BUILD_VERSION;
 const APPLICATION_ID = "org.lil.wallet";
 const UPDATE_RECOVERY_STORAGE_KEY = "workflowUpdateRecoveryNeeded";
+const ADMISSION_WINDOWS_STORAGE_KEY = "recoveryAdmissionWindows";
+const NATIVE_ADMISSION_WINDOW = WIRE.WORKFLOW_POLICY.requestTTLMilliseconds + 60 * 1000;
 const TRANSPORT_TIMEOUT = 5000;
 const TAB_QUERY_TIMEOUT = 1000;
 const MANUAL_SWITCH_INTENT_TIMEOUT = TRANSPORT_TIMEOUT * 8;
 const NATIVE_OPERATION_TIMEOUT = 180 * 1000;
 const MANUAL_SWITCH_RECOVERY_ALARM = "manualSwitchRecovery";
+const IDLE_RECOVERY_INTERVAL_MINUTES = 5;
 const REQUEST_MAINTENANCE_INTERVAL = 30 * 1000;
 const requestMaintenanceTimes = new Map;
 let recoveryFlight = null;
 let recoveryQueued = false;
-let alarmFlight = null;
+let alarmFlight = Promise.resolve();
+let admissionRevision = 0;
 
 const sendNativeMessage = WIRE.createTrustedNativeMessageSender({
     sendRawNativeMessage: message => browser.runtime.sendNativeMessage(APPLICATION_ID, message),
@@ -123,14 +127,13 @@ async function handleDappRequest(request, context) {
             return pageFailure(message.id, message.provider, message.name, "onlyIfTrusted must be a boolean", -32602);
         }
     }
-    await ensureManualSwitchAlarm();
-    const response = await WIRE.withTimeout(sendNativeMessage({
+    const response = await WIRE.withTimeout(sendNativeAdmission({
         ...message, ...identity, authority: request.authority,
         admissionDeadline: request.admissionDeadline, enqueueAttempt: request.enqueueAttempt,
         favicon: identity.configurationKey.startsWith("file:") ? ""
             : typeof context.favicon === "string" && context.favicon.length <= 16 * 1024 ? context.favicon : "",
         workflowVersion: WORKFLOW_VERSION,
-    }, false), TRANSPORT_TIMEOUT);
+    }), TRANSPORT_TIMEOUT);
     if (WIRE.isNativeEnqueueAcknowledgement(response, message.id)) {
         if (response.approvalRequired) { notifyPendingRequestAvailable(); cuePopup(); }
         return response;
@@ -251,17 +254,56 @@ async function handleRPC(request, context) {
     } catch { return pageFailure(request.id, "ethereum", null); }
 }
 
+function updateRecoveryAlarm(operation) {
+    const pending = alarmFlight.then(operation);
+    alarmFlight = pending.catch(() => {});
+    return pending;
+}
+
 function ensureManualSwitchAlarm() {
-    if (alarmFlight) { return alarmFlight; }
-    const pending = (async () => {
-        if (!await browser.alarms.get(MANUAL_SWITCH_RECOVERY_ALARM)) {
+    return updateRecoveryAlarm(async () => {
+        const alarm = await browser.alarms.get(MANUAL_SWITCH_RECOVERY_ALARM);
+        if (alarm?.periodInMinutes !== 1 || alarm.scheduledTime > Date.now() + 60 * 1000) {
             await browser.alarms.create(MANUAL_SWITCH_RECOVERY_ALARM, {delayInMinutes: 1, periodInMinutes: 1});
         }
-    })();
-    alarmFlight = pending;
-    const clear = () => { if (alarmFlight === pending) { alarmFlight = null; } };
-    pending.then(clear, clear);
-    return pending;
+    });
+}
+
+async function sendNativeAdmission(message) {
+    admissionRevision += 1;
+    try {
+        await ensureManualSwitchAlarm();
+        await updateRecoveryAlarm(async () => {
+            const windows = (await recoveryAdmissionWindows()).filter(([, end]) => end > Date.now());
+            windows.push([message.admissionDeadline - NATIVE_ADMISSION_WINDOW, message.admissionDeadline]);
+            windows.sort((left, right) => left[0] - right[0]);
+            const merged = [];
+            for (const window of windows) {
+                const previous = merged.at(-1);
+                if (previous && previous[1] >= window[0]) {
+                    previous[1] = Math.max(previous[1], window[1]);
+                } else {
+                    merged.push(window);
+                }
+            }
+            await browser.storage.local.set({[ADMISSION_WINDOWS_STORAGE_KEY]: merged});
+        });
+        return await sendNativeMessage(message, false);
+    } finally {
+        admissionRevision += 1;
+        void ensureManualSwitchAlarm().catch(() => {});
+    }
+}
+
+async function recoveryAdmissionWindows() {
+    const stored = await browser.storage.local.get(ADMISSION_WINDOWS_STORAGE_KEY);
+    const windows = stored[ADMISSION_WINDOWS_STORAGE_KEY];
+    if (windows === undefined) { return []; }
+    if (!Array.isArray(windows) || !windows.every(window => Array.isArray(window) && window.length === 2 &&
+        window.every(Number.isSafeInteger) && window[0] < window[1] && window[1] > 0)) {
+        throw new Error("Invalid recovery admission windows");
+    }
+    return windows;
 }
 
 function validRecoveryRequest(request) {
@@ -275,7 +317,9 @@ function recoverRequests() {
     if (browser.extension?.inIncognitoContext === true) { return Promise.resolve(); }
     if (recoveryFlight) { recoveryQueued = true; return recoveryFlight; }
     const pending = (async () => {
+        const revision = admissionRevision;
         await ensureManualSwitchAlarm();
+        const discoveryStartedAt = Date.now();
         const id = WIRE.genId();
         const response = await WIRE.withTimeout(sendNativeMessage({
             subject: "getRecoveryRequests", id, workflowVersion: WORKFLOW_VERSION,
@@ -283,6 +327,23 @@ function recoverRequests() {
         if (!WIRE.hasExactKeys(response, ["id", "requests"]) || response.id !== id ||
             !Array.isArray(response.requests) || response.requests.length > WIRE.WORKFLOW_POLICY.maximumRetainedRequests ||
             !response.requests.every(validRecoveryRequest)) { return; }
+        if (response.requests.length === 0) {
+            await updateRecoveryAlarm(async () => {
+                const windows = await recoveryAdmissionWindows();
+                if (admissionRevision !== revision) { return; }
+                if (!windows.length) { return browser.alarms.clear(MANUAL_SWITCH_RECOVERY_ALARM); }
+                const now = Date.now();
+                const earliest = Math.min(discoveryStartedAt, now);
+                const latest = Math.max(discoveryStartedAt, now);
+                if (windows.some(([start, end]) => start <= latest && end > earliest)) { return; }
+                const nextStart = Math.min(...windows.filter(([start]) => start > latest).map(([start]) => start));
+                return browser.alarms.create(MANUAL_SWITCH_RECOVERY_ALARM, {
+                    when: Math.min(nextStart, now + IDLE_RECOVERY_INTERVAL_MINUTES * 60 * 1000),
+                    periodInMinutes: IDLE_RECOVERY_INTERVAL_MINUTES,
+                });
+            });
+            return;
+        }
         const ready = [];
         for (const request of response.requests) {
             try {
@@ -308,7 +369,6 @@ function recoverRequests() {
 
 function beginManualSwitch(identity) {
     const pending = (async () => {
-        await ensureManualSwitchAlarm();
         let state = await readNativeConfiguration(identity.configurationKey);
         if (!state) { return undefined; }
         const admissionDeadline = Date.now() + WIRE.WORKFLOW_POLICY.requestTTLMilliseconds;
@@ -318,11 +378,11 @@ function beginManualSwitch(identity) {
             if (Date.now() >= admissionDeadline) { return undefined; }
             const id = Math.max(WIRE.genId(), previousID + 1);
             previousID = id;
-            const response = await WIRE.withTimeout(sendNativeMessage({
+            const response = await WIRE.withTimeout(sendNativeAdmission({
                 ...identity, id, name: "switchAccount", provider: "unknown", body: {},
                 authority: {context: state.context, revisions: state.revisions},
                 admissionDeadline, enqueueAttempt: WIRE.genPrivateToken(), workflowVersion: WORKFLOW_VERSION,
-            }, false), TRANSPORT_TIMEOUT);
+            }), TRANSPORT_TIMEOUT);
             if (WIRE.isNativeEnqueueAcknowledgement(response, response?.id) && response.state.context === state.context &&
                 (response.admissionKind === "coalesced" || response.id === id)) {
                 if (!response.approvalRequired && response.admissionKind === "coalesced") {
