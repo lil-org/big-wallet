@@ -336,7 +336,7 @@ actor NativeApprovalService {
         deadline: UInt64
     ) async -> ExtensionBridge.ResponseStatusResult {
         await dependencies.maintainProfile(handle.profileIdentifier)
-        guard isPending(until: deadline) else { return .pending }
+        guard isPending(until: deadline) else { return .unavailable }
         let snapshot: ExtensionBridge.Snapshot
         switch await dependencies.load(handle) {
         case .found(let found) where found.configurationKey == configurationKey:
@@ -344,7 +344,7 @@ actor NativeApprovalService {
         case .found, .missing: return .missing
         case .unavailable: return .unavailable
         }
-        guard isPending(until: deadline) else { return .pending }
+        guard isPending(until: deadline) else { return .unavailable }
         if snapshot.phase == .responded { return .ready }
         let manual = snapshot.request?.provider == .unknown &&
             snapshot.request?.name == "switchAccount"
@@ -354,7 +354,7 @@ actor NativeApprovalService {
             handle: handle, nonce: snapshot.nativeDeliveryNonce,
             policy: quiet ? .manualRecovery : .delivery, deadline: deadline
         )
-        guard isPending(until: deadline) else { return .pending }
+        guard isPending(until: deadline) else { return .unavailable }
         switch status {
         case .delivered: return .pending
         case .responseReady: return .ready
