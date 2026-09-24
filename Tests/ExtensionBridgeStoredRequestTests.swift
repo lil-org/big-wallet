@@ -4915,6 +4915,50 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(repeatedBegin, .ownershipLost)
     }
 
+    func testOrdinaryClaimDeadlineRoundTripsAndEndsAtBroadcastCheckpoint() async throws {
+        let fixture = try makeFixture(id: 989)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        )).handle
+        let firstClaim = try approvalClaim(await bridge.claim(handle: handle))
+        defer { firstClaim.releaseLease() }
+        let claimedState = try firstStoredState("claimed")
+        let approval = try XCTUnwrap(claimedState["approval"] as? [String: Any])
+        let ordinary = try XCTUnwrap(approval["ordinary"] as? [String: Any])
+        XCTAssertEqual(ordinary["deadline"] as? Date, firstClaim.executionDeadline)
+        let claimedRecords = try XCTUnwrap(try storedProfile()["records"] as? [[String: Any]])
+        XCTAssertNil(claimedRecords.first?["executionDeadline"])
+
+        let observer = makeBridge(clock: { self.clock.now })
+        let firstPermit = try executionPermit(await observer.begin(claim: firstClaim))
+        let rolledBack = await observer.rollback(permit: firstPermit)
+        XCTAssertEqual(rolledBack, .persisted)
+        _ = try firstStoredState("pending")
+        clock.now.addTimeInterval(1)
+        let nextClaim = try approvalClaim(await observer.claim(handle: handle))
+        defer { nextClaim.releaseLease() }
+        XCTAssertGreaterThan(nextClaim.executionDeadline, firstClaim.executionDeadline)
+        let nextPermit = try executionPermit(await observer.begin(claim: nextClaim))
+        let recovery = ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x989")
+        let checkpointed = await observer.prepareBroadcast(
+            permit: nextPermit, recoveryResponse: recovery, authority: .ordinary
+        )
+        XCTAssertEqual(checkpointed, .persisted)
+        let broadcastState = try firstStoredState("broadcastPrepared")
+        let broadcastApproval = try XCTUnwrap(broadcastState["approval"] as? [String: Any])
+        let ordinaryBroadcast = try XCTUnwrap(broadcastApproval["ordinary"] as? [String: Any])
+        XCTAssertTrue(ordinaryBroadcast.isEmpty)
+
+        clock.now = nextClaim.executionDeadline.addingTimeInterval(1)
+        let completed = await observer.complete(
+            permit: nextPermit, response: recovery, authority: .ordinary
+        )
+        XCTAssertEqual(completed, .persisted)
+        let completedRecords = try XCTUnwrap(try storedProfile()["records"] as? [[String: Any]])
+        XCTAssertNil(completedRecords.first?["executionDeadline"])
+        _ = try firstStoredState("completed")
+    }
+
     func testExecutionWriteFailuresRecoverAccordingToThePersistedPhase()
         async throws {
         for (operationIndex, checkpointsBroadcast) in [false, true].enumerated() {

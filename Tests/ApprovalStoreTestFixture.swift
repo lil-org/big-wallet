@@ -32,18 +32,30 @@ enum ApprovalStoreTestPersistence {
     }
 }
 
-func makeRequestScopedWalletAccessForTesting(
-    _ access: any OwnedWalletSigningAccess = TestWalletSigningAccess(),
+func walletSigningAuthorizationForTesting(
     approvedAccount: WalletAccountDescriptor,
+    handle: ExtensionBridge.Handle = .init(
+        id: 1,
+        token: .init(value: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!),
+        profileIdentifier: nil
+    ),
+    deadline: Date = .distantFuture
+) -> WalletSigningAuthorization {
+    WalletSigningAuthorization(handle: handle, approvedAccount: approvedAccount, signingDeadline: deadline)
+}
+
+func makeWalletSigningSessionForTesting(
+    _ access: any OwnedWalletSigningAccess = TestWalletSigningAccess(),
+    authorization: WalletSigningAuthorization,
     isCurrent: @escaping () -> Bool = { true },
-    acquireExecutionLease: (() async -> WalletExecutionLease?)? = nil,
+    acquireCommitLease: (() async -> WalletExecutionLease?)? = nil,
     clock: @escaping () -> Date = Date.init
-) -> RequestScopedWalletAccess {
-    RequestScopedWalletAccess(
+) -> WalletSigningSession {
+    WalletSigningSession(
         BorrowedWalletSignerForTesting(access),
-        approvedAccount: approvedAccount,
+        authorization: authorization,
         isCurrent: isCurrent,
-        acquireExecutionLease: acquireExecutionLease ?? {
+        acquireCommitLease: acquireCommitLease ?? {
             isCurrent() ? WalletExecutionLease(release: {}) : nil
         },
         clock: clock
@@ -101,9 +113,11 @@ let walletSigningTestMessage = Data("Bound wallet signing operation".utf8)
 func approvedWalletSigningOperationForTesting(
     approvedAccount: WalletAccountDescriptor,
     payload: SignMessageAction.Payload? = nil,
-    deadline: Date = Date().addingTimeInterval(60),
-    requestID: Int = 1
+    deadline: Date = .distantFuture,
+    requestID: Int = 1,
+    authorization: WalletSigningAuthorization? = nil
 ) throws -> ApprovedWalletSigningOperation {
+    let requestID = authorization?.handle.id ?? requestID
     let ethereum = approvedAccount.coin == .ethereum
     let payload = payload ?? (ethereum
         ? .ethereumPersonalMessage(walletSigningTestMessage)
@@ -158,8 +172,11 @@ func approvedWalletSigningOperationForTesting(
     return try XCTUnwrap(ApprovedWalletSigningOperation(
         request: request,
         approval: .message(action, action.solanaClusterOptions == nil ? nil : .devnet),
-        handle: .init(id: requestID, token: .init(value: UUID()), profileIdentifier: nil),
-        deadline: deadline
+        authorization: authorization ?? walletSigningAuthorizationForTesting(
+            approvedAccount: approvedAccount,
+            handle: .init(id: requestID, token: .init(value: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!), profileIdentifier: nil),
+            deadline: deadline
+        )
     ))
 }
 

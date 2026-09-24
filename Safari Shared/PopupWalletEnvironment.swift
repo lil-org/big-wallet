@@ -4,11 +4,11 @@ import Foundation
 struct PopupWalletEnvironment {
 
     let currentReviewCatalog: () -> WalletReviewCatalog?
-    let unlock: (String, WalletAccountDescriptor) async -> WalletUnlockResult
+    let unlock: (String, WalletSigningAuthorization) async -> WalletUnlockResult
 
     init(
         reviewCatalog: @escaping () -> WalletReviewCatalog?,
-        unlockWallets: @escaping (String, WalletAccountDescriptor) async -> WalletUnlockResult
+        unlockWallets: @escaping (String, WalletSigningAuthorization) async -> WalletUnlockResult
     ) {
         currentReviewCatalog = {
             WalletsMetadataService.reload()

@@ -15,8 +15,11 @@
 		C0DE00900000000000000016 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
 		C0DE00900000000000000017 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
 		C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
+		4675E5D05F4346D1BEBFD592 /* WalletSigningSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */; };
 		C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
+		0C2431432A3F0CE29692BF48 /* WalletSigningSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */; };
 		C0DE00900000000000000023 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
+		AA65C4A347D1CDF8E304C3F8 /* WalletSigningSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */; };
 		C0DE00500000000000000011 /* NativeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeAgentRuntime.swift */; };
 		C0DE00500000000000000012 /* NativeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeAgentRuntime.swift */; };
 		C0DE00500000000000000013 /* NativeApprovalResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */; };
@@ -505,6 +508,9 @@
 		946A0404891B16ABB3B7BB30 /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
 		94723271C8DE8B094EF3CED2 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		9537DFE804784E44D508C1C3 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		938E8E50CD5A48A4407DF220 /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		11A2AC4728E2AB0A33C4316B /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		17962990F404F060EEF29D6A /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		21B6B6BF32FADB5E42C4C9A0 /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		954716660F1C28F809E485F9 /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91FA19F180DFA7F9B54883C7 /* Browser.swift */; };
 		9682C3FB73ED055696381540 /* WalletCoreProxySecp256k1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */; };
@@ -514,16 +520,34 @@
 		9F09453725834BFC8E55FE7F /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
 		A2D6B78DC94587656BE92ECC /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* Account.swift */; };
 		A2F101012FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		1E946D19696F5851244B679E /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		B4383F6700E87CD0E17F3214 /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		A0BFE7D5CB1CC2A3F849130D /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		91D1F9404B39F701A623D30A /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		A2F101022FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		375E9A42527E614EEE7E47CC /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		A87FCD572AF4AE2192AB993E /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		AA17FC58CECB0B54D2CB99ED /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		05B163851298E5C40E2ED99D /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		A2F101032FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		2974BDB8100CBC7DA68FF40E /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		B300F67AD7D74017DA3E648A /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		ECE111E020D4E1DAAC8A86BB /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		2F735F846E37F54EB823712F /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		A2F101042FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		DAC7210632C91E089961B51D /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		047FE2E06119ED8C0E6032F9 /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		C157EE6531FDAD05CE9F2196 /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		0625205931133F87458B0520 /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		A2F101052FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		8BBD4A5DFE809A696873D92A /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		0A6395D51A0685427254B14B /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		5028F97AFDF0FE098C767934 /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		98F453B2D69571748537D30C /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		A2F101062FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		5ECFF4BA480B868EE0CF4E8C /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		32A0C92A7736C34178082340 /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		93D8F35B817629F46EA00B35 /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
 		0D16FB74C73485B0085D2681 /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
 		A2F102012FC1000000000001 /* PopupTransactionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100022FC1000000000001 /* PopupTransactionSession.swift */; };
 		A2F102022FC1000000000001 /* PopupTransactionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100022FC1000000000001 /* PopupTransactionSession.swift */; };
@@ -928,6 +952,7 @@
 /* Begin PBXFileReference section */
 		C0DE00900000000000000001 /* ApprovalResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolution.swift; sourceTree = "<group>"; };
 		C0DE00900000000000000002 /* ApprovalResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolutionTests.swift; sourceTree = "<group>"; };
+		D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletSigningSessionTests.swift; sourceTree = "<group>"; };
 		C0DE00500000000000000001 /* NativeAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentRuntime.swift; sourceTree = "<group>"; };
 		C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalResponseTests.swift; sourceTree = "<group>"; };
 		D0A100012FD1000000000001 /* WalletAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletAccess.swift; sourceTree = "<group>"; };
@@ -1118,6 +1143,9 @@
 		A7D400002FFE000000000001 /* NativeApprovalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeApprovalService.swift; sourceTree = "<group>"; };
 		936244F4B9DCEB281FECE8A6 /* WaitingViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRequestFileStore.swift; sourceTree = "<group>"; };
+		5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRequestProfile.swift; sourceTree = "<group>"; };
+		E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRequestProfileCodec.swift; sourceTree = "<group>"; };
+		535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRequestStoreFiles.swift; sourceTree = "<group>"; };
 		D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurableProfilePersistence.swift; sourceTree = "<group>"; };
 		A2F100022FC1000000000001 /* PopupTransactionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupTransactionSession.swift; sourceTree = "<group>"; };
 		A2F100032FC1000000000001 /* EthereumDappRequestProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumDappRequestProcessor.swift; sourceTree = "<group>"; };
@@ -1256,6 +1284,7 @@
 				C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */,
 				BF4000012FB6000000000000 /* PopupStringsTests.swift */,
 				C0DE00900000000000000002 /* ApprovalResolutionTests.swift */,
+				D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */,
 				BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */,
 				BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */,
 				D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */,
@@ -1611,6 +1640,9 @@
 				D0A200012FD1000000000001 /* SafariApprovalVault.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */,
+				5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */,
+				E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */,
+				535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */,
 				D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */,
 				BF3C00112FB2000000000000 /* PopupRequestSessions.swift */,
 				60773283A0904680972780A2 /* DappRequestAdmission.swift */,
@@ -2718,6 +2750,9 @@
 				4727EE588FE24F25917280DF /* DappRequestAdmission.swift in Sources */,
 				AB16AB7CC4BA407EB7F29E86 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101012FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
+				1E946D19696F5851244B679E /* ExtensionRequestProfile.swift in Sources */,
+				B4383F6700E87CD0E17F3214 /* ExtensionRequestProfileCodec.swift in Sources */,
+				A0BFE7D5CB1CC2A3F849130D /* ExtensionRequestStoreFiles.swift in Sources */,
 				91D1F9404B39F701A623D30A /* DurableProfilePersistence.swift in Sources */,
 				A2F102012FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002012FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -2807,6 +2842,9 @@
 				F6DF51B9CEF34695B59AC8C5 /* DappRequestAdmission.swift in Sources */,
 				BAF4BC0B7CE643988625263B /* PopupWalletEnvironment.swift in Sources */,
 				A2F101062FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
+				5ECFF4BA480B868EE0CF4E8C /* ExtensionRequestProfile.swift in Sources */,
+				32A0C92A7736C34178082340 /* ExtensionRequestProfileCodec.swift in Sources */,
+				93D8F35B817629F46EA00B35 /* ExtensionRequestStoreFiles.swift in Sources */,
 				0D16FB74C73485B0085D2681 /* DurableProfilePersistence.swift in Sources */,
 				A2F102062FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002062FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -2909,6 +2947,9 @@
 				1FB10BCC67404AAA872FD9EB /* DappRequestAdmission.swift in Sources */,
 				09A140789AB54750B3ECD793 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101042FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
+				DAC7210632C91E089961B51D /* ExtensionRequestProfile.swift in Sources */,
+				047FE2E06119ED8C0E6032F9 /* ExtensionRequestProfileCodec.swift in Sources */,
+				C157EE6531FDAD05CE9F2196 /* ExtensionRequestStoreFiles.swift in Sources */,
 				0625205931133F87458B0520 /* DurableProfilePersistence.swift in Sources */,
 				A2F102042FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002042FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3030,6 +3071,9 @@
 				503713F256B14678AEAF8A72 /* DappRequestAdmission.swift in Sources */,
 				05650BE638214FFD8A06173E /* PopupWalletEnvironment.swift in Sources */,
 				A2F101052FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
+				8BBD4A5DFE809A696873D92A /* ExtensionRequestProfile.swift in Sources */,
+				0A6395D51A0685427254B14B /* ExtensionRequestProfileCodec.swift in Sources */,
+				5028F97AFDF0FE098C767934 /* ExtensionRequestStoreFiles.swift in Sources */,
 				98F453B2D69571748537D30C /* DurableProfilePersistence.swift in Sources */,
 				A2F102052FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002052FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3133,6 +3177,9 @@
 				10B12F31FF844302961D7DAF /* DappRequestAdmission.swift in Sources */,
 				4CFC396D859F42529D24FD82 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101032FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
+				2974BDB8100CBC7DA68FF40E /* ExtensionRequestProfile.swift in Sources */,
+				B300F67AD7D74017DA3E648A /* ExtensionRequestProfileCodec.swift in Sources */,
+				ECE111E020D4E1DAAC8A86BB /* ExtensionRequestStoreFiles.swift in Sources */,
 				2F735F846E37F54EB823712F /* DurableProfilePersistence.swift in Sources */,
 				A2F102032FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002032FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3218,6 +3265,7 @@
 				C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */,
 				BF4000112FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */,
+				4675E5D05F4346D1BEBFD592 /* WalletSigningSessionTests.swift in Sources */,
 				2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA300000000000000000007 /* AlchemyJWTProvider.swift in Sources */,
@@ -3257,6 +3305,9 @@
 				37D3666F19AD4AFB9F0F4ADE /* DappRequestAdmission.swift in Sources */,
 				3AED825DAAAD493D9417B990 /* PopupWalletEnvironment.swift in Sources */,
 				9537DFE804784E44D508C1C3 /* ExtensionRequestFileStore.swift in Sources */,
+				938E8E50CD5A48A4407DF220 /* ExtensionRequestProfile.swift in Sources */,
+				11A2AC4728E2AB0A33C4316B /* ExtensionRequestProfileCodec.swift in Sources */,
+				17962990F404F060EEF29D6A /* ExtensionRequestStoreFiles.swift in Sources */,
 				21B6B6BF32FADB5E42C4C9A0 /* DurableProfilePersistence.swift in Sources */,
 				119114F00C583856DF846F3E /* PopupTransactionSession.swift in Sources */,
 				524B29428DE7AE12532F2955 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3375,6 +3426,9 @@
 				5E9587A6E00141569DE3AAC0 /* DappRequestAdmission.swift in Sources */,
 				6B09353D062B4A18AF585777 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101022FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
+				375E9A42527E614EEE7E47CC /* ExtensionRequestProfile.swift in Sources */,
+				A87FCD572AF4AE2192AB993E /* ExtensionRequestProfileCodec.swift in Sources */,
+				AA17FC58CECB0B54D2CB99ED /* ExtensionRequestStoreFiles.swift in Sources */,
 				05B163851298E5C40E2ED99D /* DurableProfilePersistence.swift in Sources */,
 				A2F102022FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002022FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3460,6 +3514,7 @@
 				C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */,
 				BF4000122FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */,
+				0C2431432A3F0CE29692BF48 /* WalletSigningSessionTests.swift in Sources */,
 				2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA30000000000000000000A /* AlchemyJWTProvider.swift in Sources */,
@@ -3501,6 +3556,7 @@
 				C0DE0A900000000000000013 /* NativeAuthorityTransportTests.swift in Sources */,
 				BF4000132FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000023 /* ApprovalResolutionTests.swift in Sources */,
+				AA65C4A347D1CDF8E304C3F8 /* WalletSigningSessionTests.swift in Sources */,
 				2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA30000000000000000000B /* AlchemyJWTProvider.swift in Sources */,

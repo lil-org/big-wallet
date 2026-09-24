@@ -725,8 +725,9 @@ final class SafariApprovalVault {
 
     func unlockResult(
         reason: String,
-        approvedAccount: WalletAccountDescriptor
+        authorization: WalletSigningAuthorization
     ) async -> WalletUnlockResult {
+        let approvedAccount = authorization.approvedAccount
         guard approvedAccount.isValid,
               let record = withLock({ loadEnvelopeRecordLocked() }),
               record.catalog.catalog.accounts.contains(approvedAccount) else {
@@ -806,13 +807,13 @@ final class SafariApprovalVault {
             signer.invalidate()
             return .unavailable
         }
-        return .unlocked(catalog: catalog, signer: RequestScopedWalletAccess(
+        return .unlocked(catalog: catalog, session: WalletSigningSession(
             signer,
-            approvedAccount: approvedAccount,
+            authorization: authorization,
             isCurrent: { [weak self] in
                 self?.isCurrent(snapshotData, generation: generation) == true
             },
-            acquireExecutionLease: { [weak self] in
+            acquireCommitLease: { [weak self] in
                 await self?.executionLease(ifCurrent: snapshotData, generation: generation)
             }
         ))

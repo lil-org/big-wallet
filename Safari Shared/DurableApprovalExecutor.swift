@@ -86,15 +86,18 @@ final class DurableApprovalExecutor {
 
     func executeSigning(
         claim: ExtensionBridge.ApprovalClaim,
-        deadline: Date,
-        acquireWalletLease: @escaping () async -> WalletExecutionLease?,
+        session: WalletSigningSession,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
-        await execute(
+        defer { session.invalidate() }
+        guard session.authorization.handle == claim.handle,
+              session.authorization.signingDeadline == claim.executionDeadline,
+              session.requiresCommitLease else { return .ownershipLost }
+        return await execute(
             claim: claim,
             plan: .signing(
-                deadline: min(deadline, claim.executionDeadline),
-                acquireWalletLease: acquireWalletLease
+                deadline: claim.executionDeadline,
+                acquireWalletLease: { await session.takeCommitLease() }
             ),
             operation: operation
         )

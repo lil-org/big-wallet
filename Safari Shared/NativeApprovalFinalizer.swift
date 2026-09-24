@@ -49,7 +49,7 @@ final class NativeApprovalFinalizer {
         self.requestProcessor = requestProcessor
         self.refreshWalletCatalog = refreshWalletCatalog
         self.makeSigner = makeSigner ?? { operation, authorityIsCurrent in
-            BoundWalletSigner.fromSource(
+            WalletSigningSession.fromSource(
                 operation: operation,
                 authorityIsCurrent: authorityIsCurrent,
                 clock: clock
@@ -187,7 +187,11 @@ final class NativeApprovalFinalizer {
                             : executionContext.executionDeadline
                         guard let operation = ApprovedWalletSigningOperation(
                             request: request, approval: approval,
-                            handle: snapshot.handle, deadline: deadline
+                            authorization: WalletSigningAuthorization(
+                                handle: snapshot.handle,
+                                approvedAccount: approvedAccount,
+                                signingDeadline: deadline
+                            )
                         ) else { return .rollback }
                         executionSigner = self.makeSigner(operation) {
                             await self.store.authorityIsCurrent(handle: $0)

@@ -56,7 +56,7 @@ final class NativeApprovalResponseTests: XCTestCase {
         guard case .success(.ethereumSignature("signed")) = result else {
             return XCTFail("Expected authorized signature")
         }
-        XCTAssertEqual(handles, [signer.operation.handle, signer.operation.handle])
+        XCTAssertEqual(handles, [signer.authorization.handle, signer.authorization.handle])
         XCTAssertEqual(underlying.calls, 1)
         XCTAssertTrue(underlying.invalidated)
     }
@@ -64,17 +64,16 @@ final class NativeApprovalResponseTests: XCTestCase {
     private func signer(
         access: AuthorityTestAccess,
         authorityIsCurrent: @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
-    ) throws -> BoundWalletSigner {
+    ) throws -> WalletSigningSession {
         let operation = try approvedWalletSigningOperationForTesting(approvedAccount: .init(
             walletID: "approved-wallet",
             coin: .ethereum,
             normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
             derivationPath: "m/44'/60'/0'/0/0"
         ))
-        return BoundWalletSigner(
-            operation: operation, access: access, isCurrent: { true },
-            authorityIsCurrent: authorityIsCurrent
-        )
+        let session = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
+        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: authorityIsCurrent))
+        return session
     }
 }
 

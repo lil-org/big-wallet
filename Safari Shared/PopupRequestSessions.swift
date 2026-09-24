@@ -210,7 +210,7 @@ final class PopupRequestSessions {
     }
 
     private enum AuthenticationOutcome {
-        case unlocked(catalog: WalletReviewCatalog, signer: RequestScopedWalletAccess)
+        case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
         case cancelled
         case unavailable(feedback: String)
         case reviewChanged
@@ -226,12 +226,6 @@ final class PopupRequestSessions {
         case valid
         case reviewChanged
         case superseded
-    }
-
-    private struct SigningExecutionContext {
-        let access: RequestScopedWalletAccess
-        let handle: ExtensionBridge.Handle
-        let deadline: Date
     }
 
     private enum ActiveSessionResult {
@@ -256,7 +250,7 @@ final class PopupRequestSessions {
         walletEnvironment: PopupWalletEnvironment(
             reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() },
             unlockWallets: {
-                await SafariApprovalVault.shared.unlockResult(reason: $0, approvedAccount: $1)
+                await SafariApprovalVault.shared.unlockResult(reason: $0, authorization: $1)
             }
         ),
         loadsTransactionContext: true
@@ -948,6 +942,11 @@ final class PopupRequestSessions {
         }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
         let executionDeadline = approval.claim.executionDeadline
+        let authorization = WalletSigningAuthorization(
+            handle: approval.claim.handle,
+            approvedAccount: approvedAccount,
+            signingDeadline: executionDeadline
+        )
         let transactionToken = transactionSession?.beginApproval()
         if transactionSession != nil && transactionToken == nil {
             await releaseApproval(approval.claim, for: session, token: approval.token)
@@ -957,7 +956,7 @@ final class PopupRequestSessions {
             session: session,
             approval: approval,
             reason: reason,
-            approvedAccount: approvedAccount
+            authorization: authorization
         )
         guard case .unlocked(let catalog, let signer) = authentication else {
             if let transactionSession, let transactionToken {
@@ -1048,8 +1047,7 @@ final class PopupRequestSessions {
             reviewedAction: action,
             approval: approval,
             catalog: catalog,
-            signer: signer,
-            executionDeadline: executionDeadline
+            signer: signer
         ) else {
             await releaseApproval(
                 approval.claim, for: session, token: approval.token,
@@ -1061,16 +1059,13 @@ final class PopupRequestSessions {
             claim: approval.claim,
             for: session,
             token: approval.token,
-            deadline: executionDeadline,
-            acquireWalletLease: { await signer.takeExecutionLease() }
+            signingSession: signer
         ) {
             await self.executeDecision(
                 request: session.request,
                 action: action,
                 decision: decision,
-                signing: SigningExecutionContext(
-                    access: signer, handle: session.handle, deadline: executionDeadline
-                )
+                signing: signer
             )
         }
         return true
@@ -1081,21 +1076,11 @@ final class PopupRequestSessions {
         reviewedAction: DappRequestAction,
         approval: ClaimedApproval,
         catalog: WalletReviewCatalog,
-        signer: RequestScopedWalletAccess,
-        executionDeadline: Date
+        signer: WalletSigningSession
     ) async -> SigningValidation {
         guard isCurrent(session, token: approval.token) else { return .superseded }
-        let approvedAccount: WalletAccountDescriptor
-        switch reviewedAction {
-        case .approveMessage(let action):
-            approvedAccount = WalletAccountDescriptor(walletID: action.walletId, account: action.account)
-        case .approveTransaction(let action):
-            approvedAccount = WalletAccountDescriptor(walletID: action.walletId, account: action.account)
-        case .selectAccount, .switchAccount, .addEthereumChain:
-            return .reviewChanged
-        }
         let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
-        guard clock() < executionDeadline else { return .reviewChanged }
+        guard clock() < signer.authorization.signingDeadline else { return .reviewChanged }
         let walletsAvailable = refreshWalletsAndNetworks() != nil
         let networkMatches: Bool
         if case .approveTransaction(let action) = reviewedAction {
@@ -1111,11 +1096,7 @@ final class PopupRequestSessions {
         guard authorityIsCurrent,
               walletsAvailable,
               session.reviewCatalog?.identity == catalog.identity,
-              signer.approvedAccount == approvedAccount,
               signer.validateCurrent(),
-              catalog.orderedAccounts.contains(where: {
-                  approvedAccount.matches(walletID: $0.walletId, account: $0.account)
-              }),
               networkMatches else {
             return .reviewChanged
         }
@@ -1167,15 +1148,14 @@ final class PopupRequestSessions {
         session: PopupRequestSession,
         approval: ClaimedApproval,
         reason: String,
-        approvedAccount: WalletAccountDescriptor
+        authorization: WalletSigningAuthorization
     ) async -> AuthenticationOutcome {
         guard session.beginAuthentication(
             claim: approval.claim,
             token: approval.token
         ) else { return .superseded }
-        let deadline = approval.claim.executionDeadline
         let outcome = await boundedAuthentication(
-            session: session, reason: reason, approvedAccount: approvedAccount, deadline: deadline
+            session: session, reason: reason, authorization: authorization
         )
         guard isCurrent(session, token: approval.token),
               session.finishAuthentication(
@@ -1193,15 +1173,15 @@ final class PopupRequestSessions {
     private func boundedAuthentication(
         session: PopupRequestSession,
         reason: String,
-        approvedAccount: WalletAccountDescriptor,
-        deadline: Date
+        authorization: WalletSigningAuthorization
     ) async -> AuthenticationOutcome {
+        let deadline = authorization.signingDeadline
         guard clock() < deadline else { return .cancelled }
         let attempt = AuthenticationAttempt()
         let resolution = ApprovalResolution<Bool>()
         let operation = Task { @MainActor in
             let outcome = await self.authenticate(
-                session: session, reason: reason, approvedAccount: approvedAccount
+                session: session, reason: reason, authorization: authorization
             )
             guard !Task.isCancelled, self.clock() < deadline else {
                 if case .unlocked(_, let signer) = outcome { signer.invalidate() }
@@ -1234,9 +1214,9 @@ final class PopupRequestSessions {
     private func authenticate(
         session: PopupRequestSession,
         reason: String,
-        approvedAccount: WalletAccountDescriptor
+        authorization: WalletSigningAuthorization
     ) async -> AuthenticationOutcome {
-        switch await walletEnvironment.unlock(reason, approvedAccount) {
+        switch await walletEnvironment.unlock(reason, authorization) {
         case .canceled:
             return .cancelled
         case .unavailable:
@@ -1248,15 +1228,15 @@ final class PopupRequestSessions {
         case .unlocked(let catalog, let signer):
             guard let reviewedIdentity = session.reviewCatalog?.identity,
                   catalog.identity == reviewedIdentity,
-                  signer.approvedAccount == approvedAccount,
+                  signer.authorization == authorization,
                   catalog.orderedAccounts.contains(where: {
-                      approvedAccount.matches(walletID: $0.walletId, account: $0.account)
+                      authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
                   }),
                   signer.validateCurrent() else {
                 signer.invalidate()
                 return .reviewChanged
             }
-            return .unlocked(catalog: catalog, signer: signer)
+            return .unlocked(catalog: catalog, session: signer)
         }
     }
 
@@ -1289,7 +1269,7 @@ final class PopupRequestSessions {
         request: SafariRequest,
         action: DappRequestAction,
         decision: DappApprovalDecision,
-        signing: SigningExecutionContext? = nil
+        signing: WalletSigningSession? = nil
     ) async -> DappExecutionResult {
         let accounts: [SpecificWalletAccount]?
         if case .accountSelection = decision {
@@ -1308,16 +1288,15 @@ final class PopupRequestSessions {
             guard let signing,
                   let operation = ApprovedWalletSigningOperation(
                     request: request, approval: approval,
-                    handle: signing.handle, deadline: signing.deadline
-                  ), let bound = signing.access.bind(
+                    authorization: signing.authorization
+                  ), signing.bind(
                     operation: operation,
                     authorityIsCurrent: { await self.store.authorityIsCurrent(handle: $0) }
                   ) else { return .rollback }
-            executionSigner = bound
+            executionSigner = signing
         } else {
             executionSigner = nil
         }
-        defer { executionSigner?.invalidate() }
         return await requestProcessor.execute(
             request: request,
             approval: approval,
@@ -1351,8 +1330,7 @@ final class PopupRequestSessions {
         claim: ExtensionBridge.ApprovalClaim,
         for session: PopupRequestSession,
         token: UUID,
-        deadline: Date,
-        acquireWalletLease: @escaping () async -> WalletExecutionLease?,
+        signingSession: WalletSigningSession,
         operation: @escaping () async -> DappExecutionResult
     ) async {
         guard isCurrent(session, token: token) else {
@@ -1361,8 +1339,7 @@ final class PopupRequestSessions {
         }
         let result = await durableApprovalExecutor.executeSigning(
             claim: claim,
-            deadline: deadline,
-            acquireWalletLease: acquireWalletLease,
+            session: signingSession,
             operation: operation
         )
         await finishExecution(
