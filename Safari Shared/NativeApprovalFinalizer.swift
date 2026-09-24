@@ -42,7 +42,7 @@ final class NativeApprovalFinalizer {
         self.store = store
         self.requestProcessor = requestProcessor
         self.refreshWalletCatalog = refreshWalletCatalog
-        self.makeSigner = makeSigner ?? { SourceWalletSigner(operation: $0, clock: clock) }
+        self.makeSigner = makeSigner ?? { BoundWalletSigner.fromSource(operation: $0, clock: clock) }
         self.networkResolver = networkResolver
         self.clock = clock
         executor = DurableApprovalExecutor(

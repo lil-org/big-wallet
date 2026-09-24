@@ -806,8 +806,7 @@ test("a malformed revisioned terminal fails closed", async () => {
                     state: configurationState(),
                 };
             }
-            if (message.subject === "getResponse") { return {id: 7, ready: true}; }
-            return message.subject === "consumeResponse" ? response : undefined;
+            return message.subject === "getResponse" ? response : undefined;
         }});
         await settle();
         harness.dispatchPage("request", dappRequest(7));
@@ -1205,8 +1204,7 @@ test("reads and delivers one retained response", async () => {
                 state: configurationState(),
             };
         }
-        if (message.subject === "getResponse") { return {id: 9, ready: true}; }
-        if (message.subject === "consumeResponse") {
+        if (message.subject === "getResponse") {
             return {
                 kind: "result",
                 id: 9,
@@ -1228,13 +1226,12 @@ test("reads and delivers one retained response", async () => {
     });
     assert.equal(delivery.message.kind, "response");
     assert.deepEqual(harness.runtimeMessages.map(message => message.subject), [
-        "getLatestConfiguration", "message-to-wallet", "getResponse", "consumeResponse",
+        "getLatestConfiguration", "message-to-wallet", "getResponse",
     ]);
     assert.equal("revisions" in harness.runtimeMessages[2], false);
-    assert.equal("revisions" in harness.runtimeMessages[3], false);
 });
 
-test("completion allows the full native preparation and acknowledgement round trip", async () => {
+test("response polling allows twenty seconds for native status preparation and acknowledgement", async () => {
     const result = {
         kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
         state: null, result: [], approvalCommitted: true,
@@ -1243,9 +1240,8 @@ test("completion allows the full native preparation and acknowledgement round tr
         if (message.subject === "message-to-wallet") {
             return {id: 7, requestToken, admissionKind: "new", approvalRequired: false, state: configurationState()};
         }
-        if (message.subject === "getResponse") { return {id: 7, ready: true}; }
-        if (message.subject === "consumeResponse") {
-            return new Promise(resolve => harness.context.setTimeout(() => resolve(result), 11_000));
+        if (message.subject === "getResponse") {
+            return new Promise(resolve => harness.context.setTimeout(() => resolve(result), 16_000));
         }
     }});
     await settle();
@@ -1253,7 +1249,47 @@ test("completion allows the full native preparation and acknowledgement round tr
     await settle();
     await harness.runTimer();
     assert.deepEqual(harness.postedMessages.at(-1).message.response, result);
-    assert.equal(harness.runtimeMessages.filter(message => message.subject === "consumeResponse").length, 1);
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "getResponse").length, 1);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
+});
+
+test("response polling times out at twenty seconds and ignores a late reply before retrying", async () => {
+    const result = {
+        kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+        state: null, result: [], approvalCommitted: true,
+    };
+    let resolveFirstRead;
+    let reads = 0;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {id: 7, requestToken, admissionKind: "new", approvalRequired: false, state: configurationState()};
+        }
+        if (message.subject === "getResponse") {
+            reads += 1;
+            return reads === 1 ? new Promise(resolve => { resolveFirstRead = resolve; }) : result;
+        }
+    }});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    const startedAt = harness.now();
+    assert.equal(harness.nextTimerDelay(), 20_000);
+    harness.advance(19_999);
+    assert.equal(harness.nextTimerDelay(), 1);
+    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
+
+    await harness.runTimer();
+    assert.equal(harness.now() - startedAt, 20_000);
+    assert.equal(harness.nextTimerDelay(), 1000);
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+    resolveFirstRead(result);
+    await settle();
+    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
+
+    await harness.runTimer();
+    assert.equal(reads, 2);
+    assert.deepEqual(harness.postedMessages.at(-1).message.response, result);
     assert.equal(harness.context.bigWalletRequests.size, 0);
     assert.equal(harness.pendingTimers(), 0);
 });
@@ -1295,8 +1331,7 @@ test("response-ready hints wake a waiting request", async () => {
                 state: configurationState(),
             };
         }
-        if (message.subject === "getResponse" && ready) { return {id: 10, ready: true}; }
-        if (message.subject === "consumeResponse" && ready) {
+        if (message.subject === "getResponse" && ready) {
             return {
                 kind: "result",
                 id: 10,
@@ -1346,12 +1381,6 @@ test("response-ready hints rerun an active response read", async () => {
                 return new Promise(resolve => { resolveSecondRead = resolve; });
             }
         }
-        if (message.subject === "consumeResponse") {
-            return {
-                kind: "result", id: 11, name: "requestAccounts", provider: "ethereum",
-                state: null, result: [], approvalCommitted: false,
-            };
-        }
         return undefined;
     }});
     await settle();
@@ -1368,7 +1397,10 @@ test("response-ready hints rerun an active response read", async () => {
     await settle();
     assert.equal(reads, 2);
     assert.equal(harness.pendingTimers(), 1);
-    resolveSecondRead({id: 11, ready: true});
+    resolveSecondRead({
+        kind: "result", id: 11, name: "requestAccounts", provider: "ethereum",
+        state: null, result: [], approvalCommitted: false,
+    });
     await settle();
     assert.equal(harness.postedMessages.some(value => {
         return value.message.response?.id === 11;
@@ -1391,13 +1423,10 @@ test("late enqueue acknowledgement preserves native-owned work past the recovery
             };
         }
         if (message.subject === "getResponse") {
-            return ready ? {id: 15, ready: true} : {id: 15, pending: true};
-        }
-        if (message.subject === "consumeResponse") {
-            return {
+            return ready ? {
                 kind: "result", id: 15, name: "requestAccounts", provider: "ethereum",
                 state: null, result: [], approvalCommitted: false,
-            };
+            } : {id: 15, pending: true};
         }
         return undefined;
     }});
@@ -1442,12 +1471,11 @@ test("native results survive suspension past the recovery horizon", async () => 
                     state: configurationState(),
                 };
             }
-            if (message.subject === "consumeResponse") { return response; }
             if (message.subject !== "getResponse") { return undefined; }
             reads += 1;
             return delivery !== "ready" && reads === 1
                 ? new Promise(resolve => { resolveRead = resolve; })
-                : {id: 17, ready: true};
+                : response;
         }});
         await settle();
         harness.dispatchPage("request", {...dappRequest(17), name: "signTransaction"});
@@ -1459,7 +1487,7 @@ test("native results survive suspension past the recovery horizon", async () => 
             assert.equal(harness.context.bigWalletRequests.size, 1);
         }
         if (delivery !== "ready") {
-            resolveRead({id: 17, ready: true});
+            resolveRead(response);
             await settle();
         } else {
             await harness.runTimer();
@@ -1508,6 +1536,45 @@ test("native pending replies reset the communication failure budget", async () =
     assert.equal(harness.pendingTimers(), 0);
 });
 
+test("transport and delivery failures share one budget while terminal success still completes", async () => {
+    for (const succeeds of [false, true]) {
+        let response;
+        const harness = makeHarness({sendMessage: message => {
+            if (message.subject === "message-to-wallet") {
+                return {id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: configurationState()};
+            }
+            if (message.subject === "getResponse") { return response; }
+        }});
+        await settle();
+        harness.context.document.visibilityState = "hidden";
+        harness.dispatchPage("request", dappRequest());
+        await settle();
+        const startedAt = harness.now();
+        while (harness.now() - startedAt < 59 * 60 * 1000) {
+            assert.equal(await harness.runTimer(), true);
+        }
+        response = {id: 7, unavailable: true};
+        while (harness.now() - startedAt < 60 * 60 * 1000 - 5000) {
+            assert.equal(await harness.runTimer(), true);
+        }
+        assert.equal(harness.context.bigWalletRequests.size, 1);
+        if (succeeds) {
+            response = {
+                kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+                state: null, result: [], approvalCommitted: true,
+            };
+        }
+        while (harness.context.bigWalletRequests.size > 0) {
+            assert.equal(await harness.runTimer(), true);
+            assert.ok(harness.now() - startedAt <= 61 * 60 * 1000);
+        }
+        const terminal = harness.postedMessages.filter(value => value.message.response?.id === 7);
+        assert.equal(terminal.length, 1);
+        assert.equal(terminal[0].message.response.kind, succeeds ? "result" : "error");
+        assert.equal(harness.pendingTimers(), 0);
+    }
+});
+
 test("an unresolved response read cannot end a native-owned request", async () => {
     let resolveRead;
     let reads = 0;
@@ -1525,9 +1592,6 @@ test("an unresolved response read cannot end a native-owned request", async () =
             if (reads === 1) {
                 return new Promise(resolve => { resolveRead = resolve; });
             }
-            return {id: 16, ready: true};
-        }
-        if (message.subject === "consumeResponse") {
             return {
                 kind: "result",
                 id: 16,
@@ -1909,7 +1973,7 @@ test("file pages use a query-and-fragment-free configuration identity", async ()
     assert.equal(enqueue.configurationKey, "file:///tmp/dapp.html");
 });
 
-test("response reads cannot deliver a terminal payload or start completion", async () => {
+test("response polling delivers a terminal payload without another worker operation", async () => {
     const harness = makeHarness({sendMessage: message => {
         if (message.subject === "message-to-wallet") {
             return {id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: configurationState()};
@@ -1926,24 +1990,26 @@ test("response reads cannot deliver a terminal payload or start completion", asy
     harness.dispatchPage("request", dappRequest());
     await settle();
     await harness.runTimer();
-    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
-    assert.equal(harness.runtimeMessages.some(value => value.subject === "consumeResponse"), false);
-    assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "waiting");
+    assert.equal(harness.postedMessages.filter(value => value.message.response?.id === 7).length, 1);
+    assert.deepEqual(harness.runtimeMessages.map(value => value.subject), [
+        "getLatestConfiguration", "message-to-wallet", "getResponse",
+    ]);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
     const query = harness.runtimeMessages.at(-1);
     assert.deepEqual(Object.keys(query).sort(), [
         "configurationKey", "id", "requestToken", "subject", "workflowVersion",
     ]);
 });
 
-test("completion retries independently and waits for the explicit delivery result", async () => {
+test("response polling retries the same identity and waits for the explicit delivery result", async () => {
     let resolveCompletion;
     let completions = 0;
     const harness = makeHarness({sendMessage: message => {
         if (message.subject === "message-to-wallet") {
             return {id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: configurationState({ethereum: 4, solana: 2})};
         }
-        if (message.subject === "getResponse") { return {id: 7, ready: true}; }
-        if (message.subject === "consumeResponse") {
+        if (message.subject === "getResponse") {
             completions += 1;
             if (completions === 1) { throw new Error("lost delivery reply"); }
             return new Promise(resolve => { resolveCompletion = resolve; });
@@ -1953,12 +2019,12 @@ test("completion retries independently and waits for the explicit delivery resul
     harness.dispatchPage("request", dappRequest());
     await settle();
     await harness.runTimer();
-    assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "completing");
+    assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "waiting");
     assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
     await harness.runTimer();
     assert.equal(completions, 2);
-    assert.equal(harness.runtimeMessages.filter(value => value.subject === "getResponse").length, 1);
-    for (const completion of harness.runtimeMessages.filter(value => value.subject === "consumeResponse")) {
+    assert.equal(harness.runtimeMessages.filter(value => value.subject === "getResponse").length, 2);
+    for (const completion of harness.runtimeMessages.filter(value => value.subject === "getResponse")) {
         assert.equal(completion.requestToken, requestToken);
         assert.equal(completion.configurationKey, "https://wallet.example");
         assert.equal("revisions" in completion, false);

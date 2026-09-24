@@ -164,7 +164,10 @@ async function handleGetResponse(request, context) {
         ...nativeRequestIdentity(request),
         ...(maintain ? {subject: "maintainRequest", allowDelivery: true} : {subject: "getResponse"}),
     }, false), TRANSPORT_TIMEOUT);
-    return nativeRequestStatus(response, request.id);
+    const status = nativeRequestStatus(response, request.id);
+    if (!status?.ready) { return status; }
+    const completed = await consumeStoredResponse(request);
+    return completed?.delivery ? pageResponse(completed.delivery) : completed?.status;
 }
 
 async function acknowledgeCompletedResponse(request) {
@@ -182,19 +185,13 @@ function consumeStoredResponse(request) {
             ...nativeRequestIdentity(request), subject: "prepareResponseDelivery",
         }, false), TRANSPORT_TIMEOUT);
         const status = nativeRequestStatus(response, request.id);
-        if (status) { return {status}; }
+        if (status) { return status.ready ? undefined : {status}; }
         const delivery = decodedNativeDelivery(response, request.id);
         if (!delivery || !delivery.state || !await acknowledgeCompletedResponse(request)) { return undefined; }
         await broadcastConfigurationInvalidated(request.configurationKey);
         return {delivery};
     })();
     return pending;
-}
-
-async function consumeResponse(request, context) {
-    if (!validContentResponseRequest(request, context)) { return undefined; }
-    const completed = await consumeStoredResponse(request);
-    return completed?.delivery ? pageResponse(completed.delivery) : completed?.status;
 }
 
 async function applyCompletedResponse(request, context) {
@@ -562,7 +559,6 @@ async function handleMessage(request, context) {
     case "message-to-wallet": return handleDappRequest(request, context);
     case WIRE.MANUAL_SWITCH_INTENT_SUBJECT: return handleManualSwitchIntent(request, context);
     case "getResponse": return handleGetResponse(request, context);
-    case "consumeResponse": return consumeResponse(request, context);
     case "getLatestConfiguration": return latestConfiguration(request, context);
     case "applyCompletedResponse": return applyCompletedResponse(request, context);
     case "disconnect": return disconnect(request, context);

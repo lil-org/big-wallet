@@ -51,7 +51,7 @@
         worker: freeze({
             __proto__: null,
             content: freeze([
-                "rpc", "message-to-wallet", "manualSwitchIntent", "getResponse", "consumeResponse",
+                "rpc", "message-to-wallet", "manualSwitchIntent", "getResponse",
                 "getLatestConfiguration", "disconnect",
             ]),
             popup: freeze([

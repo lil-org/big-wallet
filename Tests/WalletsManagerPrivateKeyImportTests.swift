@@ -899,7 +899,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
         )
-        let signer = SourceWalletSigner(operation: operation, walletsManager: manager)
+        let signer = BoundWalletSigner.fromSource(operation: operation, walletsManager: manager)
         try assertWalletSigningSuccessForTesting(await signer.sign(), account: account)
         assertUnavailable(await signer.sign())
         XCTAssertEqual(reader.passwordReadCount, 1)
@@ -911,9 +911,9 @@ final class WalletSigningScopeTests: XCTestCase {
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         let start = Date()
         let operation = try approvedWalletSigningOperationForTesting(approvedAccount: descriptor(), deadline: start)
-        let expired = SourceWalletSigner(operation: operation, walletsManager: manager, clock: { start })
+        let expired = BoundWalletSigner.fromSource(operation: operation, walletsManager: manager, clock: { start })
         assertUnavailable(await expired.sign())
-        let missing = SourceWalletSigner(
+        let missing = BoundWalletSigner.fromSource(
             operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor()), walletsManager: manager
         )
         assertUnavailable(await missing.sign())

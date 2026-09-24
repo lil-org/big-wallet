@@ -399,7 +399,7 @@ function popupSender(overrides = {}) {
 function configurationRequest() {
     return {subject: "getLatestConfiguration", host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4};
 }
-function responseRequest(subject = "consumeResponse") {
+function responseRequest(subject = "getResponse") {
     return {subject, id: 7, configurationKey: "https://wallet.example", requestToken, workflowVersion: 4};
 }
 function delivery(id = 7, state = snapshot(), result = []) {
@@ -584,13 +584,16 @@ test("private browsing never admits or returns a grant", async () => {
 
 test("completion relays an atomically committed native state and only acknowledges delivery", async () => {
     const state = snapshot({ethereum: ethereumState("0x01"), revisions: {ethereum: 1, solana: 0}});
-    const harness = makeHarness({native: () => delivery(7, state, ["0x01"]),
+    const harness = makeHarness({
+        executionNative: message => ({id: message.id, ready: true}),
+        native: () => delivery(7, state, ["0x01"]),
         tabs: [{id: 3, url: "https://wallet.example/a"}, {id: 4, url: "https://other.example"},
             {id: 5, url: "https://wallet.example/b", incognito: true}]});
     const response = await harness.dispatch(responseRequest());
     assert.deepEqual(clone(response.state), state);
     assert.deepEqual(clone(response.result), ["0x01"]);
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
+    assert.equal(harness.executionMessages.at(-1).message.subject, "maintainRequest");
     assert.deepEqual(harness.storageWrites, []);
     assert.deepEqual(harness.tabMessages, [{id: 3, message: {
         subject: "configurationInvalidated", configurationKey: "https://wallet.example", workflowVersion: 4,
@@ -599,26 +602,175 @@ test("completion relays an atomically committed native state and only acknowledg
 
 test("a lost acknowledgement retries delivery without reapplying a grant", async () => {
     let count = 0;
-    const harness = makeHarness({native: () => delivery(), acknowledgeResponse: message => ++count === 1
+    const harness = makeHarness({
+        executionNative: message => ({id: message.id, ready: true}),
+        native: message => message.subject === "getResponse" ? {id: message.id, ready: true} : delivery(),
+        acknowledgeResponse: message => ++count === 1
         ? undefined : {id: message.id, acknowledged: true}});
     assert.equal(await harness.dispatch(responseRequest()), undefined);
     assert.equal((await harness.dispatch(responseRequest())).kind, "result");
     assert.equal(count, 2);
+    assert.equal(harness.executionMessages.length, 1);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
+        "prepareResponseDelivery", "acknowledgeResponse",
+        "getResponse", "prepareResponseDelivery", "acknowledgeResponse",
+    ]);
     assert.deepEqual(harness.storageWrites, []);
+});
+
+test("combined response delivery waits for status preparation and acknowledgement in order", async () => {
+    let resolveStatus;
+    let resolvePreparation;
+    let resolveAcknowledgement;
+    const harness = makeHarness({
+        executionNative: () => new Promise(resolve => { resolveStatus = resolve; }),
+        native: () => new Promise(resolve => { resolvePreparation = resolve; }),
+        acknowledgeResponse: () => new Promise(resolve => { resolveAcknowledgement = resolve; }),
+        tabs: [{id: 3, url: "https://wallet.example/dapp"}],
+    });
+    await settle();
+    const pending = harness.dispatch(responseRequest());
+    await settle();
+    assert.equal(harness.executionMessages.length, 1);
+    assert.deepEqual(harness.nativeMessages, []);
+
+    resolveStatus({id: 7, ready: true});
+    await settle();
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery"]);
+    assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, []);
+
+    resolvePreparation(delivery());
+    await settle();
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
+        "prepareResponseDelivery", "acknowledgeResponse",
+    ]);
+    assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, []);
+    assert.equal(harness.tabQueries(), 0);
+
+    resolveAcknowledgement({id: 7, acknowledged: true});
+    assert.equal((await pending).kind, "result");
+    assert.equal(harness.runtimeDeliveries.at(-1).replies.length, 1);
+    assert.equal(harness.tabMessages.length, 1);
+});
+
+test("combined response polling forwards nonready statuses without acknowledgement", async () => {
+    for (const stage of ["status", "preparation"]) {
+        for (const status of ["pending", "missing", "unavailable"]) {
+            const response = {id: 7, [status]: true};
+            const harness = makeHarness({
+                executionNative: () => stage === "status" ? response : {id: 7, ready: true},
+                native: () => response,
+            });
+            assert.deepEqual(clone(await harness.dispatch(responseRequest())), response);
+            assert.deepEqual(harness.nativeMessages.map(value => value.message.subject),
+                stage === "status" ? [] : ["prepareResponseDelivery"]);
+            assert.equal(harness.tabQueries(), 0);
+        }
+    }
+});
+
+test("each native delivery stage times out without advancing or publishing a late response", async () => {
+    for (const stage of ["status", "preparation", "acknowledgement"]) {
+        let resolveHungStage;
+        const hung = () => new Promise(resolve => { resolveHungStage = resolve; });
+        const harness = makeHarness({
+            executionNative: () => stage === "status" ? hung() : {id: 7, ready: true},
+            native: () => stage === "preparation" ? hung() : delivery(),
+            acknowledgeResponse: () => stage === "acknowledgement" ? hung() : {id: 7, acknowledged: true},
+        });
+        await settle();
+        const pending = harness.dispatch(responseRequest());
+        await settle();
+        const expected = stage === "status" ? [] : stage === "preparation"
+            ? ["prepareResponseDelivery"] : ["prepareResponseDelivery", "acknowledgeResponse"];
+        assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), expected);
+        assert.equal(await harness.runTimer(5000), true);
+        assert.equal(await pending, undefined);
+
+        resolveHungStage(stage === "status" ? {id: 7, ready: true} : stage === "preparation"
+            ? delivery() : {id: 7, acknowledged: true});
+        await settle();
+        assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), expected);
+        assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, [undefined]);
+        assert.equal(harness.tabQueries(), 0);
+    }
+});
+
+test("acknowledged delivery survives a tab-query timeout", async () => {
+    const harness = makeHarness({
+        executionNative: () => ({id: 7, ready: true}),
+        native: () => delivery(),
+        queryTabs: () => new Promise(() => {}),
+    });
+    await settle();
+    const pending = harness.dispatch(responseRequest());
+    await settle();
+    assert.equal(harness.nativeMessages.at(-1).message.subject, "acknowledgeResponse");
+    assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, []);
+    assert.equal(await harness.runTimer(1000), true);
+    assert.equal((await pending).kind, "result");
+});
+
+test("a lost combined reply can replay its acknowledged completion after worker restart", async () => {
+    const retained = delivery();
+    let acknowledgements = 0;
+    const options = {
+        executionNative: () => ({id: 7, ready: true}),
+        native: message => message.subject === "getResponse" ? {id: 7, ready: true} : retained,
+        acknowledgeResponse: () => { acknowledgements += 1; return {id: 7, acknowledged: true}; },
+    };
+    const original = makeHarness(options);
+    await original.dispatch(responseRequest());
+    const restarted = makeHarness(options);
+    const replay = await restarted.dispatch(responseRequest());
+    assert.equal(replay.kind, "result");
+    assert.deepEqual(clone(replay.state), retained.state);
+    assert.deepEqual(clone(replay.result), retained.response.result);
+    assert.equal(acknowledgements, 2);
+    assert.deepEqual(restarted.nativeMessages.map(value => value.message.subject), [
+        "prepareResponseDelivery", "acknowledgeResponse",
+    ]);
+    assert.deepEqual(original.storageWrites, []);
+    assert.deepEqual(restarted.storageWrites, []);
+});
+
+test("delivery accepts only exact correlated acknowledgement or missing replies", async () => {
+    for (const [acknowledgement, accepted] of [
+        [{id: 7, acknowledged: true}, true], [{id: 7, missing: true}, true],
+        [{id: 8, acknowledged: true}, false], [{id: 7, acknowledged: false}, false],
+        [{id: 7, acknowledged: true, missing: true}, false], [undefined, false],
+    ]) {
+        const harness = makeHarness({
+            executionNative: () => ({id: 7, ready: true}),
+            native: () => delivery(),
+            acknowledgeResponse: () => acknowledgement,
+        });
+        const response = await harness.dispatch(responseRequest());
+        assert.equal(response?.kind, accepted ? "result" : undefined);
+        assert.equal(harness.tabQueries(), accepted ? 1 : 0);
+    }
 });
 
 test("malformed or cross-correlated completions are never acknowledged", async () => {
     for (const response of [delivery(8), {...delivery(), state: {...snapshot(), context: "wrong"}},
-        {...delivery(), response: {...delivery().response, mutation: null}}, nativeResult({id: 7, name: "requestAccounts", provider: "ethereum", result: []})]) {
-        const harness = makeHarness({native: () => response});
+        {...delivery(), response: {...delivery().response, mutation: null}},
+        {id: 7, ready: true}, {id: 8, ready: true},
+        nativeResult({id: 7, name: "requestAccounts", provider: "ethereum", result: []})]) {
+        const harness = makeHarness({
+            executionNative: message => ({id: message.id, ready: true}),
+            native: () => response,
+        });
         assert.equal(await harness.dispatch(responseRequest()), undefined);
         assert.equal(harness.nativeMessages.some(value => value.message.subject === "acknowledgeResponse"), false);
     }
 });
 
-test("status reads cannot directly deliver a signature", async () => {
-    const harness = makeHarness({executionNative: () => delivery()});
-    assert.equal(await harness.dispatch(responseRequest("getResponse")), undefined);
+test("native status reads cannot directly deliver a signature", async () => {
+    for (const response of [delivery(), {id: 8, ready: true}, {id: 7, ready: true, pending: true}]) {
+        const harness = makeHarness({executionNative: () => response});
+        assert.equal(await harness.dispatch(responseRequest()), undefined);
+        assert.deepEqual(harness.nativeMessages, []);
+    }
 });
 
 test("disconnect relays the exact idempotent native CAS and invalidates only on success", async () => {
@@ -775,7 +927,7 @@ test("all runtime routes enforce their sender matrix before effects", async () =
     await settle();
     const commands = [
         [request(), ["content"]], [configurationRequest(), ["content", "popup"]],
-        [responseRequest(), ["content"]], [responseRequest("getResponse"), ["content"]],
+        [responseRequest(), ["content"]], [responseRequest("consumeResponse"), []],
         [{...responseRequest("applyCompletedResponse"), host: "wallet.example"}, ["popup"]],
         [{subject: "responseReady", ids: [7], workflowVersion: 4}, ["popup"]],
         [{subject: "updatePendingRequestBadge", hasPendingRequests: true, workflowVersion: 4}, ["popup"]],
@@ -897,7 +1049,10 @@ test("RPC rejects malformed input and ambiguous native replies", async () => {
 });
 
 test("a malformed tab query cannot prevent an acknowledged native result", async () => {
-    const harness = makeHarness({native: () => delivery(), queryTabs: () => {throw new Error("closed browser");}});
+    const harness = makeHarness({
+        executionNative: message => ({id: message.id, ready: true}),
+        native: () => delivery(), queryTabs: () => {throw new Error("closed browser");},
+    });
     assert.equal((await harness.dispatch(responseRequest())).kind, "result");
 });
 

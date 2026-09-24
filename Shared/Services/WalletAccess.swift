@@ -387,6 +387,21 @@ struct ApprovedWalletSigningOperation: Sendable {
 
 final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
 
+    static func fromSource(
+        operation: ApprovedWalletSigningOperation,
+        walletsManager: WalletsManager = .shared,
+        clock: @escaping () -> Date = Date.init
+    ) -> BoundWalletSigner {
+        let access = SourceWalletSigningAccess(
+            approvedAccount: operation.approvedAccount,
+            walletsManager: walletsManager
+        )
+        return BoundWalletSigner(
+            operation: operation, access: access,
+            isCurrent: { access.isCurrent }, clock: clock
+        )
+    }
+
     let operation: ApprovedWalletSigningOperation
     private let lock = NSLock()
     private var access: (any OwnedWalletSigningAccess)?
@@ -525,35 +540,6 @@ struct WalletReviewCatalog {
             }
         }
         return result
-    }
-}
-
-final class SourceWalletSigner: WalletSigning {
-
-    private let signer: BoundWalletSigner
-
-    init(
-        operation: ApprovedWalletSigningOperation,
-        walletsManager: WalletsManager = .shared,
-        clock: @escaping () -> Date = Date.init
-    ) {
-        let access = SourceWalletSigningAccess(
-            approvedAccount: operation.approvedAccount,
-            walletsManager: walletsManager
-        )
-        signer = BoundWalletSigner(
-            operation: operation, access: access,
-            isCurrent: { access.isCurrent }, clock: clock
-        )
-    }
-
-    @MainActor
-    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        await signer.sign()
-    }
-
-    func invalidate() {
-        signer.invalidate()
     }
 }
 

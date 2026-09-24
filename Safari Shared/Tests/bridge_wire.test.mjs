@@ -352,7 +352,6 @@ test("runtime sender policy permits only the complete sender receiver subject ma
         "content:worker:message-to-wallet",
         "content:worker:manualSwitchIntent",
         "content:worker:getResponse",
-        "content:worker:consumeResponse",
         "content:worker:getLatestConfiguration",
         "content:worker:disconnect",
 
@@ -371,6 +370,7 @@ test("runtime sender policy permits only the complete sender receiver subject ma
     ]);
     const subjects = new Set([
         ...[...allowed].map(entry => entry.split(":")[2]),
+        "consumeResponse",
         "executeNativeApproval", "getExecutionStatus", "maintainRequest", "prepareResponseDelivery",
         "unknown", "constructor", "__proto__", "toString", "hasOwnProperty", "",
     ]);
