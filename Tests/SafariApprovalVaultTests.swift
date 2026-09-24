@@ -103,7 +103,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
         )
-        guard let signer = access.bind(operation: operation) else {
+        guard let signer = access.bind(operation: operation, authorityIsCurrent: { _ in true }) else {
             XCTAssertFalse(expectedSuccess, "Expected authorization to bind", file: file, line: line)
             return
         }

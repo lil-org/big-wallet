@@ -2844,7 +2844,7 @@ extension PopupRequestSessionsTests {
         let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             executions += 1
             events.append("execute")
-            XCTAssertTrue(walletAccess is AuthorityBoundWalletSigner)
+            XCTAssertNotNil(walletAccess)
             XCTAssertTrue(authenticatedAccess?.validateCurrent() == true)
             XCTAssertEqual(authenticatedAccess?.approvedAccount, popupTestAccountDescriptor())
             guard case .message(let message, _) = approval,
@@ -3048,8 +3048,7 @@ extension PopupRequestSessionsTests {
         let operation = try XCTUnwrap(backingAccess.operations.first)
         XCTAssertEqual(operation.approvedAccount, WalletAccountDescriptor(walletID: "wallet", account: accounts[0]))
         XCTAssertEqual(operation.handle, snapshot.handle)
-        XCTAssertEqual(operation.configurationKey, snapshot.configurationKey)
-        guard case .ethereumPersonalMessage(let message) = operation.payload else {
+        guard case .message(.ethereumPersonalMessage(let message), nil) = operation.payload else {
             return XCTFail("Expected the reviewed personal-sign payload")
         }
         XCTAssertEqual(message, Data("reviewed".utf8))
@@ -4068,6 +4067,7 @@ extension PopupRequestSessionsTests {
         let network = popupTransactionNetwork()
         var preparations = 0
         var executionCount = 0
+        let backingAccess = PopupRecordingWalletSigningAccess()
         let operations = TransactionApprovalOperations(
             prepare: { transaction, _, _, _, _, completion in
                 completion(.success(transaction))
@@ -4099,15 +4099,15 @@ extension PopupRequestSessionsTests {
                 transaction?.feeProvenance,
                 approvedTransaction.feeProvenance
             )
-            guard let protectedSigner = walletAccess as? AuthorityBoundWalletSigner,
-                  let boundSigner = protectedSigner.signer as? BoundWalletSigner,
-                  case .ethereumTransaction(let boundTransaction, let boundNetwork) = boundSigner.operation.payload else {
+            guard let walletAccess,
+                  case .success = await walletAccess.sign(),
+                  let operation = backingAccess.operations.first,
+                  case .ethereumTransaction(let boundTransaction, let boundNetwork) = operation.payload else {
                 XCTFail("Expected a signer bound to the final transaction")
                 return .rollback
             }
-            XCTAssertEqual(boundSigner.operation.approvedAccount, popupTestAccountDescriptor())
-            XCTAssertEqual(boundSigner.operation.handle, snapshot.handle)
-            XCTAssertEqual(boundSigner.operation.configurationKey, snapshot.configurationKey)
+            XCTAssertEqual(operation.approvedAccount, popupTestAccountDescriptor())
+            XCTAssertEqual(operation.handle, snapshot.handle)
             XCTAssertEqual(boundTransaction.nonce, approvedTransaction.nonce)
             XCTAssertEqual(boundTransaction.gas, approvedTransaction.gas)
             XCTAssertEqual(boundTransaction.preparedFee, approvedTransaction.preparedFee)
@@ -4136,7 +4136,7 @@ extension PopupRequestSessionsTests {
             requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
-                unlockWallets: { _, approvedAccount in .unlocked(catalog: authenticationCatalog, signer: makeRequestScopedWalletAccessForTesting(approvedAccount: approvedAccount)) }
+                unlockWallets: { _, approvedAccount in .unlocked(catalog: authenticationCatalog, signer: makeRequestScopedWalletAccessForTesting(backingAccess, approvedAccount: approvedAccount)) }
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
@@ -4161,6 +4161,8 @@ extension PopupRequestSessionsTests {
 
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(executionCount, 1)
+        XCTAssertEqual(backingAccess.operations.count, 1)
+        XCTAssertEqual(backingAccess.invalidationCount, 1)
     }
 
     func testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput() async throws {
@@ -5004,7 +5006,7 @@ extension PopupRequestSessionsTests {
                 catalogRefreshes += 1
                 return WalletReviewCatalog(account: popupTestAccount())
             },
-            makeSigner: { _ in
+            makeSigner: { _, _ in
                 signerCreations += 1
                 return TestWalletSigner()
             }
@@ -5064,7 +5066,7 @@ extension PopupRequestSessionsTests {
             let finalizer = NativeApprovalFinalizer(
                 store: store, requestProcessor: processor,
                 refreshWalletCatalog: { catalog },
-                makeSigner: { _ in
+                makeSigner: { _, _ in
                     signerCreations += 1
                     return TestWalletSigner()
                 }
@@ -5100,7 +5102,7 @@ extension PopupRequestSessionsTests {
         let finalizer = NativeApprovalFinalizer(
             store: store, requestProcessor: processor,
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { _ in
+            makeSigner: { _, _ in
                 XCTFail("Adding a chain must not create a signer")
                 return TestWalletSigner()
             }
@@ -5237,7 +5239,7 @@ extension PopupRequestSessionsTests {
                 refreshes += 1
                 return access
             },
-            makeSigner: { _ in
+            makeSigner: { _, _ in
                 XCTFail("Account selection must not create a signer")
                 return signer
             },
@@ -5529,11 +5531,14 @@ extension PopupRequestSessionsTests {
                     )))
                 },
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-                makeSigner: { operation in
+                makeSigner: { operation, authorityIsCurrent in
                     signerCreations += 1
                     XCTAssertEqual(operation.handle, snapshot.handle)
                     XCTAssertEqual(operation.approvedAccount, popupTestAccountDescriptor())
-                    return BoundWalletSigner(operation: operation, access: signingAccess, isCurrent: { true })
+                    return BoundWalletSigner(
+                        operation: operation, access: signingAccess, isCurrent: { true },
+                        authorityIsCurrent: authorityIsCurrent
+                    )
                 }
             )
             let result = await attemptNativeDecision(
@@ -5985,7 +5990,7 @@ extension PopupRequestSessionsTests {
             store: store,
             requestProcessor: processor,
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { _ in
+            makeSigner: { _, _ in
                 XCTFail("An expired approval must not issue a signer")
                 return TestWalletSigner()
             },
@@ -6058,7 +6063,7 @@ extension PopupRequestSessionsTests {
             store: store,
             requestProcessor: processor,
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { _ in
+            makeSigner: { _, _ in
                 XCTFail("An expired approval must not issue a signer")
                 return TestWalletSigner()
             },
@@ -6128,7 +6133,7 @@ extension PopupRequestSessionsTests {
                 store: store,
                 requestProcessor: processor,
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-                makeSigner: { _ in
+                makeSigner: { _, _ in
                     XCTFail("An expired approval must not issue a signer")
                     return TestWalletSigner()
                 },

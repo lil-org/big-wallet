@@ -226,28 +226,11 @@ enum WalletSigningOutput: Sendable {
 struct ApprovedWalletSigningOperation: Sendable {
 
     enum Payload: Sendable {
-        case ethereumMessage(Data)
-        case ethereumPersonalMessage(Data)
-        case ethereumTypedData(String)
+        case message(SignMessageAction.Payload, Solana.Cluster?)
         case ethereumTransaction(Transaction, ResolvedEthereumNetwork)
-        case solanaMessage(Data)
-        case solanaTransaction(SolanaPreparedTransactionMessage)
-        case solanaTransactions([SolanaPreparedTransactionMessage])
-        case solanaLegacyBroadcast(
-            Solana.PreparedLegacySignAndSendTransaction,
-            Solana.Cluster,
-            Solana.PreparedSendOptions
-        )
-        case solanaSerializedBroadcast(
-            Solana.PreparedSerializedTransaction,
-            Solana.Cluster,
-            Solana.PreparedSendOptions
-        )
     }
 
     let handle: ExtensionBridge.Handle
-    let configurationKey: String
-    let enqueueAttempt: String
     let approvedAccount: WalletAccountDescriptor
     let deadline: Date
     let payload: Payload
@@ -266,38 +249,14 @@ struct ApprovedWalletSigningOperation: Sendable {
               approvedAccount.coin.correspondingInpageProvider == request.provider
         else { return nil }
         self.handle = handle
-        configurationKey = request.configurationKey
-        enqueueAttempt = request.enqueueAttempt
         self.approvedAccount = approvedAccount
         self.deadline = deadline
         switch approval {
         case .message(let action, let cluster):
-            switch action.payload {
-            case .ethereumMessage(let data):
-                guard approvedAccount.coin == .ethereum, cluster == nil else { return nil }
-                payload = .ethereumMessage(data)
-            case .ethereumPersonalMessage(let data):
-                guard approvedAccount.coin == .ethereum, cluster == nil else { return nil }
-                payload = .ethereumPersonalMessage(data)
-            case .ethereumTypedData(let data):
-                guard approvedAccount.coin == .ethereum, cluster == nil else { return nil }
-                payload = .ethereumTypedData(data)
-            case .solanaMessage(let data):
-                guard approvedAccount.coin == .solana, cluster == nil else { return nil }
-                payload = .solanaMessage(data)
-            case .solanaTransaction(let transaction):
-                guard approvedAccount.coin == .solana, cluster == nil else { return nil }
-                payload = .solanaTransaction(transaction)
-            case .solanaTransactions(let transactions):
-                guard approvedAccount.coin == .solana, cluster == nil else { return nil }
-                payload = .solanaTransactions(transactions)
-            case .solanaLegacyBroadcast(let transaction, let options):
-                guard approvedAccount.coin == .solana, let cluster else { return nil }
-                payload = .solanaLegacyBroadcast(transaction, cluster, options)
-            case .solanaSerializedBroadcast(let transaction, let options):
-                guard approvedAccount.coin == .solana, let cluster else { return nil }
-                payload = .solanaSerializedBroadcast(transaction, cluster, options)
-            }
+            guard action.payload.coin == approvedAccount.coin,
+                  (action.solanaClusterOptions != nil) == (cluster != nil)
+            else { return nil }
+            payload = .message(action.payload, cluster)
         case .transaction(let action, let transaction):
             guard approvedAccount.coin == .ethereum,
                   DappApprovalDecision.NetworkIdentity(action.resolvedNetwork) != nil,
@@ -311,15 +270,15 @@ struct ApprovedWalletSigningOperation: Sendable {
     fileprivate func sign(with privateKey: WalletPrivateKey) ->
         Result<WalletSigningOutput, WalletSigningFailure> {
         switch payload {
-        case .ethereumMessage(let data):
+        case .message(.ethereumMessage(let data), _):
             guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
             return .success(.ethereumSignature(signature))
-        case .ethereumPersonalMessage(let data):
+        case .message(.ethereumPersonalMessage(let data), _):
             guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
             return .success(.ethereumSignature(signature))
-        case .ethereumTypedData(let data):
+        case .message(.ethereumTypedData(let data), _):
             guard let signature = try? Ethereum.sign(typedData: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
             return .success(.ethereumSignature(signature))
@@ -336,27 +295,29 @@ struct ApprovedWalletSigningOperation: Sendable {
                     signedTransaction: signed, transactionHash: hash, network: network
                 ))
             }
-        case .solanaMessage(let data):
+        case .message(.solanaMessage(let data), _):
             return solanaSignature(data, privateKey: privateKey)
-        case .solanaTransaction(let transaction):
+        case .message(.solanaTransaction(let transaction), _):
             return solanaSignature(transaction.messageData, privateKey: privateKey)
-        case .solanaTransactions(let transactions):
+        case .message(.solanaTransactions(let transactions), _):
             guard let signatures = Solana.sign(
                 messageDataList: transactions.map(\.messageData), privateKey: privateKey
             ), signatures.count == transactions.count else { return .failure(.failedToSign) }
             return .success(.solanaSignatures(signatures))
-        case .solanaLegacyBroadcast(let transaction, let cluster, let options):
+        case .message(.solanaLegacyBroadcast(let transaction, let options), let cluster?):
             return solanaBroadcast(
                 Solana.signedTransactionForSignAndSend(
                     preparedLegacyTransaction: transaction, privateKey: privateKey
                 ), cluster: cluster, options: options
             )
-        case .solanaSerializedBroadcast(let transaction, let cluster, let options):
+        case .message(.solanaSerializedBroadcast(let transaction, let options), let cluster?):
             return solanaBroadcast(
                 Solana.signedTransactionForSignAndSend(
                     preparedSerializedTransaction: transaction, privateKey: privateKey
                 ), cluster: cluster, options: options
             )
+        case .message(.solanaLegacyBroadcast, nil), .message(.solanaSerializedBroadcast, nil):
+            return .failure(.authorizationUnavailable)
         }
     }
 
@@ -390,6 +351,7 @@ final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
     static func fromSource(
         operation: ApprovedWalletSigningOperation,
         walletsManager: WalletsManager = .shared,
+        authorityIsCurrent: @escaping @MainActor (ExtensionBridge.Handle) async -> Bool,
         clock: @escaping () -> Date = Date.init
     ) -> BoundWalletSigner {
         let access = SourceWalletSigningAccess(
@@ -398,7 +360,8 @@ final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
         )
         return BoundWalletSigner(
             operation: operation, access: access,
-            isCurrent: { access.isCurrent }, clock: clock
+            isCurrent: { access.isCurrent }, authorityIsCurrent: authorityIsCurrent,
+            clock: clock
         )
     }
 
@@ -408,17 +371,20 @@ final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
     private var consumed = false
     private var invalidated = false
     private let isCurrent: () -> Bool
+    private let authorityIsCurrent: @MainActor (ExtensionBridge.Handle) async -> Bool
     private let clock: () -> Date
 
     init(
         operation: ApprovedWalletSigningOperation,
         access: any OwnedWalletSigningAccess,
         isCurrent: @escaping () -> Bool,
+        authorityIsCurrent: @escaping @MainActor (ExtensionBridge.Handle) async -> Bool,
         clock: @escaping () -> Date = Date.init
     ) {
         self.operation = operation
         self.access = access
         self.isCurrent = isCurrent
+        self.authorityIsCurrent = authorityIsCurrent
         self.clock = clock
     }
 
@@ -431,14 +397,18 @@ final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
         }
         guard let access else { return .failure(.authorizationUnavailable) }
         defer { invalidate() }
-        guard isAuthorized else { return .failure(.authorizationUnavailable) }
-        let result = await withTaskCancellationHandler {
-            await access.sign(operation)
+        return await withTaskCancellationHandler {
+            guard isAuthorized,
+                  await authorityIsCurrent(operation.handle),
+                  isAuthorized else { return .failure(.authorizationUnavailable) }
+            let result = await access.sign(operation)
+            guard isAuthorized,
+                  await authorityIsCurrent(operation.handle),
+                  isAuthorized else { return .failure(.authorizationUnavailable) }
+            return result
         } onCancel: {
             self.invalidate()
         }
-        guard isAuthorized else { return .failure(.authorizationUnavailable) }
-        return result
     }
 
     @MainActor
@@ -459,38 +429,6 @@ final class BoundWalletSigner: WalletSigning, @unchecked Sendable {
 
     deinit {
         invalidate()
-    }
-}
-
-final class AuthorityBoundWalletSigner: WalletSigning {
-
-    let signer: any WalletSigning
-    private let authorityIsCurrent: @MainActor () async -> Bool
-
-    init(
-        signer: any WalletSigning,
-        authorityIsCurrent: @escaping @MainActor () async -> Bool
-    ) {
-        self.signer = signer
-        self.authorityIsCurrent = authorityIsCurrent
-    }
-
-    @MainActor
-    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        guard !Task.isCancelled, await authorityIsCurrent() else {
-            invalidate()
-            return .failure(.authorizationUnavailable)
-        }
-        let result = await signer.sign()
-        guard !Task.isCancelled, await authorityIsCurrent() else {
-            invalidate()
-            return .failure(.authorizationUnavailable)
-        }
-        return result
-    }
-
-    func invalidate() {
-        signer.invalidate()
     }
 }
 
@@ -784,7 +722,10 @@ final class RequestScopedWalletAccess {
         return lock.withLock { !invalidated && !executionLeaseTaken }
     }
 
-    func bind(operation: ApprovedWalletSigningOperation) -> BoundWalletSigner? {
+    func bind(
+        operation: ApprovedWalletSigningOperation,
+        authorityIsCurrent: @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
+    ) -> BoundWalletSigner? {
         guard operation.approvedAccount == approvedAccount,
               clock() < operation.deadline,
               validateCurrent() else { return nil }
@@ -794,6 +735,7 @@ final class RequestScopedWalletAccess {
                 operation: operation,
                 access: access,
                 isCurrent: { [weak self] in self?.validateCurrent() == true },
+                authorityIsCurrent: authorityIsCurrent,
                 clock: clock
             )
             self.access = nil

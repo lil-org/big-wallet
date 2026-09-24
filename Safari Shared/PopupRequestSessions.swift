@@ -1345,11 +1345,11 @@ final class PopupRequestSessions {
                   let operation = ApprovedWalletSigningOperation(
                     request: request, approval: approval,
                     handle: signing.handle, deadline: signing.deadline
-                  ), let bound = signing.access.bind(operation: operation) else { return .rollback }
-            executionSigner = AuthorityBoundWalletSigner(
-                signer: bound,
-                authorityIsCurrent: { await self.store.authorityIsCurrent(handle: signing.handle) }
-            )
+                  ), let bound = signing.access.bind(
+                    operation: operation,
+                    authorityIsCurrent: { await self.store.authorityIsCurrent(handle: $0) }
+                  ) else { return .rollback }
+            executionSigner = bound
         } else {
             executionSigner = nil
         }

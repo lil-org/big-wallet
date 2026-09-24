@@ -19,7 +19,10 @@ final class NativeApprovalFinalizer {
     private let store: NativeApprovalStore
     private let requestProcessor: DappRequestProcessing
     private let refreshWalletCatalog: () -> WalletReviewCatalog?
-    private let makeSigner: (ApprovedWalletSigningOperation) -> any WalletSigning
+    private let makeSigner: (
+        ApprovedWalletSigningOperation,
+        @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
+    ) -> any WalletSigning
     private let networkResolver: (String) -> EthereumNetwork?
     private let clock: () -> Date
     private let executor: DurableApprovalExecutor
@@ -31,7 +34,10 @@ final class NativeApprovalFinalizer {
             guard WalletsManager.shared.start() else { return nil }
             return WalletsManager.shared.reviewCatalog()
         },
-        makeSigner: ((ApprovedWalletSigningOperation) -> any WalletSigning)? = nil,
+        makeSigner: ((
+            ApprovedWalletSigningOperation,
+            @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
+        ) -> any WalletSigning)? = nil,
         networkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
         },
@@ -42,7 +48,13 @@ final class NativeApprovalFinalizer {
         self.store = store
         self.requestProcessor = requestProcessor
         self.refreshWalletCatalog = refreshWalletCatalog
-        self.makeSigner = makeSigner ?? { BoundWalletSigner.fromSource(operation: $0, clock: clock) }
+        self.makeSigner = makeSigner ?? { operation, authorityIsCurrent in
+            BoundWalletSigner.fromSource(
+                operation: operation,
+                authorityIsCurrent: authorityIsCurrent,
+                clock: clock
+            )
+        }
         self.networkResolver = networkResolver
         self.clock = clock
         executor = DurableApprovalExecutor(
@@ -177,10 +189,9 @@ final class NativeApprovalFinalizer {
                             request: request, approval: approval,
                             handle: snapshot.handle, deadline: deadline
                         ) else { return .rollback }
-                        executionSigner = AuthorityBoundWalletSigner(
-                            signer: self.makeSigner(operation),
-                            authorityIsCurrent: { await self.store.authorityIsCurrent(handle: snapshot.handle) }
-                        )
+                        executionSigner = self.makeSigner(operation) {
+                            await self.store.authorityIsCurrent(handle: $0)
+                        }
                     } else {
                         executionSigner = nil
                     }

@@ -21,9 +21,9 @@ final class NativeApprovalResponseTests: XCTestCase {
         ))
     }
 
-    func testRevokedAuthorityNeverCallsSigner() async {
-        let underlying = AuthorityTestSigner()
-        let signer = AuthorityBoundWalletSigner(signer: underlying, authorityIsCurrent: { false })
+    func testRevokedAuthorityNeverCallsSigner() async throws {
+        let underlying = AuthorityTestAccess()
+        let signer = try signer(access: underlying, authorityIsCurrent: { _ in false })
         let result = await signer.sign()
         guard case .failure(.authorizationUnavailable) = result else {
             return XCTFail("Revoked authority must not sign")
@@ -32,11 +32,11 @@ final class NativeApprovalResponseTests: XCTestCase {
         XCTAssertTrue(underlying.invalidated)
     }
 
-    func testRevocationDuringSigningDiscardsSignature() async {
-        let underlying = AuthorityTestSigner()
+    func testRevocationDuringSigningDiscardsSignature() async throws {
+        let underlying = AuthorityTestAccess()
         var isCurrent = true
         underlying.operation = { isCurrent = false }
-        let signer = AuthorityBoundWalletSigner(signer: underlying, authorityIsCurrent: { isCurrent })
+        let signer = try signer(access: underlying, authorityIsCurrent: { _ in isCurrent })
         let result = await signer.sign()
         guard case .failure(.authorizationUnavailable) = result else {
             return XCTFail("A signature produced after revocation must not escape")
@@ -45,31 +45,48 @@ final class NativeApprovalResponseTests: XCTestCase {
         XCTAssertTrue(underlying.invalidated)
     }
 
-    func testCurrentAuthorityReturnsSignatureAfterBothChecks() async {
-        let underlying = AuthorityTestSigner()
-        var checks = 0
-        let signer = AuthorityBoundWalletSigner(signer: underlying, authorityIsCurrent: {
-            checks += 1
+    func testCurrentAuthorityReturnsSignatureAfterCheckingTheStoredHandleTwice() async throws {
+        let underlying = AuthorityTestAccess()
+        var handles = [ExtensionBridge.Handle]()
+        let signer = try signer(access: underlying, authorityIsCurrent: { handle in
+            handles.append(handle)
             return true
         })
         let result = await signer.sign()
         guard case .success(.ethereumSignature("signed")) = result else {
             return XCTFail("Expected authorized signature")
         }
-        XCTAssertEqual(checks, 2)
+        XCTAssertEqual(handles, [signer.operation.handle, signer.operation.handle])
         XCTAssertEqual(underlying.calls, 1)
+        XCTAssertTrue(underlying.invalidated)
+    }
+
+    private func signer(
+        access: AuthorityTestAccess,
+        authorityIsCurrent: @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
+    ) throws -> BoundWalletSigner {
+        let operation = try approvedWalletSigningOperationForTesting(approvedAccount: .init(
+            walletID: "approved-wallet",
+            coin: .ethereum,
+            normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
+            derivationPath: "m/44'/60'/0'/0/0"
+        ))
+        return BoundWalletSigner(
+            operation: operation, access: access, isCurrent: { true },
+            authorityIsCurrent: authorityIsCurrent
+        )
     }
 }
 
-private final class AuthorityTestSigner: WalletSigning {
+private final class AuthorityTestAccess: OwnedWalletSigningAccess {
     var calls = 0
     var invalidated = false
     var operation: @MainActor () -> Void = {}
 
     @MainActor
-    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
+    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
         calls += 1
-        operation()
+        self.operation()
         return .success(.ethereumSignature("signed"))
     }
 

@@ -43,7 +43,7 @@ struct SelectAccountAction {
 }
 
 struct SignMessageAction {
-    enum Payload {
+    enum Payload: Sendable {
         case ethereumMessage(Data)
         case ethereumPersonalMessage(Data)
         case ethereumTypedData(String)
@@ -58,6 +58,16 @@ struct SignMessageAction {
             Solana.PreparedSerializedTransaction,
             Solana.PreparedSendOptions
         )
+
+        var coin: WalletCoin {
+            switch self {
+            case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
+                return .ethereum
+            case .solanaMessage, .solanaTransaction, .solanaTransactions,
+                 .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+                return .solana
+            }
+        }
     }
 
     let subject: ApprovalSubject

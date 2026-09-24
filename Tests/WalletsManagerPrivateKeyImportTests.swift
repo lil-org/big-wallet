@@ -688,12 +688,12 @@ final class WalletSigningScopeTests: XCTestCase {
         ]
         for alternative in alternatives {
             let operation = try approvedWalletSigningOperationForTesting(approvedAccount: alternative)
-            XCTAssertNil(access.bind(operation: operation))
+            XCTAssertNil(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
             XCTAssertTrue(backing.operations.isEmpty)
         }
 
         let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
-        let signer = try XCTUnwrap(access.bind(operation: operation))
+        let signer = try XCTUnwrap(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
         let result = await signer.sign()
         guard case .success(.ethereumSignature("test-signature")) = result else {
             return XCTFail("Expected the approved operation to sign")
@@ -701,7 +701,6 @@ final class WalletSigningScopeTests: XCTestCase {
         XCTAssertEqual(backing.operations.map(\.approvedAccount), [approved])
         XCTAssertEqual(backing.operations.first?.handle, operation.handle)
         XCTAssertEqual(backing.operations.first?.deadline, operation.deadline)
-        XCTAssertEqual(backing.operations.first?.configurationKey, operation.configurationKey)
     }
 
     func testAccountIdentityNormalizesEthereumCaseAndIgnoresPublicMetadata() throws {
@@ -718,7 +717,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: reconstructed)
         )
-        XCTAssertNotNil(access.bind(operation: operation))
+        XCTAssertNotNil(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
     }
 
     func testBindingPreservesSolanaAddressCase() throws {
@@ -732,8 +731,8 @@ final class WalletSigningScopeTests: XCTestCase {
             derivationPath: account.derivationPath
         )
         XCTAssertTrue(changed.isValid)
-        XCTAssertNil(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: changed)))
-        XCTAssertNotNil(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: approved)))
+        XCTAssertNil(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: changed), authorityIsCurrent: { _ in true }))
+        XCTAssertNotNil(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: approved), authorityIsCurrent: { _ in true }))
     }
 
     func testAccessAndSignerAreSingleUseAfterSuccessAndFailure() async throws {
@@ -742,11 +741,11 @@ final class WalletSigningScopeTests: XCTestCase {
             backing.result = succeeds ? .success(.ethereumSignature("test-signature")) : .failure(.failedToSign)
             let access = requestAccess(approved: descriptor(), backing: backing)
             let operation = try approvedWalletSigningOperationForTesting(approvedAccount: descriptor())
-            let signer = try XCTUnwrap(access.bind(operation: operation))
-            XCTAssertNil(access.bind(operation: operation))
+            let signer = try XCTUnwrap(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
+            XCTAssertNil(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
             _ = await signer.sign()
             assertUnavailable(await signer.sign())
-            XCTAssertNil(access.bind(operation: operation))
+            XCTAssertNil(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
             XCTAssertEqual(backing.operations.count, 1)
             XCTAssertEqual(backing.invalidations, 1)
         }
@@ -757,7 +756,7 @@ final class WalletSigningScopeTests: XCTestCase {
             let backing = SigningSpy()
             let access = requestAccess(approved: descriptor(), backing: backing)
             let operation = try approvedWalletSigningOperationForTesting(approvedAccount: descriptor())
-            let signer = try XCTUnwrap(access.bind(operation: operation))
+            let signer = try XCTUnwrap(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
             if invalidateAccess {
                 access.invalidate()
             } else {
@@ -767,7 +766,7 @@ final class WalletSigningScopeTests: XCTestCase {
             assertUnavailable(await signer.sign())
             assertUnavailable(await signer.sign())
             XCTAssertTrue(backing.operations.isEmpty)
-            XCTAssertNil(access.bind(operation: operation))
+            XCTAssertNil(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
             XCTAssertEqual(backing.invalidations, 1)
         }
     }
@@ -783,13 +782,99 @@ final class WalletSigningScopeTests: XCTestCase {
             }
         }
         let access = requestAccess(approved: descriptor(), backing: backing)
-        let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor())))
+        let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor()), authorityIsCurrent: { _ in true }))
         let first = Task { await signer.sign() }
         await fulfillment(of: [started], timeout: 1)
         assertUnavailable(await signer.sign())
         XCTAssertEqual(backing.operations.count, 1)
         try XCTUnwrap(continuation).resume()
         _ = await first.value
+    }
+
+    func testConcurrentSigningCannotReuseAuthorizationDuringEitherAuthorityCheck() async throws {
+        for suspendedCheck in 1...2 {
+            let backing = SigningSpy()
+            let access = requestAccess(approved: descriptor(), backing: backing)
+            let checking = expectation(description: "Authority check \(suspendedCheck) started")
+            var checks = 0
+            var continuation: CheckedContinuation<Bool, Never>?
+            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: descriptor())
+            let signer = try XCTUnwrap(access.bind(operation: operation, authorityIsCurrent: { handle in
+                XCTAssertEqual(handle, operation.handle)
+                checks += 1
+                guard checks == suspendedCheck else { return true }
+                return await withCheckedContinuation {
+                    continuation = $0
+                    checking.fulfill()
+                }
+            }))
+            let first = Task { await signer.sign() }
+            await fulfillment(of: [checking], timeout: 1)
+            assertUnavailable(await signer.sign())
+            XCTAssertEqual(checks, suspendedCheck)
+            XCTAssertEqual(backing.operations.count, suspendedCheck - 1)
+            XCTAssertEqual(backing.invalidations, 0)
+            try XCTUnwrap(continuation).resume(returning: true)
+            guard case .success(.ethereumSignature("test-signature")) = await first.value else {
+                return XCTFail("The original signing call must retain its authorization")
+            }
+            XCTAssertEqual(checks, 2)
+            XCTAssertEqual(backing.operations.count, 1)
+            XCTAssertEqual(backing.invalidations, 1)
+        }
+    }
+
+    func testAuthoritySuspensionCannotOutliveAuthorizationBeforeOrAfterSigning() async throws {
+        enum Interruption: CaseIterable {
+            case revoked, expired, invalidated, canceled, sourceChanged
+        }
+        for suspendedCheck in 1...2 {
+            for interruption in Interruption.allCases {
+                let start = Date()
+                var now = start
+                var current = true
+                let backing = SigningSpy()
+                let access = requestAccess(
+                    approved: descriptor(), backing: backing,
+                    isCurrent: { current }, clock: { now }
+                )
+                let checking = expectation(description: "Authority check \(suspendedCheck): \(interruption)")
+                var checks = 0
+                var continuation: CheckedContinuation<Bool, Never>?
+                let operation = try approvedWalletSigningOperationForTesting(
+                    approvedAccount: descriptor(), deadline: start.addingTimeInterval(1)
+                )
+                let signer = try XCTUnwrap(access.bind(operation: operation, authorityIsCurrent: { _ in
+                    checks += 1
+                    guard checks == suspendedCheck else { return true }
+                    return await withCheckedContinuation {
+                        continuation = $0
+                        checking.fulfill()
+                    }
+                }))
+                let signing = Task { await signer.sign() }
+                await fulfillment(of: [checking], timeout: 1)
+                switch interruption {
+                case .revoked: break
+                case .expired: now = start.addingTimeInterval(1)
+                case .invalidated: access.invalidate()
+                case .canceled: signing.cancel()
+                case .sourceChanged: current = false
+                }
+                if interruption == .invalidated || interruption == .canceled {
+                    XCTAssertEqual(backing.invalidations, 1)
+                }
+                try XCTUnwrap(continuation).resume(returning: interruption != .revoked)
+                assertUnavailable(await signing.value)
+                assertUnavailable(await signer.sign())
+                XCTAssertEqual(checks, suspendedCheck)
+                XCTAssertEqual(backing.operations.count, suspendedCheck - 1)
+                XCTAssertEqual(backing.invalidations, 1)
+                signer.invalidate()
+                access.invalidate()
+                XCTAssertEqual(backing.invalidations, 1)
+            }
+        }
     }
 
     func testExpiryBeforeSigningNeverReachesBacking() async throws {
@@ -799,7 +884,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let access = requestAccess(approved: descriptor(), backing: backing, clock: { now })
         let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(
             approvedAccount: descriptor(), deadline: start.addingTimeInterval(1)
-        )))
+        ), authorityIsCurrent: { _ in true }))
         now = start.addingTimeInterval(1)
         assertUnavailable(await signer.sign())
         now = start
@@ -810,7 +895,7 @@ final class WalletSigningScopeTests: XCTestCase {
     func testCancellationBeforeSigningConsumesAuthorizationWithoutBackingAccess() async throws {
         let backing = SigningSpy()
         let access = requestAccess(approved: descriptor(), backing: backing)
-        let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor())))
+        let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor()), authorityIsCurrent: { _ in true }))
         let task = Task { await signer.sign() }
         task.cancel()
         assertUnavailable(await task.value)
@@ -838,7 +923,7 @@ final class WalletSigningScopeTests: XCTestCase {
             )
             let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(
                 approvedAccount: descriptor(), deadline: start.addingTimeInterval(1)
-            )))
+            ), authorityIsCurrent: { _ in true }))
             let signing = Task { await signer.sign() }
             await fulfillment(of: [started], timeout: 1)
             switch interruption {
@@ -860,7 +945,7 @@ final class WalletSigningScopeTests: XCTestCase {
     func testSigningConsumptionDoesNotConsumeExecutionLease() async throws {
         let backing = SigningSpy()
         let access = requestAccess(approved: descriptor(), backing: backing)
-        let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor())))
+        let signer = try XCTUnwrap(access.bind(operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor()), authorityIsCurrent: { _ in true }))
         _ = await signer.sign()
         let firstLease = await access.takeExecutionLease()
         XCTAssertNotNil(firstLease)
@@ -879,12 +964,12 @@ final class WalletSigningScopeTests: XCTestCase {
         ] {
             let backing = SigningSpy()
             let access = requestAccess(approved: approved, backing: backing)
-            XCTAssertNil(access.bind(operation: operation))
+            XCTAssertNil(access.bind(operation: operation, authorityIsCurrent: { _ in true }))
             XCTAssertTrue(backing.operations.isEmpty)
         }
         let backing = SigningSpy()
         let stale = requestAccess(approved: descriptor(), backing: backing, isCurrent: { false })
-        XCTAssertNil(stale.bind(operation: operation))
+        XCTAssertNil(stale.bind(operation: operation, authorityIsCurrent: { _ in true }))
         XCTAssertTrue(backing.operations.isEmpty)
     }
 
@@ -899,7 +984,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
         )
-        let signer = BoundWalletSigner.fromSource(operation: operation, walletsManager: manager)
+        let signer = BoundWalletSigner.fromSource(operation: operation, walletsManager: manager, authorityIsCurrent: { _ in true })
         try assertWalletSigningSuccessForTesting(await signer.sign(), account: account)
         assertUnavailable(await signer.sign())
         XCTAssertEqual(reader.passwordReadCount, 1)
@@ -911,13 +996,70 @@ final class WalletSigningScopeTests: XCTestCase {
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         let start = Date()
         let operation = try approvedWalletSigningOperationForTesting(approvedAccount: descriptor(), deadline: start)
-        let expired = BoundWalletSigner.fromSource(operation: operation, walletsManager: manager, clock: { start })
+        let expired = BoundWalletSigner.fromSource(operation: operation, walletsManager: manager, authorityIsCurrent: { _ in true }, clock: { start })
         assertUnavailable(await expired.sign())
         let missing = BoundWalletSigner.fromSource(
-            operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor()), walletsManager: manager
+            operation: try approvedWalletSigningOperationForTesting(approvedAccount: descriptor()), walletsManager: manager, authorityIsCurrent: { _ in true }
         )
         assertUnavailable(await missing.sign())
         XCTAssertEqual(reader.passwordReadCount, 0)
+    }
+
+    func testSigningOperationRequiresPayloadCoinAndBroadcastClusterToMatchApproval() throws {
+        let solana = WalletAccountDescriptor(walletID: walletID, account: solanaAccount())
+        let publicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: solana.normalizedAddress))
+        let message = SolanaMessageFixture.wireMessage(
+            accountKeys: [publicKey], bodyAfterBlockhash: Data.encodeLength(0)
+        )
+        let encodedMessage = WalletCrypto.base58Encode(data: message)
+        let transaction = try Solana.shared.preparedTransactionMessageForSigning(
+            message: encodedMessage, publicKey: solana.normalizedAddress
+        ).get()
+        let legacy = try Solana.shared.preparedLegacySignAndSendTransaction(
+            message: encodedMessage, publicKey: solana.normalizedAddress
+        ).get()
+        let serialized = try Solana.shared.preparedSerializedTransactionForSignAndSend(
+            serializedTransaction: WalletCrypto.base58Encode(data: Data([1]) + Data(repeating: 0, count: 64) + message),
+            publicKey: solana.normalizedAddress
+        ).get()
+        let options = try Solana.preparedSendOptions(from: [:]).get()
+        let cases: [(SignMessageAction.Payload, WalletCoin, Bool)] = [
+            (.ethereumMessage(Vectors.ethereumRawSignDigest), .ethereum, false),
+            (.ethereumPersonalMessage(walletSigningTestMessage), .ethereum, false),
+            (.ethereumTypedData(Vectors.typedDataJSON), .ethereum, false),
+            (.solanaMessage(walletSigningTestMessage), .solana, false),
+            (.solanaTransaction(transaction), .solana, false),
+            (.solanaTransactions([transaction]), .solana, false),
+            (.solanaLegacyBroadcast(legacy, options), .solana, true),
+            (.solanaSerializedBroadcast(serialized, options), .solana, true),
+        ]
+        for approved in [descriptor(), solana] {
+            var request = try XCTUnwrap(SafariRequest(json: [
+                "id": 1, "name": "signMessage", "provider": approved.coin == .ethereum ? "ethereum" : "solana",
+                "host": "wallet.example", "configurationKey": "https://wallet.example",
+                "enqueueAttempt": String(repeating: "a", count: 32),
+                "admissionDeadline": Int(Date().addingTimeInterval(120).timeIntervalSince1970 * 1_000),
+                "workflowVersion": ExtensionBridge.workflowVersion,
+                "body": approved.coin == .ethereum
+                    ? ["address": approved.normalizedAddress, "chainId": "0x1"]
+                    : ["publicKey": approved.normalizedAddress],
+            ]))
+            request.authorizedAccount = approved
+            for (payload, coin, requiresCluster) in cases {
+                for cluster: Solana.Cluster? in [nil, .devnet] {
+                    let action = SignMessageAction(
+                        subject: .signMessage, walletId: approved.walletID,
+                        account: approved.account, meta: "", payload: payload
+                    )
+                    let operation = ApprovedWalletSigningOperation(
+                        request: request, approval: .message(action, cluster),
+                        handle: .init(id: 1, token: .init(value: UUID()), profileIdentifier: nil),
+                        deadline: Date().addingTimeInterval(60)
+                    )
+                    XCTAssertEqual(operation != nil, approved.coin == coin && requiresCluster == (cluster != nil))
+                }
+            }
+        }
     }
 
     func testEthereumSigningModesUseTheCapturedPayload() async throws {
@@ -929,7 +1071,7 @@ final class WalletSigningScopeTests: XCTestCase {
         for (payload, expectedSignature) in cases {
             let (account, access) = try unlockedSigningAccess(coin: .ethereum, key: Vectors.ethereumSignerPrivateKey)
             let operation = try approvedWalletSigningOperationForTesting(approvedAccount: account, payload: payload)
-            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true })
+            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true }, authorityIsCurrent: { _ in true })
             guard case .success(.ethereumSignature(let signature)) = await signer.sign() else {
                 return XCTFail("Expected the approved Ethereum signing mode")
             }
@@ -943,7 +1085,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: account, payload: .ethereumTypedData(Vectors.malformedTypedDataJSON)
         )
-        let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true })
+        let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true }, authorityIsCurrent: { _ in true })
         guard case .failure(.failedToSign) = await signer.sign() else {
             return XCTFail("Expected malformed typed data to fail")
         }
@@ -994,7 +1136,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 network: network.network
             ).get()
             final.nonce = "0x8"
-            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true })
+            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true }, authorityIsCurrent: { _ in true })
             guard case .success(.ethereumTransaction(let signed, let hash, let destination)) = await signer.sign() else {
                 return XCTFail("Expected signed Ethereum transaction")
             }
@@ -1026,7 +1168,7 @@ final class WalletSigningScopeTests: XCTestCase {
         for (payload, expectedMessages) in cases {
             let (account, access) = try unlockedSigningAccess(coin: .solana, key: Vectors.solanaPreparedSignerPrivateKey)
             let operation = try approvedWalletSigningOperationForTesting(approvedAccount: account, payload: payload)
-            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true })
+            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true }, authorityIsCurrent: { _ in true })
             let signatures: [String]
             switch try await signer.sign().get() {
             case .solanaSignature(let value): signatures = [value]
@@ -1095,7 +1237,7 @@ final class WalletSigningScopeTests: XCTestCase {
         for (payload, message, signerIndex) in cases {
             let (account, access) = try unlockedSigningAccess(coin: .solana, key: Vectors.solanaPreparedSignerPrivateKey)
             let operation = try approvedWalletSigningOperationForTesting(approvedAccount: account, payload: payload)
-            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true })
+            let signer = BoundWalletSigner(operation: operation, access: access, isCurrent: { true }, authorityIsCurrent: { _ in true })
             guard case .success(.solanaTransaction(let signed, let signature, let cluster, let capturedOptions)) = await signer.sign() else {
                 return XCTFail("Expected signed Solana transaction")
             }
