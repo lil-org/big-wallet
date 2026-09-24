@@ -15454,6 +15454,566 @@
         }
       }
     },
+    "Manage Wallets" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إدارة المحافظ"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ওয়ালেট পরিচালনা করুন"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestiona les carteres"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spravovat peněženky"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrer tegnebøger"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wallets verwalten"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαχείριση πορτοφολιών"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage Wallets"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestionar carteras"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrar carteras"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hallitse lompakoita"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gérer les portefeuilles"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "વૉલેટ્સનું સંચાલન કરો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ניהול ארנקים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वॉलेट्स प्रबंधित करें"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upravljanje novčanicima"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tárcák kezelése"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kelola Dompet"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestisci portafogli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウォレットを管理"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ವಾಲೆಟ್‌ಗಳನ್ನು ನಿರ್ವಹಿಸಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지갑 관리"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "വാലറ്റുകൾ നിയന്ത്രിക്കുക"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वॉलेट्स व्यवस्थापित करा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urus Dompet"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrer lommebøker"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wallets beheren"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ୱାଲେଟ୍ ପରିଚାଳନା କରନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਵਾਲਿਟਾਂ ਦਾ ਪ੍ਰਬੰਧ ਕਰੋ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zarządzaj portfelami"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerenciar Carteiras"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerir carteiras"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestionați portofelele"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управление кошельками"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spravovať peňaženky"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upravljanje denarnic"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hantera plånböcker"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "வாலட்டுகளை நிர்வகி"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "వాలెట్‌లను నిర్వహించండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "จัดการกระเป๋าเงิน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cüzdanları Yönetin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Керування гаманцями"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "والٹس کا نظم کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quản lý ví"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理钱包"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理錢包"
+          }
+        }
+      }
+    },
+    "Manage wallets in Big Wallet, then return here to connect." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أدِر محافظك في Big Wallet، ثم عُد إلى هنا للاتصال."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet-এ ওয়ালেট পরিচালনা করুন, তারপর সংযোগ করতে এখানে ফিরে আসুন।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestiona les carteres a Big Wallet i després torna aquí per connectar-te."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spravujte peněženky v Big Wallet a pak se sem vraťte a připojte se."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrer tegnebøger i Big Wallet, og vend derefter tilbage hertil for at oprette forbindelse."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwalte deine Wallets in Big Wallet und kehre anschließend hierher zurück, um dich zu verbinden."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διαχειριστείτε τα πορτοφόλια σας στο Big Wallet και μετά επιστρέψτε εδώ για να συνδεθείτε."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage wallets in Big Wallet, then return here to connect."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestiona tus carteras en Big Wallet y luego vuelve aquí para conectarte."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administra tus carteras en Big Wallet y luego vuelve aquí para conectarte."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hallitse lompakoita Big Walletissa ja palaa sitten tänne yhdistämään."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gérez vos portefeuilles dans Big Wallet, puis revenez ici pour vous connecter."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Walletમાં વૉલેટ્સનું સંચાલન કરો, પછી કનેક્ટ કરવા અહીં પાછા આવો."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יש לנהל את הארנקים ב-Big Wallet, ואז לחזור לכאן כדי להתחבר."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet में वॉलेट्स प्रबंधित करें, फिर कनेक्ट करने के लिए यहाँ लौटें।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upravljajte novčanicima u aplikaciji Big Wallet, zatim se vratite ovamo kako biste se povezali."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kezelje tárcáit a Big Walletben, majd térjen vissza ide a csatlakozáshoz."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kelola dompet di Big Wallet, lalu kembali ke sini untuk menghubungkan."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestisci i portafogli in Big Wallet, poi torna qui per connetterti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Walletでウォレットを管理してから、ここに戻って接続してください。"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Walletನಲ್ಲಿ ವಾಲೆಟ್‌ಗಳನ್ನು ನಿರ್ವಹಿಸಿ, ನಂತರ ಸಂಪರ್ಕಿಸಲು ಇಲ್ಲಿಗೆ ಹಿಂತಿರುಗಿ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet에서 지갑을 관리한 다음, 여기로 돌아와 연결하세요."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Walletൽ വാലറ്റുകൾ നിയന്ത്രിക്കുക, തുടർന്ന് കണക്റ്റ് ചെയ്യാൻ ഇവിടേക്ക് മടങ്ങുക."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet मध्ये वॉलेट्स व्यवस्थापित करा, नंतर कनेक्ट करण्यासाठी येथे परत या."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urus dompet dalam Big Wallet, kemudian kembali ke sini untuk menyambung."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrer lommebøker i Big Wallet, og kom deretter tilbake hit for å koble til."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beheer je wallets in Big Wallet en kom daarna hier terug om verbinding te maken."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Walletରେ ୱାଲେଟ୍ ପରିଚାଳନା କରନ୍ତୁ, ତାପରେ ସଂଯୋଗ କରିବାକୁ ଏଠାକୁ ଫେରନ୍ତୁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet ਵਿੱਚ ਵਾਲਿਟਾਂ ਦਾ ਪ੍ਰਬੰਧ ਕਰੋ, ਫਿਰ ਕਨੈਕਟ ਕਰਨ ਲਈ ਇੱਥੇ ਵਾਪਸ ਆਓ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zarządzaj portfelami w Big Wallet, a następnie wróć tutaj, aby się połączyć."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerencie suas carteiras no Big Wallet e depois volte aqui para se conectar."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faça a gestão das suas carteiras no Big Wallet e depois volte aqui para se conectar."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestionați portofelele în Big Wallet, apoi reveniți aici pentru a vă conecta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управляйте кошельками в Big Wallet, затем вернитесь сюда для подключения."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spravujte peňaženky v Big Wallet a potom sa sem vráťte a pripojte sa."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upravljajte denarnice v aplikaciji Big Wallet, nato se vrnite sem, da se povežete."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hantera plånböcker i Big Wallet och kom sedan tillbaka hit för att ansluta."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet-இல் வாலட்டுகளை நிர்வகித்துவிட்டு, இணைக்க இங்கே திரும்பவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Walletలో వాలెట్‌లను నిర్వహించండి, ఆపై కనెక్ట్ చేయడానికి ఇక్కడికి తిరిగి రండి."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "จัดการกระเป๋าเงินใน Big Wallet แล้วกลับมาที่นี่เพื่อเชื่อมต่อ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cüzdanlarınızı Big Wallet’ta yönetin, ardından bağlanmak için buraya dönün."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Керуйте гаманцями в Big Wallet, потім поверніться сюди для підключення."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Big Wallet میں والٹس کا نظم کریں، پھر کنیکٹ کرنے کے لیے یہاں واپس آئیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quản lý ví trong Big Wallet, sau đó quay lại đây để kết nối."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Big Wallet 中管理钱包，然后返回这里进行连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Big Wallet 中管理錢包，然後返回這裡進行連接。"
+          }
+        }
+      }
+    },
     "Maximum fee" : {
       "extractionState" : "stale",
       "localizations" : {

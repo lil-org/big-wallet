@@ -286,7 +286,6 @@ function bigWalletEnqueue(message, generation, observedRevision) {
         responseFailureMilliseconds: 0,
         lastResponseFailureAt: null,
         authority,
-        authorizationRetryUsed: false,
         rerunRequested: false,
         retryDelay: 500,
         running: false,
@@ -359,21 +358,6 @@ async function bigWalletSendEnqueue(state) {
     }
     const terminal = bigWalletTerminal(response, state.message.id);
     if (terminal) {
-        if (!state.authorizationRetryUsed && terminal.kind === "error" && terminal.error.code === 4100 &&
-            ["requestAccounts", "connect", "switchEthereumChain", "addEthereumChain"].includes(state.message.name) &&
-            terminal.state?.context === state.authority.context && Date.now() < state.admissionDeadline &&
-            (terminal.state.revisions.ethereum > state.authority.revisions.ethereum ||
-                terminal.state.revisions.solana > state.authority.revisions.solana)) {
-            state.authorizationRetryUsed = true;
-            bigWalletPublishConfiguration(terminal.state, state.configurationKey, state.generation);
-            state.authority = {context: terminal.state.context, revisions: {...terminal.state.revisions}};
-            if (state.message.provider === "ethereum" && state.message.name === "switchEthereumChain") {
-                state.message.body.address = terminal.state.ethereum.address;
-            }
-            state.enqueueAttempt = bigWalletWire.genPrivateToken();
-            bigWalletSchedule(state, 0);
-            return;
-        }
         bigWalletDeliver(state, terminal);
         return;
     }
@@ -507,7 +491,7 @@ function bigWalletDisconnect(message, generation) {
         return;
     }
     const id = typeof message.id === "undefined" ? bigWalletWire.genId() : message.id;
-    let request = {
+    const request = {
         subject: "disconnect", id, provider: message.provider,
         host: identity.host, configurationKey: identity.configurationKey,
         attempt: bigWalletWire.genPrivateToken(),
@@ -516,7 +500,6 @@ function bigWalletDisconnect(message, generation) {
     };
     void (async () => {
         let response;
-        let staleRetried = false;
         let lostReplies = 0;
         for (;;) {
             response = undefined;
@@ -526,15 +509,6 @@ function bigWalletDisconnect(message, generation) {
             if (!terminal) {
                 if (lostReplies++ === 0) { continue; }
                 break;
-            }
-            if (!staleRetried && terminal.kind === "error" && terminal.error.code === 4100 &&
-                terminal.state?.context === request.authority.context) {
-                staleRetried = true;
-                lostReplies = 0;
-                bigWalletPublishConfiguration(terminal.state, identity.configurationKey, generation);
-                request = {...request, attempt: bigWalletWire.genPrivateToken(),
-                    authority: {context: terminal.state.context, revisions: {...terminal.state.revisions}}};
-                continue;
             }
             break;
         }

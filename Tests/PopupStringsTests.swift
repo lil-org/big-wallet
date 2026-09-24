@@ -147,7 +147,7 @@ final class PopupStringsTests: XCTestCase {
         }
     }
 
-    func testSafetyStringsCoverEveryCatalogLocale() throws {
+    func testApprovalStringsCoverEveryCatalogLocale() throws {
         let catalog = try localizableCatalog()
         let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
         let supportedLocales = strings.values.reduce(into: Set<String>()) {
@@ -161,6 +161,8 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertFalse(supportedLocales.isEmpty)
 
         for key in [
+            "Manage Wallets",
+            "Manage wallets in Big Wallet, then return here to connect.",
             "Approval interrupted. Please try again from the website.",
             "Big Wallet requests are unavailable in Private Browsing.",
             "Safari approvals require a device passcode. Enable one in Settings if needed, then open Big Wallet and return to Safari to retry.",

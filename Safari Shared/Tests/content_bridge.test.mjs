@@ -888,7 +888,7 @@ test("a lost enqueue reply retries the identical attempt", async () => {
         return message.subject === "message-to-wallet";
     });
     assert.equal(enqueues.length, 2);
-    assert.equal(enqueues[0].enqueueAttempt, enqueues[1].enqueueAttempt);
+    assert.deepEqual(enqueues[1], enqueues[0]);
     assert.equal(enqueues[0].admissionDeadline, enqueues[1].admissionDeadline);
 });
 
@@ -2068,41 +2068,52 @@ test("failed warm refresh retains the last snapshot and retries a bounded number
     assert.equal(harness.postedMessages.some(value => value.message.response.kind === "configurationError"), false);
 });
 
-for (const name of ["requestAccounts", "switchEthereumChain", "addEthereumChain"]) {
-    test(`${name} retries a stale native snapshot with a fresh admission attempt`, async () => {
+for (const [provider, name] of [
+    ["ethereum", "requestAccounts"], ["ethereum", "switchEthereumChain"],
+    ["ethereum", "addEthereumChain"], ["solana", "connect"],
+]) {
+    test(`${provider} ${name} returns changed authority and waits for an explicit new request`, async () => {
         const state = configurationState({ethereum: 1, solana: 1});
+        const error = {code: 4100, message: "Changed"};
         let admissions = 0;
         const harness = makeHarness({sendMessage: message => {
             if (message.subject !== "message-to-wallet") { return undefined; }
-            return ++admissions === 1 ? {kind: "error", id: message.message.id, provider: "ethereum", name,
-                state, error: {code: 4100, message: "Changed"}}
+            return ++admissions === 1 ? {kind: "error", id: message.message.id, provider, name, state, error}
                 : {id: message.message.id, requestToken, admissionKind: "new", approvalRequired: true, state};
         }});
         await settle();
-        const request = {...dappRequest(), name};
-        if (name !== "requestAccounts") { request.body.object = {chainId: "0xa"}; }
+        const request = {...dappRequest(), provider, name};
+        if (provider === "solana") { request.body = {publicKey: "", object: {params: {}}}; }
+        else if (name !== "requestAccounts") { request.body.object = {chainId: "0xa"}; }
         harness.dispatchPage("request", request);
+        await settle();
+        const first = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
+        assert.equal(first.length, 1);
+        assert.deepEqual(first[0].message, request);
+        assert.deepEqual(clone(harness.postedMessages.at(-1).message.response),
+            {kind: "error", id: request.id, provider, name, state, error});
+        assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), state);
+        assert.equal(harness.context.bigWalletRequests.size, 0);
+        assert.equal(harness.nextTimerDelay(), null);
+
+        harness.dispatchPage("request", {...request, id: request.id + 2});
         await settle();
         const sent = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
         assert.equal(sent.length, 2);
         assert.notEqual(sent[0].enqueueAttempt, sent[1].enqueueAttempt);
-        assert.equal(sent[0].admissionDeadline, sent[1].admissionDeadline);
-        assert.deepEqual(sent[1].message, sent[0].message);
         assert.deepEqual(sent[1].authority, {context: state.context, revisions: state.revisions});
         assert.equal([...harness.context.bigWalletRequests.values()][0].phase, "waiting");
     });
 }
 
 for (const address of ["0x" + "2".repeat(40), ""]) {
-    test(`chain-switch retry refreshes the account after ${address ? "an account change" : "disconnect"}`, async () => {
+    test(`chain-switch failure does not rewrite the request after ${address ? "an account change" : "disconnect"}`, async () => {
         const initial = {...configurationState(), ethereum: {address: "0x" + "1".repeat(40), chainId: "0x1"}};
         const state = {...configurationState({ethereum: 1, solana: 0}), ethereum: {address, chainId: "0x1"}};
-        let admissions = 0;
         const harness = makeHarness({configurationResponse: {kind: "configuration", state: initial}, sendMessage: message => {
             if (message.subject !== "message-to-wallet") { return undefined; }
-            return ++admissions === 1 ? {kind: "error", id: message.message.id, provider: "ethereum",
-                name: "switchEthereumChain", state, error: {code: 4100, message: "Changed"}}
-                : {id: message.message.id, requestToken, admissionKind: "new", approvalRequired: true, state};
+            return {kind: "error", id: message.message.id, provider: "ethereum",
+                name: "switchEthereumChain", state, error: {code: 4100, message: "Changed"}};
         }});
         await settle();
         const request = {...dappRequest(), name: "switchEthereumChain",
@@ -2110,10 +2121,12 @@ for (const address of ["0x" + "2".repeat(40), ""]) {
         harness.dispatchPage("request", request);
         await settle();
         const sent = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
-        assert.equal(sent.length, 2);
+        assert.equal(sent.length, 1);
         assert.deepEqual(sent[0].message, request);
-        assert.deepEqual(sent[1].message, {...request, body: {...request.body, address}});
-        assert.deepEqual(sent[1].authority, {context: state.context, revisions: state.revisions});
+        assert.equal(request.body.address, initial.ethereum.address);
+        assert.equal(harness.postedMessages.at(-1).message.response.error.code, 4100);
+        assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), state);
+        assert.equal(harness.nextTimerDelay(), null);
     });
 }
 
@@ -2129,31 +2142,35 @@ test("signing and ambiguous admissions never retry with refreshed authority", as
     assert.equal(harness.postedMessages.at(-1).message.response.error.code, 4100);
 });
 
-test("disconnect retries one stale precondition and replays a lost reply with the same new attempt", async () => {
-    let calls = 0;
-    const revised = configurationState({ethereum: 1, solana: 0});
-    const reconnected = {...configurationState({ethereum: 3, solana: 0}),
-        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}};
-    const harness = makeHarness({sendMessage: message => {
-        if (message.subject !== "disconnect") { return undefined; }
-        calls += 1;
-        if (calls === 1) { return {id: message.id, provider: "ethereum", name: "revokePermissions", kind: "error",
-            error: {code: 4100, message: "Changed"}, state: revised}; }
-        if (calls === 2) { return undefined; }
-        return {id: message.id, provider: "ethereum", name: "revokePermissions", kind: "result",
-            result: null, approvalCommitted: false, state: reconnected};
-    }});
-    await settle();
-    harness.dispatchPage("disconnect", {id: 7, provider: "ethereum"});
-    await settle();
-    const sent = harness.runtimeMessages.filter(value => value.subject === "disconnect");
-    assert.equal(sent.length, 3);
-    assert.notEqual(sent[0].attempt, sent[1].attempt);
-    assert.equal(sent[1].attempt, sent[2].attempt);
-    assert.deepEqual(sent[1].authority, sent[2].authority);
-    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), reconnected);
-    assert.equal(harness.postedMessages.at(-1).message.response.kind, "result");
-});
+for (const provider of ["ethereum", "solana"]) {
+    for (const outcome of ["stale", "lost-then-success", "lost-then-stale"]) {
+        test(`${provider} disconnect ${outcome} never replaces its authority or identity`, async () => {
+            let calls = 0;
+            const state = configurationState({ethereum: 3, solana: 3});
+            const error = {code: 4100, message: "Changed"};
+            const succeeds = outcome === "lost-then-success";
+            const harness = makeHarness({sendMessage: message => {
+                if (message.subject !== "disconnect") { return undefined; }
+                calls += 1;
+                if (calls === 1 && outcome !== "stale") { return undefined; }
+                const base = {id: message.id, provider, name: "revokePermissions", state};
+                return succeeds ? {...base, kind: "result", result: null, approvalCommitted: false}
+                    : {...base, kind: "error", error};
+            }});
+            await settle();
+            harness.dispatchPage("disconnect", {id: 7, provider});
+            await settle();
+            const sent = harness.runtimeMessages.filter(value => value.subject === "disconnect");
+            assert.equal(sent.length, outcome === "stale" ? 1 : 2);
+            if (sent.length === 2) { assert.deepEqual(sent[1], sent[0]); }
+            assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), state);
+            const terminal = harness.postedMessages.at(-1).message.response;
+            assert.equal(terminal.kind, succeeds ? "result" : "error");
+            if (!succeeds) { assert.deepEqual(clone(terminal.error), error); }
+            assert.equal(harness.nextTimerDelay(), null);
+        });
+    }
+}
 
 test("disconnect never retries a precondition from another native context", async () => {
     const harness = makeHarness({sendMessage: message => message.subject === "disconnect" ? {

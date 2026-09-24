@@ -161,28 +161,167 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(approval.currentReview === freshReview)
     }
 
-    func testAccountNavigationSharesLifetimeAndCleansRetainedScreens() throws {
+    func testApprovalPickerBlocksWalletManagementActions() throws {
+        for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
+            let manager = try accountSelectionWalletsManager()
+            let wallet = try XCTUnwrap(manager.wallets.first)
+            let selected = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
+            let controller = accountSelectionController(
+                manager: manager, mode: mode, selectedAccounts: [selected]
+            )
+            let window = accountSelectionWindow(controller: controller)
+            let windowController = WalletWindowController(window: window)
+            windowController.approvalPeer = PeerMeta(title: "wallet.example")
+            defer { windowController.close() }
+            let table = try XCTUnwrap(controller.tableView)
+            let header = try XCTUnwrap(table.rowView(atRow: 0, makeIfNecessary: true) as? AccountsHeaderRowView)
+            let menu = PopupRecordingMenu()
+            header.titleButton.menu = menu
+            menu.onPopup = { XCTFail("Approval headers must not open management menus") }
+            let originalData = try XCTUnwrap(wallet.key.exportJSON())
+
+            XCTAssertTrue(controller.addButton.isHidden)
+            XCTAssertNil(controller.menuForRow(1))
+            XCTAssertFalse(header.titleButton.isEnabled)
+            XCTAssertNil(header.titleButton.image)
+            header.titleButtonTapped(header.titleButton)
+            controller.addButtonTapped(controller.addButton)
+            for selector in ["didClickCreateAccount", "didClickImportAccount", "didClickRemoveWallet:",
+                             "didClickRemoveAccount:", "didClickEditAccountName:", "didClickShowKey:",
+                             "didClickShowSpecificPrivateKey:"] {
+                _ = controller.perform(NSSelectorFromString(selector), with: controller)
+            }
+            controller.didClickEditAccounts(sender: header)
+            controller.didClickEditName(sender: header)
+            controller.didClickShowSecretWords(sender: header)
+            controller.didClickRemoveWallet(sender: header)
+
+            XCTAssertTrue(window.contentViewController === controller)
+            XCTAssertNil(window.attachedSheet)
+            XCTAssertEqual(controller.accountSelection?.selectedAccounts, [selected])
+            XCTAssertFalse(try XCTUnwrap(controller.accountSelection).hasCompleted)
+            XCTAssertEqual(wallet.key.exportJSON(), originalData)
+        }
+    }
+
+    func testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks() throws {
         let controller = accountSelectionController(
             manager: try accountSelectionWalletsManager(), mode: .selectAccount,
             selectedAccounts: []
         )
         let window = accountSelectionWindow(controller: controller)
+        let windowController = WalletWindowController(window: window)
+        windowController.approvalPeer = PeerMeta(title: "wallet.example")
+        defer { windowController.close() }
+        let session = try XCTUnwrap(controller.accountSelection)
+        var launches = 0
+        var finishLaunch: ((Bool) -> Void)?
+        controller.openWalletManagement = { completion in
+            launches += 1
+            finishLaunch = completion
+        }
+        let manageRow = controller.numberOfRows(in: controller.tableView) - 1
+        try clickAccountRow(manageRow, in: controller, window: window)
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        XCTAssertEqual(launches, 1)
+        finishLaunch?(true)
+        XCTAssertTrue(window.contentViewController === controller)
+        XCTAssertTrue(session.lifetime.isActive)
+        XCTAssertFalse(session.hasCompleted)
+        XCTAssertNil(window.attachedSheet)
+
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        XCTAssertEqual(launches, 2)
+        finishLaunch?(false)
+        let errorSheet = try XCTUnwrap(window.attachedSheet)
+        window.endSheet(errorSheet, returnCode: .alertFirstButtonReturn)
+        errorSheet.orderOut(nil)
+        XCTAssertFalse(session.hasCompleted)
+
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        XCTAssertEqual(launches, 3)
+        session.lifetime.invalidate()
+        finishLaunch?(false)
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        XCTAssertEqual(launches, 3)
+        XCTAssertNil(window.attachedSheet)
+        XCTAssertTrue(window.contentViewController === controller)
+        XCTAssertFalse(session.hasCompleted)
+    }
+
+    func testEmptyApprovalShowsRequesterAndSeparateWalletManagement() throws {
+        let reader = KeychainCopyMatchingStub()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        XCTAssertTrue(manager.reloadFromStore())
+        for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
+            let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
+            let window = accountSelectionWindow(controller: controller)
+            let windowController = WalletWindowController(window: window)
+            windowController.approvalPeer = PeerMeta(title: "wallet.example")
+            defer { windowController.close() }
+            controller.viewDidAppear()
+            var launches = 0
+            controller.openWalletManagement = { completion in launches += 1; completion(true) }
+            XCTAssertFalse(controller.websiteNameStackView.isHidden)
+            XCTAssertEqual(controller.websiteNameLabel.stringValue, "wallet.example")
+            XCTAssertEqual(controller.titleLabel.stringValue,
+                           (mode == .selectAccount ? Strings.selectAccount : Strings.switchAccount)
+                            .replacingOccurrences(of: " ", with: "\n"))
+            XCTAssertFalse(controller.primaryButton.isEnabled)
+            XCTAssertTrue(controller.addButton.isHidden)
+            XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 2)
+            let guidance = try XCTUnwrap(controller.tableView(controller.tableView, rowViewForRow: 0))
+            XCTAssertTrue(guidance.subviews.contains {
+                ($0 as? NSTextField)?.stringValue == Strings.manageWalletsToConnect
+            })
+            XCTAssertFalse(controller.tableView(controller.tableView, shouldSelectRow: 0))
+            XCTAssertTrue(window.makeFirstResponder(controller.tableView))
+            try pressDownArrow(in: controller.tableView, window: window)
+            XCTAssertEqual(controller.tableView.selectedRow, 1)
+            try pressKey(" ", keyCode: 49, in: controller.tableView, window: window)
+            XCTAssertEqual(launches, 1)
+            XCTAssertTrue(window.contentViewController === controller)
+            XCTAssertFalse(try XCTUnwrap(controller.accountSelection).hasCompleted)
+        }
+    }
+
+    func testApprovalPickerRefreshPreservesOnlyExistingSelectionsWithoutSubmitting() throws {
+        typealias Vectors = WalletCoreProxyTestVectors
+        let reader = KeychainCopyMatchingStub()
+        let walletID = "selection-wallet"
+        reader.attributes = [reader.walletAttributes(id: walletID)]
+        let key = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
+        reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        XCTAssertTrue(manager.reloadFromStore())
+        let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
+        let selected = SpecificWalletAccount(walletId: walletID, account: account)
+        var submissions = 0
+        let controller = accountSelectionController(
+            manager: manager, mode: .selectAccount, selectedAccounts: [selected],
+            completion: { _, _ in submissions += 1 }
+        )
+        let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
-        let lifetime = try XCTUnwrap(controller.accountSelection?.lifetime)
-        let menu = TrackingMenu()
-        controller.addButton.menu = menu
-        _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
-        let imported = try XCTUnwrap(window.contentViewController as? ImportViewController)
-        XCTAssertTrue(imported.accountSelection === controller.accountSelection)
-        _ = imported.view
+        let initialRows = controller.numberOfRows(in: controller.tableView)
+        key.addAccountDerivation(
+            address: Vectors.abandonEthereumSecondAddress, coin: .ethereum, derivation: .custom,
+            derivationPath: "m/44'/60'/0'/0/1", publicKey: Vectors.abandonEthereumSecondPublicKey,
+            extendedPublicKey: Vectors.abandonEthereumExtendedPublicKey
+        )
+        reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
+        manager.handleExternalWalletStoreChange()
+        XCTAssertEqual(controller.numberOfRows(in: controller.tableView), initialRows + 1)
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [selected])
+        XCTAssertTrue(controller.primaryButton.isEnabled)
+        XCTAssertEqual(submissions, 0)
 
-        lifetime.invalidate()
-        lifetime.invalidate()
-        imported.cancelButtonTapped(imported.cancelButton)
-        _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
-
-        XCTAssertTrue(window.contentViewController === imported)
-        XCTAssertEqual(menu.cancellationCount, 1)
+        key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
+        reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
+        manager.handleExternalWalletStoreChange()
+        XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
+        XCTAssertFalse(controller.primaryButton.isEnabled)
+        XCTAssertEqual(submissions, 0)
     }
 
     func testOrdinaryWalletCloseStillFencesRetainedActions() throws {
@@ -1297,13 +1436,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(windowController.approvalPeer?.name, "wallet.example")
     }
 
-    func testApprovalImportPreservesMainLayout() throws {
+    func testWalletImportPreservesMainLayout() throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
             ) as? WalletWindowController
         )
-        windowController.approvalPeer = PeerMeta(title: "wallet.example")
         let controller = instantiate(ImportViewController.self)
         windowController.contentViewController = controller
         controller.viewWillAppear()
@@ -1762,6 +1900,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         try pressDownArrow(in: table, window: window)
         try pressDownArrow(in: table, window: window)
+        XCTAssertEqual(table.selectedRow, controller.numberOfRows(in: table) - 1)
+        try pressKey("\u{f700}", keyCode: 126, in: table, window: window)
         XCTAssertEqual(table.selectedRow, 2)
         try pressKey(" ", keyCode: 49, in: table, window: window)
         try clickAccountRow(1, in: controller, window: window)
@@ -1780,7 +1920,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         XCTAssertTrue(manager.reloadFromStore())
-        let cases: [(NativeAccountSelectionMode?, Bool)] = [(nil, true), (.switchAccount, true), (nil, false)]
+        let cases: [(NativeAccountSelectionMode?, Bool)] = [(nil, true), (nil, false)]
         for (mode, useKeyboard) in cases {
             let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
             let window = accountSelectionWindow(controller: controller)
@@ -3860,7 +4000,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         manager: WalletsManager,
         mode: NativeAccountSelectionMode?,
         selectedAccounts: Set<SpecificWalletAccount>,
-        coinType: WalletCoin? = nil
+        coinType: WalletCoin? = nil,
+        completion: @escaping ([SpecificWalletAccount]?, EthereumNetwork?) -> Void = { _, _ in }
     ) -> AccountsListViewController {
         let controller = instantiate(AccountsListViewController.self)
         controller.walletsManager = manager
@@ -3874,7 +4015,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 ),
                 mode: mode,
                 lifetime: NativeApprovalReviewLifetime(),
-                completion: { _, _ in }
+                completion: completion
             )
         }
         controller.loadView()

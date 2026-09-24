@@ -50,6 +50,8 @@ struct Strings {
     static let selectNetwork = loc("Select Network")
     static let importWallet = loc("Import Wallet")
     static let addWallet = loc("Add Wallet")
+    static let manageWallets = loc("Manage Wallets")
+    static let manageWalletsToConnect = loc("Manage wallets in Big Wallet, then return here to connect.")
     static let createNew = loc("Create New")
     static let importExisting = loc("Import")
     static let passwordDoesNotMatch = loc("Password does not match")

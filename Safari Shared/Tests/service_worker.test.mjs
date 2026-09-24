@@ -1221,36 +1221,31 @@ test("ordinary dapp admission still requires the exact request ID", async () => 
     assert.equal(harness.popupCalls.length, 0);
 });
 
-test("toolbar account selection retries one stale native authority snapshot", async () => {
+test("toolbar account selection returns changed authority and opens the wallet without readmitting", async () => {
     const initial = snapshot({revisions: {ethereum: 3, solana: 4}});
     const current = snapshot({revisions: {ethereum: 4, solana: 4}});
     const admissions = [];
     const harness = makeHarness({configuredPopup: false, dateNow: () => 1_700_000_000_000,
         native: message => {
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: initial}; }
-            if (message.subject === "showApproval") { return {id: message.id, opened: true}; }
+            if (message.subject === "openApp") { return {id: message.id, opened: true}; }
             assert.equal(message.name, "switchAccount");
             admissions.push(message);
-            return admissions.length === 1 ? manualSwitchDenial(message.id, current)
-                : {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: current};
+            return manualSwitchDenial(message.id, current);
         },
         sendTabMessage: (_id, message) => message.subject === "workflowProbe"
             ? {subject: "workflowProbe", nonce: message.nonce, workflowVersion: 4, buildVersion: packagedBuildVersion}
             : harness.dispatch(manualSwitchIntent()),
     });
     await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
-    assert.equal(admissions.length, 2);
-    assert.notEqual(admissions[0].id, admissions[1].id);
-    assert.notEqual(admissions[0].enqueueAttempt, admissions[1].enqueueAttempt);
+    assert.equal(admissions.length, 1);
     assert.equal(admissions[0].admissionDeadline, admissionDeadline);
-    assert.equal(admissions[1].admissionDeadline, admissionDeadline);
-    assert.deepEqual(clone(admissions[1].authority), {context: current.context, revisions: current.revisions});
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject || value.message.name), [
-        "getLatestConfiguration", "switchAccount", "switchAccount", "showApproval",
+        "getLatestConfiguration", "switchAccount", "openApp",
     ]);
 });
 
-test("toolbar waits for manual-switch retries and completion draining", async () => {
+test("toolbar waits for manual-switch completion draining and readmission", async () => {
     const timers = new Map;
     let nextTimer = 0;
     const schedule = (callback, delay) => {
@@ -1281,18 +1276,35 @@ test("toolbar waits for manual-switch retries and completion draining", async ()
     assert.equal(timers.size, 0);
 });
 
-test("manual-switch stale authority retries are bounded", async () => {
-    let admissions = 0;
-    const harness = makeHarness({native: message => {
-        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-        admissions += 1;
-        return manualSwitchDenial(message.id, snapshot({revisions: {ethereum: admissions, solana: 0}}));
-    }});
+test("manual-switch changed authority requires an explicit new intent", async () => {
+    const initial = snapshot();
+    const current = snapshot({revisions: {ethereum: 1, solana: 0}});
+    const admissions = [];
+    let reads = 0;
+    const harness = makeHarness({tabs: [{id: 3, url: "https://wallet.example/dapp"}],
+        recoveryNative: message => ({id: message.id, requests: []}),
+        native: message => {
+            if (message.subject === "getLatestConfiguration") {
+                return {id: message.id, state: ++reads === 1 ? initial : current};
+            }
+            assert.equal(message.name, "switchAccount");
+            admissions.push(message);
+            return admissions.length === 1 ? manualSwitchDenial(message.id, current)
+                : {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: current};
+        },
+    });
     const response = await harness.dispatch(manualSwitchIntent());
-    assert.equal(response.kind, "error");
-    assert.equal(response.error.code, 4100);
-    assert.equal(admissions, 2);
+    assert.deepEqual(clone(response), manualSwitchDenial(admissions[0].id, current).response);
+    assert.equal(admissions.length, 1);
     assert.equal(harness.popupCalls.length, 0);
+    assert.ok(harness.tabMessages.some(value => value.message.subject === "configurationInvalidated"));
+
+    const retried = await harness.dispatch(manualSwitchIntent());
+    assert.equal(admissions.length, 2);
+    assert.equal(reads, 2);
+    assert.notEqual(admissions[0].enqueueAttempt, admissions[1].enqueueAttempt);
+    assert.deepEqual(clone(admissions[1].authority), {context: current.context, revisions: current.revisions});
+    assert.equal(retried.approvalRequired, true);
 });
 
 test("manual-switch admission never retries ambiguous or unrelated terminal replies", async () => {
@@ -1338,7 +1350,7 @@ test("manual-switch transport timeout does not create another admission", async 
     assert.equal(admissions, 1);
 });
 
-test("manual-switch stale retries preserve the original deadline", async () => {
+test("manual-switch changed authority is terminal even at its deadline", async () => {
     let now = 1_700_000_000_000;
     let admissions = 0;
     const harness = makeHarness({dateNow: () => now, native: message => {
@@ -1353,12 +1365,12 @@ test("manual-switch stale retries preserve the original deadline", async () => {
 });
 
 for (const sequence of [
-    ["stale", "completed", "accepted"],
-    ["completed", "stale", "accepted"],
-    ["stale", "completed", "stale"],
-    ["completed", "stale", "completed"],
+    ["stale"],
+    ["completed", "stale"],
+    ["completed", "accepted"],
+    ["completed", "completed"],
 ]) {
-    test(`manual-switch stale and completion retries have independent limits: ${sequence.join(", ")}`, async () => {
+    test(`manual-switch permits only one completion readmission: ${sequence.join(", ")}`, async () => {
         let state = snapshot();
         const admissions = [];
         let drains = 0;
@@ -1375,7 +1387,7 @@ for (const sequence of [
                 assert.equal(message.name, "switchAccount");
                 admissions.push(message);
                 const step = sequence[admissions.length - 1];
-                assert.ok(step, "No fourth admission is allowed");
+                assert.ok(step, "No additional admission is allowed");
                 if (step === "stale") {
                     state = snapshot({revisions: {ethereum: state.revisions.ethereum + 1, solana: 0}});
                     return manualSwitchDenial(message.id, state);
@@ -1385,17 +1397,17 @@ for (const sequence of [
             },
         });
         const response = await harness.dispatch(manualSwitchIntent());
-        assert.equal(admissions.length, 3);
-        assert.equal(new Set(admissions.map(value => value.id)).size, 3);
-        assert.equal(new Set(admissions.map(value => value.enqueueAttempt)).size, 3);
+        assert.equal(admissions.length, sequence.length);
+        assert.equal(new Set(admissions.map(value => value.id)).size, sequence.length);
+        assert.equal(new Set(admissions.map(value => value.enqueueAttempt)).size, sequence.length);
         assert.ok(admissions.every(value => value.admissionDeadline === admissionDeadline));
-        assert.equal(drains, 1);
-        assert.equal(harness.nativeMessages.filter(value => value.message.subject === "acknowledgeResponse").length, 1);
-        if (sequence[2] === "accepted") {
+        assert.equal(drains, sequence[0] === "completed" ? 1 : 0);
+        assert.equal(harness.nativeMessages.filter(value => value.message.subject === "acknowledgeResponse").length, drains);
+        if (sequence.at(-1) === "accepted") {
             assert.equal(response.approvalRequired, true);
-            assert.equal(response.id, admissions[2].id);
+            assert.equal(response.id, admissions.at(-1).id);
             assert.equal(harness.popupCalls.length, 1);
-        } else if (sequence[2] === "stale") {
+        } else if (sequence.at(-1) === "stale") {
             assert.equal(response.error.code, 4100);
         } else {
             assert.equal(response, undefined);

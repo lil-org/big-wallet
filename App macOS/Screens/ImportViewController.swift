@@ -5,10 +5,7 @@ import Cocoa
 class ImportViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
-    var accountSelection: NativeAccountSelectionSession?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
-    private var presentedPasswordAlert: (alert: NSAlert, token: UUID)?
-    private var reviewLifetime: NativeApprovalReviewLifetime?
     private var isImporting = false
     
     @IBOutlet weak var titleTextField: NSTextField!
@@ -24,16 +21,13 @@ class ImportViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        reviewLifetime = accountSelection?.lifetime
-        reviewLifetime?.register(self)
-        guard reviewLifetime?.isActive != false else { return }
         cancelButton.title = Strings.cancel
         okButton.title = Strings.ok
         titleTextField.stringValue = Strings.importWallet.replacingOccurrences(of: " ", with: "\n")
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard reviewLifetime?.isActive != false, !isImporting else { return }
+        guard !isImporting else { return }
         if inputValidationResult == .requiresPassword {
             showPasswordAlert()
         } else {
@@ -42,8 +36,6 @@ class ImportViewController: NSViewController {
     }
  
     private func showPasswordAlert() {
-        guard presentedPasswordAlert == nil,
-              let window = view.window else { return }
         let alert = Alert()
         let input = textField.stringValue
         alert.messageText = Strings.enterKeystorePassword
@@ -59,35 +51,10 @@ class ImportViewController: NSViewController {
         passwordTextField.isAutomaticTextCompletionEnabled = false
         passwordTextField.alignment = .center
         
-        guard nativeApprovalPeer != nil else {
-            DispatchQueue.main.async { [weak passwordTextField] in
-                passwordTextField?.becomeFirstResponder()
-            }
-            if alert.runModal() == .alertFirstButtonReturn {
-                importWith(
-                    input: input,
-                    password: passwordTextField.stringValue
-                )
-            }
-            return
-        }
-        
-        let token = UUID()
-        presentedPasswordAlert = (alert, token)
-
-        DispatchQueue.main.async { [weak self, weak passwordTextField] in
-            guard self?.presentedPasswordAlert?.token == token else { return }
+        DispatchQueue.main.async { [weak passwordTextField] in
             passwordTextField?.becomeFirstResponder()
         }
-
-        alert.beginSheetModal(for: window) {
-            [weak self, weak alert, weak passwordTextField] response in
-            guard let self, let alert, let passwordTextField,
-                  presentedPasswordAlert?.alert === alert,
-                  presentedPasswordAlert?.token == token else { return }
-            presentedPasswordAlert = nil
-            guard reviewLifetime?.isActive != false,
-                  response == .alertFirstButtonReturn else { return }
+        if alert.runModal() == .alertFirstButtonReturn {
             importWith(
                 input: input,
                 password: passwordTextField.stringValue
@@ -95,20 +62,8 @@ class ImportViewController: NSViewController {
         }
     }
 
-    private func dismissPasswordAlert() {
-        guard let presentedPasswordAlert else { return }
-        self.presentedPasswordAlert = nil
-        if let parent = presentedPasswordAlert.alert.window.sheetParent {
-            parent.endSheet(
-                presentedPasswordAlert.alert.window,
-                returnCode: .abort
-            )
-        }
-        presentedPasswordAlert.alert.window.orderOut(nil)
-    }
-    
     private func importWith(input: String, password: String?) {
-        guard !isImporting, reviewLifetime?.isActive != false else { return }
+        guard !isImporting else { return }
         isImporting = true
         okButton.isEnabled = false
         cancelButton.isEnabled = false
@@ -118,22 +73,17 @@ class ImportViewController: NSViewController {
                 okButton.isEnabled = inputValidationResult != .invalid
                 cancelButton.isEnabled = true
             }
-            guard reviewLifetime?.isActive != false else { return }
             do {
                 let wallet = try await walletsManager.addWallet(input: input, inputPassword: password)
-                guard reviewLifetime?.isActive != false else { return }
                 showAccountsList(newWalletId: wallet.id)
             } catch {
-                guard reviewLifetime?.isActive != false else { return }
                 presentMessageAlert(Strings.failedToImportWallet, style: .critical)
             }
         }
     }
     
     private func showAccountsList(newWalletId: String?) {
-        guard reviewLifetime?.isActive != false else { return }
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.accountSelection = accountSelection
         accountsListViewController.newWalletId = newWalletId
         view.window?.contentViewController = accountsListViewController
     }
@@ -142,15 +92,6 @@ class ImportViewController: NSViewController {
         showAccountsList(newWalletId: nil)
     }
     
-}
-
-extension ImportViewController: NativeApprovalReviewTeardown {
-
-    func invalidateNativeApprovalReview() {
-        dismissPasswordAlert()
-        endAllSheets()
-    }
-
 }
 
 extension ImportViewController: NSTextFieldDelegate {

@@ -805,6 +805,7 @@ test("manual Switch Account shows terminal errors and permits retry", async () =
     for (const error of [
         {code: -32603, message: "Too many account switches are pending. Finish one, then try again."},
         {code: 4001, message: "Canceled"},
+        {code: 4100, message: "Authorization changed while the request was pending"},
     ]) {
         const harness = await manualSwitchHarness(async attempt => attempt === 1
             ? nativeError({id: 41, name: "switchAccount", provider: "multiple", error})
@@ -814,6 +815,7 @@ test("manual Switch Account shows terminal errors and permits retry", async () =
         assert.equal(harness.get("idle-switch-account").disabled, false);
         assert.equal(harness.get("idle-switch-account").classList.contains("hidden"), false);
         assert.deepEqual(harness.nativeMessages, []);
+        assert.equal(harness.tabMessages.length, 1);
 
         await harness.get("idle-switch-account").click();
         assert.equal(harness.tabMessages.length, 2);

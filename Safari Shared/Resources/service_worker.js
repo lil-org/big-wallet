@@ -312,10 +312,9 @@ function beginManualSwitch(identity) {
         let state = await readNativeConfiguration(identity.configurationKey);
         if (!state) { return undefined; }
         const admissionDeadline = Date.now() + WIRE.WORKFLOW_POLICY.requestTTLMilliseconds;
-        let authorizationRetryUsed = false;
         let completionDrainUsed = false;
         let previousID = 0;
-        for (let attempt = 0; attempt < 3; attempt += 1) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
             if (Date.now() >= admissionDeadline) { return undefined; }
             const id = Math.max(WIRE.genId(), previousID + 1);
             previousID = id;
@@ -344,17 +343,6 @@ function beginManualSwitch(identity) {
             }
             const delivery = decodedNativeDelivery(response, id);
             if (delivery?.state) { await broadcastConfigurationInvalidated(identity.configurationKey); }
-            if (!authorizationRetryUsed && delivery?.terminal.kind === "error" &&
-                delivery.terminal.name === "switchAccount" && delivery.terminal.provider === "multiple" &&
-                delivery.terminal.error.code === 4100 && delivery.state?.context === state.context &&
-                delivery.state.revisions.ethereum >= state.revisions.ethereum &&
-                delivery.state.revisions.solana >= state.revisions.solana &&
-                (delivery.state.revisions.ethereum > state.revisions.ethereum ||
-                    delivery.state.revisions.solana > state.revisions.solana) && Date.now() < admissionDeadline) {
-                authorizationRetryUsed = true;
-                state = delivery.state;
-                continue;
-            }
             return delivery?.terminal;
         }
     })();

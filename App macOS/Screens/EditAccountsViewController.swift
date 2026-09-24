@@ -11,7 +11,6 @@ class EditAccountsViewController: NSViewController {
     
     var wallet: WalletContainer!
     var getBackToRect: CGRect?
-    var accountSelection: NativeAccountSelectionSession?
 
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
@@ -21,8 +20,6 @@ class EditAccountsViewController: NSViewController {
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
     private var isSaving = false
-    private var reviewLifetime: NativeApprovalReviewLifetime?
-    private var previewCoin: WalletCoin? { accountSelection?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -37,9 +34,6 @@ class EditAccountsViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        reviewLifetime = accountSelection?.lifetime
-        reviewLifetime?.register(self)
-        guard reviewLifetime?.isActive != false else { return }
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
@@ -55,14 +49,12 @@ class EditAccountsViewController: NSViewController {
     }
 
     deinit {
+        previewPager?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
-        let applicableAccounts = previewAccounts.filter { account in
-            previewCoin == nil || account.coin == previewCoin
-        }
-        let newCellModels = applicableAccounts.map { account in
+        let newCellModels = previewAccounts.map { account in
             let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
@@ -85,7 +77,7 @@ class EditAccountsViewController: NSViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        guard !isSaving, reviewLifetime?.isActive != false, let wallet else { return }
+        guard !isSaving, let wallet else { return }
         guard !toggledIndexes.isEmpty else {
             showAccountsList()
             return
@@ -102,24 +94,19 @@ class EditAccountsViewController: NSViewController {
                 updateOkButtonState()
                 cancelButton.isEnabled = true
             }
-            guard reviewLifetime?.isActive != false else { return }
             do {
                 try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
-                guard reviewLifetime?.isActive != false else { return }
                 showAccountsList()
             } catch {
-                guard reviewLifetime?.isActive != false else { return }
                 presentMessageAlert(Strings.somethingWentWrong, style: .informational)
             }
         }
     }
     
     private func showAccountsList() {
-        guard reviewLifetime?.isActive != false else { return }
         invalidatePreviewAccounts()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.accountSelection = accountSelection
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }
@@ -254,20 +241,6 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
         toggleAccount(at: row)
     }
     
-}
-
-extension EditAccountsViewController: NativeApprovalReviewTeardown {
-
-    func invalidateNativeApprovalReview() {
-        invalidatePreviewAccounts()
-        NotificationCenter.default.removeObserver(
-            self,
-            name: .walletsChanged,
-            object: nil
-        )
-        endAllSheets()
-    }
-
 }
 
 extension EditAccountsViewController: NSTableViewDelegate {

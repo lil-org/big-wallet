@@ -25,6 +25,7 @@ class AccountsHeaderRowView: NSTableRowView {
     }
     
     @IBAction func titleButtonTapped(_ sender: NSButton) {
+        guard headerDelegate != nil else { return }
         let menu = sender.menu
         menu?.autoenablesItems = false
         
@@ -62,8 +63,8 @@ class AccountsHeaderRowView: NSTableRowView {
             } else {
                 titleButton.title = Strings.multicoinWallet
             }
-            titleButton.isEnabled = true
-            titleButton.image = Images.multicoinWalletPreferences
+            titleButton.isEnabled = delegate != nil
+            titleButton.image = delegate == nil ? nil : Images.multicoinWalletPreferences
         } else {
             titleButton.title = Strings.privateKeyWallets
             titleButton.isEnabled = false
