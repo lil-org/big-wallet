@@ -443,6 +443,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     handle: handle,
                     nativeDeliveryNonce: snapshot.nativeDeliveryNonce
                 ))
+                if !opened, let status = await Self.nativeApprovalService.reactivationFallbackStatus(
+                    handle: handle,
+                    configurationKey: identity.configurationKey,
+                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
+                ) {
+                    Self.respondStatus(status, id: request.id, context: context)
+                    return
+                }
                 Self.respond(with: ["id": request.id, "opened": opened], context: context)
             }
 #else

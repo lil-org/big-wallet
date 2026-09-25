@@ -4,19 +4,19 @@ importScripts("bridge_wire.js");
 
 const WIRE = BigWalletBridgeWire;
 const WORKFLOW_VERSION = WIRE.WORKFLOW_VERSION;
-const BUILD_VERSION = WIRE.BUILD_VERSION;
 const APPLICATION_ID = "org.lil.wallet";
 const UPDATE_RECOVERY_STORAGE_KEY = "workflowUpdateRecoveryNeeded";
 const ADMISSION_WINDOWS_STORAGE_KEY = "recoveryAdmissionWindows";
 const NATIVE_ADMISSION_WINDOW = WIRE.WORKFLOW_POLICY.requestTTLMilliseconds + 60 * 1000;
 const TRANSPORT_TIMEOUT = 5000;
 const TAB_QUERY_TIMEOUT = 1000;
-const MANUAL_SWITCH_INTENT_TIMEOUT = TRANSPORT_TIMEOUT * 8;
+const NATIVE_APPROVAL_TRANSPORT_TIMEOUT = 15 * 1000;
 const NATIVE_OPERATION_TIMEOUT = 180 * 1000;
 const MANUAL_SWITCH_RECOVERY_ALARM = "manualSwitchRecovery";
 const IDLE_RECOVERY_INTERVAL_MINUTES = 5;
 const REQUEST_MAINTENANCE_INTERVAL = 30 * 1000;
 const requestMaintenanceTimes = new Map;
+const toolbarClicks = new Map;
 let recoveryFlight = null;
 let recoveryQueued = false;
 let alarmFlight = Promise.resolve();
@@ -382,7 +382,7 @@ function beginManualSwitch(identity) {
                 ...identity, id, name: "switchAccount", provider: "unknown", body: {},
                 authority: {context: state.context, revisions: state.revisions},
                 admissionDeadline, enqueueAttempt: WIRE.genPrivateToken(), workflowVersion: WORKFLOW_VERSION,
-            }), TRANSPORT_TIMEOUT);
+            }), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
             if (WIRE.isNativeEnqueueAcknowledgement(response, response?.id) && response.state.context === state.context &&
                 (response.admissionKind === "coalesced" || response.id === id)) {
                 if (!response.approvalRequired && response.admissionKind === "coalesced") {
@@ -484,78 +484,76 @@ async function openNativeWallet(tab) {
             subject: "openApp",
             id: WIRE.genId(),
             workflowVersion: WORKFLOW_VERSION,
-        }, tab?.incognito === true), TRANSPORT_TIMEOUT);
+        }, tab?.incognito === true), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
     } catch {}
+}
+
+function setToolbarFailure(tabId, failed) {
+    let title = failed ? "Unable to switch accounts. Click to try again." : null;
+    try {
+        if (failed) { title = browser.i18n.getMessage("toolbar_switch_failed") || title; }
+    } catch {}
+    try {
+        Promise.resolve(browser.action?.setBadgeText?.({tabId, text: failed ? "!" : null})).catch(() => {});
+    } catch {}
+    try { Promise.resolve(browser.action?.setTitle?.({tabId, title})).catch(() => {}); } catch {}
+}
+
+async function showManualSwitchApproval(response, configurationKey) {
+    const request = {
+        subject: "showApproval", id: response.id, configurationKey,
+        requestToken: response.requestToken, workflowVersion: WORKFLOW_VERSION,
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            const opened = await WIRE.withTimeout(sendNativeMessage(request, false), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
+            if (WIRE.hasExactKeys(opened, ["id", "opened"]) && opened.id === response.id && opened.opened === true) {
+                return true;
+            }
+            const status = nativeRequestStatus(opened, response.id);
+            if (status?.pending) { return true; }
+            if (status?.ready) {
+                void recoverRequests().catch(() => {});
+                return true;
+            }
+        } catch {}
+    }
+    return false;
 }
 
 async function handleToolbarClick(tab) {
     if (hasConfiguredPopup()) { return; }
     const identity = WIRE.configurationIdentityForURL(tab?.url || tab?.pendingUrl);
-    if (!identity || !Number.isSafeInteger(tab?.id) || tab?.incognito === true) {
+    if (!identity || !Number.isSafeInteger(tab?.id) || tab.id < 0 || tab.incognito === true) {
+        if (Number.isSafeInteger(tab?.id) && tab.id >= 0) {
+            toolbarClicks.delete(tab.id);
+            setToolbarFailure(tab.id, false);
+        }
         await openNativeWallet(tab);
         return;
     }
-    const nonce = WIRE.genPrivateToken();
-    let probe;
+    const click = {url: tab.url || tab.pendingUrl};
+    toolbarClicks.set(tab.id, click);
+    const updateFailure = failed => {
+        if (toolbarClicks.get(tab.id) === click) { setToolbarFailure(tab.id, failed); }
+    };
+    updateFailure(false);
     try {
-        probe = await WIRE.withTimeout(browser.tabs.sendMessage(tab.id, {
-            nonce,
-            subject: "workflowProbe",
-            workflowVersion: WORKFLOW_VERSION,
-        }), TAB_QUERY_TIMEOUT);
+        const response = await beginManualSwitch({
+            ...identity,
+            favicon: !identity.configurationKey.startsWith("file:") &&
+                typeof tab.favIconUrl === "string" && tab.favIconUrl.length <= 16 * 1024 ? tab.favIconUrl : "",
+        });
+        const acknowledged = WIRE.isManualSwitchAcknowledgement(response, response?.id, identity.configurationKey);
+        const terminal = WIRE.isManualSwitchTerminalResponse(response, response?.id);
+        const succeeded = acknowledged ? !response.approvalRequired ||
+            await showManualSwitchApproval(response, identity.configurationKey)
+            : terminal && response.kind !== "error";
+        updateFailure(!succeeded);
     } catch {
-        await openNativeWallet(tab);
-        return;
-    }
-    if (!WIRE.hasExactKeys(probe, [
-            "buildVersion", "nonce", "subject", "workflowVersion",
-        ]) || probe.subject !== "workflowProbe" || probe.nonce !== nonce ||
-        typeof probe.buildVersion !== "string" ||
-        probe.buildVersion.length === 0 ||
-        !Number.isSafeInteger(probe.workflowVersion)) {
-        await openNativeWallet(tab);
-        return;
-    }
-    if (probe.workflowVersion !== WORKFLOW_VERSION ||
-        probe.buildVersion !== BUILD_VERSION) {
-        await openNativeWallet(tab);
-        return;
-    }
-    let response;
-    try {
-        response = await WIRE.withTimeout(
-            browser.tabs.sendMessage(tab.id, {
-                configurationKey: identity.configurationKey,
-                subject: WIRE.MANUAL_SWITCH_INTENT_SUBJECT,
-                workflowVersion: WORKFLOW_VERSION,
-            }),
-            MANUAL_SWITCH_INTENT_TIMEOUT
-        );
-    } catch {
-        await openNativeWallet(tab);
-        return;
-    }
-    const valid = WIRE.isManualSwitchAcknowledgement(
-        response,
-        response?.id,
-        identity.configurationKey
-    ) || WIRE.isManualSwitchTerminalResponse(response, response?.id);
-    if (!valid || response.kind === "error") {
-        await openNativeWallet(tab);
-    } else if (WIRE.isManualSwitchAcknowledgement(
-        response,
-        response.id,
-        identity.configurationKey
-    ) && response.approvalRequired) {
-        try {
-            await WIRE.withTimeout(sendNativeMessage({
-                subject: "showApproval",
-                id: response.id,
-                configurationKey: identity.configurationKey,
-                requestToken: response.requestToken,
-                workflowVersion: WORKFLOW_VERSION,
-            }, false), TRANSPORT_TIMEOUT);
-        } catch {}
+        updateFailure(true);
+    } finally {
+        if (toolbarClicks.get(tab.id) === click) { toolbarClicks.delete(tab.id); }
     }
 }
 
@@ -643,6 +641,13 @@ try {
     void recoverRequests().catch(() => {});
     browser.alarms.onAlarm.addListener(alarm => alarm?.name === MANUAL_SWITCH_RECOVERY_ALARM
         ? recoverRequests() : undefined);
+    browser.tabs.onUpdated?.addListener?.((tabId, changes) => {
+        if (changes.status === "loading" ||
+            typeof changes.url === "string" && changes.url !== toolbarClicks.get(tabId)?.url) {
+            toolbarClicks.delete(tabId);
+        }
+    });
+    browser.tabs.onRemoved?.addListener?.(tabId => { toolbarClicks.delete(tabId); });
     browser.action?.onClicked?.addListener?.(tab => {
         Promise.resolve(handleToolbarClick(tab)).catch(() => {});
     });

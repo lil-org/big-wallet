@@ -388,6 +388,24 @@ actor NativeApprovalService {
         return await boundedResult(of: operation, deadline: deadline, timeoutValue: false)
     }
 
+    func reactivationFallbackStatus(
+        handle: ExtensionBridge.Handle,
+        configurationKey: String,
+        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
+    ) async -> ExtensionBridge.ResponseStatusResult? {
+        guard !Task.isCancelled,
+              case .found(let snapshot) = await dependencies.load(handle),
+              !Task.isCancelled,
+              snapshot.handle == handle,
+              snapshot.configurationKey == configurationKey,
+              snapshot.nativeDeliveryNonce == nativeDeliveryNonce else { return nil }
+        switch snapshot.state {
+        case .responded: return .ready
+        case .approving: return .pending
+        case .queued: return nil
+        }
+    }
+
     private func reactivateApproval(_ route: NativeAgentRoute, deadline: UInt64) async -> Bool {
         guard case .approval(_, let handle, let nativeDeliveryNonce) = route else { return false }
         switch await reconcileReceipt(

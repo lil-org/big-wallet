@@ -2,6 +2,12 @@
 
 Manual operational checklist. Release gates and recurring checks both live here; walk through this list from time to time.
 
+## when testing Safari builds from multiple worktrees
+
+Check `pluginkit -m -A -D -v -i org.lil.wallet.Safari` before diagnosing a Safari regression. Different worktrees can register different extension code with the same bundle identifier and build number. Safari can retain the old JavaScript worker while native messaging reaches the current build.
+
+Unregister the exact stale `.appex` path with `pluginkit -r`, then register the intended `.appex` with `pluginkit -a`. Keep the build files and wallet data. Stop stale debug helpers with `Scripts/terminate_ambient_agents.sh`, setting `CONFIGURATION=Debug` and both build-directory variables to that stale build's products directory. Confirm the loaded worker source in Safari's Develop → Web Extension Background Content inspector; the native process path alone is insufficient.
+
 ## re-probe fee-market hints
 
 Every catalog network carries a `feeMarketHint` with the date it was last checked (`checkedAt`). Hints never expire in the app, so they are only as good as the last probe.

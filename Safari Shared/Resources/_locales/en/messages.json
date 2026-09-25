@@ -10,5 +10,9 @@
     "private_browsing_unsupported": {
         "message": "Big Wallet requests are unavailable in Private Browsing.",
         "description": "error returned when a dapp requests wallet access in Private Browsing"
+    },
+    "toolbar_switch_failed": {
+        "message": "Unable to switch accounts. Click to try again.",
+        "description": "toolbar tooltip when opening account selection fails"
     }
 }

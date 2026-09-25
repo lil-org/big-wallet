@@ -5,6 +5,76 @@ import XCTest
 
 @MainActor
 final class NativeApprovalResponseTests: XCTestCase {
+    func testReactivationReportsDecisionThatArrivesWhilePresentationIsBeingRestored() async throws {
+        for completed in [false, true] {
+            let fixture = try NativeApprovalServiceTestFixture()
+            let request = try fixture.request(manual: true)
+            fixture.deliver(request)
+            fixture.onValidate = { _ in
+                if completed {
+                    fixture.setState(.responded, for: request)
+                } else {
+                    fixture.deliver(request, executing: true)
+                }
+                return true
+            }
+            defer { fixture.onValidate = nil }
+            let service = fixture.service()
+            let opened = try await fixture.finish { await service.reactivate(fixture.route(request)) }
+            XCTAssertFalse(opened)
+            let status = await service.reactivationFallbackStatus(
+                handle: request.handle,
+                configurationKey: request.configurationKey,
+                nativeDeliveryNonce: request.nativeDeliveryNonce
+            )
+            XCTAssertEqual(status, completed ? .ready : .pending)
+            XCTAssertTrue(fixture.launches.isEmpty)
+            XCTAssertTrue(fixture.clears.isEmpty)
+            XCTAssertTrue(fixture.quits.isEmpty)
+        }
+    }
+
+    func testReactivationDoesNotReportQueuedOrUnreadableApprovalAsHandled() async throws {
+        let fixture = try NativeApprovalServiceTestFixture()
+        let request = try fixture.request(manual: true)
+        let service = fixture.service()
+        fixture.deliver(request)
+        let delivered = try XCTUnwrap(fixture.snapshots[request.handle])
+        for loaded in [ExtensionBridge.SnapshotResult.found(request), .found(delivered), .missing, .unavailable] {
+            fixture.onLoad = { _ in loaded }
+            let status = await service.reactivationFallbackStatus(
+                handle: request.handle,
+                configurationKey: request.configurationKey,
+                nativeDeliveryNonce: request.nativeDeliveryNonce
+            )
+            XCTAssertNil(status)
+        }
+        fixture.onLoad = nil
+        XCTAssertTrue(fixture.launches.isEmpty)
+    }
+
+    func testReactivationCompletionMustMatchTheExactStoredIdentity() async throws {
+        let fixture = try NativeApprovalServiceTestFixture()
+        let request = try fixture.request(manual: true)
+        let otherRequest = try fixture.request(id: 2, manual: true)
+        fixture.setState(.responded, for: request)
+        let completed = try XCTUnwrap(fixture.snapshots[request.handle])
+        fixture.onLoad = { _ in .found(completed) }
+        let service = fixture.service()
+        for (handle, key, nonce) in [
+            (otherRequest.handle, request.configurationKey, request.nativeDeliveryNonce),
+            (request.handle, "https://another.example", request.nativeDeliveryNonce),
+            (request.handle, request.configurationKey, otherRequest.nativeDeliveryNonce),
+        ] {
+            let status = await service.reactivationFallbackStatus(
+                handle: handle, configurationKey: key, nativeDeliveryNonce: nonce
+            )
+            XCTAssertNil(status)
+        }
+        fixture.onLoad = nil
+        XCTAssertTrue(fixture.launches.isEmpty)
+    }
+
     func testNativeExecutionCannotBeTriggeredByWorkerMessage() throws {
         let message: [String: Any] = [
             "subject": "executeNativeApproval", "id": 42,

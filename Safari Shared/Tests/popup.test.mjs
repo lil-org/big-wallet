@@ -759,14 +759,14 @@ test("manual Switch Account sends one exact stateless intent with a full native 
     assert.equal(harness.nativeMessages.length, 1);
     assert.equal(harness.nativeMessages[0].subject, "getPendingRequests");
     assert.equal(harness.get("idle-switch-account").disabled, true);
-    assert.equal(harness.timerHistory[0].delay, 40_000);
+    assert.equal(harness.timerHistory[0].delay, 60_000);
     queue.resolve({completedResponses: [], requests: []});
     await switching;
 });
 
-test("manual Switch Account waits for retries and completion draining", async () => {
+test("manual Switch Account waits for native admission and completion draining", async () => {
     const harness = await manualSwitchHarness(() => new Promise(resolve => {
-        harness.context.setTimeout(() => resolve(manualSwitchAcknowledgement()), 37_000);
+        harness.context.setTimeout(() => resolve(manualSwitchAcknowledgement()), 57_000);
     }));
     const pending = harness.queue.switchAccountFromIdle();
     await flushPopup();
@@ -2251,7 +2251,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             await harness.boot();
             const switching = harness.queue.switchAccountFromIdle();
             await flushPopup();
-            const switchTimeout = [...harness.timers.values()].find(timer => timer.delay === 40_000);
+            const switchTimeout = [...harness.timers.values()].find(timer => timer.delay === 60_000);
             assert.ok(switchTimeout);
             const request = pendingRequest();
             harness.model.requests = [request];
