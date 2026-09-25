@@ -2532,6 +2532,57 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(fixture.coordinator.canReactivate)
     }
 
+    func testFinalizerInterruptionPublishesRejectingBeforeFirstPersistenceCompletes() async throws {
+        let gate = AsyncGate<ExtensionBridge.NativeInterruptionResult>()
+        let started = expectation(description: "interruption persistence suspended")
+        var decisions = 0
+        let fixture = try makeFixture(attemptNativeDecision: { _, _ in
+            decisions += 1
+            return .interruptionRequired
+        })
+        fixture.store.interruptionHandler = {
+            started.fulfill()
+            return await gate.run()
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, approval, window) = try attachApprovalWindow(to: fixture)
+        defer {
+            fixture.coordinator.onEvent = nil
+            window.close()
+        }
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let activations = window.activationCount
+        await fulfillment(of: [started], timeout: 1)
+
+        XCTAssertEqual(fixture.coordinator.phase, .rejecting)
+        XCTAssertEqual(window.activationCount, activations)
+        guard case .rejecting? = fixture.coordinator.currentPresentation?.presentation else {
+            gate.resume(.interrupted)
+            return XCTFail("Interruption must replace waiting before its first write settles")
+        }
+        let revision = fixture.coordinator.currentPresentation?.revision
+        fixture.coordinator.retryRecovery()
+        fixture.coordinator.reject()
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
+        XCTAssertEqual(fixture.store.interruptionCount, 1)
+        XCTAssertEqual(decisions, 1)
+
+        gate.resume(.interrupted)
+        await waitForState(fixture.coordinator, .finished)
+        guard case .interrupted? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Expected terminal interruption")
+        }
+        XCTAssertEqual(fixture.store.interruptionCount, 1)
+        XCTAssertEqual(decisions, 1)
+        XCTAssertFalse(approval.acceptsReviewActions)
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
+        XCTAssertEqual(window.activationCount, activations)
+    }
+
     func testApprovalLoadOwnershipChangeDoesNotInvokeFinalization() async throws {
         var decisions = 0
         let fixture = try makeFixture(attemptNativeDecision: { _, _ in
@@ -3456,6 +3507,52 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         guard case .approval = snapshots[0].presentation,
               case .waiting = snapshots[1].presentation else {
             return XCTFail("Expected one review and one waiting presentation")
+        }
+    }
+
+    func testReentrantReviewDecisionCannotStartTheReplacedObserver() async throws {
+        for approves in [false, true] {
+            let clock = Clock()
+            var observationWaits = 0
+            var decisions = 0
+            var rejections = 0
+            var reviews = 0
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now }, uptime: { clock.uptime },
+                wait: { _ in observationWaits += 1; await Task.yield() },
+                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                attemptNativeDecision: { _, _ in decisions += 1; return .responseReady }
+            ))
+            fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+            fixture.coordinator.onEvent = { [weak coordinator = fixture.coordinator] event in
+                guard case .presentationChanged = event, let coordinator,
+                      case .approval? = coordinator.currentPresentation?.presentation else { return }
+                XCTAssertEqual(coordinator.phase, .reviewing)
+                let reviewRevision = coordinator.currentPresentation?.revision ?? 0
+                reviews += 1
+                if approves {
+                    coordinator.approveAccounts([], ethereumNetwork: nil)
+                } else {
+                    coordinator.reject()
+                }
+                XCTAssertEqual(coordinator.phase, approves ? .waiting : .rejecting)
+                XCTAssertGreaterThan(coordinator.currentPresentation?.revision ?? 0, reviewRevision)
+                guard case .waiting? = coordinator.currentPresentation?.presentation else {
+                    return XCTFail("The reentrant decision must synchronously replace the review")
+                }
+            }
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication()
+            await waitForState(fixture.coordinator, .finished)
+            for _ in 0..<20 { await Task.yield() }
+
+            XCTAssertEqual(reviews, 1)
+            XCTAssertEqual(decisions, approves ? 1 : 0)
+            XCTAssertEqual(rejections, approves ? 0 : 1)
+            XCTAssertEqual(observationWaits, 0)
+            XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+            XCTAssertTrue(fixture.coordinator.hasAuthenticated)
         }
     }
 

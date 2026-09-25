@@ -863,6 +863,124 @@
             XCTAssertEqual(f.launches.count, 1)
         }
 
+        func testReceiptWaitDoesNotBlockAnotherApprovalOrWalletOpen() async throws {
+            let f = try fixture()
+            let firstRequest = try f.request()
+            let secondRequest = try f.request(id: 2)
+            let runtime = f.runtime()
+            f.onLaunch = { _, route, completion in
+                f.processes[42] = runtime
+                if route == f.route(secondRequest) { f.deliver(secondRequest, runtime: runtime) }
+                completion(true)
+            }
+            let service = f.service()
+            var firstResult: NativeApprovalService.ReconciliationResult?
+            let first = Task { firstResult = await service.reconcile(.init(firstRequest), intent: .admission) }
+            try await f.eventually {
+                f.launches.count == 1 && f.clock.deadlines.contains(f.clock.now + 50_000_000)
+            }
+
+            let secondResult = try await f.finish {
+                await service.reconcile(.init(secondRequest), intent: .admission)
+            }
+            let opened = try await f.finish { await service.openWallet() }
+
+            XCTAssertEqual(secondResult, .pending)
+            XCTAssertTrue(opened)
+            XCTAssertNil(firstResult)
+            XCTAssertEqual(f.launches.map(\.route), [
+                f.route(firstRequest), f.route(secondRequest),
+                .showWallet(workflowVersion: ExtensionBridge.workflowVersion),
+            ])
+            XCTAssertEqual(f.launches.map(\.target), [
+                .launch(url: f.bundleURL.standardizedFileURL),
+                .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                         runtimeInstanceIdentifier: runtime.instanceIdentifier),
+                .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                         runtimeInstanceIdentifier: runtime.instanceIdentifier),
+            ])
+            f.deliver(firstRequest, runtime: runtime)
+            try await f.advanceClock(by: 50_000_000)
+            try await f.finish { await first.value }
+            XCTAssertEqual(firstResult, .pending)
+        }
+
+        func testStalledRunningSendDoesNotBlockAnotherRoute() async throws {
+            let f = try fixture()
+            let firstRequest = try f.request()
+            let secondRequest = try f.request(id: 2)
+            let runtime = f.runtime()
+            f.processes[42] = runtime
+            var firstCallback: ((Bool) -> Void)?
+            f.onLaunch = { _, route, completion in
+                if route == f.route(firstRequest) {
+                    firstCallback = completion
+                } else {
+                    f.deliver(secondRequest, runtime: runtime)
+                    completion(true)
+                }
+            }
+            let service = f.service()
+            var firstResult: NativeApprovalService.ReconciliationResult?
+            let first = Task { firstResult = await service.reconcile(.init(firstRequest), intent: .admission) }
+            try await f.eventually { firstCallback != nil }
+
+            let secondResult = try await f.finish {
+                await service.reconcile(.init(secondRequest), intent: .admission)
+            }
+
+            XCTAssertEqual(secondResult, .pending)
+            XCTAssertNil(firstResult)
+            XCTAssertEqual(f.launches.map(\.route), [f.route(firstRequest), f.route(secondRequest)])
+            XCTAssertTrue(f.launches.allSatisfy {
+                $0.target == .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                                     runtimeInstanceIdentifier: runtime.instanceIdentifier)
+            })
+            f.deliver(firstRequest, runtime: runtime)
+            firstCallback?(true)
+            try await f.finish { await first.value }
+            XCTAssertEqual(firstResult, .pending)
+        }
+
+        func testConcurrentColdDeliveriesLaunchOnceThenUseRunningHelper() async throws {
+            let f = try fixture()
+            let firstRequest = try f.request()
+            let secondRequest = try f.request(id: 2)
+            let runtime = f.runtime()
+            var firstCallback: ((Bool) -> Void)?
+            f.onLaunch = { _, route, completion in
+                if route == f.route(firstRequest) {
+                    firstCallback = completion
+                } else {
+                    f.deliver(secondRequest, runtime: runtime)
+                    completion(true)
+                }
+            }
+            let service = f.service()
+            let first = Task { await service.reconcile(.init(firstRequest), intent: .admission) }
+            try await f.eventually { firstCallback != nil }
+            let secondDeadline = f.clock.now + 4_000_000_000
+            let second = Task {
+                await service.reconcile(.init(secondRequest), intent: .admission, waitDeadline: secondDeadline)
+            }
+            try await f.eventually { f.clock.deadlines.contains(secondDeadline) }
+            XCTAssertEqual(f.launches.count, 1)
+
+            f.deliver(firstRequest, runtime: runtime)
+            firstCallback?(true)
+            let firstResult = try await f.finish { await first.value }
+            let secondResult = try await f.finish { await second.value }
+
+            XCTAssertEqual(firstResult, .pending)
+            XCTAssertEqual(secondResult, .pending)
+            XCTAssertEqual(f.launches.map(\.route), [f.route(firstRequest), f.route(secondRequest)])
+            XCTAssertEqual(f.launches.map(\.target), [
+                .launch(url: f.bundleURL.standardizedFileURL),
+                .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                         runtimeInstanceIdentifier: runtime.instanceIdentifier),
+            ])
+        }
+
         func testQueuedDeliveryUsesItsAdmissionBudget() async throws {
             let f = try fixture()
             let firstRequest = try f.request()
@@ -891,9 +1009,12 @@
                 try await f.advanceClock(by: 450_000_000)
             }) { await first.value }
             XCTAssertEqual(firstResult, .unavailable)
+            f.processes[42] = f.runtime(build: "147")
             firstCallback?(true)
             for _ in 0..<50 { await Task.yield() }
             XCTAssertEqual(f.launches.map(\.route), [f.route(firstRequest)])
+            XCTAssertTrue(f.quits.isEmpty)
+            f.processes.removeAll()
             let later = try await f.finish { await service.reconcile(.init(secondRequest), intent: .admission) }
             XCTAssertEqual(later, .pending)
         }

@@ -591,6 +591,7 @@ class Agent: NSObject {
                 nativeDeliveryNonce: coordinator.nativeDeliveryNonce
             ))
         }
+        if case .rejecting = snapshot.presentation { return }
         if !activateOldestPresentedApproval(), finishedWindowAction == .closeAndActivate {
             Window.activateBrowser(specific: .safari)
         }

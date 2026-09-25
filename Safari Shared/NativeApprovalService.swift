@@ -124,14 +124,20 @@ actor NativeApprovalService {
         let task: Task<ReconciliationResult, Never>
     }
 
+    private enum DeliveryPreparation: Sendable {
+        case running(NativeAgentLauncher.HelperTarget)
+        case launched(NativeAgentLauncher.ExpectedRuntime)
+        case finished(ReconciliationResult)
+    }
+
     @MainActor
     static let live = NativeApprovalService(dependencies: .live)
 
     private let dependencies: Dependencies
     private let launchTimeoutNanoseconds: UInt64
     private var sharedDeliveries = [SharedDelivery]()
-    private var deliveryTail: Task<ReconciliationResult, Never>?
-    private var deliveryTailIdentifier: UUID?
+    private var preparationTail: Task<DeliveryPreparation, Never>?
+    private var preparationTailIdentifier: UUID?
 
     init(
         dependencies: Dependencies,
@@ -393,22 +399,40 @@ actor NativeApprovalService {
             return await result(of: shared, callerDeadline: callerDeadline)
         }
         let identifier = UUID()
-        let precedingDelivery = deliveryTail
+        let precedingPreparation = preparationTail
         let operation = Task { [weak self] in
-            _ = await precedingDelivery?.value
-            guard let self else { return ReconciliationResult.unavailable }
-            return await self.deliver(route, reference: reference, deadline: deliveryDeadline)
+            _ = await precedingPreparation?.value
+            guard let self else { return DeliveryPreparation.finished(.unavailable) }
+            return await self.prepareDelivery(route, reference: reference, deadline: deliveryDeadline)
+        }
+        let preparation = Task { [weak self] in
+            guard let self else { operation.cancel(); return DeliveryPreparation.finished(.unavailable) }
+            let result = await self.boundedResult(
+                of: operation, deadline: deliveryDeadline, timeoutValue: .finished(.unavailable)
+            )
+            await self.finishDeliveryPreparation(identifier: identifier)
+            return result
         }
         let task = Task { [weak self] in
-            guard let self else { operation.cancel(); return ReconciliationResult.unavailable }
-            let result = await self.boundedResult(of: operation, deadline: deliveryDeadline, timeoutValue: .unavailable)
+            let prepared = await preparation.value
+            guard let self else { return ReconciliationResult.unavailable }
+            let result: ReconciliationResult
+            switch prepared {
+            case .finished(let terminal):
+                result = terminal
+            case .running, .launched:
+                let delivery = Task {
+                    await self.deliver(route, reference: reference, preparation: prepared, deadline: deliveryDeadline)
+                }
+                result = await self.boundedResult(of: delivery, deadline: deliveryDeadline, timeoutValue: .unavailable)
+            }
             await self.finishSharedDelivery(identifier: identifier)
             return result
         }
         let shared = SharedDelivery(identifier: identifier, route: route, deadline: deliveryDeadline, task: task)
         sharedDeliveries.append(shared)
-        deliveryTail = task
-        deliveryTailIdentifier = identifier
+        preparationTail = preparation
+        preparationTailIdentifier = identifier
         return await result(of: shared, callerDeadline: callerDeadline)
     }
 
@@ -421,30 +445,62 @@ actor NativeApprovalService {
 
     private func finishSharedDelivery(identifier: UUID) {
         sharedDeliveries.removeAll { $0.identifier == identifier }
-        if deliveryTailIdentifier == identifier {
-            deliveryTail = nil
-            deliveryTailIdentifier = nil
+    }
+
+    private func finishDeliveryPreparation(identifier: UUID) {
+        if preparationTailIdentifier == identifier {
+            preparationTail = nil
+            preparationTailIdentifier = nil
+        }
+    }
+
+    private func prepareDelivery(
+        _ route: NativeAgentRoute,
+        reference: RequestReference?,
+        deadline: UInt64
+    ) async -> DeliveryPreparation {
+        guard isPending(until: deadline) else { return .finished(.unavailable) }
+        if let reference {
+            switch await reconcileOwnership(reference, deadline: deadline) {
+            case .owned: return .finished(.pending)
+            case .finished(let result): return .finished(result)
+            case .needsDelivery: break
+            }
+        }
+        guard isPending(until: deadline), let initialExpected = await dependencies.launcher.expectedRuntime(),
+              let target = await dependencies.launcher.resolveTarget(expected: initialExpected, deadline: deadline),
+              isPending(until: deadline) else { return .finished(.unavailable) }
+        switch target {
+        case .running:
+            return .running(target)
+        case .launch:
+            guard await dependencies.launcher.send(route, to: target, deadline: deadline),
+                  let expected = await dependencies.launcher.expectedRuntime(at: target.url),
+                  isPending(until: deadline) else { return .finished(.unavailable) }
+            return .launched(expected)
         }
     }
 
     private func deliver(
         _ route: NativeAgentRoute,
         reference: RequestReference?,
+        preparation: DeliveryPreparation,
         deadline: UInt64
     ) async -> ReconciliationResult {
-        guard isPending(until: deadline) else { return .unavailable }
-        if let reference {
-            switch await reconcileOwnership(reference, deadline: deadline) {
-            case .owned: return .pending
-            case .finished(let result): return result
-            case .needsDelivery: break
+        let expected: NativeAgentLauncher.ExpectedRuntime
+        switch preparation {
+        case .running(let target):
+            guard isPending(until: deadline),
+                  await dependencies.launcher.send(route, to: target, deadline: deadline),
+                  let currentExpected = await dependencies.launcher.expectedRuntime(at: target.url) else {
+                return .unavailable
             }
+            expected = currentExpected
+        case .launched(let launchedExpected):
+            expected = launchedExpected
+        case .finished(let result):
+            return result
         }
-        guard isPending(until: deadline), let initialExpected = await dependencies.launcher.expectedRuntime(),
-              let target = await dependencies.launcher.resolveTarget(expected: initialExpected, deadline: deadline),
-              isPending(until: deadline),
-              await dependencies.launcher.send(route, to: target, deadline: deadline),
-              let expected = await dependencies.launcher.expectedRuntime(at: target.url) else { return .unavailable }
         while isPending(until: deadline) {
             if let reference {
                 switch await reconcileOwnership(reference, deadline: deadline) {
