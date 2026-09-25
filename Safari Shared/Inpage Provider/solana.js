@@ -717,6 +717,13 @@ function normalizeRequest(method, params) {
             if (typeof raw.transaction === "object" &&
                 raw.transaction !== null && !isByteArray(raw.transaction)) {
                 const adapter = transactionAdapter(raw.transaction);
+                if (typeof raw.message !== "undefined" &&
+                    normalizedBase58Value(raw.message, invalidSolanaTransactionRequest) !== adapter.message) {
+                    throw new ProviderRpcError(
+                        4200,
+                        mismatchedSolanaTransactionParams
+                    );
+                }
                 const serialize = inheritedDataFunction(
                     raw.transaction,
                     "serialize"

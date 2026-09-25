@@ -3266,6 +3266,49 @@ test("Solana preserves SDK transaction identity, cosignatures, and serializable 
     }
 });
 
+test("Solana signAndSendTransaction rejects a supplied message after the transaction changes", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    const base58 = moduleHarness(base58Source).exports;
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+        const {transaction, legacy} = sdkTransactionFixture(kind, wallet, cosigner);
+        const message = legacy ? transaction.serializeMessage() : transaction.message.serialize();
+        for (const supplied of [base58.encode(message), message]) {
+            const pending = harness.provider.request({
+                method: "signAndSendTransaction",
+                params: {transaction, message: supplied},
+            });
+            const request = harness.requests.at(-1);
+            assert.ok(request, kind);
+            harness.applyDecodedEnvelope(harness.provider, {
+                id: request.id,
+                kind: "result",
+                name: "signAndSendTransaction",
+                result: validSignature,
+            });
+            assert.equal((await pending).signature, validSignature);
+        }
+        if (legacy) {
+            transaction.recentBlockhash = secondSolanaKey;
+        } else {
+            transaction.message.recentBlockhash = secondSolanaKey;
+        }
+        for (const supplied of [base58.encode(message), message]) {
+            const pending = harness.provider.request({
+                method: "signAndSendTransaction",
+                params: {transaction, message: supplied},
+            });
+            pending.catch(() => {});
+            assert.equal(harness.requests.length, 2, kind);
+            await assert.rejects(pending, {
+                code: 4200,
+                message: "Big Wallet received mismatched Solana transaction params",
+            });
+        }
+    }
+});
+
 test("Solana response message validation scales linearly with batch size", async () => {
     for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
         for (const size of [1, 8, 64]) {
