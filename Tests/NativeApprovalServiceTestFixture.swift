@@ -312,10 +312,10 @@
             _ service: NativeApprovalService,
             _ snapshot: ExtensionBridge.Snapshot,
             allowDelivery: Bool = true
-        ) async -> ExtensionBridge.ResponseStatusResult {
-            await service.maintainRequest(
-                handle: snapshot.handle, configurationKey: snapshot.configurationKey,
-                allowDelivery: allowDelivery
+        ) async -> NativeApprovalService.ReconciliationResult {
+            await service.reconcile(
+                .init(handle: snapshot.handle, configurationKey: snapshot.configurationKey),
+                intent: .maintenance(allowDelivery: allowDelivery)
             )
         }
 

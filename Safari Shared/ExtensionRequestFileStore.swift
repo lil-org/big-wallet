@@ -12,7 +12,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     typealias ReadData = (URL) throws -> Data
     typealias ReadFileSize = (URL) throws -> Int?
     typealias RemoveItem = (URL) throws -> Void
-    typealias ParseRequest = ([String: Any]) -> SafariRequest?
 
     struct Dependencies {
         let clock: () -> Date
@@ -26,7 +25,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let readData: ReadData
         let readFileSize: ReadFileSize
         let removeItem: RemoveItem
-        let parseRequest: ParseRequest
 
         init(
             clock: @escaping () -> Date = Date.init,
@@ -39,8 +37,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             persistenceOperations: DurableProfilePersistence.Operations = .live,
             readData: @escaping ReadData = ExtensionRequestFileStore.defaultReadData,
             readFileSize: @escaping ReadFileSize = ExtensionRequestFileStore.defaultReadFileSize,
-            removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem,
-            parseRequest: @escaping ParseRequest = { SafariRequest(json: $0) }
+            removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem
         ) {
             self.clock = clock
             self.token = token
@@ -53,7 +50,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             self.readData = readData
             self.readFileSize = readFileSize
             self.removeItem = removeItem
-            self.parseRequest = parseRequest
         }
     }
 
@@ -108,7 +104,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) {
         clock = dependencies.clock
         token = dependencies.token
-        codec = ExtensionRequestProfileCodec(parseRequest: dependencies.parseRequest)
+        codec = ExtensionRequestProfileCodec()
         files = ExtensionRequestStoreFiles(
             rootURL: rootURL,
             directoryBoundary: directoryBoundary,
@@ -391,9 +387,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 return .rejected
             }
 
-            guard let boundRequest = codec.bind(ingress.request, data: ingress.canonicalData, authority: currentAuthority),
-                  boundRequest.data.count <= ExtensionBridge.maximumPayloadBytes else { return .rejected }
-            let boundData = boundRequest.data
+            guard let boundRequest = codec.bind(ingress.request, data: ingress.canonicalData, authority: currentAuthority) else { return .rejected }
 
             var record = Record(
                 id: ingress.request.id,
@@ -407,7 +401,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 authorizedAccount: boundRequest.request.authorizedAccount,
                 admissionCreatedAt: now,
                 createdAt: now,
-                state: .pending(request: boundData, approval: .unowned),
+                state: .pending(request: boundRequest.payload, approval: .unowned),
                 nativeDeliveryNonce: .init(value: nativeDeliveryNonceValue)
             )
             if case .ethereum(let body) = boundRequest.request.body,
@@ -425,7 +419,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 return .manualSwitchCapacityReached
             }
             guard let retiredHandles = profile.admit(
-                record, request: boundRequest.request, now: now
+                record, now: now
             ) else { return .rejected }
             guard writeProfileLocked(profile, failureRecovery: .readBack) else {
                 return .unavailable
@@ -1334,8 +1328,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             state: ProfileState(
                 profileIdentifier: profileIdentifier,
                 authorityEpoch: token()
-            ),
-            parsedRequests: [:]
+            )
         )
     }
 

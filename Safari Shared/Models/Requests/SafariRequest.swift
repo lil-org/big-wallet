@@ -12,16 +12,63 @@ struct SafariRequest {
     let configurationKey: String
     let favicon: String?
     let enqueueAttempt: String
-    let admissionDeadline: Date
+    let admissionDeadlineMilliseconds: Int
     let workflowVersion: Int
     var authority: ExtensionBridge.AuthorityVersion?
     var authorizedAccount: WalletAccountDescriptor?
     var connectedAccounts: [WalletAccountDescriptor] = []
+
+    var admissionDeadline: Date {
+        Date(timeIntervalSince1970: TimeInterval(admissionDeadlineMilliseconds) / 1_000)
+    }
     
     enum Body {
         case unknown(Unknown)
         case ethereum(Ethereum)
         case solana(Solana)
+
+        init?(provider: InpageProvider, name: String, json: [String: Any]) {
+            switch provider {
+            case .ethereum:
+                guard let body = Ethereum(name: name, json: json) else { return nil }
+                self = .ethereum(body)
+            case .solana:
+                guard let body = Solana(name: name, json: json) else { return nil }
+                self = .solana(body)
+            case .unknown:
+                guard let body = Unknown(name: name, json: json) else { return nil }
+                self = .unknown(body)
+            case .multiple:
+                return nil
+            }
+        }
+    }
+
+    init(
+        id: Int,
+        name: String,
+        provider: InpageProvider,
+        body: Body,
+        host: String,
+        configurationKey: String,
+        favicon: String?,
+        enqueueAttempt: String,
+        admissionDeadlineMilliseconds: Int,
+        authority: ExtensionBridge.AuthorityVersion?,
+        authorizedAccount: WalletAccountDescriptor?
+    ) {
+        self.id = id
+        self.name = name
+        self.provider = provider
+        self.body = body
+        self.host = host
+        self.configurationKey = configurationKey
+        self.favicon = favicon
+        self.enqueueAttempt = enqueueAttempt
+        self.admissionDeadlineMilliseconds = admissionDeadlineMilliseconds
+        workflowVersion = ExtensionBridge.workflowVersion
+        self.authority = authority
+        self.authorizedAccount = authorizedAccount
     }
     
     init?(data: Data) {
@@ -54,52 +101,26 @@ struct SafariRequest {
         self.host = host
         self.configurationKey = configurationKey
         self.enqueueAttempt = enqueueAttempt
-        self.admissionDeadline = Date(
-            timeIntervalSince1970: TimeInterval(admissionDeadlineMilliseconds) / 1_000
-        )
+        self.admissionDeadlineMilliseconds = admissionDeadlineMilliseconds
         self.workflowVersion = workflowVersion
         authority = ExtensionBridge.AuthorityVersion(rawValue: json["authority"])
         authorizedAccount = nil
         
-        if let favicon = json["favicon"] as? String, !favicon.isEmpty {
-            if favicon.hasPrefix("//") {
-                self.favicon = "https:" + favicon
-            } else if favicon.first == "/" {
-                self.favicon = "https://" + host + favicon
-            } else if favicon.first == "." {
-                self.favicon = "https://" + host + favicon.dropFirst()
-            } else if favicon.hasPrefix("http") {
-                self.favicon = favicon
-            } else {
-                self.favicon = "https://" + host + "/" + favicon
-            }
-        } else {
-            self.favicon = nil
-        }
+        favicon = Self.normalizedFavicon(json["favicon"] as? String, host: host)
         
         self.provider = provider
         
-        var body: Body?
-        switch provider {
-        case .ethereum:
-            if let request = Ethereum(name: name, json: jsonBody) {
-                body = .ethereum(request)
-            }
-        case .solana:
-            if let request = Solana(name: name, json: jsonBody) {
-                body = .solana(request)
-            }
-        case .unknown, .multiple:
-            if let request = Unknown(name: name, json: jsonBody) {
-                body = .unknown(request)
-            }
-        }
-        
-        if let body = body {
-            self.body = body
-        } else {
-            return nil
-        }
+        guard let body = Body(provider: provider, name: name, json: jsonBody) else { return nil }
+        self.body = body
+    }
+
+    static func normalizedFavicon(_ favicon: String?, host: String) -> String? {
+        guard let favicon, !favicon.isEmpty else { return nil }
+        if favicon.hasPrefix("//") { return "https:" + favicon }
+        if favicon.first == "/" { return "https://" + host + favicon }
+        if favicon.first == "." { return "https://" + host + favicon.dropFirst() }
+        if favicon.hasPrefix("http") { return favicon }
+        return "https://" + host + "/" + favicon
     }
     
 }

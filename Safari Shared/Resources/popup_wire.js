@@ -87,12 +87,11 @@
 
     function decodeQueue(value) {
         if (!isRecord(value)) { return null; }
-        const {layoutDirection, strings} = value;
-        if ((strings !== undefined && (!isRecord(strings) ||
-                !Object.values(strings).every(value => typeof value === "string"))) ||
-            (layoutDirection !== undefined && layoutDirection !== "ltr" && layoutDirection !== "rtl")) {
-            return null;
-        }
+        const layoutDirection = value.layoutDirection === "ltr" || value.layoutDirection === "rtl"
+            ? value.layoutDirection : undefined;
+        const strings = isRecord(value.strings) &&
+            Object.values(value.strings).every(value => typeof value === "string")
+            ? value.strings : undefined;
         const requests = decodeItems(value.requests, decodePendingRequest);
         const completedResponses = decodeItems(value.completedResponses, decodeCompletedResponse);
         return requests && completedResponses
@@ -213,8 +212,9 @@
     }
 
     function decodeTransaction(review) {
-        const {networkName, canBackOffRefresh, balance, valueLine, dataInterpretation, editorRequestToken, feeLines} = review;
-        if (typeof networkName !== "string" || typeof canBackOffRefresh !== "boolean" ||
+        const {networkName, balance, valueLine, dataInterpretation, editorRequestToken, feeLines} = review;
+        const canBackOffRefresh = review.canBackOffRefresh === true;
+        if (typeof networkName !== "string" ||
             ![balance, valueLine, dataInterpretation].every(isOptionalString) ||
             (editorRequestToken !== undefined && !Number.isSafeInteger(editorRequestToken)) ||
             !Array.isArray(feeLines) || !feeLines.every(line => typeof line === "string")) {

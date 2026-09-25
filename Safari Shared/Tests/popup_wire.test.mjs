@@ -44,10 +44,40 @@ test("popup decoding requires matching identity and complete transaction fields"
     delete source.review.editor.maxFeePerGasGwei;
     assert.equal(wire.decodeApprovalState(source, source.id), null);
     assert.equal(wire.decodeApprovalState({...fixtures.working, review: fixtures.signMessage.review}, 91), null);
-    for (const canBackOffRefresh of [undefined, null, "true"]) {
+});
+
+test("popup transaction backoff defaults to false without changing approval content or its source", () => {
+    for (const canBackOffRefresh of [undefined, null, "true", 1, [], {}, false, true]) {
         const source = structuredClone(fixtures.legacyTransaction);
         source.review.canBackOffRefresh = canBackOffRefresh;
-        assert.equal(wire.decodeApprovalState(source, source.id), null);
+        const before = structuredClone(source);
+        const expected = structuredClone(fixtures.legacyTransaction);
+        expected.review.canBackOffRefresh = canBackOffRefresh === true;
+        assert.deepEqual(wire.decodeApprovalState(source, source.id), expected);
+        assert.deepEqual(source, before);
+    }
+});
+
+test("popup queue metadata is optional without weakening request identities or changing its source", () => {
+    const queue = structuredClone(fixtures.queue);
+    delete queue.layoutDirection;
+    delete queue.strings;
+    for (const [field, values] of [
+        ["strings", [undefined, null, "translations", [], {refresh: "Refresh", cancel: 1}]],
+        ["layoutDirection", [undefined, null, "auto", true, [], {}]],
+    ]) {
+        for (const value of values) {
+            const source = {...structuredClone(queue), [field]: value};
+            const before = structuredClone(source);
+            assert.deepEqual(wire.decodeQueue(source), queue);
+            assert.deepEqual(source, before);
+            source.requests[0].requestToken = "invalid";
+            assert.equal(wire.decodeQueue(source), null);
+        }
+    }
+    for (const layoutDirection of ["ltr", "rtl"]) {
+        const source = {...queue, layoutDirection, strings: {refresh: "Refresh"}};
+        assert.deepEqual(wire.decodeQueue(source), source);
     }
 });
 
@@ -114,7 +144,7 @@ test("popup editors validate and preserve fee fields outside the active fee mode
     }
 });
 
-test("popup optional fields omit undefined and reject null except for decorative images", () => {
+test("popup approval and identity optional fields remain strict except for decorative images", () => {
     const queue = structuredClone(fixtures.queue);
     delete queue.layoutDirection;
     delete queue.strings;
@@ -124,9 +154,6 @@ test("popup optional fields omit undefined and reject null except for decorative
     queueWithUndefined.strings = undefined;
     queueWithUndefined.requests[0].enqueueAttempt = undefined;
     assert.deepEqual(wire.decodeQueue(queueWithUndefined), queue);
-    for (const field of ["layoutDirection", "strings"]) {
-        assert.equal(wire.decodeQueue({...queueWithUndefined, [field]: null}), null);
-    }
     queueWithUndefined.requests[0].enqueueAttempt = null;
     assert.equal(wire.decodeQueue(queueWithUndefined), null);
 

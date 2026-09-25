@@ -43,8 +43,8 @@ final class ExtensionRequestStoreFiles {
         let identity: ProfileFileIdentity
     }
 
-    private static let profileDirectoryName = "profiles-v8"
-    private static let operationLockDirectoryName = "operation-locks-v8"
+    private static let profileDirectoryName = "profiles-v9"
+    private static let operationLockDirectoryName = "operation-locks-v9"
 
     private let rootURL: URL?
     private let storeLock: CrossProcessFileLock?
@@ -83,7 +83,7 @@ final class ExtensionRequestStoreFiles {
         readFileSize = dependencies.readFileSize
         removeItem = dependencies.removeItem
         storeLock = dependencies.crossProcessLock ?? rootURL.map {
-            CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v8.lock"))
+            CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v9.lock"))
         }
     }
 
@@ -362,7 +362,7 @@ final class ExtensionRequestStoreFiles {
         case .directory: break
         case .unsafe, .unavailable: return unavailable
         }
-        switch regularFileStatusLocked(at: rootURL.appendingPathComponent("bridge-v8.lock")) {
+        switch regularFileStatusLocked(at: rootURL.appendingPathComponent("bridge-v9.lock")) {
         case .missing:
             return directoryStatus(at: profileDirectoryURL) == .missing ? missing() : unavailable
         case .regular: break

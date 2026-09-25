@@ -7,14 +7,7 @@ struct ExtensionRequestProfileCodec {
     typealias OriginState = ExtensionRequestProfile.OriginState
     typealias ValidatedProfile = ExtensionRequestProfile
 
-    let parseRequest: ExtensionRequestFileStore.ParseRequest
-
-    func bind(_ request: SafariRequest, data: Data, authority: ExtensionBridge.AuthoritySnapshot) -> (request: SafariRequest, data: Data)? {
-        if request.provider != .unknown && request.authority == authority.version {
-            var bound = request
-            bound.authorizedAccount = request.provider == .ethereum ? authority.ethereumAccount : authority.solanaAccount
-            return (bound, data)
-        }
+    func bind(_ request: SafariRequest, data: Data, authority: ExtensionBridge.AuthoritySnapshot) -> (request: SafariRequest, payload: ExtensionRequestProfile.ActiveRequestPayload)? {
         var raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         raw?["authority"] = authority.version.json
         if case .unknown = request.body {
@@ -30,7 +23,9 @@ struct ExtensionRequestProfileCodec {
             raw?["body"] = ["latestConfigurations": configurations]
         }
         guard let raw, let data = ExtensionBridge.payloadData(raw, options: [.sortedKeys]),
-              var bound = parseRequest(raw) else { return nil }
+              data.count <= ExtensionBridge.maximumPayloadBytes,
+              var bound = SafariRequest(json: raw),
+              let body = raw["body"] as? [String: Any] else { return nil }
         switch request.body {
         case .ethereum:
             bound.authorizedAccount = authority.ethereumAccount
@@ -39,7 +34,8 @@ struct ExtensionRequestProfileCodec {
         case .unknown:
             bound.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
         }
-        return (bound, data)
+        guard let payload = ExtensionRequestProfile.ActiveRequestPayload(request: bound, body: body, favicon: raw["favicon"] as? String) else { return nil }
+        return (bound, payload)
     }
 
     static func interruptionResponseData(for request: SafariRequest?) -> Data? {
@@ -63,14 +59,14 @@ struct ExtensionRequestProfileCodec {
         now: Date
     ) -> ValidatedProfile? {
         guard let repair = ExtensionRequestProfile.repairAuthorityState(stored, expectedIdentifier: expectedIdentifier),
-              var profile = validateAndParse(repair.state, expectedIdentifier: expectedIdentifier) else { return nil }
+              var profile = validate(repair.state, expectedIdentifier: expectedIdentifier) else { return nil }
         for key in repair.invalidOrigins {
             guard profile.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now) else { return nil }
         }
         return profile
     }
 
-    private func validateAndParse(
+    private func validate(
         _ profile: ProfileState,
         expectedIdentifier: UUID?
     ) -> ValidatedProfile? {
@@ -109,7 +105,6 @@ struct ExtensionRequestProfileCodec {
               Set(profile.records.map(\.enqueueAttempt)).count == profile.records.count else {
             return nil
         }
-        var parsedRequests = [ExtensionBridge.Handle: SafariRequest]()
         for record in profile.records {
             guard record.profileIdentifier == expectedIdentifier,
                   !record.host.isEmpty,
@@ -143,34 +138,17 @@ struct ExtensionRequestProfileCodec {
                   }) ?? true else {
                 return nil
             }
-            if let requestData = record.state.requestData {
-                guard requestData.count <= ExtensionBridge.maximumPayloadBytes,
-                      let rawObject = try? JSONSerialization.jsonObject(
-                          with: requestData
-                      ) as? [String: Any],
-                      ExtensionBridge.AuthorityVersion(rawValue: rawObject["authority"]) == record.authority,
-                      ExtensionBridge.correlationFingerprint(rawObject) ==
-                        record.requestFingerprint,
-                      var request = parseRequest(rawObject),
-                      request.id == record.id,
-                      request.host == record.host,
-                      request.configurationKey == record.configurationKey,
-                      request.enqueueAttempt == record.enqueueAttempt,
+            if let payload = record.state.request {
+                guard let object = payload.wireObject(for: record),
+                      let data = ExtensionBridge.payloadData(object, options: [.sortedKeys]),
+                      data.count <= ExtensionBridge.maximumPayloadBytes,
+                      ExtensionBridge.correlationFingerprint(object) == record.requestFingerprint,
                       ExtensionBridge.admissionDeadlineDisposition(
-                          request.admissionDeadline,
+                          payload.request(for: record).admissionDeadline,
                           now: record.admissionCreatedAt
-                      ) == .admissible,
-                      request.workflowVersion == ExtensionBridge.workflowVersion else {
+                      ) == .admissible else {
                     return nil
                 }
-                request.authorizedAccount = record.authorizedAccount
-                if case .unknown = request.body {
-                    let authority = ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: record.configurationKey)
-                    if record.authority == authority.version {
-                        request.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
-                    }
-                }
-                parsedRequests[record.handle] = request
             }
             if let responseData = record.state.responseData,
                Self.responseJSON(responseData, id: record.id) == nil {
@@ -183,7 +161,7 @@ struct ExtensionRequestProfileCodec {
                 break
             }
         }
-        return ValidatedProfile(state: profile, parsedRequests: parsedRequests)
+        return ValidatedProfile(state: profile)
     }
 
     static func boundedResponseData(
@@ -248,7 +226,7 @@ struct ExtensionRequestProfileCodec {
                 break
             }
         }
-        if let profile = validateAndParse(state, expectedIdentifier: expectedIdentifier) {
+        if let profile = validate(state, expectedIdentifier: expectedIdentifier) {
             return DecodedProfile(profile: profile, requiresAuthorityPublication: false)
         }
         guard recoverAuthority,

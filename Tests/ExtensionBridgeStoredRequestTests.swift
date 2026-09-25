@@ -25,20 +25,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var now = Date(timeIntervalSince1970: 1_800_000_000)
     }
 
-    private final class RequestParseRecorder {
-        private var ids = [Int]()
-
-        func parse(_ json: [String: Any]) -> SafariRequest? {
-            ids.append(json["id"] as? Int ?? -1)
-            return SafariRequest(json: json)
-        }
-
-        func takeIDs() -> [Int] {
-            defer { ids.removeAll() }
-            return ids
-        }
-    }
-
     private struct Fixture {
         let request: SafariRequest
         let ingress: ExtensionBridge.Ingress
@@ -51,7 +37,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "extension-bridge-v7-\(UUID().uuidString)",
+            "extension-bridge-\(UUID().uuidString)",
             isDirectory: true
         )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -1142,7 +1128,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let competing = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             crossProcessLockTimeoutNanoseconds: 0, crossProcessLockPollNanoseconds: 0
         ))
-        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
         var source = ["original"]
         var competingPreparations = 0
         var events = [String]()
@@ -1167,7 +1153,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         })
         XCTAssertEqual(result, 2)
         XCTAssertEqual(events, ["prepare", "invalidate", "commit"])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v8").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v9").path))
         try competing.perform(preparing: {
             competingPreparations += 1
             XCTAssertEqual(source, ["original", "added"])
@@ -1207,7 +1193,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = try await grantAuthority(account, id: 62_979)
         let before = try await removalSnapshot()
         let store = removalStore()
-        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
         var sourceWrites = 0
         XCTAssertThrowsError(try store.perform(preparing: {
             PreparedWalletSourceMutation(payload: (), authorityRemovals: [.accounts([account])])
@@ -1230,7 +1216,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = try await grantAuthority(ethereum, id: 62_981)
         _ = try await grantAuthority(solana, id: 62_982)
         let store = removalStore()
-        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
         var sourceWrites = 0
         try store.perform(preparing: {
             XCTAssertFalse(try competingLock.tryAcquire())
@@ -1297,7 +1283,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var sourceMutations = 0
         try store.withRevokedWalletAuthority(matching: .accounts([account])) {
             sourceMutations += 1
-            let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v8.lock"))
+            let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
             XCTAssertFalse(try competingLock.tryAcquire())
             competingLock.release()
         }
@@ -1446,12 +1432,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             return 42
         }
         XCTAssertEqual(result, 42)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v8").path))
-        try Data([1]).write(to: rootURL.appendingPathComponent("profiles-v8"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v9").path))
+        try Data([1]).write(to: rootURL.appendingPathComponent("profiles-v9"))
         XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
             sourceMutations += 1
         })
-        try FileManager.default.removeItem(at: rootURL.appendingPathComponent("profiles-v8"))
+        try FileManager.default.removeItem(at: rootURL.appendingPathComponent("profiles-v9"))
         let account = authorityTestAccount()
         _ = try await grantAuthority(account, id: 63_030)
         try Data([1]).write(to: profileURL(UUID()))
@@ -1662,7 +1648,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testObservationalReadsRejectMissingAndUnsafeExistingStoreLocks() async throws {
         let fixture = try makeFixture(id: 953)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
-        let lockURL = rootURL.appendingPathComponent("bridge-v8.lock")
+        let lockURL = rootURL.appendingPathComponent("bridge-v9.lock")
         try FileManager.default.removeItem(at: lockURL)
         let missingLock = await bridge.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
         XCTAssertEqual(missingLock, .unavailable)
@@ -1766,7 +1752,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let original = try Data(contentsOf: defaultProfileURL)
         try await CrossProcessLockTestFixture.withHeldLock(
-            at: rootURL.appendingPathComponent("bridge-v8.lock"),
+            at: rootURL.appendingPathComponent("bridge-v9.lock"),
             readyURL: rootURL.appendingPathComponent("observation-holder-ready")
         ) {
             let started = ContinuousClock.now
@@ -1999,22 +1985,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         let profile = try storedProfile()
-        XCTAssertEqual(profile["schemaVersion"] as? Int, 8)
+        XCTAssertEqual(profile["schemaVersion"] as? Int, 9)
         _ = await bridge.list(profileIdentifier: nil)
         for (url, data) in preservedFiles {
             XCTAssertEqual(try Data(contentsOf: url), data)
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: defaultProfileURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent("operation-locks-v8", isDirectory: true)
+            .appendingPathComponent("operation-locks-v9", isDirectory: true)
             .path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent(
-                "native-execution-fences-v7",
-                isDirectory: true
-            ).path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent("bridge-v8.lock").path))
+            .appendingPathComponent("bridge-v9.lock").path))
     }
 
     func testStoreExcludesBridgeRootFromBackup() async throws {
@@ -2035,7 +2016,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(values.isExcludedFromBackup, true)
     }
 
-    func testV8OrdinaryStatesRoundTripWithoutChangingRequestOrResponseBytes()
+    func testActivePayloadAndResponsesSurviveEveryPersistedState()
         async throws {
         let fixture = try makeFixture(id: 85)
         let handle = try accepted(await bridge.enqueue(
@@ -2047,9 +2028,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             Data("bplist00".utf8)
         )
         XCTAssertEqual(
-            try firstStoredState("pending")["request"] as? Data,
-            fixture.ingress.canonicalData
+            try firstStoredBody("pending"),
+            try bodyData(for: fixture.ingress)
         )
+        let payload = try XCTUnwrap(firstStoredState("pending")["request"] as? [String: Any])
+        XCTAssertEqual(Set(payload.keys), ["name", "provider", "favicon", "admissionDeadlineMilliseconds", "bodyData"])
+        XCTAssertEqual(payload["admissionDeadlineMilliseconds"] as? Int, fixture.request.admissionDeadlineMilliseconds)
         bridge = makeBridge(clock: { self.clock.now })
         guard case .found(let pending) = await bridge.load(handle: handle) else {
             return XCTFail("Expected pending request after restart")
@@ -2058,8 +2042,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         let claim = try approvalClaim(await bridge.claim(handle: handle))
         XCTAssertEqual(
-            try firstStoredState("claimed")["request"] as? Data,
-            fixture.ingress.canonicalData
+            try firstStoredBody("claimed"),
+            try bodyData(for: fixture.ingress)
         )
         bridge = makeBridge(clock: { self.clock.now })
         guard case .found(let claimed) = await bridge.load(handle: handle) else {
@@ -2081,7 +2065,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertEqual(checkpoint, .persisted)
         let broadcast = try firstStoredState("broadcastPrepared")
-        XCTAssertEqual(broadcast["request"] as? Data, fixture.ingress.canonicalData)
+        XCTAssertEqual(try firstStoredBody("broadcastPrepared"), try bodyData(for: fixture.ingress))
         XCTAssertEqual(
             broadcast["recoveryResponse"] as? Data,
             ExtensionBridge.payloadData(recovery.json, options: [.sortedKeys])
@@ -2117,11 +2101,94 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(terminal.nativeExecutionContext)
     }
 
-    func testValidatedRequestsAreParsedOnceForSnapshotsAndManualSwitchDiscovery() throws {
-        let parsing = RequestParseRecorder()
+    func testStoredBodyPreservesJSONTypesUnknownFieldsAndRetryFingerprint() async throws {
+        let template = try makeFixture(id: 86, favicon: "/icon.png")
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        let deadline = template.request.admissionDeadlineMilliseconds - 1
+        raw["admissionDeadline"] = deadline
+        var body = try XCTUnwrap(raw["body"] as? [String: Any])
+        body["extensionData"] = [
+            "flag": true,
+            "number": 1,
+            "fraction": 1.25,
+            "largeInteger": 9_007_199_254_740_991,
+            "values": [true, 1, NSNull()],
+        ] as [String: Any]
+        raw["body"] = body
+        let fixture = try authorityFixture(raw)
+        let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        bridge = makeBridge(clock: { self.clock.now })
+        guard case .found(let snapshot) = await bridge.load(handle: admitted.handle) else {
+            return XCTFail("Expected JSON body after restart")
+        }
+        let request = try XCTUnwrap(snapshot.request)
+        XCTAssertEqual(request.admissionDeadlineMilliseconds, deadline)
+        XCTAssertEqual(request.favicon, "https://wallet.example/icon.png")
+        XCTAssertEqual(try firstStoredBody("pending"), try bodyData(for: fixture.ingress))
+        let replay = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        XCTAssertEqual(replay.handle, admitted.handle)
+        XCTAssertEqual(replay.admissionKind, .replay)
+
+        var extensionData = try XCTUnwrap(body["extensionData"] as? [String: Any])
+        extensionData["flag"] = 1
+        body["extensionData"] = extensionData
+        raw["body"] = body
+        let changed = try authorityFixture(raw)
+        guard case .rejected = await bridge.enqueue(ingress: changed.ingress, profileIdentifier: nil) else {
+            return XCTFail("A boolean changed to a number must conflict with the original attempt")
+        }
+    }
+
+    @MainActor
+    func testStoredPayloadPreservesDeferredMalformedBodyErrors() async throws {
+        let account = WalletAccountDescriptor(
+            walletID: "stored-solana-wallet", coin: .solana,
+            normalizedAddress: "11111111111111111111111111111111", derivationPath: "m/44'/501'/0'/0'"
+        )
+        _ = try await grantAuthority(account, id: 90)
+        let template = try makeFixture(id: 87)
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        for (index, provider) in ["ethereum", "solana"].enumerated() {
+            var raw = original
+            raw["id"] = 87 + index
+            raw["enqueueAttempt"] = attempt(for: 87 + index)
+            raw["provider"] = provider
+            raw["name"] = provider == "ethereum" ? "ecRecover" : "signAllTransactions"
+            raw["body"] = provider == "ethereum"
+                ? ["address": "", "object": NSNull()]
+                : ["publicKey": account.normalizedAddress, "object": ["params": ["messages": NSNull()]]]
+            let fixture = try authorityFixture(raw)
+            guard case .response(let expected) = DappRequestProcessor().prepareWithoutWallets(fixture.request) else {
+                return XCTFail("Expected the existing deferred provider error")
+            }
+            let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+            bridge = makeBridge(clock: { self.clock.now })
+            guard case .found(let snapshot) = await bridge.load(handle: admitted.handle),
+                  let request = snapshot.request,
+                  case .response(let actual) = DappRequestProcessor().prepareWithoutWallets(request) else {
+                return XCTFail("Expected the deferred provider error after restart")
+            }
+            XCTAssertEqual(actual.json as NSDictionary, expected.json as NSDictionary)
+        }
+    }
+
+    func testStoredPayloadEnvelopeLimitIncludesFaviconMetadata() async throws {
+        _ = try accepted(await bridge.enqueue(ingress: try makeFixture(id: 89).ingress, profileIdentifier: nil))
+        try mutateFirstStoredRecord { record in
+            var state = try XCTUnwrap(record["state"] as? [String: Any])
+            var pending = try XCTUnwrap(state["pending"] as? [String: Any])
+            var request = try XCTUnwrap(pending["request"] as? [String: Any])
+            request["favicon"] = String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes)
+            pending["request"] = request
+            state["pending"] = pending
+            record["state"] = state
+        }
+        try await assertStoredProfileUnavailableAndUnchanged()
+    }
+
+    func testStoredPayloadMaterializesSnapshotsAndManualSwitchDiscovery() throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { self.clock.now },
-            parseRequest: parsing.parse
+            clock: { self.clock.now }
         ))
         let ordinary = try makeFixture(id: 901)
         let manual = try makeManualFixture(
@@ -2133,37 +2200,31 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: ordinary.ingress,
             profileIdentifier: nil
         )).handle
-        XCTAssertEqual(parsing.takeIDs(), [])
         let manualHandle = try accepted(store.enqueue(
             ingress: manual.ingress,
             profileIdentifier: nil
         )).handle
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
 
         guard case .available(let snapshots) = store.list(profileIdentifier: nil) else {
             return XCTFail("Expected validated snapshots")
         }
         XCTAssertEqual(snapshots[ordinaryHandle]?.request?.id, ordinary.request.id)
         XCTAssertEqual(snapshots[manualHandle]?.request?.id, manual.request.id)
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
 
         guard case .found(let ordinarySnapshot) = store.load(handle: ordinaryHandle) else {
             return XCTFail("Expected ordinary snapshot")
         }
         XCTAssertEqual(ordinarySnapshot.request?.id, ordinary.request.id)
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
 
         let page = try manualSwitchRequests(store.listManualSwitchRequests(
             profileIdentifier: nil
         ))
         XCTAssertEqual(page.map(\.handle), [manualHandle])
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
         guard case .found(let manualSnapshot) = store.loadManualSwitch(
             handle: manualHandle,
             configurationKey: manual.request.configurationKey
         ) else { return XCTFail("Expected manual switch snapshot") }
         XCTAssertEqual(manualSnapshot.request?.id, manual.request.id)
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
 
         let coalescing = try makeManualFixture(
             id: 903,
@@ -2176,14 +2237,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ))
         XCTAssertEqual(admission.handle, manualHandle)
         XCTAssertEqual(admission.admissionKind, .coalesced)
-        XCTAssertEqual(parsing.takeIDs(), [ordinary.request.id, manual.request.id])
     }
 
-    func testValidatedRequestsAreRebuiltAfterAnotherStoreChangesTheProfile() throws {
-        let parsing = RequestParseRecorder()
+    func testStoredPayloadObservesChangesFromAnotherStore() throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { self.clock.now },
-            parseRequest: parsing.parse
+            clock: { self.clock.now }
         ))
         let otherStore = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now }
@@ -2196,11 +2254,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found = store.load(handle: handle) else {
             return XCTFail("Expected initial request")
         }
-        XCTAssertEqual(parsing.takeIDs(), [first.request.id])
         guard case .found = store.load(handle: handle) else {
             return XCTFail("Expected a fresh read of the same request")
         }
-        XCTAssertEqual(parsing.takeIDs(), [first.request.id])
 
         let second = try makeFixture(id: 905)
         _ = try accepted(otherStore.enqueue(ingress: second.ingress, profileIdentifier: nil))
@@ -2213,31 +2269,25 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertEqual(completed.phase, .responded)
         XCTAssertNil(completed.request)
-        XCTAssertEqual(parsing.takeIDs(), [second.request.id])
 
         let persisted = try Data(contentsOf: defaultProfileURL)
         try Data("corrupt profile".utf8).write(to: defaultProfileURL)
         guard case .unavailable = store.load(handle: handle) else {
             return XCTFail("Expected corruption to be observed on the next operation")
         }
-        XCTAssertEqual(parsing.takeIDs(), [])
         try persisted.write(to: defaultProfileURL)
         guard case .found = store.load(handle: handle) else {
             return XCTFail("Expected a fresh read after the profile is restored")
         }
-        XCTAssertEqual(parsing.takeIDs(), [second.request.id])
         try FileManager.default.removeItem(at: defaultProfileURL)
         guard case .missing = store.load(handle: handle) else {
             return XCTFail("Expected removal to be observed on the next operation")
         }
-        XCTAssertEqual(parsing.takeIDs(), [])
     }
 
-    func testValidatedRequestsSurviveStateTransitionsWithoutReencodingStoredBytes() throws {
-        let parsing = RequestParseRecorder()
+    func testCanonicalBodySurvivesClaimReleaseRollbackAndBroadcast() throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { self.clock.now },
-            parseRequest: parsing.parse
+            clock: { self.clock.now }
         ))
         let fixture = try makeFixture(id: 906)
         let rawObject = try JSONSerialization.jsonObject(with: fixture.ingress.canonicalData)
@@ -2254,50 +2304,39 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             replayOnly: false
         )
         let handle = try accepted(store.enqueue(ingress: ingress, profileIdentifier: nil)).handle
-        XCTAssertEqual(parsing.takeIDs(), [])
         let initialClaim = try approvalClaim(store.claim(handle: handle))
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
-        XCTAssertEqual(try firstStoredState("claimed")["request"] as? Data, originalData)
+        XCTAssertEqual(try firstStoredBody("claimed"), try bodyData(for: fixture.ingress))
         XCTAssertEqual(store.release(claim: initialClaim), .persisted)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
-        XCTAssertEqual(try firstStoredState("pending")["request"] as? Data, originalData)
+        XCTAssertEqual(try firstStoredBody("pending"), try bodyData(for: fixture.ingress))
 
         let rollbackClaim = try approvalClaim(store.claim(handle: handle))
         let rollbackPermit = try executionPermit(store.begin(claim: rollbackClaim))
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id, fixture.request.id])
         XCTAssertEqual(store.rollback(permit: rollbackPermit), .persisted)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
-        XCTAssertEqual(try firstStoredState("pending")["request"] as? Data, originalData)
+        XCTAssertEqual(try firstStoredBody("pending"), try bodyData(for: fixture.ingress))
 
         let claim = try approvalClaim(store.claim(handle: handle))
         let permit = try executionPermit(store.begin(claim: claim))
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id, fixture.request.id])
         let recovery = ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x1234")
         XCTAssertEqual(store.prepareBroadcast(
             permit: permit,
             recoveryResponse: recovery,
             authority: .ordinary
         ), .persisted)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
-        XCTAssertEqual(try firstStoredState("broadcastPrepared")["request"] as? Data, originalData)
+        XCTAssertEqual(try firstStoredBody("broadcastPrepared"), try bodyData(for: fixture.ingress))
         XCTAssertEqual(store.complete(
             permit: permit,
             response: response(for: fixture.request),
             authority: .ordinary
         ), .persisted)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
         guard case .found(let completed) = store.load(handle: handle) else {
             return XCTFail("Expected completed snapshot")
         }
         XCTAssertNil(completed.request)
-        XCTAssertEqual(parsing.takeIDs(), [])
     }
 
-    func testValidatedRequestsAreReusedForExpiryAndAbandonedExecutionRecovery() throws {
-        let parsing = RequestParseRecorder()
+    func testStoredPayloadSupportsExpiryAndAbandonedExecutionRecovery() throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { self.clock.now },
-            parseRequest: parsing.parse
+            clock: { self.clock.now }
         ))
         for (index, state) in ["pending", "claimed", "broadcastPrepared"].enumerated() {
             let fixture = try makeFixture(id: 907 + index)
@@ -2323,14 +2362,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     claim.releaseLease()
                 }
             }
-            _ = parsing.takeIDs()
             clock.now.addTimeInterval(ExtensionBridge.requestTTL)
             guard case .found(let recovered) = store.load(handle: handle) else {
                 return XCTFail("Expected recovery from \(state)")
             }
             XCTAssertEqual(recovered.phase, .responded)
             XCTAssertNil(recovered.request)
-            XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
             let terminal = try responseJSON(store.prepareResponseDelivery(
                 handle: handle,
                 configurationKey: fixture.request.configurationKey
@@ -2339,12 +2376,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 ? ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x1234")
                 : ResponseToExtension(for: fixture.request, payload: .error(.userRejected))
             XCTAssertEqual(terminal as NSDictionary, expected.json as NSDictionary)
-            XCTAssertEqual(parsing.takeIDs(), [])
         }
     }
 
-    func testValidatedRequestsAreReparsedAfterFailedAndAmbiguousWrites() throws {
-        let parsing = RequestParseRecorder()
+    func testStoredPayloadSurvivesFailedAndAmbiguousWrites() throws {
         var failBeforeWrite = false
         var failAfterWrite = false
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
@@ -2353,8 +2388,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 if failBeforeWrite { throw Failure.injectedWrite }
                 try ApprovalStoreTestPersistence.write(data, url)
                 if failAfterWrite { throw Failure.injectedWrite }
-            },
-            parseRequest: parsing.parse
+            }
         ))
         let fixture = try makeFixture(id: 910)
         let handle = try accepted(store.enqueue(
@@ -2363,27 +2397,23 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )).handle
         failBeforeWrite = true
         XCTAssertEqual(store.reject(handle: handle), .retryablePersistenceFailure)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
         failBeforeWrite = false
         guard case .found(let pending) = store.load(handle: handle) else {
             return XCTFail("Expected the persisted pending request after a failed write")
         }
         XCTAssertEqual(pending.phase, .queued)
         XCTAssertEqual(pending.request?.id, fixture.request.id)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
 
         failAfterWrite = true
         XCTAssertEqual(store.complete(
             handle: handle,
             response: response(for: fixture.request)
         ), .persisted)
-        XCTAssertEqual(parsing.takeIDs(), [fixture.request.id])
         failAfterWrite = false
         guard case .found(let completed) = store.load(handle: handle) else {
             return XCTFail("Expected completion after exact read-back recovery")
         }
         XCTAssertNil(completed.request)
-        XCTAssertEqual(parsing.takeIDs(), [])
     }
 
     func testLostEnqueueReplyDeduplicatesTheExactAttempt() async throws {
@@ -3185,7 +3215,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(admitted.revisions.ethereum, 0)
     }
 
-    func testStoredRequestRevisionMismatchFailsClosed() async throws {
+    func testStoredBodyFingerprintMismatchFailsClosed() async throws {
         _ = try accepted(await bridge.enqueue(
             ingress: try makeFixture(id: 5, name: "requestAccounts").ingress,
             profileIdentifier: nil
@@ -3193,23 +3223,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try mutateFirstStoredRecord { record in
             var state = try XCTUnwrap(record["state"] as? [String: Any])
             var pending = try XCTUnwrap(state["pending"] as? [String: Any])
-            let requestData = try XCTUnwrap(pending["request"] as? Data)
-            var request = try XCTUnwrap(
-                JSONSerialization.jsonObject(with: requestData) as? [String: Any]
-            )
-            var authority = try XCTUnwrap(request["authority"] as? [String: Any])
-            authority["revisions"] = ["ethereum": 1, "solana": 0]
-            request["authority"] = authority
-            pending["request"] = try JSONSerialization.data(
-                withJSONObject: request,
-                options: [.sortedKeys]
-            )
+            var request = try XCTUnwrap(pending["request"] as? [String: Any])
+            request["bodyData"] = try JSONSerialization.data(withJSONObject: ["address": "", "unexpected": true], options: [.sortedKeys])
+            pending["request"] = request
             state["pending"] = pending
             record["state"] = state
         }
 
         guard case .unavailable = await bridge.list(profileIdentifier: nil) else {
-            return XCTFail("Expected revision mismatch to fail closed")
+            return XCTFail("Expected changed body fingerprint to fail closed")
         }
     }
 
@@ -5037,7 +5059,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let library = container.appendingPathComponent("Library", isDirectory: true)
         let support = library.appendingPathComponent("Application Support", isDirectory: true)
         let storeRoot = support.appendingPathComponent("BigWalletExtensionBridge", isDirectory: true)
-        let profiles = storeRoot.appendingPathComponent("profiles-v8", isDirectory: true)
+        let profiles = storeRoot.appendingPathComponent("profiles-v9", isDirectory: true)
         let expectedPaths = [profiles, storeRoot, support, library, container].map(\.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: library.path))
 
@@ -7674,7 +7696,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try Data(contentsOf: url)
         clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
         try await CrossProcessLockTestFixture.withHeldLock(
-            at: rootURL.appendingPathComponent("bridge-v8.lock"),
+            at: rootURL.appendingPathComponent("bridge-v9.lock"),
             readyURL: rootURL.appendingPathComponent("holder-ready")
         ) {
             await self.bridge.performMaintenance()
@@ -7689,7 +7711,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testSeparateProcessStoreLockFencesAccess() async throws {
         let fixture = try makeFixture(id: 80)
         let readyURL = rootURL.appendingPathComponent("holder-ready")
-        let lockURL = rootURL.appendingPathComponent("bridge-v8.lock")
+        let lockURL = rootURL.appendingPathComponent("bridge-v9.lock")
         try await CrossProcessLockTestFixture.withHeldLock(
             at: lockURL,
             readyURL: readyURL
@@ -8189,7 +8211,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func profileURL(_ profileIdentifier: UUID?) -> URL {
         let name = profileIdentifier?.uuidString.lowercased() ?? "default"
         return rootURL
-            .appendingPathComponent("profiles-v8", isDirectory: true)
+            .appendingPathComponent("profiles-v9", isDirectory: true)
             .appendingPathComponent(name)
             .appendingPathExtension("state")
     }
@@ -8197,7 +8219,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func operationLockURL(_ handle: ExtensionBridge.Handle) -> URL {
         let profile = handle.profileIdentifier?.uuidString.lowercased() ?? "default"
         return rootURL
-            .appendingPathComponent("operation-locks-v8", isDirectory: true)
+            .appendingPathComponent("operation-locks-v9", isDirectory: true)
             .appendingPathComponent("\(profile)-\(handle.token.rawValue)")
             .appendingPathExtension("lock")
     }
@@ -8233,6 +8255,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             options: 0
         )
         try data.write(to: defaultProfileURL, options: .atomic)
+    }
+
+    private func bodyData(for ingress: ExtensionBridge.Ingress) throws -> Data {
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: ingress.canonicalData) as? [String: Any])
+        return try XCTUnwrap(ExtensionBridge.payloadData(try XCTUnwrap(object["body"] as? [String: Any]), options: [.sortedKeys]))
+    }
+
+    private func firstStoredBody(_ state: String) throws -> Data {
+        let request = try XCTUnwrap(firstStoredState(state)["request"] as? [String: Any])
+        return try XCTUnwrap(request["bodyData"] as? Data)
     }
 
     private func firstStoredState(_ name: String) throws -> [String: Any] {

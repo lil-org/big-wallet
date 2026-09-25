@@ -20,14 +20,10 @@ final class NativeApprovalResponseTests: XCTestCase {
             }
             defer { fixture.onValidate = nil }
             let service = fixture.service()
-            let opened = try await fixture.finish { await service.reactivate(fixture.route(request)) }
-            XCTAssertFalse(opened)
-            let status = await service.reactivationFallbackStatus(
-                handle: request.handle,
-                configurationKey: request.configurationKey,
-                nativeDeliveryNonce: request.nativeDeliveryNonce
-            )
-            XCTAssertEqual(status, completed ? .ready : .pending)
+            let result = try await fixture.finish {
+                await service.reconcile(.init(request), intent: .focus)
+            }
+            XCTAssertEqual(result, completed ? .responseReady : .pending)
             XCTAssertTrue(fixture.launches.isEmpty)
             XCTAssertTrue(fixture.clears.isEmpty)
             XCTAssertTrue(fixture.quits.isEmpty)
@@ -40,15 +36,16 @@ final class NativeApprovalResponseTests: XCTestCase {
         let service = fixture.service()
         fixture.deliver(request)
         let delivered = try XCTUnwrap(fixture.snapshots[request.handle])
+        fixture.onValidate = { _ in false }
         for loaded in [ExtensionBridge.SnapshotResult.found(request), .found(delivered), .missing, .unavailable] {
             fixture.onLoad = { _ in loaded }
-            let status = await service.reactivationFallbackStatus(
-                handle: request.handle,
-                configurationKey: request.configurationKey,
-                nativeDeliveryNonce: request.nativeDeliveryNonce
-            )
-            XCTAssertNil(status)
+            let result = await service.reconcile(.init(request), intent: .focus)
+            switch loaded {
+            case .missing: XCTAssertEqual(result, .missing)
+            case .found, .unavailable: XCTAssertEqual(result, .unavailable)
+            }
         }
+        fixture.onValidate = nil
         fixture.onLoad = nil
         XCTAssertTrue(fixture.launches.isEmpty)
     }
@@ -66,10 +63,11 @@ final class NativeApprovalResponseTests: XCTestCase {
             (request.handle, "https://another.example", request.nativeDeliveryNonce),
             (request.handle, request.configurationKey, otherRequest.nativeDeliveryNonce),
         ] {
-            let status = await service.reactivationFallbackStatus(
-                handle: handle, configurationKey: key, nativeDeliveryNonce: nonce
+            let result = await service.reconcile(
+                .init(handle: handle, configurationKey: key, expectedNonce: nonce),
+                intent: .focus
             )
-            XCTAssertNil(status)
+            XCTAssertEqual(result, .missing)
         }
         fixture.onLoad = nil
         XCTAssertTrue(fixture.launches.isEmpty)

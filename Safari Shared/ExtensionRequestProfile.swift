@@ -5,16 +5,95 @@ import CryptoKit
 
 struct ExtensionRequestProfile {
     var state: State
-    var parsedRequests: [ExtensionBridge.Handle: SafariRequest]
 
     func request(for record: Record) -> SafariRequest? {
-        guard record.state.requestData != nil else { return nil }
-        return parsedRequests[record.handle]
+        guard let payload = record.state.request else { return nil }
+        var request = payload.request(for: record)
+        if case .unknown = request.body {
+            let authority = Self.authoritySnapshot(state, configurationKey: record.configurationKey)
+            if record.authority == authority.version {
+                request.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
+            }
+        }
+        return request
     }
 
     mutating func complete(at index: Int, response: Data, date: Date) {
         state.records[index].complete(response: response, at: date)
-        parsedRequests.removeValue(forKey: state.records[index].handle)
+    }
+
+    struct ActiveRequestPayload: Codable {
+        let name: String
+        let provider: InpageProvider
+        let favicon: String?
+        let admissionDeadlineMilliseconds: Int
+        let bodyData: Data
+        let body: SafariRequest.Body
+
+        private enum CodingKeys: String, CodingKey {
+            case name, provider, favicon, admissionDeadlineMilliseconds, bodyData
+        }
+
+        init?(request: SafariRequest, body: [String: Any], favicon: String?) {
+            guard let bodyData = ExtensionBridge.payloadData(body, options: [.sortedKeys]) else { return nil }
+            name = request.name
+            provider = request.provider
+            self.favicon = favicon
+            admissionDeadlineMilliseconds = request.admissionDeadlineMilliseconds
+            self.bodyData = bodyData
+            self.body = request.body
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            name = try values.decode(String.self, forKey: .name)
+            provider = try values.decode(InpageProvider.self, forKey: .provider)
+            favicon = try values.decodeIfPresent(String.self, forKey: .favicon)
+            admissionDeadlineMilliseconds = try values.decode(Int.self, forKey: .admissionDeadlineMilliseconds)
+            bodyData = try values.decode(Data.self, forKey: .bodyData)
+            guard admissionDeadlineMilliseconds > 0,
+                  admissionDeadlineMilliseconds <= 9_007_199_254_740_991,
+                  bodyData.count <= ExtensionBridge.maximumPayloadBytes,
+                  let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any],
+                  let body = SafariRequest.Body(provider: provider, name: name, json: object) else {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid active request payload"))
+            }
+            self.body = body
+        }
+
+        func request(for record: Record) -> SafariRequest {
+            SafariRequest(
+                id: record.id,
+                name: name,
+                provider: provider,
+                body: body,
+                host: record.host,
+                configurationKey: record.configurationKey,
+                favicon: SafariRequest.normalizedFavicon(favicon, host: record.host),
+                enqueueAttempt: record.enqueueAttempt,
+                admissionDeadlineMilliseconds: admissionDeadlineMilliseconds,
+                authority: record.authority,
+                authorizedAccount: record.authorizedAccount
+            )
+        }
+
+        func wireObject(for record: Record) -> [String: Any]? {
+            guard let body = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else { return nil }
+            var object: [String: Any] = [
+                "id": record.id,
+                "name": name,
+                "provider": provider.rawValue,
+                "body": body,
+                "host": record.host,
+                "configurationKey": record.configurationKey,
+                "enqueueAttempt": record.enqueueAttempt,
+                "admissionDeadline": admissionDeadlineMilliseconds,
+                "authority": record.authority.json,
+                "workflowVersion": ExtensionBridge.workflowVersion,
+            ]
+            object["favicon"] = favicon
+            return object
+        }
     }
 
     struct State: Codable {
@@ -129,17 +208,17 @@ struct ExtensionRequestProfile {
         }
 
         enum State: Codable {
-            case pending(request: Data, approval: PendingApproval)
-            case claimed(claimID: UUID, request: Data, approval: ClaimedApproval)
+            case pending(request: ActiveRequestPayload, approval: PendingApproval)
+            case claimed(claimID: UUID, request: ActiveRequestPayload, approval: ClaimedApproval)
             case broadcastPrepared(
                 claimID: UUID,
-                request: Data,
+                request: ActiveRequestPayload,
                 recoveryResponse: Data,
                 approval: BroadcastApproval
             )
             case completed(since: Date, response: Data, acknowledged: Bool)
 
-            var requestData: Data? {
+            var request: ActiveRequestPayload? {
                 switch self {
                 case .pending(let request, _), .claimed(_, let request, _),
                      .broadcastPrepared(_, let request, _, _):
@@ -337,7 +416,7 @@ struct ExtensionRequestProfile {
 
     enum AuthorityStatus { case current, stale, inconsistentGrant }
 
-    static let profileSchemaVersion = 8
+    static let profileSchemaVersion = 9
     static let maximumProfileBytes =
         ExtensionBridge.maximumRetainedBytes + ExtensionRequestProfile.maximumAuthorityBytes + ExtensionRequestProfile.maximumMutationReceiptBytes + 64 * 1024
     static let maximumOrigins = 512
@@ -425,11 +504,9 @@ struct ExtensionRequestProfile {
     }
 
     static func authorityStatus(_ record: Record, in profile: State) -> AuthorityStatus {
-        guard let data = record.state.requestData,
-              let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let providerName = raw["provider"] as? String,
-              let provider = InpageProvider(rawValue: providerName),
-              let name = raw["name"] as? String else { return .stale }
+        guard let request = record.state.request else { return .stale }
+        let provider = request.provider
+        let name = request.name
         let snapshot = authoritySnapshot(profile, configurationKey: record.configurationKey)
         guard authorityMatches(record.authority, current: snapshot.version,
                                provider: provider, requestName: name) else { return .stale }
@@ -684,15 +761,11 @@ struct ExtensionRequestProfile {
         now: Date
     ) -> PendingDeadlineTransition {
         let request = self.request(for: self.state.records[index])
-        let transition = Self.transitionExpiredPending(
+        return Self.transitionExpiredPending(
             &self.state.records[index],
             request: request,
             now: now
         )
-        if case .expired = transition {
-            self.parsedRequests.removeValue(forKey: self.state.records[index].handle)
-        }
-        return transition
     }
 
     static func transitionExpiredPending(
@@ -840,7 +913,7 @@ struct ExtensionRequestProfile {
     static func retainedStorageBytes(_ record: Record) -> Int? {
         var metadata = record
         if record.state.isActive {
-            metadata.state = .pending(request: Data(), approval: .unowned)
+            metadata.state = .completed(since: record.createdAt, response: Data(), acknowledged: false)
         }
         guard let data = try? ExtensionRequestProfileCodec.encode(metadata) else {
             return nil
@@ -893,7 +966,6 @@ struct ExtensionRequestProfile {
                             return nil
                         }
                         record.complete(response: response, at: now)
-                        self.parsedRequests.removeValue(forKey: record.handle)
                     } else {
                         record.restorePendingClaim()
                     }
@@ -903,7 +975,6 @@ struct ExtensionRequestProfile {
             case .broadcastPrepared(_, _, let recoveryResponse, _):
                 if abandonedHandles.contains(record.handle) {
                     record.complete(response: recoveryResponse, at: now)
-                    self.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     locksToRemove.append(record.handle)
                 }
@@ -921,7 +992,6 @@ struct ExtensionRequestProfile {
                 case .active:
                     break
                 case .expired:
-                    self.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     if !locksToRemove.contains(record.handle) {
                         locksToRemove.append(record.handle)
@@ -933,7 +1003,6 @@ struct ExtensionRequestProfile {
             case .completed(let since, _, _):
                 if now.timeIntervalSince(since) >= ExtensionBridge.responseExpiry,
                    ExtensionRequestProfile.canRetireAdmissionRecord(record, now: now) {
-                    self.parsedRequests.removeValue(forKey: record.handle)
                     changed = true
                     locksToRemove.append(record.handle)
                 } else {
@@ -998,15 +1067,12 @@ struct ExtensionRequestProfile {
 
     mutating func admit(
         _ record: Record,
-        request: SafariRequest,
         now: Date
     ) -> [ExtensionBridge.Handle]? {
         guard let retiredHandles = Self.makeRoomForAdmission(record, in: &state.records, now: now) else {
             return nil
         }
         state.records.append(record)
-        if record.state.isActive { parsedRequests[record.handle] = request }
-        for handle in retiredHandles { parsedRequests.removeValue(forKey: handle) }
         Self.reclaimAuthority(in: &state, now: now)
         return retiredHandles
     }

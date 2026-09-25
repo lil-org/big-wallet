@@ -162,10 +162,17 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     id: request.id, token: identity.response.token, profileIdentifier: profileIdentifier
                 )
 #if os(macOS)
-                let status = await Self.nativeApprovalService.maintainRequest(
-                    handle: handle, configurationKey: identity.response.configurationKey,
-                    allowDelivery: identity.allowDelivery
+                let result = await Self.nativeApprovalService.reconcile(
+                    .init(handle: handle, configurationKey: identity.response.configurationKey),
+                    intent: .maintenance(allowDelivery: identity.allowDelivery)
                 )
+                let status: ExtensionBridge.ResponseStatusResult
+                switch result {
+                case .pending, .opened: status = .pending
+                case .responseReady: status = .ready
+                case .missing: status = .missing
+                case .unavailable: status = .unavailable
+                }
 #else
                 await Self.bridge.performMaintenance(profileIdentifier: profileIdentifier)
                 let status = await Self.bridge.responseStatus(
@@ -267,10 +274,15 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 switch await DappRequestAdmission.shared.materialize(handle: handle) {
                 case .approvalRequired:
 #if os(macOS)
-                    switch await Self.nativeApprovalService.deliverApproval(
-                        handle: handle, nativeDeliveryNonce: nativeDeliveryNonce
+                    switch await Self.nativeApprovalService.reconcile(
+                        .init(
+                            handle: handle,
+                            configurationKey: request.configurationKey,
+                            expectedNonce: nativeDeliveryNonce
+                        ),
+                        intent: .admission
                     ) {
-                    case .pending:
+                    case .pending, .opened:
                         break
                     case .responseReady:
                         Self.respond(
@@ -281,7 +293,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                             context: context
                         )
                         return
-                    case .unavailable:
+                    case .missing, .unavailable:
                         context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                         return
                     }
@@ -438,20 +450,19 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     context.cancelRequest(withError: HandlerError.invalidMessage)
                     return
                 }
-                let opened = await Self.nativeApprovalService.reactivate(.approval(
-                    workflowVersion: ExtensionBridge.workflowVersion,
-                    handle: handle,
-                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
-                ))
-                if !opened, let status = await Self.nativeApprovalService.reactivationFallbackStatus(
-                    handle: handle,
-                    configurationKey: identity.configurationKey,
-                    nativeDeliveryNonce: snapshot.nativeDeliveryNonce
-                ) {
-                    Self.respondStatus(status, id: request.id, context: context)
-                    return
+                let result = await Self.nativeApprovalService.reconcile(
+                    .init(snapshot), intent: .focus
+                )
+                switch result {
+                case .opened:
+                    Self.respond(with: ["id": request.id, "opened": true], context: context)
+                case .pending:
+                    Self.respondStatus(.pending, id: request.id, context: context)
+                case .responseReady:
+                    Self.respondStatus(.ready, id: request.id, context: context)
+                case .missing, .unavailable:
+                    Self.respond(with: ["id": request.id, "opened": false], context: context)
                 }
-                Self.respond(with: ["id": request.id, "opened": opened], context: context)
             }
 #else
             context.cancelRequest(withError: HandlerError.unsupportedOperation)
@@ -599,9 +610,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #if os(macOS)
     private func openNativeAgent(id: Int, context: NSExtensionContext) {
         Task {
-            let opened = await Self.nativeApprovalService.open(
-                .showWallet(workflowVersion: ExtensionBridge.workflowVersion)
-            )
+            let opened = await Self.nativeApprovalService.openWallet()
             guard opened else {
                 context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 return

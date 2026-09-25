@@ -103,9 +103,9 @@
                         let result = await f.maintain(f.service(), request, allowDelivery: allowDelivery)
                         switch result {
                         case .pending: XCTAssertFalse(executing)
-                        case .ready: XCTAssertTrue(executing && !exists)
+                        case .responseReady: XCTAssertTrue(executing && !exists)
                         case .unavailable: XCTAssertTrue(executing && exists)
-                        case .missing: XCTFail("Expected the delivered request to remain present")
+                        case .missing, .opened: XCTFail("Expected the delivered request to remain present")
                         }
                         XCTAssertEqual(f.maintainedProfiles.count, 1)
                         XCTAssertTrue(f.launches.isEmpty)
@@ -132,9 +132,9 @@
                 }
                 let service = f.service()
                 let result = try await f.finish {
-                    await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+                    await service.reconcile(.init(request), intent: .admission)
                 }
-                XCTAssertEqual(result, outcome == "delivered" ? .pending : outcome == "completed" ? .responseReady : .unavailable)
+                XCTAssertEqual(result, outcome == "delivered" ? .pending : outcome == "completed" ? .responseReady : .missing)
                 XCTAssertEqual(f.launches.count, 1)
             }
         }
@@ -152,11 +152,35 @@
             f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
             let service = f.service()
             let result = try await f.finish {
-                await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+                await service.reconcile(.init(request), intent: .admission)
             }
             XCTAssertEqual(result, .pending)
             XCTAssertTrue(confirmed)
-            XCTAssertEqual(f.loads.count, 3)
+        }
+
+        func testSuccessfulLaunchPreservesCompletedResponseWithoutAnotherRead() async throws {
+            for intent in [NativeApprovalService.ReconciliationIntent.admission, .focus] {
+                let f = try fixture()
+                let request = try f.request()
+                var completed = false
+                f.onLoad = { handle in
+                    guard !completed else { return .unavailable }
+                    let snapshot = f.snapshots[handle]!
+                    completed = snapshot.phase == .responded
+                    return .found(snapshot)
+                }
+                f.onLaunch = { _, _, completion in
+                    f.setState(.responded, for: request)
+                    completion(true)
+                }
+                let service = f.service()
+                let result = try await f.finish {
+                    await service.reconcile(.init(request), intent: intent)
+                }
+                XCTAssertEqual(result, .responseReady)
+                XCTAssertTrue(completed)
+                XCTAssertEqual(f.launches.count, 1)
+            }
         }
 
         func testApprovedAdmissionBypassesUnrelatedLaunchQueue() async throws {
@@ -171,9 +195,9 @@
             }
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service()
-            let wallet = Task { await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion)) }
+            let wallet = Task { await service.openWallet() }
             try await f.eventually { !f.validations.isEmpty }
-            let result = await service.deliverApproval(handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+            let result = await service.reconcile(.init(request), intent: .admission)
             XCTAssertEqual(result, .pending)
             XCTAssertTrue(f.launches.isEmpty)
             gate.open()
@@ -267,7 +291,7 @@
             XCTAssertTrue(f.clears.isEmpty)
             f.processes.removeAll()
             f.clock.advance(to: f.clock.deadlines.first!)
-            guard case .ready = await task.value else { return XCTFail("Expected interrupted response") }
+            guard case .responseReady = await task.value else { return XCTFail("Expected interrupted response") }
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertTrue(f.launches.isEmpty)
         }
@@ -285,7 +309,7 @@
                 return .found(f.snapshots[handle]!)
             }
             let result = await f.maintain(f.service(), request)
-            guard case .ready = result else { return XCTFail("Expected interrupted response") }
+            guard case .responseReady = result else { return XCTFail("Expected interrupted response") }
             XCTAssertEqual(f.clears, [receipt])
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
@@ -470,8 +494,8 @@
             f.deliver(request, executing: true)
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service()
-            let result = try await f.finish { await service.reactivate(f.route(request)) }
-            XCTAssertFalse(result)
+            let result = try await f.finish { await service.reconcile(.init(request), intent: .focus) }
+            XCTAssertEqual(result, .pending)
             XCTAssertTrue(f.launches.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
             XCTAssertTrue(f.quits.isEmpty)
@@ -484,12 +508,12 @@
             f.deliver(request, runtime: owner)
             f.processes[42] = f.runtime()
             let service = f.service()
-            let opened = try await f.finish { await service.open(f.route(request)) }
-            XCTAssertTrue(opened)
+            let opened = try await f.finish { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(opened, .pending)
             XCTAssertTrue(f.launches.isEmpty)
             f.onLaunch = { _, _, completion in completion(true) }
-            let reactivated = try await f.finish { await service.reactivate(f.route(request)) }
-            XCTAssertTrue(reactivated)
+            let reactivated = try await f.finish { await service.reconcile(.init(request), intent: .focus) }
+            XCTAssertEqual(reactivated, .opened)
             XCTAssertEqual(
                 f.launches.map(\.target),
                 [
@@ -497,15 +521,19 @@
                         url: f.bundleURL.standardizedFileURL, processIdentifier: 43,
                         runtimeInstanceIdentifier: owner.instanceIdentifier)
                 ])
-            let wrongNonce = await service.reactivate(
-                .approval(
-                    workflowVersion: ExtensionBridge.workflowVersion,
-                    handle: request.handle, nativeDeliveryNonce: .init(value: UUID())))
-            XCTAssertFalse(wrongNonce)
+            let wrongNonce = await service.reconcile(
+                .init(
+                    handle: request.handle,
+                    configurationKey: request.configurationKey,
+                    expectedNonce: .init(value: UUID())
+                ),
+                intent: .focus
+            )
+            XCTAssertEqual(wrongNonce, .missing)
             XCTAssertEqual(f.launches.count, 1)
             f.setState(.responded, for: request)
-            let terminal = await service.reactivate(f.route(request))
-            XCTAssertFalse(terminal)
+            let terminal = await service.reconcile(.init(request), intent: .focus)
+            XCTAssertEqual(terminal, .responseReady)
             XCTAssertEqual(f.launches.count, 1)
         }
 
@@ -520,8 +548,8 @@
                 let service = f.service()
                 let result = try await f.finish(afterStarting: {
                     if !publish { try await f.advanceClock(by: 50_000_000, steps: 100) }
-                }) { await service.reactivate(f.route(request)) }
-                XCTAssertEqual(result, publish)
+                }) { await service.reconcile(.init(request), intent: .focus) }
+                XCTAssertEqual(result, publish ? .opened : .unavailable)
                 XCTAssertEqual(f.launches.count, 1)
             }
         }
@@ -534,8 +562,8 @@
             let started = f.clock.now
             let result = try await f.finish(afterStarting: {
                 try await f.advanceClock(by: 50_000_000, steps: 20)
-            }) { await service.open(f.route(request)) }
-            XCTAssertFalse(result)
+            }) { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(result, .unavailable)
             XCTAssertEqual(f.launches.map { $0.time - started }, [0])
             XCTAssertEqual(f.launches.map(\.route), [f.route(request)])
             XCTAssertEqual(f.clock.now - started, 1_000_000_000)
@@ -551,11 +579,11 @@
             let service = f.service()
             let first = try await f.finish(afterStarting: {
                 try await f.advanceClock(by: 50_000_000, steps: 100)
-            }) { await service.open(f.route(request)) }
-            XCTAssertFalse(first)
+            }) { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(first, .unavailable)
             XCTAssertEqual(f.launches.count, 1)
-            let result = try await f.finish { await service.open(f.route(request)) }
-            XCTAssertTrue(result)
+            let result = try await f.finish { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(result, .pending)
             XCTAssertEqual(f.launches.map(\.route), [f.route(request), f.route(request)])
         }
 
@@ -571,8 +599,8 @@
                 let service = f.service(timeout: 800_000_000)
                 let result = try await f.finish(afterStarting: {
                     if afterLaunch { try await f.advanceClock(by: 50_000_000, steps: 16) }
-                }) { await service.open(f.route(request)) }
-                XCTAssertFalse(result)
+                }) { await service.reconcile(.init(request), intent: .admission) }
+                XCTAssertEqual(result, .unavailable)
                 XCTAssertEqual(f.launches.count, afterLaunch ? 1 : 0)
                 if afterLaunch { XCTAssertGreaterThan(f.loads.count, 3) }
             }
@@ -588,13 +616,13 @@
             }
             f.onQuit = { _ in true }
             let service = f.service()
-            let task = Task { await service.open(f.route(request)) }
+            let task = Task { await service.reconcile(.init(request), intent: .admission) }
             try await f.eventually { f.quits.count == 1 && !f.clock.deadlines.isEmpty }
             XCTAssertTrue(f.launches.isEmpty)
             f.clock.advance(to: f.clock.now + 350_000_000)
             f.processes.removeAll()
             let result = try await f.finish { await task.value }
-            XCTAssertTrue(result)
+            XCTAssertEqual(result, .pending)
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertEqual(f.launches.count, 1)
         }
@@ -608,8 +636,8 @@
                 completion(true)
             }
             let service = f.service()
-            let result = try await f.finish { await service.open(f.route(request)) }
-            XCTAssertFalse(result)
+            let result = try await f.finish { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(result, .missing)
             XCTAssertEqual(f.launches.count, 1)
         }
 
@@ -624,7 +652,7 @@
                 let result = try await f.finish(afterStarting: {
                     if !publish { try await f.advanceClock(by: 50_000_000, steps: 100) }
                 }) {
-                    await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                    await service.openWallet()
                 }
                 XCTAssertEqual(result, publish)
                 XCTAssertEqual(f.launches.count, 1)
@@ -636,7 +664,7 @@
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service()
             let task = Task {
-                await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                await service.openWallet()
             }
             try await f.eventually { f.launches.count == 1 && f.clock.deadlines.count > 1 }
             f.clock.advance(to: f.clock.now + 350_000_000)
@@ -681,12 +709,12 @@
                 }
             )
             let service = NativeApprovalService(dependencies: dependencies)
-            let reactivated = await service.reactivate(f.route(snapshot))
-            XCTAssertTrue(reactivated)
+            let reactivated = await service.reconcile(.init(snapshot), intent: .focus)
+            XCTAssertEqual(reactivated, .opened)
             let stored = try await store.snapshot(handle: snapshot.handle)
             XCTAssertEqual(stored.nativeDeliveryReceipt?.owner, runtime.nativeDeliveryOwner)
-            let delivered = await service.open(f.route(snapshot))
-            XCTAssertTrue(delivered)
+            let delivered = await service.reconcile(.init(snapshot), intent: .admission)
+            XCTAssertEqual(delivered, .pending)
             XCTAssertEqual(f.launches.count, 1)
         }
 
@@ -699,7 +727,7 @@
                 try await f.eventually { callback != nil }
                 try await f.advanceClock(by: 100_000_000)
             }) {
-                await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                await service.openWallet()
             }
             XCTAssertFalse(result)
             XCTAssertEqual(f.launches.count, 1)
@@ -713,14 +741,11 @@
             let clock = f.clock
             let deadline = clock.now + 100_000_000
             let service = f.service(timeout: 100_000_000)
-            let route = NativeAgentRoute.showWallet(
-                workflowVersion: ExtensionBridge.workflowVersion
-            )
             var callback: ((Bool) -> Void)?
             f.onLaunch = { _, _, completion in callback = completion }
             let completed = DispatchSemaphore(value: 0)
             let delivery = Task.detached {
-                let result = await service.open(route)
+                let result = await service.openWallet()
                 completed.signal()
                 return result
             }
@@ -758,7 +783,7 @@
             let result = try await f.finish(afterStarting: {
                 try await f.advanceClock(by: 50_000_000, steps: 2)
             }) {
-                await service.open(.showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+                await service.openWallet()
             }
             XCTAssertFalse(result)
             XCTAssertTrue(f.launches.isEmpty)
@@ -778,10 +803,10 @@
             }
             let route = NativeAgentRoute.showWallet(workflowVersion: ExtensionBridge.workflowVersion)
             let service = f.service()
-            let first = Task { await service.open(route) }
+            let first = Task { await service.openWallet() }
             try await f.eventually { !f.validations.isEmpty }
             let secondDeadline = f.clock.now + 4_000_000_000
-            let second = Task { await service.open(route, waitDeadline: secondDeadline) }
+            let second = Task { await service.openWallet(waitDeadline: secondDeadline) }
             try await f.eventually { f.clock.deadlines.contains(secondDeadline) }
             gate.open()
 
@@ -799,16 +824,16 @@
             var completion: ((Bool) -> Void)?
             f.onLaunch = { _, _, callback in completion = callback }
             let deadline = f.clock.now + 5_000_000_000
-            let first = Task { await service.open(f.route(request)) }
+            let first = Task { await service.reconcile(.init(request), intent: .admission) }
             try await f.eventually { completion != nil && f.clock.deadlines == [deadline] }
-            let second = Task { await service.open(f.route(request)) }
-            let third = Task { await service.open(f.route(request)) }
+            let second = Task { await service.reconcile(.init(request), intent: .admission) }
+            let third = Task { await service.reconcile(.init(request), intent: .admission) }
             for _ in 0..<30 { await Task.yield() }
             XCTAssertEqual(f.clock.deadlines, [deadline])
             f.deliver(request)
             completion?(true)
             let results = await [first.value, second.value, third.value]
-            XCTAssertEqual(results, [true, true, true])
+            XCTAssertEqual(results, [.pending, .pending, .pending])
             XCTAssertEqual(f.launches.count, 1)
             XCTAssertTrue(f.clock.deadlines.isEmpty)
         }
@@ -826,15 +851,15 @@
                 completion(true)
             }
             let service = f.service()
-            let first = Task { await service.open(f.route(request)) }
+            let first = Task { await service.reconcile(.init(request), intent: .admission) }
             try await f.eventually { !f.validations.isEmpty }
-            let second = Task { await service.open(f.route(request)) }
+            let second = Task { await service.reconcile(.init(request), intent: .admission) }
             first.cancel()
             gate.open()
             let result = try await f.finish { await second.value }
-            XCTAssertTrue(result)
+            XCTAssertEqual(result, .pending)
             let cancelledResult = await first.value
-            XCTAssertTrue(cancelledResult)
+            XCTAssertEqual(cancelledResult, .unavailable)
             XCTAssertEqual(f.launches.count, 1)
         }
 
@@ -852,25 +877,25 @@
                 }
             }
             let service = f.service(timeout: 500_000_000)
-            let first = Task { await service.open(f.route(firstRequest)) }
+            let first = Task { await service.reconcile(.init(firstRequest), intent: .admission) }
             try await f.eventually { firstCallback != nil }
             let second = Task {
-                await service.open(f.route(secondRequest), waitDeadline: f.clock.now + 50_000_000)
+                await service.reconcile(.init(secondRequest), intent: .admission, waitDeadline: f.clock.now + 50_000_000)
             }
             try await f.eventually { f.clock.deadlines.contains(f.clock.now + 50_000_000) }
             f.clock.advance(to: f.clock.now + 50_000_000)
             let earlyResult = await second.value
-            XCTAssertFalse(earlyResult)
+            XCTAssertEqual(earlyResult, .unavailable)
             XCTAssertEqual(f.launches.count, 1)
             let firstResult = try await f.finish(afterStarting: {
                 try await f.advanceClock(by: 450_000_000)
             }) { await first.value }
-            XCTAssertFalse(firstResult)
+            XCTAssertEqual(firstResult, .unavailable)
             firstCallback?(true)
             for _ in 0..<50 { await Task.yield() }
             XCTAssertEqual(f.launches.map(\.route), [f.route(firstRequest)])
-            let later = try await f.finish { await service.open(f.route(secondRequest)) }
-            XCTAssertTrue(later)
+            let later = try await f.finish { await service.reconcile(.init(secondRequest), intent: .admission) }
+            XCTAssertEqual(later, .pending)
         }
 
         func testFailedSharedDeliveryAllowsLaterRetry() async throws {
@@ -883,16 +908,16 @@
                 return false
             }
             let service = f.service()
-            let first = Task { await service.open(f.route(request)) }
+            let first = Task { await service.reconcile(.init(request), intent: .admission) }
             try await f.eventually { !f.validations.isEmpty }
             let secondDeadline = f.clock.now + 4_000_000_000
-            let second = Task { await service.open(f.route(request), waitDeadline: secondDeadline) }
+            let second = Task { await service.reconcile(.init(request), intent: .admission, waitDeadline: secondDeadline) }
             try await f.eventually { f.clock.deadlines.contains(secondDeadline) }
             gate.open()
             let firstResult = try await f.finish { await first.value }
             let secondResult = await second.value
-            XCTAssertFalse(firstResult)
-            XCTAssertFalse(secondResult)
+            XCTAssertEqual(firstResult, .unavailable)
+            XCTAssertEqual(secondResult, .unavailable)
             XCTAssertTrue(f.launches.isEmpty)
             XCTAssertEqual(f.validations.count, 1)
             f.onValidate = nil
@@ -900,8 +925,8 @@
                 f.deliver(request)
                 completion(true)
             }
-            let retried = try await f.finish { await service.open(f.route(request)) }
-            XCTAssertTrue(retried)
+            let retried = try await f.finish { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(retried, .pending)
             XCTAssertEqual(f.launches.count, 1)
         }
 
@@ -918,16 +943,41 @@
                 completion(true)
             }
             let service = f.service()
-            let first = Task { await service.open(f.route(request), waitDeadline: f.clock.now + 50_000_000) }
+            let first = Task { await service.reconcile(.init(request), intent: .admission, waitDeadline: f.clock.now + 50_000_000) }
             try await f.eventually { !f.validations.isEmpty }
-            let second = Task { await service.open(f.route(request)) }
+            let second = Task { await service.reconcile(.init(request), intent: .admission) }
             f.clock.advance(to: f.clock.now + 50_000_000)
             let timedOut = await first.value
-            XCTAssertFalse(timedOut)
+            XCTAssertEqual(timedOut, .unavailable)
             gate.open()
             let result = try await f.finish { await second.value }
-            XCTAssertTrue(result)
+            XCTAssertEqual(result, .pending)
             XCTAssertEqual(f.launches.count, 1)
+        }
+
+        func testAdmissionCallerDeadlineDoesNotStartReceiptFallback() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            let gate = NativeApprovalServiceTestFixture.Gate()
+            defer { gate.open() }
+            f.onValidate = { _ in await gate.wait(); return true }
+            let service = f.service()
+            let deadline = f.clock.now + 50_000_000
+            var lateRead = false
+            f.onLoad = { handle in
+                lateRead = lateRead || f.clock.now >= deadline
+                return .found(f.snapshots[handle]!)
+            }
+            let delivery = Task {
+                await service.reconcile(.init(request), intent: .admission, waitDeadline: deadline)
+            }
+            try await f.eventually { !f.validations.isEmpty }
+            f.clock.advance(to: deadline)
+            let result = await delivery.value
+            XCTAssertEqual(result, .unavailable)
+            XCTAssertFalse(lateRead)
+            XCTAssertTrue(f.launches.isEmpty)
+            f.onLoad = nil
         }
 
         func testExpiredSuspendedDeliveryDoesNotBlockExplicitRetry() async throws {
@@ -940,13 +990,13 @@
             }
             f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
             let service = f.service()
-            let first = Task { await service.open(f.route(request)) }
+            let first = Task { await service.reconcile(.init(request), intent: .admission) }
             try await f.eventually { f.validations.count == 1 }
             f.clock.advance(to: f.clock.now + 5_000_000_000)
             let expired = await first.value
-            XCTAssertFalse(expired)
-            let retried = try await f.finish { await service.open(f.route(request)) }
-            XCTAssertTrue(retried)
+            XCTAssertEqual(expired, .unavailable)
+            let retried = try await f.finish { await service.reconcile(.init(request), intent: .admission) }
+            XCTAssertEqual(retried, .pending)
             gate.open()
             for _ in 0..<30 { await Task.yield() }
             XCTAssertEqual(f.launches.count, 1)
@@ -955,10 +1005,10 @@
         func testExpiredCallerDoesNotStartWork() async throws {
             let f = try fixture()
             let request = try f.request()
-            let result = await f.service().open(f.route(request), waitDeadline: f.clock.now)
-            XCTAssertFalse(result)
-            let reactivated = await f.service().reactivate(f.route(request), waitDeadline: f.clock.now)
-            XCTAssertFalse(reactivated)
+            let result = await f.service().reconcile(.init(request), intent: .admission, waitDeadline: f.clock.now)
+            XCTAssertEqual(result, .unavailable)
+            let reactivated = await f.service().reconcile(.init(request), intent: .focus, waitDeadline: f.clock.now)
+            XCTAssertEqual(reactivated, .unavailable)
             XCTAssertTrue(f.loads.isEmpty)
             XCTAssertTrue(f.validations.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
@@ -980,12 +1030,12 @@
             let expired = try await f.finish(afterStarting: {
                 try await f.eventually { f.validations.count == 1 }
                 try await f.advanceClock(by: 100_000_000)
-            }) { await service.reactivate(f.route(request)) }
-            XCTAssertFalse(expired)
+            }) { await service.reconcile(.init(request), intent: .focus) }
+            XCTAssertEqual(expired, .unavailable)
             XCTAssertEqual(f.clock.now, start + 100_000_000)
             XCTAssertTrue(f.launches.isEmpty)
-            let retried = try await f.finish { await service.reactivate(f.route(request)) }
-            XCTAssertTrue(retried)
+            let retried = try await f.finish { await service.reconcile(.init(request), intent: .focus) }
+            XCTAssertEqual(retried, .opened)
             gate.open()
             for _ in 0..<30 { await Task.yield() }
             XCTAssertEqual(f.launches.count, 1)
@@ -1007,12 +1057,12 @@
                 f.onLaunch = { _, _, completion in completion(true) }
                 let service = f.service()
                 let started = f.clock.now
-                var result: Bool?
-                let task = Task { result = await service.reactivate(f.route(request)) }
+                var result: NativeApprovalService.ReconciliationResult?
+                let task = Task { result = await service.reconcile(.init(request), intent: .focus) }
                 try await f.eventually { !f.validations.isEmpty }
                 task.cancel()
                 try await f.eventually { result != nil }
-                XCTAssertEqual(result, false)
+                XCTAssertEqual(result, .unavailable)
                 XCTAssertEqual(f.clock.now, started)
                 gate.open()
                 await task.value
@@ -1040,9 +1090,9 @@
                 try await f.eventually { f.launches.count == 1 }
                 try await f.advanceClock(by: 20_000_000)
             }) {
-                await service.reactivate(f.route(request), waitDeadline: started + 100_000_000)
+                await service.reconcile(.init(request), intent: .focus, waitDeadline: started + 100_000_000)
             }
-            XCTAssertFalse(result)
+            XCTAssertEqual(result, .unavailable)
             XCTAssertEqual(f.clock.now, started + 100_000_000)
             f.clock.advance(to: started + 5_080_000_000)
             for _ in 0..<30 { await Task.yield() }

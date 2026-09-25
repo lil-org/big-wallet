@@ -1110,6 +1110,52 @@ test("full popup boot renders FIFO requests through the production controller", 
     assert.ok(harness.nativeMessages.every(message => message.__bwPrivateBrowsing === false));
 });
 
+test("malformed queue metadata keeps localization defaults while draining completions and allowing approval", async () => {
+    for (const hasPreviousLocalization of [false, true]) {
+        const malformedMetadata = {
+            strings: {refresh: "Do not apply", notConnected: 7},
+            layoutDirection: "auto",
+        };
+        let metadata = hasPreviousLocalization
+            ? {strings: {refresh: "تحديث", notConnected: "غير متصل"}, layoutDirection: "rtl"}
+            : malformedMetadata;
+        const harness = popupHarness({native: (message, fallback) => {
+            const response = fallback(message);
+            return message.subject === "getPendingRequests" ? {...response, ...metadata} : response;
+        }});
+        await harness.boot();
+        const expectedRefresh = hasPreviousLocalization ? "تحديث" : "Refresh";
+        const expectedConnection = hasPreviousLocalization ? "غير متصل" : "Not connected";
+        const expectedDirection = hasPreviousLocalization ? "rtl" : undefined;
+        assert.equal(harness.get("idle-check-status").textContent, expectedRefresh);
+        assert.equal(harness.get("idle-connection").textContent, expectedConnection);
+        assert.equal(harness.document.documentElement.dir, expectedDirection);
+
+        metadata = malformedMetadata;
+        const request = pendingRequest(3, 3);
+        harness.model.requests = [request];
+        harness.model.completed = [completedResponse(1), completedResponse(2)];
+        harness.setState(request, messageState(request));
+        harness.clearMessages();
+        await harness.queue.refreshQueue();
+        await flushPopup();
+
+        assert.deepEqual(harness.workerMessages.filter(message => message.subject === "applyCompletedResponse")
+            .map(message => message.id), [1, 2]);
+        assert.deepEqual(harness.model.completed, []);
+        assert.equal(harness.controller.request.requestToken, request.requestToken);
+        assert.equal(harness.get("request-title").textContent, "Sign message");
+        assert.equal(harness.get("button-approve").disabled, false);
+        assert.equal(harness.get("idle-check-status").textContent, expectedRefresh);
+        assert.equal(harness.call("localized", "notConnected", "Not connected"), expectedConnection);
+        assert.equal(harness.document.documentElement.dir, expectedDirection);
+
+        await harness.get("button-approve").click();
+        assert.equal(approvalMessages(harness).length, 1);
+        assert.equal(approvalMessages(harness)[0].requestToken, request.requestToken);
+    }
+});
+
 test("additional approval display fields leave rendering and approval payloads unchanged", async () => {
     for (const stateFor of [messageState, transactionState, selectionState]) {
         const request = pendingRequest();
@@ -2427,6 +2473,30 @@ test("state reads coalesce and transaction polling preserves its backoff", async
     harness.setState(controller.request, transactionState(controller.request));
     await harness.fire(harness.followUpTimerId());
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+});
+
+test("malformed transaction backoff keeps normal polling and approval actionable", async () => {
+    const harness = await reviewedPopup(request => transactionState(request, {canBackOffRefresh: "true"}));
+    const controller = harness.controller;
+    assert.equal(controller.state.review.canBackOffRefresh, false);
+    for (let index = 0; index < 3; index += 1) {
+        const timer = harness.followUpTimerId();
+        assert.equal(harness.timers.get(timer).delay, 600);
+        await harness.fire(timer);
+        assert.equal(harness.get("button-approve").disabled, false);
+    }
+
+    await harness.get("button-approve").click();
+
+    assert.deepEqual(approvalMessages(harness), [{
+        subject: "approveRequest",
+        id: controller.request.id,
+        requestToken: controller.request.requestToken,
+        reviewToken: requestToken(101),
+        payload: {},
+        __bwPrivateBrowsing: false,
+        workflowVersion: 4,
+    }]);
 });
 
 test("late idle status lookups probes and reloads cannot replace an active request", async () => {
