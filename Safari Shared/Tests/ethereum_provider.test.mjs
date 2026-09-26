@@ -2262,14 +2262,60 @@ test("Solana validates only the own trust option in its admission snapshot", asy
     }
 });
 
-test("Solana connect checks an existing native account without another event", async () => {
+test("Solana explicit and eager connects notify listeners after bootstrap", async () => {
+    for (const options of [undefined, {onlyIfTrusted: true}]) {
+        for (const advancesRevision of [false, true]) {
+            const h = connectedSolanaHarness();
+            const events = [];
+            h.standardProvider.on("connect", key => events.push(key.toString()));
+            const connecting = h.standardProvider.connect(options);
+            assert.deepEqual(events, []);
+            if (advancesRevision) {
+                grantSolana(h, h.requests[0].id, firstSolanaKey);
+            } else {
+                completeSolanaConnect(h, connecting);
+            }
+            const result = await connecting.then(result => {
+                assert.deepEqual(events, [firstSolanaKey]);
+                return result;
+            });
+            assert.equal(result.publicKey.toString(), firstSolanaKey);
+            assert.equal(h.requests.length, 1);
+        }
+    }
+});
+
+test("Solana connect does not duplicate bootstrap or fresh-grant events", async () => {
+    for (const loading of [false, true]) {
+        const h = inpageHarness();
+        if (!loading) { dispatchConfigurations(h); }
+        const events = [];
+        h.window.solana.on("connect", key => events.push(key.toString()));
+        const connecting = h.window.solana.connect();
+        if (loading) { dispatchConfigurations(h, {publicKey: firstSolanaKey}); }
+        const request = pageMessages(h, "request", "solana").at(-1).message;
+        dispatchProviderResponse(h, {
+            id: request.id, provider: "solana", name: "connect",
+            state: pageSnapshot({publicKey: firstSolanaKey, solana: 2}),
+            result: {publicKey: firstSolanaKey},
+        });
+        assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
+        assert.deepEqual(events, [firstSolanaKey]);
+    }
+});
+
+test("Solana connect settles before reentrant notification handlers", async () => {
     const h = connectedSolanaHarness();
-    let events = 0;
-    h.standardProvider.on("connect", () => events++);
+    const events = [];
+    h.standardProvider.on("connect", key => {
+        events.push(key.toString());
+        completeSolanaConnect(h);
+        h.Solana.retire(h.provider);
+    });
     const result = await nativeSolanaConnect(h);
     assert.equal(result.publicKey.toString(), firstSolanaKey);
-    assert.equal(h.requests.length, 1);
-    assert.equal(events, 0);
+    assert.deepEqual(events, [firstSolanaKey]);
+    assert.equal(h.provider.publicKey, null);
 });
 
 test("Solana drains loading connects FIFO and rejects a stale grant", async () => {
@@ -2518,12 +2564,15 @@ test("same-account Solana revisions fence operations without duplicate account e
 test("disconnected Solana snapshots advance authority without reconnecting from terminals", async () => {
     const h = solanaHarness();
     applySolanaConfiguration(h);
+    const events = [];
+    h.standardProvider.on("connect", key => events.push(key.toString()));
     const connecting = h.provider.connect();
     applySolanaConfiguration(h, {nativeRevision: 7});
     h.applyDecodedEnvelope(h.provider, {id: h.requests[0].id, name: "connect", kind: "result", result: {publicKey: firstSolanaKey}, approvalCommitted: true});
     assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
     assert.equal(h.provider.publicKey, null);
     assert.equal(h.Solana.snapshot(h.provider).nativeRevision, 7);
+    assert.deepEqual(events, []);
 });
 
 test("Solana rejects invalid worker revisions without changing authorization", () => {
@@ -3147,6 +3196,8 @@ test("Solana settles committed connect without replacing newer state", async () 
         publicKey: secondSolanaKey,
         nativeRevision: 1,
     });
+    const events = [];
+    harness.standardProvider.on("connect", key => events.push(key.toString()));
     harness.applyDecodedEnvelope(harness.provider, {
         approvalCommitted: true,
         id: request.id,
@@ -3157,6 +3208,7 @@ test("Solana settles committed connect without replacing newer state", async () 
 
     assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
     assert.equal(harness.provider.publicKey.toString(), secondSolanaKey);
+    assert.deepEqual(events, []);
 });
 
 test("Wallet Standard committed connect returns current authorization", async () => {
@@ -5783,7 +5835,7 @@ test("bootstrap failure rejects work and recovers the same providers", async () 
     ethereumProvider.on("connect", value => ethereumConnects.push(value));
     solanaProvider.on("connect", value => {
         solanaConnects.push({value, connected: solanaProvider.isConnected});
-        reentrantConnect = solanaProvider.connect();
+        if (!reentrantConnect) { reentrantConnect = solanaProvider.connect(); }
     });
     wallet.features["standard:events"].on("change", value => {
         accountChanges.push(value);
@@ -5935,7 +5987,7 @@ test("bootstrap recovery reconnects copied connections without revoking accounts
     dispatchConfigurations(harness, configuration);
     harness.runTimers();
     assert.equal(ethereumEvents.length, 3);
-    assert.equal(solanaEvents.length, 3);
+    assert.equal(solanaEvents.length, 4);
     assert.deepEqual(accountChanges, []);
 });
 
@@ -6196,7 +6248,7 @@ test("Solana accepted connections preserve public wrapper identity", async () =>
     assert.equal(harness.provider.publicKey, key);
     assert.equal(harness.standardProvider.publicKey, key);
     assert.equal((await nativeSolanaConnect(harness)).publicKey, key);
-    assert.deepEqual(events, [["accountChanged", key], ["connect", key]]);
+    assert.deepEqual(events, [["accountChanged", key], ["connect", key], ["connect", key]]);
     assert.equal(key.toString(), firstSolanaKey);
     assert.equal(key.toBase58(), firstSolanaKey);
     assert.equal(key.toJSON(), firstSolanaKey);

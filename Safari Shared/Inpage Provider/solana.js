@@ -575,6 +575,7 @@ function createMetadata(method) {
         adapters: null,
         authorization: null,
         configurationOnly: false,
+        connectionEpoch: 0,
         dispatched: false,
         messages: null,
         method,
@@ -876,6 +877,7 @@ function dispatchDisconnect(state, record) {
 
 function registerOperation(provider, method, params, originalId, configurationOnly = false) {
     const state = getProviderState(provider);
+    const connectionEpoch = state.connectionEpoch;
     const authorization = method !== "connect" && state.publicKeyString
         ? authorizationSnapshot(state)
         : null;
@@ -889,6 +891,7 @@ function registerOperation(provider, method, params, originalId, configurationOn
     const normalized = normalizeRequest(method, params);
     normalized.metadata.authorization = authorization;
     normalized.metadata.configurationOnly = configurationOnly;
+    normalized.metadata.connectionEpoch = connectionEpoch;
     if (state.runtime.phase === "retired" ||
         state.transport.isCurrent() !== true) {
         retire(provider, providerReplacementError());
@@ -1038,6 +1041,7 @@ function commitConfiguration(provider, prepared) {
     state.publicKeyString = prepared.publicKey;
     state.publicKey = prepared.wrapper;
     state.isConnected = prepared.publicKey !== null;
+    if (!wasConnected && state.isConnected) { state.connectionEpoch += 1; }
     if (state.nativeRevision !== prepared.revision) { state.notificationEpoch += 1; }
     state.nativeRevision = prepared.revision;
     state.runtime.activate();
@@ -1166,9 +1170,15 @@ function applyDecodedEnvelope(provider, envelope) {
                 !authorizationMatches(state, record.metadata.authorization)))) {
             return rejectOperation(provider, record, new ProviderRpcError(4100, providerNotReadyMessage));
         }
-        return state.runtime.resolve(record, {
+        const settled = state.runtime.resolve(record, {
             publicKey: state.publicKeyString === publicKeyValue ? state.publicKey : resultPublicKey,
         });
+        if (settled && currentProviderState(provider) === state && state.isConnected &&
+            state.publicKeyString === publicKeyValue &&
+            state.connectionEpoch === record.metadata.connectionEpoch) {
+            emitProvider(provider, "connect", state.publicKey);
+        }
+        return settled;
     }
     const value = envelope.result;
     if (record.metadata.method === "signMessage" ||
@@ -1254,6 +1264,7 @@ class BigWalletSolana {
         const authorization = initialAuthorization(initialState);
         setProviderState(this, {
             activeDisconnect: null,
+            connectionEpoch: 0,
             notificationEpoch: 0,
             generation: providerGeneration,
             runtime: new OperationRuntime(providerGeneration, {
