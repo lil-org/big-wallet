@@ -7,6 +7,8 @@ struct ExtensionRequestProfileCodec {
     typealias OriginState = ExtensionRequestProfile.OriginState
     typealias ValidatedProfile = ExtensionRequestProfile
 
+    private var cachedProfile: (data: Data, profile: ValidatedProfile)?
+
     func bind(_ request: SafariRequest, data: Data, authority: ExtensionBridge.AuthoritySnapshot) -> (request: SafariRequest, payload: ExtensionRequestProfile.ActiveRequestPayload)? {
         var raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         raw?["authority"] = authority.version.json
@@ -207,12 +209,18 @@ struct ExtensionRequestProfileCodec {
         let requiresAuthorityPublication: Bool
     }
 
-    func decodeProfile(
+    mutating func decodeProfile(
         _ data: Data,
         expectedIdentifier: UUID?,
         recoverAuthority: Bool,
         now: Date
     ) -> DecodedProfile? {
+        if let cachedProfile,
+           cachedProfile.profile.state.profileIdentifier == expectedIdentifier,
+           cachedProfile.data == data {
+            return DecodedProfile(profile: cachedProfile.profile, requiresAuthorityPublication: false)
+        }
+        cachedProfile = nil
         guard var state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
               state.authoritySequence >= 0,
               state.authoritySequence <= ExtensionRequestProfile.maximumRevision else { return nil }
@@ -227,6 +235,7 @@ struct ExtensionRequestProfileCodec {
             }
         }
         if let profile = validate(state, expectedIdentifier: expectedIdentifier) {
+            cachedProfile = (data, profile)
             return DecodedProfile(profile: profile, requiresAuthorityPublication: false)
         }
         guard recoverAuthority,

@@ -62,7 +62,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private let clock: () -> Date
     private let token: () -> UUID
     private let files: ExtensionRequestStoreFiles
-    private let codec: ExtensionRequestProfileCodec
+    private var codec: ExtensionRequestProfileCodec
 
     private typealias ProfileState = ExtensionRequestProfile.State
     private typealias Record = ExtensionRequestProfile.Record

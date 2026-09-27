@@ -461,9 +461,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             writes += 1
             throw Failure.injectedWrite
         })
-        guard case .unavailable = await unwritable.configurationSnapshot(
-            configurationKey: "https://wallet.example", profileIdentifier: nil
-        ) else { return XCTFail("Recovery must persist before returning disconnected authority") }
+        for _ in 0..<2 {
+            guard case .unavailable = await unwritable.configurationSnapshot(
+                configurationKey: "https://wallet.example", profileIdentifier: nil
+            ) else { return XCTFail("Recovery must persist before returning disconnected authority") }
+        }
         XCTAssertGreaterThan(writes, 0)
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), corruptedData)
         let recovered = try await removalSnapshot()
@@ -2323,6 +2325,45 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .missing = store.load(handle: handle) else {
             return XCTFail("Expected removal to be observed on the next operation")
         }
+    }
+
+    func testCachedProfileStillChecksExpectedProfileIdentity() throws {
+        let profileIdentifier = UUID()
+        let profile = ExtensionRequestProfile.State(profileIdentifier: profileIdentifier, authorityEpoch: UUID())
+        let data = try ExtensionRequestProfileCodec.encode(profile)
+        var codec = ExtensionRequestProfileCodec()
+        for expectedIdentifier in [profileIdentifier, profileIdentifier, nil, UUID(), profileIdentifier] {
+            let decoded = codec.decodeProfile(
+                data, expectedIdentifier: expectedIdentifier, recoverAuthority: true, now: clock.now
+            )
+            XCTAssertEqual(decoded != nil, expectedIdentifier == profileIdentifier)
+        }
+    }
+
+    func testCachedProfileStillExpiresRequestsAndRecoversReleasedBroadcasts() async throws {
+        let pending = try makeFixture(id: 906)
+        let pendingHandle = try accepted(await bridge.enqueue(ingress: pending.ingress, profileIdentifier: nil)).handle
+        let execution = try await makeExecutableNativePermit(id: 907)
+        let checkpoint = await bridge.prepareBroadcast(
+            permit: execution.permit, recoveryResponse: response(for: execution.request),
+            authority: .native(execution.context)
+        )
+        XCTAssertEqual(checkpoint, .persisted)
+        let warmStatus = await bridge.responseStatus(
+            handle: execution.handle, configurationKey: execution.request.configurationKey
+        )
+        XCTAssertEqual(warmStatus, .pending)
+        let original = try Data(contentsOf: defaultProfileURL)
+
+        clock.now = pending.request.admissionDeadline.addingTimeInterval(1)
+        execution.permit.releaseLease()
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
+        await bridge.performMaintenance(profileIdentifier: nil)
+
+        let expired = try await deliveredAuthority(pendingHandle)
+        XCTAssertEqual((expired.response["error"] as? [String: Any])?["code"] as? Int, 4001)
+        let recovered = try await deliveredAuthority(execution.handle)
+        XCTAssertTrue(NSDictionary(dictionary: recovered.response).isEqual(to: response(for: execution.request).json))
     }
 
     func testCanonicalBodySurvivesClaimReleaseRollbackAndBroadcast() throws {
