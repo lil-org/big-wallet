@@ -79,7 +79,7 @@ final class NativeApprovalResponseTests: XCTestCase {
             "workflowVersion": ExtensionBridge.workflowVersion,
             "configurationKey": "https://wallet.example",
             "requestToken": UUID().uuidString.lowercased(),
-            "attemptID": UUID().uuidString.lowercased(),
+            "claimID": UUID().uuidString.lowercased(),
             "revisions": ["ethereum": 2, "solana": 3],
             "executionDeadline": 1_800_000_100_000,
         ]

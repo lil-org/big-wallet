@@ -44,7 +44,7 @@
                 XCTAssertEqual(identity.token.rawValue, token)
                 XCTAssertEqual(identity.configurationKey, "https://wallet.example")
                 for (key, value) in [
-                    "attemptID": UUID().uuidString.lowercased(),
+                    "claimID": UUID().uuidString.lowercased(),
                     "revisions": ["ethereum": 0, "solana": 0],
                     "executionDeadline": 1_800_000_100_000,
                     "manualOnly": true,
@@ -1101,6 +1101,98 @@
             f.onLoad = nil
         }
 
+        func testQueuedCallerTimeoutDoesNotReleasePreparationForLaterRoutes() async throws {
+            let f = try fixture()
+            let requests = try (1...3).map { try f.request(id: $0) }
+            let runtime = f.runtime()
+            var firstCallback: ((Bool) -> Void)?
+            f.onLaunch = { _, route, completion in
+                if route == f.route(requests[0]) {
+                    firstCallback = completion
+                } else if let request = requests.first(where: { f.route($0) == route }) {
+                    f.deliver(request, runtime: runtime)
+                    completion(true)
+                }
+            }
+            let service = f.service()
+            let first = Task { await service.reconcile(.init(requests[0]), intent: .admission) }
+            try await f.eventually { firstCallback != nil }
+            let callerDeadline = f.clock.now + 50_000_000
+            let second = Task {
+                await service.reconcile(.init(requests[1]), intent: .admission, waitDeadline: callerDeadline)
+            }
+            try await f.eventually { f.clock.deadlines.contains(callerDeadline) }
+            f.clock.advance(to: callerDeadline)
+            let secondResult = try await f.finish { await second.value }
+            XCTAssertEqual(secondResult, .unavailable)
+
+            let thirdDeadline = f.clock.now + 5_000_000_000
+            let third = Task { await service.reconcile(.init(requests[2]), intent: .admission) }
+            try await f.eventually { f.clock.deadlines.contains(thirdDeadline) }
+            XCTAssertEqual(f.launches.map(\.route), [f.route(requests[0])])
+
+            f.deliver(requests[0], runtime: runtime)
+            firstCallback?(true)
+            let firstResult = try await f.finish { await first.value }
+            let thirdResult = try await f.finish { await third.value }
+            XCTAssertEqual(firstResult, .pending)
+            XCTAssertEqual(thirdResult, .pending)
+            XCTAssertEqual(f.launches.map(\.route), requests.map(f.route))
+        }
+
+        func testExpiredPreparationReleasesQueuedSuccessorWithoutReleasingItsGateAgain() async throws {
+            let f = try fixture()
+            let requests = try (1...3).map { try f.request(id: $0) }
+            let runtime = f.runtime()
+            let firstValidation = NativeApprovalServiceTestFixture.Gate()
+            let secondValidation = NativeApprovalServiceTestFixture.Gate()
+            defer { firstValidation.open(); secondValidation.open() }
+            var firstValidationReturned = false
+            f.onValidate = { _ in
+                if f.validations.count == 1 {
+                    await firstValidation.wait()
+                    firstValidationReturned = true
+                } else if f.validations.count == 2 {
+                    await secondValidation.wait()
+                }
+                return true
+            }
+            f.onLaunch = { _, route, completion in
+                if let request = requests.first(where: { f.route($0) == route }) {
+                    f.deliver(request, runtime: runtime)
+                    completion(true)
+                }
+            }
+            let service = f.service(timeout: 500_000_000)
+            let firstDeadline = f.clock.now + 500_000_000
+            let first = Task { await service.reconcile(.init(requests[0]), intent: .admission) }
+            try await f.eventually { f.validations.count == 1 }
+            f.clock.advance(to: f.clock.now + 100_000_000)
+            let secondDeadline = f.clock.now + 500_000_000
+            let second = Task { await service.reconcile(.init(requests[1]), intent: .admission) }
+            try await f.eventually { f.clock.deadlines.contains(secondDeadline) }
+
+            f.clock.advance(to: firstDeadline)
+            let firstResult = try await f.finish { await first.value }
+            XCTAssertEqual(firstResult, .unavailable)
+            try await f.eventually { f.validations.count == 2 }
+            firstValidation.open()
+            try await f.eventually { firstValidationReturned }
+
+            let thirdDeadline = f.clock.now + 500_000_000
+            let third = Task { await service.reconcile(.init(requests[2]), intent: .admission) }
+            try await f.eventually { f.clock.deadlines.contains(thirdDeadline) }
+            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertTrue(f.launches.isEmpty)
+
+            secondValidation.open()
+            let secondResult = try await f.finish { await second.value }
+            let thirdResult = try await f.finish { await third.value }
+            XCTAssertEqual(secondResult, .pending)
+            XCTAssertEqual(thirdResult, .pending)
+            XCTAssertEqual(f.launches.map(\.route), requests.dropFirst().map(f.route))
+        }
+
         func testExpiredSuspendedDeliveryDoesNotBlockExplicitRetry() async throws {
             let f = try fixture()
             let request = try f.request()
@@ -1193,6 +1285,28 @@
                 XCTAssertTrue(f.clears.isEmpty)
                 XCTAssertTrue(f.clock.deadlines.isEmpty)
             }
+        }
+
+        func testReactivationCancellationImmediatelyReachesFinalValidation() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            var caller: Task<NativeApprovalService.ReconciliationResult, Never>?
+            f.onValidate = { _ in
+                if f.validations.count == 3 {
+                    caller?.cancel()
+                    XCTAssertTrue(Task.isCancelled)
+                }
+                return true
+            }
+            f.onLaunch = { _, _, completion in completion(true) }
+            let service = f.service()
+            let task = Task { await service.reconcile(.init(request), intent: .focus) }
+            caller = task
+            let result = try await f.finish { await task.value }
+            XCTAssertEqual(result, .unavailable)
+            XCTAssertEqual(f.validations.count, 3)
+            XCTAssertTrue(f.launches.isEmpty)
         }
 
         func testReactivationFallbackPreservesRemainingCallerBudget() async throws {

@@ -94,7 +94,7 @@ final class NativeAuthorityTransportTests: XCTestCase {
             "subject": "executeNativeApproval",
             "requestToken": requestToken,
             "configurationKey": "https://wallet.example",
-            "attemptID": requestToken,
+            "claimID": requestToken,
             "executionDeadline": 9_000_000_000_000,
             "revisions": ["ethereum": 2, "solana": 3],
         ]))

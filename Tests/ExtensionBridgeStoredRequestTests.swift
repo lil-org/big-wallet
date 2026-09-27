@@ -754,6 +754,46 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual((response.response["error"] as? [String: Any])?["code"] as? Int, 4100)
     }
 
+    func testPreviousPermitCannotCommitUsingCurrentNativeExecutionContext() async throws {
+        let fixture = try makeFixture(id: 60_035)
+        let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
+        let originalClaim = try approvalClaim(await bridge.claim(handle: handle))
+        let originalPermit = try executionPermit(await bridge.begin(claim: originalClaim))
+        let rollback = await bridge.rollback(permit: originalPermit)
+        XCTAssertEqual(rollback, .persisted)
+
+        let delivered = try await recordNativeDelivery(handle: handle)
+        XCTAssertEqual(delivered, .persisted)
+        guard case .claimed(let currentClaim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: handle, approvedAt: clock.now
+        ) else { return XCTFail("Expected native claim") }
+        let currentPermit = try executionPermit(await bridge.begin(claim: currentClaim.approvalClaim))
+        defer { currentPermit.releaseLease() }
+        let authority = ExtensionBridge.ExecutionAuthority.native(currentClaim.executionContext)
+        let recovery = ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x1234")
+        let staleCheckpoint = await bridge.prepareBroadcast(
+            permit: originalPermit, recoveryResponse: recovery, authority: authority
+        )
+        let staleCompletion = await bridge.complete(
+            permit: originalPermit, response: response(for: fixture.request), authority: authority
+        )
+        XCTAssertEqual(staleCheckpoint, .ownershipLost)
+        XCTAssertEqual(staleCompletion, .ownershipLost)
+        guard case .found(let current) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected current claim to survive stale commits")
+        }
+        XCTAssertEqual(current.nativeExecutionContext, currentClaim.executionContext)
+        XCTAssertTrue(current.hasActiveExecution)
+        let checkpoint = await bridge.prepareBroadcast(
+            permit: currentPermit, recoveryResponse: recovery, authority: authority
+        )
+        XCTAssertEqual(checkpoint, .persisted)
+        let completion = await bridge.complete(
+            permit: currentPermit, response: response(for: fixture.request), authority: .ordinary
+        )
+        XCTAssertEqual(completion, .persisted)
+    }
+
     func testConcurrentNativeClaimersPersistOnlyOneAtomicTransition() async throws {
         let fixture = try makeFixture(id: 60_031)
         let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
@@ -1856,7 +1896,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             "subject": "executeNativeApproval", "requestToken": UUID().uuidString.lowercased(),
             "configurationKey": "https://wallet.example",
             "executionDeadline": 1_700_000_160_000,
-            "attemptID": UUID().uuidString.lowercased(), "revisions": ["ethereum": 0, "solana": 0],
+            "claimID": UUID().uuidString.lowercased(), "revisions": ["ethereum": 0, "solana": 0],
         ]
         XCTAssertThrowsError(try JSONDecoder().decode(InternalSafariRequest.self,
             from: JSONSerialization.data(withJSONObject: execution)))

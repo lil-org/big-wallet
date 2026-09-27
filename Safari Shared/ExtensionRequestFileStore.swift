@@ -737,14 +737,12 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 }
                 let approval = Record.NativeApproval(approvedAt: approvedAt, receipt: receipt)
                 let executionContext = ExtensionBridge.NativeExecutionContext(
-                    attemptID: token(),
                     revisions: profile.state.records[index].revisions,
                     observedAt: now,
                     executionDeadline: min(
                         now.addingTimeInterval(ExtensionRequestProfile.executionLifetime),
                         parsedRequest.admissionDeadline
-                    ),
-                    fenceToken: token()
+                    )
                 )
                 guard let claimID = nextID(excluding: handle.token.value),
                       let lease = files.acquireOperationLeaseLocked(handle: handle) else {

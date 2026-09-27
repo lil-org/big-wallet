@@ -376,11 +376,9 @@ actor ExtensionBridge {
     enum RecoveryRequestsResult { case available([RecoveryRequest]), unavailable }
 
     struct NativeExecutionContext: Codable, Equatable, Sendable {
-        let attemptID: UUID
         let revisions: ProviderRevisions
         let observedAt: Date
         let executionDeadline: Date
-        let fenceToken: UUID
     }
     
     enum ExecutionAuthority: Equatable, Sendable {

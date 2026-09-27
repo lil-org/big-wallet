@@ -136,8 +136,7 @@ actor NativeApprovalService {
     private let dependencies: Dependencies
     private let launchTimeoutNanoseconds: UInt64
     private var sharedDeliveries = [SharedDelivery]()
-    private var preparationTail: Task<DeliveryPreparation, Never>?
-    private var preparationTailIdentifier: UUID?
+    private var preparationTail: ApprovalResolution<Void>?
 
     init(
         dependencies: Dependencies,
@@ -169,10 +168,9 @@ actor NativeApprovalService {
                 reference, intent: intent, deadline: deadline, waitDeadline: waitDeadline
             )
         }
-        let operation = Task {
-            await reconcileRequest(reference, intent: intent, deadline: deadline)
+        let result = await bounded(deadline: deadline, timeoutValue: ReconciliationResult.unavailable) {
+            await self.reconcileRequest(reference, intent: intent, deadline: deadline)
         }
-        let result = await boundedResult(of: operation, deadline: deadline, timeoutValue: .unavailable)
         guard intent == .focus,
               result == .unavailable || result == .missing,
               !Task.isCancelled else { return result }
@@ -371,10 +369,9 @@ actor NativeApprovalService {
         deadline: UInt64
     ) async -> ReconciliationResult {
         guard isPending(until: deadline) else { return .unavailable }
-        let operation = Task {
-            await reconcileOwnership(reference, deadline: deadline).result
+        return await bounded(deadline: deadline, timeoutValue: ReconciliationResult.unavailable) {
+            await self.reconcileOwnership(reference, deadline: deadline).result
         }
-        return await boundedResult(of: operation, deadline: deadline, timeoutValue: .unavailable)
     }
 
     private func deliverRequest(
@@ -400,45 +397,35 @@ actor NativeApprovalService {
         }
         let identifier = UUID()
         let precedingPreparation = preparationTail
-        let operation = Task { [weak self] in
-            _ = await precedingPreparation?.value
-            guard let self else { return DeliveryPreparation.finished(.unavailable) }
-            return await self.prepareDelivery(route, reference: reference, deadline: deliveryDeadline)
-        }
-        let preparation = Task { [weak self] in
-            guard let self else { operation.cancel(); return DeliveryPreparation.finished(.unavailable) }
-            let result = await self.boundedResult(
-                of: operation, deadline: deliveryDeadline, timeoutValue: .finished(.unavailable)
-            )
-            await self.finishDeliveryPreparation(identifier: identifier)
-            return result
-        }
+        let preparationFinished = ApprovalResolution<Void>()
+        preparationTail = preparationFinished
         let task = Task { [weak self] in
-            let prepared = await preparation.value
-            guard let self else { return ReconciliationResult.unavailable }
-            let result: ReconciliationResult
-            switch prepared {
-            case .finished(let terminal):
-                result = terminal
-            case .running, .launched:
-                let delivery = Task {
-                    await self.deliver(route, reference: reference, preparation: prepared, deadline: deliveryDeadline)
-                }
-                result = await self.boundedResult(of: delivery, deadline: deliveryDeadline, timeoutValue: .unavailable)
+            guard let self else {
+                await preparationFinished.resolve(())
+                return ReconciliationResult.unavailable
             }
+            let result = await self.bounded(
+                deadline: deliveryDeadline, timeoutValue: ReconciliationResult.unavailable
+            ) {
+                await precedingPreparation?.value()
+                let prepared = await self.prepareDelivery(route, reference: reference, deadline: deliveryDeadline)
+                await self.finishDeliveryPreparation(preparationFinished)
+                return await self.deliver(route, reference: reference, preparation: prepared, deadline: deliveryDeadline)
+            }
+            await self.finishDeliveryPreparation(preparationFinished)
             await self.finishSharedDelivery(identifier: identifier)
             return result
         }
         let shared = SharedDelivery(identifier: identifier, route: route, deadline: deliveryDeadline, task: task)
         sharedDeliveries.append(shared)
-        preparationTail = preparation
-        preparationTailIdentifier = identifier
         return await result(of: shared, callerDeadline: callerDeadline)
     }
 
     private func result(of delivery: SharedDelivery, callerDeadline: UInt64) async -> ReconciliationResult {
         if callerDeadline < delivery.deadline {
-            return await awaitResult(of: delivery.task, deadline: callerDeadline, timeoutValue: .unavailable)
+            return await bounded(deadline: callerDeadline, timeoutValue: ReconciliationResult.unavailable) {
+                await delivery.task.value
+            }
         }
         return await delivery.task.value
     }
@@ -447,11 +434,11 @@ actor NativeApprovalService {
         sharedDeliveries.removeAll { $0.identifier == identifier }
     }
 
-    private func finishDeliveryPreparation(identifier: UUID) {
-        if preparationTailIdentifier == identifier {
+    private func finishDeliveryPreparation(_ completion: ApprovalResolution<Void>) async {
+        if preparationTail === completion {
             preparationTail = nil
-            preparationTailIdentifier = nil
         }
+        await completion.resolve(())
     }
 
     private func prepareDelivery(
@@ -518,32 +505,25 @@ actor NativeApprovalService {
         return .unavailable
     }
 
-    private func boundedResult<Value: Sendable>(
-        of task: Task<Value, Never>, deadline: UInt64, timeoutValue: Value
+    private func bounded<Value: Sendable>(
+        deadline: UInt64,
+        timeoutValue: Value,
+        operation: @escaping @Sendable () async -> Value
     ) async -> Value {
+        guard isPending(until: deadline) else { return timeoutValue }
         let resolution = ApprovalResolution<Value>()
+        let sleepUntil = dependencies.sleepUntil
+        let task = Task { await operation() }
+        defer { task.cancel() }
         return await withTaskCancellationHandler {
-            let result = await awaitResult(of: task, deadline: deadline, timeoutValue: timeoutValue, resolution: resolution)
-            task.cancel()
-            return result
+            await resolution.value(
+                timeoutValue: timeoutValue,
+                waitForTimeout: { await sleepUntil(deadline) },
+                operation: { await task.value }
+            )
         } onCancel: {
             task.cancel()
             Task { await resolution.resolve(timeoutValue) }
         }
-    }
-
-    private func awaitResult<Value: Sendable>(
-        of task: Task<Value, Never>,
-        deadline: UInt64,
-        timeoutValue: Value,
-        resolution: ApprovalResolution<Value> = ApprovalResolution()
-    ) async -> Value {
-        guard dependencies.uptime() < deadline else { return timeoutValue }
-        let sleepUntil = dependencies.sleepUntil
-        return await resolution.value(
-            timeoutValue: timeoutValue,
-            waitForTimeout: { await sleepUntil(deadline) },
-            operation: { await task.value }
-        )
     }
 }
