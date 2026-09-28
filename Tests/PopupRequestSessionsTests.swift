@@ -1943,6 +1943,124 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(preparations, 2)
     }
 
+    func testOldImmediatePersistenceCompletionPreservesReplacementReview() async throws {
+        for result in [
+            ExtensionBridge.StoreMutationResult.persisted,
+            .ownershipLost,
+            .retryablePersistenceFailure,
+        ] {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 486), in: store)
+            await store.suspendNextCompletion()
+            var preparations = 0
+            var requiresReview = false
+            let controller = PopupRequestSessions(
+                store: store,
+                requestProcessor: CompactPopupProcessor { request in
+                    preparations += 1
+                    if requiresReview {
+                        return .approval(.addEthereumChain(AddEthereumChainAction(
+                            chainToAdd: popupTestNetwork()
+                        )))
+                    }
+                    return .response(request.response(error: .userRejected))
+                },
+                walletEnvironment: popupWalletEnvironment(),
+                loadsTransactionContext: false
+            )
+            let read = try popupCommand(
+                subject: "getApprovalState", id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            )
+            _ = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+            try await waitForEvent("completeStarted", store: store)
+            await store.setNativeDeliveryReceipt(.init(
+                nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+                owner: popupNativeDeliveryOwner(runtime: UUID())
+            ), handle: snapshot.handle)
+            let nativeOwned = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+            XCTAssertEqual(nativeOwned["state"] as? String, "working")
+
+            await store.setNativeDeliveryReceipt(nil, handle: snapshot.handle)
+            requiresReview = true
+            let token = try await materializeToken(controller: controller, snapshot: snapshot)
+            XCTAssertEqual(preparations, 2)
+
+            await store.resumeCompletion(result: result)
+            try await waitForEvent("completeResumed", store: store)
+            for _ in 0..<3 {
+                let current = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+                XCTAssertEqual(current["state"] as? String, "review")
+                XCTAssertEqual(current["actions"] as? [String], ["approve", "reject"])
+                XCTAssertEqual((current["review"] as? [String: Any])?["reviewToken"] as? String, token)
+                XCTAssertNil(current["error"])
+            }
+            XCTAssertEqual(preparations, 2)
+        }
+    }
+
+    func testQueueCleanupPreservesOtherProfileReviewAndImmediatePersistence() async throws {
+        let store = try makeStore()
+        let review = try await enqueue(popupSnapshot(id: 487), in: store)
+        let otherProfile = UUID()
+        let immediate = try await enqueue(popupSnapshot(
+            id: review.handle.id, profileIdentifier: otherProfile, provider: .ethereum
+        ), in: store)
+        var reviewPreparations = 0
+        var immediatePreparations = 0
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupProcessor { request in
+                if request.provider == .ethereum {
+                    immediatePreparations += 1
+                    return .response(request.response(error: .userRejected))
+                }
+                reviewPreparations += 1
+                return .approval(.addEthereumChain(AddEthereumChainAction(
+                    chainToAdd: popupTestNetwork()
+                )))
+            },
+            walletEnvironment: popupWalletEnvironment(),
+            loadsTransactionContext: false
+        )
+        let reviewToken = try await materializeToken(controller: controller, snapshot: review)
+        await store.suspendNextCompletion()
+        let readImmediate = try popupCommand(
+            subject: "getApprovalState", id: immediate.handle.id,
+            requestToken: immediate.handle.requestToken
+        )
+        _ = await controller.dispatchJSON(request: readImmediate, profileIdentifier: otherProfile)
+        try await waitForEvent("completeStarted", store: store)
+        let pending = try popupCommand(subject: "getPendingRequests", id: 99)
+
+        for snapshot in [review, immediate] {
+            let queue = await controller.dispatchJSON(
+                request: pending, profileIdentifier: snapshot.handle.profileIdentifier
+            )
+            let requests = try XCTUnwrap(queue["requests"] as? [[String: Any]])
+            XCTAssertEqual(requests.count, 1)
+            XCTAssertEqual(requests.first?["requestToken"] as? String, snapshot.handle.requestToken)
+            let currentReviewToken = try await materializeToken(controller: controller, snapshot: review)
+            XCTAssertEqual(currentReviewToken, reviewToken)
+            let working = await controller.dispatchJSON(
+                request: readImmediate, profileIdentifier: otherProfile
+            )
+            XCTAssertEqual(working["state"] as? String, "working")
+            XCTAssertNil(working["review"])
+        }
+        XCTAssertEqual(reviewPreparations, 1)
+        XCTAssertEqual(immediatePreparations, 1)
+        let workingEvents = await store.events()
+        XCTAssertEqual(workingEvents, ["completeStarted"])
+
+        await store.resumeCompletion()
+        try await waitForEvent("complete", store: store)
+        _ = await controller.dispatchJSON(request: pending, profileIdentifier: otherProfile)
+        let retainedReviewToken = try await materializeToken(controller: controller, snapshot: review)
+        XCTAssertEqual(retainedReviewToken, reviewToken)
+        XCTAssertEqual(reviewPreparations, 1)
+    }
+
     func testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors() async throws {
         for ownership in ["receipt", "nativeClaim", "approving"] {
             let store = try makeStore()
@@ -3315,6 +3433,11 @@ extension PopupRequestSessionsTests {
         }
 
         try await waitForCondition { executionCount == 1 }
+        let pending = try popupCommand(subject: "getPendingRequests", id: 99)
+        let queue = await controller.dispatchJSON(request: pending, profileIdentifier: nil)
+        let queued = try XCTUnwrap(queue["requests"] as? [[String: Any]])
+        XCTAssertEqual(queued.count, 1)
+        XCTAssertEqual(queued.first?["requestToken"] as? String, snapshot.handle.requestToken)
         for subject in ["getApprovalState", "retryApproval"] {
             let command = try popupCommand(
                 subject: subject,
@@ -6793,7 +6916,7 @@ extension PopupRequestSessionsTests {
         )
         let state = await controller.dispatchJSON(
             request: request,
-            profileIdentifier: nil
+            profileIdentifier: snapshot.handle.profileIdentifier
         )
         return try XCTUnwrap((state["review"] as? [String: Any])?["reviewToken"] as? String)
     }
@@ -7157,6 +7280,7 @@ private func popupSwitchSnapshot(
 
 private func popupSnapshot(
     id: Int,
+    profileIdentifier: UUID? = nil,
     createdAt: Date = Date(),
     provider: InpageProvider = .unknown,
     method: String? = nil,
@@ -7212,7 +7336,7 @@ private func popupSnapshot(
     let handle = ExtensionBridge.Handle(
         id: id,
         token: .init(value: UUID()),
-        profileIdentifier: nil
+        profileIdentifier: profileIdentifier
     )
     let nonce = nativeDeliveryReceipt?.nativeDeliveryNonce ?? ExtensionBridge.NativeDeliveryNonce(value: UUID())
     let state: ExtensionBridge.Snapshot.State

@@ -65,13 +65,6 @@ func awaitBackgroundOperation<Value: Sendable>(
     }
 }
 
-func awaitBackgroundOptionalOperation<Value: Sendable>(
-    _ operation: @escaping @Sendable () -> Value?
-) async -> Value? {
-    let value = await awaitBackgroundOperation(operation)
-    return value ?? nil
-}
-
 struct DappRequestProcessor: DappRequestProcessing {
 
     func prepare(

@@ -183,11 +183,6 @@ actor ExtensionBridge {
         }
     }
 
-    enum ManualSwitchRequestsResult: Equatable, Sendable {
-        case available([ManualSwitchRequest])
-        case unavailable
-    }
-
     struct Snapshot {
         enum State {
             case queued(request: SafariRequest, approval: QueuedApproval)
@@ -752,28 +747,10 @@ actor ExtensionBridge {
 
     func responseStatus(
         handle: Handle,
-        configurationKey: String,
-        manualOnly: Bool = false
+        configurationKey: String
     ) -> ResponseStatusResult {
         store.responseStatus(
-            handle: handle, configurationKey: configurationKey,
-            manualOnly: manualOnly
-        )
-    }
-
-    func listManualSwitchRequests(
-        profileIdentifier: UUID?
-    ) -> ManualSwitchRequestsResult {
-        store.listManualSwitchRequests(profileIdentifier: profileIdentifier)
-    }
-
-    func loadManualSwitch(
-        handle: Handle,
-        configurationKey: String
-    ) -> SnapshotResult {
-        store.loadManualSwitch(
-            handle: handle,
-            configurationKey: configurationKey
+            handle: handle, configurationKey: configurationKey
         )
     }
 

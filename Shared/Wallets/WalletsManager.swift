@@ -195,25 +195,6 @@ final class WalletsManager: NSObject {
         }
     }
 
-    func getSpecificAccount(coin: WalletCoin, address: String) -> SpecificWalletAccount? {
-        return getWalletAndAccount(coin: coin, address: address).map { wallet, account in
-            SpecificWalletAccount(walletId: wallet.id, account: account)
-        }
-    }
-
-    func suggestedAccounts(coin: WalletCoin? = nil) -> [SpecificWalletAccount] {
-        return suggestedAccounts(for: [coin ?? defaultCoin])
-    }
-
-    func suggestedAccounts(providers: Set<InpageProvider>) -> [SpecificWalletAccount] {
-        guard !providers.isEmpty else { return [] }
-
-        let coins = InpageProvider.allCases
-            .filter(providers.contains)
-            .compactMap(WalletCoin.correspondingToInpageProvider)
-        return suggestedAccounts(for: coins)
-    }
-
     final class PreviewAccountsPager {
         private static let minimumPreviewInterval: TimeInterval = 0.23
         private static var minimumPreviewDelay: DispatchTimeInterval {
@@ -623,15 +604,6 @@ final class WalletsManager: NSObject {
         return WalletContainer(id: id, key: key)
     }
 
-    private static func accountMatches(
-        _ account: WalletAccount,
-        coin: WalletCoin,
-        normalizedAddress: String
-    ) -> Bool {
-        return account.coin == coin &&
-            coin.normalizedAddress(account.address) == normalizedAddress
-    }
-
     @MainActor
     func update(wallet: WalletContainer, enabledAccounts: [WalletAccount]) async throws {
         _ = try await save(isUpdate: true) {
@@ -797,29 +769,6 @@ final class WalletsManager: NSObject {
         return previewCoins
     }()
 
-    private func suggestedAccounts(for coins: [WalletCoin]) -> [SpecificWalletAccount] {
-        var suggestions = [SpecificWalletAccount]()
-        var seenCoins = Set<WalletCoin>()
-
-        for coin in coins {
-            guard seenCoins.insert(coin).inserted else { continue }
-            if let suggestion = firstSuggestedAccount(for: coin) {
-                suggestions.append(suggestion)
-            }
-        }
-
-        return suggestions
-    }
-
-    private func firstSuggestedAccount(for coin: WalletCoin) -> SpecificWalletAccount? {
-        for wallet in wallets {
-            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
-                return SpecificWalletAccount(walletId: wallet.id, account: account)
-            }
-        }
-        return nil
-    }
-
     private func addMnemonicAccounts(to wallet: WalletContainer,
                                      password: String,
                                      coinDerivations: [(coin: WalletCoin, derivation: WalletDerivation)]) throws {
@@ -876,22 +825,6 @@ extension WalletsManager {
         else { return nil }
         guard wallet.hasAccountMatching(account) else { return nil }
         return try? wallet.privateKey(password: password, account: account)
-    }
-
-    func getWalletAndAccount(coin: WalletCoin, address: String) -> (WalletContainer, WalletAccount)? {
-        let normalizedAddress = coin.normalizedAddress(address)
-        for wallet in wallets {
-            for account in wallet.accounts {
-                if Self.accountMatches(
-                    account,
-                    coin: coin,
-                    normalizedAddress: normalizedAddress
-                ) {
-                    return (wallet, account)
-                }
-            }
-        }
-        return nil
     }
 
 }

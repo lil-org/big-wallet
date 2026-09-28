@@ -491,61 +491,20 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         }
     }
 
-    func listManualSwitchRequests(
-        profileIdentifier: UUID?
-    ) -> ExtensionBridge.ManualSwitchRequestsResult {
-        guard case .state(let profile) = readProfileObservational(
-            profileIdentifier: profileIdentifier
-        ) else { return .unavailable }
-        let requests = profile.state.records.filter {
-            !$0.responseAcknowledged && ExtensionRequestProfile.isManualSwitch($0, in: profile)
-        }.sorted {
-            $0.admissionCreatedAt == $1.admissionCreatedAt
-                ? $0.handle.requestToken < $1.handle.requestToken
-                : $0.admissionCreatedAt < $1.admissionCreatedAt
-        }.map(ExtensionRequestProfile.manualSwitchRequest)
-        guard ExtensionRequestProfile.manualSwitchRequestsFit(requests) else { return .unavailable }
-        return .available(requests)
-    }
-
     func responseStatus(
         handle: ExtensionBridge.Handle,
-        configurationKey: String,
-        manualOnly: Bool = false
+        configurationKey: String
     ) -> ExtensionBridge.ResponseStatusResult {
         guard case .state(let profile) = readProfileObservational(
             profileIdentifier: handle.profileIdentifier
         ) else { return .unavailable }
         guard let record = profile.state.records.first(where: {
             $0.handle == handle && $0.configurationKey == configurationKey
-        }), !manualOnly || (!record.responseAcknowledged && ExtensionRequestProfile.isManualSwitch(record, in: profile)) else {
+        }) else {
             return .missing
         }
         if case .completed = record.state { return .ready }
         return .pending
-    }
-
-    func loadManualSwitch(
-        handle: ExtensionBridge.Handle,
-        configurationKey: String
-    ) -> ExtensionBridge.SnapshotResult {
-        files.withLock(or: .unavailable) {
-            guard case .state(let profile) = readProfileLocked(
-                profileIdentifier: handle.profileIdentifier,
-                now: clock(),
-                recover: true
-            ) else { return .unavailable }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == handle && $0.configurationKey == configurationKey &&
-                    !$0.responseAcknowledged && ExtensionRequestProfile.isManualSwitch($0, in: profile)
-            }) else { return .missing }
-            guard let snapshot = ExtensionRequestProfile.snapshot(
-                profile.state.records[index],
-                request: profile.request(for: profile.state.records[index]),
-                sequence: index
-            ) else { return .unavailable }
-            return .found(snapshot)
-        }
     }
 
     func claim(

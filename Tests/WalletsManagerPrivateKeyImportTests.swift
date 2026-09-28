@@ -1033,10 +1033,57 @@ final class WalletSigningScopeTests: XCTestCase {
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
         )
+        let initialWalletReads = reader.walletReadCount
         let signer = WalletSigningSession.fromSource(operation: operation, walletsManager: manager, authorityIsCurrent: { _ in true })
         try assertWalletSigningSuccessForTesting(await signer.sign(), account: account)
-        assertUnavailable(await signer.sign())
+        XCTAssertEqual(reader.walletReadCount - initialWalletReads, 4)
         XCTAssertEqual(reader.passwordReadCount, 1)
+        assertUnavailable(await signer.sign())
+        XCTAssertEqual(reader.walletReadCount - initialWalletReads, 4)
+        XCTAssertEqual(reader.passwordReadCount, 1)
+    }
+
+    func testSourceSignerRejectsWalletRemovalDuringEitherAuthorityCheck() async throws {
+        for suspendedCheck in 1...2 {
+            let reader = KeychainCopyMatchingStub()
+            reader.attributes = [reader.walletAttributes(id: walletID)]
+            reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
+            reader.passwordData = Vectors.walletCoreJSONPrivateKeyPassword
+            let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+            XCTAssertTrue(manager.reloadFromStore())
+            let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
+            let operation = try approvedWalletSigningOperationForTesting(
+                approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
+            )
+            let checking = expectation(description: "Source authority check \(suspendedCheck) started")
+            var checks = 0
+            var continuation: CheckedContinuation<Bool, Never>?
+            let initialWalletReads = reader.walletReadCount
+            let signer = WalletSigningSession.fromSource(
+                operation: operation,
+                walletsManager: manager,
+                authorityIsCurrent: { _ in
+                    checks += 1
+                    guard checks == suspendedCheck else { return true }
+                    return await withCheckedContinuation {
+                        continuation = $0
+                        checking.fulfill()
+                    }
+                }
+            )
+            let signing = Task { await signer.sign() }
+            await fulfillment(of: [checking], timeout: 1)
+            reader.walletData[walletID] = nil
+            try XCTUnwrap(continuation).resume(returning: true)
+
+            assertUnavailable(await signing.value)
+            XCTAssertEqual(checks, suspendedCheck)
+            XCTAssertEqual(reader.walletReadCount - initialWalletReads, suspendedCheck == 1 ? 2 : 4)
+            XCTAssertEqual(reader.passwordReadCount, suspendedCheck - 1)
+            assertUnavailable(await signer.sign())
+            XCTAssertEqual(reader.walletReadCount - initialWalletReads, suspendedCheck == 1 ? 2 : 4)
+            XCTAssertEqual(reader.passwordReadCount, suspendedCheck - 1)
+        }
     }
 
     func testSourceSignerRejectsMissingAccountAndExpiredOperation() async throws {

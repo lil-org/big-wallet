@@ -1618,10 +1618,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let handle = ExtensionBridge.Handle(id: 1, token: .init(value: UUID()), profileIdentifier: nil)
         let response = await bridge.responseStatus(handle: handle, configurationKey: "https://wallet.example")
 
-        let switches = await bridge.listManualSwitchRequests(profileIdentifier: nil)
         XCTAssertEqual(response, .missing)
-
-        XCTAssertEqual(switches, .available([]))
         XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.path))
     }
 
@@ -1645,17 +1642,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             synchronizePublishedFile: { _ in XCTFail("Observation synchronized storage"); throw Failure.injectedWrite }
         )
         let manualStatus = await observer.responseStatus(
-            handle: manualHandle, configurationKey: manual.request.configurationKey, manualOnly: true
+            handle: manualHandle, configurationKey: manual.request.configurationKey
         )
 
-        let nonManual = await observer.responseStatus(
-            handle: ordinaryHandle, configurationKey: ordinary.request.configurationKey, manualOnly: true
+        let ordinaryStatus = await observer.responseStatus(
+            handle: ordinaryHandle, configurationKey: ordinary.request.configurationKey
         )
-        let switches = try manualSwitchRequests(await observer.listManualSwitchRequests(profileIdentifier: nil))
         XCTAssertEqual(manualStatus, .pending)
-
-        XCTAssertEqual(nonManual, .missing)
-        XCTAssertEqual(switches.map(\.state), [.pending])
+        XCTAssertEqual(ordinaryStatus, .pending)
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
         XCTAssertEqual(try FileManager.default.subpathsOfDirectory(atPath: rootURL.path).sorted(), originalPaths)
     }
@@ -1698,9 +1692,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: lockURL, withDestinationURL: defaultProfileURL)
         let original = try Data(contentsOf: defaultProfileURL)
 
-        let unsafeDiscovery = await bridge.listManualSwitchRequests(profileIdentifier: nil)
-
-        XCTAssertEqual(unsafeDiscovery, .unavailable)
+        let unsafeStatus = await bridge.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
+        XCTAssertEqual(unsafeStatus, .unavailable)
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
     }
 
@@ -1730,11 +1723,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         for observedAt in [clock.now, future.addingTimeInterval(ExtensionBridge.responseExpiry + 1)] {
             clock.now = observedAt
             let status = await observer.responseStatus(
-                handle: handle, configurationKey: fixture.request.configurationKey, manualOnly: true
+                handle: handle, configurationKey: fixture.request.configurationKey
             )
-            let switches = try manualSwitchRequests(await observer.listManualSwitchRequests(profileIdentifier: nil))
             XCTAssertEqual(status, .ready)
-            XCTAssertEqual(switches.map(\.state), [.completed])
             XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
         }
         await bridge.performMaintenance(profileIdentifier: nil)
@@ -1800,10 +1791,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let started = ContinuousClock.now
             let response = await self.bridge.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
 
-            let switches = await self.bridge.listManualSwitchRequests(profileIdentifier: nil)
             XCTAssertEqual(response, .unavailable)
-
-            XCTAssertEqual(switches, .unavailable)
             XCTAssertLessThan(started.duration(to: .now), .milliseconds(500))
         }
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
@@ -2228,7 +2216,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try await assertStoredProfileUnavailableAndUnchanged()
     }
 
-    func testStoredPayloadMaterializesSnapshotsAndManualSwitchDiscovery() throws {
+    func testStoredPayloadMaterializesSnapshotsAndRecoveryDiscovery() throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { self.clock.now }
         ))
@@ -2258,14 +2246,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertEqual(ordinarySnapshot.request?.id, ordinary.request.id)
 
-        let page = try manualSwitchRequests(store.listManualSwitchRequests(
+        let page = try recoveryRequests(store.listRecoveryRequests(
             profileIdentifier: nil
         ))
-        XCTAssertEqual(page.map(\.handle), [manualHandle])
-        guard case .found(let manualSnapshot) = store.loadManualSwitch(
-            handle: manualHandle,
-            configurationKey: manual.request.configurationKey
-        ) else { return XCTFail("Expected manual switch snapshot") }
+        XCTAssertEqual(Set(page.map(\.handle)), [ordinaryHandle, manualHandle])
+        XCTAssertEqual(page.filter(\.manual).map(\.handle), [manualHandle])
+        guard case .found(let manualSnapshot) = store.load(handle: manualHandle) else {
+            return XCTFail("Expected manual switch snapshot")
+        }
         XCTAssertEqual(manualSnapshot.request?.id, manual.request.id)
 
         let coalescing = try makeManualFixture(
@@ -3537,7 +3525,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("Expired new intent must not acquire a stored handle") }
     }
 
-    func testManualSwitchDiscoveryDescribesStoredStatesAndRequiresExactIdentity()
+    func testRecoveryDiscoveryDescribesStoredStatesAndRequiresExactIdentity()
         async throws {
         let pending = try makeManualFixture(
             id: 430,
@@ -3591,59 +3579,72 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: foreignProfile
         )).handle
 
-        let page = try manualSwitchRequests(await bridge.listManualSwitchRequests(
+        let page = try recoveryRequests(await bridge.listRecoveryRequests(
             profileIdentifier: nil
         ))
         XCTAssertEqual(Dictionary(uniqueKeysWithValues: page.map {
             ($0.handle, $0.state)
-        }), [pendingHandle: .pending, approvedHandle: .approved, completedHandle: .completed])
+        }), [pendingHandle: .pending, approvedHandle: .approved,
+             completedHandle: .completed, ordinary: .pending])
+        XCTAssertEqual(Set(page.filter(\.manual).map(\.handle)), [
+            pendingHandle, approvedHandle, completedHandle,
+        ])
         for request in page {
             XCTAssertEqual(Set(request.json.keys), [
-                "id", "host", "configurationKey", "requestToken", "revisions", "state",
+                "id", "configurationKey", "requestToken", "manual", "state",
             ])
         }
         let pendingDescriptor = try XCTUnwrap(page.first { $0.handle == pendingHandle })
-        XCTAssertEqual(pendingDescriptor.revisions, pending.ingress.authority.revisions)
-        XCTAssertEqual(pendingDescriptor.host, pending.request.host)
         XCTAssertEqual(pendingDescriptor.configurationKey, pending.request.configurationKey)
-        guard case .found(let completedSnapshot) = await bridge.loadManualSwitch(
-            handle: completedHandle,
-            configurationKey: completed.request.configurationKey
-        ) else { return XCTFail("Completed switches must retain their classification") }
+        guard case .found(let completedSnapshot) = await bridge.load(handle: completedHandle) else {
+            return XCTFail("Expected completed switch snapshot")
+        }
         XCTAssertNil(completedSnapshot.request)
         XCTAssertEqual(completedSnapshot.phase, .responded)
 
         for (handle, origin) in [
             (pendingHandle, "https://other.example"),
-            (ordinary, pending.request.configurationKey),
             (ExtensionBridge.Handle(
                 id: foreign.id,
                 token: foreign.token,
                 profileIdentifier: nil
             ), pending.request.configurationKey),
         ] {
-            guard case .missing = await bridge.loadManualSwitch(
+            guard case .missing = await bridge.responseStatus(
                 handle: handle,
                 configurationKey: origin
-            ) else { return XCTFail("Switch reads must require exact type, origin, and profile") }
+            ) else { return XCTFail("Status reads must require exact origin and profile") }
         }
         let acknowledged = await bridge.acknowledgeResponse(
             handle: completedHandle,
             configurationKey: completed.request.configurationKey
         )
         XCTAssertEqual(acknowledged, .persisted)
-        guard case .missing = await bridge.loadManualSwitch(
+        guard case .found(let acknowledgedSnapshot) = await bridge.load(handle: completedHandle) else {
+            return XCTFail("Acknowledged responses must remain readable")
+        }
+        XCTAssertEqual(acknowledgedSnapshot.phase, .responded)
+        let acknowledgedStatus = await bridge.responseStatus(
             handle: completedHandle,
             configurationKey: completed.request.configurationKey
-        ) else { return XCTFail("Acknowledged switches must not be recovered") }
-        let remaining = try manualSwitchRequests(await bridge.listManualSwitchRequests(
+        )
+        XCTAssertEqual(acknowledgedStatus, .ready)
+        let remaining = try recoveryRequests(await bridge.listRecoveryRequests(
             profileIdentifier: nil
         ))
-        XCTAssertEqual(Set(remaining.map(\.handle)), [pendingHandle, approvedHandle])
-        let foreignPage = try manualSwitchRequests(await bridge.listManualSwitchRequests(
+        XCTAssertEqual(Set(remaining.map(\.handle)), [pendingHandle, approvedHandle, ordinary])
+        let foreignPage = try recoveryRequests(await bridge.listRecoveryRequests(
             profileIdentifier: foreignProfile
         ))
         XCTAssertEqual(foreignPage.map(\.handle), [foreign])
+
+        try Data("corrupt profile".utf8).write(to: defaultProfileURL, options: .atomic)
+        guard case .unavailable = await bridge.listRecoveryRequests(profileIdentifier: nil) else {
+            return XCTFail("Corrupt storage must not look like an empty recovery queue")
+        }
+        guard case .unavailable = await bridge.load(handle: completedHandle) else {
+            return XCTFail("Corrupt storage must not look like a missing request")
+        }
     }
 
     func testManualSwitchCapacityPreservesCompletedSelectionsAndCoalescesWhenFull() async throws {
@@ -3698,8 +3699,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ))
         XCTAssertEqual(replay.handle, handles[0])
         XCTAssertEqual(replay.admissionKind, .coalesced)
-        let requests = try manualSwitchRequests(await bridge.listManualSwitchRequests(profileIdentifier: nil))
-        XCTAssertEqual(requests.map(\.handle), handles)
+        let requests = try recoveryRequests(await bridge.listRecoveryRequests(profileIdentifier: nil)).filter(\.manual)
+        XCTAssertEqual(Set(requests.map(\.handle)), Set(handles))
         XCTAssertTrue(requests.allSatisfy { $0.state == .completed })
         let acknowledged = await bridge.acknowledgeResponse(
             handle: handles[0], configurationKey: "https://wallet470.example"
@@ -3750,9 +3751,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .missing = await bridge.load(handle: ordinary[0].handle) else {
             return XCTFail("The test must exercise completed-record eviction")
         }
-        guard case .found(let retained) = await bridge.loadManualSwitch(
-            handle: handle, configurationKey: manual.request.configurationKey
-        ) else { return XCTFail("An unacknowledged selection must survive admission pressure") }
+        guard case .found(let retained) = await bridge.load(handle: handle) else {
+            return XCTFail("An unacknowledged selection must survive admission pressure")
+        }
         XCTAssertEqual(retained.phase, .responded)
     }
 
@@ -3764,40 +3765,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeFixture(id: 500)
         XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
         XCTAssertEqual(fixture.ingress.authority.revisions.ethereum, 0)
-    }
-
-    func testManualSwitchDiscoveryLeavesExpirationToExplicitMaintenance()
-        async throws {
-        let manual = try makeManualFixture(
-            id: 490,
-            enqueueAttempt: attempt(for: 490),
-            latestConfigurations: []
-        )
-        let handle = try accepted(await bridge.enqueue(
-            ingress: manual.ingress,
-            profileIdentifier: nil
-        )).handle
-        clock.now = manual.request.admissionDeadline
-        let pending = try manualSwitchRequests(await bridge.listManualSwitchRequests(profileIdentifier: nil))
-        XCTAssertEqual(pending.map(\.state), [.pending])
-        await bridge.performMaintenance(profileIdentifier: nil)
-        let expired = try manualSwitchRequests(await bridge.listManualSwitchRequests(
-            profileIdentifier: nil
-        ))
-        XCTAssertEqual(expired.map(\.state), [.completed])
-        clock.now.addTimeInterval(ExtensionBridge.responseExpiry)
-        await bridge.performMaintenance(profileIdentifier: nil)
-        let retired = try manualSwitchRequests(await bridge.listManualSwitchRequests(
-            profileIdentifier: nil
-        ))
-        XCTAssertTrue(retired.isEmpty)
-        try Data("corrupt profile".utf8).write(to: defaultProfileURL, options: .atomic)
-        let unavailable = await bridge.listManualSwitchRequests(profileIdentifier: nil)
-        XCTAssertEqual(unavailable, .unavailable)
-        guard case .unavailable = await bridge.loadManualSwitch(
-            handle: handle,
-            configurationKey: manual.request.configurationKey
-        ) else { return XCTFail("Corrupt storage must not look like a missing switch") }
     }
 
     func testCompletedRecordWithInvalidRevisionsFailsClosed() async throws {
@@ -8130,13 +8097,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         return Fixture(request: request, ingress: ingress)
     }
 
-    private func manualSwitchRequests(
-        _ result: ExtensionBridge.ManualSwitchRequestsResult,
+    private func recoveryRequests(
+        _ result: ExtensionBridge.RecoveryRequestsResult,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws -> [ExtensionBridge.ManualSwitchRequest] {
+    ) throws -> [ExtensionBridge.RecoveryRequest] {
         guard case .available(let page) = result else {
-            XCTFail("Expected manual switch requests", file: file, line: line)
+            XCTFail("Expected recovery requests", file: file, line: line)
             throw Failure.expectedValue
         }
         return page

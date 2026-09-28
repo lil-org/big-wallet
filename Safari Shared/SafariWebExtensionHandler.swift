@@ -499,7 +499,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         case .getResponse(let identity):
             readResponseStatus(
                 id: request.id, identity: identity, profileIdentifier: profileIdentifier,
-                privateBrowsing: privateBrowsing, manualOnly: false, context: context
+                privateBrowsing: privateBrowsing, context: context
             )
         }
     }
@@ -509,7 +509,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         identity: InternalSafariRequest.ResponseIdentity,
         profileIdentifier: UUID?,
         privateBrowsing: Bool,
-        manualOnly: Bool,
         context: NSExtensionContext
     ) {
         guard !privateBrowsing else {
@@ -521,8 +520,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 id: id, token: identity.token, profileIdentifier: profileIdentifier
             )
             let status = await Self.bridge.responseStatus(
-                handle: handle, configurationKey: identity.configurationKey,
-                manualOnly: manualOnly
+                handle: handle, configurationKey: identity.configurationKey
             )
             Self.respondStatus(status, id: id, context: context)
         }

@@ -213,7 +213,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         })
     }
 
-    func testWalletLookupPreservesCoinAndAddressNormalization() throws {
+    func testReviewCatalogLookupPreservesCoinAndAddressNormalization() throws {
         let key = try XCTUnwrap(
             WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture)
         )
@@ -241,29 +241,30 @@ final class WalletsManagerPreviewTests: XCTestCase {
         )
 
         XCTAssertTrue(manager.reloadFromStore())
+        let catalog = try XCTUnwrap(manager.reviewCatalog())
         let ethereum = try XCTUnwrap(
             manager.wallets.first?.accounts.first(where: { $0.coin == .ethereum })
         )
         XCTAssertEqual(
-            manager.getWalletAndAccount(
+            catalog.specificAccount(
                 coin: .ethereum,
                 address: ethereum.address.uppercased()
-            )?.1,
+            )?.account,
             ethereum
         )
         XCTAssertEqual(
-            manager.getWalletAndAccount(coin: .solana, address: solana.address)?.1,
+            catalog.specificAccount(coin: .solana, address: solana.address)?.account,
             solana
         )
         XCTAssertNotEqual(solana.address, solana.address.lowercased())
         XCTAssertNil(
-            manager.getWalletAndAccount(
+            catalog.specificAccount(
                 coin: .solana,
                 address: solana.address.lowercased()
             )
         )
         XCTAssertNil(
-            manager.getWalletAndAccount(coin: .solana, address: ethereum.address)
+            catalog.specificAccount(coin: .solana, address: ethereum.address)
         )
     }
 
@@ -488,6 +489,7 @@ final class KeychainCopyMatchingStub {
     var passwordData: Data?
     var passwordReadCount = 0
     var walletData = [String: Data]()
+    var walletReadCount = 0
     var walletReadStatuses = [String: OSStatus]()
 
     func walletAttributes(id: String, createdAt: Date? = nil) -> [String: Any] {
@@ -521,6 +523,7 @@ final class KeychainCopyMatchingStub {
             return errSecSuccess
         }
         guard key.hasPrefix(Self.walletPrefix) else { return errSecItemNotFound }
+        walletReadCount += 1
         let id = String(key.dropFirst(Self.walletPrefix.count))
         if let status = walletReadStatuses[id], status != errSecSuccess {
             return status

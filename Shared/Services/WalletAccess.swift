@@ -375,29 +375,10 @@ struct WalletReviewCatalog {
     }
 
     func suggestedAccounts(coin: WalletCoin? = nil) -> [SpecificWalletAccount] {
-        suggestedAccounts(for: [coin ?? .ethereum])
-    }
-
-    func suggestedAccounts(providers: Set<InpageProvider>) -> [SpecificWalletAccount] {
-        let coins = InpageProvider.allCases
-            .filter(providers.contains)
-            .compactMap(WalletCoin.correspondingToInpageProvider)
-        return suggestedAccounts(for: coins)
-    }
-
-    private func suggestedAccounts(
-        for coins: [WalletCoin]
-    ) -> [SpecificWalletAccount] {
-        var result = [SpecificWalletAccount]()
-        var seen = Set<WalletCoin>()
-        for coin in coins where seen.insert(coin).inserted {
-            if let account = orderedAccounts.first(where: {
-                $0.account.coin == coin
-            }) {
-                result.append(account)
-            }
-        }
-        return result
+        guard let account = orderedAccounts.first(where: {
+            $0.account.coin == (coin ?? .ethereum)
+        }) else { return [] }
+        return [account]
     }
 }
 
@@ -421,7 +402,7 @@ private final class SourceWalletSigningAccess: OwnedWalletSigningAccess {
     func sign(_ operation: ApprovedWalletSigningOperation) async ->
         Result<WalletSigningOutput, WalletSigningFailure> {
         guard operation.approvedAccount == approvedAccount,
-              !Task.isCancelled, isCurrent else {
+              !Task.isCancelled else {
             return .failure(.authorizationUnavailable)
         }
         guard let privateKey = walletsManager.getPrivateKey(
@@ -430,7 +411,6 @@ private final class SourceWalletSigningAccess: OwnedWalletSigningAccess {
         ), WalletSnapshotValidation.accountMatches(
             approvedAccount.account, privateKey: privateKey
         ) else { return .failure(.failedToSign) }
-        guard isCurrent else { return .failure(.authorizationUnavailable) }
         guard let result = await awaitBackgroundOperation({
             operation.sign(with: privateKey)
         }) else { return .failure(.authorizationUnavailable) }
@@ -710,13 +690,15 @@ final class WalletSigningSession: WalletSigning, @unchecked Sendable {
         }
         defer { finishSigningAttempt() }
         return await withTaskCancellationHandler {
-            guard isAuthorizedToSign,
+            guard isLocallyAuthorizedToSign,
                   await binding.authorityIsCurrent(authorization.handle),
-                  isAuthorizedToSign else { return .failure(.authorizationUnavailable) }
+                  isLocallyAuthorizedToSign,
+                  isCurrent() else { return .failure(.authorizationUnavailable) }
             let result = await access.sign(binding.operation)
-            guard isAuthorizedToSign,
+            guard isLocallyAuthorizedToSign,
                   await binding.authorityIsCurrent(authorization.handle),
-                  isAuthorizedToSign else { return .failure(.authorizationUnavailable) }
+                  isLocallyAuthorizedToSign,
+                  isCurrent() else { return .failure(.authorizationUnavailable) }
             return result
         } onCancel: {
             self.invalidate()
@@ -724,12 +706,12 @@ final class WalletSigningSession: WalletSigning, @unchecked Sendable {
     }
 
     @MainActor
-    private var isAuthorizedToSign: Bool {
+    private var isLocallyAuthorizedToSign: Bool {
         !Task.isCancelled && clock() < authorization.signingDeadline &&
             lock.withLock {
                 if case .signing = state { return true }
                 return false
-            } && isCurrent()
+            }
     }
 
     private func finishSigningAttempt() {
