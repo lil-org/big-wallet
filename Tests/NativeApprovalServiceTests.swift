@@ -1287,13 +1287,108 @@
             }
         }
 
+        func testReactivationReusesVerifiedOwnershipBeforeFinalSendValidation() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            let runtime = f.runtime()
+            f.deliver(request, runtime: runtime)
+            f.onLaunch = { _, _, completion in completion(true) }
+            let service = f.service()
+
+            let result = try await f.finish {
+                await service.reconcile(.init(request), intent: .focus)
+            }
+
+            XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertEqual(f.launches.map(\.target), [
+                .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                         runtimeInstanceIdentifier: runtime.instanceIdentifier),
+            ])
+        }
+
+        func testReactivationReconcilesReceiptReplacementAfterVerification() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            let replacement = f.runtime(pid: 84)
+            var replaced = false
+            f.onLoad = { handle in
+                if !f.validations.isEmpty && !replaced {
+                    replaced = true
+                    f.deliver(request, runtime: replacement)
+                }
+                return f.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
+            }
+            f.onLaunch = { _, _, completion in completion(true) }
+            let service = f.service()
+
+            let result = try await f.finish {
+                await service.reconcile(.init(request), intent: .focus)
+            }
+
+            XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.launches.map(\.target), [
+                .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 84,
+                         runtimeInstanceIdentifier: replacement.instanceIdentifier),
+            ])
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.clears.isEmpty)
+        }
+
+        func testReactivationRejectsChangedCodeDespiteUnchangedBundleVersion() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            let version = try XCTUnwrap(AmbientRuntimeIdentity.bundleVersion(at: f.bundleURL))
+            f.onValidate = { _ in f.validations.count == 1 }
+            f.onLaunch = { _, _, completion in completion(true) }
+            let service = f.service()
+
+            let result = try await f.finish {
+                await service.reconcile(.init(request), intent: .focus)
+            }
+
+            XCTAssertEqual(result, .unavailable)
+            XCTAssertEqual(AmbientRuntimeIdentity.bundleVersion(at: f.bundleURL), version)
+            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertTrue(f.launches.isEmpty)
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.clears.isEmpty)
+        }
+
+        func testReactivationRejectsRuntimeReplacementWithUnchangedReceipt() async throws {
+            let f = try fixture()
+            let request = try f.request()
+            f.deliver(request)
+            var replaced = false
+            f.onLoad = { handle in
+                if !f.validations.isEmpty && !replaced {
+                    replaced = true
+                    f.processes[42] = f.runtime()
+                }
+                return f.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
+            }
+            f.onLaunch = { _, _, completion in completion(true) }
+            let service = f.service()
+
+            let result = try await f.finish {
+                await service.reconcile(.init(request), intent: .focus)
+            }
+
+            XCTAssertEqual(result, .unavailable)
+            XCTAssertTrue(f.launches.isEmpty)
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertTrue(f.clears.isEmpty)
+        }
+
         func testReactivationCancellationImmediatelyReachesFinalValidation() async throws {
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
             var caller: Task<NativeApprovalService.ReconciliationResult, Never>?
             f.onValidate = { _ in
-                if f.validations.count == 3 {
+                if f.validations.count == 2 {
                     caller?.cancel()
                     XCTAssertTrue(Task.isCancelled)
                 }
@@ -1305,7 +1400,7 @@
             caller = task
             let result = try await f.finish { await task.value }
             XCTAssertEqual(result, .unavailable)
-            XCTAssertEqual(f.validations.count, 3)
+            XCTAssertEqual(f.validations.count, 2)
             XCTAssertTrue(f.launches.isEmpty)
         }
 

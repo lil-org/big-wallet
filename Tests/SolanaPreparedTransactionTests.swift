@@ -164,19 +164,17 @@ final class SolanaPreparedTransactionTests: XCTestCase {
             XCTAssertEqual(preparedTransaction.approvalMessage, Vectors.solanaPreparedApprovalMessage)
             XCTAssertEqual(WalletCrypto.base58Encode(data: preparedMessage.messageData), Vectors.solanaPreparedApprovalMessage)
 
-            switch Solana.signedTransactionForSignAndSend(preparedSerializedTransaction: preparedTransaction,
-                                                                 privateKey: privateKey) {
-            case .success(let signedTransaction):
-                let signedData = try XCTUnwrap(Data(base64Encoded: signedTransaction))
-                let signedParts = try signerSignature(in: signedData, signerPublicKey: Vectors.solanaPreparedSignerPublicKey)
+            let signedTransaction = try XCTUnwrap(Solana.signedTransactionForSignAndSend(
+                preparedSerializedTransaction: preparedTransaction,
+                privateKey: privateKey
+            ))
+            let signedData = try XCTUnwrap(Data(base64Encoded: signedTransaction))
+            let signedParts = try signerSignature(in: signedData, signerPublicKey: Vectors.solanaPreparedSignerPublicKey)
 
-                XCTAssertEqual(signedParts.messageData, preparedMessage.messageData)
-                try assertValidSolanaSignature(signedParts.signature,
-                                               message: signedParts.messageData,
-                                               publicKeyData: signedParts.publicKeyData)
-            case .failure(let error):
-                XCTFail("Expected signed transaction, got \(error)")
-            }
+            XCTAssertEqual(signedParts.messageData, preparedMessage.messageData)
+            try assertValidSolanaSignature(signedParts.signature,
+                                           message: signedParts.messageData,
+                                           publicKeyData: signedParts.publicKeyData)
         case .failure(let error):
             XCTFail("Expected prepared transaction, got \(error)")
         }

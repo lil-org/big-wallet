@@ -9,7 +9,6 @@ var bigWalletProviderGeneration;
 var bigWalletProviderGenerationSerial;
 var bigWalletContentInstalled;
 var bigWalletConfigurationState;
-var bigWalletFailedConfigurationGeneration;
 var bigWalletConfigurationFlight;
 var bigWalletConfigurationRefreshQueued;
 var bigWalletConfigurationRefreshSerial;
@@ -117,7 +116,6 @@ function bigWalletConfigurationDelivery(
                     solana: Math.max(state.revisions.solana, current.revisions.solana)}};
         }
         bigWalletConfigurationState = {configurationKey, providerGeneration, state};
-        bigWalletFailedConfigurationGeneration = undefined;
     }
     if (terminal && providerGeneration !== originalGeneration) {
         window.postMessage({direction: bigWalletContentDirection, kind: "response",
@@ -592,7 +590,6 @@ async function bigWalletReadConfiguration(generation, attempt, serial) {
         return;
     }
     if (bigWalletHasAcceptedConfiguration(generation, identity?.configurationKey)) { return; }
-    bigWalletFailedConfigurationGeneration = generation;
     window.postMessage({direction: bigWalletContentDirection, kind: "response",
         response: unsupported ? decoded : {kind: "configurationError", error: {code: 4900, message: "Failed to communicate with Big Wallet"}},
         providerGeneration: generation}, "*");

@@ -194,9 +194,7 @@ struct EthereumDappRequestProcessor {
                 return .rollback
             case .failure(.failedToSign):
                 return .response(signingFailedResponse(to: request))
-            case .failure(.ethereum(let failure)):
-                return .response(response(to: request, error: providerError(for: failure)))
-            case .failure(.solana):
+            case .failure(.invalidTransaction):
                 return .response(response(to: request, error: .internalError))
             }
         case .addEthereumChain(let action):
@@ -243,13 +241,6 @@ struct EthereumDappRequestProcessor {
                 message: message,
                 code: code,
                 context: dataJSON.map(ProviderResponseError.Context.dataJSON)
-            )
-        case .invalidTransaction:
-            return .internalError
-        case .failedToSign:
-            return .init(
-                message: Strings.failedToSign,
-                code: ProviderResponseError.internalErrorCode
             )
         case .rpc(.unknown), .transport:
             return .init(
@@ -409,8 +400,7 @@ struct EthereumDappRequestProcessor {
                         options: .caseInsensitive
                     ) != nil:
                 return recoveryResponse
-            case .invalidTransaction, .failedToSign,
-                 .rpc(.serverError), .rpc(.notSubmitted):
+            case .rpc(.serverError), .rpc(.notSubmitted):
                 return response(
                     to: request,
                     error: providerError(for: failure)

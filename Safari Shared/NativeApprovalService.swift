@@ -47,7 +47,10 @@ actor NativeApprovalService {
     }
 
     private enum Ownership: Sendable {
-        case owned
+        case owned(
+            receipt: ExtensionBridge.NativeDeliveryReceipt,
+            runtime: NativeAgentLauncher.IdentifiedRuntime
+        )
         case needsDelivery
         case finished(ReconciliationResult)
 
@@ -122,12 +125,6 @@ actor NativeApprovalService {
         let route: NativeAgentRoute
         let deadline: UInt64
         let task: Task<ReconciliationResult, Never>
-    }
-
-    private enum DeliveryPreparation: Sendable {
-        case running(NativeAgentLauncher.HelperTarget)
-        case launched(NativeAgentLauncher.ExpectedRuntime)
-        case finished(ReconciliationResult)
     }
 
     @MainActor
@@ -212,28 +209,44 @@ actor NativeApprovalService {
         }
         guard isPending(until: deadline) else { return .unavailable }
         if snapshot.phase == .responded { return .responseReady }
+        switch intent {
+        case .admission:
+            return await reconcileAdmission(snapshot, deadline: deadline, waitDeadline: waitDeadline)
+        case .maintenance(let allowDelivery):
+            return await reconcileMaintenance(snapshot, allowDelivery: allowDelivery, deadline: deadline)
+        case .focus:
+            return await reconcileFocus(snapshot, deadline: deadline)
+        }
+    }
+
+    private func reconcileAdmission(
+        _ snapshot: ExtensionBridge.Snapshot,
+        deadline: UInt64,
+        waitDeadline: UInt64?
+    ) async -> ReconciliationResult {
         let reference = RequestReference(snapshot)
-        let quiet: Bool
-        if case .maintenance(let allowDelivery) = intent {
-            quiet = !allowDelivery || (snapshot.request?.provider == .unknown &&
-                snapshot.request?.name == "switchAccount")
-        } else {
-            quiet = false
-        }
-        if quiet && !snapshot.hasActiveExecution { return .pending }
-        if intent == .admission, !snapshot.hasActiveExecution {
-            let delivered = await deliverRequest(reference, deadline: deadline)
-            guard !Task.isCancelled else { return .unavailable }
-            guard delivered == .unavailable else { return delivered }
-            let receiptDeadline = min(
-                dependencies.deadline(after: NativeApprovalTiming.receiptWaitTimeoutNanoseconds),
-                waitDeadline ?? UInt64.max
-            )
-            return await inspectOwnership(reference, deadline: receiptDeadline)
-        }
-        if intent == .admission {
+        if snapshot.hasActiveExecution {
             return await inspectOwnership(reference, deadline: deadline)
         }
+        let delivered = await deliverRequest(reference, deadline: deadline)
+        guard !Task.isCancelled else { return .unavailable }
+        guard delivered == .unavailable else { return delivered }
+        let receiptDeadline = min(
+            dependencies.deadline(after: NativeApprovalTiming.receiptWaitTimeoutNanoseconds),
+            waitDeadline ?? UInt64.max
+        )
+        return await inspectOwnership(reference, deadline: receiptDeadline)
+    }
+
+    private func reconcileMaintenance(
+        _ snapshot: ExtensionBridge.Snapshot,
+        allowDelivery: Bool,
+        deadline: UInt64
+    ) async -> ReconciliationResult {
+        let reference = RequestReference(snapshot)
+        let quiet = !allowDelivery || (snapshot.request?.provider == .unknown &&
+            snapshot.request?.name == "switchAccount")
+        if quiet && !snapshot.hasActiveExecution { return .pending }
         let ownership = await reconcileOwnership(
             reference,
             policy: quiet ? .manualRecovery : .delivery,
@@ -242,7 +255,6 @@ actor NativeApprovalService {
         guard isPending(until: deadline) else { return .unavailable }
         switch ownership {
         case .finished(.missing):
-            guard case .maintenance = intent else { return .missing }
             switch await dependencies.responseStatus(reference.handle, reference.configurationKey) {
             case .pending: return .pending
             case .ready: return .responseReady
@@ -253,24 +265,51 @@ actor NativeApprovalService {
             return result
         case .needsDelivery:
             guard !quiet, !snapshot.hasActiveExecution else { return .pending }
-            let result = await deliverRequest(reference, deadline: deadline)
-            return intent == .focus && result == .pending ? .opened : result
+            return await deliverRequest(reference, deadline: deadline)
         case .owned:
-            guard intent == .focus else { return .pending }
-            guard case .found(let current) = await load(reference) else { return .unavailable }
-            guard isPending(until: deadline) else { return .unavailable }
-            switch current.state {
-            case .responded: return .responseReady
-            case .approving: return .pending
-            case .queued: break
-            }
-            guard let receipt = current.nativeDeliveryReceipt,
-                  case .compatible(let runtime) = await dependencies.launcher.status(owner: receipt.owner),
-                  runtime.identity.instanceIdentifier == receipt.owner.runtimeInstanceIdentifier,
-                  let route = reference.route else { return .unavailable }
-            return await dependencies.launcher.send(route, to: runtime.target, deadline: deadline)
-                ? .opened : .unavailable
+            return .pending
         }
+    }
+
+    private func reconcileFocus(
+        _ snapshot: ExtensionBridge.Snapshot,
+        deadline: UInt64
+    ) async -> ReconciliationResult {
+        let reference = RequestReference(snapshot)
+        var snapshot = snapshot
+        while isPending(until: deadline) {
+            let ownership = await reconcileOwnership(reference, deadline: deadline)
+            guard isPending(until: deadline) else { return .unavailable }
+            switch ownership {
+            case .finished(let result):
+                return result
+            case .needsDelivery:
+                guard !snapshot.hasActiveExecution else { return .pending }
+                let result = await deliverRequest(reference, deadline: deadline)
+                return result == .pending ? .opened : result
+            case .owned(let receipt, let runtime):
+                guard case .found(let current) = await load(reference) else { return .unavailable }
+                guard isPending(until: deadline) else { return .unavailable }
+                switch current.state {
+                case .responded: return .responseReady
+                case .approving: return .pending
+                case .queued: break
+                }
+                guard current.nativeDeliveryReceipt != nil else { return .unavailable }
+                guard current.nativeDeliveryReceipt == receipt else {
+                    snapshot = current
+                    continue
+                }
+                guard let expected = await dependencies.launcher.expectedRuntime(),
+                      case .compatible(let currentRuntime) = await dependencies.launcher.assess(
+                          owner: receipt.owner, expected: expected
+                      ), currentRuntime.identity == runtime.identity,
+                      let route = reference.route else { return .unavailable }
+                return await dependencies.launcher.send(route, to: runtime.target, deadline: deadline)
+                    ? .opened : .unavailable
+            }
+        }
+        return .unavailable
     }
 
     private func isPending(until deadline: UInt64) -> Bool {
@@ -312,8 +351,8 @@ actor NativeApprovalService {
             let status = await dependencies.launcher.status(owner: receipt.owner)
             guard isPending(until: deadline) else { return .finished(.unavailable) }
             switch status {
-            case .compatible:
-                return .owned
+            case .compatible(let runtime):
+                return .owned(receipt: receipt, runtime: runtime)
             case .incompatible(let runtime):
                 guard policy != .manualRecovery,
                       let expected = await dependencies.launcher.verifiedExpectedRuntime(for: runtime),
@@ -408,9 +447,10 @@ actor NativeApprovalService {
                 deadline: deliveryDeadline, timeoutValue: ReconciliationResult.unavailable
             ) {
                 await precedingPreparation?.value()
-                let prepared = await self.prepareDelivery(route, reference: reference, deadline: deliveryDeadline)
-                await self.finishDeliveryPreparation(preparationFinished)
-                return await self.deliver(route, reference: reference, preparation: prepared, deadline: deliveryDeadline)
+                return await self.deliver(
+                    route, reference: reference,
+                    preparationFinished: preparationFinished, deadline: deliveryDeadline
+                )
             }
             await self.finishDeliveryPreparation(preparationFinished)
             await self.finishSharedDelivery(identifier: identifier)
@@ -441,53 +481,32 @@ actor NativeApprovalService {
         await completion.resolve(())
     }
 
-    private func prepareDelivery(
+    private func deliver(
         _ route: NativeAgentRoute,
         reference: RequestReference?,
+        preparationFinished: ApprovalResolution<Void>,
         deadline: UInt64
-    ) async -> DeliveryPreparation {
-        guard isPending(until: deadline) else { return .finished(.unavailable) }
+    ) async -> ReconciliationResult {
+        guard isPending(until: deadline) else { return .unavailable }
         if let reference {
             switch await reconcileOwnership(reference, deadline: deadline) {
-            case .owned: return .finished(.pending)
-            case .finished(let result): return .finished(result)
+            case .owned: return .pending
+            case .finished(let result): return result
             case .needsDelivery: break
             }
         }
         guard isPending(until: deadline), let initialExpected = await dependencies.launcher.expectedRuntime(),
               let target = await dependencies.launcher.resolveTarget(expected: initialExpected, deadline: deadline),
-              isPending(until: deadline) else { return .finished(.unavailable) }
-        switch target {
-        case .running:
-            return .running(target)
-        case .launch:
-            guard await dependencies.launcher.send(route, to: target, deadline: deadline),
-                  let expected = await dependencies.launcher.expectedRuntime(at: target.url),
-                  isPending(until: deadline) else { return .finished(.unavailable) }
-            return .launched(expected)
+              isPending(until: deadline) else { return .unavailable }
+        if case .running = target {
+            await finishDeliveryPreparation(preparationFinished)
         }
-    }
-
-    private func deliver(
-        _ route: NativeAgentRoute,
-        reference: RequestReference?,
-        preparation: DeliveryPreparation,
-        deadline: UInt64
-    ) async -> ReconciliationResult {
-        let expected: NativeAgentLauncher.ExpectedRuntime
-        switch preparation {
-        case .running(let target):
-            guard isPending(until: deadline),
-                  await dependencies.launcher.send(route, to: target, deadline: deadline),
-                  let currentExpected = await dependencies.launcher.expectedRuntime(at: target.url) else {
-                return .unavailable
-            }
-            expected = currentExpected
-        case .launched(let launchedExpected):
-            expected = launchedExpected
-        case .finished(let result):
-            return result
+        let sent = await dependencies.launcher.send(route, to: target, deadline: deadline)
+        if case .launch = target {
+            await finishDeliveryPreparation(preparationFinished)
         }
+        guard sent, let expected = await dependencies.launcher.expectedRuntime(at: target.url),
+              isPending(until: deadline) else { return .unavailable }
         while isPending(until: deadline) {
             if let reference {
                 switch await reconcileOwnership(reference, deadline: deadline) {

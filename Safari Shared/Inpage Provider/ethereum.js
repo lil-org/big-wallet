@@ -221,7 +221,6 @@ function operationMetadata(method, wrapResult) {
         expectedAddress: null,
         dispatched: false,
         method,
-        requestedChainId: null,
         responseName: null,
         wrapResult,
     };
@@ -522,7 +521,6 @@ function dispatchOperation(provider, record) {
             const name = method === "wallet_switchEthereumChain"
                 ? "switchEthereumChain"
                 : "addEthereumChain";
-            record.metadata.requestedChainId = request.chainId;
             return postWalletRequest(
                 provider,
                 state,
@@ -791,7 +789,6 @@ class BigWalletEthereum {
             chainId,
             copiedStateBaseline: null,
             notificationListener: null,
-            initialized: true,
             networkVersion: normalizedNetworkVersion(chainId),
             provider: this,
             retired: false,

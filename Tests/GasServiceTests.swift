@@ -3946,6 +3946,32 @@ final class GasServiceTests: XCTestCase {
         )
     }
 
+    func testSigningDistinguishesInvalidPrivateKeyFromInvalidTransaction() throws {
+        let privateKeyData = Data(repeating: 0xff, count: 32)
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: privateKeyData))
+        XCTAssertFalse(WalletCrypto.isValidPrivateKeyData(privateKeyData, coin: .ethereum))
+        let transaction = Transaction(
+            from: "0x0000000000000000000000000000000000000001",
+            to: "0x0000000000000000000000000000000000000002",
+            nonce: "0x0",
+            gas: "0x5208",
+            value: "0x0",
+            data: "0x",
+            preparedFee: .legacy(gasPrice: 1),
+            feeSource: .dapp
+        )
+        let network = makeNetwork(chainID: 100)
+        XCTAssertTrue(transaction.isReadyForApproval(on: network))
+        XCTAssertEqual(
+            Ethereum.signedTransaction(
+                transaction: transaction,
+                privateKey: privateKey,
+                network: network
+            ),
+            .failure(.failedToSign)
+        )
+    }
+
     func testSigningRejectsUnsafeType2Fee() throws {
         let privateKey = try XCTUnwrap(
             WalletPrivateKey(

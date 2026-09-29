@@ -201,9 +201,8 @@ protocol OwnedWalletSigningAccess: AnyObject {
 
 enum WalletSigningFailure: Error, Equatable, Sendable {
     case authorizationUnavailable
+    case invalidTransaction
     case failedToSign
-    case ethereum(EthereumSendFailure)
-    case solana(Solana.SendTransactionError)
 }
 
 enum WalletSigningOutput: Sendable {
@@ -292,11 +291,13 @@ struct ApprovedWalletSigningOperation: Sendable {
             switch Ethereum.signedTransaction(
                 transaction: transaction, privateKey: privateKey, network: network.network
             ) {
-            case .failure(let failure):
-                return .failure(.ethereum(failure))
+            case .failure(.invalidTransaction):
+                return .failure(.invalidTransaction)
+            case .failure(.failedToSign):
+                return .failure(.failedToSign)
             case .success(let signed):
                 guard let hash = Ethereum.transactionHash(signedTransaction: signed)
-                else { return .failure(.ethereum(.invalidTransaction)) }
+                else { return .failure(.invalidTransaction) }
                 return .success(.ethereumTransaction(
                     signedTransaction: signed, transactionHash: hash, network: network
                 ))
@@ -311,13 +312,13 @@ struct ApprovedWalletSigningOperation: Sendable {
             ), signatures.count == transactions.count else { return .failure(.failedToSign) }
             return .success(.solanaSignatures(signatures))
         case .message(.solanaLegacyBroadcast(let transaction, let options), let cluster?):
-            return solanaBroadcast(
+            return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
                     preparedLegacyTransaction: transaction, privateKey: privateKey
                 ), cluster: cluster, options: options
             )
         case .message(.solanaSerializedBroadcast(let transaction, let options), let cluster?):
-            return solanaBroadcast(
+            return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
                     preparedSerializedTransaction: transaction, privateKey: privateKey
                 ), cluster: cluster, options: options
@@ -334,21 +335,17 @@ struct ApprovedWalletSigningOperation: Sendable {
         return .success(.solanaSignature(signature))
     }
 
-    private func solanaBroadcast(
-        _ result: Result<String, Solana.SendTransactionError>,
+    private func solanaTransactionOutput(
+        _ signedTransaction: String?,
         cluster: Solana.Cluster,
         options: Solana.PreparedSendOptions
     ) -> Result<WalletSigningOutput, WalletSigningFailure> {
-        switch result {
-        case .failure(let failure):
-            return .failure(.solana(failure))
-        case .success(let signed):
-            guard let signature = Solana.transactionSignature(signedTransaction: signed)
-            else { return .failure(.solana(.invalidMessage)) }
-            return .success(.solanaTransaction(
-                signedTransaction: signed, signature: signature, cluster: cluster, options: options
-            ))
-        }
+        guard let signedTransaction,
+              let signature = Solana.transactionSignature(signedTransaction: signedTransaction)
+        else { return .failure(.invalidTransaction) }
+        return .success(.solanaTransaction(
+            signedTransaction: signedTransaction, signature: signature, cluster: cluster, options: options
+        ))
     }
 }
 

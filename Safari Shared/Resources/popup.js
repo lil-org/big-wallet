@@ -361,8 +361,7 @@ class PopupRequestController {
         this.read = {kind: "idle"};
     }
 
-    scheduleRead() {
-        if (this.read.kind === "scheduled") { this.stopRead(); }
+    scheduleNextRead() {
         if (!this.isActive || this.activity.kind !== "viewing" || this.read.kind !== "idle") { return; }
         const polling = shouldPollApprovalState(this.state);
         if (!polling && !(this.state?.state === "review" && this.state.review.kind === "sendTransaction")) { return; }
@@ -399,8 +398,7 @@ class PopupRequestController {
             if (!this.isActive || this.read !== flight) { return null; }
             this.read = {kind: "idle"};
             const state = this.acceptReply(outcome)?.approval;
-            if (state) { this.adoptState(state, {refresh}); }
-            this.scheduleRead();
+            if (state) { this.commitPresentation({state, refresh}); }
             return state;
         })();
         return flight.promise;
@@ -415,44 +413,71 @@ class PopupRequestController {
     reconcile() {
         if (this.activity.kind === "reconciling") { return this.activity.promise; }
         if (!this.isActive) { return Promise.resolve(); }
-        this.stopRead();
-        this.discardSliderGesture();
-        this.closeAlert(false);
         const activity = {kind: "reconciling", promise: null};
-        this.activity = activity;
+        this.commitPresentation({activity});
         activity.promise = this.owner.reconcile(this);
         return activity.promise;
     }
 
     fail() {
         if (!this.isActive) { return; }
-        this.stopRead();
-        this.discardSliderGesture();
-        this.activity = {kind: "failed"};
-        this.renderTransportFailure();
+        this.commitPresentation({activity: {kind: "failed"}});
     }
 
-    adoptState(state, {refresh = false} = {}) {
-        if (!this.isActive || !state) { return; }
-        if (this.editorDraft &&
-            (state.review?.alert || !hasApprovalAction(state, "editTransaction"))) {
-            this.resetEditorDraft();
+    commitPresentation({activity = this.activity, state, refresh = false}) {
+        const terminal = activity.kind === "reconciling" || activity.kind === "disposed";
+        if (this.activity.kind === "disposed" || !this.isActive && !terminal) { return; }
+        this.stopRead();
+        const nextState = state ?? this.state;
+        const interaction = activity.kind === "submitting" ? activity.source : activity;
+        if (state && (interaction.kind === "editing" &&
+            (state.review?.alert || !hasApprovalAction(state, "editTransaction")) ||
+            interaction.kind === "dragging" && !state.review)) {
+            activity = activity.kind === "submitting"
+                ? {...activity, source: {kind: "viewing"}} : {kind: "viewing"};
         }
-        this.nativeState = state;
-        const unchanged = canonicalJSONString(state) === this.presentation.lastStateJSON;
-        if (!refresh || !unchanged) { this.renderState(state); }
-        this.refreshDelay = refresh && unchanged && state.review?.canBackOffRefresh === true
-            ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
-            : TRANSACTION_REFRESH_INTERVAL;
-        this.scheduleRead();
+        const editorToken = nextState?.review?.editorRequestToken;
+        if (!terminal && !["submitting", "failed"].includes(activity.kind) &&
+            hasApprovalAction(nextState, "editTransaction") && typeof editorToken === "number") {
+            const key = this.request.requestToken + ":" + editorToken;
+            if (this.presentation.lastEditorRequestKey !== key) {
+                this.presentation.lastEditorRequestKey = key;
+                if (activity.kind === "viewing" && !nextState.review.alert) {
+                    activity = this.editingActivity(nextState);
+                }
+            }
+        }
+        if (this.activity.kind === "dragging" && activity !== this.activity &&
+            !(activity.kind === "submitting" && activity.source === this.activity)) {
+            ignoreSliderUntilRelease = true;
+        }
+        this.activity = activity;
+        const unchanged = state && canonicalJSONString(state) === this.presentation.lastStateJSON;
+        if (state) {
+            this.nativeState = state;
+            this.refreshDelay = refresh && unchanged && state.review?.canBackOffRefresh === true
+                ? Math.min(this.refreshDelay * 2, TRANSACTION_REFRESH_MAX_INTERVAL)
+                : TRANSACTION_REFRESH_INTERVAL;
+        }
+        if (terminal || activity.operation?.kind === "rejectRequest") { this.closeAlert(false); }
+        if (this.isActive) {
+            const rendersState = state && activity.kind !== "failed" && (!refresh || !unchanged);
+            if (activity.kind === "failed") { this.renderTransportFailure(); }
+            else if (rendersState) { this.renderState(state); }
+            else if (!state && activity.kind === "editing") { this.populateEditor(this.state); }
+            if (!state && this.isSubmitting) { hide("working-overlay"); }
+            this.updateInteractionControls();
+            if (rendersState && state.review) { this.renderAlertIfNeeded(state); }
+        }
+        this.scheduleNextRead();
     }
 
     beginAction(kind) {
-        this.stopRead();
         const operation = {kind};
-        this.activity = {kind: "submitting", operation, source: this.activity};
-        hide("working-overlay");
-        this.updateInteractionControls();
+        this.commitPresentation({activity: {
+            kind: "submitting", operation,
+            source: kind === "rejectRequest" ? {kind: "viewing"} : this.activity,
+        }});
         return operation;
     }
 
@@ -462,11 +487,7 @@ class PopupRequestController {
 
     finishAction(operation, state, next = {kind: "viewing"}) {
         if (!this.ownsAction(operation)) { return; }
-        this.activity = next;
-        if (state) { this.adoptState(state); }
-        this.openRequestedEditor();
-        this.updateInteractionControls();
-        this.scheduleRead();
+        this.commitPresentation({activity: next, state});
     }
 
     completeAction(operation, outcome) {
@@ -492,10 +513,6 @@ class PopupRequestController {
             if (this.activity.kind !== "viewing") { return; }
         } else {
             if (this.isSubmitting && ["approveRequest", "rejectRequest"].includes(this.activity.operation.kind)) { return; }
-            this.discardSliderGesture();
-            this.activity = {kind: "viewing"};
-            this.closeAlert(false);
-            this.syncEditor();
         }
         const reviewToken = subject === "approveRequest" ? this.state.review.reviewToken : undefined;
         const operation = this.beginAction(subject);
@@ -550,15 +567,8 @@ class PopupRequestController {
         this.updateApproveEnabled(this.state);
     }
 
-    requestFor(value) {
-        if (!this.isActive) { return null; }
-        return typeof value === "undefined" || value === this.request.id ||
-            sameRequest(value, this.request) ? this.request : null;
-    }
-
     start() {
         if (!this.isActive) { return; }
-        this.resetEditorDraft();
         show("working-overlay");
         setText("request-title", "");
         setText("request-host", this.request.host);
@@ -571,12 +581,7 @@ class PopupRequestController {
     }
 
     dispose() {
-        if (this.activity.kind !== "disposed") {
-            this.stopRead();
-            this.discardSliderGesture();
-            this.activity = {kind: "disposed"};
-        }
-        this.closeAlert(false);
+        this.commitPresentation({activity: {kind: "disposed"}});
     }
 
     closeAlert(restoreFocus) {
@@ -605,21 +610,14 @@ class PopupRequestController {
             hasApprovalAction(state, "retry") || shouldRefreshAccountSelection(state)
                 ? localized("refresh", "Refresh")
                 : state.review?.primaryTitle || localized("ok", "OK");
-        document.getElementById("button-reject").disabled = !canRejectApprovalState(state);
-        this.updateApproveEnabled(state);
         const isBusy = shouldPollApprovalState(state);
         setHidden("working-overlay", !isBusy);
         if (!state.review) {
             this.closeAlert(false);
-            this.discardSliderGesture();
-            document.getElementById("tx-slider").disabled = true;
-            document.getElementById("editor-apply").disabled = true;
-            document.getElementById("editor-suggested").disabled = true;
             if (isBusy) {
                 document.getElementById("screen-request").inert = true;
                 return;
             }
-            this.resetEditorDraft();
             hide("tx-editor");
         }
 
@@ -645,8 +643,6 @@ class PopupRequestController {
                 renderAddChain(state);
                 break;
         }
-        this.renderAlertIfNeeded(state);
-        this.updateInteractionControls();
     }
 
     renderAccountSelection(state) {
@@ -733,7 +729,7 @@ class PopupRequestController {
             row.addEventListener("click", () => {
                 if (!this.isActive || this.activity.kind !== "viewing") { return; }
                 select(item);
-                this.renderState(this.state);
+                this.commitPresentation({state: this.state});
                 const replacement = document.getElementById(containerId).children[index];
                 if (replacement && typeof replacement.focus === "function") {
                     replacement.focus();
@@ -837,31 +833,18 @@ class PopupRequestController {
             slider.max = sliderState.maximum || 200;
             slider.value = this.presentationActivity.kind === "dragging"
                 ? this.presentationActivity.gesture.value : sliderState.position ?? 100;
-            slider.disabled = !hasApprovalAction(state, "setTransactionSpeed");
             slider.setAttribute("aria-valuetext", firstFeeLine);
         }
 
         setOptionalText("tx-data", "tx-data-details", review.dataInterpretation);
 
         const canApplyEdits = hasApprovalAction(state, "editTransaction");
-        document.getElementById("editor-apply").disabled = !canApplyEdits;
-        document.getElementById("editor-suggested").disabled = !canApplyEdits;
         if (canApplyEdits || this.editorDraft) {
             show("tx-editor");
             this.populateEditor(state);
-            this.openRequestedEditor();
         } else {
             hide("tx-editor");
         }
-    }
-
-    openRequestedEditor() {
-        const token = this.state?.review?.editorRequestToken;
-        if (this.isSubmitting || !this.allows("editTransaction") || typeof token !== "number") { return; }
-        const key = this.request.requestToken + ":" + token;
-        if (this.presentation.lastEditorRequestKey === key) { return; }
-        this.presentation.lastEditorRequestKey = key;
-        if (!this.state.review.alert) { this.openEditor(); }
     }
 
     populateEditor(state) {
@@ -875,7 +858,6 @@ class PopupRequestController {
         }
         const hasSuggested = editor.suggestedGasPriceGwei != null || editor.suggestedMaxFeePerGasGwei != null;
         setHidden("editor-suggested", !hasSuggested);
-        this.syncEditor();
     }
 
     syncEditor() {
@@ -888,11 +870,6 @@ class PopupRequestController {
             setText("edits-error", localized("reviewChanged", "Review changed. Check the values and apply again."));
         }
         setHidden("edits-error", !error);
-    }
-
-    resetEditorDraft() {
-        if (this.activity.kind === "editing") { this.activity = {kind: "viewing"}; }
-        this.syncEditor();
     }
 
     async approveCurrent() {
@@ -934,16 +911,17 @@ class PopupRequestController {
             this.syncEditor();
             return;
         }
-        this.stopRead();
-        const editor = this.state.review.editor;
-        this.activity = {kind: "editing", draft: {
-            reviewToken: this.state.review.reviewToken,
+        this.commitPresentation({activity: this.editingActivity(this.state)});
+    }
+
+    editingActivity(state) {
+        const editor = state.review.editor;
+        return {kind: "editing", draft: {
+            reviewToken: state.review.reviewToken,
             usesEIP1559: editor.usesEIP1559,
             values: transactionEditorValues(editor),
             error: null,
         }};
-        this.populateEditor(this.state);
-        this.updateInteractionControls();
     }
 
     editorToggled() {
@@ -953,10 +931,10 @@ class PopupRequestController {
             this.syncEditor();
         } else if (wantsOpen) {
             this.openEditor();
+        } else if (this.activity.kind === "editing") {
+            this.commitPresentation({activity: {kind: "viewing"}});
         } else {
-            this.resetEditorDraft();
-            this.updateInteractionControls();
-            this.scheduleRead();
+            this.syncEditor();
         }
     }
 
@@ -966,16 +944,14 @@ class PopupRequestController {
         this.activity.draft.values[name] = value;
     }
 
-    beginSliderInteraction(request, reviewToken = this.state?.review?.reviewToken) {
-        const capturedRequest = this.requestFor(request);
+    beginSliderInteraction() {
+        const reviewToken = this.state?.review?.reviewToken;
         if (!this.allows("setTransactionSpeed") || this.activity.kind !== "viewing" ||
-            !capturedRequest || !isRequestToken(reviewToken)) { return false; }
-        this.stopRead();
+            !isRequestToken(reviewToken)) { return false; }
         ignoreSliderUntilRelease = false;
-        this.activity = {kind: "dragging", gesture: {
+        this.commitPresentation({activity: {kind: "dragging", gesture: {
             reviewToken, value: Number(document.getElementById("tx-slider").value),
-        }};
-        this.updateInteractionControls();
+        }}});
         return true;
     }
 
@@ -985,8 +961,8 @@ class PopupRequestController {
         }
     }
 
-    finishSliderInteraction(interaction, request) {
-        if (this.activity.kind !== "dragging" || !this.requestFor(request)) { return null; }
+    finishSliderInteraction(interaction) {
+        if (!this.isActive || this.activity.kind !== "dragging") { return null; }
         this.updateSliderValue();
         const gesture = this.activity.gesture;
         return this.setSpeed({interaction, value: gesture.value}, gesture.reviewToken);
@@ -1080,7 +1056,6 @@ class PopupRequestController {
     renderTransportFailure() {
         this.presentation.lastStateJSON = null;
         this.closeAlert(false);
-        this.syncEditor();
         this.renderState({
             id: this.request.id,
             state: "error",
@@ -1088,13 +1063,6 @@ class PopupRequestController {
             host: this.state?.host,
             error: localized("failedToLoad", "Failed to load"),
         });
-    }
-
-    discardSliderGesture() {
-        if (this.activity.kind === "dragging") {
-            ignoreSliderUntilRelease = true;
-            this.activity = {kind: "viewing"};
-        }
     }
 }
 
@@ -1433,12 +1401,6 @@ async function fetchPendingResponse() {
         notifyResponseReadyIds(appliedIDs);
         if (response.completedResponses.length === 0) { return response; }
     }
-}
-
-function sameRequest(left, right) {
-    return !!left && !!right &&
-        left.id === right.id &&
-        left.requestToken === right.requestToken;
 }
 
 function hasApprovalAction(state, action) {

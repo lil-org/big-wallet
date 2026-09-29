@@ -11,8 +11,6 @@ enum TransactionPreparationFailure: Swift.Error, Equatable {
 }
 
 enum EthereumSendFailure: Swift.Error, Equatable, Sendable {
-    case invalidTransaction
-    case failedToSign
     case rpc(EthereumRPCError)
     case transport
 }
@@ -38,7 +36,8 @@ struct Ethereum {
         _ completion: @escaping (String) -> Void
     ) -> Void
 
-    enum Error: Swift.Error {
+    enum SigningFailure: Swift.Error, Equatable, Sendable {
+        case invalidTransaction
         case failedToSign
     }
 
@@ -90,7 +89,7 @@ struct Ethereum {
         data: Data,
         privateKey: WalletPrivateKey
     ) throws -> String {
-        guard let digest = prefixedDataHash(data: data) else { throw Error.failedToSign }
+        guard let digest = prefixedDataHash(data: data) else { throw SigningFailure.failedToSign }
         return try sign(digest: digest, privateKey: privateKey)
     }
     
@@ -108,7 +107,7 @@ struct Ethereum {
     private static func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
         guard var signed = privateKey.sign(digest: digest, coin: .ethereum),
               signed.count == 65,
-              signed[64] <= 1 else { throw Error.failedToSign }
+              signed[64] <= 1 else { throw SigningFailure.failedToSign }
         signed[64] += 27
         return WalletCrypto.hexString(data: signed).withHexPrefix
     }
@@ -298,7 +297,7 @@ struct Ethereum {
         transaction: Transaction,
         privateKey: WalletPrivateKey,
         network: EthereumNetwork
-    ) -> Result<String, EthereumSendFailure> {
+    ) -> Result<String, SigningFailure> {
         let parsedAmount: BigUInt?
         if transaction.value == nil || transaction.value == String.hexPrefix {
             parsedAmount = BigUInt()

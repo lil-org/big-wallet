@@ -351,10 +351,6 @@
         return leadingZeros + significantBytes === 32;
     }
 
-    function isConfigurationKey(value) {
-        return typeof value === "string" && value.length > 0;
-    }
-
     function configurationIdentityForURL(value) {
         if (typeof value !== "string") { return null; }
         try {
@@ -509,10 +505,6 @@
         return Array.from(values, value => value.toString(16).padStart(8, "0")).join("");
     }
 
-    function rpcFailureResponse(id) {
-        return {id, error: "Failed to communicate with Big Wallet", errorCode: -32603};
-    }
-
     function withTimeout(value, milliseconds) {
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -569,7 +561,6 @@
         isConfigurationInvalidated,
         isAuthorityVersion,
         isCanonicalEthereumChainId,
-        isConfigurationKey,
         isCorrelatedRPCResponse,
         isManualSwitchAcknowledgement,
         isManualSwitchTerminalResponse,
@@ -582,7 +573,6 @@
         isValidDisconnectRequest,
         isValidRequestId,
         responseReadyIds,
-        rpcFailureResponse,
         withTimeout,
     });
 });

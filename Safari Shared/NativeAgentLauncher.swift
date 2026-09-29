@@ -200,12 +200,6 @@ final class NativeAgentLauncher {
         return assessment
     }
 
-    func hasCompatibleOwner(_ owner: ExtensionBridge.NativeDeliveryOwner) -> Bool {
-        guard let expected = expectedRuntime(),
-              case .compatible = assess(owner: owner, expected: expected) else { return false }
-        return expected.installedVersionMatches
-    }
-
     func verifiedExpectedRuntime(for runtime: IdentifiedRuntime) async -> ExpectedRuntime? {
         guard let expected = expectedRuntime(),
               await verify(runtime, expected: expected) else { return nil }

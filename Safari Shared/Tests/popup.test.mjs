@@ -1273,8 +1273,7 @@ test("poll and transaction edit responses use the same nonfatal image normalizat
     });
     const before = normalized(response);
     harness.setState(controller.request, response);
-    controller.adoptState({id: controller.request.id, state: "working", actions: []});
-    controller.scheduleRead();
+    controller.commitPresentation({state: {id: controller.request.id, state: "working", actions: []}});
 
     await harness.fire(harness.followUpTimerId());
 
@@ -1382,7 +1381,7 @@ test("controller approval strips caller revisions and passwords at the native bo
 test("controller errors explicitly retry the visible request without entering the queue", async () => {
     const harness = await reviewedPopup();
     const controller = harness.controller;
-    controller.adoptState({id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"});
+    controller.commitPresentation({state: {id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"}});
     assert.equal(harness.get("button-approve").disabled, false);
     assert.equal(harness.get("button-approve").textContent, "Refresh");
     assert.equal(harness.get("button-reject").disabled, true);
@@ -1469,13 +1468,13 @@ test("unavailable approval storage retains the request instead of reconciling a 
 test("rejectable errors submit tokenless Reject without a refresh", async () => {
     const harness = await reviewedPopup();
     const controller = harness.controller;
-    controller.adoptState({
+    controller.commitPresentation({state: {
         id: controller.request.id,
         state: "error",
         actions: ["reject"],
         host: controller.request.host,
         error: "Too much data to display",
-    });
+    }});
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.get("button-reject").disabled, false);
     assert.equal(harness.followUpTimerId(), null);
@@ -1542,8 +1541,7 @@ test("approval polling adopts an error and stops its only follow-up timer", asyn
     const harness = await reviewedPopup();
     const controller = harness.controller;
     harness.setState(controller.request, {id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"});
-    controller.adoptState({id: controller.request.id, state: "working", actions: []});
-    controller.scheduleRead();
+    controller.commitPresentation({state: {id: controller.request.id, state: "working", actions: []}});
 
     await harness.fire(harness.followUpTimerId());
 
@@ -1584,6 +1582,7 @@ test("terminal decisions fence an older read and poll only after their native re
         actionGate.resolve(commandReply({id: controller.request.id, state: "working", actions: []}));
         await decision;
         assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
+        assert.equal(harness.timerHistory.filter(timer => timer.delay === 400).length, 1);
     }
 });
 
@@ -1651,28 +1650,29 @@ test("state transitions own one follow-up timer and ignore stale callbacks", asy
     const controller = harness.controller;
     const initial = harness.followUpTimerId();
     const old = harness.timers.get(initial);
-    controller.scheduleRead();
-    controller.scheduleRead();
-    assert.notEqual(harness.followUpTimerId(), null);
     assert.equal(old.delay, 600);
-    controller.adoptState({id: controller.request.id, state: "working", actions: []});
+    assert.equal(harness.timerHistory.filter(timer => timer.delay === 600).length, 1);
+    harness.setState(controller.request, {id: controller.request.id, state: "working", actions: []});
+    await controller.readState();
     const current = harness.followUpTimerId();
     assert.equal(harness.timers.size, 1);
     assert.equal(harness.timers.get(current).delay, 400);
+    assert.equal(harness.timerHistory.filter(timer => timer.delay === 400).length, 1);
 
     old.callback();
     await flushPopup();
 
     assert.equal(harness.followUpTimerId(), current);
-    assert.equal(harness.nativeMessages.length, 0);
-    harness.setState(controller.request, {id: controller.request.id, state: "working", actions: []});
+    assert.equal(harness.nativeMessages.length, 1);
     await harness.fire(current);
     assert.equal(harness.timers.size, 1);
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
+    assert.equal(harness.timerHistory.filter(timer => timer.delay === 400).length, 2);
     harness.setState(controller.request, transactionState(controller.request));
     await harness.fire(harness.followUpTimerId());
     assert.equal(harness.timers.size, 1);
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+    assert.equal(harness.timerHistory.filter(timer => timer.delay === 600).length, 2);
     const last = harness.timers.get(harness.followUpTimerId());
     controller.dispose();
     last.callback();
@@ -1835,7 +1835,7 @@ test("stale or ignored terminal slider commands block approval until a fresh rev
         const slider = harness.get("tx-slider");
         slider.emit("pointerdown");
         slider.value = "140";
-        if (stale) { controller.adoptState(fresh); }
+        if (stale) { controller.commitPresentation({state: fresh}); }
 
         const completion = controller.finishSliderInteraction("ended");
         await flushPopup();
@@ -2013,7 +2013,7 @@ test("alert clicks send the click-time review token and ignore a superseded resp
     const controller = harness.controller;
     const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
     harness.get("edit-nonce").focus();
-    controller.adoptState(transactionState(controller.request, {alert}));
+    controller.commitPresentation({state: transactionState(controller.request, {alert})});
     const button = harness.get("alert-buttons").children[0];
     const gate = deferred();
     harness.handlers.native = (message, fallback) =>
@@ -2031,7 +2031,7 @@ test("alert clicks send the click-time review token and ignore a superseded resp
         payload: {action: "cancel"},
         __bwPrivateBrowsing: false,
     }]);
-    controller.adoptState(transactionState(controller.request, {alert, reviewToken: requestToken(102)}));
+    controller.commitPresentation({state: transactionState(controller.request, {alert, reviewToken: requestToken(102)})});
     const before = harness.visibleSnapshot();
     const focusCount = harness.focusCalls.length;
     gate.resolve(commandReply(transactionState(controller.request, {reviewToken: requestToken(999)})));
@@ -2040,6 +2040,26 @@ test("alert clicks send the click-time review token and ignore a superseded resp
     assert.equal(harness.get("alert-overlay").classList.contains("hidden"), false);
     assert.equal(harness.get("alert-title").textContent, "Review fees");
     assert.equal(harness.focusCalls.length, focusCount);
+});
+
+test("resolving an alert restores focus after its prior control becomes enabled", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const approve = harness.get("button-approve");
+    approve.focus();
+    harness.setState(controller.request, transactionState(controller.request, {
+        alert: {title: "Review fees", message: "", actions: [{title: "OK", action: "acknowledge"}]},
+    }, {actions: ["reject", "resolveApprovalAlert"]}));
+    await controller.readState();
+    assert.equal(approve.disabled, true);
+    harness.handlers.native = (message, fallback) => message.subject === "resolveApprovalAlert"
+        ? commandReply(transactionState(controller.request)) : fallback(message);
+
+    await harness.get("alert-buttons").children[0].click();
+
+    assert.equal(approve.disabled, false);
+    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
+    assert.equal(harness.document.activeElement, approve);
 });
 
 test("disposed alert callbacks cannot close or focus the replacement request", async () => {
@@ -2129,7 +2149,7 @@ test("approval reads have one token-only shape for refresh and polling", async (
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
     await controller.readState({refresh: true});
-    controller.adoptState({id: controller.request.id, state: "working", actions: []});
+    controller.commitPresentation({state: {id: controller.request.id, state: "working", actions: []}});
     await controller.readState();
     assert.deepEqual(harness.nativeMessages, Array.from({length: 2}, () => ({
         subject: "getApprovalState",
@@ -2212,13 +2232,13 @@ test("busy refresh blocks keyboard interaction and restores error and alert beha
     assert.equal(harness.get("screen-request").inert, false);
     assert.equal(harness.get("button-approve").disabled, false);
 
-    controller.adoptState(busy);
+    controller.commitPresentation({state: busy});
     assert.equal(harness.get("screen-request").inert, true);
     const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
-    controller.adoptState(transactionState(controller.request, {alert}));
+    controller.commitPresentation({state: transactionState(controller.request, {alert})});
     assert.equal(harness.get("screen-request").inert, true);
     assert.equal(harness.get("alert-overlay").classList.contains("hidden"), false);
-    controller.adoptState(transactionState(controller.request));
+    controller.commitPresentation({state: transactionState(controller.request)});
     assert.equal(harness.get("screen-request").inert, false);
 });
 
@@ -2443,8 +2463,6 @@ test("state reads coalesce and transaction polling preserves its backoff", async
         message.subject === "getApprovalState" ? gate.promise : fallback(message);
     await harness.fire(harness.followUpTimerId());
     const duplicate = controller.readState({refresh: true});
-    controller.scheduleRead();
-    controller.scheduleRead();
     await flushPopup();
     assert.equal(harness.nativeMessages.length, 1);
     assert.equal(harness.followUpTimerId(), null);
@@ -2454,9 +2472,11 @@ test("state reads coalesce and transaction polling preserves its backoff", async
     for (const delay of [1200, 2400, 4800, 9600, 10000, 10000]) {
         const timer = harness.followUpTimerId();
         assert.equal(harness.timers.get(timer).delay, delay);
-        controller.scheduleRead();
-        assert.notEqual(harness.followUpTimerId(), null);
-        await harness.fire(harness.followUpTimerId());
+        const historyLength = harness.timerHistory.length;
+        await harness.fire(timer);
+        assert.equal(harness.timerHistory.slice(historyLength).filter(timer =>
+            timer.delay !== 5000
+        ).length, 1);
     }
     harness.setState(controller.request, transactionState(controller.request, {valueLine: "Changed value"}));
     await harness.fire(harness.followUpTimerId());

@@ -1371,10 +1371,10 @@ final class SolanaOptionsTests: XCTestCase {
             file: file,
             line: line
         )
-        return try Solana.signedTransactionForSignAndSend(
+        return try XCTUnwrap(Solana.signedTransactionForSignAndSend(
             preparedSerializedTransaction: prepared,
             privateKey: privateKey
-        ).get()
+        ), file: file, line: line)
     }
 
     private func makeRPCSession(

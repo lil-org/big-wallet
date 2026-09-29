@@ -115,10 +115,8 @@ struct SolanaDappRequestProcessor {
             return .rollback
         case .failure(.failedToSign):
             return .response(response(to: request, error: .failedToSign))
-        case .failure(.solana(let error)):
-            return .response(response(to: request, error: .sendTransaction(error)))
-        case .failure(.ethereum):
-            return .response(response(to: request, error: .internalError))
+        case .failure(.invalidTransaction):
+            return .response(response(to: request, error: .malformedPayload))
         }
     }
 

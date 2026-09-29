@@ -1562,22 +1562,22 @@ final class Solana {
     static func signedTransactionForSignAndSend(
         preparedSerializedTransaction: PreparedSerializedTransaction,
         privateKey: WalletPrivateKey
-    ) -> Result<String, SendTransactionError> {
+    ) -> String? {
         let prepared = preparedSerializedTransaction.preparedTransaction
         guard let signedData = signatureData(digest: prepared.parsedTransaction.messageData, privateKey: privateKey),
               let signedTransaction = compileTransactionData(transactionData: prepared.parsedTransaction.transactionData,
                                                              signerSignatureRange: prepared.signerSignatureRange,
                                                              signatureData: signedData) else {
-            return .failure(.invalidMessage)
+            return nil
         }
 
-        return .success(signedTransaction)
+        return signedTransaction
     }
 
     static func signedTransactionForSignAndSend(
         preparedLegacyTransaction: PreparedLegacySignAndSendTransaction,
         privateKey: WalletPrivateKey
-    ) -> Result<String, SendTransactionError> {
+    ) -> String? {
         let preparedMessage = preparedLegacyTransaction.preparedMessage
         guard let signedData = signatureData(
                   digest: preparedMessage.messageData,
@@ -1588,9 +1588,9 @@ final class Solana {
                   parsedMessage: preparedMessage.parsedMessage,
                   signatureData: signedData
               ) else {
-            return .failure(.invalidMessage)
+            return nil
         }
-        return .success(signedTransaction)
+        return signedTransaction
     }
 
     static func transactionSignature(signedTransaction: String) -> String? {

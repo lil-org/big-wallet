@@ -459,7 +459,6 @@ test("unsupported bootstrap preserves its explanation without retries", async ()
     }, target: "*"}]);
     assert.equal(harness.runtimeMessages.length, 1);
     assert.equal(harness.context.bigWalletConfigurationState, undefined);
-    assert.equal(harness.context.bigWalletFailedConfigurationGeneration, harness.generation());
     assert.equal(await harness.runTimer(), false);
 });
 

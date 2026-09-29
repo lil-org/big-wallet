@@ -824,25 +824,25 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(try Ethereum.sign(typedData: Vectors.complexTypedDataJSON, privateKey: privateKey),
                        Vectors.complexTypedDataSignature)
         XCTAssertThrowsError(try Ethereum.sign(data: Data([1, 2, 3]), privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for short raw signing input, got \($0)")
                 return
             }
         }
         XCTAssertThrowsError(try Ethereum.sign(data: Vectors.ethereumZeroRawSignDigest, privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for zero raw signing input, got \($0)")
                 return
             }
         }
         XCTAssertThrowsError(try Ethereum.sign(data: Vectors.ethereumOverlongRawSignDigest, privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for overlong raw signing input, got \($0)")
                 return
             }
         }
         XCTAssertThrowsError(try Ethereum.sign(typedData: Vectors.malformedTypedDataJSON, privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for malformed typed data, got \($0)")
                 return
             }
@@ -2834,7 +2834,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                          "WalletCore accepts undersized odd-length EIP-712 bytesN values")
         for fixture in Vectors.invalidTypedDataJSONFixtures {
             XCTAssertThrowsError(try Ethereum.sign(typedData: fixture.json, privateKey: privateKey), fixture.name) {
-                guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+                guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                     XCTFail("Expected failedToSign for \(fixture.name), got \($0)")
                     return
                 }
@@ -2845,7 +2845,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
             ("int8 underflow", Vectors.int8UnderflowTypedDataJSON),
         ] {
             XCTAssertThrowsError(try Ethereum.sign(typedData: fixture.1, privateKey: privateKey), fixture.0) {
-                guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+                guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                     XCTFail("Expected failedToSign for \(fixture.0), got \($0)")
                     return
                 }

@@ -211,10 +211,10 @@ final class DappRequestProcessorTests: XCTestCase {
         guard case .solanaLegacyBroadcast(let preparedTransaction, let options) = action.payload else {
             return XCTFail("Expected a legacy broadcast payload")
         }
-        let signedTransaction = try Solana.signedTransactionForSignAndSend(
+        let signedTransaction = try XCTUnwrap(Solana.signedTransactionForSignAndSend(
             preparedLegacyTransaction: preparedTransaction,
             privateKey: privateKey
-        ).get()
+        ))
         let expectedSignature = try XCTUnwrap(Solana.transactionSignature(
             signedTransaction: signedTransaction
         ))
@@ -267,11 +267,9 @@ final class DappRequestProcessorTests: XCTestCase {
     func testSignerFailuresKeepProviderErrorCodes() async throws {
         let cases: [(WalletCoin, WalletSigningFailure, Int, String)] = [
             (.ethereum, .failedToSign, ProviderResponseError.internalErrorCode, Strings.failedToSign),
-            (.ethereum, .ethereum(.failedToSign), ProviderResponseError.internalErrorCode, Strings.failedToSign),
-            (.ethereum, .ethereum(.rpc(.serverError(-32_000, "rejected", dataJSON: nil))), -32_000, "rejected"),
+            (.ethereum, .invalidTransaction, ProviderResponseError.internalErrorCode, Strings.somethingWentWrong),
             (.solana, .failedToSign, ProviderResponseError.internalErrorCode, Strings.failedToSign),
-            (.solana, .solana(.blockhashNotFound), -32003, Strings.solanaBlockhashNotFound),
-            (.solana, .solana(.invalidSendOptions), 4200, Strings.unsupportedSolanaSendOptions),
+            (.solana, .invalidTransaction, 4200, Strings.somethingWentWrong),
         ]
         for (coin, failure, code, message) in cases {
             let (request, approval) = try processorMessageApproval(coin: coin)
@@ -279,14 +277,42 @@ final class DappRequestProcessorTests: XCTestCase {
             let result = await DappRequestProcessor().execute(
                 request: request, approval: approval, signer: signer
             )
-            guard case .response(let response, _) = result else {
-                return XCTFail("Cryptographic failures must produce provider errors")
+            guard case .response(let response, let approvalCommitted) = result else {
+                return XCTFail("Signing failures must produce terminal provider errors")
             }
             let error = try XCTUnwrap(response.json["error"] as? [String: Any])
             XCTAssertEqual(error["code"] as? Int, code)
             XCTAssertEqual(error["message"] as? String, message)
+            XCTAssertNil(error["data"])
+            XCTAssertNil(response.json["result"])
+            XCTAssertTrue(approvalCommitted)
             XCTAssertEqual(signer.signCalls, 1)
         }
+    }
+
+    func testSolanaPreparationPreservesInvalidSendOptionsError() throws {
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 2, count: 32)))
+        let account = processorAccount(privateKey: privateKey, coin: .solana)
+        let message = SolanaMessageFixture.wireMessage(
+            accountKeys: [privateKey.publicKeyData(coin: .solana)],
+            bodyAfterBlockhash: Data([0])
+        )
+        let request = try solanaRequest(
+            method: "signAndSendTransaction",
+            publicKey: account.address,
+            parameters: [
+                "message": WalletCrypto.base58Encode(data: message),
+                "options": ["skipPreflight": true],
+            ]
+        )
+        guard case .response(let response) = DappRequestProcessor().prepare(
+            request, catalog: processorCatalog(accounts: [account])
+        ) else { return XCTFail("Invalid send options must fail before approval") }
+        let error = try XCTUnwrap(response.json["error"] as? [String: Any])
+        XCTAssertEqual(error["code"] as? Int, 4200)
+        XCTAssertEqual(error["message"] as? String, Strings.unsupportedSolanaSendOptions)
+        XCTAssertNil(error["data"])
+        XCTAssertNil(response.json["result"])
     }
 
     func testSolanaTypedSignerOutputsPreserveSignatureOrder() async throws {
@@ -1001,6 +1027,27 @@ final class DappRequestProcessorTests: XCTestCase {
         )
     }
 
+    func testSolanaBroadcastPreservesBlockhashNotFoundError() throws {
+        let request = try solanaRequest(
+            method: "signAndSendTransaction",
+            publicKey: "public-key"
+        )
+        let signature = "expected-signature"
+        let response = SolanaDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedSignature: signature,
+            recoveryResponse: SolanaDappRequestProcessor.transactionSubmissionUnknownResponse(
+                to: request, signature: signature
+            ),
+            result: .failure(.blockhashNotFound)
+        )
+        let error = try XCTUnwrap(response.json["error"] as? [String: Any])
+        XCTAssertEqual(error["code"] as? Int, -32003)
+        XCTAssertEqual(error["message"] as? String, Strings.solanaBlockhashNotFound)
+        XCTAssertNil(error["data"])
+        XCTAssertNil(response.json["result"])
+    }
+
     func testEthereumSendProviderErrorPreservesRPCCodeMessageAndData() {
         let dataJSON =
             #"{"baseFeePerGas":"0x132","minimumPriorityFeePerGas":"0x1"}"#
@@ -1022,15 +1069,7 @@ final class DappRequestProcessorTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            EthereumDappRequestProcessor.providerError(for: .failedToSign).code,
-            -32_603
-        )
-        XCTAssertEqual(
             EthereumDappRequestProcessor.providerError(for: .transport).code,
-            -32_603
-        )
-        XCTAssertEqual(
-            EthereumDappRequestProcessor.providerError(for: .invalidTransaction).code,
             -32_603
         )
     }
