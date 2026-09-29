@@ -510,11 +510,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ("workflowVersion", Int.max),
             ("profileIdentifier", UUID().uuidString),
             ("authorityEpoch", "not-an-epoch"),
+            ("reclaimedAuthorityRevision", -1),
+            ("reclaimedAuthorityRevision", Int.max),
         ] {
             var profile = original
             profile[key] = value
             invalidProfiles.append(profile)
         }
+        var missingRevision = original
+        missingRevision.removeValue(forKey: "reclaimedAuthorityRevision")
+        invalidProfiles.append(missingRevision)
         var invalidRecord = original
         var records = try XCTUnwrap(invalidRecord["records"] as? [[String: Any]])
         records[0]["requestFingerprint"] = "invalid transaction history"
@@ -667,14 +672,48 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual((signingDelivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
     }
 
+    func testUnpinnedConnectionsSurviveUnrelatedPermissionChanges() async throws {
+        let ethereum = try makeFixture(id: 60_115, name: "requestAccounts", host: "new.example")
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: ethereum.ingress.canonicalData) as? [String: Any])
+        raw["id"] = 60_116
+        raw["enqueueAttempt"] = attempt(for: 60_116)
+        raw["provider"] = "solana"
+        raw["name"] = "connect"
+        raw["body"] = ["publicKey": ""]
+        let solana = try authorityFixture(raw)
+
+        _ = try await grantAuthority(authorityTestAccount(), id: 60_117)
+        let other = try await removalSnapshot()
+        guard case .revoked = await bridge.revoke(
+            configurationKey: "https://wallet.example", provider: .ethereum,
+            attempt: attempt(for: 60_118), expected: other.version, profileIdentifier: nil
+        ) else { return XCTFail("Expected unrelated revocation") }
+
+        bridge = makeBridge(clock: { self.clock.now })
+        let current = try await removalSnapshot(host: "new.example")
+        XCTAssertEqual(current.version, ethereum.ingress.authority)
+        XCTAssertNil((try storedProfile()["origins"] as? [String: Any])?["https://new.example"])
+        for fixture in [ethereum, solana] {
+            let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+            XCTAssertTrue(admission.approvalRequired)
+            let authorityCurrent = await bridge.authorityIsCurrent(handle: admission.handle)
+            XCTAssertTrue(authorityCurrent)
+        }
+    }
+
     func testECRecoverSurvivesUnrelatedWatermarkAndLocalGrantChanges() async throws {
-        let first = try makeFixture(id: 60_110)
-        let second = try makeFixture(id: 60_111)
+        let now = clock.now
+        clock.now.addTimeInterval(-3_601)
         guard case .snapshot(let other) = await bridge.configurationSnapshot(
             configurationKey: "https://other.example", profileIdentifier: nil
         ), case .revoked = await bridge.revoke(configurationKey: "https://other.example", provider: .ethereum,
-            attempt: attempt(for: 60_112), expected: other.version, profileIdentifier: nil),
-           case .snapshot(let advanced) = await bridge.configurationSnapshot(
+            attempt: attempt(for: 60_112), expected: other.version, profileIdentifier: nil)
+        else { return XCTFail("Expected unrelated revocation") }
+        clock.now = now
+        let first = try makeFixture(id: 60_110)
+        let second = try makeFixture(id: 60_111)
+        await bridge.performMaintenance(profileIdentifier: nil)
+        guard case .snapshot(let advanced) = await bridge.configurationSnapshot(
             configurationKey: first.request.configurationKey, profileIdentifier: nil
         ) else { return XCTFail("Expected unrelated authority advance") }
         XCTAssertGreaterThan(advanced.version.revisions.ethereum, first.ingress.authority.revisions.ethereum)
@@ -857,6 +896,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(absent.version.context, before.context)
         XCTAssertGreaterThan(absent.version.revisions.ethereum, revoked.version.revisions.ethereum)
         XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
+        let template = try makeFixture(id: 60_042, name: "requestAccounts")
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        raw["authority"] = before.json
+        let stale = try authorityFixture(raw)
+        guard case .unauthorized = await bridge.enqueue(ingress: stale.ingress, profileIdentifier: nil) else {
+            return XCTFail("Reclamation must not revive an old connection intent")
+        }
         guard case .stale = await bridge.revoke(configurationKey: origin, provider: .ethereum,
             attempt: attempt(for: 60_041), expected: before, profileIdentifier: nil) else {
             return XCTFail("An expired receipt cannot make an old revoke fresh again")

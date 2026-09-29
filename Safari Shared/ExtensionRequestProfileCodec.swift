@@ -78,6 +78,8 @@ struct ExtensionRequestProfileCodec {
               profile.profileIdentifier == expectedIdentifier,
               profile.invalidOrigins.isEmpty, !profile.invalidOriginsContainer,
               profile.authoritySequence >= 0, profile.authoritySequence <= ExtensionRequestProfile.maximumRevision,
+              profile.reclaimedAuthorityRevision >= 0,
+              profile.reclaimedAuthorityRevision <= profile.authoritySequence,
               profile.origins.count <= ExtensionRequestProfile.maximumOrigins,
               (try? Self.encode(profile.origins).count).map({ $0 <= ExtensionRequestProfile.maximumAuthorityBytes }) == true,
               profile.mutationReceipts.count <= ExtensionRequestProfile.maximumMutationReceipts,
@@ -223,7 +225,9 @@ struct ExtensionRequestProfileCodec {
         cachedProfile = nil
         guard var state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
               state.authoritySequence >= 0,
-              state.authoritySequence <= ExtensionRequestProfile.maximumRevision else { return nil }
+              state.authoritySequence <= ExtensionRequestProfile.maximumRevision,
+              state.reclaimedAuthorityRevision >= 0,
+              state.reclaimedAuthorityRevision <= state.authoritySequence else { return nil }
         for record in state.records {
             switch record.state {
             case .pending, .claimed:

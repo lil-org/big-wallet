@@ -102,6 +102,7 @@ struct ExtensionRequestProfile {
         let profileIdentifier: UUID?
         let authorityEpoch: UUID
         var authoritySequence: Int
+        var reclaimedAuthorityRevision: Int
         var origins: [String: OriginState]
         var mutationReceipts: [MutationReceipt]
         var records: [Record]
@@ -110,7 +111,7 @@ struct ExtensionRequestProfile {
 
         private enum CodingKeys: String, CodingKey {
             case schemaVersion, workflowVersion, profileIdentifier, authorityEpoch
-            case authoritySequence, origins, mutationReceipts, records
+            case authoritySequence, reclaimedAuthorityRevision, origins, mutationReceipts, records
         }
 
         init(profileIdentifier: UUID?, authorityEpoch: UUID) {
@@ -119,6 +120,7 @@ struct ExtensionRequestProfile {
             self.profileIdentifier = profileIdentifier
             self.authorityEpoch = authorityEpoch
             authoritySequence = 0
+            reclaimedAuthorityRevision = 0
             origins = [:]
             mutationReceipts = []
             records = []
@@ -131,6 +133,7 @@ struct ExtensionRequestProfile {
             profileIdentifier = try values.decodeIfPresent(UUID.self, forKey: .profileIdentifier)
             authorityEpoch = try values.decode(UUID.self, forKey: .authorityEpoch)
             authoritySequence = try values.decode(Int.self, forKey: .authoritySequence)
+            reclaimedAuthorityRevision = try values.decode(Int.self, forKey: .reclaimedAuthorityRevision)
             mutationReceipts = try values.decode([MutationReceipt].self, forKey: .mutationReceipts)
             records = try values.decode([Record].self, forKey: .records)
             if let decodedOrigins = try? values.decode([String: DecodedOrigin].self, forKey: .origins) {
@@ -474,7 +477,7 @@ struct ExtensionRequestProfile {
         ))).map { String(format: "%02x", $0) }.joined()
         return .init(
             version: .init(context: context, revisions: origin?.revisions ?? revisions(
-                ethereum: profile.authoritySequence, solana: profile.authoritySequence
+                ethereum: profile.reclaimedAuthorityRevision, solana: profile.reclaimedAuthorityRevision
             )),
             ethereumAccount: origin?.ethereumAccount,
             ethereumChainId: origin?.ethereumChainId ?? "0x1",
@@ -543,7 +546,8 @@ struct ExtensionRequestProfile {
         profile.mutationReceipts.removeAll { now.timeIntervalSince($0.createdAt) >= Self.mutationReceiptLifetime }
         let referenced = Set(profile.records.map(\.configurationKey) + profile.mutationReceipts.map(\.configurationKey))
         let removable = profile.origins.filter { $0.value.isDefaultDisconnected && !referenced.contains($0.key) }.map(\.key)
-        if !removable.isEmpty, nextRevision(in: &profile) != nil {
+        if !removable.isEmpty, let revision = nextRevision(in: &profile) {
+            profile.reclaimedAuthorityRevision = revision
             for key in removable { profile.origins.removeValue(forKey: key) }
             return true
         }
@@ -553,7 +557,7 @@ struct ExtensionRequestProfile {
     static func pinOrigin(in profile: inout State, configurationKey: String, now: Date) -> Bool {
         if profile.origins[configurationKey] != nil { return true }
         profile.origins[configurationKey] = .init(revisions: revisions(
-            ethereum: profile.authoritySequence, solana: profile.authoritySequence
+            ethereum: profile.reclaimedAuthorityRevision, solana: profile.reclaimedAuthorityRevision
         ))
         if authorityFits(profile.origins) { return true }
         let referenced = Set(profile.records.map(\.configurationKey) + profile.mutationReceipts.map(\.configurationKey))
@@ -561,7 +565,8 @@ struct ExtensionRequestProfile {
             key != configurationKey && !referenced.contains(key) &&
                 origin.ethereumAccount == nil && origin.solanaAccount == nil
         }.map(\.key).sorted()
-        guard !removable.isEmpty, nextRevision(in: &profile) != nil else { return false }
+        guard !removable.isEmpty, let revision = nextRevision(in: &profile) else { return false }
+        profile.reclaimedAuthorityRevision = revision
         for key in removable {
             profile.origins.removeValue(forKey: key)
             if authorityFits(profile.origins) { return true }
@@ -1127,6 +1132,9 @@ struct ExtensionRequestProfile {
 
         var state = stored
         guard let revision = Self.nextRevision(in: &state) else { return nil }
+        if stored.invalidOriginsContainer {
+            state.reclaimedAuthorityRevision = revision
+        }
         for key in invalidOrigins {
             state.origins[key] = OriginState(revisions: Self.revisions(ethereum: revision, solana: revision))
         }
