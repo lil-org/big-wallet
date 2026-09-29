@@ -1,6 +1,11 @@
 import Foundation
 
 actor ApprovalResolution<Value: Sendable> {
+    enum CallerCancellation: Sendable {
+        case ignore
+        case resolveTimeout
+    }
+
     private enum State {
         case empty
         case waiting(CheckedContinuation<Value, Never>)
@@ -26,11 +31,20 @@ actor ApprovalResolution<Value: Sendable> {
 
     func value(
         timeoutValue: Value,
+        callerCancellation: CallerCancellation,
         waitForTimeout: @escaping @Sendable () async -> Void,
+        onDiscardedValue: @escaping @Sendable (Value) -> Void = { _ in },
         operation: @escaping @Sendable () async -> Value
     ) async -> Value {
+        if case .resolveTimeout = callerCancellation, Task.isCancelled {
+            resolve(timeoutValue)
+            return await value()
+        }
         let operationTask = Task {
-            resolve(await operation())
+            let result = await operation()
+            if !resolve(result) {
+                onDiscardedValue(result)
+            }
         }
         let timeoutTask = Task {
             await waitForTimeout()
@@ -39,10 +53,17 @@ actor ApprovalResolution<Value: Sendable> {
                 operationTask.cancel()
             }
         }
-        let result = await value()
-        timeoutTask.cancel()
-        operationTask.cancel()
-        return result
+        defer {
+            timeoutTask.cancel()
+            operationTask.cancel()
+        }
+        return await withTaskCancellationHandler {
+            await value()
+        } onCancel: {
+            guard case .resolveTimeout = callerCancellation else { return }
+            operationTask.cancel()
+            Task { await self.resolve(timeoutValue) }
+        }
     }
 
     @discardableResult

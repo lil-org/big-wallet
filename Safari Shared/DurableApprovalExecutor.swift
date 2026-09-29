@@ -12,44 +12,6 @@ final class DurableApprovalExecutor {
         case released
     }
 
-    private struct ExecutionPlan {
-        let authority: ExtensionBridge.ExecutionAuthority
-        let deadline: Date?
-        let acquireWalletLease: (() async -> WalletExecutionLease?)?
-
-        var rollsBackRejectedCommit: Bool {
-            if case .mobileSigning = authority { return true }
-            return false
-        }
-
-        static let ordinary = ExecutionPlan(
-            authority: .ordinary,
-            deadline: nil,
-            acquireWalletLease: nil
-        )
-
-        static func signing(
-            deadline: Date,
-            acquireWalletLease: @escaping () async -> WalletExecutionLease?
-        ) -> ExecutionPlan {
-            return ExecutionPlan(
-                authority: .mobileSigning(deadline: deadline),
-                deadline: deadline,
-                acquireWalletLease: acquireWalletLease
-            )
-        }
-
-        static func native(
-            context: ExtensionBridge.NativeExecutionContext
-        ) -> ExecutionPlan {
-            ExecutionPlan(
-                authority: .native(context),
-                deadline: context.executionDeadline,
-                acquireWalletLease: nil
-            )
-        }
-    }
-
     nonisolated static let defaultBroadcastTimeoutNanoseconds: UInt64 =
         120 * 1_000_000_000
 
@@ -74,11 +36,7 @@ final class DurableApprovalExecutor {
     ) async -> Result {
         await execute(
             claim: claim,
-            plan: ExecutionPlan(
-                authority: .ordinary,
-                deadline: claim.executionDeadline,
-                acquireWalletLease: nil
-            ),
+            authority: .ordinary,
             operation: operation
         )
     }
@@ -97,10 +55,8 @@ final class DurableApprovalExecutor {
         }
         return await execute(
             claim: claim,
-            plan: .signing(
-                deadline: claim.executionDeadline,
-                acquireWalletLease: { await session.takeCommitLease() }
-            ),
+            authority: .mobileSigning(deadline: claim.executionDeadline),
+            acquireWalletLease: { await session.takeCommitLease() },
             operation: operation
         )
     }
@@ -112,16 +68,23 @@ final class DurableApprovalExecutor {
     ) async -> Result {
         await execute(
             claim: claim,
-            plan: .native(context: context),
+            authority: .native(context),
             operation: operation
         )
     }
 
     private func execute(
         claim: ExtensionBridge.ApprovalClaim,
-        plan: ExecutionPlan,
+        authority: ExtensionBridge.ExecutionAuthority,
+        acquireWalletLease: (() async -> WalletExecutionLease?)? = nil,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
+        let deadline: Date
+        switch authority {
+        case .ordinary: deadline = claim.executionDeadline
+        case .mobileSigning(let signingDeadline): deadline = signingDeadline
+        case .native(let context): deadline = context.executionDeadline
+        }
         defer { claim.lease?.releaseIfUnconsumed() }
         let permit: ExtensionBridge.ExecutionPermit
         switch await store.begin(claim: claim) {
@@ -137,26 +100,20 @@ final class DurableApprovalExecutor {
             }
         }
         defer { permit.releaseLease() }
-        if case .native = plan.authority, Task.isCancelled {
+        if case .native = authority, Task.isCancelled {
             return await rollback(permit: permit)
         }
-        let operationResult: DappExecutionResult
-        if let deadline = plan.deadline {
-            guard let result = await boundedOperation(
-                deadline: deadline,
-                operation: operation
-            ) else {
-                return await rollback(permit: permit)
-            }
-            operationResult = result
-        } else {
-            operationResult = await operation()
+        guard let operationResult = await boundedOperation(
+            deadline: deadline,
+            operation: operation
+        ) else {
+            return await rollback(permit: permit)
         }
         if case .rollback = operationResult {
             return await rollback(permit: permit)
         }
         var acquiredExecutionLease: WalletExecutionLease?
-        if let acquireWalletLease = plan.acquireWalletLease {
+        if let acquireWalletLease {
             let lease = await Task { await acquireWalletLease() }.value
             guard let lease else {
                 return await rollback(permit: permit)
@@ -171,27 +128,29 @@ final class DurableApprovalExecutor {
                 : response
             if let expired = await rollbackIfExpired(
                 permit: permit,
-                plan: plan
+                authority: authority,
+                deadline: deadline
             ) {
                 return expired
             }
             return await complete(
                 permit: permit,
                 response: response,
-                plan: plan
+                authority: authority
             )
         case .broadcast(let prepared):
             let recoveryResponse = prepared.recoveryResponse.markingApprovalCommitted()
             if let expired = await rollbackIfExpired(
                 permit: permit,
-                plan: plan
+                authority: authority,
+                deadline: deadline
             ) {
                 return expired
             }
             let checkpointResult = await prepareBroadcast(
                 permit: permit,
                 recoveryResponse: recoveryResponse,
-                plan: plan
+                authority: authority
             )
             switch checkpointResult {
             case .persisted:
@@ -205,7 +164,7 @@ final class DurableApprovalExecutor {
             return await complete(
                 permit: permit,
                 response: delivered.markingApprovalCommitted(),
-                plan: .ordinary
+                authority: .ordinary
             )
         case .rollback:
             return await rollback(permit: permit)
@@ -214,29 +173,30 @@ final class DurableApprovalExecutor {
 
     private func rollbackIfExpired(
         permit: ExtensionBridge.ExecutionPermit,
-        plan: ExecutionPlan
+        authority: ExtensionBridge.ExecutionAuthority,
+        deadline: Date
     ) async -> Result? {
-        if case .native = plan.authority, Task.isCancelled {
+        if case .native = authority, Task.isCancelled {
             return await rollback(permit: permit)
         }
-        guard let deadline = plan.deadline, clock() >= deadline else { return nil }
+        guard clock() >= deadline else { return nil }
         return await rollback(permit: permit)
     }
 
     private func complete(
         permit: ExtensionBridge.ExecutionPermit,
         response: ResponseToExtension,
-        plan: ExecutionPlan
+        authority: ExtensionBridge.ExecutionAuthority
     ) async -> Result {
         switch await store.complete(
             permit: permit,
             response: response,
-            authority: plan.authority
+            authority: authority
         ) {
         case .persisted:
             return .persisted
         case .ownershipLost:
-            guard plan.rollsBackRejectedCommit else { return .ownershipLost }
+            guard case .mobileSigning = authority else { return .ownershipLost }
             return await rollback(permit: permit)
         case .retryablePersistenceFailure:
             return .retryablePersistenceFailure
@@ -246,17 +206,17 @@ final class DurableApprovalExecutor {
     private func prepareBroadcast(
         permit: ExtensionBridge.ExecutionPermit,
         recoveryResponse: ResponseToExtension,
-        plan: ExecutionPlan
+        authority: ExtensionBridge.ExecutionAuthority
     ) async -> Result {
         switch await store.prepareBroadcast(
             permit: permit,
             recoveryResponse: recoveryResponse,
-            authority: plan.authority
+            authority: authority
         ) {
         case .persisted:
             return .persisted
         case .ownershipLost:
-            guard plan.rollsBackRejectedCommit else { return .ownershipLost }
+            guard case .mobileSigning = authority else { return .ownershipLost }
             return await rollback(permit: permit)
         case .retryablePersistenceFailure:
             return .retryablePersistenceFailure
@@ -309,6 +269,7 @@ final class DurableApprovalExecutor {
     ) async -> Value {
         await ApprovalResolution<Value>().value(
             timeoutValue: timeoutValue,
+            callerCancellation: .ignore,
             waitForTimeout: { try? await Task.sleep(nanoseconds: timeoutNanoseconds) },
             operation: { await operation() }
         )

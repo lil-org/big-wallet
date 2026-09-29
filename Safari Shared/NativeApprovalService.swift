@@ -530,19 +530,12 @@ actor NativeApprovalService {
         operation: @escaping @Sendable () async -> Value
     ) async -> Value {
         guard isPending(until: deadline) else { return timeoutValue }
-        let resolution = ApprovalResolution<Value>()
         let sleepUntil = dependencies.sleepUntil
-        let task = Task { await operation() }
-        defer { task.cancel() }
-        return await withTaskCancellationHandler {
-            await resolution.value(
-                timeoutValue: timeoutValue,
-                waitForTimeout: { await sleepUntil(deadline) },
-                operation: { await task.value }
-            )
-        } onCancel: {
-            task.cancel()
-            Task { await resolution.resolve(timeoutValue) }
-        }
+        return await ApprovalResolution<Value>().value(
+            timeoutValue: timeoutValue,
+            callerCancellation: .resolveTimeout,
+            waitForTimeout: { await sleepUntil(deadline) },
+            operation: operation
+        )
     }
 }

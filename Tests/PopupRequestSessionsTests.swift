@@ -606,35 +606,121 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
 
     func testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease() async throws {
-        for offset in [0.0, -1.0] {
-            let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
-            let store = try makeStore(clock: { clock.now })
-            let snapshot = try await enqueue(popupSnapshot(id: 457), in: store)
-            guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
-                return XCTFail("Expected claim")
-            }
-            let executor = DurableApprovalExecutor(store: store, clock: { claim.executionDeadline.addingTimeInterval(-offset) })
-            let response = try XCTUnwrap(snapshot.request).response(error: .internalError)
-            let result = await executor.executeSigning(
-                claim: claim,
-                session: makeWalletSigningSessionForTesting(
-                    authorization: walletSigningAuthorizationForTesting(
-                        approvedAccount: popupTestAccountDescriptor(), handle: claim.handle, deadline: claim.executionDeadline
-                    ),
-                    acquireCommitLease: {
-                        XCTFail("Expired operation must not acquire a lease")
-                        return nil
-                    },
-                    clock: { claim.executionDeadline.addingTimeInterval(-offset) }
-                )
-            ) {
-                XCTFail("Expired operation must not start")
-                return .response(response)
-            }
-            XCTAssertEqual(result, .released)
-            let events = await store.events()
-            XCTAssertEqual(events, ["claim", "begin", "rollback"])
+        enum ExecutionKind: CaseIterable {
+            case ordinary, mobile, native
         }
+        for kind in ExecutionKind.allCases {
+            for offset in [0.0, 1.0] {
+                let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
+                let store = try makeStore(clock: { clock.now })
+                let snapshot = try await enqueue(popupSnapshot(
+                    id: 457, provider: .ethereum, method: "signPersonalMessage"
+                ), in: store)
+                let claim: ExtensionBridge.ApprovalClaim
+                let context: ExtensionBridge.NativeExecutionContext?
+                if kind == .native {
+                    let authorization = try await store.prepareNativeApproval(
+                        handle: snapshot.handle,
+                        decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
+                    )
+                    guard case .claimed(let nativeClaim) = await store.claimNativeExecution(
+                        handle: snapshot.handle,
+                        nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
+                        runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
+                        approvedAt: authorization.approvedAt
+                    ) else { return XCTFail("Expected native claim") }
+                    claim = nativeClaim.approvalClaim
+                    context = nativeClaim.executionContext
+                } else {
+                    guard case .claimed(let ordinaryClaim) = await store.claim(handle: snapshot.handle) else {
+                        return XCTFail("Expected claim")
+                    }
+                    claim = ordinaryClaim
+                    context = nil
+                }
+                let executor = DurableApprovalExecutor(store: store, clock: { claim.executionDeadline.addingTimeInterval(offset) })
+                let operation: () async -> DappExecutionResult = {
+                    XCTFail("Expired operation must not start")
+                    return .rollback
+                }
+                let result: DurableApprovalExecutor.Result
+                switch kind {
+                case .ordinary:
+                    result = await executor.executeOrdinary(claim: claim, operation: operation)
+                case .native:
+                    result = await executor.executeNative(
+                        claim: claim, context: try XCTUnwrap(context), operation: operation
+                    )
+                case .mobile:
+                    result = await executor.executeSigning(
+                        claim: claim,
+                        session: makeWalletSigningSessionForTesting(
+                            authorization: walletSigningAuthorizationForTesting(
+                                approvedAccount: popupTestAccountDescriptor(), handle: claim.handle, deadline: claim.executionDeadline
+                            ),
+                            acquireCommitLease: {
+                                XCTFail("Expired operation must not acquire a lease")
+                                return nil
+                            },
+                            clock: { claim.executionDeadline.addingTimeInterval(offset) }
+                        ),
+                        operation: operation
+                    )
+                }
+                XCTAssertEqual(result, .released)
+                let events = await store.events()
+                XCTAssertEqual(events, [kind == .native ? "nativeClaim" : "claim", "begin", "rollback"])
+            }
+        }
+    }
+
+    func testNativeCallerCancellationAfterCheckpointPersistsTheBroadcastResult() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
+            id: 607, provider: .ethereum, method: "signPersonalMessage"
+        ), in: store)
+        let authorization = try await store.prepareNativeApproval(
+            handle: snapshot.handle,
+            decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
+        )
+        guard case .claimed(let nativeClaim) = await store.claimNativeExecution(
+            handle: snapshot.handle,
+            nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
+            approvedAt: authorization.approvedAt
+        ) else { return XCTFail("Expected native claim") }
+        let request = try XCTUnwrap(snapshot.request)
+        let executor = DurableApprovalExecutor(store: store)
+        let gate = makeGate()
+        let started = expectation(description: "broadcast started after checkpoint")
+        let task = Task { @MainActor in
+            await executor.executeNative(
+                claim: nativeClaim.approvalClaim,
+                context: nativeClaim.executionContext
+            ) {
+                .broadcast(PreparedBroadcast(
+                    recoveryResponse: request.response(error: .internalError),
+                    send: {
+                        await store.record("send")
+                        started.fulfill()
+                        await gate.wait()
+                        XCTAssertFalse(Task.isCancelled)
+                        return request.response(error: .userRejected)
+                    }
+                ))
+            }
+        }
+        await fulfillment(of: [started], timeout: 1)
+        task.cancel()
+        await gate.open()
+        let result = await task.value
+        XCTAssertEqual(result, .persisted)
+        let events = await store.events()
+        XCTAssertEqual(events, ["nativeClaim", "begin", "checkpoint", "send", "complete"])
+        let errorCode = await store.completedErrorCode(handle: snapshot.handle)
+        XCTAssertEqual(errorCode, ProviderResponseError.userRejected.code)
+        let response = await store.response(handle: snapshot.handle)
+        XCTAssertEqual(response?["approvalCommitted"] as? Bool, true)
     }
 
     func testDuplicateExecutionCannotReleaseTheOriginalPermit() async throws {
@@ -3027,32 +3113,125 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(capturedDeadline, now.addingTimeInterval(150))
     }
 
-    func testAuthenticationDeadlineReleasesClaimAndInvalidatesLateUnlockedSigner() async throws {
-        let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_900_000_000))
-        let store = try makeStore(clock: { clock.now })
+    func testAuthenticationDeadlineReleasesClaimAndInvalidatesSignerRegardlessOfTimerOrder() async throws {
+        for timeoutWins in [false, true] {
+            let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_900_000_000))
+            let store = try makeStore(clock: { clock.now })
+            let snapshot = try await enqueue(popupSnapshot(
+                id: 603, provider: .ethereum, method: "signPersonalMessage"
+            ), in: store)
+            let catalog = WalletReviewCatalog(account: popupTestAccount())
+            let signingAccess = PopupRecordingWalletSigningAccess()
+            var signer: WalletSigningSession!
+            let unlockGate = makeGate()
+            let timeoutGate = makeGate()
+            let cancelled = timeoutWins ? expectation(description: "deadline cancels authentication") : nil
+            let finished = expectation(description: "approval releases at deadline")
+            let timerReturned = expectation(description: "authentication timer returned")
+            var authenticationStarted = false
+            var executionCount = 0
+            var observedDeadline: Date?
+            await store.observeNextClaim { claim in
+                clock.now = claim.executionDeadline.addingTimeInterval(-0.01)
+            }
+            let controller = PopupRequestSessions(
+                store: store,
+                requestProcessor: CompactPopupAccessProcessor(execute: { request, _, _ in
+                    executionCount += 1
+                    return .response(request.response(error: .internalError))
+                }) { _, _ in
+                    .approval(.approveMessage(SignMessageAction(
+                        subject: .signMessage, walletId: "wallet", account: popupTestAccount(),
+                        meta: "message", payload: .ethereumPersonalMessage(Data())
+                    )))
+                },
+                walletEnvironment: PopupWalletEnvironment(
+                    reviewCatalog: { catalog },
+                    unlockWallets: { _, authorization in
+                        signer = WalletSigningSession(
+                            signingAccess, authorization: authorization,
+                            isCurrent: { true }, acquireCommitLease: { WalletExecutionLease(release: {}) },
+                            clock: { clock.now }
+                        )
+                        authenticationStarted = true
+                        return await withTaskCancellationHandler {
+                            await unlockGate.wait()
+                            return .unlocked(catalog: catalog, session: signer)
+                        } onCancel: {
+                            cancelled?.fulfill()
+                        }
+                    }
+                ),
+                loadsTransactionContext: false,
+                clock: { clock.now },
+                waitForAuthenticationDeadline: { deadline in
+                    observedDeadline = deadline
+                    await timeoutGate.wait()
+                    if !timeoutWins { XCTAssertTrue(Task.isCancelled) }
+                    clock.now = deadline
+                    timerReturned.fulfill()
+                }
+            )
+            let token = try await materializeToken(controller: controller, snapshot: snapshot)
+            let request = try popupCommand(
+                subject: "approveRequest", id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken, reviewToken: token, payload: [:]
+            )
+            let approval = Task { @MainActor in
+                _ = await controller.dispatchJSON(request: request, profileIdentifier: nil)
+                finished.fulfill()
+            }
+            try await waitForCondition { authenticationStarted && observedDeadline != nil }
+            XCTAssertEqual(try XCTUnwrap(observedDeadline).timeIntervalSince(clock.now), 0.01, accuracy: 0.001)
+            if timeoutWins {
+                await timeoutGate.open()
+            } else {
+                clock.now = try XCTUnwrap(observedDeadline)
+                await unlockGate.open()
+            }
+            await fulfillment(of: [finished] + [cancelled].compactMap { $0 }, timeout: 1)
+            await approval.value
+            let events = await store.events()
+            XCTAssertEqual(events, ["claim", "release"])
+            let retained = try await store.snapshot(handle: snapshot.handle)
+            XCTAssertNotEqual(retained.phase, .approving)
+            XCTAssertEqual(executionCount, 0)
+            XCTAssertTrue(signingAccess.operations.isEmpty)
+
+            await unlockGate.open()
+            try await waitForCondition { signingAccess.invalidationCount > 0 }
+            XCTAssertFalse(signer.validateCurrent())
+            XCTAssertEqual(executionCount, 0)
+            XCTAssertTrue(signingAccess.operations.isEmpty)
+            let afterLateResult = await store.events()
+            XCTAssertEqual(afterLateResult, events)
+            await timeoutGate.open()
+            await fulfillment(of: [timerReturned], timeout: 1)
+        }
+    }
+
+    func testSupersededAuthenticationInvalidatesSignerAndPreservesReplacementReview() async throws {
+        let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(
-            id: 603, provider: .ethereum, method: "signPersonalMessage"
+            id: 608, provider: .ethereum, method: "signPersonalMessage"
         ), in: store)
         let catalog = WalletReviewCatalog(account: popupTestAccount())
         let signingAccess = PopupRecordingWalletSigningAccess()
-        var signer: WalletSigningSession!
         let unlockGate = makeGate()
-        let timeoutGate = makeGate()
-        let cancelled = expectation(description: "deadline cancels authentication")
-        let finished = expectation(description: "approval releases before authentication returns")
-        var authenticationStarted = false
-        var executionCount = 0
-        var observedDeadline: Date?
-        await store.observeNextClaim { claim in
-            clock.now = claim.executionDeadline.addingTimeInterval(-0.01)
-        }
+        let started = expectation(description: "authentication started")
+        var signer: WalletSigningSession!
+        var originalClaim: ExtensionBridge.ApprovalClaim?
+        var preparations = 0
+        var executions = 0
+        await store.observeNextClaim { originalClaim = $0 }
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupAccessProcessor(execute: { request, _, _ in
-                executionCount += 1
+                executions += 1
                 return .response(request.response(error: .internalError))
             }) { _, _ in
-                .approval(.approveMessage(SignMessageAction(
+                preparations += 1
+                return .approval(.approveMessage(SignMessageAction(
                     subject: .signMessage, walletId: "wallet", account: popupTestAccount(),
                     meta: "message", payload: .ethereumPersonalMessage(Data())
                 )))
@@ -3062,54 +3241,53 @@ extension PopupRequestSessionsTests {
                 unlockWallets: { _, authorization in
                     signer = WalletSigningSession(
                         signingAccess, authorization: authorization,
-                        isCurrent: { true }, acquireCommitLease: { WalletExecutionLease(release: {}) },
-                        clock: { clock.now }
+                        isCurrent: { true }, acquireCommitLease: { WalletExecutionLease(release: {}) }
                     )
-                    authenticationStarted = true
-                    return await withTaskCancellationHandler {
-                        await unlockGate.wait()
-                        return .unlocked(catalog: catalog, session: signer)
-                    } onCancel: {
-                        cancelled.fulfill()
-                    }
+                    started.fulfill()
+                    await unlockGate.wait()
+                    return .unlocked(catalog: catalog, session: signer)
                 }
             ),
-            loadsTransactionContext: false,
-            clock: { clock.now },
-            waitForAuthenticationDeadline: { deadline in
-                observedDeadline = deadline
-                await timeoutGate.wait()
-                clock.now = deadline
-            }
+            loadsTransactionContext: false
         )
-        let token = try await materializeToken(controller: controller, snapshot: snapshot)
-        let request = try popupCommand(
+        let originalToken = try await materializeToken(controller: controller, snapshot: snapshot)
+        let approve = try popupCommand(
             subject: "approveRequest", id: snapshot.handle.id,
-            requestToken: snapshot.handle.requestToken, reviewToken: token, payload: [:]
+            requestToken: snapshot.handle.requestToken, reviewToken: originalToken, payload: [:]
         )
         let approval = Task { @MainActor in
-            _ = await controller.dispatchJSON(request: request, profileIdentifier: nil)
-            finished.fulfill()
+            await controller.dispatchJSON(request: approve, profileIdentifier: nil)
         }
-        try await waitForCondition { authenticationStarted && observedDeadline != nil }
-        XCTAssertEqual(try XCTUnwrap(observedDeadline).timeIntervalSince(clock.now), 0.01, accuracy: 0.001)
-        await timeoutGate.open()
-        await fulfillment(of: [cancelled, finished], timeout: 1)
-        await approval.value
-        let events = await store.events()
-        XCTAssertEqual(events, ["claim", "release"])
-        let retained = try await store.snapshot(handle: snapshot.handle)
-        XCTAssertNotEqual(retained.phase, .approving)
-        XCTAssertEqual(executionCount, 0)
-        XCTAssertTrue(signingAccess.operations.isEmpty)
+        await fulfillment(of: [started], timeout: 1)
+        let released = await store.bridge.release(claim: try XCTUnwrap(originalClaim))
+        XCTAssertEqual(released, .persisted)
+        await store.setNativeDeliveryReceipt(.init(
+            nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+            owner: popupNativeDeliveryOwner(runtime: UUID())
+        ), handle: snapshot.handle)
+        let read = try popupCommand(
+            subject: "getApprovalState", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        let nativeOwned = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+        XCTAssertEqual(nativeOwned["state"] as? String, "working")
+        await store.setNativeDeliveryReceipt(nil, handle: snapshot.handle)
+        let replacementToken = try await materializeToken(controller: controller, snapshot: snapshot)
+        XCTAssertNotEqual(replacementToken, originalToken)
+        XCTAssertEqual(preparations, 2)
 
         await unlockGate.open()
-        try await waitForCondition { signingAccess.invalidationCount > 0 }
+        _ = await approval.value
         XCTAssertFalse(signer.validateCurrent())
-        XCTAssertEqual(executionCount, 0)
+        XCTAssertGreaterThan(signingAccess.invalidationCount, 0)
         XCTAssertTrue(signingAccess.operations.isEmpty)
-        let afterLateResult = await store.events()
-        XCTAssertEqual(afterLateResult, events)
+        XCTAssertEqual(executions, 0)
+        let current = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+        XCTAssertEqual(current["state"] as? String, "review")
+        XCTAssertEqual(current["actions"] as? [String], ["approve", "reject"])
+        XCTAssertEqual((current["review"] as? [String: Any])?["reviewToken"] as? String, replacementToken)
+        XCTAssertNil(current["error"])
+        XCTAssertEqual(preparations, 2)
     }
 
     func testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess() async throws {

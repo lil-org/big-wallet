@@ -1181,29 +1181,23 @@ final class PopupRequestSessions {
     ) async -> AuthenticationOutcome {
         let deadline = authorization.signingDeadline
         guard clock() < deadline else { return .cancelled }
-        let resolution = ApprovalResolution<AuthenticationOutcome>()
-        let operation = Task { @MainActor in
+        return await ApprovalResolution<AuthenticationOutcome>().value(
+            timeoutValue: .cancelled,
+            callerCancellation: .ignore,
+            waitForTimeout: { await self.waitForAuthenticationDeadline(deadline) },
+            onDiscardedValue: { outcome in
+                if case .unlocked(_, let signer) = outcome { signer.invalidate() }
+            }
+        ) { @MainActor in
             let outcome = await self.authenticate(
                 session: session, reason: reason, authorization: authorization
             )
             guard !Task.isCancelled, self.clock() < deadline else {
                 if case .unlocked(_, let signer) = outcome { signer.invalidate() }
-                await resolution.resolve(.cancelled)
-                return
+                return .cancelled
             }
-            if !(await resolution.resolve(outcome)) {
-                if case .unlocked(_, let signer) = outcome { signer.invalidate() }
-            }
+            return outcome
         }
-        let timeout = Task { @MainActor in
-            await waitForAuthenticationDeadline(deadline)
-            guard !Task.isCancelled else { return }
-            await resolution.resolve(.cancelled) { operation.cancel() }
-        }
-        let outcome = await resolution.value()
-        timeout.cancel()
-        operation.cancel()
-        return outcome
     }
 
     private func authenticate(
