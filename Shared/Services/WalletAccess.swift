@@ -539,47 +539,37 @@ enum WalletSnapshotValidation {
     }
 }
 
-final class UnlockedWalletSigner: OwnedWalletSigningAccess {
+final class UnlockedAccountSigner: OwnedWalletSigningAccess {
 
     private let lock = NSLock()
-    private var password: Data
-    private var walletsByID: [String: WalletContainer]
+    private let approvedAccount: WalletAccountDescriptor
+    private var privateKey: WalletPrivateKey?
 
-    init?(password: Data, wallets: [WalletContainer]) {
-        guard !password.isEmpty,
-              Set(wallets.map(\.id)).count == wallets.count else { return nil }
-        self.password = password
-        walletsByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
-    }
-
-    private func privateKey(
-        walletID: String,
-        account: WalletAccount
-    ) -> WalletPrivateKey? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let wallet = walletsByID[walletID],
-              wallet.hasAccountMatching(account),
-              let privateKey = try? wallet.privateKey(
-                  passwordData: password,
-                  account: account
-              ),
+    init?(approvedAccount: WalletAccountDescriptor, privateKey: WalletPrivateKey) {
+        guard approvedAccount.isValid,
               WalletSnapshotValidation.accountMatches(
-                  account,
+                  approvedAccount.account,
                   privateKey: privateKey
               ) else { return nil }
-        return privateKey
+        self.approvedAccount = approvedAccount
+        self.privateKey = privateKey
     }
 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async ->
         Result<WalletSigningOutput, WalletSigningFailure> {
-        let account = operation.approvedAccount
-        guard account.isValid, !Task.isCancelled else {
+        guard operation.approvedAccount == approvedAccount else {
             return .failure(.authorizationUnavailable)
         }
-        guard let privateKey = privateKey(walletID: account.walletID, account: account.account)
-        else { return .failure(.failedToSign) }
+        guard !Task.isCancelled else {
+            invalidate()
+            return .failure(.authorizationUnavailable)
+        }
+        guard let privateKey = lock.withLock({
+            let privateKey = self.privateKey
+            self.privateKey = nil
+            return privateKey
+        }) else { return .failure(.authorizationUnavailable) }
         guard let result = await awaitBackgroundOperation({
             operation.sign(with: privateKey)
         }) else { return .failure(.authorizationUnavailable) }
@@ -587,11 +577,7 @@ final class UnlockedWalletSigner: OwnedWalletSigningAccess {
     }
 
     func invalidate() {
-        lock.lock()
-        defer { lock.unlock() }
-        password.resetBytes(in: 0..<password.count)
-        password.removeAll(keepingCapacity: false)
-        walletsByID.removeAll(keepingCapacity: false)
+        lock.withLock { privateKey = nil }
     }
 
     deinit {

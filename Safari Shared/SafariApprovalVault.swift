@@ -728,7 +728,9 @@ final class SafariApprovalVault {
         authorization: WalletSigningAuthorization
     ) async -> WalletUnlockResult {
         let approvedAccount = authorization.approvedAccount
-        guard approvedAccount.isValid,
+        guard !Task.isCancelled,
+              Date() < authorization.signingDeadline,
+              approvedAccount.isValid,
               let record = withLock({ loadEnvelopeRecordLocked() }),
               record.catalog.catalog.accounts.contains(approvedAccount) else {
             return .unavailable
@@ -749,6 +751,38 @@ final class SafariApprovalVault {
             reason
         ) else { return .canceled }
 
+        guard let unlocked = unlockAccount(
+            in: record,
+            context: context,
+            authorization: authorization
+        ) else { return .unavailable }
+        guard isCurrent(snapshotData, generation: generation),
+              !Task.isCancelled,
+              Date() < authorization.signingDeadline else {
+            unlocked.signer.invalidate()
+            return .unavailable
+        }
+        return .unlocked(catalog: unlocked.catalog, session: WalletSigningSession(
+            unlocked.signer,
+            authorization: authorization,
+            isCurrent: { [weak self] in
+                self?.isCurrent(snapshotData, generation: generation) == true
+            },
+            acquireCommitLease: { [weak self] in
+                await self?.executionLease(ifCurrent: snapshotData, generation: generation)
+            }
+        ))
+    }
+
+    private func unlockAccount(
+        in record: EnvelopeRecord,
+        context: LAContext,
+        authorization: WalletSigningAuthorization
+    ) -> (catalog: WalletReviewCatalog, signer: UnlockedAccountSigner)? {
+        guard !Task.isCancelled,
+              Date() < authorization.signingDeadline else { return nil }
+        let envelope = record.envelope
+        let approvedAccount = authorization.approvedAccount
         var key: Data
         do {
             key = try keyStore.load(
@@ -757,16 +791,16 @@ final class SafariApprovalVault {
             )
         } catch {
             SafariApprovalDiagnostics.record("load approval key", error: error)
-            return .unavailable
+            return nil
         }
         defer { key.resetBytes(in: 0..<key.count) }
-        guard key.count == 32 else { return .unavailable }
+        guard key.count == 32 else { return nil }
 
         guard let sealed = try? AES.GCM.SealedBox(
                   nonce: AES.GCM.Nonce(data: envelope.nonce),
                   ciphertext: envelope.ciphertext,
                   tag: envelope.tag
-              ) else { return .unavailable }
+              ) else { return nil }
         let aad = authenticatedData(
             header: envelope.header,
             catalog: envelope.catalog
@@ -777,13 +811,13 @@ final class SafariApprovalVault {
                   authenticating: aad
               ),
               decrypted.count <= Self.maximumEnvelopeBytes else {
-            return .unavailable
+            return nil
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
         guard var secret = try? JSONDecoder().decode(
                   SecretSnapshot.self,
                   from: decrypted
-              ) else { return .unavailable }
+              ) else { return nil }
         defer { secret.resetSecrets() }
         guard
               secret.catalog == envelope.catalog,
@@ -793,30 +827,26 @@ final class SafariApprovalVault {
                       (id: $0.walletID, data: $0.storedKeyJSON)
                   }
               ),
-              WalletAccountCatalog(wallets: wallets).accounts.contains(approvedAccount),
-              let signer = UnlockedWalletSigner(password: secret.password, wallets: wallets)
-        else { return .unavailable }
+              !secret.password.isEmpty,
+              let wallet = wallets.first(where: { $0.id == approvedAccount.walletID }),
+              wallet.hasAccountMatching(approvedAccount.account),
+              !Task.isCancelled,
+              Date() < authorization.signingDeadline,
+              let privateKey = try? wallet.privateKey(
+                  passwordData: secret.password,
+                  account: approvedAccount.account
+              ),
+              let signer = UnlockedAccountSigner(
+                  approvedAccount: approvedAccount,
+                  privateKey: privateKey
+              ) else { return nil }
         let catalog = WalletReviewCatalog(
-            identity: WalletCatalogIdentity(generation: generation, catalogData: record.catalog.data),
+            identity: WalletCatalogIdentity(generation: envelope.generation, catalogData: record.catalog.data),
             orderedAccounts: wallets.flatMap { wallet in
                 wallet.accounts.map { SpecificWalletAccount(walletId: wallet.id, account: $0) }
             }
         )
-        let isStillCurrent = isCurrent(snapshotData, generation: generation)
-        guard isStillCurrent else {
-            signer.invalidate()
-            return .unavailable
-        }
-        return .unlocked(catalog: catalog, session: WalletSigningSession(
-            signer,
-            authorization: authorization,
-            isCurrent: { [weak self] in
-                self?.isCurrent(snapshotData, generation: generation) == true
-            },
-            acquireCommitLease: { [weak self] in
-                await self?.executionLease(ifCurrent: snapshotData, generation: generation)
-            }
-        ))
+        return (catalog, signer)
     }
 
     func clear(coordinationLease: CoordinationLease? = nil) throws {

@@ -1381,13 +1381,17 @@ final class WalletSigningScopeTests: XCTestCase {
         }
     }
 
-    private func unlockedSigningAccess(coin: WalletCoin, key: Data) throws -> (WalletAccountDescriptor, UnlockedWalletSigner) {
+    private func unlockedSigningAccess(coin: WalletCoin, key: Data) throws -> (WalletAccountDescriptor, UnlockedAccountSigner) {
         let password = Data("signing-tests".utf8)
         let storedKey = try XCTUnwrap(WalletStoredKey.importPrivateKey(privateKey: key, name: "Signer", password: password, coin: coin))
         let wallet = WalletContainer(id: walletID, key: storedKey)
         let account = try XCTUnwrap(wallet.accounts.first)
-        let access = try XCTUnwrap(UnlockedWalletSigner(password: password, wallets: [wallet]))
-        return (WalletAccountDescriptor(walletID: walletID, account: account), access)
+        let descriptor = WalletAccountDescriptor(walletID: walletID, account: account)
+        let access = try XCTUnwrap(UnlockedAccountSigner(
+            approvedAccount: descriptor,
+            privateKey: wallet.privateKey(passwordData: password, account: account)
+        ))
+        return (descriptor, access)
     }
 
     private func descriptor(

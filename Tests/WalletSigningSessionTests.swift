@@ -131,6 +131,179 @@ final class WalletSigningSessionTests: XCTestCase {
     }
 }
 
+@MainActor
+final class UnlockedAccountSignerTests: XCTestCase {
+    func testInitializationRejectsInvalidDescriptorsAndMismatchedKeys() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        let otherKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 7, count: 32)))
+        for coin: WalletCoin in [.ethereum, .solana] {
+            let approved = descriptor(coin: coin, key: key)
+            let invalid = [
+                WalletAccountDescriptor(walletID: "", account: approved.account),
+                WalletAccountDescriptor(
+                    walletID: approved.walletID, coin: coin,
+                    normalizedAddress: "invalid", derivationPath: approved.derivationPath
+                ),
+                WalletAccountDescriptor(
+                    walletID: approved.walletID, coin: coin,
+                    normalizedAddress: approved.normalizedAddress, derivationPath: ""
+                ),
+            ]
+            for account in invalid {
+                XCTAssertNil(UnlockedAccountSigner(approvedAccount: account, privateKey: key))
+            }
+            XCTAssertNil(UnlockedAccountSigner(approvedAccount: approved, privateKey: otherKey))
+        }
+
+        let invalidEthereumKey = try XCTUnwrap(WalletPrivateKey(
+            data: WalletCoreProxyTestVectors.secp256k1PrivateKeyAtCurveOrder
+        ))
+        XCTAssertNil(UnlockedAccountSigner(
+            approvedAccount: descriptor(coin: .ethereum, key: key), privateKey: invalidEthereumKey
+        ))
+    }
+
+    func testSignerRejectsOtherAccountIdentitiesAndSignsApprovedAccountOnlyOnce() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        let otherKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 7, count: 32)))
+        for coin: WalletCoin in [.ethereum, .solana] {
+            let approved = descriptor(coin: coin, key: key)
+            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let alternatives = [
+                WalletAccountDescriptor(walletID: "other-wallet", account: approved.account),
+                descriptor(coin: coin, key: otherKey),
+                WalletAccountDescriptor(
+                    walletID: approved.walletID, coin: coin,
+                    normalizedAddress: approved.normalizedAddress,
+                    derivationPath: coin == .ethereum ? "m/44'/60'/0'/0/1" : "m/44'/501'/1'/0'"
+                ),
+                descriptor(coin: coin == .ethereum ? .solana : .ethereum, key: key),
+            ]
+            for account in alternatives {
+                let operation = try approvedWalletSigningOperationForTesting(approvedAccount: account)
+                assertUnavailable(await signer.sign(operation))
+            }
+
+            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+            try assertWalletSigningSuccessForTesting(await signer.sign(operation), account: approved.account)
+            assertUnavailable(await signer.sign(operation))
+        }
+    }
+
+    func testFailedSigningConsumesTheAccountKey() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        let approved = descriptor(coin: .ethereum, key: key)
+        let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+        let malformed = try approvedWalletSigningOperationForTesting(
+            approvedAccount: approved,
+            payload: .ethereumTypedData(WalletCoreProxyTestVectors.malformedTypedDataJSON)
+        )
+        guard case .failure(.failedToSign) = await signer.sign(malformed) else {
+            return XCTFail("Malformed typed data must fail cryptographic signing")
+        }
+        let valid = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+        assertUnavailable(await signer.sign(valid))
+    }
+
+    func testConcurrentAttemptsCanProduceOnlyOneSignature() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        let approved = descriptor(coin: .ethereum, key: key)
+        let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+        let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+        let first = Task { await signer.sign(operation) }
+        let second = Task { await signer.sign(operation) }
+        let results = await [first.value, second.value]
+        var signatures = 0
+        for result in results {
+            switch result {
+            case .success:
+                signatures += 1
+                try assertWalletSigningSuccessForTesting(result, account: approved.account)
+            case .failure:
+                assertUnavailable(result)
+            }
+        }
+        XCTAssertEqual(signatures, 1)
+        assertUnavailable(await signer.sign(operation))
+    }
+
+    func testInvalidationReleasesUnusedSigningAuthority() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        for coin: WalletCoin in [.ethereum, .solana] {
+            let approved = descriptor(coin: coin, key: key)
+            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+            signer.invalidate()
+            signer.invalidate()
+            assertUnavailable(await signer.sign(operation))
+        }
+    }
+
+    func testCancellationBeforeSigningConsumesTheAccountKey() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        for coin: WalletCoin in [.ethereum, .solana] {
+            let approved = descriptor(coin: coin, key: key)
+            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+            let task = Task { await signer.sign(operation) }
+            task.cancel()
+            assertUnavailable(await task.value)
+            assertUnavailable(await signer.sign(operation))
+        }
+    }
+
+    func testWalletContainerIsReleasedBeforeItsApprovedKeySigns() async throws {
+        for coin: WalletCoin in [.ethereum, .solana] {
+            for mnemonic in [false, true] {
+                weak var releasedWallet: WalletContainer?
+                let (approved, signer) = try autoreleasepool {
+                    let password = Data("account-signer-tests".utf8)
+                    let key = try XCTUnwrap(mnemonic
+                        ? WalletStoredKey.importHDWallet(
+                            mnemonic: WalletCoreProxyTestVectors.multiAccountMnemonic,
+                            name: "Signer", password: password, coin: coin
+                        )
+                        : WalletStoredKey.importPrivateKey(
+                            privateKey: Data(1...32), name: "Signer", password: password, coin: coin
+                        ))
+                    let wallet = WalletContainer(id: "released-wallet", key: key)
+                    releasedWallet = wallet
+                    let account = try XCTUnwrap(wallet.accounts.first)
+                    let approved = WalletAccountDescriptor(walletID: wallet.id, account: account)
+                    let signer = try XCTUnwrap(UnlockedAccountSigner(
+                        approvedAccount: approved,
+                        privateKey: wallet.privateKey(passwordData: password, account: account)
+                    ))
+                    return (approved, signer)
+                }
+                XCTAssertNil(releasedWallet)
+                let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+                try assertWalletSigningSuccessForTesting(await signer.sign(operation), account: approved.account)
+                assertUnavailable(await signer.sign(operation))
+            }
+        }
+    }
+
+    private func descriptor(coin: WalletCoin, key: WalletPrivateKey) -> WalletAccountDescriptor {
+        WalletAccountDescriptor(
+            walletID: "approved-wallet", coin: coin,
+            normalizedAddress: coin.normalizedAddress(WalletCrypto.addressFromPublicKeyData(
+                key.publicKeyData(coin: coin), coin: coin
+            )),
+            derivationPath: coin == .ethereum ? "m/44'/60'/0'/0/0" : "m/44'/501'/0'/0'"
+        )
+    }
+
+    private func assertUnavailable(
+        _ result: Result<WalletSigningOutput, WalletSigningFailure>,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard case .failure(.authorizationUnavailable) = result else {
+            return XCTFail("Expected unavailable signing authorization", file: file, line: line)
+        }
+    }
+}
+
 private final class SessionSigningMaterial: OwnedWalletSigningAccess {
     private let lock = NSLock()
     private var signs = 0
