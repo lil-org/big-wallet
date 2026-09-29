@@ -419,6 +419,64 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         XCTAssertNotNil(fixture.keychain.walletData[imported.id])
     }
 
+    func testFailedJSONDecryptionDoesNotEnterSourceMutation() async throws {
+        let fixture = try RemovalFixture()
+        var transactionEntries = 0
+        let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+            base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Unexpected revocation") }),
+            beforeTransaction: { transactionEntries += 1 }
+        ))
+
+        do {
+            _ = try await manager.addWallet(
+                input: String(decoding: Vectors.walletCoreJSONMnemonicFixture, as: UTF8.self),
+                inputPassword: "incorrect password"
+            )
+            XCTFail("Expected decryption to fail")
+        } catch WalletKeyStoreError.invalidPassword {
+        }
+
+        XCTAssertEqual(transactionEntries, 0)
+        XCTAssertTrue(fixture.keychain.events.isEmpty)
+    }
+
+    func testWalletCreationAndImportRejectChangedOrMissingPasswordBeforeCommit() async throws {
+        for createWallet in [true, false] {
+            for passwordData: Data? in [Data("changed password".utf8), nil] {
+                let fixture = try RemovalFixture()
+                var transactionEntries = 0
+                let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+                    base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Unexpected revocation") }),
+                    beforeTransaction: {
+                        transactionEntries += 1
+                        fixture.keychain.passwordData = passwordData
+                    }
+                ))
+                XCTAssertTrue(manager.reloadFromStore())
+                let originalData = fixture.keychain.walletData
+                let originalWalletIDs = manager.wallets.map(\.id)
+
+                do {
+                    if createWallet {
+                        _ = try await manager.createWallet()
+                    } else {
+                        _ = try await manager.addWallet(
+                            input: WalletCrypto.hexString(data: Vectors.onePrivateKey),
+                            inputPassword: nil
+                        )
+                    }
+                    XCTFail("Expected the stale password to prevent saving")
+                } catch WalletsManager.Error.keychainAccessFailure {
+                }
+
+                XCTAssertEqual(transactionEntries, 1)
+                XCTAssertTrue(fixture.keychain.events.isEmpty)
+                XCTAssertEqual(fixture.keychain.walletData, originalData)
+                XCTAssertEqual(manager.wallets.map(\.id), originalWalletIDs)
+            }
+        }
+    }
+
     func testCleanupFailureLeavesSourceAndMetadataUnchanged() async throws {
         for operation in RemovalOperation.allCases {
             let fixture = try RemovalFixture()
@@ -642,6 +700,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 private final class WalletRemovalKeychainStub {
     private let walletPrefix = "org.lil.wallet.wallet."
     var walletData = [String: Data]()
+    var passwordData: Data? = Vectors.walletCoreJSONMnemonicPassword
     var events = [String]()
     var deleteStatus = errSecSuccess
     var updateStatus = errSecSuccess
@@ -658,7 +717,8 @@ private final class WalletRemovalKeychainStub {
         }
         guard let key = query[kSecAttrAccount as String] as? String else { return errSecItemNotFound }
         if key == "org.lil.wallet.password" {
-            result?.pointee = Vectors.walletCoreJSONMnemonicPassword as CFData
+            guard let passwordData else { return errSecItemNotFound }
+            result?.pointee = passwordData as CFData
             return errSecSuccess
         }
         guard key.hasPrefix(walletPrefix) else { return errSecItemNotFound }

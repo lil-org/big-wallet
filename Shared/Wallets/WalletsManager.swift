@@ -171,16 +171,14 @@ final class WalletsManager: NSObject {
 
     @MainActor
     func createWallet() async throws -> WalletContainer {
-        return try await save(isUpdate: false) {
-            guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        return try await saveNewWallet { password in
             return try createWallet(name: defaultWalletName, password: password)
         }
     }
 
     @MainActor
     func addWallet(input: String, inputPassword: String?) async throws -> WalletContainer {
-        return try await save(isUpdate: false) {
-            guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        return try await saveNewWallet { password in
             let name = defaultWalletName
             let trimmedInput = input.singleSpaced
             if WalletCrypto.isValidMnemonic(mnemonic: trimmedInput) {
@@ -657,6 +655,21 @@ final class WalletsManager: NSObject {
         let wallet: WalletContainer
         let data: Data
         let removedAccounts: [WalletAccount]
+    }
+
+    @MainActor
+    private func saveNewWallet(
+        preparing prepare: (String) throws -> WalletContainer
+    ) async throws -> WalletContainer {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        let wallet = try prepare(password)
+        return try await save(isUpdate: false) {
+            guard try keychain.readPasswordData() == Data(password.utf8),
+                  try keychain.readWalletData(id: wallet.id) == nil else {
+                throw Error.keychainAccessFailure
+            }
+            return wallet
+        }
     }
 
     @MainActor
