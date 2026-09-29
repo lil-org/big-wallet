@@ -540,8 +540,8 @@ function bigWalletPostDisconnect(message, response, generation, configurationKey
     }, "*");
 }
 
-function bigWalletPublishConfiguration(state, configurationKey, generation) {
-    const response = bigWalletWire.decodePageResponse({kind: "configuration", state});
+function bigWalletPublishConfiguration(validatedState, configurationKey, generation) {
+    const response = {kind: "configuration", state: validatedState};
     const delivery = bigWalletConfigurationDelivery(response, configurationKey, generation, false);
     if (!delivery?.response) { return false; }
     window.postMessage({direction: bigWalletContentDirection, kind: "response",

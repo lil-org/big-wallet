@@ -169,7 +169,7 @@ class ApproveTransactionViewController: NSViewController {
         token: TransactionApprovalRequestToken
     ) {
         cancelAuthentication()
-        guard let window = view.window else {
+        guard view.window != nil else {
             coordinator.authenticationCompleted(
                 token: token,
                 succeeded: false
@@ -179,16 +179,8 @@ class ApproveTransactionViewController: NSViewController {
         }
         authenticationToken = token
         authenticationContext = agent.askAuthentication(
-            on: window,
-            getBackTo: self,
-            browser: nil,
-            onStart: false,
-            reason: .sendTransaction,
-            reviewLifetime: reviewLifetime,
-            onWindowClose: { [weak self] in
-                self?.cancelAuthentication()
-                self?.coordinator.invalidate()
-            }
+            for: .approval(returningTo: self, lifetime: reviewLifetime),
+            reason: .sendTransaction
         ) { [weak self] succeeded in
             guard let self,
                   reviewLifetime.isActive else { return }

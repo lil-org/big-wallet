@@ -209,17 +209,12 @@ final class PopupRequestSessions {
         let token: UUID
     }
 
-    private enum AuthenticationOutcome {
+    private enum AuthenticationOutcome: Sendable {
         case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
         case cancelled
         case unavailable(feedback: String)
         case reviewChanged
         case superseded
-    }
-
-    @MainActor
-    private final class AuthenticationAttempt {
-        var outcome: AuthenticationOutcome?
     }
 
     private enum SigningValidation {
@@ -1186,37 +1181,28 @@ final class PopupRequestSessions {
     ) async -> AuthenticationOutcome {
         let deadline = authorization.signingDeadline
         guard clock() < deadline else { return .cancelled }
-        let attempt = AuthenticationAttempt()
-        let resolution = ApprovalResolution<Bool>()
+        let resolution = ApprovalResolution<AuthenticationOutcome>()
         let operation = Task { @MainActor in
             let outcome = await self.authenticate(
                 session: session, reason: reason, authorization: authorization
             )
             guard !Task.isCancelled, self.clock() < deadline else {
                 if case .unlocked(_, let signer) = outcome { signer.invalidate() }
-                await resolution.resolve(false)
+                await resolution.resolve(.cancelled)
                 return
             }
-            attempt.outcome = outcome
-            if !(await resolution.resolve(true)) {
+            if !(await resolution.resolve(outcome)) {
                 if case .unlocked(_, let signer) = outcome { signer.invalidate() }
-                attempt.outcome = nil
             }
         }
         let timeout = Task { @MainActor in
             await waitForAuthenticationDeadline(deadline)
             guard !Task.isCancelled else { return }
-            await resolution.resolve(false) { operation.cancel() }
+            await resolution.resolve(.cancelled) { operation.cancel() }
         }
-        let completed = await resolution.value()
+        let outcome = await resolution.value()
         timeout.cancel()
         operation.cancel()
-        let outcome = attempt.outcome
-        attempt.outcome = nil
-        guard completed, let outcome else {
-            if case .unlocked(_, let signer)? = outcome { signer.invalidate() }
-            return .cancelled
-        }
         return outcome
     }
 

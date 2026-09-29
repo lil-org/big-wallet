@@ -1,6 +1,6 @@
 // ∅ 2026 lil org
 
-struct SpecificWalletAccount: Hashable {
+struct SpecificWalletAccount: Hashable, Sendable {
     let walletId: String
     let account: WalletAccount
 }

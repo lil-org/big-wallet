@@ -1493,6 +1493,46 @@ test("Ethereum normalizes external chain IDs without mutating caller data", asyn
     }
 });
 
+test("queued Ethereum chain requests retain nested snapshots through dispatch", async () => {
+    for (const method of ["wallet_addEthereumChain", "wallet_switchEthereumChain"]) {
+        const harness = ethereumHarness();
+        const input = {
+            chainId: "0xA",
+            rpcUrls: ["https://rpc.example"],
+            nativeCurrency: {name: "Test", symbol: "TEST", decimals: 18},
+        };
+        const pending = harness.provider.request({method, params: [input]});
+        input.chainId = "0x2";
+        input.rpcUrls[0] = "https://changed.example";
+        input.nativeCurrency.symbol = "CHANGED";
+        const prototypes = ["Object.prototype", "Array.prototype"].map(
+            expression => vm.runInContext(expression, harness.context)
+        );
+        for (const prototype of prototypes) {
+            prototype.toJSON = () => { throw new Error("Inherited serializer called"); };
+        }
+        try {
+            applyEthereumConfiguration(harness);
+            assert.deepEqual(normalized(harness.requests[0].data), {
+                chainId: "0xa",
+                rpcUrls: ["https://rpc.example"],
+                nativeCurrency: {name: "Test", symbol: "TEST", decimals: 18},
+            });
+        } finally {
+            for (const prototype of prototypes) { delete prototype.toJSON; }
+        }
+        const request = harness.requests[0];
+        applyEthereumConfiguration(harness, "", "0xa");
+        harness.applyDecodedEnvelope({
+            id: request.id,
+            kind: "result",
+            name: request.name,
+            result: null,
+        });
+        assert.equal(await pending, null);
+    }
+});
+
 test("Ethereum normalizes uppercase IDs before comparing the current chain", async () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0xa");

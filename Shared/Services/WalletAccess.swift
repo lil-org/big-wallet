@@ -352,7 +352,7 @@ struct ApprovedWalletSigningOperation: Sendable {
     }
 }
 
-struct WalletReviewCatalog {
+struct WalletReviewCatalog: Sendable {
 
     let identity: WalletCatalogIdentity
     let orderedAccounts: [SpecificWalletAccount]

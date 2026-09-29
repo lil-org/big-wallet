@@ -161,6 +161,30 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(approval.currentReview === freshReview)
     }
 
+    func testClosingApprovalPasswordTearsDownReviewWithoutCompletingAuthentication() {
+        let lifetime = NativeApprovalReviewLifetime()
+        let originalController = ReviewTeardownController()
+        var cleanupCount = 0
+        originalController.onInvalidate = { cleanupCount += 1 }
+        lifetime.register(originalController)
+        var completionCount = 0
+        let password = PasswordViewController.with(
+            mode: .enter,
+            reviewLifetime: lifetime,
+            completion: { _ in completionCount += 1 }
+        )
+        _ = password.view
+
+        let notification = Notification(name: NSWindow.willCloseNotification)
+        password.windowWillClose(notification)
+        password.windowWillClose(notification)
+        password.cancelButtonTapped(password.cancelButton)
+
+        XCTAssertFalse(lifetime.isActive)
+        XCTAssertEqual(cleanupCount, 1)
+        XCTAssertEqual(completionCount, 0)
+    }
+
     func testApprovalPickerBlocksWalletManagementActions() throws {
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
             let manager = try accountSelectionWalletsManager()

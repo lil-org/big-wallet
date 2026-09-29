@@ -8,14 +8,12 @@ class PasswordViewController: NSViewController {
         mode: Mode,
         reason: AuthenticationReason? = nil,
         reviewLifetime: NativeApprovalReviewLifetime? = nil,
-        windowCloseCompletion: (() -> Void)? = nil,
         completion: ((Bool) -> Void)?
     ) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
         new.reason = reason
         new.reviewLifetime = reviewLifetime
-        new.windowCloseCompletion = windowCloseCompletion
         new.completion = completion
         return new
     }
@@ -28,7 +26,6 @@ class PasswordViewController: NSViewController {
     private var mode = Mode.create
     private var reason: AuthenticationReason?
     private var passwordToRepeat: String?
-    private var windowCloseCompletion: (() -> Void)?
     private var completion: ((Bool) -> Void)?
     private var didCallCompletion = false
     private var reviewLifetime: NativeApprovalReviewLifetime?
@@ -182,8 +179,6 @@ extension PasswordViewController: NSWindowDelegate {
             reviewLifetime.invalidate()
             return
         }
-        windowCloseCompletion?()
-        windowCloseCompletion = nil
         callCompletion(result: false)
     }
     
@@ -195,7 +190,6 @@ extension PasswordViewController: NativeApprovalReviewTeardown {
         didCallCompletion = true
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         completion = nil
-        windowCloseCompletion = nil
     }
 
 }

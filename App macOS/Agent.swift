@@ -104,6 +104,12 @@ class Agent: NSObject {
         case failed
     }
 
+    enum AuthenticationContext {
+        case startup
+        case walletManagement(returningTo: NSViewController)
+        case approval(returningTo: NSViewController, lifetime: NativeApprovalReviewLifetime)
+    }
+
     enum MissingPasswordApprovalAction: Equatable {
         case awaitOnboarding
         case rejectAndOpenDock
@@ -347,9 +353,7 @@ class Agent: NSObject {
         guard !isAuthenticatingOnStart else { return }
         isAuthenticatingOnStart = true
         askAuthentication(
-            on: nil,
-            browser: nil,
-            onStart: true,
+            for: .startup,
             reason: .start
         ) { [weak self] success in
             guard let self else { return }
@@ -367,15 +371,25 @@ class Agent: NSObject {
     
     @discardableResult
     func askAuthentication(
-        on: NSWindow?,
-        getBackTo: NSViewController? = nil,
-        browser: Browser? = nil,
-        onStart: Bool,
+        for authentication: AuthenticationContext,
         reason: AuthenticationReason,
-        reviewLifetime: NativeApprovalReviewLifetime? = nil,
-        onWindowClose: (() -> Void)? = nil,
         completion: @escaping (Bool) -> Void
     ) -> LAContext? {
+        let returningController: NSViewController?
+        let reviewLifetime: NativeApprovalReviewLifetime?
+        switch authentication {
+        case .startup:
+            returningController = nil
+            reviewLifetime = nil
+        case .walletManagement(let controller):
+            returningController = controller
+            reviewLifetime = nil
+        case .approval(let controller, let lifetime):
+            returningController = controller
+            reviewLifetime = lifetime
+        }
+        let onStart = returningController == nil
+        let originalWindow = returningController?.viewIfLoaded?.window
         guard reviewLifetime?.isActive != false else { return nil }
         let context = LAContext()
         var error: NSError?
@@ -386,24 +400,18 @@ class Agent: NSObject {
         
         func showPasswordScreen() {
             guard reviewLifetime?.isActive != false else { return }
-            let window = on ?? Window.showNew(closeOthers: onStart).window
+            let window = originalWindow ?? Window.showNew(closeOthers: onStart).window
             let presentation = WeakViewControllerReference()
             let passwordViewController = PasswordViewController.with(
                 mode: .enter,
                 reason: reason,
-                reviewLifetime: reviewLifetime,
-                windowCloseCompletion: onWindowClose
+                reviewLifetime: reviewLifetime
             ) { [weak window] success in
                 guard reviewLifetime?.isActive != false,
                       window?.contentViewController === presentation.value
                 else { return }
-                if let getBackTo {
-                    window?.contentViewController = getBackTo
-                } else if let browser {
-                    Window.closeWindowAndActivateNext(
-                        idToClose: window?.windowNumber,
-                        specificBrowser: browser
-                    )
+                if let returningController {
+                    window?.contentViewController = returningController
                 } else {
                     Window.closeWindow(idToClose: window?.windowNumber)
                 }
@@ -788,14 +796,13 @@ extension Agent.ActiveApproval {
                 coordinator.reject()
                 return
             }
+            guard let returningController = window?.contentViewController else {
+                coordinator.reject()
+                return
+            }
             authenticationContext = agent?.askAuthentication(
-                on: window,
-                getBackTo: window?.contentViewController,
-                browser: .safari,
-                onStart: false,
-                reason: action.subject.asAuthenticationReason,
-                reviewLifetime: review,
-                onWindowClose: { didResolveAuthentication = true }
+                for: .approval(returningTo: returningController, lifetime: review),
+                reason: action.subject.asAuthenticationReason
             ) { [weak self, weak window] success in
                 guard let self, acceptsActions(for: review), !didResolveAuthentication else { return }
                 didResolveAuthentication = true

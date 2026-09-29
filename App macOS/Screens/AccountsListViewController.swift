@@ -687,10 +687,7 @@ class AccountsListViewController: NSViewController {
                   acceptsManagementActions else { return }
             if response == .alertFirstButtonReturn {
                 authenticationContext = agent.askAuthentication(
-                    on: view.window,
-                    getBackTo: self,
-                    browser: nil,
-                    onStart: false,
+                    for: .walletManagement(returningTo: self),
                     reason: .removeWallet
                 ) { [weak self] allowed in
                     guard let self,
@@ -770,10 +767,7 @@ class AccountsListViewController: NSViewController {
                     ? .showSecretWords
                     : .showPrivateKey
                 authenticationContext = agent.askAuthentication(
-                    on: view.window,
-                    getBackTo: self,
-                    browser: nil,
-                    onStart: false,
+                    for: .walletManagement(returningTo: self),
                     reason: reason
                 ) { [weak self] allowed in
                     guard let self,
