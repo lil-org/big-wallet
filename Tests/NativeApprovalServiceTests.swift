@@ -324,8 +324,7 @@
                 processIdentifier: compatible.processIdentifier,
                 bundlePath: compatible.bundlePath,
                 version: compatible.version,
-                runtimeProtocolVersion: AmbientRuntimeIdentity.currentRuntimeProtocolVersion - 1,
-                supportedWorkflowVersions: compatible.supportedWorkflowVersions,
+                workflowVersion: compatible.workflowVersion + 1,
                 launchedAt: compatible.launchedAt
             )
             f.deliver(request, runtime: incompatible, executing: true)

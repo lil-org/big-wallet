@@ -410,9 +410,23 @@ actor ExtensionBridge {
             return true
         }
 
-        func release() {
+        var isUnconsumed: Bool {
             stateLock.lock()
-            guard !released else {
+            defer { stateLock.unlock() }
+            return !consumed && !released
+        }
+
+        func releaseIfUnconsumed() {
+            release(onlyIfUnconsumed: true)
+        }
+
+        func release() {
+            release(onlyIfUnconsumed: false)
+        }
+
+        private func release(onlyIfUnconsumed: Bool) {
+            stateLock.lock()
+            guard !released, !onlyIfUnconsumed || !consumed else {
                 stateLock.unlock()
                 return
             }

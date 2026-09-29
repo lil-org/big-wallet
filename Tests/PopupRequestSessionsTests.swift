@@ -291,7 +291,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             ),
             operation: { .rollback }
         )
-        XCTAssertEqual(result, .rolledBack)
+        XCTAssertEqual(result, .released)
         XCTAssertEqual(leaseAcquisitions, 0)
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "begin", "rollback"])
@@ -447,7 +447,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 return .response(response)
             }
 
-            XCTAssertEqual(result, .rolledBack)
+            XCTAssertEqual(result, .released)
             let events = await store.events()
             XCTAssertEqual(events, ["claim", "begin", "rollback"])
         }
@@ -594,7 +594,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             finished.fulfill()
         }
         await fulfillment(of: [finished], timeout: 1)
-        XCTAssertEqual(result, .rolledBack)
+        XCTAssertEqual(result, .released)
         XCTAssertEqual(leases, 0)
         let eventsBeforeRelease = await store.events()
         XCTAssertEqual(eventsBeforeRelease, ["claim", "begin", "rollback"])
@@ -631,10 +631,89 @@ final class PopupRequestSessionsTests: XCTestCase {
                 XCTFail("Expired operation must not start")
                 return .response(response)
             }
-            XCTAssertEqual(result, .rolledBack)
+            XCTAssertEqual(result, .released)
             let events = await store.events()
             XCTAssertEqual(events, ["claim", "begin", "rollback"])
         }
+    }
+
+    func testDuplicateExecutionCannotReleaseTheOriginalPermit() async throws {
+        for variant in 0..<3 {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 603 + variant), in: store)
+            guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+                return XCTFail("Expected claim")
+            }
+            let executor = DurableApprovalExecutor(store: store)
+            let response = try XCTUnwrap(snapshot.request).response(error: .userRejected)
+            let gate = makeGate()
+            let started = expectation(description: "original execution started")
+            var executions = 0
+            let task = Task { @MainActor in
+                await executor.executeOrdinary(claim: claim) {
+                    executions += 1
+                    started.fulfill()
+                    await gate.wait()
+                    return .response(response)
+                }
+            }
+            await fulfillment(of: [started], timeout: 1)
+            let duplicate: DurableApprovalExecutor.Result
+            if variant == 2 {
+                let session = makeWalletSigningSessionForTesting(
+                    authorization: walletSigningAuthorizationForTesting(
+                        approvedAccount: popupTestAccountDescriptor(), handle: claim.handle,
+                        deadline: claim.executionDeadline.addingTimeInterval(1)
+                    )
+                )
+                duplicate = await executor.executeSigning(claim: claim, session: session) {
+                    XCTFail("Duplicate signing must not execute")
+                    return .response(response)
+                }
+            } else {
+                if variant == 1 { await store.failNextBegin() }
+                duplicate = await executor.executeOrdinary(claim: claim) {
+                    XCTFail("Duplicate execution must not start")
+                    return .response(response)
+                }
+            }
+            XCTAssertEqual(duplicate, .ownershipLost)
+            let competingLock = CrossProcessFileLock(fileURL: try XCTUnwrap(claim.lease).fileURL)
+            XCTAssertFalse(try competingLock.tryAcquireExisting())
+            competingLock.release()
+            guard case .found(let held) = await store.load(handle: claim.handle) else {
+                await gate.open()
+                _ = await task.value
+                return XCTFail("Expected original execution")
+            }
+            XCTAssertEqual(held.phase, .approving)
+            await gate.open()
+            let result = await task.value
+            XCTAssertEqual(result, .persisted)
+            XCTAssertEqual(executions, 1)
+        }
+    }
+
+    func testExecutorReleasesUnconsumedLeaseWhenBeginAndReleaseFail() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 606), in: store)
+        guard case .claimed(let claim) = await store.claim(handle: snapshot.handle) else {
+            return XCTFail("Expected claim")
+        }
+        await store.failNextBegin()
+        await store.forceNextReleaseResult(.retryablePersistenceFailure)
+        let result = await DurableApprovalExecutor(store: store).executeOrdinary(claim: claim) {
+            XCTFail("Failed begin must not execute")
+            return .rollback
+        }
+        XCTAssertEqual(result, .retryablePersistenceFailure)
+        let competingLock = CrossProcessFileLock(fileURL: try XCTUnwrap(claim.lease).fileURL)
+        XCTAssertTrue(try competingLock.tryAcquireExisting())
+        competingLock.release()
+        guard case .found(let recovered) = await store.load(handle: claim.handle) else {
+            return XCTFail("Expected recoverable claim")
+        }
+        XCTAssertEqual(recovered.phase, .queued)
     }
 
     func testCallerCancellationDoesNotAbortStartedDurableOperation() async throws {
@@ -5693,7 +5772,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(retained.phase, .responded)
         XCTAssertNil(retained.nativeApproval)
         XCTAssertEqual(firstErrorCode, -32603)
-        XCTAssertEqual(firstEvents, ["nativeClaim"])
+        XCTAssertEqual(firstEvents, ["nativeClaim", "begin", "rollback"])
         XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(preparations, 0)
         XCTAssertEqual(resolves, 0)
@@ -5712,7 +5791,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(preparations, 0)
         XCTAssertEqual(resolves, 0)
-        XCTAssertEqual(finalEvents, ["nativeClaim"])
+        XCTAssertEqual(finalEvents, ["nativeClaim", "begin", "rollback"])
         XCTAssertFalse(committed)
     }
 
@@ -5892,7 +5971,7 @@ extension PopupRequestSessionsTests {
         )
         XCTAssertEqual(result, .interruptionRequired)
         let events = await store.events()
-        XCTAssertFalse(events.contains("begin"))
+        XCTAssertTrue(events.contains("begin"))
         XCTAssertFalse(events.contains("complete"))
     }
 
@@ -7418,9 +7497,7 @@ private func popupLauncherRuntimeIdentity(
         version: try XCTUnwrap(
             AmbientRuntimeIdentity.bundleVersion(at: bundleURL)
         ),
-        runtimeProtocolVersion:
-            AmbientRuntimeIdentity.currentRuntimeProtocolVersion,
-        supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+        workflowVersion: ExtensionBridge.workflowVersion,
         launchedAt: launchDate
     )
 }

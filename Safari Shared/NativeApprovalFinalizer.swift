@@ -110,25 +110,36 @@ final class NativeApprovalFinalizer {
             return .interruptionRequired
         }
 
-        defer { nativeClaim.approvalClaim.releaseLease() }
+        let result = await executor.executeNative(
+            claim: nativeClaim.approvalClaim,
+            context: nativeClaim.executionContext
+        ) {
+            await self.prepareAndExecute(
+                nativeClaim: nativeClaim,
+                request: request,
+                authorization: authorization
+            )
+        }
+        switch result {
+        case .persisted:
+            return .responseReady
+        case .ownershipLost, .retryablePersistenceFailure, .released:
+            return .interruptionRequired
+        }
+    }
+
+    private func prepareAndExecute(
+        nativeClaim: ExtensionBridge.NativeExecutionClaim,
+        request: SafariRequest,
+        authorization: ExtensionBridge.NativeApprovalAuthorization
+    ) async -> DappExecutionResult {
         let executionContext = nativeClaim.executionContext
         let now = clock()
         let age = now.timeIntervalSince(executionContext.observedAt)
         guard age >= 0,
-              now < executionContext.executionDeadline else {
-            return .interruptionRequired
-        }
-
+              now < executionContext.executionDeadline else { return .rollback }
         guard transactionDecisionIsFresh(nativeClaim, request: request) else {
-            return await completeStaleTransactionDecision(
-                nativeClaim,
-                request: request,
-                executionContext: executionContext
-            )
-        }
-
-        guard await store.authorityIsCurrent(handle: snapshot.handle) else {
-            return .interruptionRequired
+            return .response(Self.staleResponse(for: request), approvalCommitted: false)
         }
 
         let preparation: DappRequestPreparation
@@ -137,82 +148,69 @@ final class NativeApprovalFinalizer {
             preparation = walletIndependent
             signingCatalog = nil
         } else {
-            guard let refreshedAccess = refreshWalletCatalog() else {
-                return .interruptionRequired
-            }
+            guard let refreshedAccess = refreshWalletCatalog() else { return .rollback }
             signingCatalog = refreshedAccess
             CustomNetworkCache.shared.invalidate()
-            preparation = requestProcessor.prepare(
-                request,
-                catalog: refreshedAccess
-            )
+            preparation = requestProcessor.prepare(request, catalog: refreshedAccess)
         }
         switch preparation {
         case .response(let response):
-            return await execute(
-                claim: nativeClaim.approvalClaim,
-                executionContext: executionContext
-            ) { .response(response, approvalCommitted: false) }
+            return .response(response, approvalCommitted: false)
         case .approval(let action):
-            return await execute(
-                claim: nativeClaim.approvalClaim,
-                executionContext: executionContext
+            guard transactionDecisionIsFresh(nativeClaim, request: request) else {
+                return .response(Self.staleResponse(for: request), approvalCommitted: false)
+            }
+            let accounts: [SpecificWalletAccount]?
+            if case .accountSelection = authorization.decision {
+                accounts = refreshWalletCatalog()?.orderedAccounts
+            } else {
+                accounts = nil
+            }
+            switch DappApprovalValidator.resolve(
+                action: action,
+                decision: authorization.decision,
+                accounts: accounts,
+                networkResolver: networkResolver
             ) {
-                guard self.transactionDecisionIsFresh(nativeClaim, request: request) else {
-                    return .response(Self.staleResponse(for: request), approvalCommitted: false)
-                }
-                let accounts: [SpecificWalletAccount]?
-                if case .accountSelection = authorization.decision {
-                    accounts = self.refreshWalletCatalog()?.orderedAccounts
-                } else {
-                    accounts = nil
-                }
-                switch DappApprovalValidator.resolve(
-                    action: action,
-                    decision: authorization.decision,
-                    accounts: accounts,
-                    networkResolver: self.networkResolver
-                ) {
-                case .success(let approval):
-                    let executionSigner: (any WalletSigning)?
-                    if let approvedAccount = approval.signingAccount {
-                        guard signingCatalog?.orderedAccounts.contains(where: {
-                            approvedAccount.matches(walletID: $0.walletId, account: $0.account)
-                        }) == true else {
-                            return .response(Self.staleResponse(for: request), approvalCommitted: false)
-                        }
-                        let deadline = self.requestRequiresFreshTransactionDecision(request)
-                            ? min(executionContext.executionDeadline,
-                                  nativeClaim.approvedAt.addingTimeInterval(Self.maximumTransactionDecisionAge))
-                            : executionContext.executionDeadline
-                        guard let operation = ApprovedWalletSigningOperation(
-                            request: request, approval: approval,
-                            authorization: WalletSigningAuthorization(
-                                handle: snapshot.handle,
-                                approvedAccount: approvedAccount,
-                                signingDeadline: deadline
-                            )
-                        ) else { return .rollback }
-                        executionSigner = self.makeSigner(operation) {
-                            await self.store.authorityIsCurrent(handle: $0)
-                        }
-                    } else {
-                        executionSigner = nil
+            case .success(let approval):
+                let executionSigner: (any WalletSigning)?
+                if let approvedAccount = approval.signingAccount {
+                    guard signingCatalog?.orderedAccounts.contains(where: {
+                        approvedAccount.matches(walletID: $0.walletId, account: $0.account)
+                    }) == true else {
+                        return .response(Self.staleResponse(for: request), approvalCommitted: false)
                     }
-                    defer { executionSigner?.invalidate() }
-                    return await self.requestProcessor.execute(
-                        request: request,
-                        approval: approval,
-                        signer: executionSigner
-                    )
-                case .failure(.staleTransaction), .failure(.staleAccount):
-                    return .response(Self.staleResponse(for: request), approvalCommitted: false)
-                case .failure(.invalidDecision):
-                    return .response(ResponseToExtension(
-                        for: request,
-                        payload: .error(.internalError)
-                    ), approvalCommitted: false)
+                    let deadline = requestRequiresFreshTransactionDecision(request)
+                        ? min(executionContext.executionDeadline,
+                              nativeClaim.approvedAt.addingTimeInterval(Self.maximumTransactionDecisionAge))
+                        : executionContext.executionDeadline
+                    guard let operation = ApprovedWalletSigningOperation(
+                        request: request, approval: approval,
+                        authorization: WalletSigningAuthorization(
+                            handle: nativeClaim.approvalClaim.handle,
+                            approvedAccount: approvedAccount,
+                            signingDeadline: deadline
+                        )
+                    ) else { return .rollback }
+                    executionSigner = makeSigner(operation) {
+                        await self.store.authorityIsCurrent(handle: $0)
+                    }
+                } else {
+                    executionSigner = nil
                 }
+                defer { executionSigner?.invalidate() }
+                return await requestProcessor.execute(
+                    request: request,
+                    approval: approval,
+                    signer: executionSigner
+                )
+            case .failure(.staleTransaction), .failure(.staleAccount):
+                return .response(Self.staleResponse(for: request), approvalCommitted: false)
+            case .failure(.invalidDecision):
+                return .response(ResponseToExtension(
+                    for: request,
+                    payload: .error(.internalError)
+                ), approvalCommitted: false)
             }
         }
     }
@@ -251,38 +249,6 @@ final class NativeApprovalFinalizer {
             }
         case .unknown:
             return false
-        }
-    }
-
-    private func completeStaleTransactionDecision(
-        _ nativeClaim: ExtensionBridge.NativeExecutionClaim,
-        request: SafariRequest,
-        executionContext: ExtensionBridge.NativeExecutionContext
-    ) async -> NativeApprovalFinalizationResult {
-        await execute(
-            claim: nativeClaim.approvalClaim,
-            executionContext: executionContext
-        ) {
-            .response(Self.staleResponse(for: request), approvalCommitted: false)
-        }
-    }
-
-    private func execute(
-        claim: ExtensionBridge.ApprovalClaim,
-        executionContext: ExtensionBridge.NativeExecutionContext,
-        operation: @escaping () async -> DappExecutionResult
-    ) async -> NativeApprovalFinalizationResult {
-        let result = await executor.executeNative(
-            claim: claim,
-            context: executionContext,
-            operation: operation
-        )
-        switch result {
-        case .persisted:
-            return .responseReady
-        case .ownershipLost, .beginRetryablePersistenceFailure,
-             .retryablePersistenceFailure, .rolledBack:
-            return .interruptionRequired
         }
     }
 

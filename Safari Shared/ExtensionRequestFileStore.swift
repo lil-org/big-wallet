@@ -744,7 +744,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == claim.handle
             }), case .claimed(let claimID, _, _) = profile.state.records[index].state,
-                  claim.matches(handle: claim.handle, value: claimID) else {
+                  claim.matches(handle: claim.handle, value: claimID),
+                  claim.lease?.isUnconsumed == true else {
                 return .ownershipLost
             }
             return abandonClaimLocked(
@@ -844,7 +845,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard case .state(let profile) = readProfileLocked(
                 profileIdentifier: claim.handle.profileIdentifier,
                 now: clock(),
-                recover: false
+                recover: true
             ) else { return .retryablePersistenceFailure }
             guard let record = profile.state.records.first(where: {
                 $0.handle == claim.handle
@@ -876,7 +877,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard case .state(var profile) = readProfileLocked(
                 profileIdentifier: permit.handle.profileIdentifier,
                 now: readTime,
-                recover: false
+                recover: true
             ) else { return .retryablePersistenceFailure }
             guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == permit.handle
@@ -921,7 +922,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard case .state(var profile) = readProfileLocked(
                 profileIdentifier: permit.handle.profileIdentifier,
                 now: readTime,
-                recover: false
+                recover: true
             ) else { return .retryablePersistenceFailure }
             guard let index = profile.state.records.firstIndex(where: {
                 $0.handle == permit.handle

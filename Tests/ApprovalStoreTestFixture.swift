@@ -620,6 +620,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             shouldFailNextBegin = false
             return .retryablePersistenceFailure
         }
+        guard authorityCurrent else { return .ownershipLost }
         return await bridge.begin(claim: claim)
     }
     func complete(permit: ExtensionBridge.ExecutionPermit, response: ResponseToExtension,

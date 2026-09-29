@@ -8,9 +8,8 @@ final class DurableApprovalExecutor {
     enum Result: Equatable {
         case persisted
         case ownershipLost
-        case beginRetryablePersistenceFailure
         case retryablePersistenceFailure
-        case rolledBack
+        case released
     }
 
     private struct ExecutionPlan {
@@ -92,7 +91,10 @@ final class DurableApprovalExecutor {
         defer { session.invalidate() }
         guard session.authorization.handle == claim.handle,
               session.authorization.signingDeadline == claim.executionDeadline,
-              session.requiresCommitLease else { return .ownershipLost }
+              session.requiresCommitLease else {
+            claim.lease?.releaseIfUnconsumed()
+            return .ownershipLost
+        }
         return await execute(
             claim: claim,
             plan: .signing(
@@ -120,7 +122,7 @@ final class DurableApprovalExecutor {
         plan: ExecutionPlan,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
-        guard await store.authorityIsCurrent(handle: claim.handle) else { return .ownershipLost }
+        defer { claim.lease?.releaseIfUnconsumed() }
         let permit: ExtensionBridge.ExecutionPermit
         switch await store.begin(claim: claim) {
         case .began(let value):
@@ -128,8 +130,13 @@ final class DurableApprovalExecutor {
         case .ownershipLost:
             return .ownershipLost
         case .retryablePersistenceFailure:
-            return .beginRetryablePersistenceFailure
+            switch await store.release(claim: claim) {
+            case .persisted: return .released
+            case .ownershipLost: return .ownershipLost
+            case .retryablePersistenceFailure: return .retryablePersistenceFailure
+            }
         }
+        defer { permit.releaseLease() }
         if case .native = plan.authority, Task.isCancelled {
             return await rollback(permit: permit)
         }
@@ -146,9 +153,6 @@ final class DurableApprovalExecutor {
             operationResult = await operation()
         }
         if case .rollback = operationResult {
-            return await rollback(permit: permit)
-        }
-        guard await store.authorityIsCurrent(handle: claim.handle) else {
             return await rollback(permit: permit)
         }
         var acquiredExecutionLease: WalletExecutionLease?
@@ -192,8 +196,7 @@ final class DurableApprovalExecutor {
             switch checkpointResult {
             case .persisted:
                 break
-            case .ownershipLost, .beginRetryablePersistenceFailure,
-                 .retryablePersistenceFailure, .rolledBack:
+            case .ownershipLost, .retryablePersistenceFailure, .released:
                 return checkpointResult
             }
             acquiredExecutionLease?.release()
@@ -265,7 +268,7 @@ final class DurableApprovalExecutor {
     ) async -> Result {
         switch await store.rollback(permit: permit) {
         case .persisted:
-            return .rolledBack
+            return .released
         case .ownershipLost:
             return .ownershipLost
         case .retryablePersistenceFailure:

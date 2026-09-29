@@ -4919,9 +4919,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                             throw Failure.injectedWrite
                         }
                     )
+                    let permit = rollsBack ? try executionPermit(await bridge.begin(claim: claim)) : nil
                     let result: ExtensionBridge.StoreMutationResult
-                    if rollsBack {
-                        let permit = try executionPermit(await bridge.begin(claim: claim))
+                    if let permit {
                         result = await failingWriter.rollback(permit: permit)
                     } else {
                         result = await failingWriter.release(claim: claim)
@@ -4941,7 +4941,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                             return XCTFail("Expected retained claim")
                         }
                         XCTAssertEqual(retained.phase, .approving)
-                        let retried = await bridge.release(claim: claim)
+                        let retried: ExtensionBridge.StoreMutationResult
+                        if let permit {
+                            retried = await bridge.rollback(permit: permit)
+                        } else {
+                            retried = await bridge.release(claim: claim)
+                        }
                         XCTAssertEqual(retried, .persisted)
                     }
                     claim.releaseLease()
@@ -4983,6 +4988,128 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = try executionPermit(await bridge.begin(claim: claim))
         let repeatedBegin = await bridge.begin(claim: claim)
         XCTAssertEqual(repeatedBegin, .ownershipLost)
+    }
+
+    func testConsumedClaimCannotReleaseItsExecutionPermit() async throws {
+        let fixture = try makeFixture(id: 990)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        )).handle
+        let claim = try approvalClaim(await bridge.claim(handle: handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        let released = await bridge.release(claim: claim)
+        XCTAssertEqual(released, .ownershipLost)
+        claim.lease?.releaseIfUnconsumed()
+        let competingLock = CrossProcessFileLock(fileURL: operationLockURL(handle))
+        XCTAssertFalse(try competingLock.tryAcquireExisting())
+        competingLock.release()
+        let expected = response(for: fixture.request)
+        let completed = await bridge.complete(permit: permit, response: expected, authority: .ordinary)
+        XCTAssertEqual(completed, .persisted)
+        let delivered = try responseJSON(await bridge.prepareResponseDelivery(
+            id: handle.id, configurationKey: fixture.request.configurationKey,
+            requestToken: handle.requestToken, profileIdentifier: nil
+        ))
+        XCTAssertEqual(NSDictionary(dictionary: delivered), NSDictionary(dictionary: expected.json))
+    }
+
+    func testExecutionBoundariesMaintainProfilesWithoutAbandoningTheirHeldLease() async throws {
+        for (index, boundary) in ["begin", "checkpoint", "complete"].enumerated() {
+            let fixture = try makeFixture(id: 991 + index * 2)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress, profileIdentifier: nil
+            )).handle
+            let sibling = try makeFixture(id: handle.id + 1, admissionDeadline: clock.now.addingTimeInterval(1))
+            _ = try accepted(await bridge.enqueue(ingress: sibling.ingress, profileIdentifier: nil))
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            var permit = boundary == "begin" ? nil : try executionPermit(await bridge.begin(claim: claim))
+            clock.now.addTimeInterval(2)
+            var writes = 0
+            let writer = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
+                writes += 1
+                let competingLock = CrossProcessFileLock(fileURL: self.operationLockURL(handle))
+                XCTAssertFalse(try competingLock.tryAcquireExisting())
+                competingLock.release()
+                try ApprovalStoreTestPersistence.write(data, url)
+            })
+            if boundary == "begin" {
+                permit = try executionPermit(await writer.begin(claim: claim))
+            } else if boundary == "checkpoint" {
+                let result = await writer.prepareBroadcast(
+                    permit: try XCTUnwrap(permit),
+                    recoveryResponse: ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x991"),
+                    authority: .ordinary
+                )
+                XCTAssertEqual(result, .persisted)
+            } else {
+                let result = await writer.complete(
+                    permit: try XCTUnwrap(permit), response: response(for: fixture.request), authority: .ordinary
+                )
+                XCTAssertEqual(result, .persisted)
+            }
+            XCTAssertGreaterThan(writes, 0)
+            let records = try XCTUnwrap(try storedProfile()["records"] as? [[String: Any]])
+            let expired = try XCTUnwrap(records.first { $0["id"] as? Int == sibling.request.id })
+            XCTAssertNotNil((expired["state"] as? [String: Any])?["completed"])
+            let live = try XCTUnwrap(records.first { $0["id"] as? Int == handle.id })
+            let expectedPhase = boundary == "begin" ? "claimed" : boundary == "checkpoint" ? "broadcastPrepared" : "completed"
+            XCTAssertNotNil((live["state"] as? [String: Any])?[expectedPhase])
+            if boundary != "complete" {
+                let result = await bridge.complete(
+                    permit: try XCTUnwrap(permit), response: response(for: fixture.request), authority: .ordinary
+                )
+                XCTAssertEqual(result, .persisted)
+            }
+        }
+    }
+
+    @MainActor
+    func testExecutorDropsPhysicalLeaseAfterAmbiguousWritesWithoutRepeatingWork() async throws {
+        for (operationIndex, checkpointsBroadcast) in [false, true].enumerated() {
+            for (failureIndex, persistsBeforeFailure) in [false, true].enumerated() {
+                let fixture = try makeFixture(id: 997 + operationIndex * 2 + failureIndex)
+                let handle = try accepted(await bridge.enqueue(
+                    ingress: fixture.ingress, profileIdentifier: nil
+                )).handle
+                let claim = try approvalClaim(await bridge.claim(handle: handle))
+                let expected = checkpointsBroadcast
+                    ? ambiguousSubmissionResponse(for: fixture.request, transactionHash: "0x997").markingApprovalCommitted()
+                    : response(for: fixture.request).markingApprovalCommitted()
+                let writer = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
+                    if persistsBeforeFailure { try ApprovalStoreTestPersistence.write(data, url) }
+                    throw Failure.injectedWrite
+                })
+                var executions = 0
+                var sends = 0
+                let result = await DurableApprovalExecutor(store: writer, clock: { self.clock.now }).executeOrdinary(claim: claim) {
+                    executions += 1
+                    if checkpointsBroadcast {
+                        return .broadcast(PreparedBroadcast(recoveryResponse: expected, send: {
+                            sends += 1
+                            return expected
+                        }))
+                    }
+                    return .response(expected)
+                }
+                XCTAssertEqual(result, .retryablePersistenceFailure)
+                XCTAssertEqual(executions, 1)
+                XCTAssertEqual(sends, 0)
+                let competingLock = CrossProcessFileLock(fileURL: try XCTUnwrap(claim.lease).fileURL)
+                XCTAssertTrue(try competingLock.tryAcquireExisting())
+                competingLock.release()
+                guard case .found(let recovered) = await bridge.load(handle: handle) else {
+                    return XCTFail("Expected recovered request")
+                }
+                XCTAssertEqual(recovered.phase, persistsBeforeFailure ? .responded : .queued)
+                if persistsBeforeFailure {
+                    let delivered = try responseJSON(await bridge.prepareResponseDelivery(
+                        id: handle.id, configurationKey: fixture.request.configurationKey,
+                        requestToken: handle.requestToken, profileIdentifier: nil
+                    ))
+                    XCTAssertEqual(NSDictionary(dictionary: delivered), NSDictionary(dictionary: expected.json))
+                }
+            }
+        }
     }
 
     func testOrdinaryClaimDeadlineRoundTripsAndEndsAtBroadcastCheckpoint() async throws {
@@ -6540,14 +6667,57 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertTrue(current.installedVersionMatches)
     }
 
-    func testRuntimeIdentityLoadsMismatchedProtocolForRejection() throws {
+    @MainActor
+    func testCurrentRuntimeIdentityRoundTripsItsWorkflowAndInstalledVersion() throws {
+        let bundleURL = try makeAmbientBundle(name: "Current", build: "148")
+        let identity = try XCTUnwrap(AmbientRuntimeIdentity.current(
+            bundle: try XCTUnwrap(Bundle(url: bundleURL)),
+            processIdentifier: ProcessInfo.processInfo.processIdentifier,
+            launchedAt: Date(timeIntervalSince1970: 9_001)
+        ))
+        XCTAssertEqual(identity.workflowVersion, ExtensionBridge.workflowVersion)
+        let directoryURL = rootURL.appendingPathComponent("runtime-identities")
+        XCTAssertTrue(identity.persistForCurrentProcess(directoryURL: directoryURL))
+        XCTAssertEqual(AmbientRuntimeIdentity.load(
+            processIdentifier: identity.processIdentifier, directoryURL: directoryURL
+        ), identity)
+        XCTAssertTrue(identity.isCompatible(
+            withWorkflowVersion: ExtensionBridge.workflowVersion, expectedVersion: identity.version
+        ))
+    }
+
+    func testRuntimeIdentityRejectsMalformedWorkflowVersions() throws {
+        let bundleURL = try makeAmbientBundle(name: "Invalid", build: "148")
+        let identity = try runtimeIdentity(
+            processIdentifier: 792, bundleURL: bundleURL,
+            launchDate: Date(timeIntervalSince1970: 9_001)
+        )
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(identity)
+        ) as? [String: Any])
+        let directoryURL = rootURL.appendingPathComponent("runtime-identities")
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let invalidValues: [Any?] = [nil, 0, -1, "4", NSNull(), true, 1.5]
+        for value in invalidValues {
+            var json = original
+            json["workflowVersion"] = value
+            try JSONSerialization.data(withJSONObject: json).write(
+                to: directoryURL.appendingPathComponent("792.json"), options: .atomic
+            )
+            XCTAssertNil(AmbientRuntimeIdentity.load(
+                processIdentifier: identity.processIdentifier, directoryURL: directoryURL
+            ))
+        }
+    }
+
+    func testRuntimeIdentityLoadsMismatchedWorkflowForRejection() throws {
         let bundleURL = try makeAmbientBundle(name: "Protocol", build: "148")
         let identity = try runtimeIdentity(
             processIdentifier: 791,
             bundleURL: bundleURL,
             launchDate: Date(timeIntervalSince1970: 1_789_118_464.514548),
-            runtimeProtocolVersion:
-                AmbientRuntimeIdentity.currentRuntimeProtocolVersion + 1
+            workflowVersion:
+                ExtensionBridge.workflowVersion + 1
         )
         let directoryURL = rootURL.appendingPathComponent("runtime-identities")
 
@@ -6567,7 +6737,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             identity
         )
         XCTAssertFalse(identity.isCompatible(
-            withWorkflowVersion: ExtensionBridge.workflowVersion
+            withWorkflowVersion: ExtensionBridge.workflowVersion, expectedVersion: identity.version
         ))
     }
 
@@ -6887,7 +7057,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         processIdentifier: $0,
                         bundleURL: currentURL,
                         launchDate: launchDate,
-                        runtimeProtocolVersion: 2
+                        workflowVersion: ExtensionBridge.workflowVersion + 1
                     )
                 )
             })
@@ -7268,7 +7438,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             processIdentifier: 821,
             bundleURL: currentURL,
             launchDate: launchDate,
-            runtimeProtocolVersion: 2
+            workflowVersion: ExtensionBridge.workflowVersion + 1
         )
         var isRunning = true
         var quitCount = 0
@@ -7316,7 +7486,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             processIdentifier: 832,
             bundleURL: currentURL,
             launchDate: launchDate,
-            runtimeProtocolVersion: 2
+            workflowVersion: ExtensionBridge.workflowVersion + 1
         )
         var incompatibleIsRunning = true
         var quitCount = 0
@@ -7382,9 +7552,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             version: try XCTUnwrap(
                 AmbientRuntimeIdentity.bundleVersion(at: oldURL)
             ),
-            runtimeProtocolVersion:
-                AmbientRuntimeIdentity.currentRuntimeProtocolVersion,
-            supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+            workflowVersion: ExtensionBridge.workflowVersion,
             launchedAt: launchDate
         )
         var isRunning = true
@@ -7431,7 +7599,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             processIdentifier: 835,
             bundleURL: currentURL,
             launchDate: launchDate,
-            runtimeProtocolVersion: 2
+            workflowVersion: ExtensionBridge.workflowVersion + 1
         )
         var quitCount = 0
 
@@ -7511,8 +7679,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         processIdentifier: original.processIdentifier,
                         bundlePath: original.bundlePath,
                         version: original.version,
-                        runtimeProtocolVersion: original.runtimeProtocolVersion,
-                        supportedWorkflowVersions: original.supportedWorkflowVersions,
+                        workflowVersion: original.workflowVersion,
                         launchedAt: original.launchedAt
                     )
                 }
@@ -7599,8 +7766,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             processIdentifier: 848,
             bundlePath: bundleURL.path,
             version: .init(marketing: "1.0.99", build: "148"),
-            runtimeProtocolVersion: AmbientRuntimeIdentity.currentRuntimeProtocolVersion,
-            supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+            workflowVersion: ExtensionBridge.workflowVersion,
             launchedAt: launchDate
         )
         let helper = runtimeHelper(
@@ -7887,8 +8053,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         processIdentifier: Int32,
         bundleURL: URL,
         launchDate: Date,
-        runtimeProtocolVersion: Int =
-            AmbientRuntimeIdentity.currentRuntimeProtocolVersion
+        workflowVersion: Int =
+            ExtensionBridge.workflowVersion
     ) throws -> AmbientRuntimeIdentity {
         AmbientRuntimeIdentity(
             instanceIdentifier: UUID(),
@@ -7897,8 +8063,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             version: try XCTUnwrap(
                 AmbientRuntimeIdentity.bundleVersion(at: bundleURL)
             ),
-            runtimeProtocolVersion: runtimeProtocolVersion,
-            supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+            workflowVersion: workflowVersion,
             launchedAt: launchDate
         )
     }

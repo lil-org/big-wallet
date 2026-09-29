@@ -1312,9 +1312,8 @@ final class PopupRequestSessions {
             claim: claim,
             operation: operation
         )
-        await finishExecution(
+        finishExecution(
             result,
-            claim: claim,
             for: session,
             token: token
         )
@@ -1336,9 +1335,8 @@ final class PopupRequestSessions {
             session: signingSession,
             operation: operation
         )
-        await finishExecution(
+        finishExecution(
             result,
-            claim: claim,
             for: session,
             token: token
         )
@@ -1346,29 +1344,17 @@ final class PopupRequestSessions {
 
     private func finishExecution(
         _ result: DurableApprovalExecutor.Result,
-        claim: ExtensionBridge.ApprovalClaim,
         for session: PopupRequestSession,
         token: UUID
-    ) async {
+    ) {
         switch result {
-        case .persisted, .ownershipLost:
+        case .persisted, .ownershipLost, .released:
             if entries[session.handle]?.session === session {
                 discardSession(handle: session.handle)
             }
-        case .beginRetryablePersistenceFailure:
-            await releaseApproval(
-                claim,
-                for: session,
-                token: token,
-                rematerializeOnSuccess: true
-            )
         case .retryablePersistenceFailure:
             if isCurrent(session, token: token) {
                 session.fail(Strings.failedToLoad, token: token)
-            }
-        case .rolledBack:
-            if entries[session.handle]?.session === session {
-                discardSession(handle: session.handle)
             }
         }
     }

@@ -162,8 +162,7 @@
                 instanceIdentifier: instance, processIdentifier: pid,
                 bundlePath: (url ?? bundleURL).standardizedFileURL.path,
                 version: .init(marketing: "1.0.99", build: build),
-                runtimeProtocolVersion: AmbientRuntimeIdentity.currentRuntimeProtocolVersion,
-                supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+                workflowVersion: ExtensionBridge.workflowVersion,
                 launchedAt: Date(timeIntervalSince1970: Double(pid)))
         }
 

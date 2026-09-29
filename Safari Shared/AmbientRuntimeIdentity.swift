@@ -23,14 +23,11 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
         let build: String
     }
 
-    static let currentRuntimeProtocolVersion = 4
-
     let instanceIdentifier: UUID
     let processIdentifier: Int32
     let bundlePath: String
     let version: Version
-    let runtimeProtocolVersion: Int
-    let supportedWorkflowVersions: [Int]
+    let workflowVersion: Int
     let launchedAt: Date
 
     static func current(
@@ -48,8 +45,7 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
             processIdentifier: processIdentifier,
             bundlePath: bundle.bundleURL.standardizedFileURL.path,
             version: version,
-            runtimeProtocolVersion: currentRuntimeProtocolVersion,
-            supportedWorkflowVersions: [ExtensionBridge.workflowVersion],
+            workflowVersion: ExtensionBridge.workflowVersion,
             launchedAt: launchedAt
         )
     }
@@ -91,17 +87,12 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
             version.build == owner.buildVersion
     }
 
-    func isCompatible(withWorkflowVersion workflowVersion: Int) -> Bool {
-        runtimeProtocolVersion == Self.currentRuntimeProtocolVersion &&
-            supportedWorkflowVersions.contains(workflowVersion)
-    }
-
     func isCompatible(
         withWorkflowVersion workflowVersion: Int,
         expectedVersion: Version
     ) -> Bool {
         version == expectedVersion &&
-            isCompatible(withWorkflowVersion: workflowVersion)
+            self.workflowVersion == workflowVersion
     }
 
     func matches(
@@ -298,9 +289,7 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
             bundleURL.pathExtension == "app" &&
             !version.marketing.isEmpty && version.marketing.count <= 128 &&
             !version.build.isEmpty && version.build.count <= 128 &&
-            runtimeProtocolVersion > 0 &&
-            !supportedWorkflowVersions.isEmpty &&
-            supportedWorkflowVersions.allSatisfy { $0 > 0 }
+            workflowVersion > 0
     }
 
     private static func bundleVersion(for bundle: Bundle) -> Version? {
