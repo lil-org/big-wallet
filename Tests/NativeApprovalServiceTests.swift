@@ -286,11 +286,12 @@
             f.deliver(request, runtime: f.runtime(build: "147"), executing: true)
             f.onQuit = { _ in true }
             let service = f.service()
+            let pollDeadline = f.clock.now + NativeApprovalTiming.launchPollIntervalNanoseconds
             let task = Task { await f.maintain(service, request) }
-            try await f.eventually { f.quits == [42] && !f.clock.deadlines.isEmpty }
+            try await f.eventually { f.quits == [42] && f.clock.deadlines.contains(pollDeadline) }
             XCTAssertTrue(f.clears.isEmpty)
             f.processes.removeAll()
-            f.clock.advance(to: f.clock.deadlines.first!)
+            f.clock.advance(to: pollDeadline)
             guard case .responseReady = await task.value else { return XCTFail("Expected interrupted response") }
             XCTAssertEqual(f.clears.count, 1)
             XCTAssertTrue(f.launches.isEmpty)
