@@ -1150,6 +1150,7 @@ final class SafariApprovalVaultHost {
     private let integrityKeyStore: SafariApprovalIntegrityKeyStoring
     private let synchronizeDefaults: SynchronizeDefaults
     private let sourceSnapshot: () throws -> SafariApprovalSourceSnapshot?
+    private let notificationCenter: NotificationCenter
     private let reconciliationQueue: DispatchQueue
     private let scheduleReconciliationRetry: ScheduleReconciliationRetry
     private let lock = NSRecursiveLock()
@@ -1157,6 +1158,7 @@ final class SafariApprovalVaultHost {
     private var isStarted = false
     private var isReconciliationPending = false
     private var backgroundTask: BackgroundTask?
+    private var protectedDataObserver: NSObjectProtocol?
     private var reconciliationRetry: (id: UUID, work: DispatchWorkItem)?
 
     init(
@@ -1168,6 +1170,7 @@ final class SafariApprovalVaultHost {
         synchronizeDefaults: @escaping SynchronizeDefaults = {
             $0.synchronize()
         },
+        notificationCenter: NotificationCenter = .default,
         reconciliationQueue: DispatchQueue = DispatchQueue(
             label: "org.lil.wallet.safari-approval-reconciliation",
             qos: .utility
@@ -1179,6 +1182,7 @@ final class SafariApprovalVaultHost {
         self.defaults = defaults
         self.integrityKeyStore = integrityKeyStore
         self.synchronizeDefaults = synchronizeDefaults
+        self.notificationCenter = notificationCenter
         self.reconciliationQueue = reconciliationQueue
         self.scheduleReconciliationRetry = scheduleReconciliationRetry ?? {
             reconciliationQueue.asyncAfter(
@@ -1188,6 +1192,12 @@ final class SafariApprovalVaultHost {
         }
         self.sourceSnapshot = sourceSnapshot ?? {
             try walletsManager.safariApprovalSourceSnapshot()
+        }
+    }
+
+    deinit {
+        if let protectedDataObserver {
+            notificationCenter.removeObserver(protectedDataObserver)
         }
     }
 
@@ -1212,6 +1222,13 @@ final class SafariApprovalVaultHost {
             return true
         }
         guard shouldStart else { return }
+        protectedDataObserver = notificationCenter.addObserver(
+            forName: UIApplication.protectedDataDidBecomeAvailableNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.reconcile()
+        }
         reconcile()
     }
 
@@ -1377,6 +1394,9 @@ final class SafariApprovalVaultHost {
             source = loaded
         } catch is CancellationError {
             return
+        } catch Keychain.KeychainError.failedToRead(let status)
+            where status == errSecInteractionNotAllowed {
+            return
         } catch {
             SafariApprovalDiagnostics.record("load source snapshot", error: error)
             clearVaultLocked(
@@ -1395,6 +1415,9 @@ final class SafariApprovalVaultHost {
                 integrityKey = try integrityKeyStore.loadOrCreate()
             }
         } catch is CancellationError {
+            return
+        } catch SafariApprovalVault.Error.keychainFailure(let status)
+            where status == errSecInteractionNotAllowed {
             return
         } catch {
             SafariApprovalDiagnostics.record("load integrity key", error: error)

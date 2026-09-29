@@ -1,6 +1,7 @@
 #if os(iOS) || os(visionOS)
 import LocalAuthentication
 import Security
+import UIKit
 import XCTest
 @testable import Big_Wallet
 
@@ -3498,6 +3499,72 @@ final class SafariApprovalVaultTests: XCTestCase {
         reconciliationQueue.sync {}
         XCTAssertNotNil(vault.reviewCatalog())
         XCTAssertEqual(keys.keys.count, 1)
+    }
+
+    func testLockedKeychainPreservesPublicationAndRetriesAfterUnlock() throws {
+        for sourceIsLocked in [true, false] {
+            let url = temporaryURL()
+            defer {
+                try? FileManager.default.removeItem(at: url)
+                try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock"))
+            }
+            let keys = MemoryApprovalKeyStore()
+            let integrityKeys = MemoryApprovalIntegrityKeyStore(key: integrityKey)
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+            let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let source = try fixture().source
+            var isLocked = false
+            var sourceReads = 0
+            let notifications = NotificationCenter()
+            let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
+            let host = SafariApprovalVaultHost(
+                vault: vault,
+                defaults: defaults,
+                integrityKeyStore: integrityKeys,
+                notificationCenter: notifications,
+                reconciliationQueue: reconciliationQueue,
+                sourceSnapshot: {
+                    sourceReads += 1
+                    if sourceIsLocked && isLocked {
+                        throw Keychain.KeychainError.failedToRead(errSecInteractionNotAllowed)
+                    }
+                    return source
+                }
+            )
+            host.start(backgroundTask: { _ in {} })
+            reconciliationQueue.sync {}
+            let identity = try XCTUnwrap(vault.reviewCatalog()?.identity)
+            let envelope = try Data(contentsOf: url)
+            let publishedKeys = keys.keys
+            let metadataKey = "SafariApprovalVault.hostPublicationMetadata.v1"
+            let metadata = try XCTUnwrap(defaults.data(forKey: metadataKey))
+
+            isLocked = true
+            if !sourceIsLocked {
+                integrityKeys.error = SafariApprovalVault.Error.keychainFailure(errSecInteractionNotAllowed)
+            }
+            host.reconcile()
+            reconciliationQueue.sync {}
+
+            XCTAssertEqual(sourceReads, 2)
+            XCTAssertEqual(vault.reviewCatalog()?.identity, identity)
+            XCTAssertEqual(try Data(contentsOf: url), envelope)
+            XCTAssertEqual(keys.keys, publishedKeys)
+            XCTAssertEqual(defaults.data(forKey: metadataKey), metadata)
+
+            isLocked = false
+            integrityKeys.error = nil
+            notifications.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+            reconciliationQueue.sync {}
+
+            XCTAssertEqual(sourceReads, 3)
+            XCTAssertEqual(vault.reviewCatalog()?.identity, identity)
+            XCTAssertEqual(try Data(contentsOf: url), envelope)
+            XCTAssertEqual(keys.keys, publishedKeys)
+            XCTAssertEqual(defaults.data(forKey: metadataKey), metadata)
+        }
     }
 
     func testMissingRotatedAndUnavailableIntegrityKeysFailClosed() throws {
