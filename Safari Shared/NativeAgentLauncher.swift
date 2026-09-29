@@ -179,21 +179,14 @@ final class NativeAgentLauncher {
         return ExpectedRuntime(url: url)
     }
 
-    func assess(
-        owner: ExtensionBridge.NativeDeliveryOwner,
-        expected: ExpectedRuntime
-    ) -> RuntimeAssessment {
-        assessRuntime(.receiptOwner(owner), expected: expected)
-    }
-
-    func status(
+    func observe(
         owner: ExtensionBridge.NativeDeliveryOwner,
         expected: ExpectedRuntime? = nil
-    ) async -> RuntimeAssessment {
+    ) -> RuntimeAssessment {
         guard let expected = expected ?? expectedRuntime() else { return .unidentified(nil) }
-        let assessment = assess(owner: owner, expected: expected)
+        let assessment = assessRuntime(.receiptOwner(owner), expected: expected)
         if case .compatible(let runtime) = assessment {
-            guard await verify(runtime, expected: expected) else {
+            guard runtimeIsCurrent(runtime, expected: expected) else {
                 return .unidentified(runtime.helper)
             }
         }
@@ -214,7 +207,7 @@ final class NativeAgentLauncher {
     ) async -> OwnerRetirementResult {
         guard !Task.isCancelled, dependencies.uptime() < deadline,
               expected.installedVersionMatches else { return .unavailable }
-        switch assess(owner: owner, expected: expected) {
+        switch observe(owner: owner, expected: expected) {
         case .absent:
             return .exited
         case .compatible:
@@ -251,12 +244,13 @@ final class NativeAgentLauncher {
     func isConfirmed(
         _ expected: ExpectedRuntime,
         deadline: UInt64
-    ) async -> Bool {
+    ) -> Bool {
 #if os(macOS)
+        guard !Task.isCancelled, dependencies.uptime() < deadline else { return false }
         for helper in dependencies.helpers() {
             guard !Task.isCancelled, dependencies.uptime() < deadline else { return false }
             if case .compatible(let runtime) = assessRuntime(.candidate(helper), expected: expected),
-               await verify(runtime, expected: expected) {
+               runtimeIsCurrent(runtime, expected: expected) {
                 return !Task.isCancelled && dependencies.uptime() < deadline
             }
         }
@@ -414,24 +408,28 @@ final class NativeAgentLauncher {
         return nil
     }
 
-    func verify(
+    private func verify(
         _ runtime: IdentifiedRuntime,
         expected: ExpectedRuntime
     ) async -> Bool {
         let runtimeURL = runtime.target.url
-        let observedIdentity = runtime.identity
         guard await dependencies.validate(expected.url) else { return false }
         if runtimeURL != expected.url {
             guard await dependencies.validate(runtimeURL) else { return false }
         }
-        guard expected.installedVersionMatches,
-              runtime.helper.isRunning(),
-              verifiedRuntimeIdentity(
-                  processIdentifier: runtime.helper.processIdentifier,
-                  bundleURL: runtimeURL,
-                  processStartDate: runtime.helper.processStartDate,
-                  identity: dependencies.identity
-              ) == observedIdentity else { return false }
-        return true
+        return runtimeIsCurrent(runtime, expected: expected)
+    }
+
+    private func runtimeIsCurrent(
+        _ runtime: IdentifiedRuntime,
+        expected: ExpectedRuntime
+    ) -> Bool {
+        expected.installedVersionMatches && runtime.helper.isRunning() &&
+            verifiedRuntimeIdentity(
+                processIdentifier: runtime.helper.processIdentifier,
+                bundleURL: runtime.target.url,
+                processStartDate: runtime.helper.processStartDate,
+                identity: dependencies.identity
+            ) == runtime.identity
     }
 }

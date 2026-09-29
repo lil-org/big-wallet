@@ -231,8 +231,39 @@ struct WalletSigningAuthorization: Equatable, Sendable {
 struct ApprovedWalletSigningOperation: Sendable {
 
     enum Payload: Sendable {
-        case message(SignMessageAction.Payload, Solana.Cluster?)
+        case ethereumMessage(Data)
+        case ethereumPersonalMessage(Data)
+        case ethereumTypedData(String)
         case ethereumTransaction(Transaction, ResolvedEthereumNetwork)
+        case solanaMessage(Data)
+        case solanaTransaction(SolanaPreparedTransactionMessage)
+        case solanaTransactions([SolanaPreparedTransactionMessage])
+        case solanaLegacyBroadcast(
+            Solana.PreparedLegacySignAndSendTransaction,
+            Solana.PreparedSendOptions,
+            Solana.Cluster
+        )
+        case solanaSerializedBroadcast(
+            Solana.PreparedSerializedTransaction,
+            Solana.PreparedSendOptions,
+            Solana.Cluster
+        )
+
+        var coin: WalletCoin {
+            switch self {
+            case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData,
+                 .ethereumTransaction:
+                return .ethereum
+            case .solanaMessage, .solanaTransaction, .solanaTransactions,
+                 .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+                return .solana
+            }
+        }
+
+        var isEthereumTransaction: Bool {
+            if case .ethereumTransaction = self { return true }
+            return false
+        }
     }
 
     let authorization: WalletSigningAuthorization
@@ -248,42 +279,31 @@ struct ApprovedWalletSigningOperation: Sendable {
         authorization: WalletSigningAuthorization
     ) {
         let approvedAccount = authorization.approvedAccount
-        guard request.id == authorization.handle.id,
+        guard case .signing(let account, let payload) = approval.kind,
+              request.id == authorization.handle.id,
               authorization.signingDeadline.timeIntervalSince1970.isFinite,
-              approval.signingAccount == approvedAccount,
+              account == approvedAccount,
               approvedAccount.isValid,
               request.authorizedAccount == approvedAccount,
-              approvedAccount.coin.correspondingInpageProvider == request.provider
+              approvedAccount.coin.correspondingInpageProvider == request.provider,
+              payload.coin == approvedAccount.coin
         else { return nil }
         self.authorization = authorization
-        switch approval {
-        case .message(let action, let cluster):
-            guard action.payload.coin == approvedAccount.coin,
-                  (action.solanaClusterOptions != nil) == (cluster != nil)
-            else { return nil }
-            payload = .message(action.payload, cluster)
-        case .transaction(let action, let transaction):
-            guard approvedAccount.coin == .ethereum,
-                  DappApprovalDecision.NetworkIdentity(action.resolvedNetwork) != nil,
-                  transaction.isReadyForApproval(on: action.chain) else { return nil }
-            payload = .ethereumTransaction(transaction, action.resolvedNetwork)
-        case .accountSelection, .addEthereumChain:
-            return nil
-        }
+        self.payload = payload
     }
 
     fileprivate func sign(with privateKey: WalletPrivateKey) ->
         Result<WalletSigningOutput, WalletSigningFailure> {
         switch payload {
-        case .message(.ethereumMessage(let data), _):
+        case .ethereumMessage(let data):
             guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
             return .success(.ethereumSignature(signature))
-        case .message(.ethereumPersonalMessage(let data), _):
+        case .ethereumPersonalMessage(let data):
             guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
             return .success(.ethereumSignature(signature))
-        case .message(.ethereumTypedData(let data), _):
+        case .ethereumTypedData(let data):
             guard let signature = try? Ethereum.sign(typedData: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
             return .success(.ethereumSignature(signature))
@@ -302,29 +322,27 @@ struct ApprovedWalletSigningOperation: Sendable {
                     signedTransaction: signed, transactionHash: hash, network: network
                 ))
             }
-        case .message(.solanaMessage(let data), _):
+        case .solanaMessage(let data):
             return solanaSignature(data, privateKey: privateKey)
-        case .message(.solanaTransaction(let transaction), _):
+        case .solanaTransaction(let transaction):
             return solanaSignature(transaction.messageData, privateKey: privateKey)
-        case .message(.solanaTransactions(let transactions), _):
+        case .solanaTransactions(let transactions):
             guard let signatures = Solana.sign(
                 messageDataList: transactions.map(\.messageData), privateKey: privateKey
             ), signatures.count == transactions.count else { return .failure(.failedToSign) }
             return .success(.solanaSignatures(signatures))
-        case .message(.solanaLegacyBroadcast(let transaction, let options), let cluster?):
+        case .solanaLegacyBroadcast(let transaction, let options, let cluster):
             return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
                     preparedLegacyTransaction: transaction, privateKey: privateKey
                 ), cluster: cluster, options: options
             )
-        case .message(.solanaSerializedBroadcast(let transaction, let options), let cluster?):
+        case .solanaSerializedBroadcast(let transaction, let options, let cluster):
             return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
                     preparedSerializedTransaction: transaction, privateKey: privateKey
                 ), cluster: cluster, options: options
             )
-        case .message(.solanaLegacyBroadcast, nil), .message(.solanaSerializedBroadcast, nil):
-            return .failure(.authorizationUnavailable)
         }
     }
 

@@ -300,9 +300,8 @@ actor NativeApprovalService {
                     snapshot = current
                     continue
                 }
-                guard let expected = await dependencies.launcher.expectedRuntime(),
-                      case .compatible(let currentRuntime) = await dependencies.launcher.assess(
-                          owner: receipt.owner, expected: expected
+                guard case .compatible(let currentRuntime) = await dependencies.launcher.observe(
+                          owner: receipt.owner
                       ), currentRuntime.identity == runtime.identity,
                       let route = reference.route else { return .unavailable }
                 return await dependencies.launcher.send(route, to: runtime.target, deadline: deadline)
@@ -348,7 +347,7 @@ actor NativeApprovalService {
             if policy == .manualRecovery && !snapshot.hasActiveExecution {
                 return .finished(.unavailable)
             }
-            let status = await dependencies.launcher.status(owner: receipt.owner)
+            let status = await dependencies.launcher.observe(owner: receipt.owner)
             guard isPending(until: deadline) else { return .finished(.unavailable) }
             switch status {
             case .compatible(let runtime):

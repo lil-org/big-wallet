@@ -4,30 +4,11 @@ import Foundation
 
 enum DappApprovalDecision: Equatable, Sendable {
 
-    struct AccountIdentity: Equatable, Sendable {
-        let walletID: String
-        let address: String
-        let provider: InpageProvider
-        let derivationPath: String
-
-        init(
-            walletID: String,
-            address: String,
-            provider: InpageProvider,
-            derivationPath: String
-        ) {
-            self.walletID = walletID
-            self.address = address
-            self.provider = provider
-            self.derivationPath = derivationPath
-        }
-    }
-
     struct AccountSelection: Equatable, Sendable {
-        let accounts: [AccountIdentity]
+        let accounts: [WalletAccountDescriptor]
         let ethereumChainID: String?
 
-        init(accounts: [AccountIdentity], ethereumChainID: String?) {
+        init(accounts: [WalletAccountDescriptor], ethereumChainID: String?) {
             self.accounts = accounts
             self.ethereumChainID = ethereumChainID
         }
@@ -213,18 +194,26 @@ enum DappApprovalValidator {
         let network: EthereumNetwork?
     }
 
-    enum Approval {
-        case accountSelection(SelectAccountAction, Selection)
-        case message(SignMessageAction, Solana.Cluster?)
-        case transaction(SendTransactionAction, Transaction)
-        case addEthereumChain(AddEthereumChainAction)
+    struct Approval {
+        enum Kind {
+            case accountSelection(SelectAccountAction, Selection)
+            case signing(
+                approvedAccount: WalletAccountDescriptor,
+                payload: ApprovedWalletSigningOperation.Payload
+            )
+            case addEthereumChain(AddEthereumChainAction)
+        }
+
+        let kind: Kind
+
+        fileprivate init(_ kind: Kind) {
+            self.kind = kind
+        }
 
         var signingAccount: WalletAccountDescriptor? {
-            switch self {
-            case .message(let action, _):
-                return WalletAccountDescriptor(walletID: action.walletId, account: action.account)
-            case .transaction(let action, _):
-                return WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            switch kind {
+            case .signing(let approvedAccount, _):
+                return approvedAccount
             case .accountSelection, .addEthereumChain:
                 return nil
             }
@@ -253,16 +242,21 @@ enum DappApprovalValidator {
                     accounts: accounts,
                     networkResolver: networkResolver
                   ) else { return .failure(.invalidDecision) }
-            return .success(.accountSelection(action, resolved))
+            return .success(Approval(.accountSelection(action, resolved)))
         case (.approveMessage(let action), .message(let approval)):
             guard approval.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
                 return .failure(.staleAccount)
             }
-            guard (action.solanaClusterOptions != nil) ==
-                    (approval.solanaCluster != nil) else {
+            guard let payload = resolveMessagePayload(
+                action.payload,
+                cluster: approval.solanaCluster
+            ) else {
                 return .failure(.invalidDecision)
             }
-            return .success(.message(action, approval.solanaCluster))
+            return .success(Approval(.signing(
+                approvedAccount: approval.approvedAccount,
+                payload: payload
+            )))
         case (.approveTransaction(let action), .transaction(let execution)):
             guard execution.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
                 return .failure(.staleAccount)
@@ -273,11 +267,40 @@ enum DappApprovalValidator {
             guard transaction.isReadyForApproval(on: action.chain) else {
                 return .failure(.invalidDecision)
             }
-            return .success(.transaction(action, transaction))
+            return .success(Approval(.signing(
+                approvedAccount: execution.approvedAccount,
+                payload: .ethereumTransaction(transaction, action.resolvedNetwork)
+            )))
         case (.addEthereumChain(let action), .addEthereumChain):
-            return .success(.addEthereumChain(action))
+            return .success(Approval(.addEthereumChain(action)))
         default:
             return .failure(.invalidDecision)
+        }
+    }
+
+    private static func resolveMessagePayload(
+        _ payload: SignMessageAction.Payload,
+        cluster: Solana.Cluster?
+    ) -> ApprovedWalletSigningOperation.Payload? {
+        switch (payload, cluster) {
+        case (.solanaLegacyBroadcast(let transaction, let options), let cluster?):
+            return .solanaLegacyBroadcast(transaction, options, cluster)
+        case (.solanaSerializedBroadcast(let transaction, let options), let cluster?):
+            return .solanaSerializedBroadcast(transaction, options, cluster)
+        case (.ethereumMessage(let data), nil):
+            return .ethereumMessage(data)
+        case (.ethereumPersonalMessage(let data), nil):
+            return .ethereumPersonalMessage(data)
+        case (.ethereumTypedData(let data), nil):
+            return .ethereumTypedData(data)
+        case (.solanaMessage(let data), nil):
+            return .solanaMessage(data)
+        case (.solanaTransaction(let transaction), nil):
+            return .solanaTransaction(transaction)
+        case (.solanaTransactions(let transactions), nil):
+            return .solanaTransactions(transactions)
+        default:
+            return nil
         }
     }
 
@@ -290,15 +313,11 @@ enum DappApprovalValidator {
         var resolvedAccounts = [SpecificWalletAccount]()
         var selectedCoins = Set<WalletCoin>()
         for identity in selection.accounts {
-            guard let coin = WalletCoin.correspondingToInpageProvider(identity.provider),
-                  action.coinType == nil || action.coinType == coin,
-                  selectedCoins.insert(coin).inserted else { return nil }
+            guard identity.isValid,
+                  action.coinType == nil || action.coinType == identity.coin,
+                  selectedCoins.insert(identity.coin).inserted else { return nil }
             let matches = accounts.filter {
-                $0.walletId == identity.walletID &&
-                    $0.account.coin == coin &&
-                    coin.normalizedAddress($0.account.address) ==
-                        coin.normalizedAddress(identity.address) &&
-                    $0.account.derivationPath == identity.derivationPath
+                WalletAccountDescriptor(walletID: $0.walletId, account: $0.account) == identity
             }
             guard matches.count == 1 else { return nil }
             resolvedAccounts.append(matches[0])

@@ -1101,7 +1101,7 @@ final class WalletSigningScopeTests: XCTestCase {
         XCTAssertEqual(reader.passwordReadCount, 0)
     }
 
-    func testSigningOperationRequiresPayloadCoinAndBroadcastClusterToMatchApproval() throws {
+    func testSigningOperationRequiresPayloadCoinAndValidatedBroadcastCluster() throws {
         let solana = WalletAccountDescriptor(walletID: walletID, account: solanaAccount())
         let publicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: solana.normalizedAddress))
         let message = SolanaMessageFixture.wireMessage(
@@ -1147,11 +1147,24 @@ final class WalletSigningScopeTests: XCTestCase {
                         subject: .signMessage, walletId: approved.walletID,
                         account: approved.account, meta: "", payload: payload
                     )
-                    let operation = ApprovedWalletSigningOperation(
-                        request: request, approval: .message(action, cluster),
-                        authorization: walletSigningAuthorizationForTesting(approvedAccount: approved)
+                    let result = DappApprovalValidator.resolve(
+                        action: .approveMessage(action),
+                        decision: .message(.init(approvedAccount: approved, solanaCluster: cluster)),
+                        accounts: nil,
+                        networkResolver: { _ in nil }
                     )
-                    XCTAssertEqual(operation != nil, approved.coin == coin && requiresCluster == (cluster != nil))
+                    let validCluster = requiresCluster == (cluster != nil)
+                    switch result {
+                    case .success(let approval):
+                        XCTAssertTrue(validCluster)
+                        let operation = ApprovedWalletSigningOperation(
+                            request: request, approval: approval,
+                            authorization: walletSigningAuthorizationForTesting(approvedAccount: approved)
+                        )
+                        XCTAssertEqual(operation != nil, approved.coin == coin)
+                    case .failure:
+                        XCTAssertFalse(validCluster)
+                    }
                 }
             }
         }
@@ -1220,11 +1233,19 @@ final class WalletSigningScopeTests: XCTestCase {
                 "body": ["address": account.normalizedAddress, "chainId": "0xa"],
             ]))
             request.authorizedAccount = account
+            let action = SendTransactionAction(
+                transaction: original, resolvedNetwork: network, walletId: account.walletID, account: account.account
+            )
+            let decision = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+                final, reviewedNetwork: network, approvedAccount: account
+            ))
+            let approval = try DappApprovalValidator.resolve(
+                action: .approveTransaction(action), decision: .transaction(decision),
+                accounts: nil, networkResolver: { _ in nil }
+            ).get()
             let operation = try XCTUnwrap(ApprovedWalletSigningOperation(
                 request: request,
-                approval: .transaction(SendTransactionAction(
-                    transaction: original, resolvedNetwork: network, walletId: account.walletID, account: account.account
-                ), final),
+                approval: approval,
                 authorization: walletSigningAuthorizationForTesting(approvedAccount: account)
             ))
             let expected = try Ethereum.signedTransaction(

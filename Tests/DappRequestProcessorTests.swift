@@ -153,8 +153,8 @@ final class DappRequestProcessorTests: XCTestCase {
             let decision = DappApprovalDecision.accountSelection(.init(
                 accounts: [.init(
                     walletID: "wallet",
-                    address: account.address,
-                    provider: .ethereum,
+                    coin: .ethereum,
+                    normalizedAddress: account.address.lowercased(),
                     derivationPath: path
                 )],
                 ethereumChainID: "0x1"
@@ -400,8 +400,8 @@ final class DappRequestProcessorTests: XCTestCase {
                     action: action,
                     selection: .init(accounts: [.init(
                         walletID: "wallet",
-                        address: address,
-                        provider: coin.correspondingInpageProvider,
+                        coin: coin,
+                        normalizedAddress: coin.normalizedAddress(address),
                         derivationPath: account.derivationPath
                     )], ethereumChainID: nil),
                     accounts: catalog,
@@ -425,18 +425,16 @@ final class DappRequestProcessorTests: XCTestCase {
             initiallyConnectedProviders: [],
             network: Networks.ethereum
         )
-        let identity = DappApprovalDecision.AccountIdentity(
-            walletID: "wallet", address: account.address, provider: .ethereum,
-            derivationPath: account.derivationPath
-        )
-        let invalidIdentities: [DappApprovalDecision.AccountIdentity] = [
-            .init(walletID: "other", address: account.address, provider: .ethereum,
+        let identity = WalletAccountDescriptor(walletID: "wallet", account: account)
+        let invalidIdentities: [WalletAccountDescriptor] = [
+            .init(walletID: "other", coin: .ethereum, normalizedAddress: identity.normalizedAddress,
                   derivationPath: account.derivationPath),
-            .init(walletID: "wallet", address: "0x0000000000000000000000000000000000000000",
-                  provider: .ethereum, derivationPath: account.derivationPath),
-            .init(walletID: "wallet", address: account.address, provider: .solana,
+            .init(walletID: "wallet", coin: .ethereum,
+                  normalizedAddress: "0x0000000000000000000000000000000000000000",
                   derivationPath: account.derivationPath),
-            .init(walletID: "wallet", address: account.address, provider: .ethereum,
+            .init(walletID: "wallet", coin: .solana, normalizedAddress: identity.normalizedAddress,
+                  derivationPath: account.derivationPath),
+            .init(walletID: "wallet", coin: .ethereum, normalizedAddress: identity.normalizedAddress,
                   derivationPath: "m/44'/60'/0'/0/9"),
         ]
         let cases = invalidIdentities.map { ([$0], [account]) } + [
@@ -460,11 +458,7 @@ final class DappRequestProcessorTests: XCTestCase {
         for coin in [WalletCoin.ethereum, .solana] {
             let account = processorAccount(privateKey: key, coin: coin)
             let catalog = [SpecificWalletAccount(walletId: "wallet", account: account)]
-            let identity = DappApprovalDecision.AccountIdentity(
-                walletID: "wallet", address: account.address,
-                provider: coin.correspondingInpageProvider,
-                derivationPath: account.derivationPath
-            )
+            let identity = WalletAccountDescriptor(walletID: "wallet", account: account)
             for fallback in [nil, Networks.ethereum] as [EthereumNetwork?] {
                 let action = SelectAccountAction(
                     coinType: nil, selectedAccounts: [],
@@ -511,6 +505,128 @@ final class DappRequestProcessorTests: XCTestCase {
                 ) else { return XCTFail("Invalid decisions must fail validation") }
             }
         }
+    }
+
+    func testMessageApprovalResolvesEveryPayloadWithOnlyItsRequiredCluster() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let solanaAccount = processorAccount(privateKey: key, coin: .solana)
+        let messageData = SolanaMessageFixture.wireMessage(
+            accountKeys: [key.publicKeyData(coin: .solana)],
+            bodyAfterBlockhash: Data.encodeLength(0)
+        )
+        let message = WalletCrypto.base58Encode(data: messageData)
+        let transaction = try Solana.shared.preparedTransactionMessageForSigning(
+            message: message,
+            publicKey: solanaAccount.address
+        ).get()
+        let legacy = try Solana.shared.preparedLegacySignAndSendTransaction(
+            message: message,
+            publicKey: solanaAccount.address
+        ).get()
+        let serialized = try Solana.shared.preparedSerializedTransactionForSignAndSend(
+            serializedTransaction: WalletCrypto.base58Encode(
+                data: Data([1]) + Data(repeating: 0, count: 64) + messageData
+            ),
+            publicKey: solanaAccount.address
+        ).get()
+        let options = Solana.PreparedSendOptions(
+            clusterHint: .devnet,
+            preflightCommitment: .confirmed,
+            maxRetries: 3,
+            minContextSlot: 12,
+            confirmationCommitment: .finalized
+        )
+        let cases: [(SignMessageAction.Payload, Bool)] = [
+            (.ethereumMessage(Data("digest".utf8)), false),
+            (.ethereumPersonalMessage(Data("personal message".utf8)), false),
+            (.ethereumTypedData("typed data"), false),
+            (.solanaMessage(Data("solana message".utf8)), false),
+            (.solanaTransaction(transaction), false),
+            (.solanaTransactions([transaction, transaction]), false),
+            (.solanaLegacyBroadcast(legacy, options), true),
+            (.solanaSerializedBroadcast(serialized, options), true),
+        ]
+        for (payload, requiresCluster) in cases {
+            let account = processorAccount(privateKey: key, coin: payload.coin)
+            let descriptor = WalletAccountDescriptor(walletID: "wallet", account: account)
+            let action = SignMessageAction(
+                subject: .signMessage,
+                walletId: descriptor.walletID,
+                account: account,
+                meta: "reviewed",
+                payload: payload
+            )
+            for cluster in [nil] + Solana.Cluster.allCases.map(Optional.some) {
+                let result = DappApprovalValidator.resolve(
+                    action: .approveMessage(action),
+                    decision: .message(.init(approvedAccount: descriptor, solanaCluster: cluster)),
+                    accounts: nil,
+                    networkResolver: { _ in nil }
+                )
+                guard requiresCluster == (cluster != nil) else {
+                    guard case .failure(.invalidDecision) = result else {
+                        return XCTFail("The cluster must be present exactly for broadcasts")
+                    }
+                    continue
+                }
+                let approval = try result.get()
+                guard case .signing(let approvedAccount, let approvedPayload) = approval.kind else {
+                    return XCTFail("Expected a resolved signing payload")
+                }
+                XCTAssertEqual(approvedAccount, descriptor)
+                XCTAssertEqual(approvedPayload.coin, payload.coin)
+                XCTAssertFalse(approvedPayload.isEthereumTransaction)
+                switch (payload, approvedPayload) {
+                case (.ethereumMessage(let expected), .ethereumMessage(let actual)),
+                     (.ethereumPersonalMessage(let expected), .ethereumPersonalMessage(let actual)),
+                     (.solanaMessage(let expected), .solanaMessage(let actual)):
+                    XCTAssertEqual(actual, expected)
+                case (.ethereumTypedData(let expected), .ethereumTypedData(let actual)):
+                    XCTAssertEqual(actual, expected)
+                case (.solanaTransaction(let expected), .solanaTransaction(let actual)):
+                    XCTAssertEqual(actual.messageData, expected.messageData)
+                case (.solanaTransactions(let expected), .solanaTransactions(let actual)):
+                    XCTAssertEqual(actual.map(\.messageData), expected.map(\.messageData))
+                case (.solanaLegacyBroadcast(let expected, _),
+                      .solanaLegacyBroadcast(let actual, let actualOptions, let actualCluster)):
+                    XCTAssertEqual(actual.preparedMessage.messageData, expected.preparedMessage.messageData)
+                    XCTAssertEqual(actualCluster, cluster)
+                    XCTAssertEqual(actualOptions.rpcOptions as NSDictionary, options.rpcOptions as NSDictionary)
+                    XCTAssertEqual(actualOptions.clusterHint, options.clusterHint)
+                    XCTAssertEqual(actualOptions.confirmationCommitment, options.confirmationCommitment)
+                case (.solanaSerializedBroadcast(let expected, _),
+                      .solanaSerializedBroadcast(let actual, let actualOptions, let actualCluster)):
+                    XCTAssertEqual(actual.preparedMessage.messageData, expected.preparedMessage.messageData)
+                    XCTAssertEqual(actualCluster, cluster)
+                    XCTAssertEqual(actualOptions.rpcOptions as NSDictionary, options.rpcOptions as NSDictionary)
+                    XCTAssertEqual(actualOptions.clusterHint, options.clusterHint)
+                    XCTAssertEqual(actualOptions.confirmationCommitment, options.confirmationCommitment)
+                default:
+                    XCTFail("Approval must preserve the signing mode and payload")
+                }
+            }
+        }
+    }
+
+    func testMessageDecisionChecksIdentityBeforeInvalidCluster() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let action = SignMessageAction(
+            subject: .signMessage,
+            walletId: "reviewed-wallet",
+            account: account,
+            meta: "reviewed",
+            payload: .ethereumMessage(Data())
+        )
+        guard case .failure(.staleAccount) = DappApprovalValidator.resolve(
+            action: .approveMessage(action),
+            decision: .message(.init(
+                approvedAccount: WalletAccountDescriptor(walletID: "other-wallet", account: account),
+                solanaCluster: .devnet
+            )),
+            accounts: nil,
+            networkResolver: { _ in nil }
+        ) else { return XCTFail("A stale account must take precedence over a malformed decision") }
     }
 
     func testMessageDecisionRejectsAnotherWalletWithTheSameAddress() throws {
@@ -611,10 +727,14 @@ final class DappRequestProcessorTests: XCTestCase {
             transaction, reviewedNetwork: network,
             approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         ))
-        guard case .success(.transaction(_, let rebuilt)) = DappApprovalValidator.resolve(
+        guard case .success(let approval) = DappApprovalValidator.resolve(
             action: .approveTransaction(action), decision: .transaction(execution),
             accounts: nil, networkResolver: { _ in nil }
-        ) else { return XCTFail("Expected a ready reconstructed transaction") }
+        ), case .signing(let approvedAccount, .ethereumTransaction(let rebuilt, let approvedNetwork)) = approval.kind else {
+            return XCTFail("Expected a ready reconstructed transaction")
+        }
+        XCTAssertEqual(approvedAccount, execution.approvedAccount)
+        XCTAssertEqual(approvedNetwork, network)
         XCTAssertEqual(rebuilt.nonce, transaction.nonce)
         XCTAssertEqual(rebuilt.gas, transaction.gas)
         XCTAssertEqual(rebuilt.preparedFee, transaction.preparedFee)

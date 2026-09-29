@@ -818,15 +818,21 @@ final class PopupRequestSessions {
         guard let reviewedCatalog = session.reviewCatalog else {
             return false
         }
+        var accounts = [WalletAccountDescriptor]()
+        for selected in selectedAccounts {
+            guard let coin = WalletCoin.correspondingToInpageProvider(selected.coin) else {
+                session.setFeedback(Strings.somethingWentWrong)
+                return true
+            }
+            accounts.append(WalletAccountDescriptor(
+                walletID: selected.walletId,
+                coin: coin,
+                normalizedAddress: coin.normalizedAddress(selected.address),
+                derivationPath: selected.derivationPath
+            ))
+        }
         let selection = DappApprovalDecision.AccountSelection(
-            accounts: selectedAccounts.map {
-                .init(
-                    walletID: $0.walletId,
-                    address: $0.address,
-                    provider: $0.coin,
-                    derivationPath: $0.derivationPath
-                )
-            },
+            accounts: accounts,
             ethereumChainID: chainId
         )
         guard let resolved = DappApprovalValidator.resolveSelection(

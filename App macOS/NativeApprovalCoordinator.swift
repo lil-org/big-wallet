@@ -402,12 +402,7 @@ final class NativeApprovalCoordinator {
         ethereumNetwork: EthereumNetwork?
     ) {
         let identities = accounts.map {
-            DappApprovalDecision.AccountIdentity(
-                walletID: $0.walletId,
-                address: $0.account.address,
-                provider: $0.account.coin.correspondingInpageProvider,
-                derivationPath: $0.account.derivationPath
-            )
+            WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
         }
         approve(.accountSelection(.init(
             accounts: identities,

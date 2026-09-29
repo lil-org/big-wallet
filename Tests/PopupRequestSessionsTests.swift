@@ -224,8 +224,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             if native {
 #if os(macOS)
                 let decision = DappApprovalDecision.accountSelection(.init(
-                    accounts: [.init(walletID: "wallet", address: account.address,
-                                     provider: .ethereum, derivationPath: account.derivationPath)],
+                    accounts: [.init(walletID: "wallet", account: account)],
                     ethereumChainID: network.chainIdHexString
                 ))
                 let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
@@ -2446,9 +2445,9 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(refreshEvents, ["catalog"])
     }
 
-    func testAccountSelectionRejectsDuplicateSameCoinAndWrongCoinAccountsBeforeClaim() async throws {
+    func testAccountSelectionRejectsInvalidEntriesWithoutClaimingOrDroppingAccounts() async throws {
         let firstAccount = WalletAccount(
-            address: "solana-public-key-1",
+            address: WalletCoreProxyTestVectors.sequentialSolanaAddress,
             coin: .solana,
             derivation: .solanaSolana,
             derivationPath: "m/44'/501'/0'/0'",
@@ -2456,7 +2455,7 @@ extension PopupRequestSessionsTests {
             extendedPublicKey: ""
         )
         let secondAccount = WalletAccount(
-            address: "solana-public-key-2",
+            address: WalletCoreProxyTestVectors.oneSolanaAddress,
             coin: .solana,
             derivation: .solanaSolana,
             derivationPath: "m/44'/501'/1'/0'",
@@ -2474,11 +2473,38 @@ extension PopupRequestSessionsTests {
             SpecificWalletAccount(walletId: "wallet", account: $0)
         })
 
-        for (index, selectedAccounts) in [
+        var selections = [
             [firstAccount, firstAccount],
             [firstAccount, secondAccount],
             [wrongCoinAccount],
-        ].enumerated() {
+        ].map { selectedAccounts in
+            selectedAccounts.map { account in
+                [
+                    "walletId": "wallet",
+                    "address": account.address,
+                    "coin": account.coin.correspondingInpageProvider.rawValue,
+                    "derivationPath": account.derivationPath,
+                ]
+            }
+        }
+        let validSelection = selections[0][0]
+        for provider in ["unknown", "multiple"] {
+            var invalidSelection = validSelection
+            invalidSelection["coin"] = provider
+            selections.append([validSelection, invalidSelection])
+        }
+        for (key, value) in [
+            ("address", firstAccount.address.uppercased()),
+            ("address", "invalid-address"),
+            ("walletId", "another-wallet"),
+            ("derivationPath", secondAccount.derivationPath),
+        ] {
+            var invalidSelection = validSelection
+            invalidSelection[key] = value
+            selections.append([invalidSelection])
+        }
+
+        for (index, selectedAccounts) in selections.enumerated() {
             let store = try makeStore()
             let snapshot = try await enqueue(popupSnapshot(id: 40 + index, provider: .solana), in: store)
             var resolveCount = 0
@@ -2511,15 +2537,7 @@ extension PopupRequestSessionsTests {
                 requestToken: snapshot.handle.requestToken,
                 reviewToken: token,
                 payload: [
-                    "selectedAccounts": selectedAccounts.map { account in
-                        [
-                            "walletId": "wallet",
-                            "address": account.address,
-                            "coin": account.coin.correspondingInpageProvider.rawValue,
-                            "derivationPath": account.derivationPath,
-                        ]
-                    },
-
+                    "selectedAccounts": selectedAccounts,
                 ]
             )
 
@@ -2563,7 +2581,7 @@ extension PopupRequestSessionsTests {
         var executionCount = 0
         let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             executionCount += 1
-            guard case .accountSelection(_, let selection) = approval else {
+            guard case .accountSelection(_, let selection) = approval.kind else {
                 XCTFail("Expected account selection")
                 return .rollback
             }
@@ -2666,7 +2684,7 @@ extension PopupRequestSessionsTests {
         let network = popupTransactionNetwork()
         let processor = CompactPopupAccessProcessor(execute: { request, approval, signer in
             executions += 1
-            guard case .accountSelection(_, let selection) = approval else {
+            guard case .accountSelection(_, let selection) = approval.kind else {
                 XCTFail("Expected account selection")
                 return .rollback
             }
@@ -3311,8 +3329,7 @@ extension PopupRequestSessionsTests {
             XCTAssertNotNil(walletAccess)
             XCTAssertTrue(authenticatedAccess?.validateCurrent() == true)
             XCTAssertEqual(authenticatedAccess?.approvedAccount, popupTestAccountDescriptor())
-            guard case .message(let message, _) = approval,
-                  case .ethereumPersonalMessage(let payload) = message.payload else {
+            guard case .signing(_, .ethereumPersonalMessage(let payload)) = approval.kind else {
                 XCTFail("Expected the reviewed message")
                 return .response(request.response(error: .internalError))
             }
@@ -3513,7 +3530,7 @@ extension PopupRequestSessionsTests {
         let operation = try XCTUnwrap(backingAccess.operations.first)
         XCTAssertEqual(operation.approvedAccount, WalletAccountDescriptor(walletID: "wallet", account: accounts[0]))
         XCTAssertEqual(operation.handle, snapshot.handle)
-        guard case .message(.ethereumPersonalMessage(let message), nil) = operation.payload else {
+        guard case .ethereumPersonalMessage(let message) = operation.payload else {
             return XCTFail("Expected the reviewed personal-sign payload")
         }
         XCTAssertEqual(message, Data("reviewed".utf8))
@@ -4554,14 +4571,14 @@ extension PopupRequestSessionsTests {
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
             let transaction = popupExecutedTransaction(approval: approval)
             executionCount += 1
-            guard case .transaction(let reviewed, _) = approval else {
+            guard case .signing(_, .ethereumTransaction(let reviewed, _)) = approval.kind else {
                 XCTFail("Expected the reviewed transaction")
                 return .response(request.response(error: .internalError))
             }
-            XCTAssertEqual(reviewed.transaction.from, reviewedTransaction.from)
-            XCTAssertEqual(reviewed.transaction.to, reviewedTransaction.to)
-            XCTAssertEqual(reviewed.transaction.value, reviewedTransaction.value)
-            XCTAssertEqual(reviewed.transaction.data, reviewedTransaction.data)
+            XCTAssertEqual(reviewed.from, reviewedTransaction.from)
+            XCTAssertEqual(reviewed.to, reviewedTransaction.to)
+            XCTAssertEqual(reviewed.value, reviewedTransaction.value)
+            XCTAssertEqual(reviewed.data, reviewedTransaction.data)
             XCTAssertEqual(transaction?.nonce, approvedTransaction.nonce)
             XCTAssertEqual(transaction?.gas, approvedTransaction.gas)
             XCTAssertEqual(
@@ -5594,7 +5611,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(executions, 1)
     }
 
-    func testNativeFinalizerSharesNormalizedSelectionAndDisconnectRules() async throws {
+    func testNativeFinalizerSharesCanonicalSelectionAndDisconnectRules() async throws {
         let account = WalletAccount(
             address: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
             coin: .ethereum,
@@ -5604,14 +5621,9 @@ extension PopupRequestSessionsTests {
             extendedPublicKey: ""
         )
         let specific = SpecificWalletAccount(walletId: "wallet", account: account)
-        let identity = DappApprovalDecision.AccountIdentity(
-            walletID: "wallet",
-            address: account.address.uppercased(),
-            provider: .ethereum,
-            derivationPath: account.derivationPath
-        )
+        let identity = WalletAccountDescriptor(walletID: "wallet", account: account)
         let network = popupTransactionNetwork()
-        let cases: [(name: String, accounts: [SpecificWalletAccount], selection: [DappApprovalDecision.AccountIdentity], network: EthereumNetwork?, allowed: Bool)] = [
+        let cases: [(name: String, accounts: [SpecificWalletAccount], selection: [WalletAccountDescriptor], network: EthereumNetwork?, allowed: Bool)] = [
             ("normalized identity", [specific], [identity], network, true),
             ("ambiguous identity", [specific, specific], [identity], network, false),
             ("disconnect after network removal", [], [], nil, true),
@@ -5669,12 +5681,7 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let network = popupTransactionNetwork()
         let decision = DappApprovalDecision.accountSelection(.init(
-            accounts: [.init(
-                walletID: "wallet",
-                address: account.address,
-                provider: .ethereum,
-                derivationPath: account.derivationPath
-            )],
+            accounts: [.init(walletID: "wallet", account: account)],
             ethereumChainID: network.chainIdHexString
         ))
         let authorization = try await store.prepareNativeApproval(
@@ -5685,7 +5692,7 @@ extension PopupRequestSessionsTests {
         let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess in
             XCTAssertNil(walletAccess)
             XCTAssertNil(approval.signingAccount)
-            guard case .accountSelection(_, let selection) = approval else {
+            guard case .accountSelection(_, let selection) = approval.kind else {
                 XCTFail("Expected account selection")
                 return .response(request.response(error: .internalError))
             }
@@ -5717,6 +5724,10 @@ extension PopupRequestSessionsTests {
             requestProcessor: processor,
             refreshWalletCatalog: {
                 refreshes += 1
+                guard refreshes == 1 else {
+                    XCTFail("Preparation and selection must use the same catalog snapshot")
+                    return WalletReviewCatalog(accounts: [])
+                }
                 return access
             },
             makeSigner: { _, _ in
@@ -5745,7 +5756,7 @@ extension PopupRequestSessionsTests {
 
         XCTAssertEqual(result, .responseReady)
         XCTAssertEqual(second, .responseReady)
-        XCTAssertEqual(refreshes, 2)
+        XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(events, ["nativeClaim", "begin", "resolve", "complete"])
         XCTAssertTrue(committed)
@@ -5882,12 +5893,7 @@ extension PopupRequestSessionsTests {
         let authorization = try await store.prepareNativeApproval(
             handle: snapshot.handle,
             decision: .accountSelection(.init(
-                accounts: [.init(
-                    walletID: "wallet",
-                    address: account.address,
-                    provider: .ethereum,
-                    derivationPath: account.derivationPath
-                )],
+                accounts: [.init(walletID: "wallet", account: account)],
                 ethereumChainID: network.chainIdHexString
             ))
         )
@@ -5896,7 +5902,7 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         var resolves = 0
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess in
-            guard case .accountSelection(_, let selection) = approval else {
+            guard case .accountSelection(_, let selection) = approval.kind else {
                 XCTFail("Expected account selection")
                 return .response(request.response(error: .internalError))
             }
@@ -6660,8 +6666,11 @@ extension PopupRequestSessionsTests {
             isRunning: { true }
         )
 
-        let confirmed = await NativeAgentLauncher(dependencies: launcherTestDependencies(
-            validate: { $0 == bundleURL.standardizedFileURL },
+        let confirmed = NativeAgentLauncher(dependencies: launcherTestDependencies(
+            validate: { _ in
+                XCTFail("Confirmation must not validate code")
+                return false
+            },
             helpers: { [validRuntime] },
             identity: { _ in identity }
         )).isConfirmed(
@@ -6669,7 +6678,7 @@ extension PopupRequestSessionsTests {
             deadline: UInt64.max
         )
         XCTAssertTrue(confirmed)
-        let replaced = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+        let replaced = NativeAgentLauncher(dependencies: launcherTestDependencies(
             validate: { _ in
                 XCTFail("A replaced process must not reach code verification")
                 return true
@@ -7315,7 +7324,7 @@ private extension WalletReviewCatalog {
 }
 
 private func popupExecutedTransaction(approval: DappApprovalValidator.Approval) -> Transaction? {
-    guard case .transaction(_, let transaction) = approval else { return nil }
+    guard case .signing(_, .ethereumTransaction(let transaction, _)) = approval.kind else { return nil }
     return transaction
 }
 

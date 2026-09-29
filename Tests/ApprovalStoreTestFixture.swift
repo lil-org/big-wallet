@@ -169,9 +169,18 @@ func approvedWalletSigningOperationForTesting(
         meta: "",
         payload: payload
     )
+    let approval = try DappApprovalValidator.resolve(
+        action: .approveMessage(action),
+        decision: .message(.init(
+            approvedAccount: approvedAccount,
+            solanaCluster: action.solanaClusterOptions == nil ? nil : .devnet
+        )),
+        accounts: nil,
+        networkResolver: { _ in nil }
+    ).get()
     return try XCTUnwrap(ApprovedWalletSigningOperation(
         request: request,
-        approval: .message(action, action.solanaClusterOptions == nil ? nil : .devnet),
+        approval: approval,
         authorization: authorization ?? walletSigningAuthorizationForTesting(
             approvedAccount: approvedAccount,
             handle: .init(id: requestID, token: .init(value: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!), profileIdentifier: nil),

@@ -218,8 +218,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
             let decision = DappApprovalDecision.accountSelection(.init(
                 accounts: action.selectedAccounts.map {
-                    .init(walletID: $0.walletId, address: $0.account.address,
-                          provider: $0.account.coin.correspondingInpageProvider, derivationPath: $0.account.derivationPath)
+                    WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
                 },
                 ethereumChainID: chainID
             ))
@@ -7659,7 +7658,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         for scenario in ["missing", "terminated", "reused", "unreadableStart", "unreadableIdentity", "differentIdentity"] {
             var lookups = [Int32]()
-            let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+            let status = NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { _ in XCTFail("Unconfirmed owners must not verify signatures"); return false },
                 helper: { pid in
                     lookups.append(pid)
@@ -7683,7 +7682,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         launchedAt: original.launchedAt
                     )
                 }
-            )).status(
+            )).observe(
                 owner: receipt.owner,
                 expected: .init(url: url, version: original.version)
             )
@@ -7697,7 +7696,122 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testRuntimeConfirmationRechecksIdentityAfterCodeVerification() async throws {
+    func testCompatibleRuntimeObservationsNeverVerifyCode() throws {
+        let bundleURL = try makeAmbientBundle(name: "Observed Runtime", build: "149")
+        let identity = try runtimeIdentity(
+            processIdentifier: 845,
+            bundleURL: bundleURL,
+            launchDate: Date(timeIntervalSince1970: 14_100)
+        )
+        let helper = runtimeHelper(
+            processIdentifier: identity.processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: identity.launchedAt
+        )
+        let launcher = NativeAgentLauncher(dependencies: launcherTestDependencies(
+            helperURL: { bundleURL },
+            validate: { _ in
+                XCTFail("Observation must not verify code")
+                return false
+            },
+            helpers: { [helper] },
+            helper: { _ in helper },
+            identity: { _ in identity }
+        ))
+        let owner = try XCTUnwrap(identity.nativeDeliveryOwner)
+        let expected = try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL))
+
+        for _ in 0..<3 {
+            guard case .compatible(let observed) = launcher.observe(owner: owner) else {
+                return XCTFail("Expected compatible receipt owner")
+            }
+            XCTAssertEqual(observed.identity, identity)
+            XCTAssertTrue(launcher.isConfirmed(expected, deadline: UInt64.max))
+        }
+    }
+
+    @MainActor
+    func testRuntimeObservationRechecksIdentityBeforeReportingCompatibility() throws {
+        let bundleURL = try makeAmbientBundle(name: "Changing Observed Runtime", build: "149")
+        let original = try runtimeIdentity(
+            processIdentifier: 849,
+            bundleURL: bundleURL,
+            launchDate: Date(timeIntervalSince1970: 14_100)
+        )
+        let replacement = try runtimeIdentity(
+            processIdentifier: original.processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: original.launchedAt
+        )
+        let helper = runtimeHelper(
+            processIdentifier: original.processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: original.launchedAt
+        )
+        let owner = try XCTUnwrap(original.nativeDeliveryOwner)
+        let expected = try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL))
+
+        for confirm in [false, true] {
+            var identityReads = 0
+            let launcher = NativeAgentLauncher(dependencies: launcherTestDependencies(
+                validate: { _ in
+                    XCTFail("Observation must not verify code")
+                    return false
+                },
+                helpers: { [helper] },
+                helper: { _ in helper },
+                identity: { _ in
+                    identityReads += 1
+                    return identityReads == 1 ? original : replacement
+                }
+            ))
+
+            if confirm {
+                XCTAssertFalse(launcher.isConfirmed(expected, deadline: UInt64.max))
+            } else {
+                guard case .unidentified = launcher.observe(owner: owner, expected: expected) else {
+                    return XCTFail("A changed runtime must not retain ownership")
+                }
+            }
+            XCTAssertEqual(identityReads, 2)
+        }
+    }
+
+    @MainActor
+    func testRuntimeConfirmationStopsAtDeadlineDuringObservation() throws {
+        let bundleURL = try makeAmbientBundle(name: "Confirmation Deadline", build: "149")
+        let identity = try runtimeIdentity(
+            processIdentifier: 850,
+            bundleURL: bundleURL,
+            launchDate: Date(timeIntervalSince1970: 14_100)
+        )
+        let helper = runtimeHelper(
+            processIdentifier: identity.processIdentifier,
+            bundleURL: bundleURL,
+            launchDate: identity.launchedAt
+        )
+        var uptime: UInt64 = 0
+        let launcher = NativeAgentLauncher(dependencies: launcherTestDependencies(
+            validate: { _ in
+                XCTFail("Observation must not verify code")
+                return false
+            },
+            helpers: { [helper] },
+            identity: { _ in
+                uptime = 50_000_000
+                return identity
+            },
+            uptime: { uptime }
+        ))
+
+        XCTAssertFalse(launcher.isConfirmed(
+            try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL)),
+            deadline: 50_000_000
+        ))
+    }
+
+    @MainActor
+    func testRuntimeRetirementVerificationRechecksIdentityAfterCodeVerification() async throws {
         let bundleURL = try makeAmbientBundle(name: "Replaced During Verification", build: "149")
         let launchDate = Date(timeIntervalSince1970: 14_100)
         let original = try runtimeIdentity(
@@ -7717,48 +7831,23 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         var identity = original
         var verifications = 0
-        let confirmed = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+        let verified = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+            helperURL: { bundleURL },
             validate: { _ in
                 verifications += 1
                 await Task.yield()
                 identity = replacement
                 return true
             },
-            helpers: { [helper] },
             identity: { _ in identity }
-        )).isConfirmed(
-            try XCTUnwrap(NativeAgentLauncher.ExpectedRuntime(url: bundleURL)),
-            deadline: UInt64.max
-        )
+        )).verifiedExpectedRuntime(for: .init(helper: helper, identity: original))
 
-        XCTAssertFalse(confirmed)
+        XCTAssertNil(verified)
         XCTAssertEqual(verifications, 1)
-
-        identity = original
-        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
-                validate: { _ in
-                verifications += 1
-                await Task.yield()
-                identity = replacement
-                return true
-            },
-                helper: { pid in
-                XCTAssertEqual(pid, original.processIdentifier)
-                return helper
-            },
-                identity: { _ in identity }
-            )).status(
-                owner: try XCTUnwrap(original.nativeDeliveryOwner),
-                expected: .init(url: bundleURL, version: original.version)
-            )
-        guard case .unidentified = status else {
-            return XCTFail("Changed receipt owner must not receive delivery")
-        }
-        XCTAssertEqual(verifications, 2)
     }
 
     @MainActor
-    func testRuntimeVerificationRejectsAnInstalledVersionDifferentFromCapturedVersion() async throws {
+    func testRuntimeObservationRejectsAnInstalledVersionDifferentFromCapturedVersion() throws {
         let bundleURL = try makeAmbientBundle(name: "Updated Since Capture", build: "149")
         let launchDate = Date(timeIntervalSince1970: 14_150)
         let identity = AmbientRuntimeIdentity(
@@ -7780,7 +7869,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             verifications += 1
             return true
         }
-        let confirmed = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+        let confirmed = NativeAgentLauncher(dependencies: launcherTestDependencies(
             validate: validate,
             helpers: { [helper] },
             identity: { _ in identity }
@@ -7789,22 +7878,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             deadline: UInt64.max
         )
         XCTAssertFalse(confirmed)
-        XCTAssertEqual(verifications, 1)
+        XCTAssertEqual(verifications, 0)
 
-        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+        let status = NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: validate,
                 helper: { pid in
                 ([helper]).first { $0.processIdentifier == pid }
             },
                 identity: { _ in identity }
-            )).status(
+            )).observe(
                 owner: try XCTUnwrap(identity.nativeDeliveryOwner),
                 expected: .init(url: bundleURL, version: identity.version)
             )
         guard case .unidentified = status else {
             return XCTFail("An updated installed bundle must invalidate captured compatibility")
         }
-        XCTAssertEqual(verifications, 2)
+        XCTAssertEqual(verifications, 0)
     }
 
     @MainActor
@@ -7819,7 +7908,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(runtime: UUID(), bundleURL: expectedURL)
         )
 
-        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+        let status = NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { $0 == expectedURL },
                 helper: { pid in
                 ([self.runtimeHelper(
@@ -7829,7 +7918,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 )]).first { $0.processIdentifier == pid }
             },
                 identity: { _ in nil }
-            )).status(
+            )).observe(
                 owner: receipt.owner,
                 expected: .init(url: expectedURL, version: version)
             )
@@ -7850,7 +7939,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             owner: try nativeDeliveryOwner(runtime: UUID(), bundleURL: expectedURL)
         )
 
-        let status = await NativeAgentLauncher(dependencies: launcherTestDependencies(
+        let status = NativeAgentLauncher(dependencies: launcherTestDependencies(
                 validate: { $0 == expectedURL },
                 helper: { pid in
                 ([self.runtimeHelper(
@@ -7860,7 +7949,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 )]).first { $0.processIdentifier == pid }
             },
                 identity: { _ in nil }
-            )).status(
+            )).observe(
                 owner: receipt.owner,
                 expected: .init(url: expectedURL, version: version)
             )

@@ -10,15 +10,17 @@ final class NativeApprovalResponseTests: XCTestCase {
             let fixture = try NativeApprovalServiceTestFixture()
             let request = try fixture.request(manual: true)
             fixture.deliver(request)
-            fixture.onValidate = { _ in
-                if completed {
-                    fixture.setState(.responded, for: request)
-                } else {
-                    fixture.deliver(request, executing: true)
+            fixture.onLoad = { handle in
+                if fixture.loads.count == 3 {
+                    if completed {
+                        fixture.setState(.responded, for: request)
+                    } else {
+                        fixture.deliver(request, executing: true)
+                    }
                 }
-                return true
+                return fixture.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
             }
-            defer { fixture.onValidate = nil }
+            defer { fixture.onLoad = nil }
             let service = fixture.service()
             let result = try await fixture.finish {
                 await service.reconcile(.init(request), intent: .focus)

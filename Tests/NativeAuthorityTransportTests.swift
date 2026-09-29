@@ -100,6 +100,53 @@ final class NativeAuthorityTransportTests: XCTestCase {
         ]))
     }
 
+    func testSelectedAccountsRetainTheExactPopupWireShape() throws {
+        let selected: [String: Any] = [
+            "walletId": "selected-wallet",
+            "address": "0x" + String(repeating: "AB", count: 20),
+            "coin": "ethereum",
+            "derivationPath": "m/44'/60'/0'/0/1",
+        ]
+        func approval(_ selected: [String: Any]) throws -> InternalSafariRequest {
+            try decode([
+                "subject": "approveRequest",
+                "requestToken": requestToken,
+                "reviewToken": requestToken,
+                "payload": ["selectedAccounts": [selected]],
+            ])
+        }
+        guard case .popup(.approveRequest(_, let payload)) = try approval(selected).command,
+              let account = payload.selectedAccounts?.first else {
+            return XCTFail("Expected the popup account selection")
+        }
+        XCTAssertEqual(account.walletId, selected["walletId"] as? String)
+        XCTAssertEqual(account.address, selected["address"] as? String)
+        XCTAssertEqual(account.coin, .ethereum)
+        XCTAssertEqual(account.derivationPath, selected["derivationPath"] as? String)
+
+        for field in selected.keys {
+            var missing = selected
+            missing.removeValue(forKey: field)
+            XCTAssertThrowsError(try approval(missing), field)
+            var wrongType = selected
+            wrongType[field] = 1
+            XCTAssertThrowsError(try approval(wrongType), field)
+        }
+        for field in ["walletID", "normalizedAddress", "publicKey"] {
+            var extra = selected
+            extra[field] = "unexpected"
+            XCTAssertThrowsError(try approval(extra), field)
+        }
+        for provider in [InpageProvider.unknown, .multiple] {
+            var unsupported = selected
+            unsupported["coin"] = provider.rawValue
+            guard case .popup(.approveRequest(_, let payload)) = try approval(unsupported).command else {
+                return XCTFail("Unsupported selection providers remain subject to semantic validation")
+            }
+            XCTAssertEqual(payload.selectedAccounts?.first?.coin, provider)
+        }
+    }
+
     func testRecoveryDiscoveryCannotSupplyAProfileOrGrant() throws {
         guard case .worker(.getRecoveryRequests) = try decode([
             "subject": "getRecoveryRequests",

@@ -93,7 +93,8 @@ struct SolanaDappRequestProcessor {
         approval: DappApprovalValidator.Approval,
         signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
-        guard case .message = approval
+        guard case .signing(_, let payload) = approval.kind,
+              !payload.isEthereumTransaction
         else { return .response(response(to: request, error: .internalError)) }
         guard let signer else { return .rollback }
         switch await signer.sign() {

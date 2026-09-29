@@ -117,14 +117,14 @@ struct DappRequestProcessor: DappRequestProcessing {
         approval: DappApprovalValidator.Approval,
         signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
-        switch approval {
+        switch approval.kind {
         case .accountSelection(let selectionAction, let selection):
             return .response(Self.executeAccountSelection(
                 request: request,
                 action: selectionAction,
                 selection: selection
             ))
-        case .message, .transaction, .addEthereumChain:
+        case .signing, .addEthereumChain:
             switch request.body {
             case .ethereum:
                 return await EthereumDappRequestProcessor.execute(

@@ -231,6 +231,31 @@
             XCTAssertTrue(f.launches.isEmpty)
         }
 
+        func testRepeatedCompatibleOwnershipObservationDoesNotVerifyCode() async throws {
+            for executing in [false, true] {
+                let f = try fixture()
+                let request = try f.request()
+                f.deliver(request, executing: executing)
+                f.onValidate = { _ in
+                    XCTFail("Observing an existing owner must not verify code")
+                    return false
+                }
+                let service = f.service()
+
+                for _ in 0..<3 {
+                    let admitted = await service.reconcile(.init(request), intent: .admission)
+                    let maintained = await f.maintain(service, request)
+                    XCTAssertEqual(admitted, .pending)
+                    XCTAssertEqual(maintained, .pending)
+                }
+
+                XCTAssertTrue(f.validations.isEmpty)
+                XCTAssertTrue(f.launches.isEmpty)
+                XCTAssertTrue(f.quits.isEmpty)
+                XCTAssertTrue(f.clears.isEmpty)
+            }
+        }
+
         func testUnidentifiedReceiptOwnerIsRetained() async throws {
             let f = try fixture()
             let request = try f.request()
@@ -340,7 +365,7 @@
             let service = f.service()
             let result = await f.maintain(service, request)
             guard case .pending = result else { return XCTFail("Expected pending approval") }
-            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertEqual(f.validations.count, 1)
             XCTAssertEqual(f.snapshots[request.handle]?.nativeDeliveryReceipt, receipt)
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
@@ -656,6 +681,7 @@
                 }
                 XCTAssertEqual(result, publish)
                 XCTAssertEqual(f.launches.count, 1)
+                XCTAssertEqual(f.validations.count, 1)
             }
         }
 
@@ -672,6 +698,7 @@
             let result = try await f.finish { await task.value }
             XCTAssertTrue(result)
             XCTAssertEqual(f.launches.count, 1)
+            XCTAssertEqual(f.validations.count, 1)
         }
 
         func testReactivationPublishesAndReadsReceiptThroughFileStore() async throws {
@@ -1287,7 +1314,7 @@
             }
         }
 
-        func testReactivationReusesVerifiedOwnershipBeforeFinalSendValidation() async throws {
+        func testReactivationVerifiesCodeOnlyBeforeSending() async throws {
             let f = try fixture()
             let request = try f.request()
             let runtime = f.runtime()
@@ -1300,22 +1327,21 @@
             }
 
             XCTAssertEqual(result, .opened)
-            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertEqual(f.validations.count, 1)
             XCTAssertEqual(f.launches.map(\.target), [
                 .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
                          runtimeInstanceIdentifier: runtime.instanceIdentifier),
             ])
         }
 
-        func testReactivationReconcilesReceiptReplacementAfterVerification() async throws {
+        func testReactivationReconcilesReceiptReplacementDuringPreSendReload() async throws {
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
             let replacement = f.runtime(pid: 84)
-            var replaced = false
             f.onLoad = { handle in
-                if !f.validations.isEmpty && !replaced {
-                    replaced = true
+                if f.loads.count == 3 {
+                    XCTAssertTrue(f.validations.isEmpty)
                     f.deliver(request, runtime: replacement)
                 }
                 return f.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
@@ -1328,6 +1354,7 @@
             }
 
             XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.validations.count, 1)
             XCTAssertEqual(f.launches.map(\.target), [
                 .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 84,
                          runtimeInstanceIdentifier: replacement.instanceIdentifier),
@@ -1345,6 +1372,13 @@
             f.onLaunch = { _, _, completion in completion(true) }
             let service = f.service()
 
+            let first = try await f.finish {
+                await service.reconcile(.init(request), intent: .focus)
+            }
+            XCTAssertEqual(first, .opened)
+            XCTAssertEqual(f.validations.count, 1)
+            XCTAssertEqual(f.launches.count, 1)
+
             let result = try await f.finish {
                 await service.reconcile(.init(request), intent: .focus)
             }
@@ -1352,7 +1386,7 @@
             XCTAssertEqual(result, .unavailable)
             XCTAssertEqual(AmbientRuntimeIdentity.bundleVersion(at: f.bundleURL), version)
             XCTAssertEqual(f.validations.count, 2)
-            XCTAssertTrue(f.launches.isEmpty)
+            XCTAssertEqual(f.launches.count, 1)
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
         }
@@ -1361,10 +1395,9 @@
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
-            var replaced = false
             f.onLoad = { handle in
-                if !f.validations.isEmpty && !replaced {
-                    replaced = true
+                if f.loads.count == 3 {
+                    XCTAssertTrue(f.validations.isEmpty)
                     f.processes[42] = f.runtime()
                 }
                 return f.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
@@ -1377,6 +1410,7 @@
             }
 
             XCTAssertEqual(result, .unavailable)
+            XCTAssertTrue(f.validations.isEmpty)
             XCTAssertTrue(f.launches.isEmpty)
             XCTAssertTrue(f.quits.isEmpty)
             XCTAssertTrue(f.clears.isEmpty)
@@ -1388,7 +1422,7 @@
             f.deliver(request)
             var caller: Task<NativeApprovalService.ReconciliationResult, Never>?
             f.onValidate = { _ in
-                if f.validations.count == 2 {
+                if f.validations.count == 1 {
                     caller?.cancel()
                     XCTAssertTrue(Task.isCancelled)
                 }
@@ -1400,7 +1434,7 @@
             caller = task
             let result = try await f.finish { await task.value }
             XCTAssertEqual(result, .unavailable)
-            XCTAssertEqual(f.validations.count, 2)
+            XCTAssertEqual(f.validations.count, 1)
             XCTAssertTrue(f.launches.isEmpty)
         }
 

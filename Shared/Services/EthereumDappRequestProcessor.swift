@@ -169,17 +169,17 @@ struct EthereumDappRequestProcessor {
         approval: DappApprovalValidator.Approval,
         signer: (any WalletSigning)?
     ) async -> DappExecutionResult {
-        switch approval {
-        case .message, .transaction:
+        switch approval.kind {
+        case .signing(_, let payload):
             guard let signer else { return .rollback }
             switch await signer.sign() {
             case .success(.ethereumSignature(let signature)):
-                guard case .message = approval else {
+                guard !payload.isEthereumTransaction else {
                     return .response(response(to: request, error: .internalError))
                 }
                 return .response(response(to: request, result: .string(signature)))
             case .success(.ethereumTransaction(let signedTransaction, let hash, let network)):
-                guard case .transaction = approval else {
+                guard payload.isEthereumTransaction else {
                     return .response(response(to: request, error: .internalError))
                 }
                 return prepareTransactionBroadcast(

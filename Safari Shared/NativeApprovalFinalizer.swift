@@ -143,13 +143,13 @@ final class NativeApprovalFinalizer {
         }
 
         let preparation: DappRequestPreparation
-        let signingCatalog: WalletReviewCatalog?
+        let preparationCatalog: WalletReviewCatalog?
         if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
             preparation = walletIndependent
-            signingCatalog = nil
+            preparationCatalog = nil
         } else {
             guard let refreshedAccess = refreshWalletCatalog() else { return .rollback }
-            signingCatalog = refreshedAccess
+            preparationCatalog = refreshedAccess
             CustomNetworkCache.shared.invalidate()
             preparation = requestProcessor.prepare(request, catalog: refreshedAccess)
         }
@@ -162,7 +162,7 @@ final class NativeApprovalFinalizer {
             }
             let accounts: [SpecificWalletAccount]?
             if case .accountSelection = authorization.decision {
-                accounts = refreshWalletCatalog()?.orderedAccounts
+                accounts = preparationCatalog?.orderedAccounts
             } else {
                 accounts = nil
             }
@@ -175,7 +175,7 @@ final class NativeApprovalFinalizer {
             case .success(let approval):
                 let executionSigner: (any WalletSigning)?
                 if let approvedAccount = approval.signingAccount {
-                    guard signingCatalog?.orderedAccounts.contains(where: {
+                    guard preparationCatalog?.orderedAccounts.contains(where: {
                         approvedAccount.matches(walletID: $0.walletId, account: $0.account)
                     }) == true else {
                         return .response(Self.staleResponse(for: request), approvalCommitted: false)
