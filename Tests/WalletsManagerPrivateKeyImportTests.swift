@@ -619,7 +619,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             mutation: .accounts([.ethereum(address: account.normalizedAddress, chainId: "0x1")]),
             approvedAccounts: [account]
         ).markingApprovalCommitted()
-        guard store.complete(permit: permit, response: response, authority: .ordinary) == .persisted else {
+        guard store.complete(permit: permit, response: response) == .persisted else {
             throw CocoaError(.fileWriteUnknown)
         }
     }

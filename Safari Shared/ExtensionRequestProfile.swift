@@ -188,12 +188,15 @@ struct ExtensionRequestProfile {
             case ordinary(deadline: Date)
             case native(NativeApproval, context: ExtensionBridge.NativeExecutionContext)
 
-            var deadline: Date {
+            var authority: ExtensionBridge.ExecutionAuthority {
                 switch self {
-                case .ordinary(let deadline): return deadline
-                case .native(_, let context): return context.executionDeadline
+                case .ordinary(let deadline): return .ordinary(deadline: deadline)
+                case .native(let approval, let context):
+                    return .native(approvedAt: approval.approvedAt, context: context)
                 }
             }
+
+            var deadline: Date { authority.executionDeadline }
 
             var broadcast: BroadcastApproval {
                 switch self {
@@ -302,18 +305,12 @@ struct ExtensionRequestProfile {
             now: Date,
             isCancelled: Bool
         ) -> Bool {
+            guard claimedApproval?.authority == authority else { return false }
             switch authority {
-            case .ordinary:
-                if case .broadcastPrepared = state { return true }
-                guard case .claimed(_, _, .ordinary(let deadline)) = state else { return false }
+            case .ordinary(let deadline):
                 return ExtensionRequestProfile.executionDeadlineIsCurrent(deadline, now: now)
-            case .mobileSigning(let deadline):
-                guard case .claimed(_, _, .ordinary(let claimedDeadline)) = state else { return false }
-                return deadline == claimedDeadline && ExtensionRequestProfile.executionDeadlineIsCurrent(deadline, now: now)
-            case .native(let expected):
-                return !isCancelled && nativeExecutionContext == expected &&
-                    now >= expected.observedAt &&
-                    now < expected.executionDeadline
+            case .native(_, let expected):
+                return !isCancelled && now >= expected.observedAt && now < expected.executionDeadline
             }
         }
 

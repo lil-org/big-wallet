@@ -12,10 +12,8 @@ final class PopupTransactionSession {
     }
 
     private let coordinator: TransactionApprovalCoordinator
-    private var gasSpeedConfiguration = GasSpeedConfiguration()
     private var authenticationToken: TransactionApprovalRequestToken?
     private var preflightContinuation: CheckedContinuation<PreflightOutcome, Never>?
-    private(set) var activeAlert: TransactionApprovalAlertIntent?
     var editorRequestToken = 0
     var balance: String?
     var onChange: () -> Void = {}
@@ -40,12 +38,16 @@ final class PopupTransactionSession {
         return coordinator.snapshot
     }
 
-    var hasGasSpeedInfo: Bool {
-        return gasSpeedConfiguration.info != nil
+    var activeAlert: TransactionApprovalAlertIntent? {
+        coordinator.activeAlert
     }
 
-    func gasSliderPosition(for transaction: Transaction) -> Double {
-        return gasSpeedConfiguration.sliderPosition(for: transaction)
+    var hasGasSpeedInfo: Bool {
+        coordinator.hasGasSpeedInfo
+    }
+
+    var gasSliderPosition: Double {
+        coordinator.gasSliderPosition
     }
 
     func start() {
@@ -98,38 +100,12 @@ final class PopupTransactionSession {
     func setSpeed(
         _ payload: InternalSafariRequest.TransactionSpeedPayload
     ) {
-        func applyFee() -> Bool {
-            guard snapshot.transaction.feeBasisBaseFeePerGas != nil,
-                  let info = gasSpeedConfiguration.info else { return false }
-            gasSpeedConfiguration.markGasSliderInteraction()
-            let didChangeFee = coordinator.setFeeForSpeed(
-                value: payload.value,
-                inRelationTo: info
-            )
-            let transaction = snapshot.transaction
-            gasSpeedConfiguration.recordSelectedSliderPosition(
-                payload.value,
-                for: transaction
-            )
-            if didChangeFee {
-                gasSpeedConfiguration.markGasSliderFeeChange()
-            }
-            return didChangeFee
-        }
-
-        func closeInteraction(didChangeFee: Bool) {
-            guard gasSpeedConfiguration.endGasSliderInteraction(
-                didChangeFee: didChangeFee
-            ) else { return }
-            updateSpeedConfiguration(transaction: snapshot.transaction)
-        }
-
         switch payload.interaction {
         case .ended:
-            closeInteraction(didChangeFee: applyFee())
+            coordinator.setFeeForSpeed(value: payload.value)
+            coordinator.endSliderInteraction()
         case .cancelled:
-            _ = coordinator.endSliderInteraction(cancelled: true)
-            closeInteraction(didChangeFee: false)
+            coordinator.endSliderInteraction(cancelled: true)
         }
     }
 
@@ -180,7 +156,7 @@ final class PopupTransactionSession {
             resettingFeeTo: selectedSuggestedFee
         ) else { return false }
         guard edits != Transaction.Edits() else { return true }
-        return commit(edits, previousTransaction: transaction)
+        return commit(edits)
     }
 
     @discardableResult
@@ -197,40 +173,18 @@ final class PopupTransactionSession {
         return true
     }
 
-    private func updateSpeedConfiguration(transaction: Transaction) {
-        if let priorityFee = gasSpeedConfiguration.speedPriorityFeePerGas(for: transaction) {
-            gasSpeedConfiguration.installTransactionFallback(feePerGas: priorityFee)
-        }
-        gasSpeedConfiguration.synchronizeSelectedSliderPosition(with: transaction)
-    }
-
-    private func commit(
-        _ edits: Transaction.Edits,
-        previousTransaction: Transaction
-    ) -> Bool {
+    private func commit(_ edits: Transaction.Edits) -> Bool {
         guard snapshot.canEdit else { return false }
         guard coordinator.apply(edits: edits) else { return true }
-        let updatedTransaction = snapshot.transaction
-        gasSpeedConfiguration.commitAppliedEdits(
-            edits,
-            from: previousTransaction,
-            to: updatedTransaction
-        )
         coordinator.startPreparation(forceGasCheck: true)
         return true
     }
 
     private func receive(_ output: TransactionApprovalOutput) {
         switch output {
-        case .snapshot(let snapshot):
-            updateSpeedConfiguration(transaction: snapshot.transaction)
-            if activeAlert.map({ coordinator.isCurrentAlert($0.token) == false }) == true {
-                activeAlert = nil
-            }
-        case .verifiedFeeEstimate(let estimate):
-            gasSpeedConfiguration.applyFetchedEstimate(estimate)
-        case .alert(let intent):
-            activeAlert = intent
+        case .snapshot, .verifiedFeeEstimate:
+            break
+        case .alert:
             finishPreflight(with: .reviewRequired)
         case .editorRequest:
             editorRequestToken += 1

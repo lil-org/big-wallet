@@ -304,10 +304,9 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(session.state, .working)
         XCTAssertNotEqual(token, initialToken)
 
-        let claim = ExtensionBridge.ApprovalClaim(
+        let claim = try makeApprovalClaimForTesting(
             handle: session.handle,
-            value: UUID(),
-            executionDeadline: Date().addingTimeInterval(150)
+            deadline: Date().addingTimeInterval(150)
         )
         XCTAssertNil(session.approvalClaim)
         XCTAssertFalse(session.beginAuthentication(claim: claim, token: token))
@@ -329,10 +328,9 @@ final class PopupRequestSessionsTests: XCTestCase {
         let session = try makeSession()
         let token = try XCTUnwrap(session.beginApproval())
         let stale = UUID()
-        let claim = ExtensionBridge.ApprovalClaim(
+        let claim = try makeApprovalClaimForTesting(
             handle: session.handle,
-            value: UUID(),
-            executionDeadline: Date().addingTimeInterval(150)
+            deadline: Date().addingTimeInterval(150)
         )
 
         XCTAssertFalse(session.acceptClaim(claim, token: stale))
@@ -362,10 +360,9 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(session.errorText, "Choose an account")
         let token = try XCTUnwrap(session.beginApproval())
         XCTAssertNil(session.errorText)
-        let claim = ExtensionBridge.ApprovalClaim(
+        let claim = try makeApprovalClaimForTesting(
             handle: session.handle,
-            value: UUID(),
-            executionDeadline: Date().addingTimeInterval(150)
+            deadline: Date().addingTimeInterval(150)
         )
         XCTAssertTrue(session.acceptClaim(claim, token: token))
         session.setFeedback("Try again")
@@ -616,7 +613,6 @@ final class PopupRequestSessionsTests: XCTestCase {
                     id: 457, provider: .ethereum, method: "signPersonalMessage"
                 ), in: store)
                 let claim: ExtensionBridge.ApprovalClaim
-                let context: ExtensionBridge.NativeExecutionContext?
                 if kind == .native {
                     let authorization = try await store.prepareNativeApproval(
                         handle: snapshot.handle,
@@ -628,14 +624,12 @@ final class PopupRequestSessionsTests: XCTestCase {
                         runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
                         approvedAt: authorization.approvedAt
                     ) else { return XCTFail("Expected native claim") }
-                    claim = nativeClaim.approvalClaim
-                    context = nativeClaim.executionContext
+                    claim = nativeClaim
                 } else {
                     guard case .claimed(let ordinaryClaim) = await store.claim(handle: snapshot.handle) else {
                         return XCTFail("Expected claim")
                     }
                     claim = ordinaryClaim
-                    context = nil
                 }
                 let executor = DurableApprovalExecutor(store: store, clock: { claim.executionDeadline.addingTimeInterval(offset) })
                 let operation: () async -> DappExecutionResult = {
@@ -648,7 +642,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                     result = await executor.executeOrdinary(claim: claim, operation: operation)
                 case .native:
                     result = await executor.executeNative(
-                        claim: claim, context: try XCTUnwrap(context), operation: operation
+                        claim: claim, operation: operation
                     )
                 case .mobile:
                     result = await executor.executeSigning(
@@ -694,8 +688,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let started = expectation(description: "broadcast started after checkpoint")
         let task = Task { @MainActor in
             await executor.executeNative(
-                claim: nativeClaim.approvalClaim,
-                context: nativeClaim.executionContext
+                claim: nativeClaim
             ) {
                 .broadcast(PreparedBroadcast(
                     recoveryResponse: request.response(error: .internalError),
@@ -720,6 +713,51 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(errorCode, ProviderResponseError.userRejected.code)
         let response = await store.response(handle: snapshot.handle)
         XCTAssertEqual(response?["approvalCommitted"] as? Bool, true)
+    }
+
+    func testNativeCancellationAtCommittedCheckpointStillStartsBroadcastOnce() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
+            id: 608, provider: .ethereum, method: "signPersonalMessage"
+        ), in: store)
+        let authorization = try await store.prepareNativeApproval(
+            handle: snapshot.handle,
+            decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
+        )
+        guard case .claimed(let claim) = await store.claimNativeExecution(
+            handle: snapshot.handle,
+            nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
+            approvedAt: authorization.approvedAt
+        ) else { return XCTFail("Expected native claim") }
+        let request = try XCTUnwrap(snapshot.request)
+        await store.setBroadcastCheckpointCommittedHook {
+            withUnsafeCurrentTask { $0?.cancel() }
+        }
+        let executor = DurableApprovalExecutor(store: store)
+        let task = Task { @MainActor in
+            await executor.executeNative(claim: claim) {
+                .broadcast(PreparedBroadcast(
+                    recoveryResponse: request.response(error: .internalError),
+                    send: {
+                        XCTAssertFalse(Task.isCancelled)
+                        await store.record("send")
+                        return request.response(error: .userRejected)
+                    }
+                ))
+            }
+        }
+
+        let result = await task.value
+
+        XCTAssertTrue(task.isCancelled)
+        XCTAssertEqual(result, .persisted)
+        let events = await store.events()
+        XCTAssertEqual(events, ["nativeClaim", "begin", "checkpoint", "send", "complete"])
+        let response = await store.response(handle: snapshot.handle)
+        XCTAssertEqual(response?["approvalCommitted"] as? Bool, true)
+        let errorCode = await store.completedErrorCode(handle: snapshot.handle)
+        XCTAssertEqual(errorCode, ProviderResponseError.userRejected.code)
     }
 
     func testDuplicateExecutionCannotReleaseTheOriginalPermit() async throws {
@@ -763,7 +801,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 }
             }
             XCTAssertEqual(duplicate, .ownershipLost)
-            let competingLock = CrossProcessFileLock(fileURL: try XCTUnwrap(claim.lease).fileURL)
+            let competingLock = CrossProcessFileLock(fileURL: claim.lease.fileURL)
             XCTAssertFalse(try competingLock.tryAcquireExisting())
             competingLock.release()
             guard case .found(let held) = await store.load(handle: claim.handle) else {
@@ -792,7 +830,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             return .rollback
         }
         XCTAssertEqual(result, .retryablePersistenceFailure)
-        let competingLock = CrossProcessFileLock(fileURL: try XCTUnwrap(claim.lease).fileURL)
+        let competingLock = CrossProcessFileLock(fileURL: claim.lease.fileURL)
         XCTAssertTrue(try competingLock.tryAcquireExisting())
         competingLock.release()
         guard case .found(let recovered) = await store.load(handle: claim.handle) else {
@@ -1167,7 +1205,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         )
         session.start()
         let fee = session.snapshot.transaction.preparedFee
-        let position = session.gasSliderPosition(for: session.snapshot.transaction)
+        let position = session.gasSliderPosition
         let payloadData = try JSONSerialization.data(withJSONObject: [
             "interaction": "cancelled",
             "value": 200,
@@ -1181,10 +1219,61 @@ final class PopupRequestSessionsTests: XCTestCase {
 
         XCTAssertEqual(session.snapshot.transaction.preparedFee, fee)
         XCTAssertEqual(
-            session.gasSliderPosition(for: session.snapshot.transaction),
+            session.gasSliderPosition,
             position
         )
         XCTAssertEqual(preparationCount, 1)
+    }
+
+    func testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce() throws {
+        let transaction = Transaction(
+            from: popupTestAccount().address,
+            to: "0x0000000000000000000000000000000000000002",
+            nonce: "0x0", gas: "0x5208", value: "0x0", data: "0x",
+            feeIntent: .eip1559(maxPriorityFeePerGas: 100, maxFeePerGas: 300),
+            preparedFee: .eip1559(maxPriorityFeePerGas: 100, maxFeePerGas: 300),
+            feeSource: .automatic,
+            currentBaseFeePerGas: 100
+        )
+        let estimate = GasService.Estimate(
+            info: .init(recommendedPriorityFee: 100, highPriorityFee: 200),
+            nextBaseFee: 100, currentBaseFee: 100,
+            support: .eip1559, endpointChainID: 10
+        )
+        var preparationCount = 0
+        let session = makeTransactionApprovalSession(
+            transaction: transaction,
+            prepare: { transaction, _, _, _, onEstimate, completion in
+                preparationCount += 1
+                onEstimate(estimate)
+                completion(.success(transaction))
+                return EthereumRequestCancellation()
+            },
+            preflight: { _, _, _ in EthereumRequestCancellation() }
+        )
+        let selectedPosition = 137.5
+        var observedPositions = [Double]()
+        session.onChange = { [weak session] in
+            guard let session else { return }
+            if session.snapshot.transaction.speedPriorityFeeSource == .slider {
+                observedPositions.append(session.gasSliderPosition)
+            }
+        }
+        let payload = try JSONDecoder().decode(
+            InternalSafariRequest.TransactionSpeedPayload.self,
+            from: JSONSerialization.data(withJSONObject: [
+                "interaction": "ended", "value": selectedPosition,
+            ])
+        )
+
+        session.setSpeed(payload)
+
+        XCTAssertEqual(preparationCount, 2)
+        XCTAssertEqual(session.snapshot.phase, .ready)
+        XCTAssertEqual(session.snapshot.transaction.speedPriorityFeeSource, .slider)
+        XCTAssertFalse(observedPositions.isEmpty)
+        XCTAssertTrue(observedPositions.allSatisfy { $0 == selectedPosition })
+        XCTAssertEqual(session.gasSliderPosition, selectedPosition)
     }
 
     func testPriorityFeeEditPreservesUntouchedFeeCapProvenance() {
@@ -2266,7 +2355,7 @@ extension PopupRequestSessionsTests {
                     runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
                     approvedAt: authorization.approvedAt
                 ) else { return XCTFail("Expected native execution claim") }
-                nativeClaim = claim.approvalClaim
+                nativeClaim = claim
             } else {
                 try await store.holdForeignClaim(handle: snapshot.handle)
             }

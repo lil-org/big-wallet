@@ -268,7 +268,7 @@ final class PopupApprovalStatePresenter {
             canBackOffRefresh: canBackOffRefresh,
             slider: PopupTransactionSlider(
                 visible: chain.isEthMainnet && transactionSession.hasGasSpeedInfo,
-                position: transactionSession.gasSliderPosition(for: transaction),
+                position: transactionSession.gasSliderPosition,
                 maximum: GasSpeedConfiguration.maximumSliderPosition
             ),
             editor: editorModel(transaction: transaction, suggestedFee: snapshot.latestWalletSuggestedFee),

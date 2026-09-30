@@ -542,7 +542,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 return .claimed(.init(
                     handle: handle,
                     value: claimID,
-                    lease: lease, executionDeadline: deadline
+                    lease: lease, authority: .ordinary(deadline: deadline)
                 ))
             case .claimed, .broadcastPrepared:
                 return .executing
@@ -716,13 +716,9 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                     handle: handle,
                     value: claimID,
                     lease: lease,
-                    executionDeadline: executionContext.executionDeadline
+                    authority: .native(approvedAt: approval.approvedAt, context: executionContext)
                 )
-                return .claimed(.init(
-                    approvalClaim: claim,
-                    approvedAt: approval.approvedAt,
-                    executionContext: executionContext
-                ))
+                return .claimed(claim)
             case .claimed, .broadcastPrepared:
                 return .executing
             case .completed:
@@ -745,7 +741,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 $0.handle == claim.handle
             }), case .claimed(let claimID, _, _) = profile.state.records[index].state,
                   claim.matches(handle: claim.handle, value: claimID),
-                  claim.lease?.isUnconsumed == true else {
+                  claim.lease.isUnconsumed else {
                 return .ownershipLost
             }
             return abandonClaimLocked(
@@ -853,20 +849,15 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                   claim.matches(handle: claim.handle, value: claimID),
                   ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
                   ExtensionRequestProfile.executionDeadlineIsCurrent(record.claimedApproval?.deadline, now: clock()),
-                  let lease = claim.lease,
-                  lease.consume() else { return .ownershipLost }
-            return .began(.init(
-                handle: claim.handle,
-                value: claimID,
-                lease: lease
-            ))
+                  record.claimedApproval?.authority == claim.authority,
+                  claim.lease.consume() else { return .ownershipLost }
+            return .began(.init(claim: claim))
         }
     }
 
     func prepareBroadcast(
         permit: ExtensionBridge.ExecutionPermit,
-        recoveryResponse: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
+        recoveryResponse: ResponseToExtension
     ) -> ExtensionBridge.StoreMutationResult {
         files.withLock(or: .retryablePersistenceFailure) {
             let readTime = clock()
@@ -886,10 +877,9 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             case .claimed(let claimID, _, _):
                 let authorizationTime = clock()
                 guard permit.matches(handle: permit.handle, value: claimID),
-                      permit.lease != nil,
                       ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state),
                       profile.state.records[index].authorizesExecution(
-                          authority: authority,
+                          authority: permit.authority,
                           now: authorizationTime,
                           isCancelled: Task.isCancelled
                       ) else { return .ownershipLost }
@@ -913,8 +903,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     func complete(
         permit: ExtensionBridge.ExecutionPermit,
-        response: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
+        response: ResponseToExtension
     ) -> ExtensionBridge.StoreMutationResult {
         files.withLock(or: .retryablePersistenceFailure) {
             let readTime = clock()
@@ -948,11 +937,11 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             let authorizationTime = clock()
             guard permit.matches(handle: permit.handle, value: claimID),
                   (recoveryResponseData != nil || ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state)),
-                  profile.state.records[index].authorizesExecution(
-                      authority: authority,
+                  (recoveryResponseData != nil || profile.state.records[index].authorizesExecution(
+                      authority: permit.authority,
                       now: authorizationTime,
                       isCancelled: Task.isCancelled
-                  ),
+                  )),
                   let request = profile.request(for: profile.state.records[index]),
                   let responseData = ExtensionRequestProfileCodec.boundedResponseData(
                       response,
@@ -990,8 +979,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 $0.handle == permit.handle
             }), case .claimed(let claimID, _, _) =
                     profile.state.records[index].state,
-                  permit.matches(handle: permit.handle, value: claimID),
-                  permit.lease != nil else { return .ownershipLost }
+                  permit.matches(handle: permit.handle, value: claimID) else { return .ownershipLost }
             return abandonClaimLocked(
                 in: &profile,
                 at: index,

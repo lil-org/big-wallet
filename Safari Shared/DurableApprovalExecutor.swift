@@ -34,11 +34,11 @@ final class DurableApprovalExecutor {
         claim: ExtensionBridge.ApprovalClaim,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
-        await execute(
-            claim: claim,
-            authority: .ordinary,
-            operation: operation
-        )
+        guard case .ordinary = claim.authority else {
+            claim.lease.releaseIfUnconsumed()
+            return .ownershipLost
+        }
+        return await execute(claim: claim, operation: operation)
     }
 
     func executeSigning(
@@ -47,15 +47,15 @@ final class DurableApprovalExecutor {
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
         defer { session.invalidate() }
-        guard session.authorization.handle == claim.handle,
+        guard case .ordinary = claim.authority,
+              session.authorization.handle == claim.handle,
               session.authorization.signingDeadline == claim.executionDeadline,
               session.requiresCommitLease else {
-            claim.lease?.releaseIfUnconsumed()
+            claim.lease.releaseIfUnconsumed()
             return .ownershipLost
         }
         return await execute(
             claim: claim,
-            authority: .mobileSigning(deadline: claim.executionDeadline),
             acquireWalletLease: { await session.takeCommitLease() },
             operation: operation
         )
@@ -63,29 +63,22 @@ final class DurableApprovalExecutor {
 
     func executeNative(
         claim: ExtensionBridge.ApprovalClaim,
-        context: ExtensionBridge.NativeExecutionContext,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
-        await execute(
-            claim: claim,
-            authority: .native(context),
-            operation: operation
-        )
+        guard case .native = claim.authority else {
+            claim.lease.releaseIfUnconsumed()
+            return .ownershipLost
+        }
+        return await execute(claim: claim, operation: operation)
     }
 
     private func execute(
         claim: ExtensionBridge.ApprovalClaim,
-        authority: ExtensionBridge.ExecutionAuthority,
         acquireWalletLease: (() async -> WalletExecutionLease?)? = nil,
         operation: @escaping () async -> DappExecutionResult
     ) async -> Result {
-        let deadline: Date
-        switch authority {
-        case .ordinary: deadline = claim.executionDeadline
-        case .mobileSigning(let signingDeadline): deadline = signingDeadline
-        case .native(let context): deadline = context.executionDeadline
-        }
-        defer { claim.lease?.releaseIfUnconsumed() }
+        let deadline = claim.executionDeadline
+        defer { claim.lease.releaseIfUnconsumed() }
         let permit: ExtensionBridge.ExecutionPermit
         switch await store.begin(claim: claim) {
         case .began(let value):
@@ -100,7 +93,7 @@ final class DurableApprovalExecutor {
             }
         }
         defer { permit.releaseLease() }
-        if case .native = authority, Task.isCancelled {
+        if case .native = permit.authority, Task.isCancelled {
             return await rollback(permit: permit)
         }
         guard let operationResult = await boundedOperation(
@@ -127,30 +120,26 @@ final class DurableApprovalExecutor {
                 ? response.markingApprovalCommitted()
                 : response
             if let expired = await rollbackIfExpired(
-                permit: permit,
-                authority: authority,
-                deadline: deadline
+                permit: permit
             ) {
                 return expired
             }
             return await complete(
                 permit: permit,
                 response: response,
-                authority: authority
+                rollbackOnOwnershipLoss: acquireWalletLease != nil
             )
         case .broadcast(let prepared):
             let recoveryResponse = prepared.recoveryResponse.markingApprovalCommitted()
             if let expired = await rollbackIfExpired(
-                permit: permit,
-                authority: authority,
-                deadline: deadline
+                permit: permit
             ) {
                 return expired
             }
             let checkpointResult = await prepareBroadcast(
                 permit: permit,
                 recoveryResponse: recoveryResponse,
-                authority: authority
+                rollbackOnOwnershipLoss: acquireWalletLease != nil
             )
             switch checkpointResult {
             case .persisted:
@@ -164,7 +153,7 @@ final class DurableApprovalExecutor {
             return await complete(
                 permit: permit,
                 response: delivered.markingApprovalCommitted(),
-                authority: .ordinary
+                rollbackOnOwnershipLoss: false
             )
         case .rollback:
             return await rollback(permit: permit)
@@ -172,31 +161,28 @@ final class DurableApprovalExecutor {
     }
 
     private func rollbackIfExpired(
-        permit: ExtensionBridge.ExecutionPermit,
-        authority: ExtensionBridge.ExecutionAuthority,
-        deadline: Date
+        permit: ExtensionBridge.ExecutionPermit
     ) async -> Result? {
-        if case .native = authority, Task.isCancelled {
+        if case .native = permit.authority, Task.isCancelled {
             return await rollback(permit: permit)
         }
-        guard clock() >= deadline else { return nil }
+        guard clock() >= permit.executionDeadline else { return nil }
         return await rollback(permit: permit)
     }
 
     private func complete(
         permit: ExtensionBridge.ExecutionPermit,
         response: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
+        rollbackOnOwnershipLoss: Bool
     ) async -> Result {
         switch await store.complete(
             permit: permit,
-            response: response,
-            authority: authority
+            response: response
         ) {
         case .persisted:
             return .persisted
         case .ownershipLost:
-            guard case .mobileSigning = authority else { return .ownershipLost }
+            guard rollbackOnOwnershipLoss else { return .ownershipLost }
             return await rollback(permit: permit)
         case .retryablePersistenceFailure:
             return .retryablePersistenceFailure
@@ -206,17 +192,16 @@ final class DurableApprovalExecutor {
     private func prepareBroadcast(
         permit: ExtensionBridge.ExecutionPermit,
         recoveryResponse: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
+        rollbackOnOwnershipLoss: Bool
     ) async -> Result {
         switch await store.prepareBroadcast(
             permit: permit,
-            recoveryResponse: recoveryResponse,
-            authority: authority
+            recoveryResponse: recoveryResponse
         ) {
         case .persisted:
             return .persisted
         case .ownershipLost:
-            guard case .mobileSigning = authority else { return .ownershipLost }
+            guard rollbackOnOwnershipLoss else { return .ownershipLost }
             return await rollback(permit: permit)
         case .retryablePersistenceFailure:
             return .retryablePersistenceFailure

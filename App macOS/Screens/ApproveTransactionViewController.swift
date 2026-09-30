@@ -37,7 +37,6 @@ class ApproveTransactionViewController: NSViewController {
     private let priceService = PriceService.shared
     private var authenticationContext: LAContext?
     private var authenticationToken: TransactionApprovalRequestToken?
-    private var gasSpeedConfiguration = GasSpeedConfiguration()
     private var coordinator: TransactionApprovalCoordinator!
     private var approvalSnapshot: TransactionApprovalSnapshot!
     private var chain: EthereumNetwork!
@@ -145,12 +144,9 @@ class ApproveTransactionViewController: NSViewController {
         switch output {
         case .snapshot(let snapshot):
             approvalSnapshot = snapshot
-            gasSpeedConfiguration.synchronizeSelectedSliderPosition(
-                with: snapshot.transaction
-            )
             updateInterface()
-        case .verifiedFeeEstimate(let estimate):
-            gasSpeedConfiguration.applyFetchedEstimate(estimate)
+        case .verifiedFeeEstimate:
+            break
         case .authenticationRequest(let token):
             authenticate(token: token)
         case .alert(let intent):
@@ -356,7 +352,7 @@ class ApproveTransactionViewController: NSViewController {
         guard approvalSnapshot.allowsMutation,
               chain.isEthMainnet,
               transaction.feeBasisBaseFeePerGas != nil,
-              gasSpeedConfiguration.info != nil else {
+              coordinator.hasGasSpeedInfo else {
             return false
         }
         guard transaction.preparedFee == nil else { return true }
@@ -368,13 +364,6 @@ class ApproveTransactionViewController: NSViewController {
 
     private func updateSpeedConfigurationState() {
         guard chain.isEthMainnet else { return }
-        if let priorityFee = gasSpeedConfiguration.speedPriorityFeePerGas(
-            for: transaction
-        ) {
-            gasSpeedConfiguration.installTransactionFallback(
-                feePerGas: priorityFee
-            )
-        }
         let isEnabled = isSpeedConfigurationEnabled
         setSpeedConfigurationViews(enabled: isEnabled)
         if isEnabled {
@@ -384,14 +373,8 @@ class ApproveTransactionViewController: NSViewController {
 
     private func updateGasSliderValueIfNeeded() {
         guard gasSliderInteractionStartValue == nil,
-              isSpeedConfigurationEnabled,
-              gasSpeedConfiguration.info != nil else { return }
-        gasSpeedConfiguration.synchronizeSelectedSliderPosition(
-            with: transaction
-        )
-        let sliderValue = gasSpeedConfiguration.sliderPosition(
-            for: transaction
-        )
+              isSpeedConfigurationEnabled else { return }
+        let sliderValue = coordinator.gasSliderPosition
         speedSlider.doubleValue = sliderValue
         displayedGasSliderValue = sliderValue
         updateSpeedAccessibilityDetail()
@@ -405,16 +388,14 @@ class ApproveTransactionViewController: NSViewController {
 
     private func updateSpeedAccessibilityDetail() {
         guard chain.isEthMainnet else { return }
-        let detail = gasSpeedConfiguration.info == nil
+        let detail = !coordinator.hasGasSpeedInfo
             ? Strings.calculating.withEllipsis
             : speedAccessibilityDetail()
         speedSlider.setAccessibilityValueDescription(detail)
     }
 
     private func speedAccessibilityDetail() -> String {
-        let priority = gasSpeedConfiguration.speedPriorityFeePerGas(
-            for: transaction
-        )
+        let priority = coordinator.speedPriorityFeePerGas
         guard let priority else { return Strings.calculating.withEllipsis }
         let fee = "\(priority.compactGwei()) \(Strings.gwei)"
         return Transaction.editableGwei(fromWei: priority).map {
@@ -451,19 +432,10 @@ class ApproveTransactionViewController: NSViewController {
                     self.endTransactionEditorSheet()
                     return
                 }
-                let previousTransaction =
-                    self.approvalSnapshot.transaction
                 guard self.coordinator.apply(edits: edits) else {
                     self.endTransactionEditorSheet()
                     return
                 }
-                let updatedTransaction =
-                    self.approvalSnapshot.transaction
-                self.gasSpeedConfiguration.commitAppliedEdits(
-                    edits,
-                    from: previousTransaction,
-                    to: updatedTransaction
-                )
                 self.endTransactionEditorSheet { [weak self] in
                     guard let self, reviewLifetime.isActive,
                           self.approvalSnapshot.phase != .finished else {
@@ -488,19 +460,11 @@ class ApproveTransactionViewController: NSViewController {
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
         guard approvalSnapshot.allowsMutation,
-              let gasInfo = gasSpeedConfiguration.info else {
-            let didInstallPendingQuote =
-                finishGasSliderInteraction(
-                    cancelled: true
-                )
-            if didInstallPendingQuote {
-                updateSpeedConfigurationState()
-            } else {
-                updateGasSliderValueIfNeeded()
-            }
+              coordinator.hasGasSpeedInfo else {
+            finishGasSliderInteraction(cancelled: true)
+            updateInterface()
             return
         }
-        gasSpeedConfiguration.markGasSliderInteraction()
         coordinator.beginSliderInteraction()
 
         let eventType = NSApp.currentEvent?.type
@@ -510,10 +474,7 @@ class ApproveTransactionViewController: NSViewController {
             gasSliderInteractionDidMove =
                 abs(sender.doubleValue - startValue) >= 0.001
             if gasSliderInteractionDidMove {
-                applyGasSliderValue(
-                    sender.doubleValue,
-                    inRelationTo: gasInfo
-                )
+                coordinator.setFeeForSpeed(value: sender.doubleValue)
                 updateInterface()
             }
             return
@@ -528,20 +489,13 @@ class ApproveTransactionViewController: NSViewController {
 
             guard gasSliderInteractionDidMove else {
                 if eventType == .leftMouseUp {
-                    let didInstallPendingQuote =
-                        finishGasSliderInteraction(
-                            cancelled: false
-                        )
-                    if didInstallPendingQuote {
-                        updateSpeedConfigurationState()
-                    } else {
-                        updateGasSliderValueIfNeeded()
-                    }
+                    finishGasSliderInteraction(cancelled: false)
+                    updateInterface()
                 }
                 return
             }
 
-            applyGasSliderValue(sender.doubleValue, inRelationTo: gasInfo)
+            coordinator.setFeeForSpeed(value: sender.doubleValue)
             if eventType == .leftMouseUp {
                 finishGasSliderInteraction(
                     cancelled: false
@@ -561,47 +515,16 @@ class ApproveTransactionViewController: NSViewController {
             updateInterface()
             return
         }
-        applyGasSliderValue(value, inRelationTo: gasInfo)
+        coordinator.setFeeForSpeed(value: value)
         finishGasSliderInteraction(
             cancelled: false
         )
         updateInterface()
     }
 
-    @discardableResult
-    private func applyGasSliderValue(
-        _ value: Double,
-        inRelationTo info: GasService.Info
-    ) -> Bool {
-        guard approvalSnapshot.allowsMutation else { return false }
-        let didChangeFee = coordinator.setFeeForSpeed(
-            value: value,
-            inRelationTo: info
-        )
-        let updatedTransaction = approvalSnapshot.transaction
-        gasSpeedConfiguration.recordSelectedSliderPosition(
-            value,
-            for: updatedTransaction
-        )
-        if didChangeFee {
-            gasSpeedConfiguration.markGasSliderFeeChange()
-        }
-        return didChangeFee
-    }
-
-    @discardableResult
-    private func finishGasSliderInteraction(
-        cancelled: Bool
-    ) -> Bool {
-        let didChangeFee = coordinator.endSliderInteraction(
-            cancelled: cancelled
-        )
-        let didInstallPendingQuote =
-            gasSpeedConfiguration.endGasSliderInteraction(
-                didChangeFee: !cancelled && didChangeFee
-            )
+    private func finishGasSliderInteraction(cancelled: Bool) {
+        coordinator.endSliderInteraction(cancelled: cancelled)
         resetGasSliderInteraction()
-        return didInstallPendingQuote
     }
 
     private func resetGasSliderInteraction() {

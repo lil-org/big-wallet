@@ -92,7 +92,7 @@ final class NativeApprovalFinalizer {
         guard snapshot.nativeDeliveryReceipt == authorization.receipt else {
             return .interruptionRequired
         }
-        let nativeClaim: ExtensionBridge.NativeExecutionClaim
+        let nativeClaim: ExtensionBridge.ApprovalClaim
         let claimResult = await store.claimNativeExecution(
             handle: snapshot.handle,
             nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
@@ -111,8 +111,7 @@ final class NativeApprovalFinalizer {
         }
 
         let result = await executor.executeNative(
-            claim: nativeClaim.approvalClaim,
-            context: nativeClaim.executionContext
+            claim: nativeClaim
         ) {
             await self.prepareAndExecute(
                 nativeClaim: nativeClaim,
@@ -129,16 +128,18 @@ final class NativeApprovalFinalizer {
     }
 
     private func prepareAndExecute(
-        nativeClaim: ExtensionBridge.NativeExecutionClaim,
+        nativeClaim: ExtensionBridge.ApprovalClaim,
         request: SafariRequest,
         authorization: ExtensionBridge.NativeApprovalAuthorization
     ) async -> DappExecutionResult {
-        let executionContext = nativeClaim.executionContext
+        guard case .native(let approvedAt, let executionContext) = nativeClaim.authority else {
+            return .rollback
+        }
         let now = clock()
         let age = now.timeIntervalSince(executionContext.observedAt)
         guard age >= 0,
               now < executionContext.executionDeadline else { return .rollback }
-        guard transactionDecisionIsFresh(nativeClaim, request: request) else {
+        guard transactionDecisionIsFresh(approvedAt: approvedAt, request: request) else {
             return .response(Self.staleResponse(for: request), approvalCommitted: false)
         }
 
@@ -157,7 +158,7 @@ final class NativeApprovalFinalizer {
         case .response(let response):
             return .response(response, approvalCommitted: false)
         case .approval(let action):
-            guard transactionDecisionIsFresh(nativeClaim, request: request) else {
+            guard transactionDecisionIsFresh(approvedAt: approvedAt, request: request) else {
                 return .response(Self.staleResponse(for: request), approvalCommitted: false)
             }
             let accounts: [SpecificWalletAccount]?
@@ -182,12 +183,12 @@ final class NativeApprovalFinalizer {
                     }
                     let deadline = requestRequiresFreshTransactionDecision(request)
                         ? min(executionContext.executionDeadline,
-                              nativeClaim.approvedAt.addingTimeInterval(Self.maximumTransactionDecisionAge))
+                              approvedAt.addingTimeInterval(Self.maximumTransactionDecisionAge))
                         : executionContext.executionDeadline
                     guard let operation = ApprovedWalletSigningOperation(
                         request: request, approval: approval,
                         authorization: WalletSigningAuthorization(
-                            handle: nativeClaim.approvalClaim.handle,
+                            handle: nativeClaim.handle,
                             approvedAccount: approvedAccount,
                             signingDeadline: deadline
                         )
@@ -216,13 +217,13 @@ final class NativeApprovalFinalizer {
     }
 
     private func transactionDecisionIsFresh(
-        _ nativeClaim: ExtensionBridge.NativeExecutionClaim,
+        approvedAt: Date,
         request: SafariRequest
     ) -> Bool {
         guard requestRequiresFreshTransactionDecision(request) else {
             return true
         }
-        let age = clock().timeIntervalSince(nativeClaim.approvedAt)
+        let age = clock().timeIntervalSince(approvedAt)
         return age >= 0 && age <= Self.maximumTransactionDecisionAge
     }
 

@@ -32,6 +32,27 @@ enum ApprovalStoreTestPersistence {
     }
 }
 
+extension XCTestCase {
+    func makeApprovalClaimForTesting(
+        handle: ExtensionBridge.Handle,
+        deadline: Date = Date().addingTimeInterval(150)
+    ) throws -> ExtensionBridge.ApprovalClaim {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "approval-claim-\(UUID().uuidString)", isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("operation.lock")
+        let lock = Big_Wallet.CrossProcessFileLock(fileURL: fileURL)
+        try lock.acquire(timeoutNanoseconds: 1_000_000_000, pollNanoseconds: 10_000_000)
+        let lease = ExtensionBridge.OperationLease(fileURL: fileURL, lock: lock)
+        addTeardownBlock { lease.release() }
+        return ExtensionBridge.ApprovalClaim(
+            handle: handle, value: UUID(), lease: lease, authority: .ordinary(deadline: deadline)
+        )
+    }
+}
+
 func walletSigningAuthorizationForTesting(
     approvedAccount: WalletAccountDescriptor,
     handle: ExtensionBridge.Handle = .init(
@@ -256,6 +277,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var beginHook: (@MainActor () -> Void)?
     private var permitCompletionHook: (@Sendable () -> Void)?
     private var broadcastCheckpointHook: (@Sendable () -> Void)?
+    private var broadcastCheckpointCommittedHook: (@Sendable () -> Void)?
     private var committedCheckpoints = Set<ExtensionBridge.Handle>()
     private var suspendAuthorityCheck = false
     private var authorityCheckContinuation: CheckedContinuation<Void, Never>?
@@ -454,7 +476,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             : .solana(publicKey: account.normalizedAddress)
         let result: ResponseToExtension.Result = ethereum ? .strings([account.normalizedAddress]) : .solanaPublicKey(account.normalizedAddress)
         let response = ResponseToExtension(for: request, payload: .result(result), mutation: .accounts([update]), approvedAccounts: [account]).markingApprovalCommitted()
-        guard await bridge.complete(permit: permit, response: response, authority: .ordinary) == .persisted else { throw CocoaError(.fileWriteUnknown) }
+        guard await bridge.complete(permit: permit, response: response) == .persisted else { throw CocoaError(.fileWriteUnknown) }
         _ = await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
     }
 
@@ -496,6 +518,9 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     func setBeginHook(_ hook: @escaping @MainActor () -> Void) { beginHook = hook }
     func setPermitCompletionHook(_ hook: @escaping @Sendable () -> Void) { permitCompletionHook = hook }
     func setBroadcastCheckpointHook(_ hook: @escaping @Sendable () -> Void) { broadcastCheckpointHook = hook }
+    func setBroadcastCheckpointCommittedHook(_ hook: @escaping @Sendable () -> Void) {
+        broadcastCheckpointCommittedHook = hook
+    }
     func suspendNextAuthorityCheck() { suspendAuthorityCheck = true }
     func resumeAuthorityCheck() {
         let continuation = authorityCheckContinuation
@@ -635,19 +660,17 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard authorityCurrent else { return .ownershipLost }
         return await bridge.begin(claim: claim)
     }
-    func complete(permit: ExtensionBridge.ExecutionPermit, response: ResponseToExtension,
-                  authority: ExtensionBridge.ExecutionAuthority) async -> ExtensionBridge.StoreMutationResult {
+    func complete(permit: ExtensionBridge.ExecutionPermit, response: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
         permitCompletionHook?()
         if let result = await beforeCompletion() { return result }
-        let result = await bridge.complete(permit: permit, response: response, authority: authority)
+        let result = await bridge.complete(permit: permit, response: response)
         recordCompletion(result)
         return result
     }
-    func prepareBroadcast(permit: ExtensionBridge.ExecutionPermit, recoveryResponse: ResponseToExtension,
-                          authority: ExtensionBridge.ExecutionAuthority) async -> ExtensionBridge.StoreMutationResult {
+    func prepareBroadcast(permit: ExtensionBridge.ExecutionPermit, recoveryResponse: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
@@ -656,12 +679,15 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             checkpointFailureAfterWriting = nil
             writes.failNext(afterWriting: afterWriting)
         }
-        let result = await bridge.prepareBroadcast(permit: permit, recoveryResponse: recoveryResponse, authority: authority)
+        let result = await bridge.prepareBroadcast(permit: permit, recoveryResponse: recoveryResponse)
         if result == .persisted {
             eventValues.append("checkpoint")
             if recoveryResponse.approvalCommitted {
                 committedCheckpoints.insert(permit.handle)
             }
+            let committed = broadcastCheckpointCommittedHook
+            broadcastCheckpointCommittedHook = nil
+            committed?()
         }
         return result
     }

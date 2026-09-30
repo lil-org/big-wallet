@@ -274,7 +274,7 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertNil(review["reviewToken"])
 
         let token = try XCTUnwrap(session.beginApproval())
-        let claim = ExtensionBridge.ApprovalClaim(handle: handle, value: UUID(), executionDeadline: Date().addingTimeInterval(150))
+        let claim = try makeApprovalClaimForTesting(handle: handle)
         for expectedState in ["working", "authenticating"] {
             if expectedState == "authenticating" {
                 XCTAssertTrue(session.acceptClaim(claim, token: token))

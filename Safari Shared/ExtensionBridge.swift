@@ -353,9 +353,15 @@ actor ExtensionBridge {
     }
     
     enum ExecutionAuthority: Equatable, Sendable {
-        case ordinary
-        case mobileSigning(deadline: Date)
-        case native(NativeExecutionContext)
+        case ordinary(deadline: Date)
+        case native(approvedAt: Date, context: NativeExecutionContext)
+
+        var executionDeadline: Date {
+            switch self {
+            case .ordinary(let deadline): return deadline
+            case .native(_, let context): return context.executionDeadline
+            }
+        }
     }
 
     struct Ingress {
@@ -416,46 +422,52 @@ actor ExtensionBridge {
     struct ApprovalClaim: Equatable, Sendable {
         let handle: Handle
         fileprivate let value: UUID
-        let lease: OperationLease?
-        let executionDeadline: Date
+        let lease: OperationLease
+        let authority: ExecutionAuthority
 
-        init(handle: Handle, value: UUID, lease: OperationLease? = nil, executionDeadline: Date) {
+        var executionDeadline: Date { authority.executionDeadline }
+
+        init(handle: Handle, value: UUID, lease: OperationLease, authority: ExecutionAuthority) {
             self.handle = handle
             self.value = value
             self.lease = lease
-            self.executionDeadline = executionDeadline
+            self.authority = authority
         }
 
         func matches(handle: Handle, value: UUID) -> Bool {
             self.handle == handle && self.value == value
         }
 
-        func releaseLease() { lease?.release() }
+        func releaseLease() { lease.release() }
 
         static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.handle == rhs.handle && lhs.value == rhs.value
+            lhs.handle == rhs.handle && lhs.value == rhs.value && lhs.authority == rhs.authority
         }
     }
 
     struct ExecutionPermit: Equatable, Sendable {
         let handle: Handle
         fileprivate let value: UUID
-        let lease: OperationLease?
+        let lease: OperationLease
+        let authority: ExecutionAuthority
 
-        init(handle: Handle, value: UUID, lease: OperationLease? = nil) {
-            self.handle = handle
-            self.value = value
-            self.lease = lease
+        var executionDeadline: Date { authority.executionDeadline }
+
+        init(claim: ApprovalClaim) {
+            handle = claim.handle
+            value = claim.value
+            lease = claim.lease
+            authority = claim.authority
         }
 
         func matches(handle: Handle, value: UUID) -> Bool {
             self.handle == handle && self.value == value
         }
 
-        func releaseLease() { lease?.release() }
+        func releaseLease() { lease.release() }
 
         static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.handle == rhs.handle && lhs.value == rhs.value
+            lhs.handle == rhs.handle && lhs.value == rhs.value && lhs.authority == rhs.authority
         }
     }
 
@@ -463,12 +475,6 @@ actor ExtensionBridge {
         let receipt: NativeDeliveryReceipt
         let decision: DappApprovalDecision
         let approvedAt: Date
-    }
-
-    struct NativeExecutionClaim: Equatable, Sendable {
-        let approvalClaim: ApprovalClaim
-        let approvedAt: Date
-        let executionContext: NativeExecutionContext
     }
 
     enum AdmissionKind: Equatable, Sendable {
@@ -500,7 +506,7 @@ actor ExtensionBridge {
     }
 
     enum NativeExecutionClaimResult: Equatable {
-        case claimed(NativeExecutionClaim)
+        case claimed(ApprovalClaim)
         case ownershipLost, executing, responded, missing, unavailable
     }
 
@@ -829,25 +835,21 @@ actor ExtensionBridge {
 
     func prepareBroadcast(
         permit: ExecutionPermit,
-        recoveryResponse: ResponseToExtension,
-        authority: ExecutionAuthority
+        recoveryResponse: ResponseToExtension
     ) -> StoreMutationResult {
         store.prepareBroadcast(
             permit: permit,
-            recoveryResponse: recoveryResponse,
-            authority: authority
+            recoveryResponse: recoveryResponse
         )
     }
 
     func complete(
         permit: ExecutionPermit,
-        response: ResponseToExtension,
-        authority: ExecutionAuthority
+        response: ResponseToExtension
     ) -> StoreMutationResult {
         store.complete(
             permit: permit,
-            response: response,
-            authority: authority
+            response: response
         )
     }
 
@@ -894,13 +896,11 @@ protocol PopupRequestStore: AnyObject {
     func begin(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.BeginExecutionResult
     func prepareBroadcast(
         permit: ExtensionBridge.ExecutionPermit,
-        recoveryResponse: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
+        recoveryResponse: ResponseToExtension
     ) async -> ExtensionBridge.StoreMutationResult
     func complete(
         permit: ExtensionBridge.ExecutionPermit,
-        response: ResponseToExtension,
-        authority: ExtensionBridge.ExecutionAuthority
+        response: ResponseToExtension
     ) async -> ExtensionBridge.StoreMutationResult
     func rollback(
         permit: ExtensionBridge.ExecutionPermit
