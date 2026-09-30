@@ -74,44 +74,92 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
     }
 
-    private func replaceAuthenticatedSource(
-        _ source: SafariApprovalSourceSnapshot,
-        at url: URL,
-        keys: MemoryApprovalKeyStore
-    ) throws {
-        struct Secret: Encodable {
-            let catalog: Data
-            let password: Data
-            let wallets: [SafariApprovalWalletRecord]
+    private func accountCountFixture(_ count: Int) throws -> SafariApprovalSourceSnapshot {
+        let key = try XCTUnwrap(WalletStoredKey.importJSON(
+            json: WalletCoreProxyTestVectors.walletCoreJSONVariantPrivateKeyFixtures[0].json
+        ))
+        let first = try XCTUnwrap(key.account(index: 0))
+        for index in 1..<count {
+            key.addAccountDerivation(
+                address: first.address,
+                coin: first.coin,
+                derivation: .custom,
+                derivationPath: "m/44'/60'/0'/0/\(index)",
+                publicKey: first.publicKey,
+                extendedPublicKey: ""
+            )
         }
-        var envelope = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        let wallet = WalletContainer(id: "shared-signing-key", key: key)
+        return SafariApprovalSourceSnapshot(
+            catalog: WalletAccountCatalog(wallets: [wallet]),
+            password: WalletCoreProxyTestVectors.walletCoreJSONPBKDF2PrivateKeyPassword,
+            wallets: [SafariApprovalWalletRecord(
+                walletID: wallet.id, storedKeyJSON: try XCTUnwrap(key.exportJSON())
+            )]
         )
-        let generation = try XCTUnwrap(UUID(
-            uuidString: try XCTUnwrap(envelope["generation"] as? String)
-        ))
-        let header = try XCTUnwrap(Data(
-            base64Encoded: try XCTUnwrap(envelope["header"] as? String)
-        ))
-        let catalog = try source.catalog.canonicalData()
-        var authenticatedData = Data()
-        for value in [header, catalog] {
-            var count = UInt64(value.count).bigEndian
-            withUnsafeBytes(of: &count) { authenticatedData.append(contentsOf: $0) }
-            authenticatedData.append(value)
+    }
+
+    private struct AccountEnvelope: Codable {
+        var account: WalletAccountDescriptor
+        var nonce: Data
+        var ciphertext: Data
+        var tag: Data
+    }
+
+    private struct Envelope: Codable {
+        let version: Int
+        let generation: UUID
+        let header: Data
+        var catalog: Data
+        var accounts: [AccountEnvelope]
+    }
+
+    private func readEnvelope(at url: URL) throws -> Envelope {
+        try JSONDecoder().decode(Envelope.self, from: Data(contentsOf: url))
+    }
+
+    private func writeEnvelope(_ envelope: Envelope, at url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(envelope).write(to: url, options: .atomic)
+    }
+
+    private func accountAuthenticatedData(
+        _ account: WalletAccountDescriptor,
+        envelope: Envelope
+    ) throws -> Data {
+        struct AuthenticatedData: Encodable {
+            let domain = "org.lil.wallet.safari-approval.account.v1"
+            let header: Data
+            let catalogDigest: Data
+            let account: WalletAccountDescriptor
         }
-        let secret = Secret(catalog: catalog, password: source.password, wallets: source.wallets)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(AuthenticatedData(
+            header: envelope.header,
+            catalogDigest: Data(SHA256.hash(data: envelope.catalog)),
+            account: account
+        ))
+    }
+
+    private func sealAccount(
+        _ privateKey: Data,
+        account: WalletAccountDescriptor,
+        envelope: Envelope,
+        key: Data
+    ) throws -> AccountEnvelope {
         let sealed = try AES.GCM.seal(
-            JSONEncoder().encode(secret),
-            using: SymmetricKey(data: try XCTUnwrap(keys.keys[generation])),
-            authenticating: authenticatedData
+            privateKey,
+            using: SymmetricKey(data: key),
+            authenticating: accountAuthenticatedData(account, envelope: envelope)
         )
-        envelope["catalog"] = catalog.base64EncodedString()
-        envelope["nonce"] = sealed.nonce.withUnsafeBytes { Data($0) }.base64EncodedString()
-        envelope["ciphertext"] = sealed.ciphertext.base64EncodedString()
-        envelope["tag"] = sealed.tag.base64EncodedString()
-        try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
-            .write(to: url, options: .atomic)
+        return AccountEnvelope(
+            account: account,
+            nonce: sealed.nonce.withUnsafeBytes { Data($0) },
+            ciphertext: sealed.ciphertext,
+            tag: sealed.tag
+        )
     }
 
     @MainActor
@@ -252,13 +300,16 @@ final class SafariApprovalVaultTests: XCTestCase {
             JSONSerialization.jsonObject(with: envelopeData) as? [String: Any]
         )
         XCTAssertEqual(Set(envelope.keys), [
+            "accounts",
             "catalog",
-            "ciphertext",
             "generation",
             "header",
-            "nonce",
-            "tag",
             "version",
+        ])
+        let sealedAccounts = try XCTUnwrap(envelope["accounts"] as? [[String: Any]])
+        XCTAssertEqual(sealedAccounts.count, 1)
+        XCTAssertEqual(Set(try XCTUnwrap(sealedAccounts.first).keys), [
+            "account", "nonce", "ciphertext", "tag",
         ])
         XCTAssertEqual(envelope["version"] as? Int, 1)
         let catalogJSON = try XCTUnwrap(
@@ -301,6 +352,384 @@ final class SafariApprovalVaultTests: XCTestCase {
         try await assertSigningAccessForTesting(unlocked, walletID: "wallet", account: fixture.account, expectedSuccess: false)
     }
 
+    func testPublishedAccountPayloadsContainOnlyTheirDerivedPrivateKeys() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let fixture = try orderedFixture()
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        try vault.publish(source: fixture.source, integrityKey: integrityKey)
+        let envelope = try readEnvelope(at: url)
+        let wallets = try XCTUnwrap(WalletSnapshotValidation.wallets(
+            catalog: fixture.source.catalog,
+            walletRecords: fixture.source.wallets.map { ($0.walletID, $0.storedKeyJSON) }
+        ))
+
+        XCTAssertEqual(envelope.accounts.map(\.account), fixture.source.catalog.accounts)
+        XCTAssertEqual(Set(envelope.accounts.map(\.nonce)).count, envelope.accounts.count)
+        XCTAssertEqual(keys.keys.count, envelope.accounts.count)
+        XCTAssertEqual(Set(keys.keys.values).count, envelope.accounts.count)
+        for entry in envelope.accounts {
+            let identity = SafariApprovalKeyIdentity(generation: envelope.generation, account: entry.account)
+            let key = SymmetricKey(data: try XCTUnwrap(keys.keys[identity]))
+            XCTAssertEqual(entry.nonce.count, 12)
+            XCTAssertEqual(entry.ciphertext.count, 32)
+            XCTAssertEqual(entry.tag.count, 16)
+            let sealed = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: entry.nonce),
+                ciphertext: entry.ciphertext,
+                tag: entry.tag
+            )
+            var plaintext = try AES.GCM.open(
+                sealed,
+                using: key,
+                authenticating: accountAuthenticatedData(entry.account, envelope: envelope)
+            )
+            defer { plaintext.resetBytes(in: 0..<plaintext.count) }
+            XCTAssertEqual(plaintext.count, 32)
+            let wallet = try XCTUnwrap(wallets.first { $0.id == entry.account.walletID })
+            let expected = try wallet.privateKey(
+                passwordData: fixture.source.password,
+                account: entry.account.account
+            )
+            expected.withData { XCTAssertEqual(plaintext, $0) }
+            for (otherIdentity, otherKey) in keys.keys where otherIdentity != identity {
+                XCTAssertThrowsError(try AES.GCM.open(
+                    sealed,
+                    using: SymmetricKey(data: otherKey),
+                    authenticating: accountAuthenticatedData(entry.account, envelope: envelope)
+                ))
+            }
+        }
+    }
+
+    func testIndependentEncryptionKeysProtectIdenticalSigningKeys() throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        try vault.publish(source: source, integrityKey: integrityKey)
+        let envelope = try readEnvelope(at: url)
+        XCTAssertEqual(keys.keys.count, 3)
+        XCTAssertEqual(Set(keys.keys.values).count, 3)
+        var plaintexts = Set<Data>()
+        for entry in envelope.accounts {
+            let identity = SafariApprovalKeyIdentity(generation: envelope.generation, account: entry.account)
+            let sealed = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: entry.nonce), ciphertext: entry.ciphertext, tag: entry.tag
+            )
+            let aad = try accountAuthenticatedData(entry.account, envelope: envelope)
+            for (candidate, key) in keys.keys {
+                if candidate == identity {
+                    plaintexts.insert(try AES.GCM.open(sealed, using: SymmetricKey(data: key), authenticating: aad))
+                } else {
+                    XCTAssertThrowsError(try AES.GCM.open(sealed, using: SymmetricKey(data: key), authenticating: aad))
+                }
+            }
+        }
+        XCTAssertEqual(plaintexts.count, 1)
+        XCTAssertEqual(plaintexts.first?.count, 32)
+    }
+
+    func testMissingAccountKeysFilterCatalogAndSkipUnavailableAuthentication() async throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        var authenticationAttempts = 0
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in authenticationAttempts += 1; return true }
+        )
+        let publication = try vault.publish(source: source, integrityKey: integrityKey)
+        let original = try XCTUnwrap(vault.reviewCatalog())
+        let identities = source.catalog.accounts.map {
+            SafariApprovalKeyIdentity(generation: publication.generation, account: $0)
+        }
+        keys.keys.removeValue(forKey: identities[1])
+        let available = try XCTUnwrap(vault.reviewCatalog())
+        XCTAssertEqual(available.identity, original.identity)
+        XCTAssertEqual(available.orderedAccounts, [source.catalog.accounts[0], source.catalog.accounts[2]].map(\.specificAccount))
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+        guard case .unavailable = await vault.unlockResult(
+            reason: "Missing", authorization: walletSigningAuthorizationForTesting(approvedAccount: identities[1].account)
+        ) else { return XCTFail("A missing account key must fail before authentication") }
+        XCTAssertEqual(authenticationAttempts, 0)
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+        guard case .unlocked(let catalog, let signer) = await vault.unlockResult(
+            reason: "Healthy", authorization: walletSigningAuthorizationForTesting(approvedAccount: identities[0].account)
+        ) else { return XCTFail("Healthy accounts must remain available") }
+        defer { signer.invalidate() }
+        XCTAssertEqual(catalog.identity, original.identity)
+        XCTAssertEqual(catalog.orderedAccounts, available.orderedAccounts)
+        XCTAssertEqual(keys.loadedIdentities, [identities[0]])
+        XCTAssertEqual(authenticationAttempts, 1)
+        try await assertSigningAccessForTesting(
+            signer, walletID: identities[0].account.walletID, account: identities[0].account.account, expectedSuccess: true
+        )
+        keys.keys.removeAll()
+        XCTAssertNil(vault.reviewCatalog())
+    }
+
+    func testSiblingKeyLossAfterUnlockPreservesSigningAndCommitLease() async throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(
+            fileURL: url, keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in true }
+        )
+        let publication = try vault.publish(source: source, integrityKey: integrityKey)
+        let selected = source.catalog.accounts[0]
+        guard case .unlocked(_, let signer) = await vault.unlockResult(
+            reason: "Approve", authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
+        ) else { return XCTFail("Expected selected signer") }
+        defer { signer.invalidate() }
+        keys.keys.removeValue(forKey: SafariApprovalKeyIdentity(
+            generation: publication.generation, account: source.catalog.accounts[1]
+        ))
+        keys.availabilityRequests.removeAll()
+        XCTAssertTrue(signer.validateCurrent())
+        try await assertSigningAccessForTesting(signer, walletID: selected.walletID, account: selected.account, expectedSuccess: true)
+        let acquired = await signer.takeCommitLease()
+        let lease = try XCTUnwrap(acquired)
+        lease.release()
+        let identity = SafariApprovalKeyIdentity(generation: publication.generation, account: selected)
+        XCTAssertTrue(keys.availabilityRequests.allSatisfy { $0 == [identity] })
+        XCTAssertEqual(keys.loadedIdentities, [identity])
+    }
+
+    func testSelectedKeyLossRejectsSigningAndCommitLease() async throws {
+        let source = try accountCountFixture(2)
+        for alreadySigned in [false, true] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keys = MemoryApprovalKeyStore()
+            let vault = SafariApprovalVault(
+                fileURL: url, keyStore: keys,
+                canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in true }
+            )
+            let publication = try vault.publish(source: source, integrityKey: integrityKey)
+            let selected = source.catalog.accounts[0]
+            guard case .unlocked(_, let signer) = await vault.unlockResult(
+                reason: "Approve", authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
+            ) else { return XCTFail("Expected selected signer") }
+            defer { signer.invalidate() }
+            if alreadySigned {
+                try await assertSigningAccessForTesting(signer, walletID: selected.walletID, account: selected.account, expectedSuccess: true)
+            }
+            keys.keys.removeValue(forKey: SafariApprovalKeyIdentity(generation: publication.generation, account: selected))
+            XCTAssertFalse(signer.validateCurrent())
+            if !alreadySigned {
+                try await assertSigningAccessForTesting(signer, walletID: selected.walletID, account: selected.account, expectedSuccess: false)
+            }
+            let lease = await signer.takeCommitLease()
+            XCTAssertNil(lease)
+            XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts, [source.catalog.accounts[1].specificAccount])
+        }
+    }
+
+    func testSelectedKeyLossDuringAuthenticationLeavesSiblingAvailable() async throws {
+        let source = try accountCountFixture(2)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        var selectedIdentity: SafariApprovalKeyIdentity?
+        let vault = SafariApprovalVault(
+            fileURL: url, keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in
+                if let selectedIdentity { keys.keys.removeValue(forKey: selectedIdentity) }
+                return true
+            }
+        )
+        let publication = try vault.publish(source: source, integrityKey: integrityKey)
+        selectedIdentity = SafariApprovalKeyIdentity(generation: publication.generation, account: source.catalog.accounts[0])
+        guard case .unavailable = await vault.unlockResult(
+            reason: "Approve", authorization: walletSigningAuthorizationForTesting(approvedAccount: source.catalog.accounts[0])
+        ) else { return XCTFail("A deleted account key must not yield a signer") }
+        XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts, [source.catalog.accounts[1].specificAccount])
+    }
+
+    func testEmptyPublicationNeedsNoAccountKeysOrKeychainReads() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(
+            fileURL: url, keyStore: keys,
+            randomKey: { XCTFail("Empty catalogs do not need encryption keys"); return Data() }
+        )
+        let source = SafariApprovalSourceSnapshot(
+            catalog: WalletAccountCatalog(accounts: []), password: Data("empty-wallet".utf8), wallets: []
+        )
+        let publication = try vault.publish(source: source, integrityKey: integrityKey)
+        let catalog = try XCTUnwrap(vault.reviewCatalog())
+        XCTAssertTrue(catalog.orderedAccounts.isEmpty)
+        XCTAssertTrue(keys.keys.isEmpty)
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+        XCTAssertTrue(keys.availabilityRequests.allSatisfy(\.isEmpty))
+        XCTAssertEqual(vault.publicationStatus(
+            source: source, expectedGeneration: publication.generation,
+            expectedEnvelopeDigest: publication.envelopeDigest, expectedSourceMAC: publication.sourceMAC,
+            integrityKey: integrityKey
+        ), .current)
+    }
+
+    func testUnlockIgnoresUnrelatedCorruptedAccountCiphertexts() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let fixture = try orderedFixture()
+        let keys = MemoryApprovalKeyStore()
+        var protectedReads = 0
+        keys.onLoad = { protectedReads += 1 }
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        try vault.publish(source: fixture.source, integrityKey: integrityKey)
+        let original = try readEnvelope(at: url)
+        for selectedIndex in original.accounts.indices {
+            var envelope = original
+            for index in envelope.accounts.indices where index != selectedIndex {
+                envelope.accounts[index].tag[0] ^= 0xff
+            }
+            try writeEnvelope(envelope, at: url)
+            let selected = envelope.accounts[selectedIndex].account
+            guard case .unlocked(let catalog, let signer) = await vault.unlockResult(
+                reason: "Approve",
+                authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
+            ) else {
+                return XCTFail("Unrelated account ciphertexts must not be decrypted")
+            }
+            XCTAssertEqual(catalog.orderedAccounts, fixture.source.catalog.accounts.map(\.specificAccount))
+            XCTAssertEqual(protectedReads, selectedIndex + 1)
+            try await assertSigningAccessForTesting(
+                signer,
+                walletID: selected.walletID,
+                account: selected.account,
+                expectedSuccess: true
+            )
+            signer.invalidate()
+        }
+    }
+
+    func testMalformedAccountRecordsFailBeforeAuthentication() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let fixture = try orderedFixture()
+        let keys = MemoryApprovalKeyStore()
+        var authenticationChecks = 0
+        let vault = SafariApprovalVault(
+            fileURL: url,
+            keyStore: keys,
+            canEvaluateAuthentication: { _, _ in
+                authenticationChecks += 1
+                return true
+            },
+            authentication: { _, _, _ in
+                XCTFail("Malformed records must fail before authentication")
+                return true
+            }
+        )
+        try vault.publish(source: fixture.source, integrityKey: integrityKey)
+        let original = try readEnvelope(at: url)
+        let selected = try XCTUnwrap(fixture.source.catalog.accounts.first)
+        let mutations: [(String, (inout Envelope) -> Void)] = [
+            ("missing record", { $0.accounts.removeLast() }),
+            ("extra record", { $0.accounts.append($0.accounts[0]) }),
+            ("reordered records", { $0.accounts.swapAt(0, 1) }),
+            ("duplicate identity", { $0.accounts[0].account = $0.accounts[1].account }),
+            ("unknown identity", {
+                $0.accounts[0].account = WalletAccountDescriptor(
+                    walletID: "unknown-wallet", account: $0.accounts[0].account.account
+                )
+            }),
+            ("reused nonce", { $0.accounts[0].nonce = $0.accounts[1].nonce }),
+            ("short nonce", { $0.accounts[0].nonce.removeLast() }),
+            ("long nonce", { $0.accounts[0].nonce.append(0) }),
+            ("empty ciphertext", { $0.accounts[0].ciphertext = Data() }),
+            ("short ciphertext", { $0.accounts[0].ciphertext.removeLast() }),
+            ("long ciphertext", { $0.accounts[0].ciphertext.append(0) }),
+            ("short tag", { $0.accounts[0].tag.removeLast() }),
+            ("long tag", { $0.accounts[0].tag.append(0) }),
+        ]
+        for (name, mutate) in mutations {
+            var envelope = original
+            mutate(&envelope)
+            try writeEnvelope(envelope, at: url)
+            XCTAssertNil(vault.reviewCatalog(), name)
+            guard case .unavailable = await vault.unlockResult(
+                reason: "Approve",
+                authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
+            ) else {
+                return XCTFail("Malformed record accepted: \(name)")
+            }
+        }
+        XCTAssertEqual(authenticationChecks, 0)
+        XCTAssertNil(keys.loadedContext)
+    }
+
+    func testSwappedAccountCiphertextsFailAuthenticatedUnlock() async throws {
+        let original = try fixture().source
+        let originalAccount = try XCTUnwrap(original.catalog.accounts.first)
+        let originalWallet = try XCTUnwrap(original.wallets.first)
+        let duplicateAccount = WalletAccountDescriptor(
+            walletID: "duplicate-wallet", account: originalAccount.account
+        )
+        let duplicateKeySource = SafariApprovalSourceSnapshot(
+            catalog: WalletAccountCatalog(accounts: [originalAccount, duplicateAccount]),
+            password: original.password,
+            wallets: [originalWallet, SafariApprovalWalletRecord(
+                walletID: duplicateAccount.walletID,
+                storedKeyJSON: originalWallet.storedKeyJSON
+            )]
+        )
+        for source in [try orderedFixture().source, duplicateKeySource] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keys = MemoryApprovalKeyStore()
+            let vault = SafariApprovalVault(
+                fileURL: url,
+                keyStore: keys,
+                canEvaluateAuthentication: { _, _ in true },
+                authentication: { _, _, _ in true }
+            )
+            try vault.publish(source: source, integrityKey: integrityKey)
+            var envelope = try readEnvelope(at: url)
+            let first = envelope.accounts[0]
+            let second = envelope.accounts[1]
+            envelope.accounts[0] = AccountEnvelope(
+                account: first.account,
+                nonce: second.nonce,
+                ciphertext: second.ciphertext,
+                tag: second.tag
+            )
+            envelope.accounts[1] = AccountEnvelope(
+                account: second.account,
+                nonce: first.nonce,
+                ciphertext: first.ciphertext,
+                tag: first.tag
+            )
+            try writeEnvelope(envelope, at: url)
+            XCTAssertNotNil(vault.reviewCatalog())
+            for selected in [first.account, second.account] {
+                guard case .unavailable = await vault.unlockResult(
+                    reason: "Approve",
+                    authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
+                ) else {
+                    return XCTFail("Ciphertext must be bound to its exact approved account")
+                }
+            }
+            XCTAssertNotNil(keys.loadedContext)
+        }
+    }
+
     func testHeaderTamperingFailsAuthenticatedUnlock() async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -325,7 +754,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             UUID(uuidString: try XCTUnwrap(object["generation"] as? String))
         )
         let replacementGeneration = UUID()
-        keys.keys[replacementGeneration] = try XCTUnwrap(keys.keys[originalGeneration])
+        let account = try XCTUnwrap(fixture().source.catalog.accounts.first)
+        let originalIdentity = SafariApprovalKeyIdentity(generation: originalGeneration, account: account)
+        let replacementIdentity = SafariApprovalKeyIdentity(generation: replacementGeneration, account: account)
+        keys.keys[replacementIdentity] = try XCTUnwrap(keys.keys[originalIdentity])
         let headerData = try XCTUnwrap(
             Data(base64Encoded: try XCTUnwrap(object["header"] as? String))
         )
@@ -427,12 +859,39 @@ final class SafariApprovalVaultTests: XCTestCase {
         )) { error in
             XCTAssertEqual(error as? SafariApprovalVault.Error, .invalidCatalog)
         }
-        XCTAssertTrue(publicationEvents.isEmpty)
+        XCTAssertTrue(publicationEvents.allSatisfy { $0 == "random-key" })
         XCTAssertTrue(keys.keys.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
 
         try vault.publish(source: fixture.source, integrityKey: integrityKey)
-        try replaceAuthenticatedSource(source, at: url, keys: keys)
+        var envelope = try readEnvelope(at: url)
+        envelope.catalog = try source.catalog.canonicalData()
+        let originalWallet = WalletContainer(
+            id: "mnemonic-wallet",
+            key: try XCTUnwrap(WalletStoredKey.importJSON(json: fixture.source.wallets[0].storedKeyJSON))
+        )
+        let privateKey = try originalWallet.privateKey(
+            passwordData: fixture.source.password,
+            account: fixture.account
+        )
+        let originalIdentity = SafariApprovalKeyIdentity(
+            generation: envelope.generation,
+            account: try XCTUnwrap(fixture.source.catalog.accounts.first)
+        )
+        let replacementIdentity = SafariApprovalKeyIdentity(
+            generation: envelope.generation,
+            account: try XCTUnwrap(source.catalog.accounts.first)
+        )
+        keys.keys[replacementIdentity] = try XCTUnwrap(keys.keys[originalIdentity])
+        envelope.accounts[0] = try privateKey.withData {
+            try sealAccount(
+                $0,
+                account: XCTUnwrap(source.catalog.accounts.first),
+                envelope: envelope,
+                key: XCTUnwrap(keys.keys[replacementIdentity])
+            )
+        }
+        try writeEnvelope(envelope, at: url)
         XCTAssertNotNil(vault.reviewCatalog())
         guard case .unavailable = await vault.unlockResult(
             reason: "Approve",
@@ -573,8 +1032,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(keys.loadedContext)
     }
 
-    func testUnrelatedUndecryptableWalletDoesNotBlockSelectedSignerButCannotPublish()
-        async throws {
+    func testPublicationRejectsUndecryptableSourceWallet() throws {
         let fixture = try fixture()
         let unrelatedKey = try XCTUnwrap(WalletStoredKey.importPrivateKey(
             privateKey: Data(repeating: 2, count: 32),
@@ -608,33 +1066,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
         XCTAssertTrue(keys.keys.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
-
-        try vault.publish(source: fixture.source, integrityKey: integrityKey)
-        try replaceAuthenticatedSource(source, at: url, keys: keys)
-        let selected = WalletAccountDescriptor(walletID: "wallet", account: fixture.account)
-        guard case .unlocked(let catalog, let access) = await vault.unlockResult(
-            reason: "Approve",
-            authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
-        ) else {
-            return XCTFail("An unrelated undecryptable wallet must not block the selected account")
-        }
-        XCTAssertEqual(catalog.orderedAccounts.count, 2)
-        let unrelated = try XCTUnwrap(unrelatedWallet.accounts.first)
-        try await assertSigningAccessForTesting(access, walletID: unrelatedWallet.id, account: unrelated, expectedSuccess: false)
-        try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: true)
-        try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: false)
-        guard case .unavailable = await vault.unlockResult(
-            reason: "Approve",
-            authorization: walletSigningAuthorizationForTesting(
-                approvedAccount: WalletAccountDescriptor(walletID: unrelatedWallet.id, account: unrelated)
-            )
-        ) else {
-            return XCTFail("Selecting the undecryptable wallet must fail during unlock")
-        }
     }
 
-    func testUnownedSiblingDoesNotBlockSelectedMnemonicSignerButCannotPublish()
-        async throws {
+    func testPublicationRejectsUnownedMnemonicSibling() throws {
         let fixture = try orderedFixture()
         var records = fixture.source.wallets
         var object = try XCTUnwrap(
@@ -673,30 +1107,6 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
         XCTAssertTrue(keys.keys.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
-
-        try vault.publish(source: fixture.source, integrityKey: integrityKey)
-        try replaceAuthenticatedSource(source, at: url, keys: keys)
-        let selected = fixture.accounts[0]
-        guard case .unlocked(let catalog, let access) = await vault.unlockResult(
-            reason: "Approve",
-            authorization: walletSigningAuthorizationForTesting(
-                approvedAccount: WalletAccountDescriptor(walletID: selected.walletId, account: selected.account)
-            )
-        ) else {
-            return XCTFail("An unowned sibling must not block the selected mnemonic account")
-        }
-        XCTAssertEqual(catalog.orderedAccounts.count, 3)
-        try await assertSigningAccessForTesting(access, walletID: wallets[0].id, account: wallets[0].accounts[1], expectedSuccess: false)
-        try await assertSigningAccessForTesting(access, walletID: selected.walletId, account: selected.account, expectedSuccess: true)
-        try await assertSigningAccessForTesting(access, walletID: selected.walletId, account: selected.account, expectedSuccess: false)
-        guard case .unavailable = await vault.unlockResult(
-            reason: "Approve",
-            authorization: walletSigningAuthorizationForTesting(
-                approvedAccount: WalletAccountDescriptor(walletID: wallets[0].id, account: wallets[0].accounts[1])
-            )
-        ) else {
-            return XCTFail("Selecting the unowned sibling must fail during unlock")
-        }
     }
 
     func testAuthenticationCancellationDoesNotReadProtectedKey() async throws {
@@ -1070,6 +1480,7 @@ final class SafariApprovalVaultTests: XCTestCase {
     func testExactCatalogBytesAreAuthenticated() async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
+        let fixture = try orderedFixture()
         let keys = MemoryApprovalKeyStore()
         let vault = SafariApprovalVault(
             fileURL: url,
@@ -1078,36 +1489,24 @@ final class SafariApprovalVaultTests: XCTestCase {
             authentication: { _, _, _ in true },
             randomKey: { Data(repeating: 8, count: 32) }
         )
-        try vault.publish(
-            source: fixture().source,
-            integrityKey: integrityKey
+        try vault.publish(source: fixture.source, integrityKey: integrityKey)
+        var envelope = try readEnvelope(at: url)
+        var accounts = fixture.source.catalog.accounts
+        accounts[1] = WalletAccountDescriptor(
+            walletID: "changed-wallet", account: accounts[1].account
         )
-
-        var envelope = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(contentsOf: url))
-                as? [String: Any]
-        )
-        let encodedCatalog = try XCTUnwrap(envelope["catalog"] as? String)
-        var catalog = try XCTUnwrap(
-            JSONSerialization.jsonObject(
-                with: try XCTUnwrap(Data(base64Encoded: encodedCatalog))
-            ) as? [String: Any]
-        )
-        var accounts = try XCTUnwrap(catalog["accounts"] as? [[String: Any]])
-        accounts[0]["normalizedAddress"] =
-            "0x0000000000000000000000000000000000000001"
-        catalog["accounts"] = accounts
-        let changedCatalog = try JSONSerialization.data(
-            withJSONObject: catalog,
-            options: [.sortedKeys]
-        )
-        envelope["catalog"] = changedCatalog.base64EncodedString()
-        try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
-            .write(to: url, options: .atomic)
+        envelope.catalog = try WalletAccountCatalog(accounts: accounts).canonicalData()
+        envelope.accounts[1].account = accounts[1]
+        try writeEnvelope(envelope, at: url)
 
         XCTAssertNotNil(vault.reviewCatalog())
-        let unlocked = await vault.unlockSignerForTesting(reason: "Approve")
-        XCTAssertNil(unlocked)
+        guard case .unavailable = await vault.unlockResult(
+            reason: "Approve",
+            authorization: walletSigningAuthorizationForTesting(approvedAccount: accounts[0])
+        ) else {
+            return XCTFail("A change to a sibling catalog entry must invalidate the selected ciphertext")
+        }
+        XCTAssertNotNil(keys.loadedContext)
     }
 
     func testValidatedCatalogRetainsCanonicalBytes() throws {
@@ -1119,33 +1518,47 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(validated.data, data)
     }
 
-    func testUnlockRejectsUndecryptableSelectedAccountBeforeReturningSession() async throws {
+    func testUnlockRejectsInvalidSelectedAccountPayloadBeforeReturningSession() async throws {
         for fixture in [try fixture(), try mnemonicFixture()] {
-            for password in [Data(), Data("incorrect-password".utf8)] {
-                let url = temporaryURL()
-                defer { try? FileManager.default.removeItem(at: url) }
-                let keys = MemoryApprovalKeyStore()
-                let vault = SafariApprovalVault(
-                    fileURL: url,
-                    keyStore: keys,
-                    canEvaluateAuthentication: { _, _ in true },
-                    authentication: { _, _, _ in true }
-                )
-                try vault.publish(source: fixture.source, integrityKey: integrityKey)
-                var source = fixture.source
-                source.password = password
-                try replaceAuthenticatedSource(source, at: url, keys: keys)
-                XCTAssertNotNil(vault.reviewCatalog())
-
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keys = MemoryApprovalKeyStore()
+            let vault = SafariApprovalVault(
+                fileURL: url,
+                keyStore: keys,
+                canEvaluateAuthentication: { _, _ in true },
+                authentication: { _, _, _ in true }
+            )
+            try vault.publish(source: fixture.source, integrityKey: integrityKey)
+            let original = try readEnvelope(at: url)
+            let selected = try XCTUnwrap(fixture.source.catalog.accounts.first)
+            for mutation in ["ciphertext", "tag", "zero private key", "wrong private key"] {
+                var envelope = original
+                switch mutation {
+                case "ciphertext":
+                    envelope.accounts[0].ciphertext[0] ^= 0xff
+                case "tag":
+                    envelope.accounts[0].tag[0] ^= 0xff
+                default:
+                    envelope.accounts[0] = try sealAccount(
+                        Data(repeating: mutation == "zero private key" ? 0 : 0x8f, count: 32),
+                        account: selected,
+                        envelope: envelope,
+                        key: XCTUnwrap(keys.keys[SafariApprovalKeyIdentity(
+                            generation: envelope.generation, account: selected
+                        )])
+                    )
+                }
+                try writeEnvelope(envelope, at: url)
+                XCTAssertNotNil(vault.reviewCatalog(), mutation)
+                keys.loadedContext = nil
                 guard case .unavailable = await vault.unlockResult(
                     reason: "Approve",
-                    authorization: walletSigningAuthorizationForTesting(
-                        approvedAccount: try XCTUnwrap(source.catalog.accounts.first)
-                    )
+                    authorization: walletSigningAuthorizationForTesting(approvedAccount: selected)
                 ) else {
-                    return XCTFail("The selected key must be decrypted before returning a session")
+                    return XCTFail("Invalid selected account payload accepted: \(mutation)")
                 }
-                XCTAssertNotNil(keys.loadedContext)
+                XCTAssertNotNil(keys.loadedContext, mutation)
             }
         }
     }
@@ -1262,7 +1675,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             }
             defer { unlocked.invalidate() }
             XCTAssertEqual(unlockedCatalog.identity, catalog.identity)
-            XCTAssertEqual(unlockedCatalog.orderedAccounts, fixture.accounts)
+            XCTAssertEqual(unlockedCatalog.orderedAccounts, catalog.orderedAccounts)
             XCTAssertEqual(unlocked.approvedAccount, approvedAccount)
             try await assertSigningAccessForTesting(unlocked, walletID: selected.walletId, account: selected.account, expectedSuccess: true)
             for other in fixture.accounts where other != selected {
@@ -1285,17 +1698,14 @@ final class SafariApprovalVaultTests: XCTestCase {
             source: fixture.source,
             integrityKey: integrityKey
         )
-        var envelope = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-        )
+        var envelope = try readEnvelope(at: url)
         let reordered = WalletAccountCatalog(
             accounts: Array(fixture.source.catalog.accounts.reversed())
         )
         XCTAssertTrue(reordered.isValid)
-        envelope["catalog"] = try (reordered).canonicalData()
-            .base64EncodedString()
-        try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
-            .write(to: url, options: .atomic)
+        envelope.catalog = try reordered.canonicalData()
+        envelope.accounts.reverse()
+        try writeEnvelope(envelope, at: url)
 
         XCTAssertNotNil(vault.reviewCatalog())
         let unlocked = await vault.unlockSignerForTesting(reason: "Approve")
@@ -1418,11 +1828,14 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNil(vault.reviewCatalog())
     }
 
-    func testKeychainQueriesUseProtectedApprovalGroupAndExactContext() {
+    func testKeychainQueriesUseProtectedApprovalGroupAndExactContext() throws {
         let generation = UUID()
+        let identity = SafariApprovalKeyIdentity(
+            generation: generation, account: try XCTUnwrap(fixture().source.catalog.accounts.first)
+        )
         let context = LAContext()
-        let query = SafariApprovalKeychainStore.loadQuery(
-            generation: generation,
+        let query = try SafariApprovalKeychainStore.loadQuery(
+            identity: identity,
             context: context
         )
 
@@ -1433,7 +1846,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(query[kSecUseDataProtectionKeychain as String] as? Bool, true)
         XCTAssertEqual(
             query[kSecAttrAccount as String] as? String,
-            generation.uuidString.lowercased()
+            try identity.keychainAccount()
         )
         XCTAssertTrue(
             query[kSecUseAuthenticationContext as String] as AnyObject === context
@@ -1485,8 +1898,12 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
     }
 
-    func testKeyAvailabilityMapsProductionStatusesWithoutAuthentication() {
+    func testKeyAvailabilityMapsProductionStatusesWithoutAuthentication() throws {
         let generation = UUID()
+        let identity = SafariApprovalKeyIdentity(
+            generation: generation, account: try XCTUnwrap(fixture().source.catalog.accounts.first)
+        )
+        let selector = try identity.keychainAccount()
         let outcomes: [(OSStatus, SafariApprovalKeyAvailability)] = [
             (errSecSuccess, .present),
             (errSecInteractionNotAllowed, .authenticationRequired),
@@ -1506,7 +1923,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                     let query = query as NSDictionary
                     XCTAssertEqual(
                         query[kSecAttrAccount] as? String,
-                        generation.uuidString.lowercased()
+                        selector
                     )
                     XCTAssertEqual(
                         query[kSecAttrService] as? String,
@@ -1537,8 +1954,203 @@ final class SafariApprovalVaultTests: XCTestCase {
                 }
             )
 
-            XCTAssertEqual(store.availability(generation: generation), expected)
+            XCTAssertEqual(store.availability(identities: [identity]), [identity: expected])
             XCTAssertEqual(queryCount, 1)
+        }
+    }
+
+    func testAccountKeySelectorsBindTheExactDescriptorAndGeneration() throws {
+        let generation = try XCTUnwrap(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
+        let descriptor = WalletAccountDescriptor(
+            walletID: "wallet", coin: .ethereum,
+            normalizedAddress: "0x0000000000000000000000000000000000000042",
+            derivationPath: "m/44'/60'/0'/0/0"
+        )
+        let identity = SafariApprovalKeyIdentity(generation: generation, account: descriptor)
+        let selector = try identity.keychainAccount()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let digest = SHA256.hash(data: try encoder.encode(descriptor))
+            .map { String(format: "%02x", $0) }.joined()
+        XCTAssertEqual(selector, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:" + digest)
+        let decoded = try JSONDecoder().decode(
+            WalletAccountDescriptor.self, from: JSONEncoder().encode(descriptor)
+        )
+        XCTAssertEqual(try SafariApprovalKeyIdentity(generation: generation, account: decoded).keychainAccount(), selector)
+
+        let variants = [
+            WalletAccountDescriptor(
+                walletID: "other-wallet", coin: descriptor.coin,
+                normalizedAddress: descriptor.normalizedAddress, derivationPath: descriptor.derivationPath
+            ),
+            WalletAccountDescriptor(
+                walletID: descriptor.walletID, coin: .solana,
+                normalizedAddress: descriptor.normalizedAddress, derivationPath: descriptor.derivationPath
+            ),
+            WalletAccountDescriptor(
+                walletID: descriptor.walletID, coin: descriptor.coin,
+                normalizedAddress: "0x0000000000000000000000000000000000000043",
+                derivationPath: descriptor.derivationPath
+            ),
+            WalletAccountDescriptor(
+                walletID: descriptor.walletID, coin: descriptor.coin,
+                normalizedAddress: descriptor.normalizedAddress, derivationPath: "m/44'/60'/0'/0/1"
+            )
+        ]
+        var selectors = Set([selector])
+        for variant in variants {
+            selectors.insert(try SafariApprovalKeyIdentity(generation: generation, account: variant).keychainAccount())
+        }
+        selectors.insert(try SafariApprovalKeyIdentity(generation: UUID(), account: descriptor).keychainAccount())
+        XCTAssertEqual(selectors.count, variants.count + 2)
+    }
+
+    func testBulkKeyInventoryMatchesAccountSelectorsWithoutReadingSecrets() throws {
+        let generation = UUID()
+        let identities = try accountCountFixture(3).catalog.accounts.map {
+            SafariApprovalKeyIdentity(generation: generation, account: $0)
+        }
+        let selectors = try identities.map { try $0.keychainAccount() }
+        let foreignSelector = try SafariApprovalKeyIdentity(
+            generation: UUID(), account: identities[1].account
+        ).keychainAccount()
+        var queries = 0
+        let store = SafariApprovalKeychainStore(copyMatching: { query, result in
+            queries += 1
+            let query = query as NSDictionary
+            XCTAssertNil(query[kSecAttrAccount])
+            XCTAssertEqual(query[kSecMatchLimit] as? String, kSecMatchLimitAll as String)
+            XCTAssertEqual(query[kSecClass] as? String, kSecClassGenericPassword as String)
+            XCTAssertEqual(query[kSecAttrService] as? String, SafariApprovalKeychainStore.service)
+            XCTAssertEqual(query[kSecAttrAccessGroup] as? String, SafariApprovalKeychainStore.accessGroup)
+            XCTAssertEqual(query[kSecUseDataProtectionKeychain] as? Bool, true)
+            XCTAssertEqual(query[kSecReturnAttributes] as? Bool, true)
+            XCTAssertNil(query[kSecReturnData])
+            XCTAssertNil(query[kSecValueData])
+            XCTAssertEqual((query[kSecUseAuthenticationContext] as? LAContext)?.interactionNotAllowed, true)
+            result?.pointee = [selectors[2], foreignSelector, selectors[0]].map {
+                [kSecAttrAccount as String: $0]
+            } as CFArray
+            return errSecSuccess
+        })
+
+        XCTAssertEqual(store.availability(identities: identities), [
+            identities[0]: .present, identities[1]: .missing, identities[2]: .present
+        ])
+        XCTAssertEqual(queries, 1)
+    }
+
+    func testBulkAuthenticationRequiredFallsBackToExactMetadataQueries() throws {
+        let generation = UUID()
+        let identities = try accountCountFixture(4).catalog.accounts.map {
+            SafariApprovalKeyIdentity(generation: generation, account: $0)
+        }
+        let selectors = try identities.map { try $0.keychainAccount() }
+        let statuses = Dictionary(uniqueKeysWithValues: zip(selectors, [
+            errSecSuccess, errSecInteractionNotAllowed, errSecItemNotFound, errSecAuthFailed
+        ]))
+        var queriedAccounts = [String]()
+        var bulkQueries = 0
+        var inventoryContext: LAContext?
+        let store = SafariApprovalKeychainStore(copyMatching: { query, _ in
+            let query = query as NSDictionary
+            XCTAssertEqual(query[kSecReturnAttributes] as? Bool, true)
+            XCTAssertNil(query[kSecReturnData])
+            XCTAssertNil(query[kSecValueData])
+            let context = query[kSecUseAuthenticationContext] as? LAContext
+            XCTAssertEqual(context?.interactionNotAllowed, true)
+            if query[kSecMatchLimit] as? String == kSecMatchLimitAll as String {
+                bulkQueries += 1
+                XCTAssertNil(query[kSecAttrAccount])
+                inventoryContext = context
+                return errSecInteractionNotAllowed
+            }
+            XCTAssertTrue(context === inventoryContext)
+            XCTAssertEqual(query[kSecMatchLimit] as? String, kSecMatchLimitOne as String)
+            guard let account = query[kSecAttrAccount] as? String,
+                  let status = statuses[account] else {
+                XCTFail("Fallback must query only the requested account identities")
+                return errSecParam
+            }
+            queriedAccounts.append(account)
+            return status
+        })
+
+        XCTAssertEqual(store.availability(identities: identities), [
+            identities[0]: .present,
+            identities[1]: .authenticationRequired,
+            identities[2]: .missing,
+            identities[3]: .unavailable(errSecAuthFailed)
+        ])
+        XCTAssertEqual(bulkQueries, 1)
+        XCTAssertEqual(queriedAccounts, selectors)
+    }
+
+    func testMalformedBulkKeyMetadataFailsClosed() throws {
+        let generation = UUID()
+        let identities = try accountCountFixture(2).catalog.accounts.map {
+            SafariApprovalKeyIdentity(generation: generation, account: $0)
+        }
+        let selector = try identities[0].keychainAccount()
+        let malformedResults: [CFTypeRef?] = [
+            nil,
+            Data([0x01]) as CFData,
+            [kSecAttrAccount as String: selector] as CFDictionary,
+            [["unexpected": selector]] as CFArray,
+            [[kSecAttrAccount as String: 1]] as CFArray,
+            [[kSecAttrAccount as String: selector], [:]] as CFArray
+        ]
+        for attributes in malformedResults {
+            var queries = 0
+            let store = SafariApprovalKeychainStore(copyMatching: { query, result in
+                queries += 1
+                let query = query as NSDictionary
+                XCTAssertEqual(query[kSecMatchLimit] as? String, kSecMatchLimitAll as String)
+                XCTAssertNil(query[kSecReturnData])
+                result?.pointee = attributes
+                return errSecSuccess
+            })
+            XCTAssertEqual(store.availability(identities: identities), [
+                identities[0]: .unavailable(errSecDecode), identities[1]: .unavailable(errSecDecode)
+            ])
+            XCTAssertEqual(queries, 1)
+        }
+    }
+
+    func testEmptyKeyInventoryDoesNotQueryKeychain() {
+        let store = SafariApprovalKeychainStore(copyMatching: { _, _ in
+            XCTFail("An empty account catalog needs no Keychain query")
+            return errSecParam
+        })
+        XCTAssertTrue(store.availability(identities: []).isEmpty)
+    }
+
+    func testAccountKeyPublicationAndCatalogReadCostsWithMockedKeychain() throws {
+        for accountCount in [1, 100] {
+            let source = try accountCountFixture(accountCount)
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keychain = ProtectedApprovalKeychainFixture()
+            keychain.availabilityStatus = errSecSuccess
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keychain.store)
+            let start = ContinuousClock.now
+            try vault.publish(source: source, integrityKey: integrityKey)
+            let publicationDuration = start.duration(to: .now)
+            XCTAssertEqual(keychain.events.filter { $0 == "add" }.count, accountCount)
+            XCTAssertEqual(keychain.keys.count, accountCount)
+            XCTAssertEqual(keychain.availabilityReads, 1)
+
+            var catalogDurations = [Duration]()
+            for _ in 0..<5 {
+                let readsBefore = keychain.availabilityReads
+                let start = ContinuousClock.now
+                let catalog = try XCTUnwrap(vault.reviewCatalog())
+                catalogDurations.append(start.duration(to: .now))
+                XCTAssertEqual(catalog.orderedAccounts.count, accountCount)
+                XCTAssertEqual(keychain.availabilityReads - readsBefore, 1)
+            }
+            XCTAssertEqual(keychain.protectedKeyReads, 0)
+            print("Safari approval mocked Keychain: accounts=\(accountCount), publication=\(publicationDuration), catalog reads=\(catalogDurations)")
         }
     }
 
@@ -1695,7 +2307,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(keychain.events, events)
     }
 
-    func testHostRepairsPublicationWhenGenerationKeyIsActuallyMissing() throws {
+    func testHostRepairsPublicationWhenOneAccountKeyIsMissing() throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
         let keychain = ProtectedApprovalKeychainFixture()
@@ -1703,7 +2315,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let source = try fixture().source
+        let source = try accountCountFixture(3)
         let reconciliationQueue = DispatchQueue(label: "SafariApprovalVaultHostTests.reconciliation")
         let host = SafariApprovalVaultHost(
             vault: vault,
@@ -1715,8 +2327,11 @@ final class SafariApprovalVaultTests: XCTestCase {
         host.start(backgroundTask: { _ in {} })
         reconciliationQueue.sync {}
         let first = try XCTUnwrap(vault.reviewCatalog()?.identity)
-        keychain.keys.removeAll()
-        XCTAssertNil(vault.reviewCatalog())
+        let missingIdentity = SafariApprovalKeyIdentity(
+            generation: try XCTUnwrap(first.generation), account: source.catalog.accounts[1]
+        )
+        keychain.keys.removeValue(forKey: try missingIdentity.keychainAccount())
+        XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts.count, 2)
 
         host.reconcile()
         reconciliationQueue.sync {}
@@ -1724,9 +2339,162 @@ final class SafariApprovalVaultTests: XCTestCase {
         let repaired = try XCTUnwrap(vault.reviewCatalog()?.identity)
         XCTAssertNotEqual(repaired.generation, first.generation)
         XCTAssertEqual(repaired.catalogData, first.catalogData)
-        XCTAssertEqual(keychain.keys.count, 1)
-        XCTAssertEqual(keychain.events.filter { $0 == "add" }.count, 2)
+        XCTAssertEqual(keychain.keys.count, 3)
+        XCTAssertEqual(keychain.events.filter { $0 == "add" }.count, 6)
         XCTAssertEqual(keychain.protectedKeyReads, 0)
+    }
+
+    func testUnknownAccountKeyAvailabilityPreservesPublicationBeforeMissingKeyRepair() throws {
+        let source = try accountCountFixture(3)
+        for missingIndex in [0, 1] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keys = MemoryApprovalKeyStore()
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+            let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let queue = DispatchQueue(label: "SafariApprovalVaultHostTests.partialAvailability")
+            let host = SafariApprovalVaultHost(
+                vault: vault, defaults: defaults,
+                integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+                reconciliationQueue: queue, sourceSnapshot: { source }
+            )
+            host.start(backgroundTask: { _ in {} })
+            queue.sync {}
+            let original = try XCTUnwrap(vault.reviewCatalog())
+            let generation = try XCTUnwrap(original.identity.generation)
+            let identities = source.catalog.accounts.map { SafariApprovalKeyIdentity(generation: generation, account: $0) }
+            let envelope = try Data(contentsOf: url)
+            let metadata = defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1")
+            keys.keys.removeValue(forKey: identities[missingIndex])
+            keys.availabilityOverrides[identities[1 - missingIndex]] = .unavailable(errSecIO)
+            let remainingKeys = keys.keys
+
+            host.reconcile()
+            queue.sync {}
+
+            XCTAssertEqual(try Data(contentsOf: url), envelope)
+            XCTAssertEqual(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"), metadata)
+            XCTAssertEqual(keys.keys, remainingKeys)
+            XCTAssertEqual(vault.reviewCatalog()?.identity, original.identity)
+            XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts, [source.catalog.accounts[2].specificAccount])
+            XCTAssertTrue(keys.loadedIdentities.isEmpty)
+
+            keys.availabilityOverrides.removeAll()
+            host.reconcile()
+            queue.sync {}
+
+            XCTAssertNotEqual(vault.reviewCatalog()?.identity.generation, generation)
+            XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts, original.orderedAccounts)
+            XCTAssertEqual(keys.keys.count, 3)
+        }
+    }
+
+    func testCompleteKeySetIsInstalledBeforeEnvelopePublication() throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        var events = [String]()
+        keys.onRemove = { events.append("delete") }
+        keys.onStore = { _ in
+            events.append("store")
+            XCTAssertEqual(try? Data(contentsOf: url), Data())
+        }
+        let vault = SafariApprovalVault(
+            fileURL: url, keyStore: keys,
+            atomicWrite: { data, destination in
+                events.append(data.isEmpty ? "tombstone" : "envelope")
+                if !data.isEmpty {
+                    XCTAssertEqual(keys.keys.count, 3)
+                    XCTAssertEqual(keys.availabilityRequests.last?.count, 3)
+                }
+                try data.write(to: destination, options: .atomic)
+            }
+        )
+        try vault.publish(source: source, integrityKey: integrityKey)
+        XCTAssertEqual(events, ["tombstone", "delete", "store", "store", "store", "envelope"])
+        XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts.count, 3)
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+    }
+
+    func testPartialKeyInsertionCleansUpIndependentlyAndCanRecover() throws {
+        let source = try accountCountFixture(3)
+        for cleanupFailure in ["none", "tombstone", "keys"] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keys = MemoryApprovalKeyStore()
+            var writes = 0
+            var insertions = 0
+            var deletions = 0
+            var events = [String]()
+            keys.onStore = { _ in
+                insertions += 1
+                events.append("store")
+                if insertions == 2 { keys.storeError = SafariApprovalVault.Error.keychainFailure(errSecIO) }
+            }
+            keys.onRemove = {
+                deletions += 1
+                events.append("delete")
+                if deletions == 2 && cleanupFailure == "keys" {
+                    keys.removeError = SafariApprovalVault.Error.keychainFailure(errSecIO)
+                }
+            }
+            let vault = SafariApprovalVault(
+                fileURL: url, keyStore: keys,
+                atomicWrite: { data, destination in
+                    writes += 1
+                    events.append(data.isEmpty ? "tombstone" : "envelope")
+                    if writes == 2 && cleanupFailure == "tombstone" { throw CocoaError(.fileWriteUnknown) }
+                    try data.write(to: destination, options: .atomic)
+                }
+            )
+            XCTAssertThrowsError(try vault.publish(source: source, integrityKey: integrityKey))
+            XCTAssertEqual(events, ["tombstone", "delete", "store", "store", "tombstone", "delete"])
+            XCTAssertEqual(try Data(contentsOf: url), Data())
+            XCTAssertNil(vault.reviewCatalog())
+            XCTAssertEqual(keys.keys.count, cleanupFailure == "keys" ? 1 : 0)
+
+            keys.storeError = nil
+            keys.removeError = nil
+            keys.onStore = nil
+            keys.onRemove = nil
+            let publication = try vault.publish(source: source, integrityKey: integrityKey)
+            XCTAssertEqual(keys.keys.count, 3)
+            XCTAssertTrue(keys.keys.keys.allSatisfy { $0.generation == publication.generation })
+            XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts.count, 3)
+        }
+    }
+
+    func testHostRecoversTombstoneWithOrphanedAccountKeys() throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data().write(to: url)
+        let keys = MemoryApprovalKeyStore()
+        let abandonedGeneration = UUID()
+        let abandoned = SafariApprovalKeyIdentity(generation: abandonedGeneration, account: source.catalog.accounts[0])
+        keys.keys[abandoned] = Data(repeating: 4, count: 32)
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        XCTAssertNil(vault.reviewCatalog())
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let queue = DispatchQueue(label: "SafariApprovalVaultHostTests.crashRecovery")
+        let host = SafariApprovalVaultHost(
+            vault: vault, defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            reconciliationQueue: queue, sourceSnapshot: { source }
+        )
+        host.start(backgroundTask: { _ in {} })
+        queue.sync {}
+        let recovered = try XCTUnwrap(vault.reviewCatalog())
+        XCTAssertNotEqual(recovered.identity.generation, abandonedGeneration)
+        XCTAssertEqual(recovered.orderedAccounts.count, 3)
+        XCTAssertNil(keys.keys[abandoned])
+        XCTAssertEqual(keys.keys.count, 3)
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
     }
 
     func testChangedSourceCannotKeepPublicationWhenKeyAvailabilityIsUnknown()
@@ -1758,7 +2526,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertNil(vault.reviewCatalog())
         XCTAssertEqual(try Data(contentsOf: url), Data())
-        XCTAssertNil(keychain.keys[oldGeneration.uuidString.lowercased()])
+        XCTAssertFalse(keychain.keys.keys.contains { $0.hasPrefix(oldGeneration.uuidString.lowercased() + ":") })
         XCTAssertNil(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
 
         keychain.availabilityStatus = errSecInteractionNotAllowed
@@ -1800,7 +2568,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             XCTAssertEqual(error as? SafariApprovalVault.Error, .keychainFailure(errSecIO))
         }
 
-        XCTAssertEqual(keychain.events, ["tombstone", "delete"])
+        XCTAssertEqual(keychain.events, ["tombstone", "delete", "tombstone", "delete"])
         XCTAssertEqual(try Data(contentsOf: url), Data())
         XCTAssertNil(vault.reviewCatalog())
         XCTAssertEqual(keychain.keys.count, 1)
@@ -2080,6 +2848,106 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(ends, 1)
     }
 
+    func testExpirationDuringFirstAccountKeyStoreStopsPublication() throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        var expire: (() -> Void)?
+        var ends = 0
+        let activity = try XCTUnwrap(SafariApprovalReconciliationActivity(begin: {
+            expire = $0
+            return { ends += 1 }
+        }))
+        defer { activity.finish() }
+        var stores = 0
+        var deletions = 0
+        keys.onStore = { _ in stores += 1; expire?() }
+        keys.onRemove = { deletions += 1 }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let lease = try XCTUnwrap(activity.acquireLease(from: vault))
+
+        XCTAssertThrowsError(try vault.publish(
+            source: source, integrityKey: integrityKey, coordinationLease: lease, activity: activity
+        )) { XCTAssertTrue($0 is CancellationError) }
+
+        XCTAssertEqual(stores, 1)
+        XCTAssertEqual(deletions, 1)
+        XCTAssertEqual(ends, 1)
+        XCTAssertEqual(try Data(contentsOf: url), Data())
+        XCTAssertNil(vault.reviewCatalog())
+        XCTAssertEqual(keys.keys.count, 1)
+        keys.onStore = nil
+        let recovered = try vault.publish(source: source, integrityKey: integrityKey)
+        XCTAssertEqual(keys.keys.count, 3)
+        XCTAssertTrue(keys.keys.keys.allSatisfy { $0.generation == recovered.generation })
+        XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts.count, 3)
+    }
+
+    @MainActor
+    func testExpirationDuringKeyInventoryReturnsPromptlyAndPreservesNewerPublication() async throws {
+        let source = try accountCountFixture(3)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let inventoryStarted = expectation(description: "Publication is checking key metadata")
+        let publicationFinished = expectation(description: "Expired publication stops")
+        let releaseInventory = DispatchSemaphore(value: 0)
+        defer { releaseInventory.signal() }
+        var blockInventory = true
+        keys.onAvailability = {
+            guard blockInventory else { return }
+            blockInventory = false
+            inventoryStarted.fulfill()
+            XCTAssertEqual(releaseInventory.wait(timeout: .now() + 5), .success)
+        }
+        var expire: (() -> Void)?
+        let activity = try XCTUnwrap(SafariApprovalReconciliationActivity(begin: {
+            expire = $0
+            return {}
+        }))
+        defer { activity.finish() }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let lease = try XCTUnwrap(activity.acquireLease(from: vault))
+        let integrityKey = integrityKey
+        DispatchQueue.global().async {
+            do {
+                try vault.publish(
+                    source: source, integrityKey: integrityKey, coordinationLease: lease, activity: activity
+                )
+                XCTFail("Expired publication must stop")
+            } catch {
+                XCTAssertTrue(error is CancellationError)
+            }
+            publicationFinished.fulfill()
+        }
+        await fulfillment(of: [inventoryStarted], timeout: 2)
+        let expireActivity = try XCTUnwrap(expire)
+        let expirationReturned = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            expireActivity()
+            expirationReturned.signal()
+        }
+        let expirationResult = expirationReturned.wait(timeout: .now() + 1)
+        XCTAssertEqual(expirationResult, .success)
+        guard expirationResult == .success else {
+            releaseInventory.signal()
+            await fulfillment(of: [publicationFinished], timeout: 5)
+            return
+        }
+
+        let replacementVault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let replacement = try replacementVault.publish(source: source, integrityKey: integrityKey)
+        let replacementData = try Data(contentsOf: url)
+        let replacementKeys = keys.keys
+        releaseInventory.signal()
+        await fulfillment(of: [publicationFinished], timeout: 2)
+
+        XCTAssertEqual(try Data(contentsOf: url), replacementData)
+        XCTAssertEqual(keys.keys, replacementKeys)
+        XCTAssertEqual(vault.reviewCatalog()?.identity.generation, replacement.generation)
+    }
+
     func testOwnershipValidationStopsOnCancellationBeforeDecryptionAndAccountDerivation()
         throws {
         let source = try orderedFixture().source
@@ -2098,14 +2966,15 @@ final class SafariApprovalVaultTests: XCTestCase {
                     return {}
                 }))
                 defer { activity.finish() }
-                XCTAssertThrowsError(try WalletSnapshotValidation.ownsStoredAccounts(
+                XCTAssertThrowsError(try WalletSnapshotValidation.visitOwnedAccountKeys(
                     wallet,
                     password: source.password,
                     checkCancellation: {
                         checks += 1
                         if checks == cancelAt { expire?() }
                         try activity.checkCancellation()
-                    }
+                    },
+                    visit: { _, _ in }
                 )) { XCTAssertTrue($0 is CancellationError) }
                 XCTAssertEqual(checks, cancelAt)
             }
@@ -2115,13 +2984,14 @@ final class SafariApprovalVaultTests: XCTestCase {
         var visitedWallets = 0
         XCTAssertThrowsError(try wallets.allSatisfy { wallet in
             visitedWallets += 1
-            return try WalletSnapshotValidation.ownsStoredAccounts(
+            return try WalletSnapshotValidation.visitOwnedAccountKeys(
                 wallet,
                 password: source.password,
                 checkCancellation: {
                     checks += 1
                     if checks == 4 { throw CancellationError() }
-                }
+                },
+                visit: { _, _ in }
             )
         }) { XCTAssertTrue($0 is CancellationError) }
         XCTAssertEqual(checks, 4)
@@ -2357,7 +3227,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         reconciliationQueue.sync {}
         XCTAssertEqual(vault.reviewCatalog()?.identity, original)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
-        XCTAssertNotNil(keys.keys[try XCTUnwrap(original.generation)])
+        XCTAssertTrue(keys.keys.keys.contains { $0.generation == original.generation })
     }
 
     @MainActor
@@ -2394,7 +3264,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         reconciliationQueue.sync {}
         XCTAssertEqual(vault.reviewCatalog()?.identity, original)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
-        XCTAssertNotNil(keys.keys[try XCTUnwrap(original.generation)])
+        XCTAssertTrue(keys.keys.keys.contains { $0.generation == original.generation })
     }
 
     @MainActor
@@ -2851,17 +3721,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         let firstGeneration = try XCTUnwrap(
             vault.reviewCatalog()?.identity.generation
         )
-        var envelope = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(contentsOf: url))
-                as? [String: Any]
-        )
-        var tag = try XCTUnwrap(
-            Data(base64Encoded: try XCTUnwrap(envelope["tag"] as? String))
-        )
-        tag[0] ^= 0xff
-        envelope["tag"] = tag.base64EncodedString()
-        try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
-            .write(to: url, options: .atomic)
+        var envelope = try readEnvelope(at: url)
+        envelope.accounts[0].tag[0] ^= 0xff
+        try writeEnvelope(envelope, at: url)
 
         host.reconcile()
         reconciliationQueue.sync {}
@@ -3038,7 +3900,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertEqual(vault.reviewCatalog()?.identity, initial)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
-        XCTAssertNotNil(keys.keys[try XCTUnwrap(initial.generation)])
+        XCTAssertTrue(keys.keys.keys.contains { $0.generation == initial.generation })
         try await assertSigningAccessForTesting(access, walletID: "wallet", account: fixture.account, expectedSuccess: true)
     }
 
@@ -3214,7 +4076,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let recoveredUnlock = await vault.unlockSignerForTesting(reason: "After metadata recovery")
         let recoveredAccess = try XCTUnwrap(recoveredUnlock)
         try await assertSigningAccessForTesting(recoveredAccess, walletID: "mnemonic-wallet", account: replacement.account, expectedSuccess: true)
-        XCTAssertNil(keys.keys[try XCTUnwrap(originalIdentity.generation)])
+        XCTAssertFalse(keys.keys.keys.contains { $0.generation == originalIdentity.generation })
         XCTAssertFalse(previousAccess.validateCurrent())
         let replayedLease = await previousAccess.takeCommitLease()
         XCTAssertNil(replayedLease)
@@ -3283,7 +4145,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertNotEqual(current.generation, first.generation)
         XCTAssertNotEqual(current.catalogData, first.catalogData)
         XCTAssertNotNil(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
-        XCTAssertNil(keys.keys[try XCTUnwrap(first.generation)])
+        XCTAssertFalse(keys.keys.keys.contains { $0.generation == first.generation })
         XCTAssertFalse(previousAccess.validateCurrent())
         let previousLease = await previousAccess.takeCommitLease()
         XCTAssertNil(previousLease)
@@ -3631,7 +4493,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(stores, 1)
         XCTAssertEqual(vault.reviewCatalog()?.identity, initial)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
-        XCTAssertNotNil(keys.keys[try XCTUnwrap(initial.generation)])
+        XCTAssertTrue(keys.keys.keys.contains { $0.generation == initial.generation })
 
         rejectSynchronization = false
         host.reconcile()
@@ -3918,6 +4780,8 @@ private final class ProtectedApprovalKeychainFixture {
     var availabilityStatus: OSStatus = errSecInteractionNotAllowed
     var loadStatus: OSStatus = errSecSuccess
     var deleteStatus: OSStatus = errSecSuccess
+    var addStatus: ((String) -> OSStatus)?
+    var availabilityStatuses = [String: OSStatus]()
     private(set) var availabilityReads = 0
     private(set) var protectedKeyReads = 0
 
@@ -3932,15 +4796,29 @@ private final class ProtectedApprovalKeychainFixture {
             XCTAssertNotNil(query[kSecAttrAccessControl])
             XCTAssertEqual(query[kSecAttrService] as? String, SafariApprovalKeychainStore.service)
             XCTAssertEqual(query[kSecAttrAccessGroup] as? String, SafariApprovalKeychainStore.accessGroup)
-            XCTAssertTrue(keys.isEmpty)
+            XCTAssertNil(keys[account])
+            if let status = addStatus?(account), status != errSecSuccess { return status }
             keys[account] = data
             return errSecSuccess
         },
         copyMatching: { [unowned self] query, result in
             let query = query as NSDictionary
-            guard let account = query[kSecAttrAccount] as? String,
-                  let context = query[kSecUseAuthenticationContext] as? LAContext else {
-                XCTFail("Approval keys must be queried by generation with an explicit context")
+            guard let context = query[kSecUseAuthenticationContext] as? LAContext else {
+                XCTFail("Approval keys require an explicit authentication context")
+                return errSecParam
+            }
+            if query[kSecMatchLimit] as? String == kSecMatchLimitAll as String {
+                availabilityReads += 1
+                XCTAssertNil(query[kSecAttrAccount])
+                XCTAssertNil(query[kSecReturnData])
+                XCTAssertEqual(query[kSecReturnAttributes] as? Bool, true)
+                XCTAssertTrue(context.interactionNotAllowed)
+                guard availabilityStatus == errSecSuccess else { return availabilityStatus }
+                result?.pointee = keys.keys.map { [kSecAttrAccount as String: $0] } as CFArray
+                return keys.isEmpty ? errSecItemNotFound : errSecSuccess
+            }
+            guard let account = query[kSecAttrAccount] as? String else {
+                XCTFail("Account key queries require an exact identity")
                 return errSecParam
             }
             guard let data = keys[account] else { return errSecItemNotFound }
@@ -3954,7 +4832,7 @@ private final class ProtectedApprovalKeychainFixture {
             availabilityReads += 1
             XCTAssertEqual(query[kSecReturnAttributes] as? Bool, true)
             XCTAssertTrue(context.interactionNotAllowed)
-            return availabilityStatus
+            return availabilityStatuses[account] ?? availabilityStatus
         },
         delete: { [unowned self] query in
             events.append("delete")
@@ -3970,31 +4848,40 @@ private final class ProtectedApprovalKeychainFixture {
 }
 
 private final class MemoryApprovalKeyStore: SafariApprovalKeyStoring {
-    var keys = [UUID: Data]()
+    var keys = [SafariApprovalKeyIdentity: Data]()
+    var availabilityOverrides = [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability]()
+    var loadedIdentities = [SafariApprovalKeyIdentity]()
+    var availabilityRequests = [[SafariApprovalKeyIdentity]]()
     var loadedContext: LAContext?
     var onLoad: (() -> Void)?
-    var onStore: ((UUID) -> Void)?
+    var onAvailability: (() -> Void)?
+    var onStore: ((SafariApprovalKeyIdentity) -> Void)?
     var onRemove: (() -> Void)?
     var storeError: Swift.Error?
     var removeError: Swift.Error?
 
-    func store(_ key: Data, generation: UUID) throws {
-        onStore?(generation)
+    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
+        onStore?(identity)
         if let storeError { throw storeError }
-        keys[generation] = key
+        keys[identity] = key
     }
 
-    func load(generation: UUID, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
         loadedContext = context
-        guard let key = keys[generation] else {
+        loadedIdentities.append(identity)
+        guard let key = keys[identity] else {
             throw SafariApprovalVault.Error.invalidKey
         }
         onLoad?()
         return key
     }
 
-    func availability(generation: UUID) -> SafariApprovalKeyAvailability {
-        keys[generation] == nil ? .missing : .present
+    func availability(identities: [SafariApprovalKeyIdentity]) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] {
+        availabilityRequests.append(identities)
+        onAvailability?()
+        return Dictionary(uniqueKeysWithValues: identities.map { identity in
+            (identity, availabilityOverrides[identity] ?? (keys[identity] == nil ? .missing : .present))
+        })
     }
 
     func removeAll() throws {

@@ -583,8 +583,8 @@ final class PopupRequestSessions {
                     discardSession(handle: snapshot.handle)
                     return .secureSetupRequired
                 }
-                if currentAccess.identity !=
-                    reviewedAccess.identity {
+                if currentAccess.identity != reviewedAccess.identity ||
+                    currentAccess.orderedAccounts != reviewedAccess.orderedAccounts {
                     discardSession(handle: snapshot.handle)
                     return ensureSession(snapshot: snapshot)
                 }
@@ -1260,8 +1260,11 @@ final class PopupRequestSessions {
         case .canceled:
             return .cancelled
         case .unavailable:
-            guard let currentIdentity = walletEnvironment.currentReviewCatalog()?.identity,
-                  currentIdentity == session.reviewCatalog?.identity else {
+            guard let currentCatalog = walletEnvironment.currentReviewCatalog(),
+                  currentCatalog.identity == session.reviewCatalog?.identity,
+                  currentCatalog.orderedAccounts.contains(where: {
+                      authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
+                  }) else {
                 return .reviewChanged
             }
             return .unavailable(feedback: Strings.somethingWentWrong)

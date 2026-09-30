@@ -490,10 +490,11 @@ enum WalletSnapshotValidation {
         return wallets
     }
 
-    static func ownsStoredAccounts(
+    static func visitOwnedAccountKeys(
         _ wallet: WalletContainer,
         password: Data,
-        checkCancellation: () throws -> Void = {}
+        checkCancellation: () throws -> Void = {},
+        visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
         try checkCancellation()
         let accounts = wallet.accounts
@@ -504,23 +505,26 @@ enum WalletSnapshotValidation {
         try checkCancellation()
 
         if wallet.isMnemonic {
-            return try mnemonicAccountsMatch(
+            return try visitMnemonicAccountKeys(
                 accounts,
                 secret: secret,
-                checkCancellation: checkCancellation
+                checkCancellation: checkCancellation,
+                visit: visit
             )
         }
-        return try privateKeyAccountsMatch(
+        return try visitPrivateKeyAccounts(
             accounts,
             secret: secret,
-            checkCancellation: checkCancellation
+            checkCancellation: checkCancellation,
+            visit: visit
         )
     }
 
-    private static func mnemonicAccountsMatch(
+    private static func visitMnemonicAccountKeys(
         _ accounts: [WalletAccount],
         secret: Data,
-        checkCancellation: () throws -> Void
+        checkCancellation: () throws -> Void,
+        visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
         guard let mnemonic = String(data: secret, encoding: .utf8),
               let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "")
@@ -531,14 +535,19 @@ enum WalletSnapshotValidation {
                 coin: account.coin,
                 derivationPath: account.derivationPath
             ) else { return false }
-            return accountMatches(account, privateKey: privateKey)
+            try checkCancellation()
+            guard accountMatches(account, privateKey: privateKey) else { return false }
+            try checkCancellation()
+            try visit(account, privateKey)
+            return true
         }
     }
 
-    private static func privateKeyAccountsMatch(
+    private static func visitPrivateKeyAccounts(
         _ accounts: [WalletAccount],
         secret: Data,
-        checkCancellation: () throws -> Void
+        checkCancellation: () throws -> Void,
+        visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
         guard let privateKey = WalletPrivateKey(data: secret) else {
             return false
@@ -549,7 +558,10 @@ enum WalletSnapshotValidation {
                 secret,
                 coin: account.coin
             ) else { return false }
-            return accountMatches(account, privateKey: privateKey)
+            guard accountMatches(account, privateKey: privateKey) else { return false }
+            try checkCancellation()
+            try visit(account, privateKey)
+            return true
         }
     }
 

@@ -4150,6 +4150,194 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(preparedCatalogs, [original.identity, replacement.identity])
     }
 
+    func testUnavailableSelectedAccountDuringAuthenticationRematerializesSameGeneration() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
+            id: 813, provider: .ethereum, method: "signPersonalMessage"
+        ), in: store)
+        let account = popupTestAccount()
+        let catalog = WalletReviewCatalog(accounts: [
+            SpecificWalletAccount(walletId: "wallet", account: account),
+            SpecificWalletAccount(walletId: "other-wallet", account: account)
+        ])
+        let remainingCatalog = WalletReviewCatalog(
+            accounts: Array(catalog.orderedAccounts.dropFirst()), identity: catalog.identity
+        )
+        var currentCatalog = catalog
+        var preparedAccounts = [[SpecificWalletAccount]]()
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
+                XCTFail("An unavailable selected account must not sign")
+                return approvedFailureForTesting(.internalError, permit: permit)
+            }) { _, access in
+                preparedAccounts.append(access.orderedAccounts)
+                return .approval(.approveMessage(SignMessageAction(
+                    subject: .signPersonalMessage, walletId: "wallet", account: account,
+                    meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                )))
+            },
+            walletEnvironment: PopupWalletEnvironment(
+                reviewCatalog: { currentCatalog },
+                unlockWallets: { _, _ in
+                    currentCatalog = remainingCatalog
+                    return .unavailable
+                }
+            ),
+            loadsTransactionContext: false
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        let response = await controller.dispatchJSON(request: try popupCommand(
+            subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: token, payload: [:]
+        ), profileIdentifier: nil)
+
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "release"])
+        XCTAssertEqual(preparedAccounts, [catalog.orderedAccounts, remainingCatalog.orderedAccounts])
+        XCTAssertEqual(response["state"] as? String, "review")
+        XCTAssertNotEqual((response["review"] as? [String: Any])?["reviewToken"] as? String, token)
+        XCTAssertNil(response["error"])
+    }
+
+    func testSigningContinuesWhenSiblingAccountBecomesUnavailableDuringAuthentication() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
+            id: 814, provider: .ethereum, method: "signPersonalMessage"
+        ), in: store)
+        let account = popupTestAccount()
+        let catalog = WalletReviewCatalog(accounts: [
+            SpecificWalletAccount(walletId: "wallet", account: account),
+            SpecificWalletAccount(walletId: "other-wallet", account: account)
+        ])
+        let remainingCatalog = WalletReviewCatalog(
+            accounts: Array(catalog.orderedAccounts.prefix(1)), identity: catalog.identity
+        )
+        var currentCatalog = catalog
+        var preparations = 0
+        let signingAccess = PopupRecordingWalletSigningAccess()
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupAccessProcessor(execute: { _, _, signer, permit in
+                guard let signer,
+                      case .success(.ethereumSignature("reviewed-signature")) = await signer.sign() else {
+                    XCTFail("The available selected account must remain authorized to sign")
+                    return .rollback
+                }
+                return approvedFailureForTesting(.userRejected, permit: permit)
+            }) { _, _ in
+                preparations += 1
+                return .approval(.approveMessage(SignMessageAction(
+                    subject: .signPersonalMessage, walletId: "wallet", account: account,
+                    meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                )))
+            },
+            walletEnvironment: PopupWalletEnvironment(
+                reviewCatalog: { currentCatalog },
+                unlockWallets: { _, authorization in
+                    currentCatalog = remainingCatalog
+                    return .unlocked(catalog: currentCatalog, session: makeWalletSigningSessionForTesting(
+                        signingAccess, authorization: authorization,
+                        isCurrent: {
+                            currentCatalog.identity == catalog.identity &&
+                                currentCatalog.orderedAccounts.contains(where: {
+                                    authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
+                                })
+                        }
+                    ))
+                }
+            ),
+            loadsTransactionContext: false
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        _ = await controller.dispatchJSON(request: try popupCommand(
+            subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: token, payload: [:]
+        ), profileIdentifier: nil)
+
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(signingAccess.operations.count, 1)
+        XCTAssertEqual(signingAccess.operations.first?.approvedAccount, popupTestAccountDescriptor())
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "begin", "complete"])
+    }
+
+    func testCachedReviewsRefreshWhenAvailableAccountsChangeWithinSameGeneration() async throws {
+        for (index, isSelection) in [false, true].enumerated() {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(
+                id: 815 + index, provider: .ethereum,
+                method: isSelection ? "requestAccounts" : "signPersonalMessage"
+            ), in: store)
+            let account = popupTestAccount()
+            let catalog = WalletReviewCatalog(accounts: [
+                SpecificWalletAccount(walletId: "wallet", account: account),
+                SpecificWalletAccount(walletId: "other-wallet", account: account)
+            ])
+            let remainingCatalog = WalletReviewCatalog(
+                accounts: Array(catalog.orderedAccounts.prefix(1)), identity: catalog.identity
+            )
+            var currentCatalog = catalog
+            var preparedAccounts = [[SpecificWalletAccount]]()
+            let controller = PopupRequestSessions(
+                store: store,
+                requestProcessor: CompactPopupAccessProcessor { _, access in
+                    preparedAccounts.append(access.orderedAccounts)
+                    if isSelection {
+                        return .approval(.selectAccount(SelectAccountAction(
+                            coinType: .ethereum, selectedAccounts: Set(access.orderedAccounts),
+                            initiallyConnectedProviders: [], network: popupTransactionNetwork()
+                        )))
+                    }
+                    return .approval(.approveMessage(SignMessageAction(
+                        subject: .signPersonalMessage, walletId: "wallet", account: account,
+                        meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    )))
+                },
+                walletEnvironment: PopupWalletEnvironment(
+                    reviewCatalog: { currentCatalog },
+                    unlockWallets: { _, _ in
+                        XCTFail("A stale review token must never start authentication")
+                        return .unavailable
+                    }
+                ),
+                loadsTransactionContext: false
+            )
+            let token = try await materializeToken(controller: controller, snapshot: snapshot)
+            currentCatalog = remainingCatalog
+            let response = await controller.dispatchJSON(request: try popupCommand(
+                subject: "approveRequest", id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken, reviewToken: token,
+                payload: isSelection ? [
+                    "selectedAccounts": [[
+                        "walletId": "other-wallet", "address": account.address,
+                        "coin": "ethereum", "derivationPath": account.derivationPath
+                    ]],
+                    "chainId": popupTransactionNetwork().chainIdHexString
+                ] : [:]
+            ), profileIdentifier: nil)
+
+            XCTAssertEqual(response["status"] as? String, "ignored")
+            let refreshedReview = try XCTUnwrap(response["review"] as? [String: Any])
+            let refreshedToken = try XCTUnwrap(refreshedReview["reviewToken"] as? String)
+            XCTAssertNotEqual(refreshedToken, token)
+            XCTAssertEqual(preparedAccounts, [catalog.orderedAccounts, remainingCatalog.orderedAccounts])
+            if isSelection {
+                XCTAssertEqual((refreshedReview["accounts"] as? [[String: Any]])?.count, 1)
+            }
+            let unchangedToken = try await materializeToken(controller: controller, snapshot: snapshot)
+            XCTAssertEqual(unchangedToken, refreshedToken)
+            currentCatalog = catalog
+            let restoredToken = try await materializeToken(controller: controller, snapshot: snapshot)
+            XCTAssertNotEqual(restoredToken, refreshedToken)
+            XCTAssertEqual(preparedAccounts, [
+                catalog.orderedAccounts, remainingCatalog.orderedAccounts, catalog.orderedAccounts
+            ])
+            let events = await store.events()
+            XCTAssertTrue(events.isEmpty)
+        }
+    }
+
     func testCachedSigningAndSelectionReviewsDetectVaultTombstone()
         async throws {
         for (index, isSelection) in [false, true].enumerated() {

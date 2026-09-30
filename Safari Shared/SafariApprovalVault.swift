@@ -124,10 +124,25 @@ private enum SafariApprovalDiagnostics {
     }
 }
 
+struct SafariApprovalKeyIdentity: Hashable, Sendable {
+    let generation: UUID
+    let account: WalletAccountDescriptor
+
+    func keychainAccount() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let digest = SHA256.hash(data: try encoder.encode(account))
+        let accountDigest = digest.map { String(format: "%02x", $0) }.joined()
+        return generation.uuidString.lowercased() + ":" + accountDigest
+    }
+}
+
 protocol SafariApprovalKeyStoring: AnyObject {
-    func store(_ key: Data, generation: UUID) throws
-    func load(generation: UUID, context: LAContext) throws -> Data
-    func availability(generation: UUID) -> SafariApprovalKeyAvailability
+    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data
+    func availability(
+        identities: [SafariApprovalKeyIdentity]
+    ) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability]
     func removeAll() throws
 }
 
@@ -262,7 +277,7 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
         self.delete = delete
     }
 
-    func store(_ key: Data, generation: UUID) throws {
+    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
         guard key.count == 32 else { throw SafariApprovalVault.Error.invalidKey }
         var accessControlError: Unmanaged<CFError>?
         guard let accessControl = SecAccessControlCreateWithFlags(
@@ -274,7 +289,7 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
             throw SafariApprovalVault.Error.keychainFailure(errSecParam)
         }
 
-        var addQuery = Self.baseQuery(generation: generation)
+        var addQuery = try Self.baseQuery(identity: identity)
         addQuery[kSecValueData as String] = key
         addQuery[kSecAttrAccessControl as String] = accessControl
         let status = add(addQuery as CFDictionary, nil)
@@ -283,8 +298,8 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
         }
     }
 
-    func load(generation: UUID, context: LAContext) throws -> Data {
-        let query = Self.loadQuery(generation: generation, context: context)
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+        let query = try Self.loadQuery(identity: identity, context: context)
         var item: CFTypeRef?
         let status = copyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let key = item as? Data else {
@@ -295,13 +310,55 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
         return key
     }
 
-    func availability(generation: UUID) -> SafariApprovalKeyAvailability {
+    func availability(
+        identities: [SafariApprovalKeyIdentity]
+    ) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] {
+        guard !identities.isEmpty else { return [:] }
         let context = LAContext()
         context.interactionNotAllowed = true
-        let query = Self.availabilityQuery(
-            generation: generation,
-            context: context
-        )
+        if identities.count == 1, let identity = identities.first {
+            return [identity: availability(identity: identity, context: context)]
+        }
+        var selectors = [SafariApprovalKeyIdentity: String]()
+        do {
+            for identity in identities {
+                selectors[identity] = try identity.keychainAccount()
+            }
+        } catch {
+            return identities.reduce(into: [:]) {
+                $0[$1] = .unavailable(errSecParam)
+            }
+        }
+        let query = Self.inventoryQuery(context: context)
+        var item: CFTypeRef?
+        switch copyMatching(query as CFDictionary, &item) {
+        case errSecSuccess:
+            guard let attributes = item as? [[String: Any]] else {
+                return selectors.mapValues { _ in .unavailable(errSecDecode) }
+            }
+            let accounts = attributes.compactMap { $0[kSecAttrAccount as String] as? String }
+            guard accounts.count == attributes.count else {
+                return selectors.mapValues { _ in .unavailable(errSecDecode) }
+            }
+            let available = Set(accounts)
+            return selectors.mapValues { available.contains($0) ? .present : .missing }
+        case errSecInteractionNotAllowed:
+            return identities.reduce(into: [:]) { result, identity in
+                result[identity] = availability(identity: identity, context: context)
+            }
+        case errSecItemNotFound:
+            return selectors.mapValues { _ in .missing }
+        case let status:
+            return selectors.mapValues { _ in .unavailable(status) }
+        }
+    }
+
+    private func availability(
+        identity: SafariApprovalKeyIdentity,
+        context: LAContext
+    ) -> SafariApprovalKeyAvailability {
+        guard let query = try? Self.availabilityQuery(identity: identity, context: context)
+        else { return .unavailable(errSecParam) }
         var item: CFTypeRef?
         switch copyMatching(query as CFDictionary, &item) {
         case errSecSuccess:
@@ -331,17 +388,17 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
         ]
     }
 
-    static func baseQuery(generation: UUID) -> [String: Any] {
+    static func baseQuery(identity: SafariApprovalKeyIdentity) throws -> [String: Any] {
         var query = commonQuery
-        query[kSecAttrAccount as String] = generation.uuidString.lowercased()
+        query[kSecAttrAccount as String] = try identity.keychainAccount()
         return query
     }
 
     static func loadQuery(
-        generation: UUID,
+        identity: SafariApprovalKeyIdentity,
         context: LAContext
-    ) -> [String: Any] {
-        var query = baseQuery(generation: generation)
+    ) throws -> [String: Any] {
+        var query = try baseQuery(identity: identity)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         query[kSecUseAuthenticationContext as String] = context
@@ -349,12 +406,20 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
     }
 
     static func availabilityQuery(
-        generation: UUID,
+        identity: SafariApprovalKeyIdentity,
         context: LAContext
-    ) -> [String: Any] {
-        var query = baseQuery(generation: generation)
+    ) throws -> [String: Any] {
+        var query = try baseQuery(identity: identity)
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
+        query[kSecUseAuthenticationContext as String] = context
+        return query
+    }
+
+    static func inventoryQuery(context: LAContext) -> [String: Any] {
+        var query = commonQuery
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitAll
         query[kSecUseAuthenticationContext as String] = context
         return query
     }
@@ -431,18 +496,47 @@ final class SafariApprovalVault {
         let generation: UUID
         let header: Data
         let catalog: Data
+        let accounts: [EncryptedAccount]
+    }
+
+    private struct EncryptedAccount: Codable, Equatable {
+        let account: WalletAccountDescriptor
         let nonce: Data
         let ciphertext: Data
         let tag: Data
+    }
+
+    private struct AccountBinding: Encodable {
+        let domain = "org.lil.wallet.safari-approval.account.v1"
+        let header: Data
+        let catalogDigest: Data
+        let account: WalletAccountDescriptor
     }
 
     private struct EnvelopeRecord {
         let envelope: Envelope
         let data: Data
         let catalog: ValidatedWalletAccountCatalog
+        let catalogDigest: Data
+
+        var keyIdentities: [SafariApprovalKeyIdentity] {
+            catalog.catalog.accounts.map {
+                SafariApprovalKeyIdentity(generation: envelope.generation, account: $0)
+            }
+        }
     }
 
-    private struct SecretSnapshot: Codable {
+    private struct AccountKey {
+        let identity: SafariApprovalKeyIdentity
+        var data: Data
+
+        mutating func resetSecret() {
+            data.resetBytes(in: 0..<data.count)
+            data.removeAll(keepingCapacity: false)
+        }
+    }
+
+    private struct SourceFingerprint: Encodable {
         let catalog: Data
         var password: Data
         var wallets: [SafariApprovalWalletRecord]
@@ -543,57 +637,73 @@ final class SafariApprovalVault {
             generation: generation
         )
         let headerData = try canonicalEncoder().encode(header)
-        let aad = authenticatedData(header: headerData, catalog: catalogData)
-        var secret = SecretSnapshot(
-            catalog: catalogData,
-            password: source.password,
-            wallets: source.wallets
+        let catalogDigest = Self.digest(catalogData)
+        let sourceMAC = try sourceAuthenticationCode(
+            source: source,
+            catalogData: catalogData,
+            integrityKey: integrityKey
         )
-        defer { secret.resetSecrets() }
-        var secretData = try canonicalEncoder().encode(secret)
-        defer { secretData.resetBytes(in: 0..<secretData.count) }
-        guard secretData.count <= Self.maximumEnvelopeBytes else {
-            throw Error.payloadTooLarge
-        }
         guard !source.password.isEmpty,
               let wallets = WalletSnapshotValidation.wallets(
                   catalog: source.catalog,
                   walletRecords: source.wallets.map {
                       (id: $0.walletID, data: $0.storedKeyJSON)
                   }
-              ),
-              try wallets.allSatisfy({
-                  try activity?.checkCancellation()
-                  return try WalletSnapshotValidation.ownsStoredAccounts(
-                      $0,
-                      password: source.password,
-                      checkCancellation: { try activity?.checkCancellation() }
-                  )
-              }) else { throw Error.invalidCatalog }
-        let sourceMAC = Self.authenticationCode(
-            for: secretData,
-            key: integrityKey
-        )
+              ) else { throw Error.invalidCatalog }
 
+        var accounts = [EncryptedAccount]()
+        accounts.reserveCapacity(source.catalog.accounts.count)
+        var keys = [AccountKey]()
+        keys.reserveCapacity(source.catalog.accounts.count)
+        defer {
+            for index in keys.indices { keys[index].resetSecret() }
+        }
+        var nonces = Set<Data>()
+        for wallet in wallets {
+            guard try WalletSnapshotValidation.visitOwnedAccountKeys(
+                wallet,
+                password: source.password,
+                checkCancellation: { try activity?.checkCancellation() },
+                visit: { account, privateKey in
+                    try activity?.checkCancellation()
+                    let descriptor = WalletAccountDescriptor(walletID: wallet.id, account: account)
+                    var key = try self.randomKey()
+                    defer { key.resetBytes(in: 0..<key.count) }
+                    guard key.count == 32 else { throw Error.invalidKey }
+                    try activity?.checkCancellation()
+                    let aad = try self.authenticatedData(
+                        header: headerData,
+                        catalogDigest: catalogDigest,
+                        account: descriptor
+                    )
+                    let sealed = try privateKey.withData {
+                        try AES.GCM.seal($0, using: SymmetricKey(data: key), authenticating: aad)
+                    }
+                    let nonce = sealed.nonce.withUnsafeBytes { Data($0) }
+                    guard nonces.insert(nonce).inserted else { throw Error.invalidEnvelope }
+                    accounts.append(EncryptedAccount(
+                        account: descriptor,
+                        nonce: nonce,
+                        ciphertext: sealed.ciphertext,
+                        tag: sealed.tag
+                    ))
+                    keys.append(AccountKey(
+                        identity: SafariApprovalKeyIdentity(generation: generation, account: descriptor),
+                        data: key
+                    ))
+                }
+            ) else { throw Error.invalidCatalog }
+        }
         try activity?.checkCancellation()
-        var key = try randomKey()
-        guard key.count == 32 else { throw Error.invalidKey }
-        defer { key.resetBytes(in: 0..<key.count) }
-
-        try activity?.checkCancellation()
-        let sealed = try AES.GCM.seal(
-            secretData,
-            using: SymmetricKey(data: key),
-            authenticating: aad
-        )
+        guard accounts.map(\.account) == source.catalog.accounts else {
+            throw Error.invalidCatalog
+        }
         let envelope = Envelope(
             version: header.version,
             generation: header.generation,
             header: headerData,
             catalog: catalogData,
-            nonce: sealed.nonce.withUnsafeBytes { Data($0) },
-            ciphertext: sealed.ciphertext,
-            tag: sealed.tag
+            accounts: accounts
         )
         let envelopeData = try canonicalEncoder().encode(envelope)
         guard envelopeData.count <= Self.maximumEnvelopeBytes else {
@@ -601,59 +711,80 @@ final class SafariApprovalVault {
         }
         guard let fileURL else { throw Error.unavailable }
 
-        let commit = {
-            try self.commitPublication(
-                envelope: envelope,
-                envelopeData: envelopeData,
-                key: key,
-                sourceMAC: sourceMAC,
-                fileURL: fileURL
-            )
-        }
-        if let activity { return try activity.withActive(commit) }
-        return try commit()
+        return try commitPublication(
+            envelope: envelope,
+            envelopeData: envelopeData,
+            keys: keys,
+            sourceMAC: sourceMAC,
+            fileURL: fileURL,
+            activity: activity
+        )
     }
 
     private func commitPublication(
         envelope: Envelope,
         envelopeData: Data,
-        key: Data,
+        keys: [AccountKey],
         sourceMAC: Data,
-        fileURL: URL
+        fileURL: URL,
+        activity: SafariApprovalReconciliationActivity?
     ) throws -> Publication {
+        func withActive(_ operation: () throws -> Void) throws {
+            if let activity { try activity.withActive(operation) }
+            else { try operation() }
+        }
         let generation = envelope.generation
         lock.lock()
         defer { lock.unlock() }
-        try writeTombstoneLocked()
-        try deleteAllKeysLocked()
-        do {
-            try keyStore.store(key, generation: generation)
-        } catch {
-            SafariApprovalDiagnostics.record("store approval key", error: error)
-            throw error
+        try withActive { try writeTombstoneLocked() }
+        var committed = false
+        defer {
+            if !committed {
+                try? withActive {
+                    try? writeTombstoneLocked()
+                    try? deleteAllKeysLocked()
+                }
+            }
         }
-        do {
-            try atomicWrite(envelopeData, fileURL)
-        } catch {
-            SafariApprovalDiagnostics.record("write envelope", error: error)
-            throw Error.unavailable
+        try withActive { try deleteAllKeysLocked() }
+        for key in keys {
+            try withActive {
+                do {
+                    try keyStore.store(key.data, identity: key.identity)
+                } catch {
+                    SafariApprovalDiagnostics.record("store approval key", error: error)
+                    throw error
+                }
+            }
         }
-        guard let committed = loadEnvelopeRecordLocked(),
-              committed.data == envelopeData,
-              committed.envelope == envelope else {
-            SafariApprovalDiagnostics.record(
-                "verify envelope",
-                error: Error.invalidEnvelope
-            )
-            throw Error.unavailable
-        }
-        switch keyStore.availability(generation: generation) {
+        try activity?.checkCancellation()
+        let availability = publicationKeyAvailability(identities: keys.map(\.identity))
+        try activity?.checkCancellation()
+        switch availability {
         case .present, .authenticationRequired:
             break
         case .missing:
             throw Error.keychainFailure(errSecItemNotFound)
         case .unavailable(let status):
             throw Error.keychainFailure(status)
+        }
+        try withActive {
+            do {
+                try atomicWrite(envelopeData, fileURL)
+            } catch {
+                SafariApprovalDiagnostics.record("write envelope", error: error)
+                throw Error.unavailable
+            }
+            guard let record = loadEnvelopeRecordLocked(),
+                  record.data == envelopeData,
+                  record.envelope == envelope else {
+                SafariApprovalDiagnostics.record(
+                    "verify envelope",
+                    error: Error.invalidEnvelope
+                )
+                throw Error.unavailable
+            }
+            committed = true
         }
         return Publication(
             generation: generation,
@@ -665,16 +796,47 @@ final class SafariApprovalVault {
     func reviewCatalog() -> WalletReviewCatalog? {
         lock.lock()
         defer { lock.unlock() }
-        guard let record = loadEnvelopeRecordLocked(),
-              keyStore.availability(generation: record.envelope.generation)
-                .permitsPublishedEnvelope else { return nil }
+        guard let record = loadEnvelopeRecordLocked() else { return nil }
+        return reviewCatalog(in: record)
+    }
+
+    private func reviewCatalog(in record: EnvelopeRecord) -> WalletReviewCatalog? {
+        let identities = record.keyIdentities
+        let availability = identities.isEmpty ? [:] : keyStore.availability(identities: identities)
+        let accounts = identities.filter {
+            availability[$0]?.permitsPublishedEnvelope == true
+        }.map(\.account.specificAccount)
+        guard identities.isEmpty || !accounts.isEmpty else { return nil }
         return WalletReviewCatalog(
             identity: WalletCatalogIdentity(
                 generation: record.envelope.generation,
                 catalogData: record.catalog.data
             ),
-            orderedAccounts: record.catalog.catalog.accounts.map(\.specificAccount)
+            orderedAccounts: accounts
         )
+    }
+
+    private func publicationKeyAvailability(
+        identities: [SafariApprovalKeyIdentity]
+    ) -> SafariApprovalKeyAvailability {
+        guard !identities.isEmpty else { return .present }
+        let availability = keyStore.availability(identities: identities)
+        var missing = false
+        var requiresAuthentication = false
+        for identity in identities {
+            switch availability[identity] ?? .unavailable(errSecDecode) {
+            case .present:
+                break
+            case .authenticationRequired:
+                requiresAuthentication = true
+            case .missing:
+                missing = true
+            case .unavailable(let status):
+                return .unavailable(status)
+            }
+        }
+        if missing { return .missing }
+        return requiresAuthentication ? .authenticationRequired : .present
     }
 
     func publicationStatus(
@@ -687,21 +849,11 @@ final class SafariApprovalVault {
         guard integrityKey.count == 32,
               source.catalog.isValid,
               let catalogData = try? source.catalog.canonicalData() else { return .stale }
-        var secret = SecretSnapshot(
-            catalog: catalogData,
-            password: source.password,
-            wallets: source.wallets
-        )
-        defer { secret.resetSecrets() }
-        guard var secretData = try? canonicalEncoder().encode(secret),
-              secretData.count <= Self.maximumEnvelopeBytes else {
-            return .stale
-        }
-        defer { secretData.resetBytes(in: 0..<secretData.count) }
-        guard Self.authenticationCode(
-                  for: secretData,
-                  key: integrityKey
-              ) == expectedSourceMAC else {
+        guard (try? sourceAuthenticationCode(
+            source: source,
+            catalogData: catalogData,
+            integrityKey: integrityKey
+        )) == expectedSourceMAC else {
             return .stale
         }
         lock.lock()
@@ -713,7 +865,7 @@ final class SafariApprovalVault {
               Self.digest(record.data) == expectedEnvelopeDigest else {
             return .stale
         }
-        switch keyStore.availability(generation: envelope.generation) {
+        switch publicationKeyAvailability(identities: record.keyIdentities) {
         case .present, .authenticationRequired:
             return .current
         case .missing:
@@ -732,12 +884,19 @@ final class SafariApprovalVault {
               Date() < authorization.signingDeadline,
               approvedAccount.isValid,
               let record = withLock({ loadEnvelopeRecordLocked() }),
-              record.catalog.catalog.accounts.contains(approvedAccount) else {
+              let encryptedAccount = record.envelope.accounts.first(where: {
+                  $0.account == approvedAccount
+              }) else {
             return .unavailable
         }
         let envelope = record.envelope
         let snapshotData = record.data
-        let generation = envelope.generation
+        let keyIdentity = SafariApprovalKeyIdentity(
+            generation: envelope.generation,
+            account: approvedAccount
+        )
+        guard keyStore.availability(identities: [keyIdentity])[keyIdentity]?
+            .permitsPublishedEnvelope == true else { return .unavailable }
 
         let context = LAContext()
         context.localizedCancelTitle = Strings.cancel
@@ -752,11 +911,12 @@ final class SafariApprovalVault {
         ) else { return .canceled }
 
         guard let unlocked = unlockAccount(
+            encryptedAccount,
             in: record,
             context: context,
             authorization: authorization
         ) else { return .unavailable }
-        guard isCurrent(snapshotData, generation: generation),
+        guard isCurrent(snapshotData, keyIdentity: keyIdentity),
               !Task.isCancelled,
               Date() < authorization.signingDeadline else {
             unlocked.signer.invalidate()
@@ -766,15 +926,16 @@ final class SafariApprovalVault {
             unlocked.signer,
             authorization: authorization,
             isCurrent: { [weak self] in
-                self?.isCurrent(snapshotData, generation: generation) == true
+                self?.isCurrent(snapshotData, keyIdentity: keyIdentity) == true
             },
             acquireCommitLease: { [weak self] in
-                await self?.executionLease(ifCurrent: snapshotData, generation: generation)
+                await self?.executionLease(ifCurrent: snapshotData, keyIdentity: keyIdentity)
             }
         ))
     }
 
     private func unlockAccount(
+        _ encryptedAccount: EncryptedAccount,
         in record: EnvelopeRecord,
         context: LAContext,
         authorization: WalletSigningAuthorization
@@ -786,7 +947,10 @@ final class SafariApprovalVault {
         var key: Data
         do {
             key = try keyStore.load(
-                generation: envelope.generation,
+                identity: SafariApprovalKeyIdentity(
+                    generation: envelope.generation,
+                    account: approvedAccount
+                ),
                 context: context
             )
         } catch {
@@ -794,58 +958,41 @@ final class SafariApprovalVault {
             return nil
         }
         defer { key.resetBytes(in: 0..<key.count) }
-        guard key.count == 32 else { return nil }
+        guard key.count == 32,
+              !Task.isCancelled,
+              Date() < authorization.signingDeadline else { return nil }
 
         guard let sealed = try? AES.GCM.SealedBox(
-                  nonce: AES.GCM.Nonce(data: envelope.nonce),
-                  ciphertext: envelope.ciphertext,
-                  tag: envelope.tag
+                  nonce: AES.GCM.Nonce(data: encryptedAccount.nonce),
+                  ciphertext: encryptedAccount.ciphertext,
+                  tag: encryptedAccount.tag
+              ),
+              let aad = try? authenticatedData(
+                  header: envelope.header,
+                  catalogDigest: record.catalogDigest,
+                  account: approvedAccount
               ) else { return nil }
-        let aad = authenticatedData(
-            header: envelope.header,
-            catalog: envelope.catalog
-        )
         guard var decrypted = try? AES.GCM.open(
                   sealed,
                   using: SymmetricKey(data: key),
                   authenticating: aad
-              ),
-              decrypted.count <= Self.maximumEnvelopeBytes else {
+              ) else {
             return nil
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
-        guard var secret = try? JSONDecoder().decode(
-                  SecretSnapshot.self,
-                  from: decrypted
-              ) else { return nil }
-        defer { secret.resetSecrets() }
-        guard
-              secret.catalog == envelope.catalog,
-              let wallets = WalletSnapshotValidation.wallets(
-                  catalog: record.catalog.catalog,
-                  walletRecords: secret.wallets.map {
-                      (id: $0.walletID, data: $0.storedKeyJSON)
-                  }
-              ),
-              !secret.password.isEmpty,
-              let wallet = wallets.first(where: { $0.id == approvedAccount.walletID }),
-              wallet.hasAccountMatching(approvedAccount.account),
+        guard decrypted.count == 32,
               !Task.isCancelled,
               Date() < authorization.signingDeadline,
-              let privateKey = try? wallet.privateKey(
-                  passwordData: secret.password,
-                  account: approvedAccount.account
-              ),
+              let privateKey = WalletPrivateKey(data: decrypted),
               let signer = UnlockedAccountSigner(
                   approvedAccount: approvedAccount,
                   privateKey: privateKey
               ) else { return nil }
-        let catalog = WalletReviewCatalog(
-            identity: WalletCatalogIdentity(generation: envelope.generation, catalogData: record.catalog.data),
-            orderedAccounts: wallets.flatMap { wallet in
-                wallet.accounts.map { SpecificWalletAccount(walletId: wallet.id, account: $0) }
-            }
-        )
+        guard let catalog = reviewCatalog(in: record),
+              catalog.specificAccount(descriptor: approvedAccount) != nil else {
+            signer.invalidate()
+            return nil
+        }
         return (catalog, signer)
     }
 
@@ -940,13 +1087,20 @@ final class SafariApprovalVault {
               header.version == envelope.version,
               header.generation == envelope.generation,
               (try? canonicalEncoder().encode(header)) == envelope.header,
-              envelope.nonce.count == 12,
-              envelope.tag.count == 16,
-              !envelope.ciphertext.isEmpty,
               envelope.catalog.count <= Self.maximumEnvelopeBytes,
-              let catalog = ValidatedWalletAccountCatalog(data: envelope.catalog)
+              let catalog = ValidatedWalletAccountCatalog(data: envelope.catalog),
+              envelope.accounts.map(\.account) == catalog.catalog.accounts,
+              envelope.accounts.allSatisfy({
+                  $0.nonce.count == 12 && $0.ciphertext.count == 32 && $0.tag.count == 16
+              }),
+              Set(envelope.accounts.map(\.nonce)).count == envelope.accounts.count
         else { return nil }
-        return EnvelopeRecord(envelope: envelope, data: data, catalog: catalog)
+        return EnvelopeRecord(
+            envelope: envelope,
+            data: data,
+            catalog: catalog,
+            catalogDigest: Self.digest(catalog.data)
+        )
     }
 
     private static func readEnvelopeData(at fileURL: URL) -> Data? {
@@ -1033,17 +1187,20 @@ final class SafariApprovalVault {
             lhs.st_ctimespec.tv_nsec == rhs.st_ctimespec.tv_nsec
     }
 
-    private func isCurrent(_ snapshotData: Data, generation: UUID) -> Bool {
+    private func isCurrent(
+        _ snapshotData: Data,
+        keyIdentity: SafariApprovalKeyIdentity
+    ) -> Bool {
         withLock {
             fileURL.flatMap(Self.readEnvelopeData(at:)) == snapshotData &&
-                keyStore.availability(generation: generation)
-                    .permitsPublishedEnvelope
+                keyStore.availability(identities: [keyIdentity])[keyIdentity]?
+                    .permitsPublishedEnvelope == true
         }
     }
 
     private func executionLease(
         ifCurrent snapshotData: Data,
-        generation: UUID
+        keyIdentity: SafariApprovalKeyIdentity
     ) async -> WalletExecutionLease? {
         let coordinationLock = CrossProcessFileLock(fileURL: coordinationLockURL)
         let deadline = ContinuousClock.now + .nanoseconds(
@@ -1059,7 +1216,7 @@ final class SafariApprovalVault {
         } catch {
             return nil
         }
-        guard isCurrent(snapshotData, generation: generation) else {
+        guard isCurrent(snapshotData, keyIdentity: keyIdentity) else {
             coordinationLock.release()
             return nil
         }
@@ -1099,15 +1256,33 @@ final class SafariApprovalVault {
         return encoder
     }
 
-    private func authenticatedData(header: Data, catalog: Data) -> Data {
-        var result = Data()
-        var headerLength = UInt64(header.count).bigEndian
-        withUnsafeBytes(of: &headerLength) { result.append(contentsOf: $0) }
-        result.append(header)
-        var catalogLength = UInt64(catalog.count).bigEndian
-        withUnsafeBytes(of: &catalogLength) { result.append(contentsOf: $0) }
-        result.append(catalog)
-        return result
+    private func authenticatedData(
+        header: Data,
+        catalogDigest: Data,
+        account: WalletAccountDescriptor
+    ) throws -> Data {
+        try canonicalEncoder().encode(AccountBinding(
+            header: header,
+            catalogDigest: catalogDigest,
+            account: account
+        ))
+    }
+
+    private func sourceAuthenticationCode(
+        source: SafariApprovalSourceSnapshot,
+        catalogData: Data,
+        integrityKey: Data
+    ) throws -> Data {
+        var fingerprint = SourceFingerprint(
+            catalog: catalogData,
+            password: source.password,
+            wallets: source.wallets
+        )
+        defer { fingerprint.resetSecrets() }
+        var data = try canonicalEncoder().encode(fingerprint)
+        defer { data.resetBytes(in: 0..<data.count) }
+        guard data.count <= Self.maximumEnvelopeBytes else { throw Error.payloadTooLarge }
+        return Self.authenticationCode(for: data, key: integrityKey)
     }
 
     private static func evaluate(
