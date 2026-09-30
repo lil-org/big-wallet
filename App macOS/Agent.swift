@@ -170,11 +170,15 @@ class Agent: NSObject {
             isDismissed = false
         }
 
-        func beginRenderingCurrentPresentation() -> NativeApprovalCoordinator.PresentationSnapshot? {
+        func beginRenderingCurrentPresentation(
+            allowNewWaitingWindow: Bool = false
+        ) -> NativeApprovalCoordinator.PresentationSnapshot? {
             guard !isRetired,
                   let snapshot = coordinator.currentPresentation,
                   snapshot.revision != lastRenderedRevision,
                   !isDismissed || snapshot.presentation.isTerminal else { return nil }
+            if case .waiting = snapshot.presentation,
+               windowController == nil, !allowNewWaitingWindow { return nil }
             lastRenderedRevision = snapshot.revision
             return snapshot
         }
@@ -588,10 +592,13 @@ class Agent: NSObject {
 
     func renderCurrentPresentation(
         for handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
+        coordinator: NativeApprovalCoordinator,
+        allowNewWaitingWindow: Bool = false
     ) {
         guard let approval = activeApproval(for: handle, coordinator: coordinator),
-              let snapshot = approval.beginRenderingCurrentPresentation() else { return }
+              let snapshot = approval.beginRenderingCurrentPresentation(
+                  allowNewWaitingWindow: allowNewWaitingWindow
+              ) else { return }
         let finishedWindowAction = approval.present(snapshot.presentation, using: self)
         if finishedWindowAction != nil {
             approvalInbox.remove(ApprovalRouteKey(
@@ -899,8 +906,11 @@ extension Agent.ActiveApproval {
         if coordinator.isPaused && retryPaused {
             coordinator.retryRecovery()
         }
-        coordinator.preparePresentationForReactivation()
-        agent.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
+        agent.renderCurrentPresentation(
+            for: coordinator.handle,
+            coordinator: coordinator,
+            allowNewWaitingWindow: true
+        )
         activate()
     }
 

@@ -146,17 +146,6 @@ final class NativeApprovalCoordinator {
         case user, failure
     }
 
-    private enum WaitingPresentation {
-        case deferred, visible
-
-        var presentation: Presentation? {
-            switch self {
-            case .deferred: nil
-            case .visible: .waiting
-            }
-        }
-    }
-
     private enum RetryAction {
         case validateReceipt, rejectBeforeAuthentication, prepareReview
         case persistResponse(ResponseToExtension)
@@ -166,8 +155,8 @@ final class NativeApprovalCoordinator {
             switch self {
             case .validateReceipt: .validating
             case .rejectBeforeAuthentication: .rejectingBeforeAuthentication
-            case .prepareReview: .loading(.visible)
-            case .persistResponse(let response): .responding(response, .visible)
+            case .prepareReview: .loading
+            case .persistResponse(let response): .responding(response)
             case .rejectOwned: .rejectingOwned(.user)
             }
         }
@@ -201,10 +190,10 @@ final class NativeApprovalCoordinator {
         case registered, validating
         case acquiringReceipt(afterReceipt: ReceiptContinuation)
         case awaitingAuthentication
-        case loading(WaitingPresentation)
+        case loading
         case reviewing(request: SafariRequest, action: DappRequestAction)
         case waiting(ExtensionBridge.NativeApprovalAuthorization)
-        case responding(ResponseToExtension, WaitingPresentation)
+        case responding(ResponseToExtension)
         case rejectingBeforeAuthentication, interrupting
         case rejectingOwned(RejectionReason)
         case paused(RetryAction)
@@ -231,7 +220,7 @@ final class NativeApprovalCoordinator {
             case .validating, .acquiringReceipt(.authenticate): .validateReceipt
             case .acquiringReceipt(.reject), .rejectingBeforeAuthentication: .rejectBeforeAuthentication
             case .loading, .reviewing: .prepareReview
-            case .responding(let response, _): .persistResponse(response)
+            case .responding(let response): .persistResponse(response)
             case .rejectingOwned: .rejectOwned
             case .registered, .awaitingAuthentication, .waiting,
                  .interrupting, .paused, .finished: nil
@@ -243,11 +232,9 @@ final class NativeApprovalCoordinator {
             case .registered, .validating, .acquiringReceipt,
                  .awaitingAuthentication, .rejectingBeforeAuthentication:
                 nil
-            case .loading(let waiting), .responding(_, let waiting):
-                waiting.presentation
             case .reviewing(let request, let action):
                 .approval(request: request, action: action)
-            case .waiting, .rejectingOwned(.user):
+            case .loading, .responding, .waiting, .rejectingOwned(.user):
                 .waiting
             case .rejectingOwned(.failure), .interrupting:
                 .rejecting
@@ -255,14 +242,6 @@ final class NativeApprovalCoordinator {
                 hasAuthenticated ? .retryRequired : nil
             case .finished(let completion):
                 completion.presentation
-            }
-        }
-
-        var showingWaiting: State {
-            switch self {
-            case .loading: .loading(.visible)
-            case .responding(let response, _): .responding(response, .visible)
-            default: self
             }
         }
 
@@ -404,13 +383,7 @@ final class NativeApprovalCoordinator {
     func resumeAfterAuthentication() {
         guard isAwaitingAuthentication else { return }
         accessProgress = .authenticated
-        enterState(.loading(.deferred))
-    }
-
-    func preparePresentationForReactivation() {
-        guard canReactivate, currentPresentation == nil,
-              let work = activeWork?.context else { return }
-        updateState(state.showingWaiting, within: work)
+        enterState(.loading)
     }
 
     func retryRecovery() {
@@ -548,7 +521,7 @@ final class NativeApprovalCoordinator {
             await prepareReview(work)
         case .interrupting:
             await persistInterruption(work)
-        case .responding(let response, _):
+        case .responding(let response):
             await persistResponse(work, response: response)
         case .rejectingBeforeAuthentication:
             await rejectBeforeAuthentication(work)
@@ -778,10 +751,7 @@ final class NativeApprovalCoordinator {
                         }
                     case .response(let response):
                         work.update {
-                            $0.updateState(
-                                .responding(response, $0.currentPresentation == nil ? .deferred : .visible),
-                                within: work
-                            )
+                            $0.updateState(.responding(response), within: work)
                         }
                         await persistResponse(work, response: response)
                     }

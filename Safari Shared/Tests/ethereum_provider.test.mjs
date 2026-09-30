@@ -5795,6 +5795,76 @@ test("committed connect and signing settle after a newer disconnect without rest
     assert.deepEqual(normalized(h.registeredWallets[0].accounts), []);
 });
 
+for (const removed of ["ethereum", "solana"]) {
+    test(`lazy ${removed} revocation preserves unrelated signing when a committed reply carries the latest snapshot`, async () => {
+        const h = inpageHarness();
+        const connected = pageSnapshot({address: firstEthereumAddress, publicKey: firstSolanaKey, ethereum: 1, solana: 1});
+        publishSnapshot(h, connected);
+        const ethereum = h.window.ethereum;
+        const solana = h.window.solana;
+        const wallet = h.registeredWallets[0];
+        const generation = h.window.bigWalletInpageProviderGenerationToken;
+        const retained = removed === "ethereum" ? "solana" : "ethereum";
+        const connecting = removed === "ethereum"
+            ? ethereum.request({method: "eth_requestAccounts"})
+            : solana.connect();
+        const connectRequest = pageMessages(h, "request", removed).at(-1).message;
+        const signing = retained === "ethereum"
+            ? ethereum.request({method: "personal_sign", params: ["0x01", firstEthereumAddress]})
+            : solana.signMessage(new Uint8Array([1]));
+        const signingRequest = pageMessages(h, "request", retained).at(-1).message;
+        const events = [];
+        ethereum.on("accountsChanged", accounts => events.push(["ethereum", normalized(accounts)]));
+        ethereum.on("chainChanged", chain => events.push(["chain", chain]));
+        ethereum.on("disconnect", () => events.push(["ethereum-disconnect"]));
+        solana.on("accountChanged", key => events.push(["solana", key?.toString() ?? null]));
+        solana.on("disconnect", () => events.push(["solana-disconnect"]));
+        wallet.features["standard:events"].on("change", change => {
+            events.push(["standard", Array.from(change.accounts, account => account.address)]);
+        });
+        const revoked = pageSnapshot({
+            address: removed === "ethereum" ? "" : firstEthereumAddress,
+            publicKey: removed === "solana" ? null : firstSolanaKey,
+            ethereum: removed === "ethereum" ? 2 : 1,
+            solana: removed === "solana" ? 2 : 1,
+        });
+        dispatchProviderResponse(h, {
+            id: connectRequest.id, provider: removed, name: connectRequest.name,
+            state: revoked, approvalCommitted: true,
+            result: removed === "ethereum" ? [firstEthereumAddress] : {publicKey: firstSolanaKey},
+        });
+        const result = await connecting;
+        assert.deepEqual(removed === "ethereum" ? normalized(result) : result.publicKey.toString(),
+            removed === "ethereum" ? [firstEthereumAddress] : firstSolanaKey);
+
+        publishSnapshot(h, connected);
+        publishSnapshot(h, revoked);
+        dispatchProviderResponse(h, {
+            id: signingRequest.id, provider: retained, name: signingRequest.name,
+            state: revoked, result: retained === "ethereum" ? "0xsignature" : validSignature,
+        });
+        const signature = await signing;
+        assert.equal(retained === "ethereum" ? signature : signature.signature.length,
+            retained === "ethereum" ? "0xsignature" : 64);
+        assert.equal(h.window.ethereum, ethereum);
+        assert.equal(h.window.solana, solana);
+        assert.equal(h.registeredWallets[0], wallet);
+        assert.equal(h.registeredWallets.length, 1);
+        assert.equal(h.announcements.length, 1);
+        assert.equal(h.window.bigWalletInpageProviderGenerationToken, generation);
+        assert.equal(ethereum.selectedAddress, removed === "ethereum" ? null : firstEthereumAddress);
+        assert.equal(solana.publicKey?.toString() ?? null, removed === "solana" ? null : firstSolanaKey);
+        assert.deepEqual(Array.from(wallet.accounts, account => account.address), removed === "solana" ? [] : [firstSolanaKey]);
+        assert.deepEqual(events, removed === "ethereum"
+            ? [["ethereum", []]]
+            : [["solana", null], ["standard", []], ["solana-disconnect"]]);
+        assert.deepEqual(normalized(h.window.bigWalletInpageStableFacadeRecord.snapshots()).ethereum.nativeRevision,
+            revoked.revisions.ethereum);
+        assert.equal(h.window.bigWalletInpageStableFacadeRecord.snapshots().solana.nativeRevision,
+            revoked.revisions.solana);
+    });
+}
+
 test("disconnect acknowledgement carries state and preserves a reentrant reconnect", async () => {
     const h = inpageHarness();
     publishSnapshot(h, pageSnapshot({publicKey: firstSolanaKey, solana: 1}));

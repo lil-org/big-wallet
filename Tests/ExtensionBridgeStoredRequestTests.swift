@@ -54,7 +54,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    func testAuthorityBootstrapPersistsOnlyProfileIdentityAndWarmReadsAreReadOnly() throws {
+    func testAuthorityBootstrapPersistsLedgerAndProfileIdentityAndWarmReadsAreReadOnly() throws {
         var writes = 0
         var synchronizations = 0
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
@@ -74,7 +74,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             return XCTFail("Expected observational authority snapshots")
         }
         XCTAssertEqual(try observedRoot.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, false)
-        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(writes, 2)
         XCTAssertEqual(synchronizations, 0)
         XCTAssertEqual(first.version, second.version)
         XCTAssertNotEqual(first.version.context, other.version.context)
@@ -1532,7 +1532,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testWalletRemovalRequiresReconnectEvenWhenTheIdenticalDescriptorReturns() async throws {
         let account = authorityTestAccount()
         _ = try await grantAuthority(account, id: 63_020)
+        let before = try Data(contentsOf: defaultProfileURL)
         try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {}
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), before)
         let removed = try await removalSnapshot()
         let signing = try makeFixture(id: 63_021, name: "signPersonalMessage")
         guard case .unauthorized = await bridge.enqueue(ingress: signing.ingress, profileIdentifier: nil) else {
@@ -1544,62 +1546,247 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertGreaterThan(reconnected.version.revisions.ethereum, removed.version.revisions.ethereum)
     }
 
-    func testWalletRemovalRunsWithoutProfilesAndRejectsUnsafeOrCorruptProfilesBeforeSourceMutation() async throws {
+    func testRemovalBeforeBroadcastCheckpointPreventsSubmission() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 63_070)
+        let signing = try await admittedSigning(account, id: 63_071)
+        let claim = try approvalClaim(await bridge.claim(handle: signing.handle))
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        defer { permit.releaseLease() }
+        try removalStore().withRevokedWalletAuthority(matching: .accounts([account])) {}
+        let checkpoint = await bridge.prepareBroadcast(
+            permit: permit,
+            recoveryResponse: ambiguousSubmissionResponse(for: signing.request, transactionHash: "0xnot-sent")
+                .markingApprovalCommitted()
+        )
+        XCTAssertEqual(checkpoint, .ownershipLost)
+        let delivered = try await deliveredAuthority(signing.handle)
+        XCTAssertEqual((delivered.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+    }
+
+    func testLostRevocationHistoryResetsGrantsLazilyWithoutDiscardingJournal() async throws {
+        let account = authorityTestAccount()
+        for (index, corrupt) in [false, true].enumerated() {
+            let baseID = 63_100 + index * 10
+            let dormantID = UUID()
+            let connected = try await grantAuthority(account, id: baseID)
+            _ = try await grantAuthority(account, id: baseID + 1, profileIdentifier: dormantID)
+            let pending = try await admittedSigning(account, id: baseID + 2)
+            let broadcast = try await admittedSigning(account, id: baseID + 3)
+            let claim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
+            let permit = try executionPermit(await bridge.begin(claim: claim))
+            defer { permit.releaseLease() }
+            let recovery = ambiguousSubmissionResponse(for: broadcast.request, transactionHash: "0xretained")
+                .markingApprovalCommitted()
+            let checkpoint = await bridge.prepareBroadcast(permit: permit, recoveryResponse: recovery)
+            XCTAssertEqual(checkpoint, .persisted)
+            let originalReply = try await deliveredAuthority(connected.handle)
+            let before = try await removalSnapshot()
+            let dormantData = try Data(contentsOf: profileURL(dormantID))
+            let oldEpoch = try storedRevocationLedger().cursor.epoch
+            if corrupt {
+                try Data("damaged ledger".utf8).write(to: revocationLedgerURL)
+            } else {
+                try FileManager.default.removeItem(at: revocationLedgerURL)
+            }
+
+            let reset = try await removalSnapshot()
+            XCTAssertNil(reset.ethereumAccount)
+            XCTAssertEqual(reset.version.context, before.version.context)
+            XCTAssertGreaterThan(reset.version.revisions.ethereum, before.version.revisions.ethereum)
+            XCTAssertNotEqual(try storedRevocationLedger().cursor.epoch, oldEpoch)
+            XCTAssertEqual(try Data(contentsOf: profileURL(dormantID)), dormantData)
+            let pendingReply = try await deliveredAuthority(pending.handle)
+            XCTAssertEqual((pendingReply.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+            let completedReply = try await deliveredAuthority(connected.handle)
+            XCTAssertTrue(NSDictionary(dictionary: originalReply.response).isEqual(to: completedReply.response))
+            let completion = await bridge.complete(permit: permit, response: recovery)
+            XCTAssertEqual(completion, .persisted)
+            let broadcastReply = try await deliveredAuthority(broadcast.handle)
+            XCTAssertTrue(NSDictionary(dictionary: recovery.json).isEqual(to: broadcastReply.response))
+            let dormant = try await removalSnapshot(profileIdentifier: dormantID)
+            XCTAssertNil(dormant.ethereumAccount)
+        }
+    }
+
+    func testUnreadableOrUnsafeRevocationHistoryBlocksSourceWithoutOverwritingIt() throws {
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "old-wallet")) {}
+        let original = try Data(contentsOf: revocationLedgerURL)
+        var sourceWrites = 0
+        let unreadable = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            readData: { _ in throw Failure.injectedWrite }
+        ))
+        XCTAssertThrowsError(try unreadable.withRevokedWalletAuthority(matching: .wallet(id: "new-wallet")) {
+            sourceWrites += 1
+        })
+        XCTAssertEqual(try Data(contentsOf: revocationLedgerURL), original)
+
+        let target = rootURL.appendingPathComponent("preserved-ledger")
+        try FileManager.default.moveItem(at: revocationLedgerURL, to: target)
+        try FileManager.default.createSymbolicLink(at: revocationLedgerURL, withDestinationURL: target)
+        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "new-wallet")) {
+            sourceWrites += 1
+        })
+        XCTAssertEqual(sourceWrites, 0)
+        XCTAssertEqual(try Data(contentsOf: target), original)
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: revocationLedgerURL.path), target.path)
+    }
+
+    func testFutureRevocationCursorBlocksOnlyItsProfileAndDoesNotPreventRemoval() async throws {
+        let account = authorityTestAccount()
+        let other = WalletAccountDescriptor(walletID: "retained-wallet", coin: account.coin,
+            normalizedAddress: account.normalizedAddress, derivationPath: account.derivationPath)
+        let otherProfile = UUID()
+        _ = try await grantAuthority(account, id: 63_130)
+        _ = try await grantAuthority(other, id: 63_131, profileIdentifier: otherProfile)
+        let before = try await removalSnapshot(profileIdentifier: otherProfile)
+        let ledger = try storedRevocationLedger()
+        var damaged = try storedProfile()
+        var cursor = try XCTUnwrap(damaged["revocationCursor"] as? [String: Any])
+        cursor["sequence"] = ledger.sequence + 10
+        damaged["revocationCursor"] = cursor
+        let damagedData = try PropertyListSerialization.data(fromPropertyList: damaged, format: .binary, options: 0)
+        try damagedData.write(to: defaultProfileURL)
+        var removed = false
+        try removalStore().withRevokedWalletAuthority(matching: .accounts([account])) { removed = true }
+        XCTAssertTrue(removed)
+        guard case .unavailable = await bridge.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ) else { return XCTFail("A future cursor must never be rewound") }
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), damagedData)
+        XCTAssertEqual(try storedRevocationLedger().cursor.epoch, ledger.cursor.epoch)
+        let retained = try await removalSnapshot(profileIdentifier: otherProfile)
+        XCTAssertEqual(retained.version, before.version)
+        XCTAssertEqual(retained.ethereumAccount, other)
+    }
+
+    func testFailedSourceMutationRevokesAgainAfterFreshConsent() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 63_140)
+        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .accounts([account])) {
+            throw Failure.injectedWrite
+        })
+        let removed = try await removalSnapshot()
+        XCTAssertNil(removed.ethereumAccount)
+        _ = try await grantAuthority(account, id: 63_141)
+        let reconnected = try await removalSnapshot()
+        XCTAssertEqual(reconnected.ethereumAccount, account)
+        try removalStore().withRevokedWalletAuthority(matching: .accounts([account])) {}
+        let removedAgain = try await removalSnapshot()
+        XCTAssertNil(removedAgain.ethereumAccount)
+        XCTAssertGreaterThan(removedAgain.version.revisions.ethereum, reconnected.version.revisions.ethereum)
+    }
+
+    func testWalletRemovalDoesNotReadOrPrepareProfileDirectories() throws {
         var sourceMutations = 0
-        let result = try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            atomicWrite: { data, url in
+                XCTAssertEqual(url, self.revocationLedgerURL)
+                try ApprovalStoreTestPersistence.write(data, url)
+            },
+            readData: { url in
+                XCTAssertEqual(url, self.revocationLedgerURL)
+                return try Data(contentsOf: url)
+            },
+            readFileSize: { url in
+                XCTAssertEqual(url, self.revocationLedgerURL)
+                return try ExtensionRequestFileStore.defaultReadFileSize(url)
+            }
+        ))
+        let result = try store.withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
             sourceMutations += 1
             return 42
         }
         XCTAssertEqual(result, 42)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("profiles-v9").path))
-        try Data([1]).write(to: rootURL.appendingPathComponent("profiles-v9"))
-        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
+        for name in ["profiles-v9", "operation-locks-v9"] {
+            let url = rootURL.appendingPathComponent(name)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+            try Data([1]).write(to: url)
+        }
+        try store.withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
             sourceMutations += 1
-        })
-        try FileManager.default.removeItem(at: rootURL.appendingPathComponent("profiles-v9"))
-        let account = authorityTestAccount()
-        _ = try await grantAuthority(account, id: 63_030)
-        try Data([1]).write(to: profileURL(UUID()))
-        XCTAssertThrowsError(try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {
-            sourceMutations += 1
-        })
-        XCTAssertEqual(sourceMutations, 1)
-        let unchanged = try await removalSnapshot()
-        XCTAssertEqual(unchanged.ethereumAccount, account)
+        }
+        XCTAssertEqual(sourceMutations, 2)
+        for name in ["profiles-v9", "operation-locks-v9"] {
+            XCTAssertEqual(try Data(contentsOf: rootURL.appendingPathComponent(name)), Data([1]))
+        }
     }
 
-    func testWalletRemovalPersistenceFailureBlocksSourceAndRetriesPartialCleanup() async throws {
+    func testWalletRemovalDefersCorruptAndUnsafeProfilesUntilTheyAreAccessed() async throws {
+        let account = authorityTestAccount()
+        let dormantID = UUID()
+        _ = try await grantAuthority(account, id: 63_030, profileIdentifier: dormantID)
+        let dormantURL = profileURL(dormantID)
+        let original = try Data(contentsOf: dormantURL)
+        let before = try await removalSnapshot(profileIdentifier: dormantID)
+        try Data([1]).write(to: dormantURL)
+        let unsafeURL = profileURL(UUID())
+        try FileManager.default.createSymbolicLink(at: unsafeURL, withDestinationURL: dormantURL)
+        var sourceMutations = 0
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            atomicWrite: ApprovalStoreTestPersistence.write,
+            readData: { url in
+                guard url == self.revocationLedgerURL else { throw Failure.injectedWrite }
+                return try Data(contentsOf: url)
+            }
+        ))
+        try store.withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) { sourceMutations += 1 }
+        XCTAssertEqual(sourceMutations, 1)
+        XCTAssertEqual(try Data(contentsOf: dormantURL), Data([1]))
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: unsafeURL.path), dormantURL.path)
+        try original.write(to: dormantURL, options: .atomic)
+        let after = try await removalSnapshot(profileIdentifier: dormantID)
+        XCTAssertNil(after.ethereumAccount)
+        XCTAssertEqual(after.version.context, before.version.context)
+        XCTAssertGreaterThan(after.version.revisions.ethereum, before.version.revisions.ethereum)
+    }
+
+    func testLedgerFailureBlocksSourceAndProfileCatchUpFailureCannotSkipRevocation() async throws {
         let account = authorityTestAccount()
         let secondProfile = try XCTUnwrap(UUID(uuidString: "00000000-0000-4000-8000-000000000001"))
         _ = try await grantAuthority(account, id: 63_040)
         _ = try await grantAuthority(account, id: 63_041, profileIdentifier: secondProfile)
+        let originalDefault = try Data(contentsOf: defaultProfileURL)
+        let originalSecond = try Data(contentsOf: profileURL(secondProfile))
         var sourceMutations = 0
-        var writes = 0
-        let failingStore = removalStore(atomicWrite: { data, url in
-            writes += 1
-            if writes == 2 { throw Failure.injectedWrite }
-            try ApprovalStoreTestPersistence.write(data, url)
+        let failingStore = removalStore(atomicWrite: { _, url in
+            XCTAssertEqual(url, self.revocationLedgerURL)
+            throw Failure.injectedWrite
         })
         XCTAssertThrowsError(try failingStore.withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {
             sourceMutations += 1
         })
         XCTAssertEqual(sourceMutations, 0)
-        let partiallyRemoved = try await removalSnapshot(profileIdentifier: secondProfile)
-        let stillGranted = try await removalSnapshot()
-        XCTAssertNil(partiallyRemoved.ethereumAccount)
-        XCTAssertEqual(stillGranted.ethereumAccount, account)
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), originalDefault)
+        XCTAssertEqual(try Data(contentsOf: profileURL(secondProfile)), originalSecond)
         try removalStore().withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) { sourceMutations += 1 }
+        XCTAssertEqual(sourceMutations, 1)
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), originalDefault)
+        XCTAssertEqual(try Data(contentsOf: profileURL(secondProfile)), originalSecond)
+
+        let unavailable = removalStore(atomicWrite: { _, url in
+            XCTAssertEqual(url, self.defaultProfileURL)
+            throw Failure.injectedWrite
+        })
+        guard case .unavailable = unavailable.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil) else {
+            return XCTFail("Failed catch-up must not expose authority")
+        }
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), originalDefault)
         let retried = try await removalSnapshot(profileIdentifier: secondProfile)
         let fullyRemoved = try await removalSnapshot()
-        XCTAssertEqual(sourceMutations, 1)
-        XCTAssertEqual(retried.version, partiallyRemoved.version)
+        let repeated = try await removalSnapshot()
+        XCTAssertNil(retried.ethereumAccount)
         XCTAssertNil(fullyRemoved.ethereumAccount)
+        XCTAssertEqual(repeated.version, fullyRemoved.version)
     }
 
-    func testWalletRemovalSynchronizesUnchangedProfilesAndKeepsRevocationWhenSourceFails() async throws {
+    func testWalletRemovalConfirmsLedgerDurabilityAndKeepsRevocationWhenSourceFails() async throws {
         _ = try authorityVersion("https://empty.example")
         var sourceMutations = 0
-        let failingStore = removalStore(synchronizePublishedFile: { _ in throw Failure.injectedWrite })
+        let failingStore = removalStore(atomicWrite: { data, url in
+            try ApprovalStoreTestPersistence.write(data, url)
+            throw Failure.injectedWrite
+        }, synchronizePublishedFile: { _ in throw Failure.injectedWrite })
         XCTAssertThrowsError(try failingStore.withRevokedWalletAuthority(matching: .wallet(id: "absent-wallet")) {
             sourceMutations += 1
         })
@@ -2394,7 +2581,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testCachedProfileStillChecksExpectedProfileIdentity() throws {
         let profileIdentifier = UUID()
-        let profile = ExtensionRequestProfile.State(profileIdentifier: profileIdentifier, authorityEpoch: UUID())
+        let profile = ExtensionRequestProfile.State(
+            profileIdentifier: profileIdentifier, authorityEpoch: UUID(),
+            revocationCursor: .init(epoch: UUID(), sequence: 0)
+        )
         let data = try ExtensionRequestProfileCodec.encode(profile)
         var codec = ExtensionRequestProfileCodec()
         for expectedIdentifier in [profileIdentifier, profileIdentifier, nil, UUID(), profileIdentifier] {
@@ -5385,8 +5575,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         let template = try makeFixture(id: 982)
         guard case .snapshot(let snapshot) = store.configurationSnapshot(configurationKey: template.request.configurationKey, profileIdentifier: nil) else { return XCTFail("Expected container authority") }
-        XCTAssertEqual(openedPaths, expectedPaths)
-        XCTAssertEqual(synchronizedPaths, expectedPaths)
+        let ledgerPaths = [storeRoot, support, library, container].map(\.path)
+        XCTAssertEqual(openedPaths, ledgerPaths + expectedPaths)
+        XCTAssertEqual(synchronizedPaths, ledgerPaths + expectedPaths)
         openedPaths.removeAll()
         synchronizedPaths.removeAll()
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
@@ -8682,6 +8873,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     private var defaultProfileURL: URL {
         profileURL(nil)
+    }
+
+    private var revocationLedgerURL: URL {
+        rootURL.appendingPathComponent("wallet-authority-revocations.state")
+    }
+
+    private func storedRevocationLedger() throws -> WalletAuthorityRevocationLedger {
+        try XCTUnwrap(WalletAuthorityRevocationLedger.decode(Data(contentsOf: revocationLedgerURL)))
     }
 
     private func profileURL(_ profileIdentifier: UUID?) -> URL {

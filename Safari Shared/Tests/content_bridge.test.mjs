@@ -673,6 +673,51 @@ test("focus and visibility reconcile configuration after a missed broadcast", as
     }).length, 3);
 });
 
+test("focus discovers lazy revocation without replacing the generation or cancelling another provider request", async () => {
+    const connected = {
+        ...configurationState({ethereum: 1, solana: 1}),
+        ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+        solana: {publicKey: "11111111111111111111111111111111"},
+    };
+    let current = connected;
+    const harness = makeHarness({
+        configurationResponse: () => ({kind: "configuration", state: current}),
+        sendMessage: message => message.subject === "message-to-wallet"
+            ? {id: 8, requestToken, admissionKind: "new", approvalRequired: true, state: connected}
+            : message.subject === "getResponse"
+                ? {kind: "result", id: 8, provider: "solana", name: "connect",
+                    result: {publicKey: connected.solana.publicKey}, approvalCommitted: false, state: current}
+                : undefined,
+    });
+    await settle();
+    const generation = harness.generation();
+    harness.dispatchPage("request", {
+        id: 8, provider: "solana", name: "connect",
+        body: {publicKey: connected.solana.publicKey, object: {method: "connect"}},
+    });
+    await settle();
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+
+    current = {...connected, revisions: {ethereum: 2, solana: 1},
+        ethereum: {address: "", chainId: "0x1"}};
+    harness.focus();
+    await settle();
+    assert.equal(harness.generation(), generation);
+    assert.equal(harness.injectedScripts.length, 1);
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), current);
+    harness.context.bigWalletPublishConfiguration(connected, "https://wallet.example", generation);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), current);
+
+    await harness.runTimer();
+    const terminal = harness.postedMessages.at(-1).message;
+    assert.equal(terminal.response.kind, "result");
+    assert.equal(terminal.response.id, 8);
+    assert.equal(terminal.providerGeneration, generation);
+    assert.deepEqual(terminal.response.state, current);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+});
+
 test("synthetic focus and visibility events do not reconcile configuration", async () => {
     const harness = makeHarness();
     await settle();

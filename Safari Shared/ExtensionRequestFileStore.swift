@@ -16,6 +16,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     struct Dependencies {
         let clock: () -> Date
         let token: () -> UUID
+        let revocationEpoch: () -> UUID
         let crossProcessLock: CrossProcessFileLock?
         let crossProcessLockTimeoutNanoseconds: UInt64
         let crossProcessLockPollNanoseconds: UInt64
@@ -29,6 +30,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         init(
             clock: @escaping () -> Date = Date.init,
             token: @escaping () -> UUID = UUID.init,
+            revocationEpoch: @escaping () -> UUID = UUID.init,
             crossProcessLock: CrossProcessFileLock? = nil,
             crossProcessLockTimeoutNanoseconds: UInt64 = 1_000_000_000,
             crossProcessLockPollNanoseconds: UInt64 = 10_000_000,
@@ -41,6 +43,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         ) {
             self.clock = clock
             self.token = token
+            self.revocationEpoch = revocationEpoch
             self.crossProcessLock = crossProcessLock
             self.crossProcessLockTimeoutNanoseconds = crossProcessLockTimeoutNanoseconds
             self.crossProcessLockPollNanoseconds = crossProcessLockPollNanoseconds
@@ -55,12 +58,20 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     private enum ProfileRead {
         case state(ValidatedProfile)
+        case missing
         case corrupt
+        case unavailable
+    }
+
+    private enum RevocationLedgerRead {
+        case ledger(WalletAuthorityRevocationLedger)
+        case resetRequired
         case unavailable
     }
 
     private let clock: () -> Date
     private let token: () -> UUID
+    private let revocationEpoch: () -> UUID
     private let files: ExtensionRequestStoreFiles
     private var codec: ExtensionRequestProfileCodec
 
@@ -104,6 +115,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) {
         clock = dependencies.clock
         token = dependencies.token
+        revocationEpoch = dependencies.revocationEpoch
         codec = ExtensionRequestProfileCodec()
         files = ExtensionRequestStoreFiles(
             rootURL: rootURL,
@@ -126,10 +138,21 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             }
             switch readProfileFileLocked(
                 at: url, profileIdentifier: profileIdentifier, now: clock(),
-                recover: false, normalizeDates: false
+                recover: false, normalizeDates: false, reconcileRevocations: false
             ) {
             case .state(let profile):
+                switch readRevocationLedgerLocked() {
+                case .ledger(let ledger):
+                    if profile.state.revocationCursor.epoch == ledger.epoch,
+                       profile.state.revocationCursor.sequence > ledger.sequence {
+                        return .unavailable
+                    }
+                    guard profile.state.revocationCursor == ledger.cursor else { return .needsRepair }
+                case .resetRequired: return .needsRepair
+                case .unavailable: return .unavailable
+                }
                 return .snapshot(ExtensionRequestProfile.authoritySnapshot(profile.state, configurationKey: configurationKey))
+            case .missing: return .missing
             case .corrupt: return .needsRepair
             case .unavailable: return .unavailable
             }
@@ -200,46 +223,54 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         try files.withRequiredLock {
             let prepared = try preparing()
             try beforeCommit()
-            for removal in prepared.authorityRemovals {
-                try revokeWalletAuthorityLocked(matching: removal)
-            }
+            try recordWalletAuthorityRemovalsLocked(prepared.authorityRemovals)
             return try commit(prepared.payload)
         }
     }
 
-    private func revokeWalletAuthorityLocked(matching removal: WalletAuthorityRemoval) throws {
-        switch removal {
-        case .wallet(let id):
-            guard !id.isEmpty, id.utf8.count <= 256 else {
-                throw WalletAuthorityRemovalError.unavailable
-            }
-        case .accounts(let accounts):
-            guard accounts.allSatisfy(\.isValid) else {
-                throw WalletAuthorityRemovalError.unavailable
-            }
-            if accounts.isEmpty { return }
+    private func recordWalletAuthorityRemovalsLocked(_ removals: [WalletAuthorityRemoval]) throws {
+        guard removals.contains(where: {
+            if case .accounts(let accounts) = $0 { return !accounts.isEmpty }
+            return true
+        }) else { return }
+        var ledger: WalletAuthorityRevocationLedger
+        switch readRevocationLedgerLocked() {
+        case .ledger(let stored) where stored.sequence < Int.max:
+            ledger = stored
+        case .ledger, .resetRequired:
+            ledger = WalletAuthorityRevocationLedger(epoch: revocationEpoch())
+        case .unavailable:
+            throw WalletAuthorityRemovalError.unavailable
         }
-        let now = clock()
-        let candidates = try files.discoverProfileCandidatesForRemovalLocked()
-        var profiles = [ValidatedProfile]()
-        for candidate in candidates {
-            guard case .regular = files.regularFileStatusLocked(at: candidate.url),
-                  case .state(let profile) = readProfileFileLocked(
-                    at: candidate.url, profileIdentifier: candidate.identity.identifier,
-                    now: now, recover: true, normalizeDates: false
-                  ) else { throw WalletAuthorityRemovalError.unavailable }
-            profiles.append(profile)
+        do {
+            guard try ledger.record(removals) else { return }
+            guard files.publishRevocationLedgerDataLocked(try ledger.encoded()) else {
+                throw WalletAuthorityRemovalError.unavailable
+            }
+        } catch {
+            throw WalletAuthorityRemovalError.unavailable
         }
-        for var profile in profiles {
-            guard let changed = profile.revokeWalletAuthority(matching: removal, now: now) else {
-                throw WalletAuthorityRemovalError.unavailable
-            }
-            if changed, !writeProfileLocked(profile, failureRecovery: .readBack) {
-                throw WalletAuthorityRemovalError.unavailable
-            }
-            guard files.synchronizeProfileLocked(profile.state.profileIdentifier) else {
-                throw WalletAuthorityRemovalError.unavailable
-            }
+    }
+
+    private func readRevocationLedgerLocked() -> RevocationLedgerRead {
+        switch files.readRevocationLedgerDataLocked() {
+        case .missing: return .resetRequired
+        case .data(let data):
+            guard let ledger = WalletAuthorityRevocationLedger.decode(data) else { return .resetRequired }
+            return .ledger(ledger)
+        case .unavailable: return .unavailable
+        }
+    }
+
+    private func currentRevocationLedgerLocked() -> WalletAuthorityRevocationLedger? {
+        switch readRevocationLedgerLocked() {
+        case .ledger(let ledger): return ledger
+        case .resetRequired:
+            let ledger = WalletAuthorityRevocationLedger(epoch: revocationEpoch())
+            guard let data = try? ledger.encoded(),
+                  files.publishRevocationLedgerDataLocked(data) else { return nil }
+            return ledger
+        case .unavailable: return nil
         }
     }
 
@@ -495,9 +526,14 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         handle: ExtensionBridge.Handle,
         configurationKey: String
     ) -> ExtensionBridge.ResponseStatusResult {
-        guard case .state(let profile) = readProfileObservational(
+        let profile: ValidatedProfile
+        switch readProfileObservational(
             profileIdentifier: handle.profileIdentifier
-        ) else { return .unavailable }
+        ) {
+        case .state(let loaded): profile = loaded
+        case .missing: return .missing
+        case .corrupt, .unavailable: return .unavailable
+        }
         guard let record = profile.state.records.first(where: {
             $0.handle == handle && $0.configurationKey == configurationKey
         }) else {
@@ -1142,12 +1178,12 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private func readProfileObservational(profileIdentifier: UUID?) -> ProfileRead {
         files.withExistingStoreLock(
             unavailable: .unavailable,
-            missing: .state(emptyProfile(profileIdentifier))
+            missing: .missing
         ) {
             readProfileFileLocked(
                 at: files.profileURL(profileIdentifier),
                 profileIdentifier: profileIdentifier,
-                now: clock(), recover: false, normalizeDates: false
+                now: clock(), recover: false, normalizeDates: false, reconcileRevocations: false
             )
         }
     }
@@ -1157,11 +1193,21 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         profileIdentifier: UUID?,
         now: Date,
         recover: Bool,
-        normalizeDates: Bool = true
+        normalizeDates: Bool = true,
+        reconcileRevocations: Bool = true
     ) -> ProfileRead {
+        let ledger: WalletAuthorityRevocationLedger?
+        if reconcileRevocations {
+            guard let current = currentRevocationLedgerLocked() else { return .unavailable }
+            ledger = current
+        } else {
+            ledger = nil
+        }
         let data: Data
         switch files.readProfileDataLocked(at: url) {
-        case .missing: return .state(emptyProfile(profileIdentifier))
+        case .missing:
+            guard let ledger else { return .missing }
+            return .state(emptyProfile(profileIdentifier, revocationCursor: ledger.cursor))
         case .data(let storedData): data = storedData
         case .corrupt: return .corrupt
         case .unavailable: return .unavailable
@@ -1171,25 +1217,38 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             recoverAuthority: recover, now: now
         ) else { return .corrupt }
         var profile = decoded.profile
-        if decoded.requiresAuthorityPublication {
-            guard writeProfileLocked(profile, failureRecovery: .readBack) else { return .unavailable }
+        var changed = decoded.requiresAuthorityPublication
+        var requiresReadBack = decoded.requiresAuthorityPublication
+        if let ledger {
+            guard let reconciled = profile.reconcileWalletAuthority(with: ledger, now: now) else {
+                return .unavailable
+            }
+            changed = changed || reconciled
+            requiresReadBack = requiresReadBack || reconciled
         }
         let normalizedDates = normalizeDates && profile.normalizeFutureDates(now: now)
-        guard recover else { return .state(profile) }
-        let abandonedHandles = Set(profile.state.records.compactMap { record -> ExtensionBridge.Handle? in
-            switch record.state {
-            case .claimed, .broadcastPrepared:
-                return files.operationLockStatusLocked(handle: record.handle) == .unlocked ? record.handle : nil
-            case .pending, .completed:
-                return nil
+        changed = changed || normalizedDates
+        var locksToRemove = [ExtensionBridge.Handle]()
+        if recover {
+            let abandonedHandles = Set(profile.state.records.compactMap { record -> ExtensionBridge.Handle? in
+                switch record.state {
+                case .claimed, .broadcastPrepared:
+                    return files.operationLockStatusLocked(handle: record.handle) == .unlocked ? record.handle : nil
+                case .pending, .completed:
+                    return nil
+                }
+            })
+            guard let maintenance = profile.maintain(now: now, abandonedHandles: abandonedHandles) else {
+                return .unavailable
             }
-        })
-        guard let maintenance = profile.maintain(now: now, abandonedHandles: abandonedHandles) else {
+            changed = changed || maintenance.changed
+            locksToRemove = maintenance.operationLocksToRemove
+        }
+        guard changed else { return .state(profile) }
+        guard writeProfileLocked(profile, failureRecovery: requiresReadBack ? .readBack : .none) else {
             return .unavailable
         }
-        guard normalizedDates || maintenance.changed else { return .state(profile) }
-        guard writeProfileLocked(profile) else { return .unavailable }
-        for handle in maintenance.operationLocksToRemove {
+        for handle in locksToRemove {
             files.removeOperationLockLocked(handle: handle)
         }
         return .state(profile)
@@ -1269,11 +1328,15 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             : .retryablePersistenceFailure
     }
 
-    private func emptyProfile(_ profileIdentifier: UUID?) -> ValidatedProfile {
+    private func emptyProfile(
+        _ profileIdentifier: UUID?,
+        revocationCursor: WalletAuthorityRevocationLedger.Cursor
+    ) -> ValidatedProfile {
         ValidatedProfile(
             state: ProfileState(
                 profileIdentifier: profileIdentifier,
-                authorityEpoch: token()
+                authorityEpoch: token(),
+                revocationCursor: revocationCursor
             )
         )
     }

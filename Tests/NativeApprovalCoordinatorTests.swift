@@ -1153,7 +1153,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             XCTAssertEqual(rejections, authenticates ? 0 : 1)
             XCTAssertEqual(fixture.store.recordCount, 1)
             XCTAssertEqual(fixture.events.authenticationCount, 1)
-            XCTAssertEqual(fixture.events.presentations.count, 1)
+            XCTAssertEqual(fixture.events.presentations.count, authenticates ? 2 : 1)
             XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
         }
     }
@@ -1219,7 +1219,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.store.recordCount, 1)
-        guard case .superseded = fixture.events.presentations.first else {
+        guard case .superseded = fixture.events.presentations.last else {
             return XCTFail("Expected lost ownership")
         }
     }
@@ -1280,7 +1280,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(reloads, 1)
         XCTAssertEqual(fixture.store.recordCount, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 2)
     }
 
     func testPostauthenticationUnavailableLoadingStopsAtDeadline() async throws {
@@ -1295,7 +1295,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.loadHandler = { _ in .unavailable }
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 2)
     }
 
     func testApprovalInboxBoundsOnlyUnverifiedRoutesAndKeepsWalletIntentSeparate() async throws {
@@ -2191,7 +2191,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
         XCTAssertEqual(fixture.store.recordCount, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 2)
         fixture.store.snapshot = nil
     }
 
@@ -2263,7 +2263,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                case .rejecting? = coordinator?.currentPresentation?.presentation { failureCount += 1 }
         }
 
-        guard case .finished = await loadPresentation(coordinator, runtime: runtime) else {
+        guard case .finished = await loadPreparedPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected immediate completion")
         }
         XCTAssertEqual(coordinator.phase, .finished)
@@ -2343,14 +2343,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [retryWrite], timeout: 1)
 
         XCTAssertEqual(fixture.coordinator.phase, .responding)
-        XCTAssertTrue(fixture.events.presentations.isEmpty)
+        XCTAssertEqual(fixture.events.presentations.count, 1)
+        guard case .waiting? = fixture.events.presentations.first else {
+            return XCTFail("Response persistence must retain its waiting presentation")
+        }
         fixture.coordinator.reject()
         gate.resume(.persisted)
         await waitForState(fixture.coordinator, .finished)
 
         XCTAssertGreaterThan(responses.count, 3)
         XCTAssertTrue(responses.allSatisfy { $0 == responses[0] })
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -2421,10 +2424,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
-        fixture.coordinator.preparePresentationForReactivation()
-        let waitingRevision = fixture.coordinator.currentPresentation?.revision
-        fixture.coordinator.preparePresentationForReactivation()
-        XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, waitingRevision)
         await waitForState(fixture.coordinator, .paused)
 
         XCTAssertEqual(clock.uptime, 10)
@@ -2511,7 +2510,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.phase, .waiting)
         finalizer.resume(.responseReady)
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.events.presentations.count, 3)
+        XCTAssertEqual(fixture.events.presentations.count, 4)
         fixture.store.loadHandler = nil
     }
 
@@ -2837,7 +2836,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .responded)
         gate.resume(.retryablePersistenceFailure)
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.events.presentations.count, 1)
+        XCTAssertEqual(fixture.events.presentations.count, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -2896,8 +2895,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             fixture.coordinator.resumeAfterAuthentication()
             await waitForState(fixture.coordinator, .finished)
-            XCTAssertEqual(fixture.events.presentations.count, 1)
-            guard case .superseded? = fixture.events.presentations.first else {
+            XCTAssertEqual(fixture.events.presentations.count, 2)
+            guard case .superseded? = fixture.events.presentations.last else {
                 return XCTFail("Ownership replacement must supersede local processing")
             }
             XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
@@ -3006,7 +3005,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 }
             )
         )
-        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
+        guard case .approval = await loadPreparedPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
 
@@ -3066,7 +3065,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             if case .presentationChanged = event,
                case .superseded? = coordinator?.currentPresentation?.presentation { finished.fulfill() }
         }
-        guard case .approval = await loadPresentation(coordinator, runtime: runtime) else {
+        guard case .approval = await loadPreparedPresentation(coordinator, runtime: runtime) else {
             return XCTFail("Expected approval")
         }
 
@@ -3140,7 +3139,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(loads, 0)
         XCTAssertEqual(finalizations, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 2)
+        XCTAssertEqual(fixture.events.presentations.count, 3)
 
         store.snapshot = nil
         waits.resume(1)
@@ -3205,7 +3204,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(finalizations, 2)
         XCTAssertEqual(loads, readsBeforeOldObservationReturns)
         XCTAssertEqual(store.maximumOutstandingWrites, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 2)
+        XCTAssertEqual(fixture.events.presentations.count, 3)
 
         store.snapshot = nil
         waits.resume(2)
@@ -3243,9 +3242,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(finalizations, 1)
         XCTAssertEqual(waits.delays.count, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 3)
-        guard case .waiting = fixture.events.presentations[1],
-              case .finished = fixture.events.presentations[2] else {
+        XCTAssertEqual(fixture.events.presentations.count, 4)
+        guard case .waiting = fixture.events.presentations[2],
+              case .finished = fixture.events.presentations[3] else {
             return XCTFail("The observed decision must enter waiting and finish at expiry")
         }
     }
@@ -3416,7 +3415,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             if case .waiting = $0 { return true }
             return false
         }.count
-        XCTAssertEqual(waitingCount, 2)
+        XCTAssertEqual(waitingCount, 3)
         fixture.store.snapshot = nil
     }
 
@@ -3567,7 +3566,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         fixture.coordinator.resumeAfterAuthentication()
         await fulfillment(of: [loadStarted], timeout: 1)
-        XCTAssertNil(fixture.coordinator.currentPresentation)
+        guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Loading must publish waiting without opening a window")
+        }
+        let revision = fixture.coordinator.currentPresentation?.revision
         XCTAssertNil(approval.windowController)
 
         let route = NativeAgentRoute.approval(
@@ -3581,10 +3583,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(window.isVisible)
         let waiting = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         XCTAssertFalse(waiting.progressIndicator.isHidden)
-        guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
-            return XCTFail("Explicit reactivation must publish its waiting presentation")
-        }
-        let revision = fixture.coordinator.currentPresentation?.revision
+        XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         agent.process(route: route)
         XCTAssertTrue(window.contentViewController === waiting)
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
@@ -3639,7 +3638,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await fulfillment(of: [started], timeout: 1)
         XCTAssertEqual(fixture.coordinator.phase, .responding)
-        XCTAssertNil(fixture.coordinator.currentPresentation)
+        guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Response persistence must publish waiting without opening a window")
+        }
+        let revision = fixture.coordinator.currentPresentation?.revision
         XCTAssertNil(approval.windowController)
 
         let route = NativeAgentRoute.approval(
@@ -3653,7 +3655,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let waiting = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         XCTAssertTrue(window.isVisible)
         XCTAssertFalse(waiting.progressIndicator.isHidden)
-        let revision = fixture.coordinator.currentPresentation?.revision
+        XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         agent.process(route: route)
         fixture.coordinator.retryRecovery()
         for _ in 0..<30 { await Task.yield() }
@@ -3666,6 +3668,49 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .finished)
         XCTAssertFalse(window.isVisible)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+    }
+
+    func testImmediateResponseFinishesWithoutCreatingApprovalWindow() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime },
+            wait: { _ in XCTFail("An immediate response must not poll") },
+            prepareWithoutWallets: { request in
+                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+            }
+        ))
+        var writes = 0
+        fixture.store.completeHandler = { _, _, _, _ in
+            writes += 1
+            return .persisted
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        XCTAssertTrue(inbox.activate(approval, for: fixture.key))
+        let agent = Agent(approvalInbox: inbox)
+        fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator] event in
+            if case .presentationChanged = event, let coordinator {
+                agent?.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
+                XCTAssertNil(approval.windowController)
+            }
+        }
+        defer { fixture.coordinator.onEvent = nil }
+
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(writes, 1)
+        XCTAssertNil(approval.windowController)
+        XCTAssertNil(approval.beginRenderingCurrentPresentation(allowNewWaitingWindow: true))
+        agent.renderCurrentPresentation(
+            for: fixture.key.handle,
+            coordinator: fixture.coordinator,
+            allowNewWaitingWindow: true
+        )
+        XCTAssertNil(approval.windowController)
     }
 
     func testRepeatedDeliveryPreservesReviewControllerAndSheet() async throws {
@@ -3717,17 +3762,20 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         XCTAssertNil(fixture.coordinator.currentPresentation)
         fixture.coordinator.resumeAfterAuthentication()
-        XCTAssertNil(fixture.coordinator.currentPresentation)
+        guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Loading must synchronously publish waiting")
+        }
         await waitForState(fixture.coordinator, .reviewing)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
             return XCTFail("Accepting the review must synchronously publish waiting")
         }
         await waitForState(fixture.coordinator, .waiting)
-        XCTAssertEqual(snapshots.count, 2)
-        guard case .approval = snapshots[0].presentation,
-              case .waiting = snapshots[1].presentation else {
-            return XCTFail("Expected one review and one waiting presentation")
+        XCTAssertEqual(snapshots.count, 3)
+        guard case .waiting = snapshots[0].presentation,
+              case .approval = snapshots[1].presentation,
+              case .waiting = snapshots[2].presentation else {
+            return XCTFail("Expected initial loading, review, and accepted approval waiting")
         }
     }
 
@@ -3821,7 +3869,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 coordinator.resumeAfterAuthentication()
                 coordinator.retryRecovery()
                 coordinator.reject()
-                coordinator.preparePresentationForReactivation()
                 coordinator.approveAccounts([], ethereumNetwork: nil)
                 XCTAssertEqual(coordinator.phase, .finished)
                 XCTAssertEqual(coordinator.currentPresentation?.revision, snapshot.revision)
@@ -3843,7 +3890,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(completions, 1)
         XCTAssertEqual(fixture.store.recordCount, 1)
         XCTAssertEqual(fixture.events.authenticationCount, 1)
-        XCTAssertEqual(fixture.events.presentations.count, 3)
+        XCTAssertEqual(fixture.events.presentations.count, 4)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -4198,7 +4245,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.recordCount, 1)
         gate.resume(.persisted)
         await waitForState(fixture.coordinator, .finished)
-        XCTAssertEqual(fixture.events.presentations.count, 5)
+        XCTAssertEqual(fixture.events.presentations.count, 6)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
@@ -4377,11 +4424,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.phase, expected, file: file, line: line)
     }
 
-    private func loadPresentation(
+    private func loadPreparedPresentation(
         _ coordinator: NativeApprovalCoordinator,
         runtime: UUID
     ) async -> NativeApprovalCoordinator.Presentation {
-        let ready = expectation(description: "first presentation")
+        let ready = expectation(description: "prepared presentation")
         var presentation: NativeApprovalCoordinator.Presentation?
         let observer = coordinator.onEvent
         coordinator.onEvent = { [weak coordinator] event in
@@ -4391,6 +4438,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 coordinator?.resumeAfterAuthentication()
             case .presentationChanged:
                 if presentation == nil, let snapshot = coordinator?.currentPresentation {
+                    if case .waiting = snapshot.presentation { return }
                     presentation = snapshot.presentation
                     ready.fulfill()
                 }

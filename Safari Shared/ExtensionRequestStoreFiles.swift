@@ -17,6 +17,12 @@ final class ExtensionRequestStoreFiles {
         case unavailable
     }
 
+    enum RevocationLedgerDataRead {
+        case missing
+        case data(Data)
+        case unavailable
+    }
+
     enum WriteFailureRecovery {
         case none
         case readBack
@@ -84,24 +90,6 @@ final class ExtensionRequestStoreFiles {
         removeItem = dependencies.removeItem
         storeLock = dependencies.crossProcessLock ?? rootURL.map {
             CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v9.lock"))
-        }
-    }
-
-    func discoverProfileCandidatesForRemovalLocked() throws -> [ProfileFileCandidate] {
-        switch directoryStatus(at: profileDirectoryURL) {
-        case .missing: return []
-        case .directory: break
-        case .unsafe, .unavailable: throw WalletAuthorityRemovalError.unavailable
-        }
-        do {
-            return try fileManager.contentsOfDirectory(
-                at: profileDirectoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
-            ).sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
-                guard let identity = profileFileIdentity(for: url) else { return nil }
-                return ProfileFileCandidate(url: url, identity: identity)
-            }
-        } catch {
-            throw WalletAuthorityRemovalError.unavailable
         }
     }
 
@@ -217,6 +205,37 @@ final class ExtensionRequestStoreFiles {
 
     func synchronizeProfileLocked(_ profileIdentifier: UUID?) -> Bool {
         let url = profileURL(profileIdentifier)
+        return synchronizeFileLocked(at: url)
+    }
+
+    func readRevocationLedgerDataLocked() -> RevocationLedgerDataRead {
+        let url = revocationLedgerURL
+        switch regularFileStatusLocked(at: url) {
+        case .missing: return .missing
+        case .regular: break
+        case .unsafe, .unavailable: return .unavailable
+        }
+        do { return .data(try readData(url)) }
+        catch { return .unavailable }
+    }
+
+    func publishRevocationLedgerDataLocked(_ data: Data) -> Bool {
+        let url = revocationLedgerURL
+        switch regularFileStatusLocked(at: url) {
+        case .missing, .regular: break
+        case .unsafe, .unavailable: return false
+        }
+        do {
+            try atomicWrite(data, url)
+            return true
+        } catch {
+            guard case .data(let persisted) = readRevocationLedgerDataLocked(),
+                  persisted == data else { return false }
+            return synchronizeFileLocked(at: url)
+        }
+    }
+
+    private func synchronizeFileLocked(at url: URL) -> Bool {
         guard case .regular = regularFileStatusLocked(at: url) else { return false }
         do {
             try synchronizePublishedFile(url)
@@ -233,11 +252,14 @@ final class ExtensionRequestStoreFiles {
                 return .unavailable
             }
             return type == .typeRegular ? .regular : .unsafe
-        } catch {
+        } catch let error as CocoaError where error.code == .fileNoSuchFile ||
+            error.code == .fileReadNoSuchFile {
             if (try? fileManager.destinationOfSymbolicLink(atPath: url.path)) != nil {
                 return .unsafe
             }
-            return fileManager.fileExists(atPath: url.path) ? .unavailable : .missing
+            return .missing
+        } catch {
+            return .unavailable
         }
     }
 
@@ -351,6 +373,11 @@ final class ExtensionRequestStoreFiles {
             isDirectory: true
         )
     }
+
+    var revocationLedgerURL: URL {
+        rootURL!.appendingPathComponent("wallet-authority-revocations.state")
+    }
+
     func withExistingStoreLock<Value>(
         unavailable: Value,
         missing: @autoclosure () -> Value,

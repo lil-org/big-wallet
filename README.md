@@ -28,7 +28,9 @@ Within a supported native profile, incompatible permission data resets to discon
 
 Disconnect revokes uncommitted requests immediately. Explicitly approved work can finish after its tab closes, and a transaction already committed for broadcast can finish after disconnect. Response retries never restore a revoked grant or repeat its mutation.
 
-Removing a wallet or account revokes its site permissions across Safari profiles and clears its saved names. Permission cleanup must succeed before removal; reimporting or re-enabling the account requires reconnecting. Committed transaction results remain available for recovery until their normal expiry.
+Removing a wallet or account durably records its revocation before changing the wallet and clears its saved names. Each Safari profile applies outstanding revocations before its next authoritative operation, so an unrelated damaged profile does not block removal. Reimporting or re-enabling the account requires reconnecting. Committed transaction results remain available for recovery until their normal expiry.
+
+Revocation history retains the latest removal of each wallet or account without expiry; repeated removals coalesce. If that history is lost or structurally corrupted, a new history generation invalidates old site permissions as profiles are accessed while preserving request and transaction recovery records. Unreadable storage or a failed durable write still prevents removal.
 
 ### iPhone debugger launch stalls in Xcode 27
 

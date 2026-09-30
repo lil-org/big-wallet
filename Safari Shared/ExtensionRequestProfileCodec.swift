@@ -76,6 +76,7 @@ struct ExtensionRequestProfileCodec {
         guard profile.schemaVersion == ExtensionRequestProfile.profileSchemaVersion,
               profile.workflowVersion == ExtensionBridge.workflowVersion,
               profile.profileIdentifier == expectedIdentifier,
+              profile.revocationCursor.sequence >= 0,
               profile.invalidOrigins.isEmpty, !profile.invalidOriginsContainer,
               profile.authoritySequence >= 0, profile.authoritySequence <= ExtensionRequestProfile.maximumRevision,
               profile.reclaimedAuthorityRevision >= 0,
@@ -224,6 +225,7 @@ struct ExtensionRequestProfileCodec {
         }
         cachedProfile = nil
         guard var state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
+              state.revocationCursor.sequence >= 0,
               state.authoritySequence >= 0,
               state.authoritySequence <= ExtensionRequestProfile.maximumRevision,
               state.reclaimedAuthorityRevision >= 0,

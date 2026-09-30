@@ -101,6 +101,7 @@ struct ExtensionRequestProfile {
         let workflowVersion: Int
         let profileIdentifier: UUID?
         let authorityEpoch: UUID
+        var revocationCursor: WalletAuthorityRevocationLedger.Cursor
         var authoritySequence: Int
         var reclaimedAuthorityRevision: Int
         var origins: [String: OriginState]
@@ -110,15 +111,20 @@ struct ExtensionRequestProfile {
         var invalidOriginsContainer = false
 
         private enum CodingKeys: String, CodingKey {
-            case schemaVersion, workflowVersion, profileIdentifier, authorityEpoch
+            case schemaVersion, workflowVersion, profileIdentifier, authorityEpoch, revocationCursor
             case authoritySequence, reclaimedAuthorityRevision, origins, mutationReceipts, records
         }
 
-        init(profileIdentifier: UUID?, authorityEpoch: UUID) {
+        init(
+            profileIdentifier: UUID?,
+            authorityEpoch: UUID,
+            revocationCursor: WalletAuthorityRevocationLedger.Cursor
+        ) {
             schemaVersion = ExtensionRequestProfile.profileSchemaVersion
             workflowVersion = ExtensionBridge.workflowVersion
             self.profileIdentifier = profileIdentifier
             self.authorityEpoch = authorityEpoch
+            self.revocationCursor = revocationCursor
             authoritySequence = 0
             reclaimedAuthorityRevision = 0
             origins = [:]
@@ -132,6 +138,7 @@ struct ExtensionRequestProfile {
             workflowVersion = try values.decode(Int.self, forKey: .workflowVersion)
             profileIdentifier = try values.decodeIfPresent(UUID.self, forKey: .profileIdentifier)
             authorityEpoch = try values.decode(UUID.self, forKey: .authorityEpoch)
+            revocationCursor = try values.decode(WalletAuthorityRevocationLedger.Cursor.self, forKey: .revocationCursor)
             authoritySequence = try values.decode(Int.self, forKey: .authoritySequence)
             reclaimedAuthorityRevision = try values.decode(Int.self, forKey: .reclaimedAuthorityRevision)
             mutationReceipts = try values.decode([MutationReceipt].self, forKey: .mutationReceipts)
@@ -1017,6 +1024,29 @@ struct ExtensionRequestProfile {
         self.state.records = kept
         changed = Self.reclaimAuthority(in: &state, now: now) || changed
         return Maintenance(changed: changed, operationLocksToRemove: locksToRemove)
+    }
+
+    mutating func reconcileWalletAuthority(
+        with ledger: WalletAuthorityRevocationLedger,
+        now: Date
+    ) -> Bool? {
+        let removals: [WalletAuthorityRemoval]
+        if state.revocationCursor.epoch == ledger.epoch {
+            guard state.revocationCursor.sequence <= ledger.sequence else { return nil }
+            guard state.revocationCursor.sequence != ledger.sequence else { return false }
+            removals = ledger.removals(after: state.revocationCursor.sequence)
+        } else {
+            let connectedAccounts = state.origins.values.flatMap {
+                [$0.ethereumAccount, $0.solanaAccount].compactMap { $0 }
+            }
+            let admittedAccounts = state.records.compactMap(\.authorizedAccount)
+            removals = [.accounts(Set(connectedAccounts + admittedAccounts))]
+        }
+        for removal in removals {
+            guard revokeWalletAuthority(matching: removal, now: now) != nil else { return nil }
+        }
+        state.revocationCursor = ledger.cursor
+        return true
     }
 
     mutating func revokeWalletAuthority(matching removal: WalletAuthorityRemoval, now: Date) -> Bool? {
