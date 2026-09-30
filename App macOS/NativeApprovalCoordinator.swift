@@ -18,11 +18,11 @@ protocol NativeDeliveryStore: AnyObject {
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID
     ) async -> ExtensionBridge.NativeInterruptionResult
-    func completeNativeDelivery(
+    func completeNativeImmediate(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        response: ResponseToExtension
+        resolution: ImmediateResolution
     ) async -> ExtensionBridge.StoreMutationResult
     func rejectNativeDelivery(
         handle: ExtensionBridge.Handle,
@@ -86,7 +86,7 @@ final class NativeApprovalCoordinator {
         let reloadWallets: () -> Bool
         let prepare: @MainActor (SafariRequest) -> DappRequestPreparation?
         let attemptNativeDecision: (
-            ExtensionBridge.Snapshot, ExtensionBridge.NativeApprovalAuthorization
+            ExtensionBridge.Snapshot, ReviewConsent
         ) async ->
             NativeApprovalFinalizationResult
 
@@ -109,7 +109,7 @@ final class NativeApprovalCoordinator {
                 return DappRequestProcessor().prepare($0, catalog: catalog)
             },
             attemptNativeDecision: @escaping (
-                ExtensionBridge.Snapshot, ExtensionBridge.NativeApprovalAuthorization
+                ExtensionBridge.Snapshot, ReviewConsent
             ) async -> NativeApprovalFinalizationResult = { _, _ in .pending
             }
         ) {
@@ -129,7 +129,7 @@ final class NativeApprovalCoordinator {
                 try? await Task.sleep(nanoseconds: nanoseconds)
             },
             attemptNativeDecision: { snapshot, authorization in
-                await NativeApprovalFinalizer.shared.attempt(snapshot: snapshot, authorization: authorization)
+                await NativeApprovalFinalizer.shared.attempt(snapshot: snapshot, consent: authorization)
             }
         )
     }
@@ -148,7 +148,7 @@ final class NativeApprovalCoordinator {
 
     private enum RetryAction {
         case validateReceipt, rejectBeforeAuthentication, prepareReview
-        case persistResponse(ResponseToExtension)
+        case persistResponse(ImmediateResolution)
         case rejectOwned
 
         var state: State {
@@ -171,7 +171,7 @@ final class NativeApprovalCoordinator {
 
     private enum ObservationMode {
         case review
-        case approved(ExtensionBridge.NativeApprovalAuthorization)
+        case approved(ReviewConsent)
     }
 
     private enum Completion {
@@ -191,9 +191,9 @@ final class NativeApprovalCoordinator {
         case acquiringReceipt(afterReceipt: ReceiptContinuation)
         case awaitingAuthentication
         case loading
-        case reviewing(request: SafariRequest, action: DappRequestAction)
-        case waiting(ExtensionBridge.NativeApprovalAuthorization)
-        case responding(ResponseToExtension)
+        case reviewing(ApprovalReview)
+        case waiting(ReviewConsent)
+        case responding(ImmediateResolution)
         case rejectingBeforeAuthentication, interrupting
         case rejectingOwned(RejectionReason)
         case paused(RetryAction)
@@ -232,8 +232,8 @@ final class NativeApprovalCoordinator {
             case .registered, .validating, .acquiringReceipt,
                  .awaitingAuthentication, .rejectingBeforeAuthentication:
                 nil
-            case .reviewing(let request, let action):
-                .approval(request: request, action: action)
+            case .reviewing(let review):
+                .approval(request: review.request, action: review.action)
             case .loading, .responding, .waiting, .rejectingOwned(.user):
                 .waiting
             case .rejectingOwned(.failure), .interrupting:
@@ -423,7 +423,8 @@ final class NativeApprovalCoordinator {
     }
 
     func approveMessage(solanaCluster: Solana.Cluster?) {
-        guard case .reviewing(_, .approveMessage(let action)) = state else { return }
+        guard case .reviewing(let review) = state,
+              case .approveMessage(let action) = review.action else { return }
         approve(.message(.init(
             approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account),
             solanaCluster: solanaCluster
@@ -434,7 +435,8 @@ final class NativeApprovalCoordinator {
         _ transaction: Transaction,
         reviewedNetwork: ResolvedEthereumNetwork
     ) {
-        guard case .reviewing(_, .approveTransaction(let action)) = state else { return }
+        guard case .reviewing(let review) = state,
+              case .approveTransaction(let action) = review.action else { return }
         guard let execution = DappApprovalDecision.TransactionExecution(
             transaction,
             reviewedNetwork: reviewedNetwork,
@@ -464,19 +466,42 @@ final class NativeApprovalCoordinator {
     }
 
     private func approve(_ decision: DappApprovalDecision) {
-        guard phase == .reviewing, let runtime else { return }
+        guard case .reviewing(let review) = state, let runtime else { return }
         let approvedAt = environment.now()
-        let authorization = ExtensionBridge.NativeApprovalAuthorization(
-            receipt: .init(nativeDeliveryNonce: nativeDeliveryNonce, owner: runtime),
-            decision: decision,
-            approvedAt: approvedAt
+        let receipt = ExtensionBridge.NativeDeliveryReceipt(
+            nativeDeliveryNonce: nativeDeliveryNonce,
+            owner: runtime
         )
-        enterState(.waiting(authorization))
+        let consent: ReviewConsent?
+        switch decision {
+        case .accountSelection(let selection):
+            consent = review.acceptAccounts(
+                selection: selection, approvedAt: approvedAt, nativeReceipt: receipt
+            )
+        case .message(let message):
+            consent = review.acceptMessage(
+                cluster: message.solanaCluster, approvedAt: approvedAt, nativeReceipt: receipt
+            )
+        case .transaction(let execution):
+            consent = review.acceptTransaction(
+                execution: execution, approvedAt: approvedAt, nativeReceipt: receipt
+            )
+        case .addEthereumChain:
+            consent = review.acceptAddEthereumChain(
+                approvedAt: approvedAt, nativeReceipt: receipt
+            )
+        }
+        guard let consent else {
+            failAndReject()
+            return
+        }
+        enterState(.waiting(consent))
     }
 
     private func enterState(_ state: State) {
         guard !isFinished else { return }
         let previousPresentation = currentPresentation?.presentation
+        if case .reviewing(let review) = self.state { review.invalidate() }
         stopWork()
         self.state = state
         switch state {
@@ -746,10 +771,15 @@ final class NativeApprovalCoordinator {
                 if let preparation {
                     switch preparation {
                     case .approval(let action):
-                        work.update {
-                            $0.enterState(.reviewing(request: request, action: action))
+                        guard let binding = snapshot.requestBinding,
+                              let review = ApprovalReview(binding: binding, action: action) else {
+                            work.update { $0.failAndReject() }
+                            return
                         }
-                    case .response(let response):
+                        work.update {
+                            $0.enterState(.reviewing(review))
+                        }
+                    case .immediate(let response):
                         work.update {
                             $0.updateState(.responding(response), within: work)
                         }
@@ -763,13 +793,13 @@ final class NativeApprovalCoordinator {
         work.update { $0.pause() }
     }
 
-    private static func persistResponse(_ work: Work, response: ResponseToExtension) async {
+    private static func persistResponse(_ work: Work, response: ImmediateResolution) async {
         guard let runtime = work.runtime else { return }
         await persistOwnedMutation(work, operation: {
-            await work.store.completeNativeDelivery(
+            await work.store.completeNativeImmediate(
                 handle: work.handle, nativeDeliveryNonce: work.nonce,
                 runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
-                response: response
+                resolution: response
             )
         }, onPersisted: { $0.finish() })
     }

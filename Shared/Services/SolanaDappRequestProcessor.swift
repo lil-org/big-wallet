@@ -72,15 +72,15 @@ struct SolanaDappRequestProcessor {
         switch body.method {
         case .connect:
             if let account = request.authorizedAccount, account.coin == .solana {
-                return .response(response(to: request, result: .solanaPublicKey(account.normalizedAddress)))
+                return .immediate(.existingSolanaConnection)
             }
             if body.onlyIfTrusted {
-                return .response(response(to: request, error: .unauthorized(publicKey: body.publicKey)))
+                return .immediate(immediateFailure(to: request, error: .unauthorized(publicKey: body.publicKey)))
             }
             return nil
         case .signAllTransactions:
             guard body.messages != nil else {
-                return .response(response(to: request, error: .malformedPayload))
+                return .immediate(immediateFailure(to: request, error: .malformedPayload))
             }
             return nil
         case .signMessage, .signTransaction, .signAndSendTransaction:
@@ -89,36 +89,36 @@ struct SolanaDappRequestProcessor {
     }
 
     static func execute(
-        request: SafariRequest,
-        approval: DappApprovalValidator.Approval,
+        permit: ExtensionBridge.ApprovedExecutionPermit,
         signer: (any WalletSigning)?
-    ) async -> DappExecutionResult {
-        guard case .signing(_, let payload) = approval.kind,
-              !payload.isEthereumTransaction
-        else { return .response(response(to: request, error: .internalError)) }
+    ) async -> ApprovedExecutionResult {
+        guard permit.isExecuting,
+              case .signing(_, let payload) = permit.approval.kind,
+              payload.coin == .solana else { return .rollback }
         guard let signer else { return .rollback }
         switch await signer.sign() {
-        case .success(.solanaSignature(let signature)):
-            return .response(response(to: request, result: .string(signature)))
-        case .success(.solanaSignatures(let signatures)):
-            return .response(response(to: request, result: .strings(signatures)))
-        case .success(.solanaTransaction(let signedTransaction, let signature, let cluster, let options)):
-            return prepareTransactionBroadcast(
-                request: request,
-                signedTransaction: signedTransaction,
-                expectedSignature: signature,
-                cluster: cluster,
-                sendOptions: options
-            )
-        case .success:
-            return .response(response(to: request, error: .internalError))
+        case .success(let output):
+            if let completion = ApprovedCompletion.signed(output, permit: permit) {
+                return .completed(completion)
+            }
+            if let broadcast = PreparedBroadcast.signed(output, permit: permit) {
+                return .broadcast(broadcast)
+            }
+            return approvedFailure(.internalError, permit: permit)
         case .failure(.authorizationUnavailable):
             return .rollback
         case .failure(.failedToSign):
-            return .response(response(to: request, error: .failedToSign))
+            return approvedFailure(.failedToSign, permit: permit)
         case .failure(.invalidTransaction):
-            return .response(response(to: request, error: .malformedPayload))
+            return approvedFailure(.malformedPayload, permit: permit)
         }
+    }
+
+    private static func approvedFailure(
+        _ error: ProviderError,
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedExecutionResult {
+        ApprovedCompletion.failure(error.responseError, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
     }
 
     static func decodedSignMessage(
@@ -154,7 +154,7 @@ struct SolanaDappRequestProcessor {
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         guard let messages = body.messages else {
-            return .response(response(to: request, error: .malformedPayload))
+            return .immediate(immediateFailure(to: request, error: .malformedPayload))
         }
 
         let walletID: String
@@ -167,7 +167,7 @@ struct SolanaDappRequestProcessor {
         case .success(let value):
             (walletID, account) = value
         case .failure(let error):
-            return .response(response(to: request, error: error))
+            return .immediate(immediateFailure(to: request, error: error))
         }
 
         var preparedMessages = [SolanaPreparedTransactionMessage]()
@@ -177,7 +177,7 @@ struct SolanaDappRequestProcessor {
             case .success(let preparedMessage):
                 preparedMessages.append(preparedMessage)
             case .failure(let error):
-                return .response(response(to: request, error: error))
+                return .immediate(immediateFailure(to: request, error: error))
             }
         }
 
@@ -210,7 +210,7 @@ struct SolanaDappRequestProcessor {
         case .success(let value):
             (walletID, account) = value
         case .failure(let error):
-            return .response(response(to: request, error: error))
+            return .immediate(immediateFailure(to: request, error: error))
         }
 
         switch body.method {
@@ -227,7 +227,7 @@ struct SolanaDappRequestProcessor {
             case .success(let value):
                 payload = value
             case .failure(let error):
-                return .response(response(to: request, error: error))
+                return .immediate(immediateFailure(to: request, error: error))
             }
             let action = approvalAction(
                 walletID: walletID,
@@ -238,7 +238,7 @@ struct SolanaDappRequestProcessor {
             )
             return .approval(action)
         case .connect, .signAllTransactions:
-            return .response(response(to: request, error: .internalError))
+            return .immediate(immediateFailure(to: request, error: .internalError))
         }
     }
 
@@ -253,7 +253,7 @@ struct SolanaDappRequestProcessor {
         case .success(let value):
             sendOptions = value
         case .failure(let error):
-            return .response(response(to: request, error: .sendTransaction(error)))
+            return .immediate(immediateFailure(to: request, error: .sendTransaction(error)))
         }
 
         if let serializedTransaction = body.transaction {
@@ -272,7 +272,7 @@ struct SolanaDappRequestProcessor {
         case .success(let value):
             transaction = value
         case .failure(let error):
-            return .response(response(to: request, error: error))
+            return .immediate(immediateFailure(to: request, error: error))
         }
 
         let action = approvalAction(
@@ -301,7 +301,7 @@ struct SolanaDappRequestProcessor {
             publicKey: body.publicKey
         ) {
         case .failure(let error):
-            return .response(response(to: request, error: .sendTransaction(error)))
+            return .immediate(immediateFailure(to: request, error: .sendTransaction(error)))
         case .success(let transaction):
             let action = approvalAction(
                 walletID: walletID,
@@ -441,49 +441,6 @@ struct SolanaDappRequestProcessor {
         ))
     }
 
-    private static func prepareTransactionBroadcast(
-        request: SafariRequest,
-        signedTransaction: String,
-        expectedSignature: String,
-        cluster: Solana.Cluster,
-        sendOptions: Solana.PreparedSendOptions
-    ) -> DappExecutionResult {
-        let recoveryResponse = transactionSubmissionUnknownResponse(
-            to: request,
-            signature: expectedSignature
-        )
-        return .broadcast(PreparedBroadcast(
-            recoveryResponse: recoveryResponse,
-            send: {
-                guard !Task.isCancelled else {
-                    return ResponseToExtension(
-                        for: request,
-                        payload: .error(.internalError)
-                    )
-                }
-                guard let result = await awaitCancellableCallback({ completion in
-                    solana.sendSignedTransaction(
-                        signedTransaction,
-                        cluster: cluster,
-                        sendOptions: sendOptions,
-                        completion: completion
-                    )
-                }) else {
-                    return ResponseToExtension(
-                        for: request,
-                        payload: .error(.internalError)
-                    )
-                }
-                return transactionBroadcastResponse(
-                    to: request,
-                    expectedSignature: expectedSignature,
-                    recoveryResponse: recoveryResponse,
-                    result: result
-                )
-            }
-        ))
-    }
-
     static func transactionBroadcastResponse(
         to request: SafariRequest,
         expectedSignature: String,
@@ -534,6 +491,16 @@ struct SolanaDappRequestProcessor {
                 context: .transactionSignature(signature)
             ))
         )
+    }
+
+    private static func immediateFailure(
+        to request: SafariRequest,
+        error: ProviderError
+    ) -> ImmediateResolution {
+        if case .unauthorized(let publicKey) = error {
+            return .solanaAuthorizationDenied(publicKey: publicKey)
+        }
+        return .failure(error.responseError)
     }
 
     private static func response(

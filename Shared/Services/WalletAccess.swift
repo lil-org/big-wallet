@@ -228,6 +228,28 @@ struct WalletSigningAuthorization: Equatable, Sendable {
     let signingDeadline: Date
 }
 
+private final class WalletSigningOperationUse: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bound = false
+    private var signed = false
+
+    func bind() -> Bool {
+        lock.withLock {
+            guard !bound, !signed else { return false }
+            bound = true
+            return true
+        }
+    }
+
+    func sign() -> Bool {
+        lock.withLock {
+            guard !signed else { return false }
+            signed = true
+            return true
+        }
+    }
+}
+
 struct ApprovedWalletSigningOperation: Sendable {
 
     enum Payload: Sendable {
@@ -268,32 +290,38 @@ struct ApprovedWalletSigningOperation: Sendable {
 
     let authorization: WalletSigningAuthorization
     let payload: Payload
+    private let permit: ExtensionBridge.ApprovedExecutionPermit
+    private let use = WalletSigningOperationUse()
 
     var handle: ExtensionBridge.Handle { authorization.handle }
     var approvedAccount: WalletAccountDescriptor { authorization.approvedAccount }
     var deadline: Date { authorization.signingDeadline }
+    var isAuthorizedToSign: Bool { permit.isSigningAuthorized }
 
-    init?(
-        request: SafariRequest,
-        approval: DappApprovalValidator.Approval,
-        authorization: WalletSigningAuthorization
-    ) {
-        let approvedAccount = authorization.approvedAccount
-        guard case .signing(let account, let payload) = approval.kind,
-              request.id == authorization.handle.id,
-              authorization.signingDeadline.timeIntervalSince1970.isFinite,
-              account == approvedAccount,
+    init?(permit: ExtensionBridge.ApprovedExecutionPermit) {
+        guard case .signing(let approvedAccount, let payload) = permit.approval.kind,
+              permit.request.id == permit.handle.id,
+              permit.signingDeadline.timeIntervalSince1970.isFinite,
               approvedAccount.isValid,
-              request.authorizedAccount == approvedAccount,
-              approvedAccount.coin.correspondingInpageProvider == request.provider,
-              payload.coin == approvedAccount.coin
-        else { return nil }
-        self.authorization = authorization
+              permit.request.authorizedAccount == approvedAccount,
+              approvedAccount.coin.correspondingInpageProvider == permit.request.provider,
+              payload.coin == approvedAccount.coin,
+              permit.consumeSigningOperation() else { return nil }
+        self.permit = permit
+        authorization = WalletSigningAuthorization(
+            handle: permit.handle, approvedAccount: approvedAccount,
+            signingDeadline: permit.signingDeadline
+        )
         self.payload = payload
+    }
+
+    fileprivate func consumeBinding() -> Bool {
+        use.bind()
     }
 
     fileprivate func sign(with privateKey: WalletPrivateKey) ->
         Result<WalletSigningOutput, WalletSigningFailure> {
+        guard isAuthorizedToSign, use.sign() else { return .failure(.authorizationUnavailable) }
         switch payload {
         case .ethereumMessage(let data):
             guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
@@ -417,6 +445,7 @@ private final class SourceWalletSigningAccess: OwnedWalletSigningAccess {
     func sign(_ operation: ApprovedWalletSigningOperation) async ->
         Result<WalletSigningOutput, WalletSigningFailure> {
         guard operation.approvedAccount == approvedAccount,
+              operation.isAuthorizedToSign,
               !Task.isCancelled else {
             return .failure(.authorizationUnavailable)
         }
@@ -428,7 +457,7 @@ private final class SourceWalletSigningAccess: OwnedWalletSigningAccess {
         ) else { return .failure(.failedToSign) }
         guard let result = await awaitBackgroundOperation({
             operation.sign(with: privateKey)
-        }) else { return .failure(.authorizationUnavailable) }
+        }), operation.isAuthorizedToSign else { return .failure(.authorizationUnavailable) }
         return result
     }
 
@@ -558,7 +587,8 @@ final class UnlockedAccountSigner: OwnedWalletSigningAccess {
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async ->
         Result<WalletSigningOutput, WalletSigningFailure> {
-        guard operation.approvedAccount == approvedAccount else {
+        guard operation.approvedAccount == approvedAccount,
+              operation.isAuthorizedToSign else {
             return .failure(.authorizationUnavailable)
         }
         guard !Task.isCancelled else {
@@ -572,7 +602,7 @@ final class UnlockedAccountSigner: OwnedWalletSigningAccess {
         }) else { return .failure(.authorizationUnavailable) }
         guard let result = await awaitBackgroundOperation({
             operation.sign(with: privateKey)
-        }) else { return .failure(.authorizationUnavailable) }
+        }), operation.isAuthorizedToSign else { return .failure(.authorizationUnavailable) }
         return result
     }
 
@@ -670,7 +700,8 @@ final class WalletSigningSession: WalletSigning, @unchecked Sendable {
               clock() < authorization.signingDeadline,
               validateCurrent() else { return false }
         return lock.withLock {
-            guard case .unbound = state, access != nil else { return false }
+            guard case .unbound = state, access != nil,
+                  operation.consumeBinding() else { return false }
             state = .bound(Binding(
                 operation: operation,
                 authorityIsCurrent: authorityIsCurrent
@@ -691,14 +722,14 @@ final class WalletSigningSession: WalletSigning, @unchecked Sendable {
         }
         defer { finishSigningAttempt() }
         return await withTaskCancellationHandler {
-            guard isLocallyAuthorizedToSign,
+            guard isLocallyAuthorizedToSign, binding.operation.isAuthorizedToSign,
                   await binding.authorityIsCurrent(authorization.handle),
-                  isLocallyAuthorizedToSign,
+                  isLocallyAuthorizedToSign, binding.operation.isAuthorizedToSign,
                   isCurrent() else { return .failure(.authorizationUnavailable) }
             let result = await access.sign(binding.operation)
-            guard isLocallyAuthorizedToSign,
+            guard isLocallyAuthorizedToSign, binding.operation.isAuthorizedToSign,
                   await binding.authorityIsCurrent(authorization.handle),
-                  isLocallyAuthorizedToSign,
+                  isLocallyAuthorizedToSign, binding.operation.isAuthorizedToSign,
                   isCurrent() else { return .failure(.authorizationUnavailable) }
             return result
         } onCancel: {

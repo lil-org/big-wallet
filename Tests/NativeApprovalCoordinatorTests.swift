@@ -51,7 +51,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     capturedDecision = authorization.decision
                     return .responseReady
                 }
-            ))
+            ), requestAction: action)
             defer { waits.resumeAll() }
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -468,7 +468,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
             UUID,
-            ResponseToExtension
+            ImmediateResolution
         ) async -> ExtensionBridge.StoreMutationResult = { _, _, _, _ in
             .ownershipLost
         }
@@ -523,7 +523,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 revisions: current.revisions,
                 createdAt: current.createdAt,
                 enqueueAttempt: current.enqueueAttempt,
-                sequence: current.sequence
+                sequence: current.sequence,
+                requestBinding: current.requestBinding
             )
             return .persisted
         }
@@ -550,11 +551,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return .interrupted
         }
 
-        func completeNativeDelivery(
+        func completeNativeImmediate(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
             runtimeInstanceIdentifier: UUID,
-            response: ResponseToExtension
+            resolution: ImmediateResolution
         ) async -> ExtensionBridge.StoreMutationResult {
             beginWrite()
             defer { outstandingWrites -= 1 }
@@ -562,7 +563,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 handle,
                 nativeDeliveryNonce,
                 runtimeInstanceIdentifier,
-                response
+                resolution
             )
         }
 
@@ -1124,7 +1125,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 prepareWithoutWallets: { request in
                     preparations += 1
                     XCTAssertTrue(authenticates)
-                    return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                    return .immediate(.failure(.userRejected))
                 }
             ))
             fixture.store.completeHandler = { _, _, _, _ in completions += 1; return .persisted }
@@ -2007,7 +2008,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         try pressKey("\u{f700}", keyCode: 126, in: table, window: window)
         XCTAssertEqual(table.selectedRow, 2)
         try pressKey(" ", keyCode: 49, in: table, window: window)
-        try clickAccountRow(1, in: controller, window: window)
+        try clickAccountRow(1, in: controller, window: window, targetWindowOnly: true)
         XCTAssertEqual(table.selectedRow, 1)
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [account])
         try pressKey(" ", keyCode: 49, in: table, window: window)
@@ -2221,10 +2222,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             deadline: clock.now.addingTimeInterval(300)
         )
         let request = try XCTUnwrap(snapshot.request)
-        let response = ResponseToExtension(
-            for: request,
-            payload: .error(.userRejected)
-        )
+        let response = ImmediateResolution.failure(.userRejected)
         var completionCount = 0
         var failureCount = 0
         let store = CoordinatorStore()
@@ -2255,7 +2253,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now },
                 uptime: { clock.uptime },
                 wait: { _ in await Task.yield() },
-                prepareWithoutWallets: { _ in .response(response) }
+                prepareWithoutWallets: { _ in .immediate(response) }
             )
         )
         coordinator.onEvent = { [weak coordinator] event in
@@ -2280,7 +2278,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { request in
-                    .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                    .immediate(.failure(.userRejected))
                 }
             ))
             var writes = 0
@@ -2321,12 +2319,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
-                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .immediate(.failure(.userRejected))
             }
         ))
         var responses = [NSDictionary]()
         fixture.store.completeHandler = { _, _, _, response in
-            responses.append(response.json as NSDictionary)
+            responses.append(response.response(for: fixture.store.snapshot!.request!)!.json as NSDictionary)
             if responses.count == 7 {
                 retryWrite.fulfill()
                 return await gate.run()
@@ -2365,12 +2363,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             wait: { _ in XCTFail("Semantic failure must pause") },
             prepareWithoutWallets: { request in
                 preparations += 1
-                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                return .immediate(.failure(.userRejected))
             }
         ))
         var responses = [NSDictionary]()
         fixture.store.completeHandler = { _, _, _, response in
-            responses.append(response.json as NSDictionary)
+            responses.append(response.response(for: fixture.store.snapshot!.request!)!.json as NSDictionary)
             return responses.count < 3 ? .ownershipLost : .persisted
         }
         fixture.store.rejectHandler = { _, _, _ in
@@ -2413,7 +2411,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             reloadWallets: { reloads += 1; return reloads == 7 },
             prepare: { request in
                 preparations += 1
-                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                return .immediate(.failure(.userRejected))
             }
         ))
         var writes = 0
@@ -2445,7 +2443,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalization started without a timer")
         var snapshots = [ExtensionBridge.Snapshot]()
-        var authorizations = [ExtensionBridge.NativeApprovalAuthorization]()
+        var authorizations = [ReviewConsent]()
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
             prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
@@ -2496,7 +2494,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [started], timeout: 1)
         XCTAssertEqual(snapshots.count, 1)
         XCTAssertEqual(snapshots.first?.sequence, 17)
-        XCTAssertEqual(authorizations.first?.receipt, receipt)
+        XCTAssertEqual(authorizations.first?.nativeReceipt, receipt)
         XCTAssertEqual(authorizations.first?.approvedAt, approvedAt)
         XCTAssertEqual(waits.delays.count, 1)
         XCTAssertTrue(waits.isPending(0))
@@ -2573,7 +2571,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testPendingFinalizationPollsWithBackoffAndRetainsAuthorization() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
-        var authorizations = [ExtensionBridge.NativeApprovalAuthorization]()
+        var authorizations = [ReviewConsent]()
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
             prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
@@ -2600,7 +2598,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(Array(waits.delays.dropFirst()), [1_000_000_000, 2_000_000_000, 4_000_000_000])
         XCTAssertEqual(authorizations.count, 4)
         XCTAssertEqual(Set(authorizations.map(\.approvedAt)).count, 1)
-        XCTAssertTrue(authorizations.allSatisfy { $0.receipt == authorizations[0].receipt })
+        XCTAssertTrue(authorizations.allSatisfy { $0.nativeReceipt == authorizations[0].nativeReceipt })
     }
 
     func testClaimedExecutionIsObservedWithoutReplayingDecision() async throws {
@@ -2785,7 +2783,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.now }, uptime: { clock.uptime },
             wait: { _ in waiting.fulfill(); await gate.run() },
             prepareWithoutWallets: { request in
-                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .immediate(.failure(.userRejected))
             }
         ))
         var responses = 0
@@ -2817,7 +2815,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             uptime: { clock.uptime },
             wait: { _ in await Task.yield() },
             prepareWithoutWallets: { request in
-                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .immediate(.failure(.userRejected))
             }
         ))
         fixture.store.completeHandler = { _, _, _, _ in
@@ -2879,7 +2877,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 uptime: { clock.uptime },
                 wait: { _ in XCTFail("Foreign ownership must not retry") },
                 prepareWithoutWallets: { request in
-                    .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                    .immediate(.failure(.userRejected))
                 }
             ))
             let foreign = try ownedSnapshot(fixture, runtime: UUID())
@@ -2915,7 +2913,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
-                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .immediate(.failure(.userRejected))
             }
         ))
         var writes = 0
@@ -2946,7 +2944,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
                 prepareWithoutWallets: { request in
-                    .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                    .immediate(.failure(.userRejected))
                 }
             ))
             let committed = try ownedSnapshot(fixture, phase: phase)
@@ -3088,7 +3086,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
-                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .immediate(.failure(.userRejected))
             }
         ))
         fixture.store.completeHandler = { _, _, _, _ in
@@ -3603,7 +3601,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             wait: { _ in XCTFail("The pending write must settle before recovery") },
             prepareWithoutWallets: { request in
                 preparations += 1
-                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                return .immediate(.failure(.userRejected))
             }
         ))
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
@@ -3676,7 +3674,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.now }, uptime: { clock.uptime },
             wait: { _ in XCTFail("An immediate response must not poll") },
             prepareWithoutWallets: { request in
-                .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                .immediate(.failure(.userRejected))
             }
         ))
         var writes = 0
@@ -3844,7 +3842,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             reloadWallets: { available },
             prepare: { request in
                 preparations += 1
-                return .response(ResponseToExtension(for: request, payload: .error(.userRejected)))
+                return .immediate(.failure(.userRejected))
             }
         ))
         fixture.store.completeHandler = { _, _, _, _ in completions += 1; return .persisted }
@@ -4206,7 +4204,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 XCTFail("An invalid transaction decision must be rejected without execution")
                 return .responseReady
             }
-        ))
+        ), requestAction: .approveTransaction(SendTransactionAction(
+            transaction: transaction, resolvedNetwork: network, walletId: "wallet", account: account
+        )))
         let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
         let retryStarted = expectation(description: "retried failure rejection")
         defer { gate.resume(.persisted) }
@@ -4328,8 +4328,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         sequence: Int = 0,
         clock: Clock = Clock(),
         environment: NativeApprovalCoordinator.Environment? = nil,
+        requestAction: DappRequestAction? = nil,
         attemptNativeDecision: @escaping (
-            ExtensionBridge.Snapshot, ExtensionBridge.NativeApprovalAuthorization
+            ExtensionBridge.Snapshot, ReviewConsent
         ) async -> NativeApprovalFinalizationResult = { _, _ in .pending }
     ) throws -> Fixture {
         let key = key ?? approvalKey(id: 100)
@@ -4339,7 +4340,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             nonce: key.nativeDeliveryNonce,
             deadline: clock.now.addingTimeInterval(300),
             createdAt: Date(timeIntervalSince1970: createdAt),
-            sequence: sequence
+            sequence: sequence,
+            action: requestAction
         )
         let action = accountSelectionAction()
         let coordinator = NativeApprovalCoordinator(
@@ -4487,7 +4489,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     private func accountSelectionAction() -> DappRequestAction {
         .selectAccount(.init(
-            coinType: nil,
+            coinType: .ethereum,
             selectedAccounts: [],
             initiallyConnectedProviders: [],
             network: Networks.ethereum
@@ -4600,7 +4602,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         _ row: Int,
         endingAt endRow: Int? = nil,
         in controller: AccountsListViewController,
-        window: NSWindow
+        window: NSWindow,
+        targetWindowOnly: Bool = false
     ) throws {
         let table = try XCTUnwrap(controller.tableView)
         let rowRect = table.rect(ofRow: row)
@@ -4654,18 +4657,38 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ))
         if endRow != nil {
             table.mouseDown(with: mouseEvent)
+        } else if targetWindowOnly {
+            window.sendEvent(mouseEvent)
         } else {
             NSApp.sendEvent(mouseEvent)
         }
-        let deadline = Date(timeIntervalSinceNow: 0.05)
-        while Date() < deadline,
-              let event = NSApp.nextEvent(
-                  matching: .any,
-                  until: deadline,
-                  inMode: .default,
-                  dequeue: true
-              ) {
-            NSApp.sendEvent(event)
+        if !targetWindowOnly {
+            let deadline = Date(timeIntervalSinceNow: 0.05)
+            while Date() < deadline,
+                  let event = NSApp.nextEvent(
+                    matching: .any,
+                    until: deadline,
+                    inMode: .default,
+                    dequeue: true
+                  ) {
+                NSApp.sendEvent(event)
+            }
+            return
+        }
+        let remainingMouseEvents: NSEvent.EventTypeMask = [.leftMouseDragged, .leftMouseUp]
+        while let pending = NSApp.nextEvent(
+            matching: remainingMouseEvents,
+            until: .distantPast,
+            inMode: .default,
+            dequeue: false
+        ), pending.windowNumber == window.windowNumber {
+            guard let event = NSApp.nextEvent(
+                matching: remainingMouseEvents,
+                until: .distantPast,
+                inMode: .default,
+                dequeue: true
+            ) else { break }
+            window.sendEvent(event)
         }
     }
 
@@ -4677,20 +4700,52 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         phase: ExtensionBridge.Phase = .queued,
         createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000),
         sequence: Int = 0,
-        host: String = "wallet.example"
+        host: String = "wallet.example",
+        action: DappRequestAction? = nil
     ) throws -> ExtensionBridge.Snapshot {
-        let data = try JSONSerialization.data(withJSONObject: [
-            "id": handle.id,
-            "name": "requestAccounts",
-            "provider": InpageProvider.ethereum.rawValue,
-            "host": host,
-            "configurationKey": "https://\(host)",
-            "enqueueAttempt": String(format: "%032x", handle.id),
-            "admissionDeadline": Int(deadline.timeIntervalSince1970 * 1_000),
-            "workflowVersion": ExtensionBridge.workflowVersion,
-            "body": ["address": ""],
-        ])
-        let request = try XCTUnwrap(SafariRequest(data: data))
+        let fixture = try ApprovedExecutionTestFixture(now: deadline.addingTimeInterval(-150))
+        let name: String
+        let body: [String: Any]
+        switch action {
+        case .approveMessage(let message):
+            let account = WalletAccountDescriptor(walletID: message.walletId, account: message.account)
+            try fixture.establishGrant(account, profileIdentifier: handle.profileIdentifier, configurationKey: "https://\(host)")
+            guard case .ethereumPersonalMessage(let data) = message.payload else {
+                throw CocoaError(.coderInvalidValue)
+            }
+            name = "signPersonalMessage"
+            body = ["address": account.normalizedAddress, "chainId": "0x1", "object": ["data": WalletCrypto.hexString(data: data)]]
+        case .approveTransaction(let transaction):
+            let account = WalletAccountDescriptor(walletID: transaction.walletId, account: transaction.account)
+            try fixture.establishGrant(account, profileIdentifier: handle.profileIdentifier, configurationKey: "https://\(host)")
+            var parameters: [String: Any] = [
+                "from": transaction.transaction.from,
+                "to": transaction.transaction.to,
+                "data": transaction.transaction.data,
+            ]
+            parameters["value"] = transaction.transaction.value
+            parameters["nonce"] = transaction.transaction.nonce
+            parameters["gas"] = transaction.transaction.gas
+            switch transaction.transaction.feeIntent {
+            case .automatic:
+                break
+            case .legacy(let gasPrice):
+                parameters["gasPrice"] = gasPrice?.toHexString(withPrefix: true)
+            case .eip1559(let priority, let maximum):
+                parameters["maxPriorityFeePerGas"] = priority?.toHexString(withPrefix: true)
+                parameters["maxFeePerGas"] = maximum?.toHexString(withPrefix: true)
+            }
+            name = "signTransaction"
+            body = ["address": account.normalizedAddress, "chainId": transaction.chain.chainIdHexString, "object": parameters]
+        default:
+            name = "requestAccounts"
+            body = ["address": ""]
+        }
+        let stored = try fixture.enqueue(
+            id: handle.id, name: name, provider: .ethereum,
+            body: body, handle: handle, configurationKey: "https://\(host)"
+        )
+        let request = try XCTUnwrap(stored.request)
         let native: ExtensionBridge.Snapshot.NativeApproval? =
             phase == .approving && receipt != nil
                 ? .init(receipt: receipt ?? .init(nativeDeliveryNonce: nonce, owner: nativeOwner(runtime: UUID())),
@@ -4719,7 +4774,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             ])!,
             createdAt: createdAt,
             enqueueAttempt: request.enqueueAttempt,
-            sequence: sequence
+            sequence: sequence,
+            requestBinding: stored.requestBinding
         )
     }
 

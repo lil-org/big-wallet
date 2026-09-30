@@ -32,6 +32,270 @@ enum ApprovalStoreTestPersistence {
     }
 }
 
+@MainActor
+func reviewConsentForTesting(
+    snapshot: ExtensionBridge.Snapshot,
+    action: DappRequestAction,
+    decision: DappApprovalDecision,
+    approvedAt: Date,
+    nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? = nil
+) throws -> ReviewConsent {
+    let review = try XCTUnwrap(ApprovalReview(
+        binding: try XCTUnwrap(snapshot.requestBinding),
+        action: action
+    ))
+    let consent: ReviewConsent?
+    switch decision {
+    case .accountSelection(let selection):
+        consent = review.acceptAccounts(
+            selection: selection, approvedAt: approvedAt,
+            nativeReceipt: nativeReceipt
+        )
+    case .message(let message):
+        consent = review.acceptMessage(
+            cluster: message.solanaCluster, approvedAt: approvedAt,
+            nativeReceipt: nativeReceipt
+        )
+    case .transaction(let execution):
+        consent = review.acceptTransaction(
+            execution: execution, approvedAt: approvedAt,
+            nativeReceipt: nativeReceipt
+        )
+    case .addEthereumChain:
+        consent = review.acceptAddEthereumChain(
+            approvedAt: approvedAt, nativeReceipt: nativeReceipt
+        )
+    }
+    return try XCTUnwrap(consent)
+}
+
+@MainActor
+func resolvedApprovalForTesting(
+    snapshot: ExtensionBridge.Snapshot,
+    action: DappRequestAction,
+    decision: DappApprovalDecision,
+    accounts: [SpecificWalletAccount]? = nil,
+    networkResolver: (String) -> EthereumNetwork? = Networks.withChainIdHex,
+    approvedAt: Date,
+    nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? = nil
+) throws -> ResolvedDappApproval {
+    try reviewConsentForTesting(
+        snapshot: snapshot, action: action, decision: decision,
+        approvedAt: approvedAt, nativeReceipt: nativeReceipt
+    ).resolve(accounts: accounts, networkResolver: networkResolver).get()
+}
+
+func approvedFailureForTesting(
+    _ error: ProviderResponseError,
+    permit: ExtensionBridge.ApprovedExecutionPermit
+) -> ApprovedExecutionResult {
+    ApprovedCompletion.failure(error, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
+}
+
+@MainActor
+func reviewActionForTesting(
+    request: SafariRequest,
+    decision: DappApprovalDecision
+) throws -> DappRequestAction {
+    switch decision {
+    case .accountSelection(let selection):
+        let initiallyConnected = Set(request.connectedAccounts.map(\.coin.correspondingInpageProvider))
+        let action = SelectAccountAction(
+            coinType: WalletCoin.correspondingToInpageProvider(request.provider),
+            selectedAccounts: [],
+            initiallyConnectedProviders: request.provider == .unknown ? initiallyConnected : [],
+            network: selection.ethereumChainID.flatMap(Networks.withChainIdHex)
+        )
+        return request.provider == .unknown ? .switchAccount(action) : .selectAccount(action)
+    case .message(let approval):
+        let catalog = WalletReviewCatalog(
+            identity: .init(generation: nil, catalogData: Data()),
+            orderedAccounts: [approval.approvedAccount.specificAccount]
+        )
+        guard case .approval(let action) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return action
+    case .transaction(let execution):
+        guard case .ethereum(let body) = request.body,
+              case .success(let transaction) = body.transactionParsingResult,
+              let url = URL(string: execution.reviewedNetwork.canonicalRPCURL) else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        let identity = execution.reviewedNetwork
+        let source: RPCSource
+        switch identity.source {
+        case .alchemy: source = .alchemy
+        case .fallback: source = .fallback
+        case .custom: source = .custom
+        }
+        let network = EthereumNetwork(
+            chainId: identity.chainID, name: "Reviewed network", symbol: "ETH",
+            rpcEndpoint: .unauthenticated(url), isTestnet: true,
+            mightShowPrice: false, explorer: nil
+        )
+        let account = execution.approvedAccount
+        return .approveTransaction(.init(
+            transaction: transaction, resolvedNetwork: .init(network: network, source: source),
+            walletId: account.walletID, account: account.account
+        ))
+    case .addEthereumChain:
+        guard case .ethereum(let body) = request.body,
+              let network = EthereumNetworkFromDapp.from(body.parameters) else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return .addEthereumChain(.init(chainToAdd: network))
+    }
+}
+
+private final class ApprovalFixtureResources: NSObject, XCTestObservation, @unchecked Sendable {
+    static let shared = ApprovalFixtureResources()
+    private let lock = NSLock()
+    private var directories = [URL]()
+
+    override private init() {
+        super.init()
+        XCTestObservationCenter.shared.addTestObserver(self)
+    }
+
+    func retain(_ directory: URL) {
+        lock.withLock { directories.append(directory) }
+    }
+
+    func testBundleDidFinish(_ testBundle: Bundle) {
+        let directories = lock.withLock {
+            let retained = self.directories
+            self.directories.removeAll()
+            return retained
+        }
+        for directory in directories { try? FileManager.default.removeItem(at: directory) }
+    }
+}
+
+@MainActor
+final class ApprovedExecutionTestFixture {
+    private final class Identifiers {
+        var next: UUID?
+        func take() -> UUID {
+            defer { next = nil }
+            return next ?? UUID()
+        }
+    }
+
+    let store: ExtensionRequestFileStore
+    let now: Date
+    private let identifiers: Identifiers
+
+    init(now: Date = Date()) throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "approved-execution-\(UUID().uuidString)", isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        ApprovalFixtureResources.shared.retain(rootURL)
+        let identifiers = Identifiers()
+        self.identifiers = identifiers
+        self.now = now
+        store = ExtensionRequestFileStore(
+            rootURL: rootURL,
+            directoryBoundary: rootURL,
+            dependencies: .init(
+                clock: { now }, token: identifiers.take,
+                atomicWrite: ApprovalStoreTestPersistence.write
+            )
+        )
+    }
+
+    func enqueue(
+        id: Int,
+        name: String,
+        provider: InpageProvider,
+        body: [String: Any],
+        handle: ExtensionBridge.Handle? = nil,
+        configurationKey: String = "https://wallet.example"
+    ) throws -> ExtensionBridge.Snapshot {
+        let profileIdentifier = handle?.profileIdentifier
+        guard case .snapshot(let authority) = store.configurationSnapshot(
+            configurationKey: configurationKey, profileIdentifier: profileIdentifier
+        ) else { throw CocoaError(.fileReadUnknown) }
+        let raw: [String: Any] = [
+            "id": id, "name": name, "provider": provider.rawValue,
+            "body": body,
+            "host": configurationKey.components(separatedBy: "://").last!,
+            "configurationKey": configurationKey,
+            "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            "admissionDeadline": Int(ceil(now.addingTimeInterval(150).timeIntervalSince1970 * 1_000)),
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "authority": authority.version.json,
+        ]
+        let request = try XCTUnwrap(SafariRequest(json: raw))
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw) else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        identifiers.next = handle?.token.value
+        guard case .accepted(let admitted, _, _, _, _) = store.enqueue(
+            ingress: ingress, profileIdentifier: profileIdentifier
+        ), case .found(let snapshot) = store.load(handle: admitted) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        if let handle { XCTAssertEqual(admitted, handle) }
+        return snapshot
+    }
+
+    func authorize(
+        snapshot: ExtensionBridge.Snapshot,
+        action: DappRequestAction,
+        decision: DappApprovalDecision,
+        accounts: [SpecificWalletAccount]? = nil,
+        networkResolver: (String) -> EthereumNetwork? = Networks.withChainIdHex
+    ) throws -> ExtensionBridge.ApprovedExecutionPermit {
+        let approved = try resolvedApprovalForTesting(
+            snapshot: snapshot, action: action, decision: decision,
+            accounts: accounts, networkResolver: networkResolver,
+            approvedAt: now
+        )
+        guard case .claimed(let claim) = store.claim(handle: snapshot.handle),
+              case .began(let reservation) = store.begin(claim: claim),
+              case .authorized(let permit) = store.authorize(reservation: reservation, approval: approved) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return permit
+    }
+
+    func establishGrant(
+        _ account: WalletAccountDescriptor,
+        profileIdentifier: UUID? = nil,
+        configurationKey: String = "https://wallet.example",
+        network: EthereumNetwork? = nil
+    ) throws {
+        let network = try XCTUnwrap(network ?? Networks.ethereum)
+        let ethereum = account.coin == .ethereum
+        let id = Int.random(in: 1_000_000...2_000_000)
+        let snapshot = try enqueue(
+            id: id, name: ethereum ? "requestAccounts" : "connect",
+            provider: ethereum ? .ethereum : .solana,
+            body: ethereum ? ["address": "", "chainId": "0x1"] : ["publicKey": "", "object": [:]],
+            handle: .init(id: id, token: .init(value: UUID()), profileIdentifier: profileIdentifier),
+            configurationKey: configurationKey
+        )
+        let permit = try authorize(
+            snapshot: snapshot,
+            action: .selectAccount(.init(
+                coinType: account.coin, selectedAccounts: [],
+                initiallyConnectedProviders: [], network: network
+            )),
+            decision: .accountSelection(.init(accounts: [account], ethereumChainID: network.chainIdHexString)),
+            accounts: [.init(walletId: account.walletID, account: account.account)],
+            networkResolver: { $0 == network.chainIdHexString ? network : nil }
+        )
+        XCTAssertTrue(permit.consumeExecution())
+        let completion = try XCTUnwrap(ApprovedCompletion.accountSelection(permit: permit))
+        guard store.complete(permit: permit, result: completion) == .persisted else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        _ = store.acknowledgeResponse(handle: snapshot.handle, configurationKey: configurationKey)
+    }
+}
+
 extension XCTestCase {
     func makeApprovalClaimForTesting(
         handle: ExtensionBridge.Handle,
@@ -41,15 +305,47 @@ extension XCTestCase {
             "approval-claim-\(UUID().uuidString)", isDirectory: true
         )
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        addTeardownBlock { try FileManager.default.removeItem(at: directory) }
-        let fileURL = directory.appendingPathComponent("operation.lock")
-        let lock = Big_Wallet.CrossProcessFileLock(fileURL: fileURL)
-        try lock.acquire(timeoutNanoseconds: 1_000_000_000, pollNanoseconds: 10_000_000)
-        let lease = ExtensionBridge.OperationLease(fileURL: fileURL, lock: lock)
-        addTeardownBlock { lease.release() }
-        return ExtensionBridge.ApprovalClaim(
-            handle: handle, value: UUID(), lease: lease, authority: .ordinary(deadline: deadline)
+        let now = deadline.addingTimeInterval(-150)
+        var identifiers = [UUID(), handle.token.value, UUID(), UUID()]
+        let store = ExtensionRequestFileStore(
+            rootURL: directory,
+            directoryBoundary: directory,
+            dependencies: .init(
+                clock: { now },
+                token: { identifiers.removeFirst() },
+                atomicWrite: ApprovalStoreTestPersistence.write
+            )
         )
+        let configurationKey = "https://wallet.example"
+        guard case .snapshot(let authority) = store.configurationSnapshot(
+            configurationKey: configurationKey,
+            profileIdentifier: handle.profileIdentifier
+        ) else { throw CocoaError(.fileReadUnknown) }
+        let raw: [String: Any] = [
+            "id": handle.id,
+            "name": "requestAccounts",
+            "provider": "ethereum",
+            "body": ["address": "", "chainId": "0x1"],
+            "host": "wallet.example",
+            "configurationKey": configurationKey,
+            "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            "admissionDeadline": Int(ceil(deadline.timeIntervalSince1970 * 1_000)),
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "authority": authority.version.json,
+        ]
+        let request = try XCTUnwrap(SafariRequest(json: raw))
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
+              case .accepted(let admitted, _, _, _, _) = store.enqueue(
+                ingress: ingress, profileIdentifier: handle.profileIdentifier
+              ), admitted == handle,
+              case .claimed(let claim) = store.claim(handle: admitted) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        addTeardownBlock {
+            claim.releaseIfUnconsumed()
+            try FileManager.default.removeItem(at: directory)
+        }
+        return claim
     }
 }
 
@@ -131,83 +427,107 @@ final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
 
 let walletSigningTestMessage = Data("Bound wallet signing operation".utf8)
 
+@MainActor
 func approvedWalletSigningOperationForTesting(
     approvedAccount: WalletAccountDescriptor,
     payload: SignMessageAction.Payload? = nil,
     deadline: Date = .distantFuture,
     requestID: Int = 1,
-    authorization: WalletSigningAuthorization? = nil
+    authorization: WalletSigningAuthorization? = nil,
+    serializedTransaction: String? = nil
 ) throws -> ApprovedWalletSigningOperation {
     let requestID = authorization?.handle.id ?? requestID
+    let deadline = authorization?.signingDeadline ?? deadline
     let ethereum = approvedAccount.coin == .ethereum
     let payload = payload ?? (ethereum
         ? .ethereumPersonalMessage(walletSigningTestMessage)
         : .solanaMessage(walletSigningTestMessage))
     let name: String
     let subject: ApprovalSubject
+    let parameters: [String: Any]
     switch payload {
-    case .ethereumMessage:
+    case .ethereumMessage(let data):
         name = "signMessage"
         subject = .signMessage
-    case .ethereumPersonalMessage:
+        parameters = ["data": WalletCrypto.hexString(data: data)]
+    case .ethereumPersonalMessage(let data):
         name = "signPersonalMessage"
         subject = .signPersonalMessage
-    case .ethereumTypedData:
+        parameters = ["data": WalletCrypto.hexString(data: data)]
+    case .ethereumTypedData(let raw):
         name = "signTypedMessage"
         subject = .signTypedData
-    case .solanaMessage:
+        parameters = ["raw": raw]
+    case .solanaMessage(let data):
         name = "signMessage"
         subject = .signMessage
-    case .solanaTransaction:
+        parameters = ["message": WalletCrypto.hexString(data: data), "messageEncoding": "hex"]
+    case .solanaTransaction(let transaction):
         name = "signTransaction"
         subject = .approveTransaction
-    case .solanaTransactions:
+        parameters = ["message": WalletCrypto.base58Encode(data: transaction.messageData)]
+    case .solanaTransactions(let transactions):
         name = "signAllTransactions"
         subject = .approveTransaction
-    case .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+        parameters = ["messages": transactions.map { WalletCrypto.base58Encode(data: $0.messageData) }]
+    case .solanaLegacyBroadcast(let transaction, let options):
         name = "signAndSendTransaction"
         subject = .approveTransaction
+        parameters = ["message": transaction.approvalMessage, "options": signingOptionsForTesting(options)]
+    case .solanaSerializedBroadcast(let transaction, let options):
+        name = "signAndSendTransaction"
+        subject = .approveTransaction
+        let message = transaction.preparedMessage.messageData
+        let signatureCount = transaction.preparedMessage.parsedMessage.requiredSignaturesCount
+        let wire = Data.encodeLength(signatureCount) + Data(repeating: 0, count: signatureCount * 64) + message
+        parameters = [
+            "transaction": serializedTransaction ?? WalletCrypto.base58Encode(data: wire),
+            "options": signingOptionsForTesting(options),
+        ]
     }
     let body: [String: Any] = ethereum
-        ? ["address": approvedAccount.normalizedAddress, "chainId": "0x1"]
-        : ["publicKey": approvedAccount.normalizedAddress]
-    var request = try XCTUnwrap(SafariRequest(json: [
-        "id": requestID,
-        "name": name,
-        "provider": ethereum ? "ethereum" : "solana",
-        "body": body,
-        "host": "wallet.example",
-        "configurationKey": "https://wallet.example",
-        "enqueueAttempt": String(format: "%032x", requestID),
-        "admissionDeadline": Int(Date().addingTimeInterval(120).timeIntervalSince1970 * 1_000),
-        "workflowVersion": ExtensionBridge.workflowVersion,
-    ]))
-    request.authorizedAccount = approvedAccount
-    let action = SignMessageAction(
-        subject: subject,
-        walletId: approvedAccount.walletID,
-        account: approvedAccount.account,
-        meta: "",
-        payload: payload
+        ? ["address": approvedAccount.normalizedAddress, "chainId": "0x1", "object": parameters]
+        : ["publicKey": approvedAccount.normalizedAddress, "object": ["params": parameters]]
+    let requestedHandle = authorization?.handle ?? ExtensionBridge.Handle(
+        id: requestID,
+        token: .init(value: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!),
+        profileIdentifier: nil
     )
-    let approval = try DappApprovalValidator.resolve(
+    let fixture = try ApprovedExecutionTestFixture(now: deadline.addingTimeInterval(-150))
+    try fixture.establishGrant(approvedAccount, profileIdentifier: requestedHandle.profileIdentifier)
+    let snapshot = try fixture.enqueue(
+        id: requestID, name: name, provider: ethereum ? .ethereum : .solana,
+        body: body, handle: requestedHandle
+    )
+    let catalog = WalletReviewCatalog(
+        identity: .init(generation: nil, catalogData: Data()),
+        orderedAccounts: [approvedAccount.specificAccount]
+    )
+    guard let request = snapshot.request,
+          case .approval(.approveMessage(let action)) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+        throw CocoaError(.coderInvalidValue)
+    }
+    XCTAssertEqual(action.subject, subject)
+    let permit = try fixture.authorize(
+        snapshot: snapshot,
         action: .approveMessage(action),
         decision: .message(.init(
             approvedAccount: approvedAccount,
             solanaCluster: action.solanaClusterOptions == nil ? nil : .devnet
-        )),
-        accounts: nil,
-        networkResolver: { _ in nil }
-    ).get()
-    return try XCTUnwrap(ApprovedWalletSigningOperation(
-        request: request,
-        approval: approval,
-        authorization: authorization ?? walletSigningAuthorizationForTesting(
-            approvedAccount: approvedAccount,
-            handle: .init(id: requestID, token: .init(value: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!), profileIdentifier: nil),
-            deadline: deadline
-        )
-    ))
+        ))
+    )
+    XCTAssertTrue(permit.consumeExecution())
+    return try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
+}
+
+private func signingOptionsForTesting(_ options: Solana.PreparedSendOptions) -> [String: Any] {
+    var result = [String: Any]()
+    result["cluster"] = options.clusterHint?.rawValue
+    result["preflightCommitment"] = options.preflightCommitment?.rawValue
+    result["maxRetries"] = options.maxRetries
+    result["minContextSlot"] = options.minContextSlot
+    result["commitment"] = options.confirmationCommitment?.rawValue
+    return result
 }
 
 func assertWalletSigningSuccessForTesting(
@@ -325,7 +645,11 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         ).timeIntervalSince1970 * 1_000)
         guard let configurationKey = rawObject["configurationKey"] as? String else { throw CocoaError(.coderInvalidValue) }
         if let approvedAccount {
-            try await establishGrant(approvedAccount, configurationKey: configurationKey, profileIdentifier: profileIdentifier)
+            let chainID = (rawObject["body"] as? [String: Any])?["chainId"] as? String ?? "0x1"
+            try await establishGrant(
+                approvedAccount, configurationKey: configurationKey,
+                profileIdentifier: profileIdentifier, chainID: chainID
+            )
         }
         guard case .snapshot(let authority) = await bridge.configurationSnapshot(
             configurationKey: configurationKey, profileIdentifier: profileIdentifier
@@ -358,6 +682,12 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             directoryBoundary: rootURL,
             dependencies: .init(clock: clock, atomicWrite: atomicWrite)
         ))
+    }
+
+    func operationLockURL(handle: ExtensionBridge.Handle) -> URL {
+        let profile = handle.profileIdentifier?.uuidString.lowercased() ?? "default"
+        return rootURL.appendingPathComponent("operation-locks-v9", isDirectory: true)
+            .appendingPathComponent("\(profile)-\(handle.requestToken).lock")
     }
 
     func holdForeignClaim(handle: ExtensionBridge.Handle) async throws {
@@ -395,8 +725,9 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     func prepareNativeApproval(
         handle: ExtensionBridge.Handle,
         decision: DappApprovalDecision,
-        approvedAt: Date? = nil
-    ) async throws -> ExtensionBridge.NativeApprovalAuthorization {
+        approvedAt: Date? = nil,
+        action: DappRequestAction? = nil
+    ) async throws -> ReviewConsent {
         let snapshot = try await snapshot(handle: handle)
         let runtime = snapshot.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier ?? UUID()
         let owner = snapshot.nativeDeliveryReceipt?.owner ?? ExtensionBridge.NativeDeliveryOwner(
@@ -412,8 +743,16 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         )
         guard delivered == .persisted else { throw CocoaError(.fileWriteUnknown) }
         let approvedAt = approvedAt ?? clock()
-        return .init(receipt: .init(nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: owner),
-                     decision: decision, approvedAt: approvedAt)
+        return try await MainActor.run {
+            let reviewed = try action ?? reviewActionForTesting(
+                request: XCTUnwrap(snapshot.request), decision: decision
+            )
+            return try reviewConsentForTesting(
+                snapshot: snapshot, action: reviewed, decision: decision,
+                approvedAt: approvedAt,
+                nativeReceipt: .init(nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: owner)
+            )
+        }
     }
 
     func setAuthorityCurrent(_ value: Bool) { authorityCurrent = value }
@@ -433,20 +772,21 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         return await bridge.authorityIsCurrent(handle: handle)
     }
 
-    private func establishGrant(
+    func establishGrant(
         _ account: WalletAccountDescriptor,
         configurationKey: String,
-        profileIdentifier: UUID?
+        profileIdentifier: UUID?,
+        chainID: String = "0x1"
     ) async throws {
         guard case .snapshot(let authority) = await bridge.configurationSnapshot(
             configurationKey: configurationKey, profileIdentifier: profileIdentifier
         ) else { throw CocoaError(.fileReadUnknown) }
-        if account.coin == .ethereum && authority.ethereumAccount == account ||
+        if account.coin == .ethereum && authority.ethereumAccount == account && authority.ethereumChainId == chainID ||
             account.coin == .solana && authority.solanaAccount == account { return }
         let ethereum = account.coin == .ethereum
         let id = Int.random(in: 1_000_000...2_000_000)
         let body: [String: Any] = ethereum
-            ? ["address": "", "chainId": "0x1"]
+            ? ["address": "", "chainId": chainID]
             : ["publicKey": "", "object": [String: Any]()]
         let request = try XCTUnwrap(SafariRequest(json: [
             "id": id, "name": ethereum ? "requestAccounts" : "connect",
@@ -468,15 +808,28 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             "body": body,
         ]
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
-              case .accepted(let handle, _, _, _, _) = await bridge.enqueue(ingress: ingress, profileIdentifier: profileIdentifier),
-              case .claimed(let claim) = await bridge.claim(handle: handle),
-              case .began(let permit) = await bridge.begin(claim: claim) else { throw CocoaError(.fileWriteUnknown) }
-        let update: ResponseToExtension.AccountUpdate = ethereum
-            ? .ethereum(address: account.normalizedAddress, chainId: "0x1")
-            : .solana(publicKey: account.normalizedAddress)
-        let result: ResponseToExtension.Result = ethereum ? .strings([account.normalizedAddress]) : .solanaPublicKey(account.normalizedAddress)
-        let response = ResponseToExtension(for: request, payload: .result(result), mutation: .accounts([update]), approvedAccounts: [account]).markingApprovalCommitted()
-        guard await bridge.complete(permit: permit, response: response) == .persisted else { throw CocoaError(.fileWriteUnknown) }
+              case .accepted(let handle, _, _, _, _) = await bridge.enqueue(ingress: ingress, profileIdentifier: profileIdentifier) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let loaded = try await snapshot(handle: handle)
+        let selectedAccount = SpecificWalletAccount(walletId: account.walletID, account: account.account)
+        let approval = try await resolvedApprovalForTesting(
+            snapshot: loaded,
+            action: .selectAccount(.init(
+                coinType: account.coin, selectedAccounts: [],
+                initiallyConnectedProviders: [], network: Networks.withChainIdHex(chainID)
+            )),
+            decision: .accountSelection(.init(accounts: [account], ethereumChainID: chainID)),
+            accounts: [selectedAccount], approvedAt: clock()
+        )
+        guard case .claimed(let claim) = await bridge.claim(handle: handle),
+              case .began(let reservation) = await bridge.begin(claim: claim),
+              case .authorized(let permit) = await bridge.authorize(reservation: reservation, approval: approval),
+              permit.consumeExecution(),
+              let completion = ApprovedCompletion.accountSelection(permit: permit),
+              await bridge.complete(permit: permit, result: completion) == .persisted else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         _ = await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
     }
 
@@ -612,7 +965,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             runtimeInstanceIdentifier: runtimeInstanceIdentifier
         )
     }
-    func complete(handle: ExtensionBridge.Handle, response: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
+    func completeImmediate(handle: ExtensionBridge.Handle, resolution: ImmediateResolution) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
@@ -621,7 +974,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             await setNativeDeliveryReceipt(receipt, handle: handle)
         }
         if let result = await beforeCompletion() { return result }
-        let result = await bridge.complete(handle: handle, response: response)
+        let result = await bridge.completeImmediate(handle: handle, resolution: resolution)
         recordCompletion(result)
         return result
     }
@@ -660,17 +1013,41 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard authorityCurrent else { return .ownershipLost }
         return await bridge.begin(claim: claim)
     }
-    func complete(permit: ExtensionBridge.ExecutionPermit, response: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
+    func authorize(
+        reservation: ExtensionBridge.ExecutionReservation,
+        approval: ResolvedDappApproval
+    ) async -> ExtensionBridge.AuthorizeExecutionResult {
+        guard !isClosing, authorityCurrent else { return .ownershipLost }
+        activeOperations += 1
+        defer { finishOperation() }
+        return await bridge.authorize(reservation: reservation, approval: approval)
+    }
+
+    func complete(
+        reservation: ExtensionBridge.ExecutionReservation,
+        resolution: ImmediateResolution
+    ) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
         permitCompletionHook?()
         if let result = await beforeCompletion() { return result }
-        let result = await bridge.complete(permit: permit, response: response)
+        let result = await bridge.complete(reservation: reservation, resolution: resolution)
         recordCompletion(result)
         return result
     }
-    func prepareBroadcast(permit: ExtensionBridge.ExecutionPermit, recoveryResponse: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult {
+
+    func complete(permit: ExtensionBridge.ApprovedExecutionPermit, result completion: ApprovedCompletion) async -> ExtensionBridge.StoreMutationResult {
+        guard !isClosing else { return .ownershipLost }
+        activeOperations += 1
+        defer { finishOperation() }
+        permitCompletionHook?()
+        if let result = await beforeCompletion() { return result }
+        let result = await bridge.complete(permit: permit, result: completion)
+        recordCompletion(result)
+        return result
+    }
+    func prepareBroadcast(permit: ExtensionBridge.ApprovedExecutionPermit, broadcast: PreparedBroadcast) async -> ExtensionBridge.BroadcastPreparationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
@@ -679,19 +1056,26 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             checkpointFailureAfterWriting = nil
             writes.failNext(afterWriting: afterWriting)
         }
-        let result = await bridge.prepareBroadcast(permit: permit, recoveryResponse: recoveryResponse)
-        if result == .persisted {
+        let result = await bridge.prepareBroadcast(permit: permit, broadcast: broadcast)
+        if case .prepared = result {
             eventValues.append("checkpoint")
-            if recoveryResponse.approvalCommitted {
-                committedCheckpoints.insert(permit.handle)
-            }
+            committedCheckpoints.insert(permit.handle)
             let committed = broadcastCheckpointCommittedHook
             broadcastCheckpointCommittedHook = nil
             committed?()
         }
         return result
     }
-    func rollback(permit: ExtensionBridge.ExecutionPermit) async -> ExtensionBridge.StoreMutationResult {
+    func rollback(reservation: ExtensionBridge.ExecutionReservation) async -> ExtensionBridge.StoreMutationResult {
+        guard !isClosing else { return .ownershipLost }
+        activeOperations += 1
+        defer { finishOperation() }
+        let result = await bridge.rollback(reservation: reservation)
+        if result == .persisted { eventValues.append("rollback") }
+        return result
+    }
+
+    func rollback(permit: ExtensionBridge.ApprovedExecutionPermit) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }

@@ -128,8 +128,9 @@ struct ResponseToExtension: Sendable {
         self.approvedAccounts = approvedAccounts
         if case .error(let error) = payload,
            case .unauthorizedPublicKey(let publicKey) = error.context,
-           provider == .solana, error.code == 4100 {
-            self.mutation = .revokeSolana(publicKey)
+           provider == .solana, error.code == 4100,
+           mutation == .revokeSolana(publicKey) {
+            self.mutation = mutation
             authorizationFailure = true
         } else {
             self.mutation = mutation

@@ -236,33 +236,22 @@ final class PopupStringsTests: XCTestCase {
 
     @MainActor
     func testBeginningApprovalRemovesReviewContentAndActions() throws {
-        let request = try XCTUnwrap(SafariRequest(json: [
-            "id": 91,
-            "name": "switchAccount",
-            "provider": "unknown",
-            "host": "wallet.example",
-            "configurationKey": "wallet.example",
-            "enqueueAttempt": String(repeating: "a", count: 32),
-            "admissionDeadline": 2_050_000_000_000,
-            "workflowVersion": ExtensionBridge.workflowVersion,
-            "body": ["latestConfigurations": []],
-        ]))
-        let handle = ExtensionBridge.Handle(
-            id: request.id,
-            token: .init(value: UUID()),
-            profileIdentifier: nil
+        let fixture = try ApprovedExecutionTestFixture()
+        let snapshot = try fixture.enqueue(
+            id: 91, name: "switchAccount", provider: .unknown,
+            body: ["latestConfigurations": []]
         )
+        let handle = snapshot.handle
         let action = DappRequestAction.switchAccount(SelectAccountAction(
             coinType: nil,
             selectedAccounts: [],
             initiallyConnectedProviders: [],
             network: nil
         ))
-        let session = PopupRequestSession(
-            handle: handle,
-            request: request,
+        let session = try XCTUnwrap(PopupRequestSession(
+            binding: try XCTUnwrap(snapshot.requestBinding),
             action: action
-        )
+        ))
         let presenter = PopupApprovalStatePresenter()
         let review = popupApprovalJSON(presenter.approvalState(
             for: session,

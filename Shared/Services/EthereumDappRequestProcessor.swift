@@ -12,7 +12,7 @@ struct EthereumDappRequestProcessor {
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
         prepareAvailable(request: request, body: body, catalog: catalog)
-            ?? .response(response(to: request, error: .internalError))
+            ?? .immediate(immediateFailure(to: request, error: .internalError))
     }
 
     static func prepareWithoutWallets(
@@ -39,7 +39,7 @@ struct EthereumDappRequestProcessor {
             return prepareAddChain(request: request, body: body)
         case .requestAccounts:
             if let account = request.authorizedAccount, account.coin == .ethereum {
-                return .response(response(to: request, result: .strings([account.normalizedAddress])))
+                return .immediate(.existingEthereumAccounts)
             }
             guard let catalog else { return nil }
             let action = SelectAccountAction(
@@ -51,11 +51,11 @@ struct EthereumDappRequestProcessor {
             return .approval(.selectAccount(action))
         case .signTypedMessage:
             guard let raw = body.raw else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             guard catalog != nil else { return nil }
             guard let walletAndAccount else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             return prepareMessageSigning(
                 walletId: walletAndAccount.0,
@@ -66,11 +66,11 @@ struct EthereumDappRequestProcessor {
             )
         case .signMessage:
             guard let data = body.message else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             guard catalog != nil else { return nil }
             guard let walletAndAccount else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             return prepareMessageSigning(
                 walletId: walletAndAccount.0,
@@ -81,11 +81,11 @@ struct EthereumDappRequestProcessor {
             )
         case .signPersonalMessage:
             guard let data = body.message else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             guard catalog != nil else { return nil }
             guard let walletAndAccount else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             let text = String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data)
             return prepareMessageSigning(
@@ -101,18 +101,18 @@ struct EthereumDappRequestProcessor {
             case .success(let value):
                 transaction = value
             case .failure(let error):
-                return .response(response(
+                return .immediate(immediateFailure(
                     to: request,
                     error: transactionProviderError(for: error)
                 ))
             }
             guard let chainId = body.currentChainId,
                   case .resolved(let resolvedNetwork) = Nodes.resolution(chainId: chainId) else {
-                return .response(response(to: request, error: .internalError))
+                return .immediate(immediateFailure(to: request, error: .internalError))
             }
             guard catalog != nil else { return nil }
             guard let walletAndAccount else {
-                return .response(response(
+                return .immediate(immediateFailure(
                     to: request,
                     error: .init(message: Strings.providerNotReady, code: 4100)
                 ))
@@ -130,19 +130,16 @@ struct EthereumDappRequestProcessor {
         case .ecRecover:
             if let (signature, message) = body.signatureAndMessage,
                let recovered = ethereum.recover(signature: signature, message: message) {
-                return .response(response(
-                    to: request,
-                    result: .string(recovered)
-                ))
+                return .immediate(.ethereumRecoveredAddress(recovered))
             }
-            return .response(response(
+            return .immediate(immediateFailure(
                 to: request,
                 error: .init(message: Strings.failedToVerify)
             ))
         case .switchEthereumChain:
             guard let chainId = body.switchToChainId,
                   Nodes.url(chainId: chainId) != nil else {
-                return .response(response(
+                return .immediate(immediateFailure(
                     to: request,
                     error: .init(message: Strings.unrecognizedChainId, code: 4902)
                 ))
@@ -150,66 +147,56 @@ struct EthereumDappRequestProcessor {
             if !body.address.isEmpty {
                 guard catalog != nil else { return nil }
                 guard walletAndAccount != nil else {
-                    return .response(response(
+                    return .immediate(immediateFailure(
                         to: request,
                         error: .init(message: Strings.providerNotReady, code: 4100)
                     ))
                 }
             }
-            return .response(response(
-                to: request,
-                result: .null,
-                mutation: .ethereumChain(String.hex(chainId, withPrefix: true))
-            ))
+            return .immediate(.ethereumChain(String.hex(chainId, withPrefix: true)))
         }
     }
 
     static func execute(
-        request: SafariRequest,
-        approval: DappApprovalValidator.Approval,
+        permit: ExtensionBridge.ApprovedExecutionPermit,
         signer: (any WalletSigning)?
-    ) async -> DappExecutionResult {
-        switch approval.kind {
-        case .signing(_, let payload):
+    ) async -> ApprovedExecutionResult {
+        guard permit.isExecuting else { return .rollback }
+        switch permit.approval.kind {
+        case .signing:
             guard let signer else { return .rollback }
             switch await signer.sign() {
-            case .success(.ethereumSignature(let signature)):
-                guard !payload.isEthereumTransaction else {
-                    return .response(response(to: request, error: .internalError))
+            case .success(let output):
+                if let completion = ApprovedCompletion.signed(output, permit: permit) {
+                    return .completed(completion)
                 }
-                return .response(response(to: request, result: .string(signature)))
-            case .success(.ethereumTransaction(let signedTransaction, let hash, let network)):
-                guard payload.isEthereumTransaction else {
-                    return .response(response(to: request, error: .internalError))
+                if let broadcast = PreparedBroadcast.signed(output, permit: permit) {
+                    return .broadcast(broadcast)
                 }
-                return prepareTransactionBroadcast(
-                    signedTransaction: signedTransaction,
-                    expectedHash: hash,
-                    resolvedNetwork: network,
-                    request: request
-                )
-            case .success:
-                return .response(response(to: request, error: .internalError))
+                return approvedFailure(.internalError, permit: permit)
             case .failure(.authorizationUnavailable):
                 return .rollback
             case .failure(.failedToSign):
-                return .response(signingFailedResponse(to: request))
+                return approvedFailure(.init(message: Strings.failedToSign, code: ProviderResponseError.internalErrorCode), permit: permit)
             case .failure(.invalidTransaction):
-                return .response(response(to: request, error: .internalError))
+                return approvedFailure(.internalError, permit: permit)
             }
-        case .addEthereumChain(let action):
-            guard let chainID = Int(hexString: action.chainToAdd.chainId),
-                  completeApprovedChainAddition(action.chainToAdd, chainId: chainID),
-                  case .ethereum = request.body else {
-                return .response(genericFailureResponse(to: request))
+        case .addEthereumChain:
+            guard completeApprovedChainAddition(permit: permit),
+                  let completion = ApprovedCompletion.chainAdded(permit: permit) else {
+                return approvedFailure(.init(message: Strings.somethingWentWrong), permit: permit)
             }
-            return .response(response(
-                to: request, result: .null,
-                mutation: .ethereumChain(String.hex(chainID, withPrefix: true))
-            ))
+            return .completed(completion)
         default:
-            return .response(response(to: request, error: .internalError))
+            return approvedFailure(.internalError, permit: permit)
         }
+    }
+
+    private static func approvedFailure(
+        _ error: ProviderResponseError,
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedExecutionResult {
+        ApprovedCompletion.failure(error, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
     }
 
     static func existingChainAdditionMatches(
@@ -262,7 +249,7 @@ struct EthereumDappRequestProcessor {
         guard let chainToAdd = EthereumNetworkFromDapp.from(body.parameters),
               let chainId = Int(hexString: chainToAdd.chainId),
               chainId > 0 else {
-            return .response(genericFailureResponse(to: request))
+            return .immediate(immediateGenericFailure(to: request))
         }
 
         switch Nodes.resolution(chainId: chainId) {
@@ -276,17 +263,14 @@ struct EthereumDappRequestProcessor {
                     )
                 }
             ) else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
-            return .response(response(
-                to: request, result: .null,
-                mutation: .ethereumChain(String.hex(chainId, withPrefix: true))
-            ))
+            return .immediate(.ethereumChain(String.hex(chainId, withPrefix: true)))
         case .catalogOwnedButUnavailable:
-            return .response(genericFailureResponse(to: request))
+            return .immediate(immediateGenericFailure(to: request))
         case .unknown:
             guard chainToAdd.defaultRpcURL != nil else {
-                return .response(genericFailureResponse(to: request))
+                return .immediate(immediateGenericFailure(to: request))
             }
             let action = AddEthereumChainAction(chainToAdd: chainToAdd)
             return .approval(.addEthereumChain(action))
@@ -294,9 +278,14 @@ struct EthereumDappRequestProcessor {
     }
 
     private static func completeApprovedChainAddition(
-        _ network: EthereumNetworkFromDapp,
-        chainId: Int
+        permit: ExtensionBridge.ApprovedExecutionPermit
     ) -> Bool {
+        guard permit.isExecuting,
+              case .addEthereumChain(let action) = permit.approval.kind,
+              case .ethereum(let body) = permit.request.body,
+              body.method == .addEthereumChain,
+              let chainId = Int(hexString: action.chainToAdd.chainId), chainId > 0 else { return false }
+        let network = action.chainToAdd
         switch Nodes.resolution(chainId: chainId) {
         case .resolved(let resolvedNetwork):
             return resolvedNetwork.source != .custom ||
@@ -331,47 +320,6 @@ struct EthereumDappRequestProcessor {
             meta: meta,
             payload: payload
         )))
-    }
-
-    private static func prepareTransactionBroadcast(
-        signedTransaction: String,
-        expectedHash: String,
-        resolvedNetwork: ResolvedEthereumNetwork,
-        request: SafariRequest
-    ) -> DappExecutionResult {
-        let recoveryResponse = transactionSubmissionUnknownResponse(
-            to: request,
-            transactionHash: expectedHash
-        )
-        return .broadcast(PreparedBroadcast(
-            recoveryResponse: recoveryResponse,
-            send: {
-                guard !Task.isCancelled else {
-                    return ResponseToExtension(
-                        for: request,
-                        payload: .error(.internalError)
-                    )
-                }
-                guard let result = await awaitCancellableCallback({ completion in
-                    ethereum.sendSignedTransaction(
-                        signedTransaction,
-                        network: resolvedNetwork.network,
-                        completion: completion
-                    )
-                }) else {
-                    return ResponseToExtension(
-                        for: request,
-                        payload: .error(.internalError)
-                    )
-                }
-                return transactionBroadcastResponse(
-                    to: request,
-                    expectedHash: expectedHash,
-                    recoveryResponse: recoveryResponse,
-                    result: result
-                )
-            }
-        ))
     }
 
     static func transactionBroadcastResponse(
@@ -438,21 +386,14 @@ struct EthereumDappRequestProcessor {
         return ResponseToExtension(for: request, payload: .error(error))
     }
 
-    private static func genericFailureResponse(
-        to request: SafariRequest
-    ) -> ResponseToExtension {
-        return response(to: request, error: .init(message: Strings.somethingWentWrong))
+    private static func immediateFailure(
+        to request: SafariRequest,
+        error: ProviderResponseError
+    ) -> ImmediateResolution {
+        .failure(error)
     }
 
-    private static func signingFailedResponse(
-        to request: SafariRequest
-    ) -> ResponseToExtension {
-        return response(
-            to: request,
-            error: .init(
-                message: Strings.failedToSign,
-                code: ProviderResponseError.internalErrorCode
-            )
-        )
+    private static func immediateGenericFailure(to request: SafariRequest) -> ImmediateResolution {
+        .failure(.init(message: Strings.somethingWentWrong))
     }
 }

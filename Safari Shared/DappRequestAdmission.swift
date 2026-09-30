@@ -84,8 +84,8 @@ final class DappRequestAdmission {
                 handle: handle,
                 queued: .approvalRequired
             )
-        case .response(let response):
-            switch await store.complete(handle: handle, response: response) {
+        case .immediate(let response):
+            switch await store.completeImmediate(handle: handle, resolution: response) {
             case .persisted:
                 return .responseReady
             case .ownershipLost:

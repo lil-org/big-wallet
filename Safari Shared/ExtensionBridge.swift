@@ -210,6 +210,31 @@ actor ExtensionBridge {
         let createdAt: Date
         let enqueueAttempt: String
         let sequence: Int
+        let requestBinding: RequestBinding?
+
+        init(
+            handle: Handle,
+            state: State,
+            nativeDeliveryNonce: NativeDeliveryNonce,
+            host: String,
+            configurationKey: String,
+            revisions: ProviderRevisions,
+            createdAt: Date,
+            enqueueAttempt: String,
+            sequence: Int,
+            requestBinding: RequestBinding? = nil
+        ) {
+            self.handle = handle
+            self.state = state
+            self.nativeDeliveryNonce = nativeDeliveryNonce
+            self.host = host
+            self.configurationKey = configurationKey
+            self.revisions = revisions
+            self.createdAt = createdAt
+            self.enqueueAttempt = enqueueAttempt
+            self.sequence = sequence
+            self.requestBinding = requestBinding
+        }
 
         var phase: Phase {
             switch state {
@@ -401,6 +426,12 @@ actor ExtensionBridge {
             return true
         }
 
+        var isActive: Bool {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return consumed && !released
+        }
+
         var isUnconsumed: Bool {
             stateLock.lock()
             defer { stateLock.unlock() }
@@ -426,64 +457,6 @@ actor ExtensionBridge {
             lock.release()
         }
         deinit { release() }
-    }
-
-    struct ApprovalClaim: Equatable, Sendable {
-        let handle: Handle
-        fileprivate let value: UUID
-        let lease: OperationLease
-        let authority: ExecutionAuthority
-
-        var executionDeadline: Date { authority.executionDeadline }
-
-        init(handle: Handle, value: UUID, lease: OperationLease, authority: ExecutionAuthority) {
-            self.handle = handle
-            self.value = value
-            self.lease = lease
-            self.authority = authority
-        }
-
-        func matches(handle: Handle, value: UUID) -> Bool {
-            self.handle == handle && self.value == value
-        }
-
-        func releaseLease() { lease.release() }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.handle == rhs.handle && lhs.value == rhs.value && lhs.authority == rhs.authority
-        }
-    }
-
-    struct ExecutionPermit: Equatable, Sendable {
-        let handle: Handle
-        fileprivate let value: UUID
-        let lease: OperationLease
-        let authority: ExecutionAuthority
-
-        var executionDeadline: Date { authority.executionDeadline }
-
-        init(claim: ApprovalClaim) {
-            handle = claim.handle
-            value = claim.value
-            lease = claim.lease
-            authority = claim.authority
-        }
-
-        func matches(handle: Handle, value: UUID) -> Bool {
-            self.handle == handle && self.value == value
-        }
-
-        func releaseLease() { lease.release() }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.handle == rhs.handle && lhs.value == rhs.value && lhs.authority == rhs.authority
-        }
-    }
-
-    struct NativeApprovalAuthorization: Equatable, Sendable {
-        let receipt: NativeDeliveryReceipt
-        let decision: DappApprovalDecision
-        let approvedAt: Date
     }
 
     enum AdmissionKind: Equatable, Sendable {
@@ -528,7 +501,15 @@ actor ExtensionBridge {
     }
 
     enum BeginExecutionResult: Equatable {
-        case began(ExecutionPermit), ownershipLost, retryablePersistenceFailure
+        case began(ExecutionReservation), ownershipLost, retryablePersistenceFailure
+    }
+
+    enum AuthorizeExecutionResult: Equatable {
+        case authorized(ApprovedExecutionPermit), ownershipLost, retryablePersistenceFailure
+    }
+
+    enum BroadcastPreparationResult: Equatable {
+        case prepared(BroadcastDispatchPermit), ownershipLost, retryablePersistenceFailure
     }
 
     enum ResponseReadResult { case response([String: Any]), pending, missing, unavailable }
@@ -546,6 +527,7 @@ actor ExtensionBridge {
     static let maximumRetainedBytes = maximumRetainedRequests * maximumStoredRecordBytes
     static let maximumRetainedBytesPerOrigin =
         maximumRetainedRequestsPerOrigin * maximumStoredRecordBytes
+    static let maximumTransactionDecisionAge: TimeInterval = 30
     static let requestTTL: TimeInterval = TimeInterval(WireProtocol.requestTTLMilliseconds) / 1_000
     static let admissionDeadlineFutureSkew: TimeInterval = 60
     static let responseExpiry: TimeInterval = TimeInterval(WireProtocol.responseExpiryMilliseconds) / 1_000
@@ -802,17 +784,17 @@ actor ExtensionBridge {
         )
     }
 
-    func completeNativeDelivery(
+    func completeNativeImmediate(
         handle: Handle,
         nativeDeliveryNonce: NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        response: ResponseToExtension
+        resolution: ImmediateResolution
     ) -> StoreMutationResult {
-        store.completeNativeDelivery(
+        store.completeNativeImmediate(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            response: response
+            resolution: resolution
         )
     }
 
@@ -830,8 +812,8 @@ actor ExtensionBridge {
 
     func release(claim: ApprovalClaim) -> StoreMutationResult { store.release(claim: claim) }
 
-    func complete(handle: Handle, response: ResponseToExtension) -> StoreMutationResult {
-        store.complete(handle: handle, response: response)
+    func completeImmediate(handle: Handle, resolution: ImmediateResolution) -> StoreMutationResult {
+        store.completeImmediate(handle: handle, resolution: resolution)
     }
 
     func reject(handle: Handle) -> StoreMutationResult {
@@ -842,29 +824,33 @@ actor ExtensionBridge {
         store.begin(claim: claim)
     }
 
+    func authorize(
+        reservation: ExecutionReservation,
+        approval: ResolvedDappApproval
+    ) -> AuthorizeExecutionResult {
+        store.authorize(reservation: reservation, approval: approval)
+    }
+
+    func complete(reservation: ExecutionReservation, resolution: ImmediateResolution) -> StoreMutationResult {
+        store.complete(reservation: reservation, resolution: resolution)
+    }
+
     func prepareBroadcast(
-        permit: ExecutionPermit,
-        recoveryResponse: ResponseToExtension
-    ) -> StoreMutationResult {
-        store.prepareBroadcast(
-            permit: permit,
-            recoveryResponse: recoveryResponse
-        )
+        permit: ApprovedExecutionPermit,
+        broadcast: PreparedBroadcast
+    ) -> BroadcastPreparationResult {
+        store.prepareBroadcast(permit: permit, broadcast: broadcast)
     }
 
-    func complete(
-        permit: ExecutionPermit,
-        response: ResponseToExtension
-    ) -> StoreMutationResult {
-        store.complete(
-            permit: permit,
-            response: response
-        )
+    func complete(permit: ApprovedExecutionPermit, result: ApprovedCompletion) -> StoreMutationResult {
+        store.complete(permit: permit, result: result)
     }
 
-    func rollback(
-        permit: ExecutionPermit
-    ) -> StoreMutationResult {
+    func rollback(reservation: ExecutionReservation) -> StoreMutationResult {
+        store.rollback(reservation: reservation)
+    }
+
+    func rollback(permit: ApprovedExecutionPermit) -> StoreMutationResult {
         store.rollback(permit: permit)
     }
 
@@ -899,21 +885,28 @@ protocol PopupRequestStore: AnyObject {
     func list(profileIdentifier: UUID?) async -> ExtensionBridge.SnapshotsResult
     func load(handle: ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
     func claim(handle: ExtensionBridge.Handle) async -> ExtensionBridge.ApprovalClaimResult
-    func complete(handle: ExtensionBridge.Handle, response: ResponseToExtension) async -> ExtensionBridge.StoreMutationResult
+    func completeImmediate(handle: ExtensionBridge.Handle, resolution: ImmediateResolution) async -> ExtensionBridge.StoreMutationResult
     func reject(handle: ExtensionBridge.Handle) async -> ExtensionBridge.StoreMutationResult
     func release(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult
     func begin(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.BeginExecutionResult
-    func prepareBroadcast(
-        permit: ExtensionBridge.ExecutionPermit,
-        recoveryResponse: ResponseToExtension
-    ) async -> ExtensionBridge.StoreMutationResult
+    func authorize(
+        reservation: ExtensionBridge.ExecutionReservation,
+        approval: ResolvedDappApproval
+    ) async -> ExtensionBridge.AuthorizeExecutionResult
     func complete(
-        permit: ExtensionBridge.ExecutionPermit,
-        response: ResponseToExtension
+        reservation: ExtensionBridge.ExecutionReservation,
+        resolution: ImmediateResolution
     ) async -> ExtensionBridge.StoreMutationResult
-    func rollback(
-        permit: ExtensionBridge.ExecutionPermit
+    func prepareBroadcast(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        broadcast: PreparedBroadcast
+    ) async -> ExtensionBridge.BroadcastPreparationResult
+    func complete(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        result: ApprovedCompletion
     ) async -> ExtensionBridge.StoreMutationResult
+    func rollback(reservation: ExtensionBridge.ExecutionReservation) async -> ExtensionBridge.StoreMutationResult
+    func rollback(permit: ExtensionBridge.ApprovedExecutionPermit) async -> ExtensionBridge.StoreMutationResult
 }
 
 extension ExtensionBridge: PopupRequestStore {}

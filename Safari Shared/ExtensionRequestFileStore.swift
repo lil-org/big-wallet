@@ -784,27 +784,23 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 in: &profile,
                 at: index,
                 now: now,
-                releaseLease: claim.releaseLease
+                releaseLease: claim.lease.release
             )
         }
     }
 
-    func complete(
+    func completeImmediate(
         handle: ExtensionBridge.Handle,
-        response: ResponseToExtension
+        resolution: ImmediateResolution
     ) -> ExtensionBridge.StoreMutationResult {
-        finish(
-            handle: handle,
-            expectedReceipt: nil,
-            response: response
-        )
+        finish(handle: handle, expectedReceipt: nil, resolution: resolution)
     }
 
-    func completeNativeDelivery(
+    func completeNativeImmediate(
         handle: ExtensionBridge.Handle,
         nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
         runtimeInstanceIdentifier: UUID,
-        response: ResponseToExtension
+        resolution: ImmediateResolution
     ) -> ExtensionBridge.StoreMutationResult {
         finish(
             handle: handle,
@@ -812,7 +808,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 nativeDeliveryNonce: nativeDeliveryNonce,
                 runtimeInstanceIdentifier: runtimeInstanceIdentifier
             ),
-            response: response
+            resolution: resolution
         )
     }
 
@@ -886,72 +882,121 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                   ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
                   ExtensionRequestProfile.executionDeadlineIsCurrent(record.claimedApproval?.deadline, now: clock()),
                   record.claimedApproval?.authority == claim.authority,
+                  let request = profile.request(for: record),
                   claim.lease.consume() else { return .ownershipLost }
-            return .began(.init(claim: claim))
+            return .began(.init(claim: claim, record: record, request: request))
+        }
+    }
+
+    func authorize(
+        reservation: ExtensionBridge.ExecutionReservation,
+        approval: ResolvedDappApproval
+    ) -> ExtensionBridge.AuthorizeExecutionResult {
+        files.withLock(or: .retryablePersistenceFailure) {
+            let now = clock()
+            guard reservation.lease.isActive,
+                  approval.binding == reservation.binding,
+                  approval.approvedAt.timeIntervalSince1970.isFinite,
+                  approval.approvedAt <= now,
+                  approval.nativeReceipt == reservation.nativeReceipt else { return .ownershipLost }
+            guard case .state(let profile) = readProfileLocked(
+                profileIdentifier: reservation.handle.profileIdentifier, now: now, recover: true
+            ) else { return .retryablePersistenceFailure }
+            guard let record = profile.state.records.first(where: { $0.handle == reservation.handle }),
+                  case .claimed(let claimID, _, _) = record.state,
+                  reservation.matches(handle: record.handle, value: claimID),
+                  reservation.binding.matches(record),
+                  approval.approvedAt >= record.createdAt,
+                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
+                  record.authorizesExecution(authority: reservation.authority, now: now, isCancelled: Task.isCancelled)
+            else { return .ownershipLost }
+            if case .native(let approvedAt, _) = reservation.authority,
+               approvedAt != approval.approvedAt { return .ownershipLost }
+            guard !reservation.authorization.isAuthorized,
+                  approval.consumeAuthorization(),
+                  reservation.authorization.consume(lease: reservation.lease) else { return .ownershipLost }
+            return .authorized(.init(reservation: reservation, approval: approval, clock: clock))
         }
     }
 
     func prepareBroadcast(
-        permit: ExtensionBridge.ExecutionPermit,
-        recoveryResponse: ResponseToExtension
-    ) -> ExtensionBridge.StoreMutationResult {
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        broadcast: PreparedBroadcast
+    ) -> ExtensionBridge.BroadcastPreparationResult {
         files.withLock(or: .retryablePersistenceFailure) {
+            let reservation = permit.reservation
             let readTime = clock()
-            guard recoveryResponse.id == permit.handle.id,
+            guard reservation.lease.isActive,
+                  let recovery = broadcast.recoveryCompletion(for: permit),
+                  let recoveryResponse = recovery.response(for: permit),
                   let responseData = ExtensionRequestProfileCodec.exactResponseData(recoveryResponse) else {
                 return .ownershipLost
             }
             guard case .state(var profile) = readProfileLocked(
-                profileIdentifier: permit.handle.profileIdentifier,
-                now: readTime,
-                recover: true
+                profileIdentifier: permit.handle.profileIdentifier, now: readTime, recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == permit.handle
-            }) else { return .ownershipLost }
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == permit.handle }) else {
+                return .ownershipLost
+            }
             switch profile.state.records[index].state {
             case .claimed(let claimID, _, _):
                 let authorizationTime = clock()
-                guard permit.matches(handle: permit.handle, value: claimID),
+                guard permit.isExecuting,
+                      reservation.matches(handle: permit.handle, value: claimID),
+                      reservation.binding.matches(profile.state.records[index]),
                       ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state),
                       profile.state.records[index].authorizesExecution(
-                          authority: permit.authority,
-                          now: authorizationTime,
-                          isCancelled: Task.isCancelled
-                      ) else { return .ownershipLost }
-                guard profile.state.records[index].prepareBroadcast(recoveryResponse: responseData) else {
+                          authority: permit.authority, now: authorizationTime, isCancelled: Task.isCancelled
+                      ),
+                      profile.state.records[index].prepareBroadcast(recoveryResponse: responseData) else {
                     return .ownershipLost
                 }
-                return writeProfileLocked(profile)
-                    ? .persisted
-                    : .retryablePersistenceFailure
+                guard writeProfileLocked(profile) else { return .retryablePersistenceFailure }
             case .broadcastPrepared(let claimID, _, let existing, _):
-                guard permit.matches(handle: permit.handle, value: claimID) else {
-                    return .ownershipLost
+                guard reservation.matches(handle: permit.handle, value: claimID),
+                      existing == responseData else { return .ownershipLost }
+                guard files.synchronizeProfileLocked(permit.handle.profileIdentifier) else {
+                    return .retryablePersistenceFailure
                 }
-                guard existing == responseData else { return .ownershipLost }
-                return synchronizedMutationResultLocked(permit.handle.profileIdentifier)
             case .pending, .completed:
                 return .ownershipLost
             }
+            guard let dispatch = permit.checkpoint(broadcast: broadcast) else { return .ownershipLost }
+            return .prepared(dispatch)
         }
     }
 
     func complete(
-        permit: ExtensionBridge.ExecutionPermit,
-        response: ResponseToExtension
+        reservation: ExtensionBridge.ExecutionReservation,
+        resolution: ImmediateResolution
+    ) -> ExtensionBridge.StoreMutationResult {
+        guard !reservation.authorization.isAuthorized else { return .ownershipLost }
+        return completeExecution(reservation: reservation, approvedPermit: nil) { request in
+            resolution.response(for: request)
+        }
+    }
+
+    func complete(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        result: ApprovedCompletion
+    ) -> ExtensionBridge.StoreMutationResult {
+        guard let response = result.response(for: permit) else { return .ownershipLost }
+        return completeExecution(reservation: permit.reservation, approvedPermit: permit) { _ in response }
+    }
+
+    private func completeExecution(
+        reservation: ExtensionBridge.ExecutionReservation,
+        approvedPermit: ExtensionBridge.ApprovedExecutionPermit?,
+        response makeResponse: (SafariRequest) -> ResponseToExtension?
     ) -> ExtensionBridge.StoreMutationResult {
         files.withLock(or: .retryablePersistenceFailure) {
             let readTime = clock()
-            guard response.id == permit.handle.id else { return .ownershipLost }
             guard case .state(var profile) = readProfileLocked(
-                profileIdentifier: permit.handle.profileIdentifier,
-                now: readTime,
-                recover: true
+                profileIdentifier: reservation.handle.profileIdentifier, now: readTime, recover: true
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == permit.handle
-            }) else { return .ownershipLost }
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == reservation.handle }) else {
+                return .ownershipLost
+            }
             let claimID: UUID
             let recoveryResponseData: Data?
             switch profile.state.records[index].state {
@@ -959,68 +1004,73 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 claimID = value
                 recoveryResponseData = nil
             case .broadcastPrepared(let value, _, let recoveryResponse, _):
+                guard approvedPermit != nil else { return .ownershipLost }
                 claimID = value
                 recoveryResponseData = recoveryResponse
             case .completed:
-                guard files.synchronizeProfileLocked(permit.handle.profileIdentifier) else {
+                guard files.synchronizeProfileLocked(reservation.handle.profileIdentifier) else {
                     return .retryablePersistenceFailure
                 }
-                permit.releaseLease()
+                reservation.lease.release()
                 return .persisted
             case .pending:
                 return .ownershipLost
             }
             let authorizationTime = clock()
-            guard permit.matches(handle: permit.handle, value: claimID),
+            guard reservation.lease.isActive,
+                  reservation.matches(handle: reservation.handle, value: claimID),
+                  reservation.binding.matches(profile.state.records[index]),
+                  (approvedPermit != nil || !reservation.authorization.isAuthorized),
+                  (recoveryResponseData != nil || approvedPermit?.isExecuting != false),
                   (recoveryResponseData != nil || ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state)),
                   (recoveryResponseData != nil || profile.state.records[index].authorizesExecution(
-                      authority: permit.authority,
-                      now: authorizationTime,
-                      isCancelled: Task.isCancelled
+                      authority: reservation.authority, now: authorizationTime, isCancelled: Task.isCancelled
                   )),
                   let request = profile.request(for: profile.state.records[index]),
+                  let response = makeResponse(request),
                   let responseData = ExtensionRequestProfileCodec.boundedResponseData(
-                      response,
-                      request: request,
-                      recoveryResponseData: recoveryResponseData
-                  ) else {
-                return .ownershipLost
-            }
+                      response, request: request, recoveryResponseData: recoveryResponseData
+                  ) else { return .ownershipLost }
             let completing = profile.state.records[index]
             if recoveryResponseData == nil {
-                guard profile.applyAuthorityEffect(response, record: completing, now: authorizationTime) else { return .ownershipLost }
+                guard profile.applyAuthorityEffect(response, record: completing, now: authorizationTime) else {
+                    return .ownershipLost
+                }
             }
             profile.complete(at: index, response: responseData, date: authorizationTime)
-            guard writeProfileLocked(profile) else {
-                return .retryablePersistenceFailure
-            }
-            permit.releaseLease()
-            files.removeOperationLockLocked(handle: permit.handle)
-
+            guard writeProfileLocked(profile) else { return .retryablePersistenceFailure }
+            reservation.lease.release()
+            files.removeOperationLockLocked(handle: reservation.handle)
             return .persisted
         }
     }
 
     func rollback(
-        permit: ExtensionBridge.ExecutionPermit
+        reservation: ExtensionBridge.ExecutionReservation
+    ) -> ExtensionBridge.StoreMutationResult {
+        rollbackOwned(reservation: reservation, approved: false)
+    }
+
+    func rollback(permit: ExtensionBridge.ApprovedExecutionPermit) -> ExtensionBridge.StoreMutationResult {
+        rollbackOwned(reservation: permit.reservation, approved: true)
+    }
+
+    private func rollbackOwned(
+        reservation: ExtensionBridge.ExecutionReservation,
+        approved: Bool
     ) -> ExtensionBridge.StoreMutationResult {
         files.withLock(or: .retryablePersistenceFailure) {
+            guard reservation.authorization.isAuthorized == approved else { return .ownershipLost }
             let now = clock()
             guard case .state(var profile) = readProfileLocked(
-                profileIdentifier: permit.handle.profileIdentifier,
-                now: now,
-                recover: false
+                profileIdentifier: reservation.handle.profileIdentifier, now: now, recover: false
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == permit.handle
-            }), case .claimed(let claimID, _, _) =
-                    profile.state.records[index].state,
-                  permit.matches(handle: permit.handle, value: claimID) else { return .ownershipLost }
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == reservation.handle }),
+                  case .claimed(let claimID, _, _) = profile.state.records[index].state,
+                  reservation.matches(handle: reservation.handle, value: claimID),
+                  reservation.lease.isActive else { return .ownershipLost }
             return abandonClaimLocked(
-                in: &profile,
-                at: index,
-                now: now,
-                releaseLease: permit.releaseLease
+                in: &profile, at: index, now: now, releaseLease: reservation.lease.release
             )
         }
     }
@@ -1115,11 +1165,10 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private func finish(
         handle: ExtensionBridge.Handle,
         expectedReceipt: ReceiptIdentity?,
-        response: ResponseToExtension
+        resolution: ImmediateResolution
     ) -> ExtensionBridge.StoreMutationResult {
         files.withLock(or: .retryablePersistenceFailure) {
             let now = clock()
-            guard response.id == handle.id else { return .ownershipLost }
             guard case .state(var profile) = readProfileLocked(
                     profileIdentifier: handle.profileIdentifier,
                     now: now,
@@ -1149,6 +1198,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             case .unavailable:
                 return .retryablePersistenceFailure
             }
+            guard let response = resolution.response(for: request) else { return .ownershipLost }
             guard let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }
@@ -1341,4 +1391,271 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         )
     }
 
+}
+
+extension ExtensionRequestProfile {
+    fileprivate static func snapshot(
+        _ record: Record,
+        request: SafariRequest?,
+        sequence: Int
+    ) -> ExtensionBridge.Snapshot? {
+        let state: ExtensionBridge.Snapshot.State
+        switch record.state {
+        case .pending(_, let approval):
+            guard let request else { return nil }
+            let queuedApproval: ExtensionBridge.Snapshot.QueuedApproval
+            switch approval {
+            case .unowned:
+                queuedApproval = .unowned
+            case .delivered(let receipt):
+                queuedApproval = .delivered(receipt)
+            }
+            state = .queued(request: request, approval: queuedApproval)
+        case .claimed, .broadcastPrepared:
+            guard let request else { return nil }
+            state = .approving(
+                request: request,
+                nativeApproval: record.nativeApproval.map {
+                    .init(receipt: $0.receipt, approvedAt: $0.approvedAt,
+                          executionContext: record.nativeExecutionContext)
+                }
+            )
+        case .completed:
+            state = .responded
+        }
+        return ExtensionBridge.Snapshot(
+            handle: record.handle,
+            state: state,
+            nativeDeliveryNonce: record.nativeDeliveryNonce,
+            host: record.host,
+            configurationKey: record.configurationKey,
+            revisions: record.revisions,
+            createdAt: record.createdAt,
+            enqueueAttempt: record.enqueueAttempt,
+            sequence: sequence,
+            requestBinding: request.map { .init(record: record, request: $0) }
+        )
+    }
+
+}
+
+extension ExtensionBridge {
+    struct RequestBinding: Equatable, @unchecked Sendable {
+        let handle: Handle
+        let request: SafariRequest
+        fileprivate let fingerprint: Data
+        fileprivate let authority: AuthorityVersion
+
+        fileprivate init(record: ExtensionRequestProfile.Record, request: SafariRequest) {
+            handle = record.handle
+            self.request = request
+            fingerprint = record.requestFingerprint
+            authority = record.authority
+        }
+
+        fileprivate func matches(_ record: ExtensionRequestProfile.Record) -> Bool {
+            handle == record.handle && fingerprint == record.requestFingerprint && authority == record.authority
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.handle == rhs.handle && lhs.fingerprint == rhs.fingerprint && lhs.authority == rhs.authority
+        }
+    }
+
+    struct ApprovalClaim: Equatable, Sendable {
+        let handle: Handle
+        let authority: ExecutionAuthority
+        fileprivate let value: UUID
+        fileprivate let lease: OperationLease
+
+        var executionDeadline: Date { authority.executionDeadline }
+
+        fileprivate init(handle: Handle, value: UUID, lease: OperationLease, authority: ExecutionAuthority) {
+            self.handle = handle
+            self.value = value
+            self.lease = lease
+            self.authority = authority
+        }
+
+        fileprivate func matches(handle: Handle, value: UUID) -> Bool {
+            self.handle == handle && self.value == value
+        }
+
+        func releaseIfUnconsumed() { lease.releaseIfUnconsumed() }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.handle == rhs.handle && lhs.value == rhs.value && lhs.authority == rhs.authority
+        }
+    }
+
+    fileprivate final class ReservationAuthorization: @unchecked Sendable {
+        private let lock = NSLock()
+        private var authorized = false
+
+        var isAuthorized: Bool { lock.withLock { authorized } }
+
+        func consume(lease: OperationLease) -> Bool {
+            lock.withLock {
+                guard !authorized, lease.isActive else { return false }
+                authorized = true
+                return true
+            }
+        }
+
+        func releaseIfUnauthorized(_ lease: OperationLease) {
+            lock.withLock {
+                if !authorized { lease.release() }
+            }
+        }
+    }
+
+    struct ExecutionReservation: Equatable, @unchecked Sendable {
+        let binding: RequestBinding
+        let authority: ExecutionAuthority
+        fileprivate let value: UUID
+        fileprivate let lease: OperationLease
+        fileprivate let authorization = ReservationAuthorization()
+        fileprivate let nativeReceipt: NativeDeliveryReceipt?
+
+        var handle: Handle { binding.handle }
+        var request: SafariRequest { binding.request }
+        var executionDeadline: Date { authority.executionDeadline }
+
+        fileprivate init(claim: ApprovalClaim, record: ExtensionRequestProfile.Record, request: SafariRequest) {
+            binding = .init(record: record, request: request)
+            value = claim.value
+            lease = claim.lease
+            authority = claim.authority
+            nativeReceipt = record.nativeDeliveryReceipt
+        }
+
+        fileprivate func matches(handle: Handle, value: UUID) -> Bool {
+            self.handle == handle && self.value == value
+        }
+
+        func releaseLease() { authorization.releaseIfUnauthorized(lease) }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.binding == rhs.binding && lhs.value == rhs.value && lhs.authority == rhs.authority
+        }
+    }
+
+    final class ApprovedExecutionPermit: Equatable, @unchecked Sendable {
+        private enum State { case authorized, executing, checkpointed }
+        private let lock = NSLock()
+        private var state = State.authorized
+        private var signingOperationIssued = false
+        fileprivate let reservation: ExecutionReservation
+        private let resolvedApproval: ResolvedDappApproval
+        private let clock: () -> Date
+        private weak var dispatchPermit: BroadcastDispatchPermit?
+        let executionID = UUID()
+        let signingDeadline: Date
+
+        var handle: Handle { reservation.handle }
+        var request: SafariRequest { reservation.request }
+        var authority: ExecutionAuthority { reservation.authority }
+        var executionDeadline: Date { reservation.executionDeadline }
+        var approval: DappApprovalValidator.Approval { resolvedApproval.approval }
+
+        fileprivate init(reservation: ExecutionReservation, approval: ResolvedDappApproval, clock: @escaping () -> Date) {
+            self.reservation = reservation
+            resolvedApproval = approval
+            self.clock = clock
+            let transaction: Bool
+            switch reservation.request.body {
+            case .ethereum(let body): transaction = body.method == .signTransaction
+            case .solana(let body):
+                transaction = body.method == .signTransaction || body.method == .signAllTransactions || body.method == .signAndSendTransaction
+            case .unknown: transaction = false
+            }
+            if case .native = reservation.authority, transaction {
+                signingDeadline = min(reservation.executionDeadline, approval.approvedAt.addingTimeInterval(ExtensionBridge.maximumTransactionDecisionAge))
+            } else {
+                signingDeadline = reservation.executionDeadline
+            }
+        }
+
+        func consumeExecution() -> Bool {
+            lock.withLock {
+                guard case .authorized = state, reservation.lease.isActive, clock() < executionDeadline else { return false }
+                state = .executing
+                return true
+            }
+        }
+
+        var isExecuting: Bool {
+            lock.withLock {
+                guard case .executing = state else { return false }
+                return reservation.lease.isActive && clock() < executionDeadline
+            }
+        }
+
+        func releaseLease() { reservation.lease.release() }
+
+        func consumeSigningOperation() -> Bool {
+            lock.withLock {
+                guard !signingOperationIssued, reservation.lease.isActive, clock() < signingDeadline else { return false }
+                switch state {
+                case .authorized, .executing:
+                    signingOperationIssued = true
+                    return true
+                case .checkpointed:
+                    return false
+                }
+            }
+        }
+
+        var isSigningAuthorized: Bool {
+            lock.withLock {
+                guard case .executing = state else { return false }
+                return reservation.lease.isActive && clock() < signingDeadline
+            }
+        }
+
+        fileprivate func checkpoint(broadcast: PreparedBroadcast) -> BroadcastDispatchPermit? {
+            lock.withLock {
+                guard reservation.lease.isActive else { return nil }
+                if case .checkpointed = state { return dispatchPermit }
+                guard case .executing = state else { return nil }
+                state = .checkpointed
+                let dispatch = BroadcastDispatchPermit(broadcast: broadcast, approvedPermit: self)
+                dispatchPermit = dispatch
+                return dispatch
+            }
+        }
+
+        fileprivate var canDispatch: Bool {
+            lock.withLock {
+                guard case .checkpointed = state else { return false }
+                return reservation.lease.isActive
+            }
+        }
+
+        deinit { reservation.lease.release() }
+
+        static func == (lhs: ApprovedExecutionPermit, rhs: ApprovedExecutionPermit) -> Bool { lhs === rhs }
+    }
+
+    final class BroadcastDispatchPermit: Equatable, @unchecked Sendable {
+        let broadcast: PreparedBroadcast
+        let approvedPermit: ApprovedExecutionPermit
+        private let lock = NSLock()
+        private var consumed = false
+
+        fileprivate init(broadcast: PreparedBroadcast, approvedPermit: ApprovedExecutionPermit) {
+            self.broadcast = broadcast
+            self.approvedPermit = approvedPermit
+        }
+
+        func consume() -> Bool {
+            lock.withLock {
+                guard !consumed, approvedPermit.canDispatch else { return false }
+                consumed = true
+                return true
+            }
+        }
+
+        static func == (lhs: BroadcastDispatchPermit, rhs: BroadcastDispatchPermit) -> Bool { lhs === rhs }
+    }
 }

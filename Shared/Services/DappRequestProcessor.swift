@@ -67,6 +67,8 @@ func awaitBackgroundOperation<Value: Sendable>(
 
 struct DappRequestProcessor: DappRequestProcessing {
 
+    nonisolated init() {}
+
     func prepare(
         _ request: SafariRequest,
         catalog: WalletReviewCatalog
@@ -113,36 +115,24 @@ struct DappRequestProcessor: DappRequestProcessing {
     }
 
     func execute(
-        request: SafariRequest,
-        approval: DappApprovalValidator.Approval,
+        permit: ExtensionBridge.ApprovedExecutionPermit,
         signer: (any WalletSigning)?
-    ) async -> DappExecutionResult {
-        switch approval.kind {
-        case .accountSelection(let selectionAction, let selection):
-            return .response(Self.executeAccountSelection(
-                request: request,
-                action: selectionAction,
-                selection: selection
-            ))
+    ) async -> ApprovedExecutionResult {
+        guard permit.consumeExecution() else { return .rollback }
+        switch permit.approval.kind {
+        case .accountSelection:
+            return ApprovedCompletion.accountSelection(permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
         case .signing, .addEthereumChain:
-            switch request.body {
+            switch permit.request.body {
             case .ethereum:
-                return await EthereumDappRequestProcessor.execute(
-                    request: request,
-                    approval: approval,
-                    signer: signer
-                )
+                return await EthereumDappRequestProcessor.execute(permit: permit, signer: signer)
             case .solana:
-                return await SolanaDappRequestProcessor.execute(
-                    request: request,
-                    approval: approval,
-                    signer: signer
-                )
+                return await SolanaDappRequestProcessor.execute(permit: permit, signer: signer)
             case .unknown:
                 break
             }
         }
-        return .response(Self.response(to: request, error: .internalError))
+        return ApprovedCompletion.failure(.internalError, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
     }
 
     private static func prepareSwitchAccount(
@@ -165,7 +155,7 @@ struct DappRequestProcessor: DappRequestProcessing {
         return .approval(.switchAccount(action))
     }
 
-    private static func executeAccountSelection(
+    nonisolated static func accountSelectionResponse(
         request: SafariRequest,
         action: SelectAccountAction,
         selection: DappApprovalValidator.Selection
@@ -223,7 +213,7 @@ struct DappRequestProcessor: DappRequestProcessing {
         }
     }
 
-    private static func selectedAccountUpdate(
+    nonisolated private static func selectedAccountUpdate(
         for account: WalletAccount,
         chain: EthereumNetwork?
     ) -> ResponseToExtension.AccountUpdate? {
@@ -236,7 +226,7 @@ struct DappRequestProcessor: DappRequestProcessing {
         }
     }
 
-    private static func disconnectedProviders(
+    nonisolated private static func disconnectedProviders(
         initiallyConnectedProviders: Set<InpageProvider>,
         selectedAccounts: [SpecificWalletAccount]
     ) -> Set<InpageProvider> {
@@ -249,7 +239,7 @@ struct DappRequestProcessor: DappRequestProcessing {
         }
     }
 
-    private static func connectedProviders(
+    nonisolated private static func connectedProviders(
         in providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration]
     ) -> Set<InpageProvider> {
         return Set(providerConfigurations.compactMap { configuration in
@@ -264,7 +254,7 @@ struct DappRequestProcessor: DappRequestProcessing {
         })
     }
 
-    private static func response(
+    nonisolated private static func response(
         to request: SafariRequest,
         error: ProviderResponseError
     ) -> ResponseToExtension {

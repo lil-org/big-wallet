@@ -12,8 +12,7 @@ protocol DappRequestProcessing {
     ) -> DappRequestPreparation?
 
     func execute(
-        request: SafariRequest,
-        approval: DappApprovalValidator.Approval,
+        permit: ExtensionBridge.ApprovedExecutionPermit,
         signer: (any WalletSigning)?
-    ) async -> DappExecutionResult
+    ) async -> ApprovedExecutionResult
 }

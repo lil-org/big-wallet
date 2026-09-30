@@ -611,15 +611,21 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
     private func grant(_ account: WalletAccountDescriptor, in store: ExtensionRequestFileStore, id: Int, origin: String) throws {
         let initial = try connection(in: store, id: id, origin: origin)
-        let request = try XCTUnwrap(initial.request)
+        let approval = try resolvedApprovalForTesting(
+            snapshot: initial,
+            action: .selectAccount(.init(
+                coinType: .ethereum, selectedAccounts: [],
+                initiallyConnectedProviders: [], network: Networks.ethereum
+            )),
+            decision: .accountSelection(.init(accounts: [account], ethereumChainID: "0x1")),
+            accounts: [account.specificAccount], approvedAt: Date()
+        )
         guard case .claimed(let claim) = store.claim(handle: initial.handle),
-              case .began(let permit) = store.begin(claim: claim) else { throw CocoaError(.fileWriteUnknown) }
-        let response = ResponseToExtension(
-            for: request, payload: .result(.strings([account.normalizedAddress])),
-            mutation: .accounts([.ethereum(address: account.normalizedAddress, chainId: "0x1")]),
-            approvedAccounts: [account]
-        ).markingApprovalCommitted()
-        guard store.complete(permit: permit, response: response) == .persisted else {
+              case .began(let reservation) = store.begin(claim: claim),
+              case .authorized(let permit) = store.authorize(reservation: reservation, approval: approval),
+              permit.consumeExecution(),
+              let completion = ApprovedCompletion.accountSelection(permit: permit),
+              store.complete(permit: permit, result: completion) == .persisted else {
             throw CocoaError(.fileWriteUnknown)
         }
     }
@@ -1190,17 +1196,14 @@ final class WalletSigningScopeTests: XCTestCase {
             (.solanaSerializedBroadcast(serialized, options), .solana, true),
         ]
         for approved in [descriptor(), solana] {
-            var request = try XCTUnwrap(SafariRequest(json: [
-                "id": 1, "name": "signMessage", "provider": approved.coin == .ethereum ? "ethereum" : "solana",
-                "host": "wallet.example", "configurationKey": "https://wallet.example",
-                "enqueueAttempt": String(repeating: "a", count: 32),
-                "admissionDeadline": Int(Date().addingTimeInterval(120).timeIntervalSince1970 * 1_000),
-                "workflowVersion": ExtensionBridge.workflowVersion,
-                "body": approved.coin == .ethereum
-                    ? ["address": approved.normalizedAddress, "chainId": "0x1"]
-                    : ["publicKey": approved.normalizedAddress],
-            ]))
-            request.authorizedAccount = approved
+            let fixture = try ApprovedExecutionTestFixture()
+            try fixture.establishGrant(approved)
+            let snapshot = try fixture.enqueue(
+                id: 1, name: "signMessage", provider: approved.coin == .ethereum ? .ethereum : .solana,
+                body: approved.coin == .ethereum
+                    ? ["address": approved.normalizedAddress, "chainId": "0x1", "object": ["data": "01"]]
+                    : ["publicKey": approved.normalizedAddress, "object": ["params": ["message": "01"]]]
+            )
             for (payload, coin, requiresCluster) in cases {
                 for cluster: Solana.Cluster? in [nil, .devnet] {
                     let action = SignMessageAction(
@@ -1215,13 +1218,18 @@ final class WalletSigningScopeTests: XCTestCase {
                     )
                     let validCluster = requiresCluster == (cluster != nil)
                     switch result {
-                    case .success(let approval):
+                    case .success:
                         XCTAssertTrue(validCluster)
-                        let operation = ApprovedWalletSigningOperation(
-                            request: request, approval: approval,
-                            authorization: walletSigningAuthorizationForTesting(approvedAccount: approved)
-                        )
-                        XCTAssertEqual(operation != nil, approved.coin == coin)
+                        if approved.coin == coin {
+                            let operation = try approvedWalletSigningOperationForTesting(
+                                approvedAccount: approved, payload: payload
+                            )
+                            XCTAssertEqual(operation.approvedAccount, approved)
+                        } else {
+                            XCTAssertNil(ApprovalReview(
+                                binding: try XCTUnwrap(snapshot.requestBinding), action: .approveMessage(action)
+                            ))
+                        }
                     case .failure:
                         XCTAssertFalse(validCluster)
                     }
@@ -1284,30 +1292,35 @@ final class WalletSigningScopeTests: XCTestCase {
             var final = original
             final.nonce = "0x7"
             final.preparedFee = finalFee
-            var request = try XCTUnwrap(SafariRequest(json: [
-                "id": 1, "name": "signTransaction", "provider": "ethereum",
-                "host": "wallet.example", "configurationKey": "https://wallet.example",
-                "enqueueAttempt": String(repeating: "a", count: 32),
-                "admissionDeadline": Int(Date().addingTimeInterval(120).timeIntervalSince1970 * 1_000),
-                "workflowVersion": ExtensionBridge.workflowVersion,
-                "body": ["address": account.normalizedAddress, "chainId": "0xa"],
-            ]))
-            request.authorizedAccount = account
+            var parameters: [String: Any] = [
+                "from": account.normalizedAddress,
+                "to": "0x0000000000000000000000000000000000000002",
+                "nonce": "0x0", "gas": "0x5208", "value": "0x1", "data": "0x",
+            ]
+            switch initialFee {
+            case .legacy(let price):
+                parameters["gasPrice"] = price.toHexString(withPrefix: true)
+            case .eip1559(let priority, let maximum):
+                parameters["maxPriorityFeePerGas"] = priority.toHexString(withPrefix: true)
+                parameters["maxFeePerGas"] = maximum.toHexString(withPrefix: true)
+            }
+            let fixture = try ApprovedExecutionTestFixture()
+            try fixture.establishGrant(account, network: network.network)
+            let snapshot = try fixture.enqueue(
+                id: 1, name: "signTransaction", provider: .ethereum,
+                body: ["address": account.normalizedAddress, "chainId": "0xa", "object": parameters]
+            )
             let action = SendTransactionAction(
                 transaction: original, resolvedNetwork: network, walletId: account.walletID, account: account.account
             )
             let decision = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
                 final, reviewedNetwork: network, approvedAccount: account
             ))
-            let approval = try DappApprovalValidator.resolve(
-                action: .approveTransaction(action), decision: .transaction(decision),
-                accounts: nil, networkResolver: { _ in nil }
-            ).get()
-            let operation = try XCTUnwrap(ApprovedWalletSigningOperation(
-                request: request,
-                approval: approval,
-                authorization: walletSigningAuthorizationForTesting(approvedAccount: account)
-            ))
+            let permit = try fixture.authorize(
+                snapshot: snapshot, action: .approveTransaction(action), decision: .transaction(decision)
+            )
+            XCTAssertTrue(permit.consumeExecution())
+            let operation = try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
             let expected = try Ethereum.signedTransaction(
                 transaction: final, privateKey: XCTUnwrap(WalletPrivateKey(data: Vectors.ethereumSignerPrivateKey)),
                 network: network.network
@@ -1382,9 +1395,10 @@ final class WalletSigningScopeTests: XCTestCase {
                 "workflowVersion": ExtensionBridge.workflowVersion,
                 "body": ["publicKey": account.normalizedAddress, "object": ["params": ["messages": messages]]],
             ]))
-            guard case .response(let response) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+            guard case .immediate(let resolution) = DappRequestProcessor().prepare(request, catalog: catalog) else {
                 return XCTFail("A malformed batch must not issue a partial signing approval")
             }
+            let response = try XCTUnwrap(resolution.response(for: request))
             XCTAssertNotNil(response.json["error"])
             XCTAssertNil(response.json["result"])
         }
@@ -1415,7 +1429,10 @@ final class WalletSigningScopeTests: XCTestCase {
         ]
         for (payload, message, signerIndex) in cases {
             let (account, access) = try unlockedSigningAccess(coin: .solana, key: Vectors.solanaPreparedSignerPrivateKey)
-            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: account, payload: payload)
+            let operation = try approvedWalletSigningOperationForTesting(
+                approvedAccount: account, payload: payload,
+                serializedTransaction: signerIndex == 1 ? WalletCrypto.base58Encode(data: serialized) : nil
+            )
             let signer = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
             XCTAssertTrue(signer.bind(operation: operation, authorityIsCurrent: { _ in true }))
             guard case .success(.solanaTransaction(let signed, let signature, let cluster, let capturedOptions)) = await signer.sign() else {

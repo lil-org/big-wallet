@@ -831,48 +831,6 @@ struct ExtensionRequestProfile {
         return changed
     }
 
-    static func snapshot(
-        _ record: Record,
-        request: SafariRequest?,
-        sequence: Int
-    ) -> ExtensionBridge.Snapshot? {
-        let state: ExtensionBridge.Snapshot.State
-        switch record.state {
-        case .pending(_, let approval):
-            guard let request else { return nil }
-            let queuedApproval: ExtensionBridge.Snapshot.QueuedApproval
-            switch approval {
-            case .unowned:
-                queuedApproval = .unowned
-            case .delivered(let receipt):
-                queuedApproval = .delivered(receipt)
-            }
-            state = .queued(request: request, approval: queuedApproval)
-        case .claimed, .broadcastPrepared:
-            guard let request else { return nil }
-            state = .approving(
-                request: request,
-                nativeApproval: record.nativeApproval.map {
-                    .init(receipt: $0.receipt, approvedAt: $0.approvedAt,
-                          executionContext: record.nativeExecutionContext)
-                }
-            )
-        case .completed:
-            state = .responded
-        }
-        return ExtensionBridge.Snapshot(
-            handle: record.handle,
-            state: state,
-            nativeDeliveryNonce: record.nativeDeliveryNonce,
-            host: record.host,
-            configurationKey: record.configurationKey,
-            revisions: record.revisions,
-            createdAt: record.createdAt,
-            enqueueAttempt: record.enqueueAttempt,
-            sequence: sequence
-        )
-    }
-
     static func makeRoomForAdmission(
         _ incoming: Record,
         in records: inout [Record],

@@ -9,7 +9,7 @@ enum NativeApprovalFinalizationResult: Equatable {
 @MainActor
 final class NativeApprovalFinalizer {
 
-    nonisolated static let maximumTransactionDecisionAge: TimeInterval = 30
+    nonisolated static let maximumTransactionDecisionAge = ExtensionBridge.maximumTransactionDecisionAge
 
     static let shared = NativeApprovalFinalizer(
         store: ExtensionBridge.shared,
@@ -42,6 +42,7 @@ final class NativeApprovalFinalizer {
             Networks.withChainIdHex($0)
         },
         clock: @escaping () -> Date = Date.init,
+        broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds
     ) {
@@ -59,6 +60,8 @@ final class NativeApprovalFinalizer {
         self.clock = clock
         executor = DurableApprovalExecutor(
             store: store,
+            requestProcessor: requestProcessor,
+            broadcastSender: broadcastSender,
             broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds,
             clock: clock
         )
@@ -66,19 +69,15 @@ final class NativeApprovalFinalizer {
 
     func attempt(
         snapshot: ExtensionBridge.Snapshot,
-        authorization: ExtensionBridge.NativeApprovalAuthorization
+        consent: ReviewConsent
     ) async -> NativeApprovalFinalizationResult {
         switch snapshot.state {
         case .responded:
             return .responseReady
         case .approving:
             return .pending
-        case .queued(let request, .delivered):
-            return await claimAndExecute(
-                snapshot: snapshot,
-                request: request,
-                authorization: authorization
-            )
+        case .queued(_, .delivered):
+            return await claimAndExecute(snapshot: snapshot, consent: consent)
         case .queued:
             return .pending
         }
@@ -86,22 +85,22 @@ final class NativeApprovalFinalizer {
 
     private func claimAndExecute(
         snapshot: ExtensionBridge.Snapshot,
-        request: SafariRequest,
-        authorization: ExtensionBridge.NativeApprovalAuthorization
+        consent: ReviewConsent
     ) async -> NativeApprovalFinalizationResult {
-        guard snapshot.nativeDeliveryReceipt == authorization.receipt else {
+        guard let receipt = consent.nativeReceipt,
+              snapshot.nativeDeliveryReceipt == receipt,
+              snapshot.requestBinding == consent.review.binding else {
             return .interruptionRequired
         }
-        let nativeClaim: ExtensionBridge.ApprovalClaim
-        let claimResult = await store.claimNativeExecution(
+        let claim: ExtensionBridge.ApprovalClaim
+        switch await store.claimNativeExecution(
             handle: snapshot.handle,
-            nativeDeliveryNonce: authorization.receipt.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: authorization.receipt.owner.runtimeInstanceIdentifier,
-            approvedAt: authorization.approvedAt
-        )
-        switch claimResult {
+            nativeDeliveryNonce: receipt.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier,
+            approvedAt: consent.approvedAt
+        ) {
         case .claimed(let value):
-            nativeClaim = value
+            claim = value
         case .executing:
             return .pending
         case .responded, .missing:
@@ -109,38 +108,38 @@ final class NativeApprovalFinalizer {
         case .ownershipLost, .unavailable:
             return .interruptionRequired
         }
-
-        let result = await executor.executeNative(
-            claim: nativeClaim
-        ) {
-            await self.prepareAndExecute(
-                nativeClaim: nativeClaim,
-                request: request,
-                authorization: authorization
-            )
-        }
-        switch result {
-        case .persisted:
-            return .responseReady
-        case .ownershipLost, .retryablePersistenceFailure, .released:
+        defer { claim.releaseIfUnconsumed() }
+        let reservation: ExtensionBridge.ExecutionReservation
+        switch await store.begin(claim: claim) {
+        case .began(let value):
+            reservation = value
+        case .ownershipLost:
+            return .interruptionRequired
+        case .retryablePersistenceFailure:
+            _ = await store.release(claim: claim)
             return .interruptionRequired
         }
+        defer { reservation.releaseLease() }
+        return await prepareAndExecute(reservation: reservation, consent: consent)
     }
 
     private func prepareAndExecute(
-        nativeClaim: ExtensionBridge.ApprovalClaim,
-        request: SafariRequest,
-        authorization: ExtensionBridge.NativeApprovalAuthorization
-    ) async -> DappExecutionResult {
-        guard case .native(let approvedAt, let executionContext) = nativeClaim.authority else {
-            return .rollback
+        reservation: ExtensionBridge.ExecutionReservation,
+        consent: ReviewConsent
+    ) async -> NativeApprovalFinalizationResult {
+        guard case .native(let approvedAt, let executionContext) = reservation.authority,
+              !Task.isCancelled else {
+            return await rollback(reservation)
         }
+        let request = reservation.request
         let now = clock()
         let age = now.timeIntervalSince(executionContext.observedAt)
         guard age >= 0,
-              now < executionContext.executionDeadline else { return .rollback }
+              now < executionContext.executionDeadline else {
+            return await rollback(reservation)
+        }
         guard transactionDecisionIsFresh(approvedAt: approvedAt, request: request) else {
-            return .response(Self.staleResponse(for: request), approvalCommitted: false)
+            return await complete(reservation, resolution: Self.staleResolution)
         }
 
         let preparation: DappRequestPreparation
@@ -149,80 +148,92 @@ final class NativeApprovalFinalizer {
             preparation = walletIndependent
             preparationCatalog = nil
         } else {
-            guard let refreshedAccess = refreshWalletCatalog() else { return .rollback }
+            guard let refreshedAccess = refreshWalletCatalog() else {
+                return await rollback(reservation)
+            }
             preparationCatalog = refreshedAccess
             CustomNetworkCache.shared.invalidate()
             preparation = requestProcessor.prepare(request, catalog: refreshedAccess)
         }
         switch preparation {
-        case .response(let response):
-            return .response(response, approvalCommitted: false)
+        case .immediate(let resolution):
+            return await complete(reservation, resolution: resolution)
         case .approval(let action):
             guard transactionDecisionIsFresh(approvedAt: approvedAt, request: request) else {
-                return .response(Self.staleResponse(for: request), approvalCommitted: false)
+                return await complete(reservation, resolution: Self.staleResolution)
             }
             let accounts: [SpecificWalletAccount]?
-            if case .accountSelection = authorization.decision {
+            if case .accountSelection = consent.decision {
                 accounts = preparationCatalog?.orderedAccounts
             } else {
                 accounts = nil
             }
-            switch DappApprovalValidator.resolve(
-                action: action,
-                decision: authorization.decision,
+            switch consent.resolve(
+                currentAction: action,
                 accounts: accounts,
                 networkResolver: networkResolver
             ) {
             case .success(let approval):
-                let executionSigner: (any WalletSigning)?
-                if let approvedAccount = approval.signingAccount {
+                if let approvedAccount = approval.approval.signingAccount {
                     guard preparationCatalog?.orderedAccounts.contains(where: {
                         approvedAccount.matches(walletID: $0.walletId, account: $0.account)
                     }) == true else {
-                        return .response(Self.staleResponse(for: request), approvalCommitted: false)
+                        return await complete(reservation, resolution: Self.staleResolution)
                     }
-                    let deadline = requestRequiresFreshTransactionDecision(request)
-                        ? min(executionContext.executionDeadline,
-                              approvedAt.addingTimeInterval(Self.maximumTransactionDecisionAge))
-                        : executionContext.executionDeadline
-                    guard let operation = ApprovedWalletSigningOperation(
-                        request: request, approval: approval,
-                        authorization: WalletSigningAuthorization(
-                            handle: nativeClaim.handle,
-                            approvedAccount: approvedAccount,
-                            signingDeadline: deadline
-                        )
-                    ) else { return .rollback }
-                    executionSigner = makeSigner(operation) {
+                }
+                let result = await executor.executeNative(
+                    reservation: reservation,
+                    approval: approval
+                ) { permit in
+                    guard approval.approval.signingAccount != nil,
+                          let operation = ApprovedWalletSigningOperation(permit: permit) else {
+                        return nil
+                    }
+                    return self.makeSigner(operation) {
                         await self.store.authorityIsCurrent(handle: $0)
                     }
-                } else {
-                    executionSigner = nil
                 }
-                defer { executionSigner?.invalidate() }
-                return await requestProcessor.execute(
-                    request: request,
-                    approval: approval,
-                    signer: executionSigner
-                )
+                switch result {
+                case .persisted:
+                    return .responseReady
+                case .ownershipLost, .retryablePersistenceFailure, .released:
+                    return .interruptionRequired
+                }
             case .failure(.staleTransaction), .failure(.staleAccount):
-                return .response(Self.staleResponse(for: request), approvalCommitted: false)
+                return await complete(reservation, resolution: Self.staleResolution)
             case .failure(.invalidDecision):
-                return .response(ResponseToExtension(
-                    for: request,
-                    payload: .error(.internalError)
-                ), approvalCommitted: false)
+                return await complete(reservation, resolution: .failure(.internalError))
             }
         }
+    }
+
+    private func complete(
+        _ reservation: ExtensionBridge.ExecutionReservation,
+        resolution: ImmediateResolution
+    ) async -> NativeApprovalFinalizationResult {
+        guard !Task.isCancelled, clock() < reservation.executionDeadline else {
+            return await rollback(reservation)
+        }
+        switch await store.complete(reservation: reservation, resolution: resolution) {
+        case .persisted:
+            return .responseReady
+        case .ownershipLost, .retryablePersistenceFailure:
+            return .interruptionRequired
+        }
+    }
+
+    private func rollback(
+        _ reservation: ExtensionBridge.ExecutionReservation
+    ) async -> NativeApprovalFinalizationResult {
+        _ = await store.rollback(reservation: reservation)
+        return .interruptionRequired
     }
 
     private func transactionDecisionIsFresh(
         approvedAt: Date,
         request: SafariRequest
     ) -> Bool {
-        guard requestRequiresFreshTransactionDecision(request) else {
-            return true
-        }
+        guard requestRequiresFreshTransactionDecision(request) else { return true }
         let age = clock().timeIntervalSince(approvedAt)
         return age >= 0 && age <= Self.maximumTransactionDecisionAge
     }
@@ -242,8 +253,7 @@ final class NativeApprovalFinalizer {
             }
         case .solana(let body):
             switch body.method {
-            case .signTransaction, .signAllTransactions,
-                 .signAndSendTransaction:
+            case .signTransaction, .signAllTransactions, .signAndSendTransaction:
                 return true
             case .connect, .signMessage:
                 return false
@@ -253,15 +263,10 @@ final class NativeApprovalFinalizer {
         }
     }
 
-    private static func staleResponse(
-        for request: SafariRequest
-    ) -> ResponseToExtension {
-        ResponseToExtension(
-            for: request,
-            payload: .error(ProviderResponseError(
-                message: Strings.providerNotReady,
-                code: 4100
-            ))
-        )
+    private static var staleResolution: ImmediateResolution {
+        .failure(ProviderResponseError(
+            message: Strings.providerNotReady,
+            code: 4100
+        ))
     }
 }
