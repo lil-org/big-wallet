@@ -49,52 +49,21 @@ struct EthereumDappRequestProcessor {
                 network: nil
             )
             return .approval(.selectAccount(action))
-        case .signTypedMessage:
-            guard let raw = body.raw else {
+        case .signTypedMessage, .signMessage, .signPersonalMessage:
+            guard let content = signingReviewContent(for: body) else {
                 return .immediate(immediateGenericFailure(to: request))
             }
             guard catalog != nil else { return nil }
             guard let walletAndAccount else {
                 return .immediate(immediateGenericFailure(to: request))
             }
-            return prepareMessageSigning(
+            return .approval(.approveMessage(SignMessageAction(
+                subject: content.subject,
                 walletId: walletAndAccount.0,
                 account: walletAndAccount.1,
-                subject: .signTypedData,
-                meta: raw,
-                payload: .ethereumTypedData(raw)
-            )
-        case .signMessage:
-            guard let data = body.message else {
-                return .immediate(immediateGenericFailure(to: request))
-            }
-            guard catalog != nil else { return nil }
-            guard let walletAndAccount else {
-                return .immediate(immediateGenericFailure(to: request))
-            }
-            return prepareMessageSigning(
-                walletId: walletAndAccount.0,
-                account: walletAndAccount.1,
-                subject: .signMessage,
-                meta: WalletCrypto.hexString(data: data),
-                payload: .ethereumMessage(data)
-            )
-        case .signPersonalMessage:
-            guard let data = body.message else {
-                return .immediate(immediateGenericFailure(to: request))
-            }
-            guard catalog != nil else { return nil }
-            guard let walletAndAccount else {
-                return .immediate(immediateGenericFailure(to: request))
-            }
-            let text = String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data)
-            return prepareMessageSigning(
-                walletId: walletAndAccount.0,
-                account: walletAndAccount.1,
-                subject: .signPersonalMessage,
-                meta: text,
-                payload: .ethereumPersonalMessage(data)
-            )
+                meta: content.meta,
+                payload: content.payload
+            )))
         case .signTransaction:
             let transaction: Transaction
             switch body.transactionParsingResult {
@@ -157,46 +126,32 @@ struct EthereumDappRequestProcessor {
         }
     }
 
-    static func execute(
-        permit: ExtensionBridge.ApprovedExecutionPermit,
-        signer: (any WalletSigning)?
-    ) async -> ApprovedExecutionResult {
-        guard permit.isExecuting else { return .rollback }
-        switch permit.approval.kind {
-        case .signing:
-            guard let signer else { return .rollback }
-            switch await signer.sign() {
-            case .success(let output):
-                if let completion = ApprovedCompletion.signed(output, permit: permit) {
-                    return .completed(completion)
-                }
-                if let broadcast = PreparedBroadcast.signed(output, permit: permit) {
-                    return .broadcast(broadcast)
-                }
-                return approvedFailure(.internalError, permit: permit)
-            case .failure(.authorizationUnavailable):
-                return .rollback
-            case .failure(.failedToSign):
-                return approvedFailure(.init(message: Strings.failedToSign, code: ProviderResponseError.internalErrorCode), permit: permit)
-            case .failure(.invalidTransaction):
-                return approvedFailure(.internalError, permit: permit)
-            }
-        case .addEthereumChain:
-            guard completeApprovedChainAddition(permit: permit),
-                  let completion = ApprovedCompletion.chainAdded(permit: permit) else {
-                return approvedFailure(.init(message: Strings.somethingWentWrong), permit: permit)
-            }
-            return .completed(completion)
-        default:
-            return approvedFailure(.internalError, permit: permit)
+    static func signingReviewContent(for body: SafariRequest.Ethereum) -> SigningReviewContent? {
+        switch body.method {
+        case .signTypedMessage:
+            guard let raw = body.raw else { return nil }
+            return SigningReviewContent(
+                subject: .signTypedData,
+                meta: raw,
+                payload: .ethereumTypedData(raw)
+            )
+        case .signMessage:
+            guard let data = body.message else { return nil }
+            return SigningReviewContent(
+                subject: .signMessage,
+                meta: WalletCrypto.hexString(data: data),
+                payload: .ethereumMessage(data)
+            )
+        case .signPersonalMessage:
+            guard let data = body.message else { return nil }
+            return SigningReviewContent(
+                subject: .signPersonalMessage,
+                meta: String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data),
+                payload: .ethereumPersonalMessage(data)
+            )
+        case .addEthereumChain, .requestAccounts, .signTransaction, .ecRecover, .switchEthereumChain:
+            return nil
         }
-    }
-
-    private static func approvedFailure(
-        _ error: ProviderResponseError,
-        permit: ExtensionBridge.ApprovedExecutionPermit
-    ) -> ApprovedExecutionResult {
-        ApprovedCompletion.failure(error, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
     }
 
     static func existingChainAdditionMatches(
@@ -277,7 +232,7 @@ struct EthereumDappRequestProcessor {
         }
     }
 
-    private static func completeApprovedChainAddition(
+    static func completeApprovedChainAddition(
         permit: ExtensionBridge.ApprovedExecutionPermit
     ) -> Bool {
         guard permit.isExecuting,
@@ -304,22 +259,6 @@ struct EthereumDappRequestProcessor {
                 networkFromDapp: network
             ) == .matching
         }
-    }
-
-    private static func prepareMessageSigning(
-        walletId: String,
-        account: WalletAccount,
-        subject: ApprovalSubject,
-        meta: String,
-        payload: SignMessageAction.Payload
-    ) -> DappRequestPreparation {
-        .approval(.approveMessage(SignMessageAction(
-            subject: subject,
-            walletId: walletId,
-            account: account,
-            meta: meta,
-            payload: payload
-        )))
     }
 
     static func transactionBroadcastResponse(

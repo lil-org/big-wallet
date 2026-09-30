@@ -113,24 +113,27 @@ enum DappApprovalDecision: Equatable, Sendable {
         }
 
         func applying(to action: SendTransactionAction) -> Transaction? {
-            guard let currentNetwork = NetworkIdentity(action.resolvedNetwork),
-                  reviewedNetwork == currentNetwork else { return nil }
-            return applyingTransactionFields(to: action.transaction)
+            guard isApplicable(to: action) else { return nil }
+            return applyingValidatedFields(to: action.transaction)
         }
 
-        private func applyingTransactionFields(
-            to transaction: Transaction
-        ) -> Transaction? {
-            guard !gasLimit.isZero,
+        fileprivate func isApplicable(to action: SendTransactionAction) -> Bool {
+            guard let currentNetwork = NetworkIdentity(action.resolvedNetwork),
+                  reviewedNetwork == currentNetwork,
+                  !gasLimit.isZero,
                   fee.isStructurallyValid,
-                  feeBasisBaseFeePerGas.map(Transaction.isValidUInt256) != false else { return nil }
+                  feeBasisBaseFeePerGas.map(Transaction.isValidUInt256) != false else { return false }
             switch fee {
             case .legacy:
                 guard feeProvenance.maxPriorityFeePerGas == nil,
-                      feeProvenance.maxFeePerGas == nil else { return nil }
+                      feeProvenance.maxFeePerGas == nil else { return false }
             case .eip1559:
-                guard feeProvenance.gasPrice == nil else { return nil }
+                guard feeProvenance.gasPrice == nil else { return false }
             }
+            return true
+        }
+
+        fileprivate func applyingValidatedFields(to transaction: Transaction) -> Transaction {
             var result = transaction
             result.nonce = nonce.toHexString(withPrefix: true)
             result.gas = gasLimit.toHexString(withPrefix: true)
@@ -154,16 +157,29 @@ enum DappApprovalDecision: Equatable, Sendable {
 final class ApprovalReview {
     private enum State { case open, accepted, invalidated }
 
-    let binding: ExtensionBridge.RequestBinding
-    let request: SafariRequest
-    let action: DappRequestAction
+    private struct Content {
+        let binding: ExtensionBridge.RequestBinding
+        let action: DappRequestAction
+    }
+
+    private let content: Content
     private var state = State.open
+
+    var binding: ExtensionBridge.RequestBinding { content.binding }
+    var request: SafariRequest { content.binding.request }
+    var action: DappRequestAction { content.action }
 
     init?(binding: ExtensionBridge.RequestBinding, action: DappRequestAction) {
         guard let action = Self.boundAction(action, request: binding.request) else { return nil }
-        self.binding = binding
-        request = binding.request
-        self.action = action
+        content = Content(binding: binding, action: action)
+    }
+
+    private init(content: Content) {
+        self.content = content
+    }
+
+    func renewed() -> ApprovalReview {
+        ApprovalReview(content: content)
     }
 
     func invalidate() {
@@ -223,7 +239,7 @@ final class ApprovalReview {
         return ReviewConsent(review: self, decision: decision, approvedAt: approvedAt, nativeReceipt: nativeReceipt)
     }
 
-    fileprivate static func boundAction(
+    private static func boundAction(
         _ action: DappRequestAction,
         request: SafariRequest
     ) -> DappRequestAction? {
@@ -246,16 +262,25 @@ final class ApprovalReview {
             return action
         case (.approveMessage(let message), _):
             let descriptor = WalletAccountDescriptor(walletID: message.walletId, account: message.account)
-            guard request.authorizedAccount == descriptor else { return nil }
-            let catalog = WalletReviewCatalog(
-                identity: .init(generation: nil, catalogData: Data()),
-                orderedAccounts: [.init(walletId: message.walletId, account: message.account)]
-            )
-            guard case .approval(.approveMessage(let canonical)) = DappRequestProcessor().prepare(request, catalog: catalog),
+            guard descriptor.isValid, request.authorizedAccount == descriptor else { return nil }
+            switch request.body {
+            case .ethereum(let body):
+                guard descriptor.coin == .ethereum,
+                      descriptor.normalizedAddress == WalletCoin.ethereum.normalizedAddress(body.address) else { return nil }
+            case .solana(let body):
+                guard descriptor.coin == .solana,
+                      descriptor.normalizedAddress == body.publicKey else { return nil }
+            case .unknown:
+                return nil
+            }
+            guard let canonical = DappRequestProcessor.signingReviewContent(for: request),
                   canonical.subject == message.subject,
                   canonical.meta == message.meta,
-                  messagePayloadMatches(message.payload, canonical.payload) else { return nil }
-            return .approveMessage(canonical)
+                  DappApprovalValidator.messagePayloadMatches(message.payload, canonical.payload) else { return nil }
+            return .approveMessage(SignMessageAction(
+                subject: canonical.subject, walletId: message.walletId,
+                account: message.account, meta: canonical.meta, payload: canonical.payload
+            ))
         case (.approveTransaction(let transaction), .ethereum(let body)):
             guard body.method == .signTransaction,
                   body.currentChainId == transaction.chain.chainId,
@@ -263,12 +288,7 @@ final class ApprovalReview {
                     walletID: transaction.walletId, account: transaction.account
                   ),
                   case .success(let canonical) = body.transactionParsingResult,
-                  canonical.from == transaction.transaction.from,
-                  canonical.to == transaction.transaction.to,
-                  canonical.value == transaction.transaction.value,
-                  canonical.data == transaction.transaction.data,
-                  canonical.accessList == transaction.transaction.accessList,
-                  canonical.feeIntent == transaction.transaction.feeIntent else { return nil }
+                  DappApprovalValidator.transactionIntentMatches(canonical, transaction.transaction) else { return nil }
             return .approveTransaction(SendTransactionAction(
                 transaction: canonical, resolvedNetwork: transaction.resolvedNetwork,
                 walletId: transaction.walletId, account: transaction.account
@@ -276,49 +296,13 @@ final class ApprovalReview {
         case (.addEthereumChain(let addition), .ethereum(let body)):
             guard body.method == .addEthereumChain,
                   let requested = EthereumNetworkFromDapp.from(body.parameters) else { return nil }
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            guard let expected = try? encoder.encode(requested),
-                  expected == (try? encoder.encode(addition.chainToAdd)) else { return nil }
+            guard DappApprovalValidator.networkDefinitionMatches(requested, addition.chainToAdd) else { return nil }
             return .addEthereumChain(AddEthereumChainAction(chainToAdd: requested))
         default:
             return nil
         }
     }
 
-    private static func messagePayloadMatches(
-        _ left: SignMessageAction.Payload,
-        _ right: SignMessageAction.Payload
-    ) -> Bool {
-        switch (left, right) {
-        case (.ethereumMessage(let left), .ethereumMessage(let right)),
-             (.ethereumPersonalMessage(let left), .ethereumPersonalMessage(let right)),
-             (.solanaMessage(let left), .solanaMessage(let right)):
-            return left == right
-        case (.ethereumTypedData(let left), .ethereumTypedData(let right)):
-            return left == right
-        case (.solanaTransaction(let left), .solanaTransaction(let right)):
-            return left.messageData == right.messageData
-        case (.solanaTransactions(let left), .solanaTransactions(let right)):
-            return left.map(\.messageData) == right.map(\.messageData)
-        case (.solanaLegacyBroadcast(let left, let leftOptions),
-              .solanaLegacyBroadcast(let right, let rightOptions)):
-            return left.preparedMessage.messageData == right.preparedMessage.messageData &&
-                optionsMatch(leftOptions, rightOptions)
-        case (.solanaSerializedBroadcast(let left, let leftOptions),
-              .solanaSerializedBroadcast(let right, let rightOptions)):
-            return left.preparedMessage.messageData == right.preparedMessage.messageData &&
-                optionsMatch(leftOptions, rightOptions)
-        default:
-            return false
-        }
-    }
-
-    private static func optionsMatch(_ left: Solana.PreparedSendOptions, _ right: Solana.PreparedSendOptions) -> Bool {
-        left.clusterHint == right.clusterHint && left.preflightCommitment == right.preflightCommitment &&
-            left.maxRetries == right.maxRetries && left.minContextSlot == right.minContextSlot &&
-            left.confirmationCommitment == right.confirmationCommitment
-    }
 }
 
 fileprivate final class ConsentAuthorizationUse: @unchecked Sendable {
@@ -360,25 +344,9 @@ struct ReviewConsent: Sendable {
         accounts: [SpecificWalletAccount]?,
         networkResolver: (String) -> EthereumNetwork?
     ) -> Result<ResolvedDappApproval, DappApprovalValidator.Failure> {
-        let candidate = currentAction ?? review.action
-        switch (candidate, decision) {
-        case (.approveMessage(let action), .message(let message)):
-            guard message.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
-                return .failure(.staleAccount)
-            }
-        case (.approveTransaction(let action), .transaction(let execution)):
-            guard execution.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
-                return .failure(.staleAccount)
-            }
-            guard execution.applying(to: action) != nil else { return .failure(.staleTransaction) }
-        default:
-            break
-        }
-        guard let action = ApprovalReview.boundAction(candidate, request: review.request) else {
-            return .failure(.invalidDecision)
-        }
         return DappApprovalValidator.resolve(
-            action: action, decision: decision, accounts: accounts, networkResolver: networkResolver
+            reviewedAction: review.action, currentAction: currentAction,
+            decision: decision, accounts: accounts, networkResolver: networkResolver
         ).map { approval in
             ResolvedDappApproval(
                 binding: review.binding, request: review.request, approval: approval,
@@ -463,9 +431,48 @@ enum DappApprovalValidator {
         accounts: [SpecificWalletAccount]?,
         networkResolver: (String) -> EthereumNetwork?
     ) -> Result<Approval, Failure> {
+        resolve(
+            action: action, reviewedAction: nil, decision: decision,
+            accounts: accounts, networkResolver: networkResolver
+        )
+    }
+
+    fileprivate static func resolve(
+        reviewedAction: DappRequestAction,
+        currentAction: DappRequestAction?,
+        decision: DappApprovalDecision,
+        accounts: [SpecificWalletAccount]?,
+        networkResolver: (String) -> EthereumNetwork?
+    ) -> Result<Approval, Failure> {
+        resolve(
+            action: currentAction ?? reviewedAction,
+            reviewedAction: currentAction.map { _ in reviewedAction },
+            decision: decision, accounts: accounts, networkResolver: networkResolver
+        )
+    }
+
+    private static func resolve(
+        action: DappRequestAction,
+        reviewedAction: DappRequestAction?,
+        decision: DappApprovalDecision,
+        accounts: [SpecificWalletAccount]?,
+        networkResolver: (String) -> EthereumNetwork?
+    ) -> Result<Approval, Failure> {
+        func canonicalAction() -> DappRequestAction? {
+            guard let reviewedAction else { return action }
+            return matchingAction(action, reviewedAction: reviewedAction)
+        }
+
         switch (action, decision) {
-        case (.selectAccount(let action), .accountSelection(let selection)),
-             (.switchAccount(let action), .accountSelection(let selection)):
+        case (.selectAccount, .accountSelection(let selection)),
+             (.switchAccount, .accountSelection(let selection)):
+            let action: SelectAccountAction
+            switch canonicalAction() {
+            case .selectAccount(let selection)?, .switchAccount(let selection)?:
+                action = selection
+            default:
+                return .failure(.invalidDecision)
+            }
             guard let accounts,
                   let resolved = resolveSelection(
                     action: action,
@@ -478,8 +485,11 @@ enum DappApprovalValidator {
             guard approval.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
                 return .failure(.staleAccount)
             }
+            guard case .approveMessage(let canonical)? = canonicalAction() else {
+                return .failure(.invalidDecision)
+            }
             guard let payload = resolveMessagePayload(
-                action.payload,
+                canonical.payload,
                 cluster: approval.solanaCluster
             ) else {
                 return .failure(.invalidDecision)
@@ -492,21 +502,112 @@ enum DappApprovalValidator {
             guard execution.approvedAccount.matches(walletID: action.walletId, account: action.account) else {
                 return .failure(.staleAccount)
             }
-            guard let transaction = execution.applying(to: action) else {
+            guard execution.isApplicable(to: action) else {
                 return .failure(.staleTransaction)
             }
-            guard transaction.isReadyForApproval(on: action.chain) else {
+            guard case .approveTransaction(let canonical)? = canonicalAction() else {
+                return .failure(.invalidDecision)
+            }
+            let transaction = execution.applyingValidatedFields(to: canonical.transaction)
+            guard transaction.isReadyForApproval(on: canonical.chain) else {
                 return .failure(.invalidDecision)
             }
             return .success(Approval(.signing(
                 approvedAccount: execution.approvedAccount,
-                payload: .ethereumTransaction(transaction, action.resolvedNetwork)
+                payload: .ethereumTransaction(transaction, canonical.resolvedNetwork)
             )))
-        case (.addEthereumChain(let action), .addEthereumChain):
-            return .success(Approval(.addEthereumChain(action)))
+        case (.addEthereumChain, .addEthereumChain):
+            guard case .addEthereumChain(let canonical)? = canonicalAction() else {
+                return .failure(.invalidDecision)
+            }
+            return .success(Approval(.addEthereumChain(canonical)))
         default:
             return .failure(.invalidDecision)
         }
+    }
+
+    private static func matchingAction(
+        _ action: DappRequestAction,
+        reviewedAction: DappRequestAction
+    ) -> DappRequestAction? {
+        switch (action, reviewedAction) {
+        case (.selectAccount(let current), .selectAccount(let reviewed)),
+             (.switchAccount(let current), .switchAccount(let reviewed)):
+            guard current.coinType == reviewed.coinType,
+                  current.initiallyConnectedProviders == reviewed.initiallyConnectedProviders else { return nil }
+            return action
+        case (.approveMessage(let current), .approveMessage(let reviewed)):
+            guard WalletAccountDescriptor(walletID: current.walletId, account: current.account) ==
+                    WalletAccountDescriptor(walletID: reviewed.walletId, account: reviewed.account),
+                  current.subject == reviewed.subject,
+                  current.meta == reviewed.meta,
+                  messagePayloadMatches(current.payload, reviewed.payload) else { return nil }
+            return reviewedAction
+        case (.approveTransaction(let current), .approveTransaction(let reviewed)):
+            guard current.chain.chainId == reviewed.chain.chainId,
+                  WalletAccountDescriptor(walletID: current.walletId, account: current.account) ==
+                    WalletAccountDescriptor(walletID: reviewed.walletId, account: reviewed.account),
+                  transactionIntentMatches(current.transaction, reviewed.transaction) else { return nil }
+            return .approveTransaction(SendTransactionAction(
+                transaction: reviewed.transaction, resolvedNetwork: current.resolvedNetwork,
+                walletId: current.walletId, account: current.account
+            ))
+        case (.addEthereumChain(let current), .addEthereumChain(let reviewed)):
+            guard networkDefinitionMatches(current.chainToAdd, reviewed.chainToAdd) else { return nil }
+            return reviewedAction
+        default:
+            return nil
+        }
+    }
+
+    fileprivate static func transactionIntentMatches(_ left: Transaction, _ right: Transaction) -> Bool {
+        left.from == right.from && left.to == right.to && left.value == right.value &&
+            left.data == right.data && left.accessList == right.accessList && left.feeIntent == right.feeIntent
+    }
+
+    fileprivate static func networkDefinitionMatches(
+        _ left: EthereumNetworkFromDapp,
+        _ right: EthereumNetworkFromDapp
+    ) -> Bool {
+        left.chainId == right.chainId && left.rpcUrls == right.rpcUrls &&
+            left.blockExplorerUrls == right.blockExplorerUrls && left.chainName == right.chainName &&
+            left.nativeCurrency.decimals == right.nativeCurrency.decimals &&
+            left.nativeCurrency.name == right.nativeCurrency.name &&
+            left.nativeCurrency.symbol == right.nativeCurrency.symbol
+    }
+
+    fileprivate static func messagePayloadMatches(
+        _ left: SignMessageAction.Payload,
+        _ right: SignMessageAction.Payload
+    ) -> Bool {
+        switch (left, right) {
+        case (.ethereumMessage(let left), .ethereumMessage(let right)),
+             (.ethereumPersonalMessage(let left), .ethereumPersonalMessage(let right)),
+             (.solanaMessage(let left), .solanaMessage(let right)):
+            return left == right
+        case (.ethereumTypedData(let left), .ethereumTypedData(let right)):
+            return left == right
+        case (.solanaTransaction(let left), .solanaTransaction(let right)):
+            return left.messageData == right.messageData
+        case (.solanaTransactions(let left), .solanaTransactions(let right)):
+            return left.map(\.messageData) == right.map(\.messageData)
+        case (.solanaLegacyBroadcast(let left, let leftOptions),
+              .solanaLegacyBroadcast(let right, let rightOptions)):
+            return left.preparedMessage.messageData == right.preparedMessage.messageData &&
+                optionsMatch(leftOptions, rightOptions)
+        case (.solanaSerializedBroadcast(let left, let leftOptions),
+              .solanaSerializedBroadcast(let right, let rightOptions)):
+            return left.preparedMessage.messageData == right.preparedMessage.messageData &&
+                optionsMatch(leftOptions, rightOptions)
+        default:
+            return false
+        }
+    }
+
+    private static func optionsMatch(_ left: Solana.PreparedSendOptions, _ right: Solana.PreparedSendOptions) -> Bool {
+        left.clusterHint == right.clusterHint && left.preflightCommitment == right.preflightCommitment &&
+            left.maxRetries == right.maxRetries && left.minContextSlot == right.minContextSlot &&
+            left.confirmationCommitment == right.confirmationCommitment
     }
 
     private static func resolveMessagePayload(

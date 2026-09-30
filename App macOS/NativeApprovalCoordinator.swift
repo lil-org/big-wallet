@@ -227,6 +227,7 @@ final class NativeApprovalCoordinator {
             }
         }
 
+        @MainActor
         func presentation(hasAuthenticated: Bool) -> Presentation? {
             switch self {
             case .registered, .validating, .acquiringReceipt,

@@ -40,7 +40,6 @@ final class PopupRequestSession {
     let request: SafariRequest
     var reviewCatalog: WalletReviewCatalog?
     let preparedAction: DappRequestAction
-    private let binding: ExtensionBridge.RequestBinding
     private var approvalReview: ApprovalReview
     var selectionDraft: SelectionDraft?
     var transaction: PopupTransactionSession?
@@ -54,7 +53,6 @@ final class PopupRequestSession {
         reviewCatalog: WalletReviewCatalog? = nil
     ) {
         guard let review = ApprovalReview(binding: binding, action: action) else { return nil }
-        self.binding = binding
         handle = binding.handle
         request = binding.request
         preparedAction = action
@@ -88,11 +86,9 @@ final class PopupRequestSession {
         transaction?.invalidate()
     }
 
-    private func renewApprovalReview() -> Bool {
+    private func renewApprovalReview() {
         approvalReview.invalidate()
-        guard let review = ApprovalReview(binding: binding, action: preparedAction) else { return false }
-        approvalReview = review
-        return true
+        approvalReview = approvalReview.renewed()
     }
 
     var state: State {
@@ -204,7 +200,8 @@ final class PopupRequestSession {
     }
 
     func returnToReview(token: UUID) -> Bool {
-        guard isCurrent(token), renewApprovalReview() else { return false }
+        guard isCurrent(token) else { return false }
+        renewApprovalReview()
         lifecycle = .review(feedback: errorText)
         return true
     }
@@ -217,10 +214,7 @@ final class PopupRequestSession {
     func rotateReviewToken() {
         presentationRevision &+= 1
         guard state == .review else { return }
-        guard renewApprovalReview() else {
-            lifecycle = .error(message: Strings.failedToLoad)
-            return
-        }
+        renewApprovalReview()
         reviewToken = UUID()
     }
 

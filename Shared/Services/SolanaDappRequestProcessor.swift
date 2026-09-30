@@ -6,14 +6,7 @@ struct SolanaDappRequestProcessor {
 
     private static let solana = Solana.shared
 
-    private struct SigningPayload {
-        let payload: SignMessageAction.Payload
-        let approvalSubject: ApprovalSubject
-        let approvalMessage: String
-    }
-
     private enum ProviderError: Error {
-        case failedToSign
         case internalError
         case malformedPayload
         case unauthorized(publicKey: String)
@@ -21,11 +14,6 @@ struct SolanaDappRequestProcessor {
 
         var responseError: ProviderResponseError {
             switch self {
-            case .failedToSign:
-                return .init(
-                    message: Strings.failedToSign,
-                    code: ProviderResponseError.internalErrorCode
-                )
             case .internalError:
                 return .internalError
             case .malformedPayload:
@@ -50,13 +38,7 @@ struct SolanaDappRequestProcessor {
         switch body.method {
         case .connect:
             return prepareConnect(request: request, body: body, catalog: catalog)
-        case .signAllTransactions:
-            return prepareSignAllTransactions(
-                request: request,
-                body: body,
-                catalog: catalog
-            )
-        case .signMessage, .signTransaction, .signAndSendTransaction:
+        case .signAllTransactions, .signMessage, .signTransaction, .signAndSendTransaction:
             return prepareSigningOrSending(
                 request: request,
                 body: body,
@@ -88,37 +70,8 @@ struct SolanaDappRequestProcessor {
         }
     }
 
-    static func execute(
-        permit: ExtensionBridge.ApprovedExecutionPermit,
-        signer: (any WalletSigning)?
-    ) async -> ApprovedExecutionResult {
-        guard permit.isExecuting,
-              case .signing(_, let payload) = permit.approval.kind,
-              payload.coin == .solana else { return .rollback }
-        guard let signer else { return .rollback }
-        switch await signer.sign() {
-        case .success(let output):
-            if let completion = ApprovedCompletion.signed(output, permit: permit) {
-                return .completed(completion)
-            }
-            if let broadcast = PreparedBroadcast.signed(output, permit: permit) {
-                return .broadcast(broadcast)
-            }
-            return approvedFailure(.internalError, permit: permit)
-        case .failure(.authorizationUnavailable):
-            return .rollback
-        case .failure(.failedToSign):
-            return approvedFailure(.failedToSign, permit: permit)
-        case .failure(.invalidTransaction):
-            return approvedFailure(.malformedPayload, permit: permit)
-        }
-    }
-
-    private static func approvedFailure(
-        _ error: ProviderError,
-        permit: ExtensionBridge.ApprovedExecutionPermit
-    ) -> ApprovedExecutionResult {
-        ApprovedCompletion.failure(error.responseError, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
+    static func signingReviewContent(for body: SafariRequest.Solana) -> SigningReviewContent? {
+        try? preparedSigningReviewContent(body: body).get()
     }
 
     static func decodedSignMessage(
@@ -148,12 +101,12 @@ struct SolanaDappRequestProcessor {
         return .approval(.selectAccount(action))
     }
 
-    private static func prepareSignAllTransactions(
+    private static func prepareSigningOrSending(
         request: SafariRequest,
         body: SafariRequest.Solana,
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
-        guard let messages = body.messages else {
+        if body.method == .signAllTransactions, body.messages == nil {
             return .immediate(immediateFailure(to: request, error: .malformedPayload))
         }
 
@@ -170,6 +123,42 @@ struct SolanaDappRequestProcessor {
             return .immediate(immediateFailure(to: request, error: error))
         }
 
+        switch preparedSigningReviewContent(body: body) {
+        case .success(let content):
+            return .approval(.approveMessage(SignMessageAction(
+                subject: content.subject,
+                walletId: walletID,
+                account: account,
+                meta: content.meta,
+                payload: content.payload
+            )))
+        case .failure(let error):
+            return .immediate(immediateFailure(to: request, error: error))
+        }
+    }
+
+    private static func preparedSigningReviewContent(
+        body: SafariRequest.Solana
+    ) -> Result<SigningReviewContent, ProviderError> {
+        switch body.method {
+        case .signAllTransactions:
+            return signAllTransactionsReviewContent(body: body)
+        case .signAndSendTransaction:
+            return signAndSendReviewContent(body: body)
+        case .signMessage, .signTransaction:
+            return messageReviewContent(body: body)
+        case .connect:
+            return .failure(.internalError)
+        }
+    }
+
+    private static func signAllTransactionsReviewContent(
+        body: SafariRequest.Solana
+    ) -> Result<SigningReviewContent, ProviderError> {
+        guard let messages = body.messages else {
+            return .failure(.malformedPayload)
+        }
+
         var preparedMessages = [SolanaPreparedTransactionMessage]()
         preparedMessages.reserveCapacity(messages.count)
         for message in messages {
@@ -177,149 +166,62 @@ struct SolanaDappRequestProcessor {
             case .success(let preparedMessage):
                 preparedMessages.append(preparedMessage)
             case .failure(let error):
-                return .immediate(immediateFailure(to: request, error: error))
+                return .failure(error)
             }
         }
 
-        let displayMessage = SolanaTransactionSummaryFormatter.approvalMessage(
-            encodedMessages: messages,
-            preparedMessages: preparedMessages
-        )
-        let action = approvalAction(
-            walletID: walletID,
-            account: account,
+        return .success(SigningReviewContent(
             subject: .approveTransaction,
-            meta: displayMessage,
+            meta: SolanaTransactionSummaryFormatter.approvalMessage(
+                encodedMessages: messages,
+                preparedMessages: preparedMessages
+            ),
             payload: .solanaTransactions(preparedMessages)
-        )
-        return .approval(action)
+        ))
     }
 
-    private static func prepareSigningOrSending(
-        request: SafariRequest,
-        body: SafariRequest.Solana,
-        catalog: WalletReviewCatalog
-    ) -> DappRequestPreparation {
-        let walletID: String
-        let account: WalletAccount
-        switch walletAndAccount(
-            authorizedAccount: request.authorizedAccount,
-            publicKey: body.publicKey,
-            catalog: catalog
-        ) {
-        case .success(let value):
-            (walletID, account) = value
-        case .failure(let error):
-            return .immediate(immediateFailure(to: request, error: error))
-        }
-
-        switch body.method {
-        case .signAndSendTransaction:
-            return prepareSignAndSend(
-                request: request,
-                body: body,
-                walletID: walletID,
-                account: account
-            )
-        case .signMessage, .signTransaction:
-            let payload: SigningPayload
-            switch signingPayload(body: body) {
-            case .success(let value):
-                payload = value
-            case .failure(let error):
-                return .immediate(immediateFailure(to: request, error: error))
-            }
-            let action = approvalAction(
-                walletID: walletID,
-                account: account,
-                subject: payload.approvalSubject,
-                meta: payload.approvalMessage,
-                payload: payload.payload
-            )
-            return .approval(action)
-        case .connect, .signAllTransactions:
-            return .immediate(immediateFailure(to: request, error: .internalError))
-        }
-    }
-
-    private static func prepareSignAndSend(
-        request: SafariRequest,
-        body: SafariRequest.Solana,
-        walletID: String,
-        account: WalletAccount
-    ) -> DappRequestPreparation {
+    private static func signAndSendReviewContent(
+        body: SafariRequest.Solana
+    ) -> Result<SigningReviewContent, ProviderError> {
         let sendOptions: Solana.PreparedSendOptions
         switch Solana.preparedSendOptions(from: body.sendOptions) {
         case .success(let value):
             sendOptions = value
         case .failure(let error):
-            return .immediate(immediateFailure(to: request, error: .sendTransaction(error)))
+            return .failure(.sendTransaction(error))
         }
 
         if let serializedTransaction = body.transaction {
-            return prepareSerializedSignAndSend(
-                request: request,
-                body: body,
+            return solana.preparedSerializedTransactionForSignAndSend(
                 serializedTransaction: serializedTransaction,
-                sendOptions: sendOptions,
-                walletID: walletID,
-                account: account
-            )
+                publicKey: body.publicKey
+            ).map { transaction in
+                SigningReviewContent(
+                    subject: .approveTransaction,
+                    meta: transactionApprovalMessage(
+                        message: transaction.approvalMessage,
+                        preparedMessage: transaction.preparedMessage
+                    ),
+                    payload: .solanaSerializedBroadcast(transaction, sendOptions)
+                )
+            }.mapError(ProviderError.sendTransaction)
         }
 
-        let transaction: Solana.PreparedLegacySignAndSendTransaction
-        switch preparedLegacySignAndSendTransaction(body: body) {
-        case .success(let value):
-            transaction = value
-        case .failure(let error):
-            return .immediate(immediateFailure(to: request, error: error))
-        }
-
-        let action = approvalAction(
-            walletID: walletID,
-            account: account,
-            subject: .approveTransaction,
-            meta: transactionApprovalMessage(
-                message: transaction.approvalMessage,
-                preparedMessage: transaction.preparedMessage
-            ),
-            payload: .solanaLegacyBroadcast(transaction, sendOptions)
-        )
-        return .approval(action)
-    }
-
-    private static func prepareSerializedSignAndSend(
-        request: SafariRequest,
-        body: SafariRequest.Solana,
-        serializedTransaction: String,
-        sendOptions: Solana.PreparedSendOptions,
-        walletID: String,
-        account: WalletAccount
-    ) -> DappRequestPreparation {
-        switch solana.preparedSerializedTransactionForSignAndSend(
-            serializedTransaction: serializedTransaction,
-            publicKey: body.publicKey
-        ) {
-        case .failure(let error):
-            return .immediate(immediateFailure(to: request, error: .sendTransaction(error)))
-        case .success(let transaction):
-            let action = approvalAction(
-                walletID: walletID,
-                account: account,
+        return preparedLegacySignAndSendTransaction(body: body).map { transaction in
+            SigningReviewContent(
                 subject: .approveTransaction,
                 meta: transactionApprovalMessage(
                     message: transaction.approvalMessage,
                     preparedMessage: transaction.preparedMessage
                 ),
-                payload: .solanaSerializedBroadcast(transaction, sendOptions)
+                payload: .solanaLegacyBroadcast(transaction, sendOptions)
             )
-            return .approval(action)
         }
     }
 
-    private static func signingPayload(
+    private static func messageReviewContent(
         body: SafariRequest.Solana
-    ) -> Result<SigningPayload, ProviderError> {
+    ) -> Result<SigningReviewContent, ProviderError> {
         guard let canonicalMessage = body.message else {
             return .failure(.malformedPayload)
         }
@@ -333,28 +235,28 @@ struct SolanaDappRequestProcessor {
                   ) else {
                 return .failure(.malformedPayload)
             }
-            return .success(SigningPayload(
-                payload: .solanaMessage(messageData),
-                approvalSubject: .signMessage,
-                approvalMessage: approvalMessage(
+            return .success(SigningReviewContent(
+                subject: .signMessage,
+                meta: approvalMessage(
                     for: body,
                     canonicalMessage: canonicalMessage,
                     decodedMessageData: messageData
-                )
+                ),
+                payload: .solanaMessage(messageData)
             ))
         case .signTransaction:
-            switch preparedTransactionMessage(canonicalMessage, publicKey: body.publicKey) {
-            case .success(let preparedMessage):
-                return .success(SigningPayload(
-                    payload: .solanaTransaction(preparedMessage),
-                    approvalSubject: .approveTransaction,
-                    approvalMessage: transactionApprovalMessage(
+            return preparedTransactionMessage(
+                canonicalMessage,
+                publicKey: body.publicKey
+            ).map { preparedMessage in
+                SigningReviewContent(
+                    subject: .approveTransaction,
+                    meta: transactionApprovalMessage(
                         message: canonicalMessage,
                         preparedMessage: preparedMessage
-                    )
-                ))
-            case .failure(let error):
-                return .failure(error)
+                    ),
+                    payload: .solanaTransaction(preparedMessage)
+                )
             }
         case .connect, .signAllTransactions, .signAndSendTransaction:
             return .failure(.internalError)
@@ -423,22 +325,6 @@ struct SolanaDappRequestProcessor {
             return .failure(.unauthorized(publicKey: publicKey))
         }
         return .success((value.walletId, value.account))
-    }
-
-    private static func approvalAction(
-        walletID: String,
-        account: WalletAccount,
-        subject: ApprovalSubject,
-        meta: String,
-        payload: SignMessageAction.Payload
-    ) -> DappRequestAction {
-        .approveMessage(SignMessageAction(
-            subject: subject,
-            walletId: walletID,
-            account: account,
-            meta: meta,
-            payload: payload
-        ))
     }
 
     static func transactionBroadcastResponse(

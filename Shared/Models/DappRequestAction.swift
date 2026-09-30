@@ -336,6 +336,12 @@ struct SelectAccountAction {
     }
 }
 
+struct SigningReviewContent {
+    let subject: ApprovalSubject
+    let meta: String
+    let payload: SignMessageAction.Payload
+}
+
 struct SignMessageAction {
     enum Payload: Sendable {
         case ethereumMessage(Data)

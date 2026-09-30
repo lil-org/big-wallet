@@ -122,17 +122,57 @@ struct DappRequestProcessor: DappRequestProcessing {
         switch permit.approval.kind {
         case .accountSelection:
             return ApprovedCompletion.accountSelection(permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
-        case .signing, .addEthereumChain:
-            switch permit.request.body {
-            case .ethereum:
-                return await EthereumDappRequestProcessor.execute(permit: permit, signer: signer)
-            case .solana:
-                return await SolanaDappRequestProcessor.execute(permit: permit, signer: signer)
-            case .unknown:
-                break
+        case .signing(_, let payload):
+            guard permit.isExecuting,
+                  payload.coin.correspondingInpageProvider == permit.request.provider,
+                  let signer else { return .rollback }
+            switch await signer.sign() {
+            case .success(let output):
+                if let completion = ApprovedCompletion.signed(output, permit: permit) {
+                    return .completed(completion)
+                }
+                if let broadcast = PreparedBroadcast.signed(output, permit: permit) {
+                    return .broadcast(broadcast)
+                }
+                return Self.approvedFailure(.internalError, permit: permit)
+            case .failure(.authorizationUnavailable):
+                return .rollback
+            case .failure(.failedToSign):
+                return Self.approvedFailure(
+                    .init(message: Strings.failedToSign, code: ProviderResponseError.internalErrorCode),
+                    permit: permit
+                )
+            case .failure(.invalidTransaction):
+                let error: ProviderResponseError = payload.coin == .solana
+                    ? .init(message: Strings.somethingWentWrong, code: 4200)
+                    : .internalError
+                return Self.approvedFailure(error, permit: permit)
             }
+        case .addEthereumChain:
+            guard EthereumDappRequestProcessor.completeApprovedChainAddition(permit: permit),
+                  let completion = ApprovedCompletion.chainAdded(permit: permit) else {
+                return Self.approvedFailure(.init(message: Strings.somethingWentWrong), permit: permit)
+            }
+            return .completed(completion)
         }
-        return ApprovedCompletion.failure(.internalError, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
+    }
+
+    private static func approvedFailure(
+        _ error: ProviderResponseError,
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedExecutionResult {
+        ApprovedCompletion.failure(error, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
+    }
+
+    static func signingReviewContent(for request: SafariRequest) -> SigningReviewContent? {
+        switch request.body {
+        case .ethereum(let body):
+            return EthereumDappRequestProcessor.signingReviewContent(for: body)
+        case .solana(let body):
+            return SolanaDappRequestProcessor.signingReviewContent(for: body)
+        case .unknown:
+            return nil
+        }
     }
 
     private static func prepareSwitchAccount(
