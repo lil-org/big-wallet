@@ -2309,6 +2309,9 @@
             "message": {
               "ref": "PageDisconnect"
             },
+            "observedRevision": {
+              "ref": "NonnegativeInteger"
+            },
             "providerGeneration": {
               "type": "string",
               "minLength": 1

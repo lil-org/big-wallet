@@ -240,6 +240,8 @@ const transport = freezeObjectNormally({
         if (!message || typeof message !== "object") { return false; }
         const provider = ownValue(message, "provider");
         if (provider !== "ethereum" && provider !== "solana") { return false; }
+        const observedRevision = ownValue(message, "observedRevision");
+        if (!isSafeIntegerNormally(observedRevision) || observedRevision < 0) { return false; }
         const request = {provider, subject: "disconnect"};
         const id = ownValue(message, "id");
         if (typeof id !== "undefined") { request.id = id; }
@@ -247,6 +249,7 @@ const transport = freezeObjectNormally({
             direction: PAGE_TO_CONTENT_DIRECTION,
             kind: "disconnect",
             message: request,
+            observedRevision,
             providerGeneration: generation,
         };
         return postToPage(envelope);

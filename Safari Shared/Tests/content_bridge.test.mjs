@@ -190,7 +190,7 @@ function makeHarness({
                         direction: "big-wallet-provider-v1",
                         kind,
                         message: kind === "rpc" || kind === "disconnect" ? {subject: kind, ...message} : message,
-                        ...(kind === "request" ? {observedRevision} : {}),
+                        ...(kind === "request" || kind === "disconnect" ? {observedRevision} : {}),
                         providerGeneration: generation,
                     },
                 });
@@ -2281,6 +2281,34 @@ test("disconnect never retries a precondition from another native context", asyn
 });
 
 for (const provider of ["ethereum", "solana"]) {
+    test(`${provider} queued page disconnect keeps its observed revision after same-account revoke and regrant`, async () => {
+        const observed = 1;
+        const current = 3;
+        const initialState = {
+            ...configurationState({ethereum: observed, solana: observed}),
+            ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"},
+            solana: {publicKey: "11111111111111111111111111111111"},
+        };
+        const refreshedState = {...initialState, revisions: {ethereum: current, solana: current}};
+        const harness = makeHarness({configurationResponse: {kind: "configuration", state: initialState},
+            sendMessage: message => message.subject === "disconnect" ? {
+                kind: "error", id: message.id, provider, name: "revokePermissions",
+                state: refreshedState, error: {code: 4100, message: "Authorization changed"},
+            } : undefined});
+        await settle();
+        const generation = harness.generation();
+        const queued = {id: 7, provider};
+        harness.context.bigWalletPublishConfiguration(refreshedState, "https://wallet.example", generation);
+        harness.dispatchPage("disconnect", queued, generation, observed);
+        await settle();
+        const sent = harness.runtimeMessages.filter(message => message.subject === "disconnect");
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].authority.revisions[provider], observed);
+        assert.equal(sent[0].authority.revisions[provider === "ethereum" ? "solana" : "ethereum"], current);
+        assert.deepEqual(clone(harness.context.bigWalletConfigurationState.state), refreshedState);
+        assert.equal(harness.postedMessages.at(-1).message.response.error.code, 4100);
+    });
+
     test(`${provider} queued page signing keeps its observed revision after same-account revoke and regrant`, async () => {
         const observed = 1;
         const current = 3;
@@ -2318,3 +2346,33 @@ test("page requests reject missing malformed and overflowing observed revisions"
     await settle();
     assert.equal(harness.runtimeMessages.filter(message => message.subject === "message-to-wallet").length, 0);
 });
+
+for (const provider of ["ethereum", "solana"]) {
+    test(`${provider} disconnect rejects missing malformed and overflowing observed revisions`, async () => {
+        const harness = makeHarness();
+        await settle();
+        const before = harness.postedMessages.length;
+        const message = {id: 7, provider};
+        for (const observedRevision of [null, -1, 1.5, "1", Number.MAX_SAFE_INTEGER + 1]) {
+            harness.dispatchPage("disconnect", message, harness.generation(), observedRevision);
+        }
+        harness.context.bigWalletPageMessage({
+            source: harness.context.window,
+            data: {
+                direction: "big-wallet-provider-v1",
+                kind: "disconnect",
+                message: {subject: "disconnect", ...message},
+                providerGeneration: harness.generation(),
+            },
+        });
+        await settle();
+        assert.equal(harness.runtimeMessages.filter(message => message.subject === "disconnect").length, 0);
+        const failures = harness.postedMessages.slice(before);
+        assert.equal(failures.length, 6);
+        for (const {message: {response}} of failures) {
+            assert.equal(response.id, 7);
+            assert.equal(response.provider, provider);
+            assert.equal(response.error.code, -32603);
+        }
+    });
+}

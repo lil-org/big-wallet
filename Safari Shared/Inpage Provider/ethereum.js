@@ -374,6 +374,7 @@ function postPermissionRevocation(provider, state, record) {
         generation: state.runtime.generation,
         id: record.wireId,
         kind: "disconnect",
+        observedRevision: record.metadata.authorization.revision,
         provider: "ethereum",
     };
     if (!state.runtime.owns(record)) { return false; }

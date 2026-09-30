@@ -5545,7 +5545,7 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
     const disconnect = window.solana.disconnect();
     const disconnectRequest = pageMessages(harness, "disconnect", "solana").at(-1);
     assert.deepEqual(Object.keys(disconnectRequest).sort(), [
-        "direction", "kind", "message", "providerGeneration",
+        "direction", "kind", "message", "observedRevision", "providerGeneration",
     ]);
     const beforeRevision = window.bigWalletInpageStableFacadeRecord.snapshots().solana.nativeRevision;
     const postedCount = harness.postedMessages.length;
@@ -7215,6 +7215,25 @@ test("page wallet envelopes capture the provider revision at dispatch outside th
         assert.deepEqual(Object.keys(envelope.message).sort(), ["body", "id", "name", "provider"]);
         dispatchProviderResponse(h, {id: envelope.message.id, provider: envelope.message.provider,
             name: envelope.message.name, error: {code: 4100, message: "Authorization changed"}});
+    }
+    await assert.rejects(ethereum, error => error.code === 4100);
+    await assert.rejects(solana, error => error.code === 4100);
+});
+
+test("page disconnect envelopes preserve the caller revision across later configuration changes", async () => {
+    const h = inpageHarness();
+    dispatchConfigurations(h, {publicKey: firstSolanaKey, ethereumRevision: 1, solanaRevision: 2});
+    const ethereum = h.window.ethereum.request({method: "wallet_revokePermissions", params: [{eth_accounts: {}}]});
+    const solana = h.window.solana.disconnect();
+    const ethereumMessage = pageMessages(h, "disconnect", "ethereum").at(-1);
+    const solanaMessage = pageMessages(h, "disconnect", "solana").at(-1);
+    dispatchConfigurations(h, {publicKey: firstSolanaKey, ethereumRevision: 3, solanaRevision: 4});
+    assert.equal(ethereumMessage.observedRevision, 1);
+    assert.equal(solanaMessage.observedRevision, 2);
+    for (const envelope of [ethereumMessage, solanaMessage]) {
+        assert.deepEqual(Object.keys(envelope.message).sort(), ["id", "provider", "subject"]);
+        dispatchProviderResponse(h, {id: envelope.message.id, provider: envelope.message.provider,
+            name: "revokePermissions", error: {code: 4100, message: "Authorization changed"}});
     }
     await assert.rejects(ethereum, error => error.code === 4100);
     await assert.rejects(solana, error => error.code === 4100);

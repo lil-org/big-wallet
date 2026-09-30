@@ -3739,11 +3739,12 @@ enum WireProtocol {
     }
 
     private static func n255(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["direction", "kind", "message", "providerGeneration"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["direction", "kind", "message", "observedRevision", "providerGeneration"], optional: []) else { return false }
         guard let field0 = value["direction"], n250(field0) else { return false }
         guard let field1 = value["kind"], n57(field1) else { return false }
         guard let field2 = value["message"], n256(field2) else { return false }
-        guard let field3 = value["providerGeneration"], n28(field3) else { return false }
+        guard let field3 = value["observedRevision"], n12(field3) else { return false }
+        guard let field4 = value["providerGeneration"], n28(field4) else { return false }
         return true
     }
 

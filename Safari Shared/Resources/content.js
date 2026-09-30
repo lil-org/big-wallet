@@ -203,7 +203,7 @@ function bigWalletPageMessage(event) {
         if (envelope.message.provider === "unknown") { return; }
         bigWalletEnqueue(envelope.message, generation, envelope.observedRevision);
     } else if (envelope.kind === "disconnect") {
-        bigWalletDisconnect(envelope.message, generation);
+        bigWalletDisconnect(envelope.message, generation, envelope.observedRevision);
     }
 }
 
@@ -495,11 +495,12 @@ function bigWalletDeliverFailure(message, generation) {
     }, "*");
 }
 
-function bigWalletDisconnect(message, generation) {
+function bigWalletDisconnect(message, generation, observedRevision) {
     if (!bigWalletWire.isValidDisconnectRequest(message)) { return; }
     const identity = bigWalletCurrentIdentity();
     const cached = bigWalletConfigurationState;
-    if (!bigWalletMatchesGeneration(generation) || cached?.providerGeneration !== generation ||
+    if (!Number.isSafeInteger(observedRevision) || observedRevision < 0 ||
+        !bigWalletMatchesGeneration(generation) || cached?.providerGeneration !== generation ||
         cached.configurationKey !== identity?.configurationKey) {
         bigWalletPostDisconnect(message, undefined, generation);
         return;
@@ -509,7 +510,8 @@ function bigWalletDisconnect(message, generation) {
         subject: "disconnect", id, provider: message.provider,
         host: identity.host, configurationKey: identity.configurationKey,
         attempt: bigWalletWire.genPrivateToken(),
-        authority: {context: cached.state.context, revisions: {...cached.state.revisions}},
+        authority: {context: cached.state.context,
+            revisions: {...cached.state.revisions, [message.provider]: observedRevision}},
         workflowVersion: bigWalletWorkflowVersion,
     };
     void (async () => {

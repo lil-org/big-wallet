@@ -2118,13 +2118,14 @@
     }
 
     function n255(value, context) {
-        record(value, ["direction","kind","message","providerGeneration"], []);
+        record(value, ["direction","kind","message","observedRevision","providerGeneration"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "direction", n250(read(value, "direction"), context));
             put(result, "kind", n57(read(value, "kind"), context));
             put(result, "message", n256(read(value, "message"), context));
+            put(result, "observedRevision", n12(read(value, "observedRevision"), context));
             put(result, "providerGeneration", n28(read(value, "providerGeneration"), context));
             return freeze(result);
         } finally { context.path = previous; }
@@ -2634,7 +2635,7 @@
     /** @typedef {(PopupQueue|PopupCommandResult|PopupQueueUnavailable)} PopupResponse */
     /** @typedef {({provider: "ethereum", subject: "disconnect", id: RequestID}|{provider: "solana", subject: "disconnect", id?: RequestID})} PageDisconnect */
     /** @typedef {{id: RequestID, body: string, chainId: string, subject: "rpc"}} PageRPC */
-    /** @typedef {({direction: "big-wallet-provider-v1", kind: "request", message: ProviderRequest, observedRevision: NonnegativeInteger, providerGeneration: string}|{direction: "big-wallet-provider-v1", kind: "rpc", message: PageRPC, providerGeneration: string}|{direction: "big-wallet-provider-v1", kind: "disconnect", message: PageDisconnect, providerGeneration: string})} PageToContent */
+    /** @typedef {({direction: "big-wallet-provider-v1", kind: "request", message: ProviderRequest, observedRevision: NonnegativeInteger, providerGeneration: string}|{direction: "big-wallet-provider-v1", kind: "rpc", message: PageRPC, providerGeneration: string}|{direction: "big-wallet-provider-v1", kind: "disconnect", message: PageDisconnect, observedRevision: NonnegativeInteger, providerGeneration: string})} PageToContent */
     /** @typedef {{direction: "big-wallet-content-v1", kind: ("response"|"rpc"), response: PageResponse, providerGeneration: string, id?: RequestID}} ContentToPage */
     /** @typedef {({workflowVersion: WorkflowVersion, subject: "responseReady", id: RequestID}|{workflowVersion: WorkflowVersion, subject: "responseReady", ids: Array<RequestID>})} ResponseReady */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "pendingRequestAvailable"}} PendingRequestAvailable */

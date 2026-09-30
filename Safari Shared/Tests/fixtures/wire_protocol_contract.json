@@ -5452,7 +5452,8 @@
         "subject": "disconnect",
         "id": 91
       },
-      "providerGeneration": "generation-1"
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
     }
   },
   {
@@ -5475,7 +5476,8 @@
         "provider": "solana",
         "subject": "disconnect"
       },
-      "providerGeneration": "generation-1"
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
     }
   },
   {
@@ -5500,7 +5502,8 @@
         "subject": "disconnect",
         "id": 92
       },
-      "providerGeneration": "generation-1"
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
     }
   },
   {
@@ -6912,7 +6915,8 @@
         "subject": "disconnect",
         "id": 91
       },
-      "providerGeneration": "generation-1"
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
     }
   },
   {
@@ -6926,7 +6930,8 @@
         "provider": "solana",
         "subject": "disconnect"
       },
-      "providerGeneration": "generation-1"
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
     }
   },
   {
@@ -6941,7 +6946,8 @@
         "subject": "disconnect",
         "id": 92
       },
-      "providerGeneration": "generation-1"
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
     }
   },
   {

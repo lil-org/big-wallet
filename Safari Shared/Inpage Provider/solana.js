@@ -864,6 +864,7 @@ function dispatchDisconnect(state, record) {
         record.metadata.dispatched = true;
         posted = state.transport.postDisconnect({
             id: record.wireId,
+            observedRevision: record.metadata.authorization.revision,
             provider: "solana",
             providerGeneration: state.generation,
         }) === true;
