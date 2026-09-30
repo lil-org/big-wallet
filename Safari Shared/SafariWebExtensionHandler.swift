@@ -126,7 +126,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     context.cancelRequest(withError: HandlerError.invalidMessage)
                     return
                 }
-                Self.respond(with: json, context: context)
+                Self.respond(with: json, contract: .popupResponse, context: context)
             }
 #endif
         }
@@ -151,9 +151,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     Self.respond(with: [
                         "id": request.id,
                         "requests": requests.map(\.json),
-                    ], context: context)
+                    ], contract: .nativeRecoveryReply, context: context)
                 case .unavailable:
-                    Self.respond(with: ["id": request.id, "unavailable": true], context: context)
+                    Self.respond(with: ["id": request.id, "unavailable": true], contract: .nativeStatus, context: context)
                 }
             }
         case .maintainRequest(let identity):
@@ -195,7 +195,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                        ResponseToExtension(json: terminal)?.addsEthereumChain == true {
                         CustomNetworkCache.shared.invalidate()
                     }
-                    Self.respond(with: response, context: context)
+                    Self.respond(with: response, contract: .nativeDelivery, context: context)
                 case .pending:
                     Self.respondStatus(.pending, id: request.id, context: context)
                 case .missing:
@@ -213,14 +213,15 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         privateBrowsing: Bool,
         context: NSExtensionContext
     ) {
-        guard let request = SafariRequest(json: message) else {
+        guard let wire = WireProtocol.DappRequest(json: message),
+              let request = SafariRequest(wire: wire) else {
             context.cancelRequest(withError: HandlerError.invalidMessage)
             return
         }
         let ingress: ExtensionBridge.Ingress
         switch ExtensionBridge.dappIngressResult(
             request: request,
-            rawObject: message
+            wire: wire
         ) {
         case .accepted(let acceptedIngress):
             ingress = acceptedIngress
@@ -267,6 +268,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                             authority: authority,
                             admissionKind: admissionKind
                         ),
+                        contract: .nativeEnqueueAcknowledgement,
                         context: context
                     )
                     return
@@ -290,6 +292,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                                 handle: handle, approvalRequired: false, authority: authority,
                                 admissionKind: admissionKind
                             ),
+                            contract: .nativeEnqueueAcknowledgement,
                             context: context
                         )
                         return
@@ -305,6 +308,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                             authority: authority,
                             admissionKind: admissionKind
                         ),
+                        contract: .nativeEnqueueAcknowledgement,
                         context: context
                     )
                 case .responseReady:
@@ -315,6 +319,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                             authority: authority,
                             admissionKind: admissionKind
                         ),
+                        contract: .nativeEnqueueAcknowledgement,
                         context: context
                     )
                 case .unavailable:
@@ -329,7 +334,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     "id": request.id,
                     "response": Self.boundedDappResponse(response, for: request),
                     "state": authority.json,
-                ], context: context)
+                ], contract: .nativeDelivery, context: context)
             case .expired:
                 Self.respond(
                     with: ResponseToExtension(
@@ -400,9 +405,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     profileIdentifier: profileIdentifier
                 ) {
                 case .snapshot(let snapshot):
-                    Self.respond(with: ["id": request.id, "state": snapshot.json], context: context)
+                    Self.respond(with: ["id": request.id, "state": snapshot.json], contract: .nativeConfigurationReply, context: context)
                 case .unavailable:
-                    Self.respond(with: ["id": request.id, "unavailable": true], context: context)
+                    Self.respond(with: ["id": request.id, "unavailable": true], contract: .nativeStatus, context: context)
                 }
             }
         case .disconnect(let identity):
@@ -417,13 +422,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 case .revoked(let snapshot):
                     Self.respond(with: [
                         "id": request.id, "state": snapshot.json, "revoked": true,
-                    ], context: context)
+                    ], contract: .nativeDisconnectReply, context: context)
                 case .stale(let snapshot):
                     Self.respond(with: [
                         "id": request.id, "state": snapshot.json, "stale": true,
-                    ], context: context)
+                    ], contract: .nativeDisconnectReply, context: context)
                 case .unavailable:
-                    Self.respond(with: ["id": request.id, "unavailable": true], context: context)
+                    Self.respond(with: ["id": request.id, "unavailable": true], contract: .nativeStatus, context: context)
                 }
             }
         case .rpc(let body, let chainId):
@@ -455,13 +460,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 )
                 switch result {
                 case .opened:
-                    Self.respond(with: ["id": request.id, "opened": true], context: context)
+                    Self.respond(with: ["id": request.id, "opened": true], contract: .nativeOpenReply, context: context)
                 case .pending:
                     Self.respondStatus(.pending, id: request.id, context: context)
                 case .responseReady:
                     Self.respondStatus(.ready, id: request.id, context: context)
                 case .missing, .unavailable:
-                    Self.respond(with: ["id": request.id, "opened": false], context: context)
+                    Self.respond(with: ["id": request.id, "opened": false], contract: .nativeOpenReply, context: context)
                 }
             }
 #else
@@ -486,12 +491,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     Self.respond(with: [
                         "id": request.id,
                         "acknowledged": true,
-                    ], context: context)
+                    ], contract: .nativeAcknowledgementReply, context: context)
                 case .ownershipLost:
                     Self.respond(with: [
                         "id": request.id,
                         "missing": true,
-                    ], context: context)
+                    ], contract: .nativeStatus, context: context)
                 case .retryablePersistenceFailure:
                     context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 }
@@ -538,7 +543,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         case .missing: key = "missing"
         case .unavailable: key = "unavailable"
         }
-        respond(with: ["id": id, key: true], context: context)
+        respond(with: ["id": id, key: true], contract: .nativeStatus, context: context)
     }
 
     private func rpcRequest(
@@ -550,7 +555,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         guard let chainIdNumber = Int(hexString: chainId),
               let resolvedNetwork = Nodes.resolution(chainId: chainIdNumber).resolvedNetwork,
               let httpBody = body.data(using: .utf8) else {
-            Self.respond(with: ["id": id, "error": Self.genericRPCFailureMessage], context: context)
+            Self.respond(with: ["id": id, "error": Self.genericRPCFailureMessage], contract: .rpcResponse, context: context)
             return
         }
         Self.rpcClient.send(
@@ -558,21 +563,30 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             body: httpBody,
             expectedResponseID: id
         ) { response in
-            if var json = response {
-                json["id"] = id
-                Self.respond(with: json, context: context)
+            if let response,
+               let projected = RPCResponseToExtension(upstream: response, expectedResponseID: id) {
+                Self.respond(with: projected.json, contract: .rpcResponse, context: context)
             } else {
                 Self.respond(
                     with: ["id": id, "error": Self.genericRPCFailureMessage],
+                    contract: .rpcResponse,
                     context: context
                 )
             }
         }
     }
     
-    private static func respond(with response: [String: Any], context: NSExtensionContext) {
+    private static func respond(
+        with response: [String: Any],
+        contract: WireProtocol.Message,
+        context: NSExtensionContext
+    ) {
+        guard let decoded = WireProtocol.decode(contract, value: response) as? [String: Any] else {
+            context.cancelRequest(withError: HandlerError.invalidMessage)
+            return
+        }
         let item = NSExtensionItem()
-        item.userInfo = [SFExtensionMessageKey: response]
+        item.userInfo = [SFExtensionMessageKey: decoded]
         context.completeRequest(returningItems: [item], completionHandler: nil)
     }
 
@@ -581,15 +595,17 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         for request: SafariRequest,
         context: NSExtensionContext
     ) {
-        respond(with: boundedDappResponse(response, for: request), context: context)
+        respond(with: boundedDappResponse(response, for: request), contract: .nativeResponse, context: context)
     }
 
     private static func boundedDappResponse(
         _ response: ResponseToExtension,
         for request: SafariRequest
     ) -> [String: Any] {
-        if ExtensionBridge.isPayloadWithinLimit(response.json) {
-            return response.json
+        let json = response.json
+        if ExtensionBridge.isPayloadWithinLimit(json),
+           WireProtocol.validate(.nativeResponse, value: json) {
+            return json
         }
         var fallback = ResponseToExtension(for: request, payload: .error(.internalError))
         if response.approvalCommitted { fallback = fallback.markingApprovalCommitted() }
@@ -613,7 +629,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 return
             }
-            Self.respond(with: ["id": id, "opened": true], context: context)
+            Self.respond(with: ["id": id, "opened": true], contract: .nativeOpenReply, context: context)
         }
     }
 

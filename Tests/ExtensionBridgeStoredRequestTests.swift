@@ -323,6 +323,40 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(reconnected.solanaAccount)
     }
 
+    func testDecimalDictionaryRevisionTriggersPermissionRecoveryAfterRestart() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 64_020, chainId: "0xa")
+        let before = try await removalSnapshot()
+        XCTAssertEqual(before.ethereumAccount, account)
+        let encoded = try PropertyListEncoder().encode(Decimal(before.version.revisions.ethereum))
+        var decimal = try XCTUnwrap(PropertyListSerialization.propertyList(
+            from: encoded, options: [], format: nil
+        ) as? [String: Any])
+        decimal["unexpected"] = ["ignored": true]
+        try mutateStoredPermissions { origins in
+            var origin = try XCTUnwrap(origins["https://wallet.example"] as? [String: Any])
+            var revisions = try XCTUnwrap(origin["revisions"] as? [String: Any])
+            revisions["ethereum"] = decimal
+            origin["revisions"] = revisions
+            origins["https://wallet.example"] = origin
+        }
+
+        let observer = makeBridge(clock: { self.clock.now })
+        guard case .snapshot(let recovered) = await observer.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ) else { return XCTFail("Expected malformed revision recovery") }
+        XCTAssertNil(recovered.ethereumAccount)
+        XCTAssertNil(recovered.solanaAccount)
+        XCTAssertEqual(recovered.ethereumChainId, "0x1")
+        XCTAssertEqual(recovered.version.context, before.version.context)
+        XCTAssertGreaterThan(recovered.version.revisions.ethereum, before.version.revisions.ethereum)
+        XCTAssertEqual(recovered.version.revisions.solana, recovered.version.revisions.ethereum)
+        let origins = try XCTUnwrap(storedProfile()["origins"] as? [String: Any])
+        let origin = try XCTUnwrap(origins["https://wallet.example"] as? [String: Any])
+        let revisions = try XCTUnwrap(origin["revisions"] as? [String: Int])
+        XCTAssertEqual(revisions["ethereum"], recovered.version.revisions.ethereum)
+    }
+
     func testIncompatiblePermissionContainerDisconnectsAllOriginsWithoutDiscardingRequestHistory() async throws {
         let account = authorityTestAccount()
         _ = try await grantAuthority(account, id: 64_050)
@@ -679,7 +713,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         raw["enqueueAttempt"] = attempt(for: 60_116)
         raw["provider"] = "solana"
         raw["name"] = "connect"
-        raw["body"] = ["publicKey": ""]
+        raw["body"] = ["publicKey": "", "object": [:]]
         let solana = try authorityFixture(raw)
 
         _ = try await grantAuthority(authorityTestAccount(), id: 60_117)
@@ -990,10 +1024,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let template = try makeFixture(id: 60_070)
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
         raw["name"] = "requestAccounts"
-        raw["body"] = ["address": "", "padding": ""]
+        raw["body"] = ["address": "", "object": ["padding": ""]]
         let emptySize = try XCTUnwrap(ExtensionBridge.payloadData(raw, options: [.sortedKeys])).count
         let paddingCount = ExtensionBridge.maximumPayloadBytes - emptySize
-        raw["body"] = ["address": "", "padding": String(repeating: "x", count: paddingCount)]
+        raw["body"] = ["address": "", "object": ["padding": String(repeating: "x", count: paddingCount)]]
         let oversizedAfterBinding = try authorityFixture(raw)
         XCTAssertEqual(oversizedAfterBinding.ingress.canonicalData.count, ExtensionBridge.maximumPayloadBytes)
         guard case .revoked(let advanced) = await bridge.revoke(
@@ -1022,7 +1056,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertEqual(readable.version, advanced.version)
 
-        raw["body"] = ["address": "", "padding": String(repeating: "x", count: paddingCount - 1)]
+        raw["body"] = ["address": "", "object": ["padding": String(repeating: "x", count: paddingCount - 1)]]
         let exactlyAtLimitAfterBinding = try authorityFixture(raw)
         let admitted = try accepted(await bridge.enqueue(
             ingress: exactlyAtLimitAfterBinding.ingress, profileIdentifier: nil
@@ -1437,7 +1471,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var solanaRaw = try XCTUnwrap(JSONSerialization.jsonObject(with: solanaTemplate.ingress.canonicalData) as? [String: Any])
         solanaRaw["name"] = "connect"
         solanaRaw["provider"] = "solana"
-        solanaRaw["body"] = ["publicKey": ""]
+        solanaRaw["body"] = ["publicKey": "", "object": [:]]
         let solana = try authorityFixture(solanaRaw)
         let solanaHandle = try accepted(await bridge.enqueue(ingress: solana.ingress, profileIdentifier: nil)).handle
 
@@ -1477,7 +1511,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var solanaRaw = try XCTUnwrap(JSONSerialization.jsonObject(with: solanaTemplate.ingress.canonicalData) as? [String: Any])
         solanaRaw["name"] = "connect"
         solanaRaw["provider"] = "solana"
-        solanaRaw["body"] = ["publicKey": solana.normalizedAddress]
+        solanaRaw["body"] = ["publicKey": solana.normalizedAddress, "object": [:]]
         let solanaRequest = try authorityFixture(solanaRaw)
         let solanaHandle = try accepted(await bridge.enqueue(ingress: solanaRequest.ingress, profileIdentifier: nil)).handle
 
@@ -1622,7 +1656,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         raw["authority"] = try authorityVersion(fixture.request.configurationKey, profileIdentifier: profileIdentifier).json
         raw["name"] = account.coin == .ethereum ? "requestAccounts" : "connect"
         raw["provider"] = account.coin == .ethereum ? "ethereum" : "solana"
-        raw["body"] = account.coin == .ethereum ? ["address": "", "chainId": chainId] : ["publicKey": ""]
+        raw["body"] = account.coin == .ethereum ? ["address": "", "chainId": chainId] : ["publicKey": "", "object": [:]]
         let connection = try authorityFixture(raw)
         let handle = try accepted(await bridge.enqueue(ingress: connection.ingress, profileIdentifier: profileIdentifier)).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
@@ -2182,13 +2216,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let deadline = template.request.admissionDeadlineMilliseconds - 1
         raw["admissionDeadline"] = deadline
         var body = try XCTUnwrap(raw["body"] as? [String: Any])
-        body["extensionData"] = [
+        var object = try XCTUnwrap(body["object"] as? [String: Any])
+        object["extensionData"] = [
             "flag": true,
             "number": 1,
             "fraction": 1.25,
             "largeInteger": 9_007_199_254_740_991,
             "values": [true, 1, NSNull()],
         ] as [String: Any]
+        body["object"] = object
         raw["body"] = body
         let fixture = try authorityFixture(raw)
         let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
@@ -2204,9 +2240,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(replay.handle, admitted.handle)
         XCTAssertEqual(replay.admissionKind, .replay)
 
-        var extensionData = try XCTUnwrap(body["extensionData"] as? [String: Any])
+        var extensionData = try XCTUnwrap(object["extensionData"] as? [String: Any])
         extensionData["flag"] = 1
-        body["extensionData"] = extensionData
+        object["extensionData"] = extensionData
+        body["object"] = object
         raw["body"] = body
         let changed = try authorityFixture(raw)
         guard case .rejected = await bridge.enqueue(ingress: changed.ingress, profileIdentifier: nil) else {
@@ -5918,6 +5955,66 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             XCTAssertEqual(error["message"] as? String, "Rejected")
             XCTAssertEqual(error["data"] as? [String: String], ["reason": "custom"])
             XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
+        }
+    }
+
+    func testNestedResponseDeliveryPreservesBoundaryAndDrainsCompletedQueue() async throws {
+        for (index, scenario) in [(61, false), (62, false), (61, true), (62, true)].enumerated() {
+            let (depth, broadcast) = scenario
+            let fixture = try makeFixture(id: 75_000 + index)
+            let handle = try accepted(await bridge.enqueue(
+                ingress: fixture.ingress, profileIdentifier: nil
+            )).handle
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            let permit = try executionPermit(await bridge.begin(claim: claim))
+            let recovery = ambiguousSubmissionResponse(
+                for: fixture.request, transactionHash: "0x1234"
+            ).markingApprovalCommitted()
+            if broadcast {
+                let preparation = await bridge.prepareBroadcast(
+                    permit: permit, recoveryResponse: recovery, authority: .ordinary
+                )
+                XCTAssertEqual(preparation, .persisted)
+            }
+            let payload = String(repeating: "{\"value\":", count: depth) + "null" +
+                String(repeating: "}", count: depth)
+            let response = ResponseToExtension(
+                for: fixture.request,
+                payload: .error(.init(message: "Rejected", code: -32_000, context: .dataJSON(payload)))
+            ).markingApprovalCommitted()
+            XCTAssertEqual(ExtensionRequestProfileCodec.exactResponseData(response) != nil, depth == 61)
+            let completion = await bridge.complete(
+                permit: permit, response: response, authority: .ordinary
+            )
+            XCTAssertEqual(completion, .persisted)
+
+            let observer = makeBridge(clock: { self.clock.now })
+            guard case .response(let envelope) = await observer.prepareResponseDelivery(
+                id: handle.id, configurationKey: fixture.request.configurationKey,
+                requestToken: handle.requestToken, profileIdentifier: nil
+            ) else { return XCTFail("Expected durable response delivery") }
+            let wire = try XCTUnwrap(WireProtocol.NativeDelivery(json: envelope))
+            let delivered = try XCTUnwrap(wire.json["response"] as? [String: Any])
+            XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
+            if depth == 61 || broadcast {
+                let expected = depth == 61 ? response : recovery
+                XCTAssertEqual(
+                    ExtensionBridge.payloadData(delivered, options: [.sortedKeys]),
+                    ExtensionBridge.payloadData(expected.json, options: [.sortedKeys])
+                )
+            } else {
+                let error = try XCTUnwrap(delivered["error"] as? [String: Any])
+                XCTAssertEqual(error["code"] as? Int, ProviderResponseError.internalErrorCode)
+                XCTAssertNil(error["data"])
+            }
+            let acknowledged = await observer.acknowledgeResponse(
+                handle: handle, configurationKey: fixture.request.configurationKey
+            )
+            XCTAssertEqual(acknowledged, .persisted)
+            guard case .available(let listed) = await observer.list(profileIdentifier: nil) else {
+                return XCTFail("Expected queue after response acknowledgement")
+            }
+            XCTAssertTrue(listed.isEmpty)
         }
     }
 

@@ -7,10 +7,12 @@ import test from "node:test";
 import vm from "node:vm";
 import {nativeError} from "./test_helpers.mjs";
 
-const [wireSource, contentSource] = await Promise.all([
+const [bridgeSource, protocolSource, contentSource] = await Promise.all([
     readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
+    readFile(new URL("../Resources/protocol.generated.js", import.meta.url), "utf8"),
     readFile(new URL("../Resources/content.js", import.meta.url), "utf8"),
 ]);
+const wireSource = protocolSource + "\n" + bridgeSource;
 const requestToken = "123e4567-e89b-12d3-a456-426614174000";
 const probeNonce = "00000001000000020000000300000004";
 const workerSender = {
@@ -187,8 +189,8 @@ function makeHarness({
                     data: {
                         direction: "big-wallet-provider-v1",
                         kind,
-                        message,
-                        observedRevision,
+                        message: kind === "rpc" || kind === "disconnect" ? {subject: kind, ...message} : message,
+                        ...(kind === "request" ? {observedRevision} : {}),
                         providerGeneration: generation,
                     },
                 });
@@ -1643,6 +1645,34 @@ test("stale generations fail visibly without entering the relay", async () => {
     }).length, 0);
 });
 
+test("RPC responses reserve enough nesting for the content delivery envelope", async () => {
+    for (const depth of [62, 63]) {
+        let result = "leaf";
+        for (let level = 0; level < depth; level += 1) { result = {nested: result}; }
+        const harness = makeHarness({sendMessage: message => message.subject === "rpc"
+            ? {
+                kind: "result", id: message.id, provider: "ethereum", name: null,
+                state: null, result, approvalCommitted: false,
+            }
+            : undefined});
+        await settle();
+        harness.dispatchPage("rpc", {id: 19, chainId: "0x1", body: "{}"});
+        await settle();
+        const delivered = harness.postedMessages.at(-1).message;
+        assert.equal(delivered.id, 19);
+        assert.equal(delivered.providerGeneration, harness.generation());
+        assert.equal(harness.context.BigWalletProtocol.isValid("ContentToPage", delivered), true);
+        if (depth === 62) {
+            assert.equal(delivered.response.kind, "result");
+            assert.deepEqual(delivered.response.result, result);
+        } else {
+            assert.equal(delivered.response.kind, "error");
+            assert.equal(delivered.response.error.code, -32603);
+            assert.equal(Object.hasOwn(delivered.response, "result"), false);
+        }
+    }
+});
+
 test("ordinary RPC fails after the long content relay timeout", async () => {
     let resolveRPC;
     const harness = makeHarness({sendMessage: message => message.subject === "rpc"
@@ -1685,6 +1715,24 @@ test("ordinary RPC fails after the long content relay timeout", async () => {
         state: null,
         error: {code: -32603, message: "Failed to communicate with Big Wallet"},
     });
+});
+
+test("overdeep page requests receive a failure without native admission", async () => {
+    const harness = makeHarness();
+    await settle();
+    let nested = null;
+    for (let depth = 0; depth < 300; depth += 1) { nested = {nested}; }
+    const request = dappRequest(23);
+    request.body.object = {nested};
+    harness.dispatchPage("request", request);
+    await settle();
+    const response = harness.postedMessages.at(-1).message;
+    assert.equal(response.id, request.id);
+    assert.equal(response.providerGeneration, harness.generation());
+    assert.equal(response.response.kind, "error");
+    assert.equal(response.response.error.code, -32603);
+    assert.equal(harness.runtimeMessages.some(message => message.subject === "message-to-wallet"), false);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
 });
 
 test("relays correlated disconnects with trusted page identity", async () => {
@@ -2206,7 +2254,7 @@ for (const provider of ["ethereum", "solana"]) {
         const generation = harness.generation();
         const queued = {id: 7, provider, name: "signMessage", body: provider === "ethereum"
             ? {address: "", chainId: "0x1", object: {data: "0x01"}}
-            : {publicKey: "", object: {message: "2"}}};
+            : {publicKey: "", object: {method: "signMessage", params: {message: "2"}}}};
         harness.context.bigWalletPublishConfiguration(refreshedState, "https://wallet.example", generation);
         harness.dispatchPage("request", queued, generation, observed);
         await settle();

@@ -11,10 +11,11 @@ import vm from "node:vm";
 import {nativeResult, nativeError, normalized} from "./test_helpers.mjs";
 
 const resourceURL = name => new URL(`../Resources/${name}`, import.meta.url);
-const [source, nativeSource] = await Promise.all([
+const [bridgeSource, protocolSource] = await Promise.all([
     readFile(resourceURL("bridge_wire.js"), "utf8"),
-    readFile(new URL("../ExtensionBridge.swift", import.meta.url), "utf8"),
+    readFile(resourceURL("protocol.generated.js"), "utf8"),
 ]);
+const source = protocolSource + "\n" + bridgeSource;
 const context = vm.createContext({
     URL,
     clearTimeout,
@@ -240,21 +241,13 @@ test("requires substantive bounded manual-switch terminals", () => {
     assert.equal(wire.isManualSwitchTerminalResponse({...success, id: "31"}, "31"), false);
 });
 
-test("keeps workflow policy aligned with the native request authority", () => {
-    const nativeNumber = name => Number(nativeSource.match(
-        new RegExp(`static let ${name}(?:: [^=]+)? = ([0-9]+)`)
-    )[1]);
-    assert.equal(wire.WORKFLOW_VERSION,
-        nativeNumber("workflowVersion"));
-    assert.equal(wire.WORKFLOW_POLICY.maximumRequests,
-        nativeNumber("maximumRequests"));
-    assert.equal(wire.WORKFLOW_POLICY.maximumRequestsPerHost,
-        nativeNumber("maximumRequestsPerHost"));
-    assert.equal(wire.WORKFLOW_POLICY.maximumRetainedRequests,
-        nativeNumber("maximumRetainedRequests"));
+test("publishes the bounded workflow policy", () => {
+    assert.equal(wire.WORKFLOW_POLICY.maximumRequests, 8);
+    assert.equal(wire.WORKFLOW_POLICY.maximumRequestsPerHost, 4);
+    assert.equal(wire.WORKFLOW_POLICY.maximumRetainedRequests, 16);
     assert.equal(wire.WORKFLOW_POLICY.requestTTLMilliseconds, 15 * 60 * 1000);
     assert.equal(wire.WORKFLOW_POLICY.responseExpiryMilliseconds, 60 * 60 * 1000);
-
+    assert.equal(Object.isFrozen(wire.WORKFLOW_POLICY), true);
 });
 
 test("validates enqueue and response correlations", () => {
@@ -585,8 +578,8 @@ test("stamps private context on the real first native message", async () => {
             return {id: message.id, result: true};
         },
     });
-    await send({subject: "rpc", id: 1}, false);
-    await send({subject: "rpc", id: 2}, true);
+    await send({subject: "rpc", id: 1, body: "{}", chainId: "0x1", workflowVersion: 4}, false);
+    await send({subject: "rpc", id: 2, body: "{}", chainId: "0x1", workflowVersion: 4}, true);
     assert.equal(messages.length, 2);
     assert.equal(messages[0].subject, "rpc");
     assert.equal(messages[0].__bwPrivateBrowsing, false);
@@ -612,7 +605,7 @@ test("keeps the real platform manifests on their intended MV3 routes", async () 
             extension_pages: "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
         });
         assert.equal(manifest.background.service_worker, "service_worker.js");
-        assert.deepEqual(manifest.content_scripts[0].js, ["bridge_wire.js", "content.js"]);
+        assert.deepEqual(manifest.content_scripts[0].js, ["protocol.generated.js", "bridge_wire.js", "content.js"]);
         assert.equal(manifest.action.default_icon["16"], "images/toolbar-icon-16.png");
     }
     assert.equal(sharedManifest.action.default_popup, "popup.html");

@@ -7,9 +7,10 @@ import test from "node:test";
 import vm from "node:vm";
 import {nativeResult, nativeError} from "./test_helpers.mjs";
 
-const [wireSource, workerSource, sharedManifestSource, macManifestSource] =
+const [wireSource, protocolSource, workerSource, sharedManifestSource, macManifestSource] =
     await Promise.all([
     readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
+    readFile(new URL("../Resources/protocol.generated.js", import.meta.url), "utf8"),
     readFile(new URL("../Resources/service_worker.js", import.meta.url), "utf8"),
     readFile(new URL("../Resources/manifest.json", import.meta.url), "utf8"),
     readFile(new URL("../../Safari macOS/Resources/manifest.json", import.meta.url), "utf8"),
@@ -18,6 +19,7 @@ const requestToken = "123e4567-e89b-12d3-a456-426614174000";
 const attempt = "00000001000000020000000300000004";
 const admissionDeadline = 1_700_000_900_000;
 const wireContext = vm.createContext({URL, crypto: webcrypto, clearTimeout, setTimeout});
+new vm.Script(protocolSource).runInContext(wireContext);
 new vm.Script(wireSource).runInContext(wireContext);
 const packagedBuildVersion = wireContext.BigWalletBridgeWire.BUILD_VERSION;
 assert.match(packagedBuildVersion, /^.+\+[0-9]+$/);
@@ -249,9 +251,12 @@ function makeHarness({
         crypto: webcrypto,
         console,
         Date: HarnessDate,
-        importScripts(name) {
-            assert.equal(name, "bridge_wire.js");
-            new vm.Script(wireSource).runInContext(context);
+        importScripts(...names) {
+            const sources = {"protocol.generated.js": protocolSource, "bridge_wire.js": wireSource};
+            for (const name of names) {
+                assert.ok(Object.hasOwn(sources, name), name);
+                new vm.Script(sources[name]).runInContext(context);
+            }
         },
         Map,
         Object,
@@ -577,17 +582,20 @@ test("malformed Solana trust options return a correlated error without native ad
     assert.equal(harness.alarmGets.length, alarmGets);
 });
 
-test("Solana trust option validation accepts booleans and ignores missing or inherited values", async () => {
+test("Solana trust options accept booleans and absent fields but reject explicit undefined", async () => {
     const harness = makeHarness({native: message => ({id: message.id, admissionKind: "new", approvalRequired: false, requestToken, state: snapshot()})});
     const inherited = Object.create({onlyIfTrusted: "invalid inherited value"});
-    for (const params of [undefined, {}, {onlyIfTrusted: undefined},
-        {onlyIfTrusted: false}, {onlyIfTrusted: true}, inherited]) {
+    for (const params of [undefined, {}, {onlyIfTrusted: false}, {onlyIfTrusted: true}, inherited]) {
         const response = await harness.dispatch(request(7, {message: {
-            name: "connect", provider: "solana", body: {publicKey: "", object: {params}},
+            name: "connect", provider: "solana", body: {publicKey: "", object: params === undefined ? {} : {params}},
         }}));
         assert.equal(response.requestToken, requestToken);
     }
-    assert.equal(harness.nativeMessages.length, 6);
+    assert.equal(harness.nativeMessages.length, 5);
+    assert.equal(await harness.dispatch(request(7, {message: {
+        name: "connect", provider: "solana", body: {publicKey: "", object: {params: {onlyIfTrusted: undefined}}},
+    }})), undefined);
+    assert.equal(harness.nativeMessages.length, 5);
 });
 
 test("sender identity and strict native authority schema precede admission", async () => {

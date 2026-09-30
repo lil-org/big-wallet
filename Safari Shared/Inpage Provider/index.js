@@ -312,8 +312,11 @@ function handleContentBridgeMessage(event) {
     if (kind !== "response" && kind !== "rpc") { return; }
     const raw = ownValue(data, "response");
     const id = ownValue(data, "id");
-    const response = BigWalletBridgeWire.decodePageResponse(raw, id);
-    if (!response) {
+    const envelope = BigWalletBridgeWire.decodeMessage("ContentToPage", data);
+    if (!isCurrentInstallation()) { return; }
+    const response = envelope?.providerGeneration === generation ? envelope.response : null;
+    if (!response || (response.kind === "result" || response.kind === "error") &&
+        typeof id !== "undefined" && response.id !== id) {
         rejectMalformedCorrelation(id, raw && typeof raw === "object" ? ownValue(raw, "name") : null);
         return;
     }

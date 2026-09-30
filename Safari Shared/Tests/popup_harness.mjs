@@ -39,7 +39,7 @@ export function popupMarkupInventory(markup) {
         }
         if (tag === "script") {
             assert.deepEqual(Object.keys(attributes), ["src"], "Popup scripts must have only a local src");
-            assert.match(attributes.src, /^[\w-]+\.js$/, "Popup scripts must be local JavaScript files");
+            assert.match(attributes.src, /^[\w-]+(?:\.[\w-]+)*\.js$/, "Popup scripts must be local JavaScript files");
             assert.ok(markup.slice(match.index + match[0].length).startsWith("</script>"), "Inline popup scripts are unsupported");
             scripts.push(attributes.src);
         }

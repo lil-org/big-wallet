@@ -74,7 +74,6 @@ struct ResponseToExtension: Sendable {
             else if let value = json as? String { self = .string(value) }
             else if let values = json as? [String] { self = .strings(values) }
             else if let value = json as? [String: Any],
-                    Set(value.keys) == ["publicKey"],
                     let publicKey = value["publicKey"] as? String {
                 self = .solanaPublicKey(publicKey)
             } else { return nil }
@@ -182,33 +181,25 @@ struct ResponseToExtension: Sendable {
     }
 
     init?(json: [String: Any]) {
-        let common: Set<String> = ["id", "name", "provider", "kind", "approvalCommitted"]
-        guard let id = Self.integer(json["id"]),
-              (-9_007_199_254_740_991...9_007_199_254_740_991).contains(id),
-              let name = json["name"] as? String,
-              let rawProvider = json["provider"] as? String,
-              let provider = InpageProvider(rawValue: rawProvider), provider != .unknown,
-              (provider == .multiple) == (name == "switchAccount"),
-              let committed = Self.boolean(json["approvalCommitted"]) else { return nil }
+        guard let wire = WireProtocol.NativeResponse(json: json),
+              let id = wire.json["id"] as? Int,
+              let name = wire.json["name"] as? String,
+              let rawProvider = wire.json["provider"] as? String,
+              let provider = InpageProvider(rawValue: rawProvider),
+              let committed = wire.json["approvalCommitted"] as? Bool else { return nil }
+        let json = wire.json
         let payload: Payload
         let authorizationFailure: Bool
         switch json["kind"] as? String {
         case "result":
-            guard Set(json.keys) == common.union(["result"]),
-                  let value = json["result"], let result = Result(json: value) else { return nil }
-            if provider == .multiple {
-                guard case .null = result else { return nil }
-            }
+            guard let value = json["result"], let result = Result(json: value) else { return nil }
             payload = .result(result)
             authorizationFailure = false
         case "error":
-            guard Set(json.keys) == common.union(["error", "authorizationFailure"]),
-                  let error = json["error"] as? [String: Any],
-                  Set(error.keys).isSubset(of: ["code", "message", "data"]),
-                  let code = Self.integer(error["code"]),
+            guard let error = json["error"] as? [String: Any],
+                  let code = error["code"] as? Int,
                   let message = error["message"] as? String,
-                  provider != .multiple || !message.isEmpty,
-                  let failure = Self.boolean(json["authorizationFailure"]) else { return nil }
+                  let failure = json["authorizationFailure"] as? Bool else { return nil }
             let context: ProviderResponseError.Context?
             if let data = error["data"] {
                 guard let encoded = try? JSONSerialization.data(withJSONObject: data, options: [.fragmentsAllowed, .sortedKeys]),
@@ -229,15 +220,21 @@ struct ResponseToExtension: Sendable {
         self.authorizationFailure = authorizationFailure
     }
 
-    private static func boolean(_ value: Any?) -> Bool? {
-        guard let value, CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID() else { return nil }
-        return value as? Bool
+}
+
+struct RPCResponseToExtension {
+    private let wire: WireProtocol.RPCResponse
+
+    init?(upstream: [String: Any], expectedResponseID: Int) {
+        var envelope = [String: Any]()
+        envelope["id"] = upstream["id"]
+        envelope["jsonrpc"] = upstream["jsonrpc"]
+        envelope["result"] = upstream["result"]
+        envelope["error"] = upstream["error"]
+        guard let wire = WireProtocol.RPCResponse(json: envelope),
+              wire.json["id"] as? Int == expectedResponseID else { return nil }
+        self.wire = wire
     }
 
-    private static func integer(_ value: Any?) -> Int? {
-        guard let value, CFGetTypeID(value as CFTypeRef) != CFBooleanGetTypeID(),
-              let number = value as? NSNumber, let integer = value as? Int,
-              number.doubleValue == Double(integer) else { return nil }
-        return integer
-    }
+    var json: [String: Any] { wire.json }
 }

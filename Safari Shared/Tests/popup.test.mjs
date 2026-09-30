@@ -7,7 +7,8 @@ import vm from "node:vm";
 import {deferred, normalized, nativeResult, nativeError} from "./test_helpers.mjs";
 import {createPopupHarness, flushPopup, popupMarkup as markup} from "./popup_harness.mjs";
 
-const wireSource = await readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8");
+const wireSource = (await Promise.all(["protocol.generated.js", "bridge_wire.js"].map(name =>
+    readFile(new URL(`../Resources/${name}`, import.meta.url), "utf8")))).join("\n");
 const wireContext = vm.createContext({URL});
 new vm.Script(wireSource).runInContext(wireContext);
 const packagedBuildVersion = wireContext.BigWalletBridgeWire.BUILD_VERSION;
@@ -1110,134 +1111,87 @@ test("full popup boot renders FIFO requests through the production controller", 
     assert.ok(harness.nativeMessages.every(message => message.__bwPrivateBrowsing === false));
 });
 
-test("malformed queue metadata keeps localization defaults while draining completions and allowing approval", async () => {
-    for (const hasPreviousLocalization of [false, true]) {
-        const malformedMetadata = {
-            strings: {refresh: "Do not apply", notConnected: 7},
-            layoutDirection: "auto",
-        };
-        let metadata = hasPreviousLocalization
-            ? {strings: {refresh: "تحديث", notConnected: "غير متصل"}, layoutDirection: "rtl"}
-            : malformedMetadata;
-        const harness = popupHarness({native: (message, fallback) => {
-            const response = fallback(message);
-            return message.subject === "getPendingRequests" ? {...response, ...metadata} : response;
-        }});
-        await harness.boot();
-        const expectedRefresh = hasPreviousLocalization ? "تحديث" : "Refresh";
-        const expectedConnection = hasPreviousLocalization ? "غير متصل" : "Not connected";
-        const expectedDirection = hasPreviousLocalization ? "rtl" : undefined;
-        assert.equal(harness.get("idle-check-status").textContent, expectedRefresh);
-        assert.equal(harness.get("idle-connection").textContent, expectedConnection);
-        assert.equal(harness.document.documentElement.dir, expectedDirection);
+test("malformed queue metadata fails closed without draining completed responses", async () => {
+    let metadata = {strings: {refresh: "Do not apply", cancel: 7}, layoutDirection: "auto"};
+    const request = pendingRequest(3, 3);
+    const harness = popupHarness({requests: [request], native: (message, fallback) => {
+        const response = fallback(message);
+        return message.subject === "getPendingRequests" ? {...response, ...metadata} : response;
+    }});
+    harness.model.completed = [completedResponse(1), completedResponse(2)];
+    harness.setState(request, messageState(request));
+    await harness.boot();
+    assert.equal(harness.queue.snapshot.kind, "failed");
+    assert.equal(harness.controller, null);
+    assert.equal(harness.workerMessages.some(message => message.subject === "applyCompletedResponse"), false);
+    assert.equal(harness.model.completed.length, 2);
+    assert.equal(harness.get("idle-check-status").textContent, "Refresh");
+    assert.equal(harness.document.documentElement.dir, undefined);
 
-        metadata = malformedMetadata;
-        const request = pendingRequest(3, 3);
-        harness.model.requests = [request];
-        harness.model.completed = [completedResponse(1), completedResponse(2)];
-        harness.setState(request, messageState(request));
-        harness.clearMessages();
-        await harness.queue.refreshQueue();
-        await flushPopup();
-
-        assert.deepEqual(harness.workerMessages.filter(message => message.subject === "applyCompletedResponse")
-            .map(message => message.id), [1, 2]);
-        assert.deepEqual(harness.model.completed, []);
-        assert.equal(harness.controller.request.requestToken, request.requestToken);
-        assert.equal(harness.get("request-title").textContent, "Sign message");
-        assert.equal(harness.get("button-approve").disabled, false);
-        assert.equal(harness.get("idle-check-status").textContent, expectedRefresh);
-        assert.equal(harness.call("localized", "notConnected", "Not connected"), expectedConnection);
-        assert.equal(harness.document.documentElement.dir, expectedDirection);
-
-        await harness.get("button-approve").click();
-        assert.equal(approvalMessages(harness).length, 1);
-        assert.equal(approvalMessages(harness)[0].requestToken, request.requestToken);
-    }
+    metadata = {strings: {refresh: "Refresh"}, layoutDirection: "ltr"};
+    await harness.queue.refreshIdleStatus();
+    await flushPopup();
+    assert.deepEqual(harness.model.completed, []);
+    assert.equal(harness.controller.request.requestToken, request.requestToken);
+    await harness.get("button-approve").click();
+    assert.equal(approvalMessages(harness).length, 1);
 });
 
-test("additional approval display fields leave rendering and approval payloads unchanged", async () => {
+test("unknown approval display fields prevent approval until a valid refresh", async () => {
     for (const stateFor of [messageState, transactionState, selectionState]) {
         const request = pendingRequest();
         const state = stateFor(request);
-        const baseline = popupHarness({requests: [request]});
-        const extended = popupHarness({requests: [request]});
-        baseline.setState(request, state);
-        extended.setState(request, {
-            ...state,
-            displayMetadata: {label: "Future display metadata"},
-            canApprove: false,
-            canReject: false,
-            payload: {password: "ignored", selectedAccounts: []},
-            revisions: {ethereum: 999, solana: 999},
-        });
-
-        await baseline.boot();
-        await extended.boot();
-
-        assert.equal((extended.controller.presentationActivity.kind === "failed"), false);
-        assert.deepEqual(extended.visibleSnapshot(), baseline.visibleSnapshot());
-
-        await baseline.get("button-approve").click();
-        await extended.get("button-approve").click();
-
-        const approvals = harness => harness.nativeMessages.filter(message =>
-            message.subject === "approveRequest"
-        );
-        assert.equal(approvals(baseline).length, 1);
-        assert.deepEqual(approvals(extended), approvals(baseline));
+        const harness = popupHarness({requests: [request]});
+        harness.setState(request, {...state, displayMetadata: {label: "Unexpected"}, canApprove: true});
+        await harness.boot();
+        assert.equal(harness.controller.presentationActivity.kind, "failed");
+        await harness.get("button-approve").click();
+        assert.equal(approvalMessages(harness).length, 0);
+        harness.setState(request, state);
+        await harness.get("button-approve").click();
+        assert.equal(harness.controller.presentationActivity.kind, "viewing");
+        await harness.get("button-approve").click();
+        assert.equal(approvalMessages(harness).length, 1);
     }
 });
 
-test("additional display fields cannot grant actions or repair invalid approval content", async () => {
+test("extra capabilities and malformed approval content are rejected together", async () => {
     const request = pendingRequest();
     const extras = {canApprove: true, canReject: true, reviewToken: requestToken(102)};
     const error = {id: request.id, state: "error", actions: ["reject"], error: "Failed"};
     const harness = popupHarness({requests: [request]});
     harness.setState(request, {...error, ...extras});
-
     await harness.boot();
-    harness.clearMessages();
+    assert.equal(harness.controller.presentationActivity.kind, "failed");
     await harness.get("button-approve").click();
-
-    assert.equal((harness.controller.presentationActivity.kind === "failed"), false);
-    assert.equal(harness.get("button-approve").disabled, true);
-    assert.equal(harness.get("button-reject").disabled, false);
-    assert.deepEqual(harness.workerMessages, []);
+    assert.equal(approvalMessages(harness).length, 0);
+    assert.equal(harness.get("button-reject").disabled, true);
     for (const state of [
         messageState(request, {}, {id: request.id + 1}),
         messageState(request, {reviewToken: "invalid"}),
         messageState(request, {meta: undefined}),
         messageState(request, {}, {actions: ["unknown"]}),
     ]) {
-        assert.equal(Boolean(harness.call("BigWalletPopupWire.decodeApprovalState", {...state, ...extras}, request.id)), false);
+        assert.equal(harness.call("BigWalletPopupWire.decodeApprovalState", {...state, ...extras}, request.id), null);
     }
 });
 
-test("approval reviews omit malformed images without changing approval content or source responses", async () => {
+test("malformed account images reject the review without modifying its source", async () => {
     const request = pendingRequest();
     for (const original of [messageState(request), transactionState(request), selectionState(request)]) {
         for (const image of [null, false, 7, {}, []]) {
-            const response = {
-                ...original,
-                review: Object.freeze({
-                    ...original.review,
-                    ...(original.review.account ? {account: Object.freeze({...original.review.account, icon: image})} : {}),
-                    ...(original.review.accounts ? {
-                        accounts: Object.freeze(original.review.accounts.map(account => Object.freeze({...account, icon: image}))),
-                    } : {}),
-                }),
-            };
+            const response = {...original, review: Object.freeze({...original.review,
+                ...(original.review.account ? {account: Object.freeze({...original.review.account, icon: image})} : {}),
+                ...(original.review.accounts ? {accounts: Object.freeze(original.review.accounts.map(account => Object.freeze({...account, icon: image})))} : {}),
+            })};
             Object.freeze(response);
             const before = normalized(response);
             const harness = popupHarness({requests: [request]});
             harness.setState(request, response);
-
             await harness.boot();
-
-            assert.deepEqual(normalized(harness.controller.state), original);
-            assert.equal(harness.get("requester-icon").src, "images/requester-globe.svg");
-            assert.equal(harness.get("button-approve").disabled, false);
+            assert.equal(harness.controller.presentationActivity.kind, "failed");
+            await harness.get("button-approve").click();
+            assert.equal(approvalMessages(harness).length, 0);
             assert.deepEqual(normalized(response), before);
         }
     }
@@ -1263,49 +1217,31 @@ test("approval reviews use a bundled requester icon and preserve account images"
     }
 });
 
-test("poll and transaction edit responses use the same nonfatal image normalization", async () => {
-    const harness = await reviewedPopup(transactionState);
-    const controller = harness.controller;
-    const response = transactionState(controller.request, {
-        account: {name: "Primary", croppedAddress: "0x1234", icon: false},
-        reviewToken: requestToken(102),
-        valueLine: "Value: 1 ETH",
-    });
-    const before = normalized(response);
-    harness.setState(controller.request, response);
-    controller.commitPresentation({state: {id: controller.request.id, state: "working", actions: []}});
-
-    await harness.fire(harness.followUpTimerId());
-
-    assert.equal(controller.state.state, "review");
-    assert.equal(controller.state.review.reviewToken, requestToken(102));
-    assert.equal(harness.get("tx-value").textContent, "Value: 1 ETH");
-    assert.equal(harness.get("button-approve").disabled, false);
-    const edited = {
-        ...response,
-        review: {
-            ...response.review,
-            editor: {...response.review.editor, gasPriceGwei: "3"},
-            reviewToken: requestToken(103),
-        },
-    };
-    harness.handlers.native = (message, fallback) =>
-        message.subject === "applyTransactionEdits" ? commandReply(edited) : fallback(message);
-
-    harness.get("tx-editor").open = true;
-    harness.get("tx-editor").emit("toggle");
-    await harness.get("editor-suggested").click();
-
-    assert.equal(controller.state.state, "review");
-    assert.equal(controller.state.review.reviewToken, requestToken(103));
-    assert.equal(harness.get("edit-gas-price").value, "3");
-    assert.equal(harness.get("button-approve").disabled, false);
-    assert.equal(Object.hasOwn(controller.state.review.account, "icon"), false);
-    assert.deepEqual(normalized(response), before);
-    assert.equal(edited.review.account.icon, false);
+test("poll and edit replies reject malformed account images consistently", async () => {
+    for (const kind of ["poll", "edit"]) {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        const response = transactionState(controller.request, {
+            account: {name: "Primary", croppedAddress: "0x1234", icon: false},
+            reviewToken: requestToken(102), valueLine: "Value: 1 ETH",
+        });
+        const before = normalized(response);
+        if (kind === "poll") {
+            harness.setState(controller.request, response);
+            await harness.fire(harness.followUpTimerId());
+        } else {
+            harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
+                ? commandReply(response) : fallback(message);
+            controller.openEditor();
+            await harness.get("editor-suggested").click();
+        }
+        assert.equal(controller.presentationActivity.kind, "failed");
+        assert.equal(approvalMessages(harness).length, 0);
+        assert.deepEqual(normalized(response), before);
+    }
 });
 
-test("discarding invalid images never makes malformed approval content actionable", async () => {
+test("malformed image metadata never makes invalid approval content actionable", async () => {
     const request = pendingRequest();
     for (const response of [
         messageState(request, {}, {id: request.id + 1}),
@@ -2495,28 +2431,12 @@ test("state reads coalesce and transaction polling preserves its backoff", async
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
 });
 
-test("malformed transaction backoff keeps normal polling and approval actionable", async () => {
+test("malformed transaction backoff rejects the review instead of silently coercing it", async () => {
     const harness = await reviewedPopup(request => transactionState(request, {canBackOffRefresh: "true"}));
-    const controller = harness.controller;
-    assert.equal(controller.state.review.canBackOffRefresh, false);
-    for (let index = 0; index < 3; index += 1) {
-        const timer = harness.followUpTimerId();
-        assert.equal(harness.timers.get(timer).delay, 600);
-        await harness.fire(timer);
-        assert.equal(harness.get("button-approve").disabled, false);
-    }
-
+    assert.equal(harness.controller.presentationActivity.kind, "failed");
+    assert.equal(harness.followUpTimerId(), null);
     await harness.get("button-approve").click();
-
-    assert.deepEqual(approvalMessages(harness), [{
-        subject: "approveRequest",
-        id: controller.request.id,
-        requestToken: controller.request.requestToken,
-        reviewToken: requestToken(101),
-        payload: {},
-        __bwPrivateBrowsing: false,
-        workflowVersion: 4,
-    }]);
+    assert.deepEqual(approvalMessages(harness), []);
 });
 
 test("late idle status lookups probes and reloads cannot replace an active request", async () => {

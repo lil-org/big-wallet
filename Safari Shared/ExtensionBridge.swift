@@ -262,39 +262,27 @@ actor ExtensionBridge {
         let solana: Int
 
         init?(rawValue: Any?) {
-            guard let value = rawValue as? [String: Any],
-                  Set(value.keys) == Set(["ethereum", "solana"]),
-                  let ethereumValue = value["ethereum"],
-                  CFGetTypeID(ethereumValue as CFTypeRef) != CFBooleanGetTypeID(),
-                  let ethereum = ethereumValue as? Int,
-                  let solanaValue = value["solana"],
-                  CFGetTypeID(solanaValue as CFTypeRef) != CFBooleanGetTypeID(),
-                  let solana = solanaValue as? Int,
-                  Self.isValid(ethereum), Self.isValid(solana) else { return nil }
+            guard let rawValue,
+                  let value = WireProtocol.decode(.revisions, value: rawValue) as? [String: Any],
+                  let ethereum = value["ethereum"] as? Int,
+                  let solana = value["solana"] as? Int else { return nil }
             self.ethereum = ethereum
             self.solana = solana
         }
 
         init(from decoder: Decoder) throws {
-            let rawValue = try [String: Int](from: decoder)
-            guard let value = Self(rawValue: rawValue) else {
-                throw DecodingError.dataCorrupted(DecodingError.Context(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "invalid provider revisions"
+            let wire = try WireProtocol.Revisions(from: decoder)
+            guard let value = Self(rawValue: wire.json) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath, debugDescription: "invalid provider revisions"
                 ))
             }
             self = value
         }
 
-        var json: [String: Any] {
-            return ["ethereum": ethereum, "solana": solana]
-        }
-
-        private static func isValid(_ value: Int) -> Bool {
-            return value >= 0 && value <= 9_007_199_254_740_991
-        }
+        var json: [String: Any] { ["ethereum": ethereum, "solana": solana] }
     }
-    
+
     struct AuthorityVersion: Codable, Equatable, Sendable {
         let context: String
         let revisions: ProviderRevisions
@@ -305,31 +293,19 @@ actor ExtensionBridge {
         }
 
         init?(rawValue: Any?) {
-            guard let value = rawValue as? [String: Any],
-                  Set(value.keys) == ["context", "revisions"],
+            guard let rawValue,
+                  let value = WireProtocol.decode(.authorityVersion, value: rawValue) as? [String: Any],
                   let context = value["context"] as? String,
-                  context.count == 64,
-                  context.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
                   let revisions = ProviderRevisions(rawValue: value["revisions"]) else { return nil }
             self.init(context: context, revisions: revisions)
         }
 
-        private struct Field: CodingKey {
-            let stringValue: String
-            var intValue: Int? { nil }
-            init?(stringValue: String) { self.stringValue = stringValue }
-            init?(intValue: Int) { return nil }
-        }
-
         init(from decoder: Decoder) throws {
-            let values = try decoder.container(keyedBy: Field.self)
-            guard Set(values.allKeys.map(\.stringValue)) == ["context", "revisions"] else {
-                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "invalid authority fields"))
-            }
-            let context = try values.decode(String.self, forKey: Field(stringValue: "context")!)
-            let revisions = try values.decode(ProviderRevisions.self, forKey: Field(stringValue: "revisions")!)
-            guard let version = Self(rawValue: ["context": context, "revisions": revisions.json]) else {
-                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "invalid authority context"))
+            let wire = try WireProtocol.AuthorityVersion(from: decoder)
+            guard let version = Self(rawValue: wire.json) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath, debugDescription: "invalid authority version"
+                ))
             }
             self = version
         }
@@ -543,11 +519,11 @@ actor ExtensionBridge {
     enum ResponseReadResult { case response([String: Any]), pending, missing, unavailable }
     enum ResponseStatusResult: Equatable { case pending, ready, missing, unavailable }
 
-    static let workflowVersion = 4
-    static let maximumPayloadBytes = 256 * 1024
-    static let maximumRequestsPerHost = 4
-    static let maximumRequests = 8
-    static let maximumRetainedRequests = 16
+    static let workflowVersion = WireProtocol.workflowVersion
+    static let maximumPayloadBytes = WireProtocol.maximumPayloadBytes
+    static let maximumRequestsPerHost = WireProtocol.maximumRequestsPerHost
+    static let maximumRequests = WireProtocol.maximumRequests
+    static let maximumRetainedRequests = WireProtocol.maximumRetainedRequests
     static let maximumRetainedRequestsPerOrigin = 12
     static let maximumGlobalRetainedRequests = maximumRetainedRequests
     static let maximumManualSwitchResponseBytes = maximumPayloadBytes * 2
@@ -555,10 +531,10 @@ actor ExtensionBridge {
     static let maximumRetainedBytes = maximumRetainedRequests * maximumStoredRecordBytes
     static let maximumRetainedBytesPerOrigin =
         maximumRetainedRequestsPerOrigin * maximumStoredRecordBytes
-    static let requestTTL: TimeInterval = 15 * 60
+    static let requestTTL: TimeInterval = TimeInterval(WireProtocol.requestTTLMilliseconds) / 1_000
     static let admissionDeadlineFutureSkew: TimeInterval = 60
-    static let responseExpiry: TimeInterval = 60 * 60
-    static let privateBrowsingKey = "__bwPrivateBrowsing"
+    static let responseExpiry: TimeInterval = TimeInterval(WireProtocol.responseExpiryMilliseconds) / 1_000
+    static let privateBrowsingKey = WireProtocol.privateBrowsingKey
 
     static let shared = ExtensionBridge(store: ExtensionRequestFileStore(
         containerURL: FileManager.default.containerURL(
@@ -602,23 +578,17 @@ actor ExtensionBridge {
         request: SafariRequest,
         rawObject: [String: Any]
     ) -> DappIngressResult {
-        var rawObject = rawObject
-        let replayOnly: Bool
-        if let value = rawObject.removeValue(forKey: "replayOnly") {
-            guard CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID(),
-                  let flag = value as? Bool else { return .invalid }
-            replayOnly = flag
-        } else {
-            replayOnly = false
-        }
-        let allowedFields = Set([
-            "id", "name", "provider", "body", "host", "configurationKey",
-            "favicon", "enqueueAttempt", "admissionDeadline", "authority",
-            "workflowVersion",
-        ])
-        guard Set(rawObject.keys).isSubset(of: allowedFields),
-              request.workflowVersion == workflowVersion,
-              rawObject["workflowVersion"] as? Int == workflowVersion,
+        guard let wire = WireProtocol.DappRequest(json: rawObject) else { return .invalid }
+        return dappIngressResult(request: request, wire: wire)
+    }
+
+    static func dappIngressResult(
+        request: SafariRequest,
+        wire: WireProtocol.DappRequest
+    ) -> DappIngressResult {
+        var rawObject = wire.json
+        let replayOnly = rawObject.removeValue(forKey: "replayOnly") as? Bool ?? false
+        guard request.workflowVersion == workflowVersion,
               isValidIdentity(
                   host: request.host,
                   configurationKey: request.configurationKey
@@ -686,9 +656,7 @@ actor ExtensionBridge {
     }
 
     static func isValidEnqueueAttempt(_ value: String) -> Bool {
-        value.count == 32 && value.utf8.allSatisfy {
-            ($0 >= 48 && $0 <= 57) || ($0 >= 97 && $0 <= 102)
-        }
+        WireProtocol.validate(.privateToken, value: value)
     }
 
     static func admissionDeadlineDisposition(
@@ -703,9 +671,8 @@ actor ExtensionBridge {
     }
 
     static func lowercaseUUID(_ rawValue: String) -> UUID? {
-        guard rawValue == rawValue.lowercased(), rawValue.count == 36,
-              let value = UUID(uuidString: rawValue),
-              value.uuidString.lowercased() == rawValue else { return nil }
+        guard WireProtocol.validate(.requestToken, value: rawValue),
+              let value = UUID(uuidString: rawValue) else { return nil }
         return value
     }
 

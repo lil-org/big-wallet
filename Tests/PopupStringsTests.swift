@@ -11,22 +11,22 @@ final class PopupStringsTests: XCTestCase {
     private let reviewToken = "00000000-0000-4000-8000-000000000092"
 
     private func popupRequest(
-        subject: InternalSafariRequest.Subject.Popup,
+        subject: String,
         payload: Any? = nil,
         id: Int = 91
     ) throws -> InternalSafariRequest {
         var message: [String: Any] = [
             "id": id,
             "workflowVersion": ExtensionBridge.workflowVersion,
-            "subject": subject.rawValue,
+            "subject": subject,
             "requestToken": "00000000-0000-4000-8000-000000000091",
         ]
-        if subject == .getPendingRequests {
+        if subject == "getPendingRequests" {
             message["requestToken"] = nil
         }
         message["payload"] = payload
-        if subject != .getApprovalState && subject != .retryApproval &&
-            subject != .getPendingRequests && subject != .rejectRequest {
+        if subject != "getApprovalState" && subject != "retryApproval" &&
+            subject != "getPendingRequests" && subject != "rejectRequest" {
             message["reviewToken"] = "00000000-0000-4000-8000-000000000092"
         }
         let data = try JSONSerialization.data(withJSONObject: message)
@@ -35,7 +35,7 @@ final class PopupStringsTests: XCTestCase {
 
     private func approvalStateRequest(id: Int = 91) throws -> InternalSafariRequest {
         return try popupRequest(
-            subject: .getApprovalState,
+            subject: "getApprovalState",
             id: id
         )
     }
@@ -436,7 +436,7 @@ final class PopupStringsTests: XCTestCase {
 
     func testOversizedIgnoredCommandPreservesDispositionAndRecovery() throws {
         let state = try XCTUnwrap(oversizedResponse().approvalState)
-        let request = try popupRequest(subject: .approveRequest, payload: [:])
+        let request = try popupRequest(subject: "approveRequest", payload: [:])
         let data = try PopupResponseEncoder.encode(.command(.init(status: .ignored, approvalState: state)), for: request)
         XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
         let reply = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -450,10 +450,10 @@ final class PopupStringsTests: XCTestCase {
 
     func testOversizedMutationResponsesUseApprovalErrorEnvelope() throws {
         let requests = try [
-            popupRequest(subject: .retryApproval),
-            popupRequest(subject: .setTransactionSpeed, payload: ["interaction": "ended", "value": 0.5]),
-            popupRequest(subject: .applyTransactionEdits, payload: ["mode": "suggested"]),
-            popupRequest(subject: .resolveApprovalAlert, payload: ["action": "cancel"]),
+            popupRequest(subject: "retryApproval"),
+            popupRequest(subject: "setTransactionSpeed", payload: ["interaction": "ended", "value": 0.5]),
+            popupRequest(subject: "applyTransactionEdits", payload: ["mode": "suggested"]),
+            popupRequest(subject: "resolveApprovalAlert", payload: ["action": "cancel"]),
         ]
         for request in requests {
             let bounded = try boundedResponse(oversizedResponse(), for: request)
@@ -473,14 +473,14 @@ final class PopupStringsTests: XCTestCase {
             strings: ["ok": String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes)],
             layoutDirection: .ltr
         ))
-        let bounded = try boundedResponse(response, for: popupRequest(subject: .getPendingRequests))
+        let bounded = try boundedResponse(response, for: popupRequest(subject: "getPendingRequests"))
         XCTAssertEqual(bounded["status"] as? String, "unavailable")
         XCTAssertEqual(Set(bounded.keys), ["status"])
     }
 
     func testStatusOnlySliderMutationIsRejectedByExactDecoder() {
         XCTAssertThrowsError(try popupRequest(
-            subject: .setTransactionSpeed,
+            subject: "setTransactionSpeed",
             payload: ["interaction": "moved", "value": 0.5, "responseMode": "status"]
         ))
     }

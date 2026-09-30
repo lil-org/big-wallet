@@ -5222,6 +5222,26 @@ test("inpage transport survives Object.freeze replacement during initialization"
     assert.equal(await result, "0x10");
 });
 
+test("the largest supported RPC result survives the content delivery envelope", async () => {
+    const protocol = providerRequire("../Resources/protocol.generated.js");
+    const harness = inpageHarness();
+    dispatchConfigurations(harness);
+    const pending = harness.window.ethereum.request({
+        method: "debug_traceTransaction",
+        params: ["0x123", {tracer: "callTracer"}],
+    });
+    const id = pageMessages(harness, "rpc").at(-1).message.id;
+    let result = "leaf";
+    for (let depth = 0; depth < 62; depth += 1) { result = {nested: result}; }
+    const native = protocol.build("RPCResponse", {id, jsonrpc: "2.0", result});
+    const response = protocol.build("PageResponse", terminalResponse({
+        id, provider: "ethereum", name: null, result: native.result,
+    }));
+    harness.dispatch({kind: "rpc", id, response});
+    assert.deepEqual(normalized(await pending), result);
+    assert.equal(harness.listenerErrors.length, 0);
+});
+
 function configurationSnapshot(configurations, revisions = {ethereum: 0, solana: 0}) {
     const ethereum = configurations.find(item => item.provider === "ethereum");
     const solana = configurations.find(item => item.provider === "solana");

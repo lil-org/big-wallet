@@ -77,6 +77,10 @@ die() {
   exit 1
 }
 
+validate_wire_protocol_sources() {
+  /bin/sh "$REPO_ROOT/Scripts/check_wire_protocol.sh" >&2
+}
+
 tracked_macos_app_sandbox_feedback_id() {
   local feedback_id
 

@@ -19,6 +19,7 @@ require_cmd plutil
 require_cmd jq
 inpage_provider_prepare_tool_path "$REPO_ROOT"
 require_inpage_provider_toolchain
+validate_wire_protocol_sources
 
 validate_export_options "$ASC_EXPORT_OPTIONS"
 version="$(current_local_version)"

@@ -3,7 +3,6 @@
 import Foundation
 
 struct InternalSafariRequest: Decodable {
-
     struct SelectedAccount: Decodable {
         let walletId: String
         let address: String
@@ -11,17 +10,11 @@ struct InternalSafariRequest: Decodable {
         let derivationPath: String
 
         init(from decoder: Decoder) throws {
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: ["walletId", "address", "coin", "derivationPath"]
-            )
-            walletId = try container.decode(String.self, forKey: "walletId")
-            address = try container.decode(String.self, forKey: "address")
-            coin = try container.decode(InpageProvider.self, forKey: "coin")
-            derivationPath = try container.decode(
-                String.self,
-                forKey: "derivationPath"
-            )
+            let fields = NativeRequestFields(try WireProtocol.SelectedAccount(from: decoder).json)
+            walletId = try fields.value("walletId")
+            address = try fields.value("address")
+            coin = try fields.decode("coin")
+            derivationPath = try fields.value("derivationPath")
         }
     }
 
@@ -31,39 +24,23 @@ struct InternalSafariRequest: Decodable {
         let cluster: Solana.Cluster?
 
         init(from decoder: Decoder) throws {
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                optional: [
-                    "selectedAccounts",
-                    "chainId",
-                    "cluster",
-                ]
-            )
-            selectedAccounts = try container.decodeIfPresent(
-                [SelectedAccount].self,
-                forKey: "selectedAccounts"
-            )
-            chainId = try container.decodeIfPresent(String.self, forKey: "chainId")
-            cluster = try container.decodeIfPresent(Solana.Cluster.self, forKey: "cluster")
-
+            let fields = NativeRequestFields(try WireProtocol.ApprovalPayload(from: decoder).json)
+            selectedAccounts = try fields.decodeOptional("selectedAccounts")
+            chainId = try fields.optional("chainId")
+            cluster = try fields.decodeOptional("cluster")
         }
     }
 
     struct TransactionSpeedPayload: Decodable {
-        enum Interaction: String, Decodable {
-            case ended, cancelled
-        }
+        enum Interaction: String, Decodable { case ended, cancelled }
 
         let interaction: Interaction
         let value: Double
 
         init(from decoder: Decoder) throws {
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: ["interaction", "value"]
-            )
-            interaction = try container.decode(Interaction.self, forKey: "interaction")
-            value = try container.decode(Double.self, forKey: "value")
+            let fields = NativeRequestFields(try WireProtocol.TransactionSpeedPayload(from: decoder).json)
+            interaction = try fields.decode("interaction")
+            value = try fields.value("value")
         }
     }
 
@@ -78,41 +55,17 @@ struct InternalSafariRequest: Decodable {
             let maxFeePerGasGwei: String?
         }
 
-        private enum Mode: String, Decodable {
-            case suggested, custom
-        }
-
         init(from decoder: Decoder) throws {
-            let modeContainer = try decoder.container(keyedBy: InternalCodingKey.self)
-            let mode = try modeContainer.decode(Mode.self, forKey: InternalCodingKey("mode"))
-            switch mode {
-            case .suggested:
-                _ = try ExactKeyedContainer(decoder: decoder, required: ["mode"])
+            let fields = NativeRequestFields(try WireProtocol.TransactionEditsPayload(from: decoder).json)
+            let mode: String = try fields.value("mode")
+            if mode == "suggested" {
                 self = .suggested
-            case .custom:
-                let container = try ExactKeyedContainer(
-                    decoder: decoder,
-                    required: ["mode", "nonce"],
-                    optional: [
-                        "gasPriceGwei",
-                        "maxPriorityFeePerGasGwei",
-                        "maxFeePerGasGwei",
-                    ]
-                )
-                self = .custom(Custom(
-                    nonce: try container.decode(String.self, forKey: "nonce"),
-                    gasPriceGwei: try container.decodeIfPresent(
-                        String.self,
-                        forKey: "gasPriceGwei"
-                    ),
-                    maxPriorityFeePerGasGwei: try container.decodeIfPresent(
-                        String.self,
-                        forKey: "maxPriorityFeePerGasGwei"
-                    ),
-                    maxFeePerGasGwei: try container.decodeIfPresent(
-                        String.self,
-                        forKey: "maxFeePerGasGwei"
-                    )
+            } else {
+                self = .custom(try Custom(
+                    nonce: fields.value("nonce"),
+                    gasPriceGwei: fields.optional("gasPriceGwei"),
+                    maxPriorityFeePerGasGwei: fields.optional("maxPriorityFeePerGasGwei"),
+                    maxFeePerGasGwei: fields.optional("maxFeePerGasGwei")
                 ))
             }
         }
@@ -122,14 +75,8 @@ struct InternalSafariRequest: Decodable {
         let action: TransactionApprovalAlertAction
 
         init(from decoder: Decoder) throws {
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: ["action"]
-            )
-            action = try container.decode(
-                TransactionApprovalAlertAction.self,
-                forKey: "action"
-            )
+            let fields = NativeRequestFields(try WireProtocol.ApprovalAlertPayload(from: decoder).json)
+            action = try fields.decode("action")
         }
     }
 
@@ -189,14 +136,10 @@ struct InternalSafariRequest: Decodable {
             switch self {
             case .getPendingRequests:
                 return nil
-            case .getApprovalState(let identity),
-                 .retryApproval(let identity),
-                 .approveRequest(let identity, _),
-                 .setTransactionSpeed(let identity, _),
-                 .applyTransactionEdits(let identity, _),
+            case .getApprovalState(let identity), .retryApproval(let identity),
+                 .approveRequest(let identity, _), .rejectRequest(let identity),
+                 .setTransactionSpeed(let identity, _), .applyTransactionEdits(let identity, _),
                  .resolveApprovalAlert(let identity, _):
-                return identity
-            case .rejectRequest(let identity):
                 return identity
             }
         }
@@ -218,304 +161,108 @@ struct InternalSafariRequest: Decodable {
         return command.identity?.token.rawValue
     }
 
-    enum Subject: Decodable {
-        case page(Page)
-        case worker(Worker)
-        case popup(Popup)
-        case openApp
-
-        enum Page: String {
-            case getResponse, acknowledgeResponse, showApproval, rpc
-            case getLatestConfiguration, disconnect
-        }
-
-        enum Worker: String {
-            case getRecoveryRequests, maintainRequest, prepareResponseDelivery
-        }
-
-        enum Popup: String {
-            case getPendingRequests, getApprovalState, retryApproval, approveRequest, rejectRequest
-            case setTransactionSpeed, applyTransactionEdits, resolveApprovalAlert
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            let rawValue = try container.decode(String.self)
-            if let page = Page(rawValue: rawValue) {
-                self = .page(page)
-            } else if let worker = Worker(rawValue: rawValue) {
-                self = .worker(worker)
-            } else if let popup = Popup(rawValue: rawValue) {
-                self = .popup(popup)
-            } else if rawValue == "openApp" {
-                self = .openApp
-            } else {
-                throw DecodingError.dataCorruptedError(
-                    in: container,
-                    debugDescription: "unknown subject"
-                )
-            }
-        }
-    }
-
     init(from decoder: Decoder) throws {
-        let subjectContainer = try decoder.container(keyedBy: InternalCodingKey.self)
-        id = try subjectContainer.decode(Int.self, forKey: InternalCodingKey("id"))
-        workflowVersion = try subjectContainer.decode(
-            Int.self,
-            forKey: InternalCodingKey("workflowVersion")
-        )
-        guard workflowVersion == ExtensionBridge.workflowVersion else {
-            throw DecodingError.dataCorruptedError(
-                forKey: InternalCodingKey("workflowVersion"),
-                in: subjectContainer,
-                debugDescription: "unsupported workflow"
-            )
-        }
-        let subject = try subjectContainer.decode(
-            Subject.self,
-            forKey: InternalCodingKey("subject")
-        )
-        let common = Set(["id", "workflowVersion", "subject"])
+        let fields = NativeRequestFields(try WireProtocol.NativeCommand(from: decoder).json)
+        id = try fields.value("id")
+        workflowVersion = try fields.value("workflowVersion")
+        let subject: String = try fields.value("subject")
         switch subject {
-        case .openApp:
-            _ = try ExactKeyedContainer(decoder: decoder, required: common)
+        case "openApp":
             command = .openApp
-        case .page(.rpc):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["body", "chainId"])
-            )
-            command = .page(.rpc(
-                body: try container.decode(String.self, forKey: "body"),
-                chainId: try container.decode(String.self, forKey: "chainId")
-            ))
-        case .page(.getLatestConfiguration):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["configurationKey"])
-            )
-            command = .page(.getLatestConfiguration(configurationKey:
-                try container.decode(String.self, forKey: "configurationKey")
-            ))
-        case .page(.disconnect):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["configurationKey", "provider", "attempt", "authority"])
-            )
-            let provider = try container.decode(InpageProvider.self, forKey: "provider")
-            let attempt = try container.decode(String.self, forKey: "attempt")
-            guard provider == .ethereum || provider == .solana,
-                  ExtensionBridge.isValidEnqueueAttempt(attempt) else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "invalid revocation identity"
-                ))
-            }
+        case "rpc":
+            command = .page(try .rpc(body: fields.value("body"), chainId: fields.value("chainId")))
+        case "getLatestConfiguration":
+            command = .page(try .getLatestConfiguration(configurationKey: fields.value("configurationKey")))
+        case "disconnect":
             command = .page(.disconnect(try DisconnectIdentity(
-                configurationKey: container.decode(String.self, forKey: "configurationKey"),
-                provider: provider,
-                attempt: attempt,
-                authority: container.decode(ExtensionBridge.AuthorityVersion.self, forKey: "authority")
+                configurationKey: fields.value("configurationKey"),
+                provider: fields.decode("provider"),
+                attempt: fields.value("attempt"),
+                authority: fields.decode("authority")
             )))
-        case .page(.getResponse):
-            command = .page(.getResponse(try Self.decodeResponseIdentity(
-                from: decoder,
-                common: common
-            )))
-        case .worker(.maintainRequest):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["configurationKey", "requestToken", "allowDelivery"])
-            )
+        case "getResponse":
+            command = .page(.getResponse(try fields.responseIdentity()))
+        case "maintainRequest":
             command = .worker(.maintainRequest(try MaintenanceIdentity(
-                response: ResponseIdentity(
-                    configurationKey: container.decode(String.self, forKey: "configurationKey"),
-                    token: Self.decodeToken(from: container)
-                ),
-                allowDelivery: container.decode(Bool.self, forKey: "allowDelivery")
+                response: fields.responseIdentity(), allowDelivery: fields.value("allowDelivery")
             )))
-        case .worker(.prepareResponseDelivery):
-            command = .worker(.prepareResponseDelivery(try Self.decodeResponseIdentity(
-                from: decoder, common: common
-            )))
-        case .worker(.getRecoveryRequests):
-            _ = try ExactKeyedContainer(decoder: decoder, required: common)
+        case "prepareResponseDelivery":
+            command = .worker(.prepareResponseDelivery(try fields.responseIdentity()))
+        case "getRecoveryRequests":
             command = .worker(.getRecoveryRequests)
-        case .page(.acknowledgeResponse), .page(.showApproval):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["configurationKey", "requestToken"])
-            )
+        case "acknowledgeResponse", "showApproval":
             let identity = try ResponseAcknowledgmentIdentity(
-                configurationKey: container.decode(String.self, forKey: "configurationKey"),
-                token: Self.decodeToken(from: container)
+                configurationKey: fields.value("configurationKey"), token: fields.token()
             )
-            if case .page(.showApproval) = subject {
-                command = .page(.showApproval(identity))
-            } else {
-                command = .page(.acknowledgeResponse(identity))
-            }
-        case .popup(.getPendingRequests):
-            _ = try ExactKeyedContainer(decoder: decoder, required: common)
+            command = .page(subject == "showApproval" ? .showApproval(identity) : .acknowledgeResponse(identity))
+        case "getPendingRequests":
             command = .popup(.getPendingRequests)
-        case .popup(.rejectRequest):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["requestToken"])
-            )
-            command = .popup(.rejectRequest(try Self.decodeIdentity(from: container)))
-        case .popup(.getApprovalState), .popup(.retryApproval):
-            let container = try ExactKeyedContainer(
-                decoder: decoder,
-                required: common.union(["requestToken"])
-            )
-            let identity = try Self.decodeIdentity(from: container)
-            if case .popup(.retryApproval) = subject {
-                command = .popup(.retryApproval(identity))
-            } else {
-                command = .popup(.getApprovalState(identity))
-            }
-        case .popup(.approveRequest):
-            let container = try Self.popupContainer(decoder: decoder, common: common)
-            command = .popup(.approveRequest(
-                try Self.decodeIdentity(from: container, requiresReviewToken: true),
-                try container.decode(ApprovalPayload.self, forKey: "payload")
-            ))
-        case .popup(.setTransactionSpeed):
-            let container = try Self.popupContainer(decoder: decoder, common: common)
-            command = .popup(.setTransactionSpeed(
-                try Self.decodeIdentity(from: container, requiresReviewToken: true),
-                try container.decode(TransactionSpeedPayload.self, forKey: "payload")
-            ))
-        case .popup(.applyTransactionEdits):
-            let container = try Self.popupContainer(decoder: decoder, common: common)
-            command = .popup(.applyTransactionEdits(
-                try Self.decodeIdentity(from: container, requiresReviewToken: true),
-                try container.decode(TransactionEditsPayload.self, forKey: "payload")
-            ))
-        case .popup(.resolveApprovalAlert):
-            let container = try Self.popupContainer(decoder: decoder, common: common)
-            command = .popup(.resolveApprovalAlert(
-                try Self.decodeIdentity(from: container, requiresReviewToken: true),
-                try container.decode(ApprovalAlertPayload.self, forKey: "payload")
-            ))
+        case "rejectRequest":
+            command = .popup(.rejectRequest(try fields.popupIdentity()))
+        case "getApprovalState":
+            command = .popup(.getApprovalState(try fields.popupIdentity()))
+        case "retryApproval":
+            command = .popup(.retryApproval(try fields.popupIdentity()))
+        case "approveRequest":
+            command = .popup(try .approveRequest(fields.popupIdentity(), fields.decode("payload")))
+        case "setTransactionSpeed":
+            command = .popup(try .setTransactionSpeed(fields.popupIdentity(), fields.decode("payload")))
+        case "applyTransactionEdits":
+            command = .popup(try .applyTransactionEdits(fields.popupIdentity(), fields.decode("payload")))
+        case "resolveApprovalAlert":
+            command = .popup(try .resolveApprovalAlert(fields.popupIdentity(), fields.decode("payload")))
+        default:
+            throw fields.invalid("subject")
         }
     }
+}
 
-    private static func popupContainer(
-        decoder: Decoder,
-        common: Set<String>
-    ) throws -> ExactKeyedContainer {
-        let required = common.union(["requestToken", "reviewToken", "payload"])
-        return try ExactKeyedContainer(
-            decoder: decoder,
-            required: required
-        )
+private struct NativeRequestFields {
+    private let json: [String: Any]
+
+    init(_ json: [String: Any]) { self.json = json }
+
+    func value<Value>(_ key: String) throws -> Value {
+        guard let value = json[key] as? Value else { throw invalid(key) }
+        return value
     }
 
-    private static func decodeIdentity(
-        from container: ExactKeyedContainer,
-        requiresReviewToken: Bool = false
-    ) throws -> PopupIdentity {
-        let reviewToken: UUID?
-        if requiresReviewToken {
-            let rawValue = try container.decode(
-                String.self,
-                forKey: "reviewToken"
-            )
-            guard let decoded = ExtensionBridge.lowercaseUUID(rawValue) else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: InternalCodingKey("reviewToken"),
-                    in: container.container,
-                    debugDescription: "invalid review token"
-                )
-            }
-            reviewToken = decoded
-        } else {
-            reviewToken = nil
-        }
-        return PopupIdentity(
-            token: try decodeToken(from: container),
-            reviewToken: reviewToken
-        )
+    func optional<Value>(_ key: String) throws -> Value? {
+        guard json[key] != nil else { return nil }
+        return try value(key)
     }
 
-    private static func decodeResponseIdentity(
-        from decoder: Decoder,
-        common: Set<String>
-    ) throws -> ResponseIdentity {
-        let container = try ExactKeyedContainer(
-            decoder: decoder,
-            required: common.union(["configurationKey", "requestToken"])
-        )
-        return try ResponseIdentity(
-            configurationKey: container.decode(String.self, forKey: "configurationKey"),
-            token: decodeToken(from: container)
-        )
+    func decode<Value: Decodable>(_ key: String) throws -> Value {
+        guard let value = json[key] else { throw invalid(key) }
+        return try JSONDecoder().decode(Value.self, from: JSONSerialization.data(
+            withJSONObject: value, options: .fragmentsAllowed
+        ))
     }
 
-    private static func decodeToken(
-        from container: ExactKeyedContainer
-    ) throws -> ExtensionBridge.RequestToken {
-        let rawValue = try container.decode(String.self, forKey: "requestToken")
-        guard let token = ExtensionBridge.RequestToken(rawValue: rawValue) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: InternalCodingKey("requestToken"),
-                in: container.container,
-                debugDescription: "invalid request token"
-            )
+    func decodeOptional<Value: Decodable>(_ key: String) throws -> Value? {
+        guard json[key] != nil else { return nil }
+        return try decode(key)
+    }
+
+    func token() throws -> ExtensionBridge.RequestToken {
+        guard let token = ExtensionBridge.RequestToken(rawValue: try value("requestToken")) else {
+            throw invalid("requestToken")
         }
         return token
     }
-}
 
-private struct InternalCodingKey: CodingKey, Hashable {
-    let stringValue: String
-    let intValue: Int? = nil
-
-    init(_ stringValue: String) {
-        self.stringValue = stringValue
+    func responseIdentity() throws -> InternalSafariRequest.ResponseIdentity {
+        try .init(configurationKey: value("configurationKey"), token: token())
     }
 
-    init?(stringValue: String) {
-        self.init(stringValue)
+    func popupIdentity() throws -> InternalSafariRequest.PopupIdentity {
+        let rawReviewToken: String? = try optional("reviewToken")
+        let reviewToken = rawReviewToken.flatMap(UUID.init(uuidString:))
+        guard rawReviewToken == nil || reviewToken != nil else { throw invalid("reviewToken") }
+        return try .init(token: token(), reviewToken: reviewToken)
     }
 
-    init?(intValue: Int) {
-        return nil
-    }
-}
-
-private struct ExactKeyedContainer {
-    let container: KeyedDecodingContainer<InternalCodingKey>
-
-    init(
-        decoder: Decoder,
-        required: Set<String> = [],
-        optional: Set<String> = []
-    ) throws {
-        container = try decoder.container(keyedBy: InternalCodingKey.self)
-        let actual = Set(container.allKeys.map(\.stringValue))
-        let allowed = required.union(optional)
-        guard actual.isSubset(of: allowed), required.isSubset(of: actual) else {
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "unexpected object shape"
-                )
-            )
-        }
-    }
-
-    func decode<T: Decodable>(_ type: T.Type, forKey key: String) throws -> T {
-        return try container.decode(type, forKey: InternalCodingKey(key))
-    }
-
-    func decodeIfPresent<T: Decodable>(
-        _ type: T.Type,
-        forKey key: String
-    ) throws -> T? {
-        return try container.decodeIfPresent(type, forKey: InternalCodingKey(key))
+    func invalid(_ key: String) -> DecodingError {
+        .dataCorrupted(.init(codingPath: [], debugDescription: "invalid native request field: \(key)"))
     }
 }

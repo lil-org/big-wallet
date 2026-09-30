@@ -502,6 +502,8 @@ mkdir -p \
 for fixture_script in \
     Scripts/asc/publish.sh \
     Scripts/asc/common.sh \
+    Scripts/check_wire_protocol.sh \
+    Scripts/generate_wire_protocol.mjs \
     Scripts/inpage_provider_toolchain.sh \
     Scripts/validate_alchemy_jwt_request_proof_key.sh \
     Scripts/alchemy_jwt_request_proof_key_common.sh \
@@ -513,6 +515,14 @@ do
     cp -p \
         "$repository_directory/$fixture_script" \
         "$publish_fixture_root/$fixture_script"
+done
+for protocol_file in \
+    "Safari Shared/Protocol/wire-protocol.json" \
+    "Safari Shared/Protocol/WireProtocol.generated.swift" \
+    "Safari Shared/Resources/protocol.generated.js"
+do
+    mkdir -p "$publish_fixture_root/${protocol_file%/*}"
+    cp -p "$repository_directory/$protocol_file" "$publish_fixture_root/$protocol_file"
 done
 # Signature and entitlement checks have dedicated packaging tests.
 /usr/bin/perl -0pi -e '

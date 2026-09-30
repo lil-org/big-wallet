@@ -361,24 +361,26 @@ struct PopupChainReview: Encodable {
 }
 
 enum PopupResponseEncoder {
-    static let maximumResponseBytes = 512 * 1024
+    static let maximumResponseBytes = WireProtocol.maximumPopupResponseBytes
 
     static func encode(_ response: PopupResponse, for request: InternalSafariRequest) throws -> Data {
         let encoder = JSONEncoder()
         func bounded(_ response: PopupResponse) -> Data? {
             guard let data = try? encoder.encode(response),
-                  data.count <= maximumResponseBytes else { return nil }
+                  data.count <= maximumResponseBytes,
+                  let json = try? JSONSerialization.jsonObject(with: data) else { return nil }
+            guard WireProtocol.validate(.popupResponse, value: json) else { return nil }
             return data
         }
         if let data = bounded(response) { return data }
         if let data = bounded(response.removingDecorativeImages) { return data }
         guard case .popup(let command) = request.command,
               returnsApprovalState(command) else {
-            return try encoder.encode(PopupResponse.queueUnavailable)
+            return try validated(PopupResponse.queueUnavailable, using: encoder)
         }
         let original = response.approvalState
         guard case .command(let command) = response else {
-            return try encoder.encode(PopupResponse.queueUnavailable)
+            return try validated(PopupResponse.queueUnavailable, using: encoder)
         }
         var fallback = PopupApprovalState(
             id: request.id,
@@ -390,7 +392,13 @@ enum PopupResponseEncoder {
         )
         if let data = bounded(.command(command.replacingApprovalState(fallback))) { return data }
         fallback.host = nil
-        return try encoder.encode(PopupResponse.command(command.replacingApprovalState(fallback)))
+        return try validated(PopupResponse.command(command.replacingApprovalState(fallback)), using: encoder)
+    }
+
+    private static func validated(_ response: PopupResponse, using encoder: JSONEncoder) throws -> Data {
+        let data = try encoder.encode(response)
+        let wire = try JSONDecoder().decode(WireProtocol.PopupResponse.self, from: data)
+        return try encoder.encode(wire)
     }
 
     private static func returnsApprovalState(_ command: InternalSafariRequest.PopupCommand) -> Bool {

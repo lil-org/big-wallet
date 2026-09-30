@@ -1,0 +1,7122 @@
+[
+  {
+    "name": "base RequestID",
+    "type": "RequestID",
+    "valid": true,
+    "value": -9007199254740991
+  },
+  {
+    "name": "base NonnegativeInteger",
+    "type": "NonnegativeInteger",
+    "valid": true,
+    "value": 0
+  },
+  {
+    "name": "base PositiveInteger",
+    "type": "PositiveInteger",
+    "valid": true,
+    "value": 1
+  },
+  {
+    "name": "base PrivateToken",
+    "type": "PrivateToken",
+    "valid": true,
+    "value": "0123456789abcdef0123456789abcdef"
+  },
+  {
+    "name": "base RequestToken",
+    "type": "RequestToken",
+    "valid": true,
+    "value": "00000000-0000-4000-8000-000000000091"
+  },
+  {
+    "name": "base EthereumChainID",
+    "type": "EthereumChainID",
+    "valid": true,
+    "value": "0x7fffffffffffffff"
+  },
+  {
+    "name": "base SolanaPublicKey",
+    "type": "SolanaPublicKey",
+    "valid": true,
+    "value": "11111111111111111111111111111111"
+  },
+  {
+    "name": "base AuthorityContext",
+    "type": "AuthorityContext",
+    "valid": true,
+    "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "name": "base Provider",
+    "type": "Provider",
+    "valid": true,
+    "value": "ethereum"
+  },
+  {
+    "name": "base RequestProvider",
+    "type": "RequestProvider",
+    "valid": true,
+    "value": "unknown"
+  },
+  {
+    "name": "base SolanaCluster",
+    "type": "SolanaCluster",
+    "valid": true,
+    "value": "mainnetBeta"
+  },
+  {
+    "name": "base Revisions",
+    "type": "Revisions",
+    "valid": true,
+    "value": {
+      "ethereum": 2,
+      "solana": 3
+    }
+  },
+  {
+    "name": "base ProviderRevisions",
+    "type": "ProviderRevisions",
+    "valid": true,
+    "value": {
+      "ethereum": 2,
+      "solana": 3
+    }
+  },
+  {
+    "name": "base AuthorityVersion",
+    "type": "AuthorityVersion",
+    "valid": true,
+    "value": {
+      "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revisions": {
+        "ethereum": 2,
+        "solana": 3
+      }
+    }
+  },
+  {
+    "name": "base EthereumConfiguration",
+    "type": "EthereumConfiguration",
+    "valid": true,
+    "value": {
+      "address": "0x1212121212121212121212121212121212121212",
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "base SolanaConfiguration",
+    "type": "SolanaConfiguration",
+    "valid": true,
+    "value": {
+      "publicKey": "11111111111111111111111111111111"
+    }
+  },
+  {
+    "name": "base ConfigurationSnapshot",
+    "type": "ConfigurationSnapshot",
+    "valid": true,
+    "value": {
+      "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revisions": {
+        "ethereum": 2,
+        "solana": 3
+      },
+      "ethereum": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1"
+      },
+      "solana": {
+        "publicKey": "11111111111111111111111111111111"
+      }
+    }
+  },
+  {
+    "name": "base SelectedAccount",
+    "type": "SelectedAccount",
+    "valid": true,
+    "value": {
+      "walletId": "wallet-one",
+      "address": "0x1212121212121212121212121212121212121212",
+      "coin": "ethereum",
+      "derivationPath": "m/44'/60'/0'/0/0"
+    }
+  },
+  {
+    "name": "provider ethereum",
+    "type": "Provider",
+    "valid": true,
+    "value": "ethereum"
+  },
+  {
+    "name": "provider solana",
+    "type": "Provider",
+    "valid": true,
+    "value": "solana"
+  },
+  {
+    "name": "cluster devnet",
+    "type": "SolanaCluster",
+    "valid": true,
+    "value": "devnet"
+  },
+  {
+    "name": "cluster testnet",
+    "type": "SolanaCluster",
+    "valid": true,
+    "value": "testnet"
+  },
+  {
+    "name": "disconnected snapshot",
+    "type": "ConfigurationSnapshot",
+    "valid": true,
+    "value": {
+      "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revisions": {
+        "ethereum": 2,
+        "solana": 3
+      },
+      "ethereum": {
+        "address": "",
+        "chainId": "0x1"
+      },
+      "solana": null
+    }
+  },
+  {
+    "name": "approval payload 0",
+    "type": "ApprovalPayload",
+    "valid": true,
+    "value": {}
+  },
+  {
+    "name": "approval payload 1",
+    "type": "ApprovalPayload",
+    "valid": true,
+    "value": {
+      "selectedAccounts": [
+        {
+          "walletId": "wallet-one",
+          "address": "0x1212121212121212121212121212121212121212",
+          "coin": "ethereum",
+          "derivationPath": "m/44'/60'/0'/0/0"
+        }
+      ],
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "approval payload 2",
+    "type": "ApprovalPayload",
+    "valid": true,
+    "value": {
+      "cluster": "devnet"
+    }
+  },
+  {
+    "name": "speed ended",
+    "type": "TransactionSpeedPayload",
+    "valid": true,
+    "value": {
+      "interaction": "ended",
+      "value": 0.5
+    }
+  },
+  {
+    "name": "speed cancelled",
+    "type": "TransactionSpeedPayload",
+    "valid": true,
+    "value": {
+      "interaction": "cancelled",
+      "value": 0.5
+    }
+  },
+  {
+    "name": "edits 0",
+    "type": "TransactionEditsPayload",
+    "valid": true,
+    "value": {
+      "mode": "suggested"
+    }
+  },
+  {
+    "name": "edits 1",
+    "type": "TransactionEditsPayload",
+    "valid": true,
+    "value": {
+      "mode": "custom",
+      "nonce": "2",
+      "gasPriceGwei": "0.25"
+    }
+  },
+  {
+    "name": "edits 2",
+    "type": "TransactionEditsPayload",
+    "valid": true,
+    "value": {
+      "mode": "custom",
+      "nonce": "2",
+      "maxPriorityFeePerGasGwei": "1",
+      "maxFeePerGasGwei": "2"
+    }
+  },
+  {
+    "name": "alert acknowledge",
+    "type": "ApprovalAlertPayload",
+    "valid": true,
+    "value": {
+      "action": "acknowledge"
+    }
+  },
+  {
+    "name": "alert retry",
+    "type": "ApprovalAlertPayload",
+    "valid": true,
+    "value": {
+      "action": "retry"
+    }
+  },
+  {
+    "name": "alert edit",
+    "type": "ApprovalAlertPayload",
+    "valid": true,
+    "value": {
+      "action": "edit"
+    }
+  },
+  {
+    "name": "alert cancel",
+    "type": "ApprovalAlertPayload",
+    "valid": true,
+    "value": {
+      "action": "cancel"
+    }
+  },
+  {
+    "name": "native command openApp 0",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "openApp"
+    }
+  },
+  {
+    "name": "extra native command 0",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "openApp",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command getRecoveryRequests 1",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getRecoveryRequests"
+    }
+  },
+  {
+    "name": "extra native command 1",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getRecoveryRequests",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command getPendingRequests 2",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getPendingRequests"
+    }
+  },
+  {
+    "name": "extra native command 2",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getPendingRequests",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command rpc 3",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"jsonrpc\": \"2.0\", \"id\": 91, \"method\": \"vendor_method\", \"params\": {\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}}",
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "extra native command 3",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"jsonrpc\": \"2.0\", \"id\": 91, \"method\": \"vendor_method\", \"params\": {\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}}",
+      "chainId": "0x1",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command getLatestConfiguration 4",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getLatestConfiguration",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "extra native command 4",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getLatestConfiguration",
+      "configurationKey": "https://wallet.example",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command disconnect 5",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "configurationKey": "https://wallet.example",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "extra native command 5",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "configurationKey": "https://wallet.example",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command getResponse 6",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 6",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command acknowledgeResponse 7",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "acknowledgeResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 7",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "acknowledgeResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command showApproval 8",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "showApproval",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 8",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "showApproval",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command prepareResponseDelivery 9",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "prepareResponseDelivery",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 9",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "prepareResponseDelivery",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command maintainRequest 10",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "maintainRequest",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "allowDelivery": false
+    }
+  },
+  {
+    "name": "extra native command 10",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "maintainRequest",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "allowDelivery": false,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command maintainRequest 11",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "maintainRequest",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "allowDelivery": true
+    }
+  },
+  {
+    "name": "extra native command 11",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "maintainRequest",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "allowDelivery": true,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command getApprovalState 12",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getApprovalState",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 12",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getApprovalState",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command retryApproval 13",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "retryApproval",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 13",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "retryApproval",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command rejectRequest 14",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rejectRequest",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "extra native command 14",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rejectRequest",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command approveRequest 15",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "approveRequest",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {}
+    }
+  },
+  {
+    "name": "extra native command 15",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "approveRequest",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {},
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command approveRequest 16",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "approveRequest",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "selectedAccounts": [
+          {
+            "walletId": "wallet-one",
+            "address": "0x1212121212121212121212121212121212121212",
+            "coin": "ethereum",
+            "derivationPath": "m/44'/60'/0'/0/0"
+          }
+        ],
+        "chainId": "0x1"
+      }
+    }
+  },
+  {
+    "name": "extra native command 16",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "approveRequest",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "selectedAccounts": [
+          {
+            "walletId": "wallet-one",
+            "address": "0x1212121212121212121212121212121212121212",
+            "coin": "ethereum",
+            "derivationPath": "m/44'/60'/0'/0/0"
+          }
+        ],
+        "chainId": "0x1"
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command setTransactionSpeed 17",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "setTransactionSpeed",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "interaction": "ended",
+        "value": 0.5
+      }
+    }
+  },
+  {
+    "name": "extra native command 17",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "setTransactionSpeed",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "interaction": "ended",
+        "value": 0.5
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command setTransactionSpeed 18",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "setTransactionSpeed",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "interaction": "cancelled",
+        "value": 0.5
+      }
+    }
+  },
+  {
+    "name": "extra native command 18",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "setTransactionSpeed",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "interaction": "cancelled",
+        "value": 0.5
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command applyTransactionEdits 19",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyTransactionEdits",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "mode": "suggested"
+      }
+    }
+  },
+  {
+    "name": "extra native command 19",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyTransactionEdits",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "mode": "suggested"
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command applyTransactionEdits 20",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyTransactionEdits",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "mode": "custom",
+        "nonce": "2",
+        "gasPriceGwei": "0.25"
+      }
+    }
+  },
+  {
+    "name": "extra native command 20",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyTransactionEdits",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "mode": "custom",
+        "nonce": "2",
+        "gasPriceGwei": "0.25"
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command applyTransactionEdits 21",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyTransactionEdits",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "mode": "custom",
+        "nonce": "2",
+        "maxPriorityFeePerGasGwei": "1",
+        "maxFeePerGasGwei": "2"
+      }
+    }
+  },
+  {
+    "name": "extra native command 21",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyTransactionEdits",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "mode": "custom",
+        "nonce": "2",
+        "maxPriorityFeePerGasGwei": "1",
+        "maxFeePerGasGwei": "2"
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "native command resolveApprovalAlert 22",
+    "type": "NativeCommand",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "resolveApprovalAlert",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "action": "cancel"
+      }
+    }
+  },
+  {
+    "name": "extra native command 22",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "resolveApprovalAlert",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000091",
+      "payload": {
+        "action": "cancel"
+      },
+      "unexpected": true
+    }
+  },
+  {
+    "name": "external open payload EthereumRequestBody",
+    "type": "EthereumRequestBody",
+    "valid": true,
+    "value": {
+      "address": "0x1212121212121212121212121212121212121212",
+      "chainId": "0x1",
+      "object": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "external open payload SolanaRequestObject",
+    "type": "SolanaRequestObject",
+    "valid": true,
+    "value": {
+      "method": "signMessage",
+      "params": {
+        "message": "01",
+        "vendorExtension": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "external open payload SolanaRequestBody",
+    "type": "SolanaRequestBody",
+    "valid": true,
+    "value": {
+      "publicKey": "11111111111111111111111111111111",
+      "object": {
+        "method": "signMessage",
+        "params": {
+          "message": "01",
+          "vendorExtension": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "manual configuration ethereum",
+    "type": "ManualProviderConfiguration",
+    "valid": true,
+    "value": {
+      "provider": "ethereum",
+      "results": [
+        "0x1212121212121212121212121212121212121212"
+      ],
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "manual configuration solana",
+    "type": "ManualProviderConfiguration",
+    "valid": true,
+    "value": {
+      "provider": "solana",
+      "publicKey": "11111111111111111111111111111111"
+    }
+  },
+  {
+    "name": "manual body 0",
+    "type": "ManualRequestBody",
+    "valid": true,
+    "value": {}
+  },
+  {
+    "name": "manual body 1",
+    "type": "ManualRequestBody",
+    "valid": true,
+    "value": {
+      "latestConfigurations": [
+        {
+          "provider": "ethereum",
+          "results": [
+            "0x1212121212121212121212121212121212121212"
+          ],
+          "chainId": "0x1"
+        },
+        {
+          "provider": "solana",
+          "publicKey": "11111111111111111111111111111111"
+        }
+      ]
+    }
+  },
+  {
+    "name": "provider request ethereum signTransaction",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signTransaction",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum signTransaction",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signTransaction",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum signPersonalMessage",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signPersonalMessage",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum signPersonalMessage",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signPersonalMessage",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum signMessage",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signMessage",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum signMessage",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signMessage",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum signTypedMessage",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signTypedMessage",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum signTypedMessage",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "signTypedMessage",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum ecRecover",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "ecRecover",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum ecRecover",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "ecRecover",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum requestAccounts",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "requestAccounts",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum requestAccounts",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "requestAccounts",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum addEthereumChain",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "addEthereumChain",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum addEthereumChain",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "addEthereumChain",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request ethereum switchEthereumChain",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "switchEthereumChain",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ethereum switchEthereumChain",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "switchEthereumChain",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request solana connect",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "connect",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission solana connect",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "connect",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request solana signMessage",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signMessage",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission solana signMessage",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signMessage",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request solana signTransaction",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signTransaction",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission solana signTransaction",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signTransaction",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request solana signAllTransactions",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signAllTransactions",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission solana signAllTransactions",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signAllTransactions",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "provider request solana signAndSendTransaction",
+    "type": "ProviderRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signAndSendTransaction",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission solana signAndSendTransaction",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "solana",
+      "name": "signAndSendTransaction",
+      "body": {
+        "publicKey": "11111111111111111111111111111111",
+        "object": {
+          "method": "signMessage",
+          "params": {
+            "message": "01",
+            "vendorExtension": {
+              "vendorExtra": {
+                "unknown": [
+                  null,
+                  true,
+                  1.25,
+                  {
+                    "__proto__": "literal",
+                    "toJSON": "literal"
+                  }
+                ]
+              },
+              "transaction": {
+                "customExtension": 42
+              }
+            }
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png"
+    }
+  },
+  {
+    "name": "manual admission 0",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "provider": "unknown",
+      "name": "switchAccount",
+      "body": {},
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "manual admission 1",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "provider": "unknown",
+      "name": "switchAccount",
+      "body": {
+        "latestConfigurations": [
+          {
+            "provider": "ethereum",
+            "results": [
+              "0x1212121212121212121212121212121212121212"
+            ],
+            "chainId": "0x1"
+          },
+          {
+            "provider": "solana",
+            "publicKey": "11111111111111111111111111111111"
+          }
+        ]
+      },
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "admission replay",
+    "type": "DappRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "requestAccounts",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png",
+      "replayOnly": true
+    }
+  },
+  {
+    "name": "provider error open data",
+    "type": "ProviderError",
+    "valid": true,
+    "value": {
+      "code": 4100,
+      "message": "Changed",
+      "data": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "native result NoneType",
+    "type": "NativeResult",
+    "valid": true,
+    "value": null
+  },
+  {
+    "name": "native result str",
+    "type": "NativeResult",
+    "valid": true,
+    "value": "signature"
+  },
+  {
+    "name": "native result list",
+    "type": "NativeResult",
+    "valid": true,
+    "value": [
+      "one",
+      "two"
+    ]
+  },
+  {
+    "name": "native result dict",
+    "type": "NativeResult",
+    "valid": true,
+    "value": {
+      "publicKey": "11111111111111111111111111111111"
+    }
+  },
+  {
+    "name": "existing native signature",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native committed-signature",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": true
+    }
+  },
+  {
+    "name": "existing native solana-signatures",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signAllTransactions",
+      "provider": "solana",
+      "kind": "result",
+      "result": [
+        "signature-1",
+        "signature-2"
+      ],
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native ethereum-connect",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "requestAccounts",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": [
+        "0x0000000000000000000000000000000000000001"
+      ],
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native solana-connect",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "connect",
+      "provider": "solana",
+      "kind": "result",
+      "result": {
+        "publicKey": "11111111111111111111111111111111"
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native switch-accounts",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "switchAccount",
+      "provider": "multiple",
+      "kind": "result",
+      "result": null,
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native disconnect-accounts",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "switchAccount",
+      "provider": "multiple",
+      "kind": "result",
+      "result": null,
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native empty-account-selection",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "switchAccount",
+      "provider": "multiple",
+      "kind": "result",
+      "result": null,
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native switch-chain",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "switchEthereumChain",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": null,
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native add-chain",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "addEthereumChain",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": null,
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing native generic-error",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native error-null-data",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed",
+        "data": null
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native error-array-data",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed",
+        "data": [
+          false,
+          3,
+          "reason"
+        ]
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native error-rpc-data",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32000,
+        "message": "Failed",
+        "data": {
+          "reason": "rejected"
+        }
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native error-transaction-hash",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed",
+        "data": {
+          "transactionHash": "0x1234"
+        }
+      },
+      "approvalCommitted": true,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native error-transaction-signature",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "solana",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed",
+        "data": {
+          "signature": "signature"
+        }
+      },
+      "approvalCommitted": true,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native revoke-solana",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "solana",
+      "kind": "error",
+      "error": {
+        "code": 4100,
+        "message": "Failed"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": true
+    }
+  },
+  {
+    "name": "existing native ordinary-4100",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "solana",
+      "kind": "error",
+      "error": {
+        "code": 4100,
+        "message": "Failed"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native manual-rejection",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "switchAccount",
+      "provider": "multiple",
+      "kind": "error",
+      "error": {
+        "code": 4001,
+        "message": "Canceled"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native large-positive-error-code",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": 9007199254740992,
+        "message": "Custom rejection",
+        "data": {
+          "reason": "custom"
+        }
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing native large-negative-error-code",
+    "type": "NativeResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -9007199254740992,
+        "message": "Custom rejection",
+        "data": {
+          "reason": "custom"
+        }
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing invalid native boolean-id",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": true,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native fractional-id",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1.5,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native unsafe-id",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 9007199254740992,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native string-committed",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": "true"
+    }
+  },
+  {
+    "name": "existing invalid native unknown-provider",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "unknown",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native wrong-kind",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "success",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native both-outcomes",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false,
+      "error": {
+        "code": 4001,
+        "message": "Canceled"
+      }
+    }
+  },
+  {
+    "name": "existing invalid native extra-field",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false,
+      "extra": true
+    }
+  },
+  {
+    "name": "existing invalid native invalid-result",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": {
+        "unexpected": "field"
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native invalid-array-result",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": [
+        1
+      ],
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native manual-provider-mismatch",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "multiple",
+      "kind": "result",
+      "result": "0xsigned",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-result-with-revocation",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "solana",
+      "kind": "result",
+      "result": "0xsigned",
+      "mutation": {
+        "kind": "revokeSolana",
+        "publicKey": "11111111111111111111111111111111"
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-cross-provider-mutation",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "mutation": {
+        "kind": "accounts",
+        "updates": {
+          "solana": {
+            "publicKey": "11111111111111111111111111111111"
+          }
+        }
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-invalid-chain",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "mutation": {
+        "kind": "ethereumChain",
+        "chainId": "0x00"
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-unknown-update",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "mutation": {
+        "kind": "accounts",
+        "updates": {
+          "unknown": null
+        }
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-injected-worker-revision",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned",
+      "mutation": {
+        "kind": "accounts",
+        "updates": {
+          "ethereum": {
+            "address": "0x0000000000000000000000000000000000000001",
+            "chainId": "0x1",
+            "revision": 99
+          }
+        }
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-bad-solana-key",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "solana",
+      "kind": "result",
+      "result": "0xsigned",
+      "mutation": {
+        "kind": "accounts",
+        "updates": {
+          "solana": {
+            "publicKey": "invalid"
+          }
+        }
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-error-with-accounts",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed"
+      },
+      "mutation": {
+        "kind": "accounts",
+        "updates": {
+          "ethereum": null
+        }
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing invalid native missing-error-message",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": 4001
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing invalid native boolean-error-code",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": true,
+        "message": "Failure"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing invalid native fractional-error-code",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": 1.5,
+        "message": "Failure"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing invalid native invalid-authorization-flag",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "error",
+      "error": {
+        "code": -32603,
+        "message": "Failed"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": 1
+    }
+  },
+  {
+    "name": "existing invalid native native-effect-field-revocation-without-authorization",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "solana",
+      "kind": "error",
+      "error": {
+        "code": 4100,
+        "message": "Failed"
+      },
+      "mutation": {
+        "kind": "revokeSolana",
+        "publicKey": "11111111111111111111111111111111"
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "existing invalid native missing-result",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native missing-approvalCommitted",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "0xsigned"
+    }
+  },
+  {
+    "name": "existing invalid native manual-nonnull-result",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "switchAccount",
+      "provider": "multiple",
+      "kind": "result",
+      "result": "invalid",
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "existing invalid native manual-empty-error",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "name": "switchAccount",
+      "provider": "multiple",
+      "kind": "error",
+      "error": {
+        "code": 4001,
+        "message": ""
+      },
+      "approvalCommitted": false,
+      "authorizationFailure": false
+    }
+  },
+  {
+    "name": "page response 0",
+    "type": "PageResponse",
+    "valid": true,
+    "value": {
+      "kind": "configuration",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "page response 1",
+    "type": "PageResponse",
+    "valid": true,
+    "value": {
+      "kind": "configurationError",
+      "error": {
+        "code": 4100,
+        "message": "Changed",
+        "data": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "page response 2",
+    "type": "PageResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      },
+      "kind": "result",
+      "result": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      },
+      "approvalCommitted": false
+    }
+  },
+  {
+    "name": "page response 3",
+    "type": "PageResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      },
+      "kind": "error",
+      "error": {
+        "code": 4100,
+        "message": "Changed",
+        "data": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "enqueue new",
+    "type": "NativeEnqueueAcknowledgement",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "admissionKind": "new",
+      "approvalRequired": true,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ack new",
+    "type": "NativeAdmission",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "admissionKind": "new",
+      "approvalRequired": true,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "enqueue replay",
+    "type": "NativeEnqueueAcknowledgement",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "admissionKind": "replay",
+      "approvalRequired": true,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ack replay",
+    "type": "NativeAdmission",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "admissionKind": "replay",
+      "approvalRequired": true,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "enqueue coalesced",
+    "type": "NativeEnqueueAcknowledgement",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "admissionKind": "coalesced",
+      "approvalRequired": true,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "native admission ack coalesced",
+    "type": "NativeAdmission",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "admissionKind": "coalesced",
+      "approvalRequired": true,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "native delivery",
+    "type": "NativeDelivery",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "response": {
+        "id": 91,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "signature",
+        "approvalCommitted": true
+      },
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "status pending",
+    "type": "NativeStatus",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "pending": true
+    }
+  },
+  {
+    "name": "open status pending",
+    "type": "NativeOpenReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "pending": true
+    }
+  },
+  {
+    "name": "status ready",
+    "type": "NativeStatus",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "ready": true
+    }
+  },
+  {
+    "name": "open status ready",
+    "type": "NativeOpenReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "ready": true
+    }
+  },
+  {
+    "name": "status missing",
+    "type": "NativeStatus",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "missing": true
+    }
+  },
+  {
+    "name": "open status missing",
+    "type": "NativeOpenReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "missing": true
+    }
+  },
+  {
+    "name": "status unavailable",
+    "type": "NativeStatus",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "unavailable": true
+    }
+  },
+  {
+    "name": "open status unavailable",
+    "type": "NativeOpenReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "unavailable": true
+    }
+  },
+  {
+    "name": "configuration reply True",
+    "type": "NativeConfigurationReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "configuration reply False",
+    "type": "NativeConfigurationReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "unavailable": true
+    }
+  },
+  {
+    "name": "disconnect revoked",
+    "type": "NativeDisconnectReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      },
+      "revoked": true
+    }
+  },
+  {
+    "name": "disconnect stale",
+    "type": "NativeDisconnectReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      },
+      "stale": true
+    }
+  },
+  {
+    "name": "disconnect unavailable",
+    "type": "NativeDisconnectReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "unavailable": true
+    }
+  },
+  {
+    "name": "acknowledgement acknowledged",
+    "type": "NativeAcknowledgementReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "acknowledged": true
+    }
+  },
+  {
+    "name": "acknowledgement missing",
+    "type": "NativeAcknowledgementReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "missing": true
+    }
+  },
+  {
+    "name": "open False",
+    "type": "NativeOpenReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "opened": false
+    }
+  },
+  {
+    "name": "open True",
+    "type": "NativeOpenReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "opened": true
+    }
+  },
+  {
+    "name": "recovery pending",
+    "type": "RecoveryRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "manual": false,
+      "state": "pending"
+    }
+  },
+  {
+    "name": "recovery approved",
+    "type": "RecoveryRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "manual": false,
+      "state": "approved"
+    }
+  },
+  {
+    "name": "recovery completed",
+    "type": "RecoveryRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "manual": true,
+      "state": "completed"
+    }
+  },
+  {
+    "name": "recovery list",
+    "type": "NativeRecoveryReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "requests": [
+        {
+          "id": 91,
+          "configurationKey": "https://wallet.example",
+          "requestToken": "00000000-0000-4000-8000-000000000091",
+          "manual": false,
+          "state": "pending"
+        },
+        {
+          "id": 91,
+          "configurationKey": "https://wallet.example",
+          "requestToken": "00000000-0000-4000-8000-000000000091",
+          "manual": false,
+          "state": "approved"
+        },
+        {
+          "id": 91,
+          "configurationKey": "https://wallet.example",
+          "requestToken": "00000000-0000-4000-8000-000000000091",
+          "manual": true,
+          "state": "completed"
+        }
+      ]
+    }
+  },
+  {
+    "name": "recovery unavailable",
+    "type": "NativeRecoveryReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "unavailable": true
+    }
+  },
+  {
+    "name": "rpc result False",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "result": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "rpc result True",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "jsonrpc": "2.0",
+      "result": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "rpc error False",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "error": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "rpc error True",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "jsonrpc": "2.0",
+      "error": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "rpc native error string",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "error": "Unavailable"
+    }
+  },
+  {
+    "name": "popup queue",
+    "type": "PopupQueue",
+    "valid": true,
+    "value": {
+      "requests": [
+        {
+          "id": 91,
+          "requestToken": "00000000-0000-4000-8000-000000000091",
+          "enqueueAttempt": "01010101010101010101010101010101",
+          "sequence": 1,
+          "host": "wallet.example",
+          "configurationKey": "https://wallet.example",
+          "provider": "ethereum",
+          "receivedAt": 1700000000.25
+        }
+      ],
+      "completedResponses": [
+        {
+          "id": 92,
+          "requestToken": "00000000-0000-4000-8000-000000000092",
+          "host": "wallet.example",
+          "configurationKey": "https://wallet.example"
+        }
+      ],
+      "strings": {
+        "ok": "OK"
+      },
+      "layoutDirection": "ltr"
+    }
+  },
+  {
+    "name": "popup response queue",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "requests": [
+        {
+          "id": 91,
+          "requestToken": "00000000-0000-4000-8000-000000000091",
+          "enqueueAttempt": "01010101010101010101010101010101",
+          "sequence": 1,
+          "host": "wallet.example",
+          "configurationKey": "https://wallet.example",
+          "provider": "ethereum",
+          "receivedAt": 1700000000.25
+        }
+      ],
+      "completedResponses": [
+        {
+          "id": 92,
+          "requestToken": "00000000-0000-4000-8000-000000000092",
+          "host": "wallet.example",
+          "configurationKey": "https://wallet.example"
+        }
+      ],
+      "strings": {
+        "ok": "OK"
+      },
+      "layoutDirection": "ltr"
+    }
+  },
+  {
+    "name": "popup missing",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "missing",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup response missing",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "missing",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup approval missing",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "missing",
+      "actions": []
+    }
+  },
+  {
+    "name": "popup working",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "working",
+        "host": "wallet.example",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup response working",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "working",
+        "host": "wallet.example",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup approval working",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "working",
+      "host": "wallet.example",
+      "actions": []
+    }
+  },
+  {
+    "name": "popup authenticating",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "authenticating",
+        "host": "wallet.example",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup response authenticating",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "authenticating",
+        "host": "wallet.example",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup approval authenticating",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "authenticating",
+      "host": "wallet.example",
+      "actions": []
+    }
+  },
+  {
+    "name": "popup retryError",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "error",
+        "host": "wallet.example",
+        "error": "Failed to load",
+        "actions": [
+          "retry"
+        ]
+      }
+    }
+  },
+  {
+    "name": "popup response retryError",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "error",
+        "host": "wallet.example",
+        "error": "Failed to load",
+        "actions": [
+          "retry"
+        ]
+      }
+    }
+  },
+  {
+    "name": "popup approval retryError",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "error",
+      "host": "wallet.example",
+      "error": "Failed to load",
+      "actions": [
+        "retry"
+      ]
+    }
+  },
+  {
+    "name": "popup rejectError",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "error",
+        "error": "Review unavailable",
+        "actions": [
+          "reject"
+        ]
+      }
+    }
+  },
+  {
+    "name": "popup response rejectError",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "error",
+        "error": "Review unavailable",
+        "actions": [
+          "reject"
+        ]
+      }
+    }
+  },
+  {
+    "name": "popup approval rejectError",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "error",
+      "error": "Review unavailable",
+      "actions": [
+        "reject"
+      ]
+    }
+  },
+  {
+    "name": "popup selectAccount",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "accountSelection",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Connect Wallet",
+          "accounts": [
+            {
+              "name": "Primary",
+              "croppedAddress": "0x1111…1111",
+              "walletId": "wallet-1",
+              "coin": "ethereum",
+              "address": "0x1111111111111111111111111111111111111111",
+              "derivationPath": "m/44'/60'/0'/0/0",
+              "isSelected": true
+            }
+          ],
+          "canSelectNetwork": true,
+          "allowsEmptySelection": false,
+          "networks": [
+            {
+              "chainId": "0x1",
+              "name": "Ethereum",
+              "isSelected": true,
+              "isCustom": false
+            }
+          ],
+          "primaryTitle": "Connect"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response selectAccount",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "accountSelection",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Connect Wallet",
+          "accounts": [
+            {
+              "name": "Primary",
+              "croppedAddress": "0x1111…1111",
+              "walletId": "wallet-1",
+              "coin": "ethereum",
+              "address": "0x1111111111111111111111111111111111111111",
+              "derivationPath": "m/44'/60'/0'/0/0",
+              "isSelected": true
+            }
+          ],
+          "canSelectNetwork": true,
+          "allowsEmptySelection": false,
+          "networks": [
+            {
+              "chainId": "0x1",
+              "name": "Ethereum",
+              "isSelected": true,
+              "isCustom": false
+            }
+          ],
+          "primaryTitle": "Connect"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval selectAccount",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject"
+      ],
+      "review": {
+        "kind": "accountSelection",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Connect Wallet",
+        "accounts": [
+          {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111",
+            "walletId": "wallet-1",
+            "coin": "ethereum",
+            "address": "0x1111111111111111111111111111111111111111",
+            "derivationPath": "m/44'/60'/0'/0/0",
+            "isSelected": true
+          }
+        ],
+        "canSelectNetwork": true,
+        "allowsEmptySelection": false,
+        "networks": [
+          {
+            "chainId": "0x1",
+            "name": "Ethereum",
+            "isSelected": true,
+            "isCustom": false
+          }
+        ],
+        "primaryTitle": "Connect"
+      }
+    }
+  },
+  {
+    "name": "popup review selectAccount",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "accountSelection",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Connect Wallet",
+      "accounts": [
+        {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111",
+          "walletId": "wallet-1",
+          "coin": "ethereum",
+          "address": "0x1111111111111111111111111111111111111111",
+          "derivationPath": "m/44'/60'/0'/0/0",
+          "isSelected": true
+        }
+      ],
+      "canSelectNetwork": true,
+      "allowsEmptySelection": false,
+      "networks": [
+        {
+          "chainId": "0x1",
+          "name": "Ethereum",
+          "isSelected": true,
+          "isCustom": false
+        }
+      ],
+      "primaryTitle": "Connect"
+    }
+  },
+  {
+    "name": "selectable account selectAccount ethereum",
+    "type": "PopupSelectableAccount",
+    "valid": true,
+    "value": {
+      "name": "Primary",
+      "croppedAddress": "0x1111…1111",
+      "walletId": "wallet-1",
+      "coin": "ethereum",
+      "address": "0x1111111111111111111111111111111111111111",
+      "derivationPath": "m/44'/60'/0'/0/0",
+      "isSelected": true
+    }
+  },
+  {
+    "name": "network selectAccount 0x1",
+    "type": "PopupNetworkOption",
+    "valid": true,
+    "value": {
+      "chainId": "0x1",
+      "name": "Ethereum",
+      "isSelected": true,
+      "isCustom": false
+    }
+  },
+  {
+    "name": "popup switchAccount",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "accountSelection",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Switch Account",
+          "accounts": [],
+          "canSelectNetwork": false,
+          "allowsEmptySelection": true,
+          "emptyMessage": "No accounts"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response switchAccount",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "accountSelection",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Switch Account",
+          "accounts": [],
+          "canSelectNetwork": false,
+          "allowsEmptySelection": true,
+          "emptyMessage": "No accounts"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval switchAccount",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject"
+      ],
+      "review": {
+        "kind": "accountSelection",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Switch Account",
+        "accounts": [],
+        "canSelectNetwork": false,
+        "allowsEmptySelection": true,
+        "emptyMessage": "No accounts"
+      }
+    }
+  },
+  {
+    "name": "popup review switchAccount",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "accountSelection",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Switch Account",
+      "accounts": [],
+      "canSelectNetwork": false,
+      "allowsEmptySelection": true,
+      "emptyMessage": "No accounts"
+    }
+  },
+  {
+    "name": "popup signMessage",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "signMessage",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Sign Message",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111",
+            "icon": "data:image/png;base64,AA=="
+          },
+          "meta": "Hello"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response signMessage",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "signMessage",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Sign Message",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111",
+            "icon": "data:image/png;base64,AA=="
+          },
+          "meta": "Hello"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval signMessage",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject"
+      ],
+      "review": {
+        "kind": "signMessage",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Sign Message",
+        "account": {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111",
+          "icon": "data:image/png;base64,AA=="
+        },
+        "meta": "Hello"
+      }
+    }
+  },
+  {
+    "name": "popup review signMessage",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "signMessage",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Sign Message",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111",
+        "icon": "data:image/png;base64,AA=="
+      },
+      "meta": "Hello"
+    }
+  },
+  {
+    "name": "display account signMessage",
+    "type": "PopupDisplayAccount",
+    "valid": true,
+    "value": {
+      "name": "Primary",
+      "croppedAddress": "0x1111…1111",
+      "icon": "data:image/png;base64,AA=="
+    }
+  },
+  {
+    "name": "popup solanaSignMessage",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "signMessage",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Sign Message",
+          "account": {
+            "name": "Solana",
+            "croppedAddress": "1111…1111"
+          },
+          "meta": "Transaction",
+          "clusters": [
+            {
+              "value": "mainnetBeta",
+              "label": "Mainnet",
+              "isSelected": false
+            },
+            {
+              "value": "devnet",
+              "label": "Devnet",
+              "isSelected": false
+            },
+            {
+              "value": "testnet",
+              "label": "Testnet",
+              "isSelected": false
+            }
+          ],
+          "requiresClusterSelection": true
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response solanaSignMessage",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "signMessage",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Sign Message",
+          "account": {
+            "name": "Solana",
+            "croppedAddress": "1111…1111"
+          },
+          "meta": "Transaction",
+          "clusters": [
+            {
+              "value": "mainnetBeta",
+              "label": "Mainnet",
+              "isSelected": false
+            },
+            {
+              "value": "devnet",
+              "label": "Devnet",
+              "isSelected": false
+            },
+            {
+              "value": "testnet",
+              "label": "Testnet",
+              "isSelected": false
+            }
+          ],
+          "requiresClusterSelection": true
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval solanaSignMessage",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject"
+      ],
+      "review": {
+        "kind": "signMessage",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Sign Message",
+        "account": {
+          "name": "Solana",
+          "croppedAddress": "1111…1111"
+        },
+        "meta": "Transaction",
+        "clusters": [
+          {
+            "value": "mainnetBeta",
+            "label": "Mainnet",
+            "isSelected": false
+          },
+          {
+            "value": "devnet",
+            "label": "Devnet",
+            "isSelected": false
+          },
+          {
+            "value": "testnet",
+            "label": "Testnet",
+            "isSelected": false
+          }
+        ],
+        "requiresClusterSelection": true
+      }
+    }
+  },
+  {
+    "name": "popup review solanaSignMessage",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "signMessage",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Sign Message",
+      "account": {
+        "name": "Solana",
+        "croppedAddress": "1111…1111"
+      },
+      "meta": "Transaction",
+      "clusters": [
+        {
+          "value": "mainnetBeta",
+          "label": "Mainnet",
+          "isSelected": false
+        },
+        {
+          "value": "devnet",
+          "label": "Devnet",
+          "isSelected": false
+        },
+        {
+          "value": "testnet",
+          "label": "Testnet",
+          "isSelected": false
+        }
+      ],
+      "requiresClusterSelection": true
+    }
+  },
+  {
+    "name": "display account solanaSignMessage",
+    "type": "PopupDisplayAccount",
+    "valid": true,
+    "value": {
+      "name": "Solana",
+      "croppedAddress": "1111…1111"
+    }
+  },
+  {
+    "name": "cluster option solanaSignMessage mainnetBeta",
+    "type": "PopupClusterOption",
+    "valid": true,
+    "value": {
+      "value": "mainnetBeta",
+      "label": "Mainnet",
+      "isSelected": false
+    }
+  },
+  {
+    "name": "cluster option solanaSignMessage devnet",
+    "type": "PopupClusterOption",
+    "valid": true,
+    "value": {
+      "value": "devnet",
+      "label": "Devnet",
+      "isSelected": false
+    }
+  },
+  {
+    "name": "cluster option solanaSignMessage testnet",
+    "type": "PopupClusterOption",
+    "valid": true,
+    "value": {
+      "value": "testnet",
+      "label": "Testnet",
+      "isSelected": false
+    }
+  },
+  {
+    "name": "popup addChain",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "addChain",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Add Network",
+          "chainName": "Custom",
+          "rpcURL": "https://rpc.example"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response addChain",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject"
+        ],
+        "review": {
+          "kind": "addChain",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Add Network",
+          "chainName": "Custom",
+          "rpcURL": "https://rpc.example"
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval addChain",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject"
+      ],
+      "review": {
+        "kind": "addChain",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Add Network",
+        "chainName": "Custom",
+        "rpcURL": "https://rpc.example"
+      }
+    }
+  },
+  {
+    "name": "popup review addChain",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "addChain",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Add Network",
+      "chainName": "Custom",
+      "rpcURL": "https://rpc.example"
+    }
+  },
+  {
+    "name": "popup ok",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "missing",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup response ok",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "missing",
+        "actions": []
+      }
+    }
+  },
+  {
+    "name": "popup approval ok",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "missing",
+      "actions": []
+    }
+  },
+  {
+    "name": "popup ignored",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ignored",
+      "approval": null
+    }
+  },
+  {
+    "name": "popup response ignored",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ignored",
+      "approval": null
+    }
+  },
+  {
+    "name": "popup unavailable",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "unavailable",
+      "approval": null
+    }
+  },
+  {
+    "name": "popup response unavailable",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "unavailable",
+      "approval": null
+    }
+  },
+  {
+    "name": "popup legacyTransaction",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject",
+          "editTransaction",
+          "setTransactionSpeed"
+        ],
+        "review": {
+          "kind": "sendTransaction",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Send Transaction",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111"
+          },
+          "networkName": "Ethereum",
+          "feeLines": [
+            "Fee: 0.001 ETH"
+          ],
+          "slider": {
+            "visible": true,
+            "position": 100,
+            "maximum": 200
+          },
+          "balance": "1 ETH",
+          "valueLine": "0.1 ETH",
+          "dataInterpretation": "Transfer",
+          "editor": {
+            "usesEIP1559": false,
+            "nonce": "2",
+            "gasPriceGwei": "10",
+            "suggestedGasPriceGwei": "11"
+          },
+          "canBackOffRefresh": true
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response legacyTransaction",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject",
+          "editTransaction",
+          "setTransactionSpeed"
+        ],
+        "review": {
+          "kind": "sendTransaction",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Send Transaction",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111"
+          },
+          "networkName": "Ethereum",
+          "feeLines": [
+            "Fee: 0.001 ETH"
+          ],
+          "slider": {
+            "visible": true,
+            "position": 100,
+            "maximum": 200
+          },
+          "balance": "1 ETH",
+          "valueLine": "0.1 ETH",
+          "dataInterpretation": "Transfer",
+          "editor": {
+            "usesEIP1559": false,
+            "nonce": "2",
+            "gasPriceGwei": "10",
+            "suggestedGasPriceGwei": "11"
+          },
+          "canBackOffRefresh": true
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval legacyTransaction",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject",
+        "editTransaction",
+        "setTransactionSpeed"
+      ],
+      "review": {
+        "kind": "sendTransaction",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Send Transaction",
+        "account": {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111"
+        },
+        "networkName": "Ethereum",
+        "feeLines": [
+          "Fee: 0.001 ETH"
+        ],
+        "slider": {
+          "visible": true,
+          "position": 100,
+          "maximum": 200
+        },
+        "balance": "1 ETH",
+        "valueLine": "0.1 ETH",
+        "dataInterpretation": "Transfer",
+        "editor": {
+          "usesEIP1559": false,
+          "nonce": "2",
+          "gasPriceGwei": "10",
+          "suggestedGasPriceGwei": "11"
+        },
+        "canBackOffRefresh": true
+      }
+    }
+  },
+  {
+    "name": "popup review legacyTransaction",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "sendTransaction",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Send Transaction",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111"
+      },
+      "networkName": "Ethereum",
+      "feeLines": [
+        "Fee: 0.001 ETH"
+      ],
+      "slider": {
+        "visible": true,
+        "position": 100,
+        "maximum": 200
+      },
+      "balance": "1 ETH",
+      "valueLine": "0.1 ETH",
+      "dataInterpretation": "Transfer",
+      "editor": {
+        "usesEIP1559": false,
+        "nonce": "2",
+        "gasPriceGwei": "10",
+        "suggestedGasPriceGwei": "11"
+      },
+      "canBackOffRefresh": true
+    }
+  },
+  {
+    "name": "display account legacyTransaction",
+    "type": "PopupDisplayAccount",
+    "valid": true,
+    "value": {
+      "name": "Primary",
+      "croppedAddress": "0x1111…1111"
+    }
+  },
+  {
+    "name": "legacyTransaction slider",
+    "type": "PopupTransactionSlider",
+    "valid": true,
+    "value": {
+      "visible": true,
+      "position": 100,
+      "maximum": 200
+    }
+  },
+  {
+    "name": "legacyTransaction editor",
+    "type": "PopupTransactionEditor",
+    "valid": true,
+    "value": {
+      "usesEIP1559": false,
+      "nonce": "2",
+      "gasPriceGwei": "10",
+      "suggestedGasPriceGwei": "11"
+    }
+  },
+  {
+    "name": "popup type2Transaction",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "reject",
+          "resolveApprovalAlert"
+        ],
+        "review": {
+          "kind": "sendTransaction",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Send Transaction",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111"
+          },
+          "networkName": "Ethereum",
+          "feeLines": [
+            "Fee: 0.001 ETH"
+          ],
+          "slider": {
+            "visible": true,
+            "position": 100,
+            "maximum": 200
+          },
+          "editorRequestToken": 1,
+          "editor": {
+            "usesEIP1559": true,
+            "nonce": "2",
+            "maxPriorityFeePerGasGwei": "1",
+            "maxFeePerGasGwei": "20",
+            "suggestedMaxPriorityFeePerGasGwei": "2",
+            "suggestedMaxFeePerGasGwei": "22"
+          },
+          "alert": {
+            "title": "Fees updated",
+            "message": "Review the fees",
+            "actions": [
+              {
+                "title": "OK",
+                "action": "acknowledge"
+              },
+              {
+                "title": "Edit",
+                "action": "edit"
+              }
+            ]
+          },
+          "canBackOffRefresh": true
+        }
+      }
+    }
+  },
+  {
+    "name": "popup response type2Transaction",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "reject",
+          "resolveApprovalAlert"
+        ],
+        "review": {
+          "kind": "sendTransaction",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Send Transaction",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111"
+          },
+          "networkName": "Ethereum",
+          "feeLines": [
+            "Fee: 0.001 ETH"
+          ],
+          "slider": {
+            "visible": true,
+            "position": 100,
+            "maximum": 200
+          },
+          "editorRequestToken": 1,
+          "editor": {
+            "usesEIP1559": true,
+            "nonce": "2",
+            "maxPriorityFeePerGasGwei": "1",
+            "maxFeePerGasGwei": "20",
+            "suggestedMaxPriorityFeePerGasGwei": "2",
+            "suggestedMaxFeePerGasGwei": "22"
+          },
+          "alert": {
+            "title": "Fees updated",
+            "message": "Review the fees",
+            "actions": [
+              {
+                "title": "OK",
+                "action": "acknowledge"
+              },
+              {
+                "title": "Edit",
+                "action": "edit"
+              }
+            ]
+          },
+          "canBackOffRefresh": true
+        }
+      }
+    }
+  },
+  {
+    "name": "popup approval type2Transaction",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "reject",
+        "resolveApprovalAlert"
+      ],
+      "review": {
+        "kind": "sendTransaction",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Send Transaction",
+        "account": {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111"
+        },
+        "networkName": "Ethereum",
+        "feeLines": [
+          "Fee: 0.001 ETH"
+        ],
+        "slider": {
+          "visible": true,
+          "position": 100,
+          "maximum": 200
+        },
+        "editorRequestToken": 1,
+        "editor": {
+          "usesEIP1559": true,
+          "nonce": "2",
+          "maxPriorityFeePerGasGwei": "1",
+          "maxFeePerGasGwei": "20",
+          "suggestedMaxPriorityFeePerGasGwei": "2",
+          "suggestedMaxFeePerGasGwei": "22"
+        },
+        "alert": {
+          "title": "Fees updated",
+          "message": "Review the fees",
+          "actions": [
+            {
+              "title": "OK",
+              "action": "acknowledge"
+            },
+            {
+              "title": "Edit",
+              "action": "edit"
+            }
+          ]
+        },
+        "canBackOffRefresh": true
+      }
+    }
+  },
+  {
+    "name": "popup review type2Transaction",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "sendTransaction",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Send Transaction",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111"
+      },
+      "networkName": "Ethereum",
+      "feeLines": [
+        "Fee: 0.001 ETH"
+      ],
+      "slider": {
+        "visible": true,
+        "position": 100,
+        "maximum": 200
+      },
+      "editorRequestToken": 1,
+      "editor": {
+        "usesEIP1559": true,
+        "nonce": "2",
+        "maxPriorityFeePerGasGwei": "1",
+        "maxFeePerGasGwei": "20",
+        "suggestedMaxPriorityFeePerGasGwei": "2",
+        "suggestedMaxFeePerGasGwei": "22"
+      },
+      "alert": {
+        "title": "Fees updated",
+        "message": "Review the fees",
+        "actions": [
+          {
+            "title": "OK",
+            "action": "acknowledge"
+          },
+          {
+            "title": "Edit",
+            "action": "edit"
+          }
+        ]
+      },
+      "canBackOffRefresh": true
+    }
+  },
+  {
+    "name": "display account type2Transaction",
+    "type": "PopupDisplayAccount",
+    "valid": true,
+    "value": {
+      "name": "Primary",
+      "croppedAddress": "0x1111…1111"
+    }
+  },
+  {
+    "name": "type2Transaction slider",
+    "type": "PopupTransactionSlider",
+    "valid": true,
+    "value": {
+      "visible": true,
+      "position": 100,
+      "maximum": 200
+    }
+  },
+  {
+    "name": "type2Transaction editor",
+    "type": "PopupTransactionEditor",
+    "valid": true,
+    "value": {
+      "usesEIP1559": true,
+      "nonce": "2",
+      "maxPriorityFeePerGasGwei": "1",
+      "maxFeePerGasGwei": "20",
+      "suggestedMaxPriorityFeePerGasGwei": "2",
+      "suggestedMaxFeePerGasGwei": "22"
+    }
+  },
+  {
+    "name": "type2Transaction alert",
+    "type": "PopupTransactionAlert",
+    "valid": true,
+    "value": {
+      "title": "Fees updated",
+      "message": "Review the fees",
+      "actions": [
+        {
+          "title": "OK",
+          "action": "acknowledge"
+        },
+        {
+          "title": "Edit",
+          "action": "edit"
+        }
+      ]
+    }
+  },
+  {
+    "name": "popup invalidTransactionEdits",
+    "type": "PopupCommandResult",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject",
+          "editTransaction",
+          "setTransactionSpeed"
+        ],
+        "review": {
+          "kind": "sendTransaction",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Send Transaction",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111"
+          },
+          "networkName": "Ethereum",
+          "feeLines": [
+            "Fee: 0.001 ETH"
+          ],
+          "slider": {
+            "visible": true,
+            "position": 100,
+            "maximum": 200
+          },
+          "balance": "1 ETH",
+          "valueLine": "0.1 ETH",
+          "dataInterpretation": "Transfer",
+          "editor": {
+            "usesEIP1559": false,
+            "nonce": "2",
+            "gasPriceGwei": "10",
+            "suggestedGasPriceGwei": "11"
+          },
+          "canBackOffRefresh": true
+        }
+      },
+      "editsError": true
+    }
+  },
+  {
+    "name": "popup response invalidTransactionEdits",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "ok",
+      "approval": {
+        "id": 91,
+        "state": "review",
+        "host": "wallet.example",
+        "actions": [
+          "approve",
+          "reject",
+          "editTransaction",
+          "setTransactionSpeed"
+        ],
+        "review": {
+          "kind": "sendTransaction",
+          "reviewToken": "00000000-0000-4000-8000-000000000092",
+          "title": "Send Transaction",
+          "account": {
+            "name": "Primary",
+            "croppedAddress": "0x1111…1111"
+          },
+          "networkName": "Ethereum",
+          "feeLines": [
+            "Fee: 0.001 ETH"
+          ],
+          "slider": {
+            "visible": true,
+            "position": 100,
+            "maximum": 200
+          },
+          "balance": "1 ETH",
+          "valueLine": "0.1 ETH",
+          "dataInterpretation": "Transfer",
+          "editor": {
+            "usesEIP1559": false,
+            "nonce": "2",
+            "gasPriceGwei": "10",
+            "suggestedGasPriceGwei": "11"
+          },
+          "canBackOffRefresh": true
+        }
+      },
+      "editsError": true
+    }
+  },
+  {
+    "name": "popup approval invalidTransactionEdits",
+    "type": "PopupApprovalState",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "state": "review",
+      "host": "wallet.example",
+      "actions": [
+        "approve",
+        "reject",
+        "editTransaction",
+        "setTransactionSpeed"
+      ],
+      "review": {
+        "kind": "sendTransaction",
+        "reviewToken": "00000000-0000-4000-8000-000000000092",
+        "title": "Send Transaction",
+        "account": {
+          "name": "Primary",
+          "croppedAddress": "0x1111…1111"
+        },
+        "networkName": "Ethereum",
+        "feeLines": [
+          "Fee: 0.001 ETH"
+        ],
+        "slider": {
+          "visible": true,
+          "position": 100,
+          "maximum": 200
+        },
+        "balance": "1 ETH",
+        "valueLine": "0.1 ETH",
+        "dataInterpretation": "Transfer",
+        "editor": {
+          "usesEIP1559": false,
+          "nonce": "2",
+          "gasPriceGwei": "10",
+          "suggestedGasPriceGwei": "11"
+        },
+        "canBackOffRefresh": true
+      }
+    }
+  },
+  {
+    "name": "popup review invalidTransactionEdits",
+    "type": "PopupReview",
+    "valid": true,
+    "value": {
+      "kind": "sendTransaction",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "title": "Send Transaction",
+      "account": {
+        "name": "Primary",
+        "croppedAddress": "0x1111…1111"
+      },
+      "networkName": "Ethereum",
+      "feeLines": [
+        "Fee: 0.001 ETH"
+      ],
+      "slider": {
+        "visible": true,
+        "position": 100,
+        "maximum": 200
+      },
+      "balance": "1 ETH",
+      "valueLine": "0.1 ETH",
+      "dataInterpretation": "Transfer",
+      "editor": {
+        "usesEIP1559": false,
+        "nonce": "2",
+        "gasPriceGwei": "10",
+        "suggestedGasPriceGwei": "11"
+      },
+      "canBackOffRefresh": true
+    }
+  },
+  {
+    "name": "display account invalidTransactionEdits",
+    "type": "PopupDisplayAccount",
+    "valid": true,
+    "value": {
+      "name": "Primary",
+      "croppedAddress": "0x1111…1111"
+    }
+  },
+  {
+    "name": "invalidTransactionEdits slider",
+    "type": "PopupTransactionSlider",
+    "valid": true,
+    "value": {
+      "visible": true,
+      "position": 100,
+      "maximum": 200
+    }
+  },
+  {
+    "name": "invalidTransactionEdits editor",
+    "type": "PopupTransactionEditor",
+    "valid": true,
+    "value": {
+      "usesEIP1559": false,
+      "nonce": "2",
+      "gasPriceGwei": "10",
+      "suggestedGasPriceGwei": "11"
+    }
+  },
+  {
+    "name": "popup pending 0",
+    "type": "PopupPendingRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "enqueueAttempt": "01010101010101010101010101010101",
+      "sequence": 1,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "provider": "ethereum",
+      "receivedAt": 1700000000.25
+    }
+  },
+  {
+    "name": "popup completed 0",
+    "type": "PopupCompletedResponse",
+    "valid": true,
+    "value": {
+      "id": 92,
+      "requestToken": "00000000-0000-4000-8000-000000000092",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "popup queue unavailable",
+    "type": "PopupResponse",
+    "valid": true,
+    "value": {
+      "status": "unavailable"
+    }
+  },
+  {
+    "name": "page rpc",
+    "type": "PageRPC",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "chainId": "0x1",
+      "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+      "subject": "rpc"
+    }
+  },
+  {
+    "name": "page disconnect ethereum{'id': 91}",
+    "type": "PageDisconnect",
+    "valid": true,
+    "value": {
+      "provider": "ethereum",
+      "subject": "disconnect",
+      "id": 91
+    }
+  },
+  {
+    "name": "page disconnect envelope ethereum{'id': 91}",
+    "type": "PageToContent",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "disconnect",
+      "message": {
+        "provider": "ethereum",
+        "subject": "disconnect",
+        "id": 91
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "page disconnect solana{}",
+    "type": "PageDisconnect",
+    "valid": true,
+    "value": {
+      "provider": "solana",
+      "subject": "disconnect"
+    }
+  },
+  {
+    "name": "page disconnect envelope solana{}",
+    "type": "PageToContent",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "disconnect",
+      "message": {
+        "provider": "solana",
+        "subject": "disconnect"
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "page disconnect solana{'id': 92}",
+    "type": "PageDisconnect",
+    "valid": true,
+    "value": {
+      "provider": "solana",
+      "subject": "disconnect",
+      "id": 92
+    }
+  },
+  {
+    "name": "page disconnect envelope solana{'id': 92}",
+    "type": "PageToContent",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "disconnect",
+      "message": {
+        "provider": "solana",
+        "subject": "disconnect",
+        "id": 92
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "page request envelope",
+    "type": "PageToContent",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "request",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
+    }
+  },
+  {
+    "name": "page rpc envelope",
+    "type": "PageToContent",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "rpc",
+      "message": {
+        "id": 91,
+        "chainId": "0x1",
+        "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+        "subject": "rpc"
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "content response 0",
+    "type": "ContentToPage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-content-v1",
+      "kind": "response",
+      "response": {
+        "kind": "configuration",
+        "state": {
+          "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "revisions": {
+            "ethereum": 2,
+            "solana": 3
+          },
+          "ethereum": {
+            "address": "0x1212121212121212121212121212121212121212",
+            "chainId": "0x1"
+          },
+          "solana": {
+            "publicKey": "11111111111111111111111111111111"
+          }
+        }
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "content response 1",
+    "type": "ContentToPage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-content-v1",
+      "kind": "response",
+      "response": {
+        "kind": "configurationError",
+        "error": {
+          "code": 4100,
+          "message": "Changed",
+          "data": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "content response 2",
+    "type": "ContentToPage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-content-v1",
+      "kind": "response",
+      "response": {
+        "id": 91,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "state": {
+          "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "revisions": {
+            "ethereum": 2,
+            "solana": 3
+          },
+          "ethereum": {
+            "address": "0x1212121212121212121212121212121212121212",
+            "chainId": "0x1"
+          },
+          "solana": {
+            "publicKey": "11111111111111111111111111111111"
+          }
+        },
+        "kind": "result",
+        "result": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        },
+        "approvalCommitted": false
+      },
+      "providerGeneration": "generation-1",
+      "id": 91
+    }
+  },
+  {
+    "name": "content response 3",
+    "type": "ContentToPage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-content-v1",
+      "kind": "response",
+      "response": {
+        "id": 91,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "state": {
+          "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "revisions": {
+            "ethereum": 2,
+            "solana": 3
+          },
+          "ethereum": {
+            "address": "0x1212121212121212121212121212121212121212",
+            "chainId": "0x1"
+          },
+          "solana": {
+            "publicKey": "11111111111111111111111111111111"
+          }
+        },
+        "kind": "error",
+        "error": {
+          "code": 4100,
+          "message": "Changed",
+          "data": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "providerGeneration": "generation-1",
+      "id": 91
+    }
+  },
+  {
+    "name": "content rpc response",
+    "type": "ContentToPage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-content-v1",
+      "kind": "rpc",
+      "response": {
+        "id": 91,
+        "name": null,
+        "provider": "ethereum",
+        "state": null,
+        "kind": "result",
+        "result": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        },
+        "approvalCommitted": false
+      },
+      "providerGeneration": "generation-1",
+      "id": 91
+    }
+  },
+  {
+    "name": "RuntimeDappRequest",
+    "type": "RuntimeDappRequest",
+    "valid": true,
+    "value": {
+      "workflowVersion": 4,
+      "subject": "message-to-wallet",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "content hop RuntimeDappRequest",
+    "type": "ContentToWorker",
+    "valid": true,
+    "value": {
+      "workflowVersion": 4,
+      "subject": "message-to-wallet",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "RuntimeDisconnect",
+    "type": "RuntimeDisconnect",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "content hop RuntimeDisconnect",
+    "type": "ContentToWorker",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "RuntimeRPC",
+    "type": "RuntimeRPC",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "content hop RuntimeRPC",
+    "type": "ContentToWorker",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "RuntimeResponseRequest",
+    "type": "RuntimeResponseRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "content hop RuntimeResponseRequest",
+    "type": "ContentToWorker",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "RuntimeConfigurationRequest",
+    "type": "RuntimeConfigurationRequest",
+    "valid": true,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "content hop RuntimeConfigurationRequest",
+    "type": "ContentToWorker",
+    "valid": true,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "RuntimeManualSwitchIntent",
+    "type": "RuntimeManualSwitchIntent",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "content hop RuntimeManualSwitchIntent",
+    "type": "ContentToWorker",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "popup RuntimeApplyCompletedResponse",
+    "type": "RuntimeApplyCompletedResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyCompletedResponse",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "popup hop RuntimeApplyCompletedResponse",
+    "type": "PopupToWorker",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyCompletedResponse",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "popup RuntimeBadgeUpdate",
+    "type": "RuntimeBadgeUpdate",
+    "valid": true,
+    "value": {
+      "subject": "updatePendingRequestBadge",
+      "workflowVersion": 4,
+      "hasPendingRequests": true
+    }
+  },
+  {
+    "name": "popup hop RuntimeBadgeUpdate",
+    "type": "PopupToWorker",
+    "valid": true,
+    "value": {
+      "subject": "updatePendingRequestBadge",
+      "workflowVersion": 4,
+      "hasPendingRequests": true
+    }
+  },
+  {
+    "name": "popup RuntimeConfigurationRequest",
+    "type": "RuntimeConfigurationRequest",
+    "valid": true,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "popup hop RuntimeConfigurationRequest",
+    "type": "PopupToWorker",
+    "valid": true,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "ResponseReady0",
+    "type": "ResponseReady",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "id": 91
+    }
+  },
+  {
+    "name": "worker content 0",
+    "type": "WorkerToContent",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "id": 91
+    }
+  },
+  {
+    "name": "popup ready 0",
+    "type": "PopupToWorker",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "id": 91
+    }
+  },
+  {
+    "name": "ResponseReady1",
+    "type": "ResponseReady",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "ids": [
+        91,
+        92
+      ]
+    }
+  },
+  {
+    "name": "worker content 1",
+    "type": "WorkerToContent",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "ids": [
+        91,
+        92
+      ]
+    }
+  },
+  {
+    "name": "popup ready 1",
+    "type": "PopupToWorker",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "ids": [
+        91,
+        92
+      ]
+    }
+  },
+  {
+    "name": "ConfigurationInvalidated2",
+    "type": "ConfigurationInvalidated",
+    "valid": true,
+    "value": {
+      "subject": "configurationInvalidated",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "worker content 2",
+    "type": "WorkerToContent",
+    "valid": true,
+    "value": {
+      "subject": "configurationInvalidated",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "WorkflowProbe3",
+    "type": "WorkflowProbe",
+    "valid": true,
+    "value": {
+      "subject": "workflowProbe",
+      "workflowVersion": 4,
+      "nonce": "0123456789abcdef0123456789abcdef"
+    }
+  },
+  {
+    "name": "worker content 3",
+    "type": "WorkerToContent",
+    "valid": true,
+    "value": {
+      "subject": "workflowProbe",
+      "workflowVersion": 4,
+      "nonce": "0123456789abcdef0123456789abcdef"
+    }
+  },
+  {
+    "name": "popup content WorkflowProbe",
+    "type": "PopupToContent",
+    "valid": true,
+    "value": {
+      "subject": "workflowProbe",
+      "workflowVersion": 4,
+      "nonce": "0123456789abcdef0123456789abcdef"
+    }
+  },
+  {
+    "name": "ManualSwitchIntent4",
+    "type": "ManualSwitchIntent",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "worker content 4",
+    "type": "WorkerToContent",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "popup content ManualSwitchIntent",
+    "type": "PopupToContent",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "probe reply",
+    "type": "WorkflowProbeReply",
+    "valid": true,
+    "value": {
+      "subject": "workflowProbe",
+      "workflowVersion": 4,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "buildVersion": "1.0.99+148"
+    }
+  },
+  {
+    "name": "pending notification",
+    "type": "PendingRequestAvailable",
+    "valid": true,
+    "value": {
+      "subject": "pendingRequestAvailable",
+      "workflowVersion": 4
+    }
+  },
+  {
+    "name": "worker popup",
+    "type": "WorkerToPopup",
+    "valid": true,
+    "value": {
+      "subject": "pendingRequestAvailable",
+      "workflowVersion": 4
+    }
+  },
+  {
+    "name": "manual acknowledgement",
+    "type": "ManualSwitchAcknowledgement",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchAcknowledged",
+      "workflowVersion": 4,
+      "id": 91,
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "approvalRequired": true,
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid request ID True",
+    "type": "RequestID",
+    "valid": false,
+    "value": true
+  },
+  {
+    "name": "invalid request ID 1.5",
+    "type": "RequestID",
+    "valid": false,
+    "value": 1.5
+  },
+  {
+    "name": "invalid request ID 9007199254740992",
+    "type": "RequestID",
+    "valid": false,
+    "value": 9007199254740992
+  },
+  {
+    "name": "invalid request ID -9007199254740992",
+    "type": "RequestID",
+    "valid": false,
+    "value": -9007199254740992
+  },
+  {
+    "name": "invalid request ID None",
+    "type": "RequestID",
+    "valid": false,
+    "value": null
+  },
+  {
+    "name": "invalid request ID 91",
+    "type": "RequestID",
+    "valid": false,
+    "value": "91"
+  },
+  {
+    "name": "invalid PrivateToken 342",
+    "type": "PrivateToken",
+    "valid": false,
+    "value": "0123456789ABCDEF0123456789ABCDEF"
+  },
+  {
+    "name": "invalid RequestToken 343",
+    "type": "RequestToken",
+    "valid": false,
+    "value": "00000000-0000-ABCD-8000-000000000091"
+  },
+  {
+    "name": "invalid EthereumChainID 344",
+    "type": "EthereumChainID",
+    "valid": false,
+    "value": "0x01"
+  },
+  {
+    "name": "invalid EthereumChainID 345",
+    "type": "EthereumChainID",
+    "valid": false,
+    "value": "0x8000000000000000"
+  },
+  {
+    "name": "invalid AuthorityVersion 346",
+    "type": "AuthorityVersion",
+    "valid": false,
+    "value": {
+      "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revisions": {
+        "ethereum": 2,
+        "solana": 3
+      },
+      "profileIdentifier": "untrusted"
+    }
+  },
+  {
+    "name": "invalid Revisions 347",
+    "type": "Revisions",
+    "valid": false,
+    "value": {
+      "ethereum": true,
+      "solana": 3
+    }
+  },
+  {
+    "name": "invalid ConfigurationSnapshot 348",
+    "type": "ConfigurationSnapshot",
+    "valid": false,
+    "value": {
+      "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revisions": {
+        "ethereum": 2,
+        "solana": 3
+      },
+      "ethereum": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1"
+      },
+      "solana": {
+        "publicKey": "11111111111111111111111111111111",
+        "privateKey": "untrusted"
+      }
+    }
+  },
+  {
+    "name": "invalid SelectedAccount 349",
+    "type": "SelectedAccount",
+    "valid": false,
+    "value": {
+      "walletId": "wallet-one",
+      "address": "0x1212121212121212121212121212121212121212",
+      "coin": "unknown",
+      "derivationPath": "m/44'/60'/0'/0/0"
+    }
+  },
+  {
+    "name": "invalid SelectedAccount 350",
+    "type": "SelectedAccount",
+    "valid": false,
+    "value": {
+      "walletId": "wallet-one",
+      "address": "0x1212121212121212121212121212121212121212",
+      "coin": "multiple",
+      "derivationPath": "m/44'/60'/0'/0/0"
+    }
+  },
+  {
+    "name": "invalid NativeStatus 351",
+    "type": "NativeStatus",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "pending": 1
+    }
+  },
+  {
+    "name": "invalid NativeStatus 352",
+    "type": "NativeStatus",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "pending": true,
+      "ready": true
+    }
+  },
+  {
+    "name": "invalid NativeResponse 353",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "signature",
+      "approvalCommitted": true,
+      "mutation": {
+        "kind": "accounts"
+      }
+    }
+  },
+  {
+    "name": "invalid NativeResponse 354",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "signature",
+      "approvalCommitted": true,
+      "approvedAccounts": []
+    }
+  },
+  {
+    "name": "invalid NativeResponse 355",
+    "type": "NativeResponse",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "name": "switchAccount",
+      "provider": "ethereum",
+      "kind": "result",
+      "result": "signature",
+      "approvalCommitted": true
+    }
+  },
+  {
+    "name": "invalid RPCResponse 356",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "result": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      },
+      "error": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid PageResponse 357",
+    "type": "PageResponse",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "name": "signMessage",
+      "provider": "ethereum",
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      },
+      "kind": "result",
+      "result": {
+        "vendorExtra": {
+          "unknown": [
+            null,
+            true,
+            1.25,
+            {
+              "__proto__": "literal",
+              "toJSON": "literal"
+            }
+          ]
+        },
+        "transaction": {
+          "customExtension": 42
+        }
+      },
+      "approvalCommitted": 1
+    }
+  },
+  {
+    "name": "null approval selectedAccounts",
+    "type": "ApprovalPayload",
+    "valid": false,
+    "value": {
+      "selectedAccounts": null
+    }
+  },
+  {
+    "name": "null approval chainId",
+    "type": "ApprovalPayload",
+    "valid": false,
+    "value": {
+      "chainId": null
+    }
+  },
+  {
+    "name": "null approval cluster",
+    "type": "ApprovalPayload",
+    "valid": false,
+    "value": {
+      "cluster": null
+    }
+  },
+  {
+    "name": "null fee gasPriceGwei",
+    "type": "TransactionEditsPayload",
+    "valid": false,
+    "value": {
+      "mode": "custom",
+      "nonce": "1",
+      "gasPriceGwei": null
+    }
+  },
+  {
+    "name": "null fee maxPriorityFeePerGasGwei",
+    "type": "TransactionEditsPayload",
+    "valid": false,
+    "value": {
+      "mode": "custom",
+      "nonce": "1",
+      "maxPriorityFeePerGasGwei": null
+    }
+  },
+  {
+    "name": "null fee maxFeePerGasGwei",
+    "type": "TransactionEditsPayload",
+    "valid": false,
+    "value": {
+      "mode": "custom",
+      "nonce": "1",
+      "maxFeePerGasGwei": null
+    }
+  },
+  {
+    "name": "unknown popup display field",
+    "type": "PopupDisplayAccount",
+    "valid": false,
+    "value": {
+      "name": "Account",
+      "croppedAddress": "1234...5678",
+      "unknown": "drop?"
+    }
+  },
+  {
+    "name": "malformed popup icon",
+    "type": "PopupDisplayAccount",
+    "valid": false,
+    "value": {
+      "name": "Account",
+      "croppedAddress": "1234...5678",
+      "icon": 7
+    }
+  },
+  {
+    "name": "unknown external envelope",
+    "type": "DappRequest",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "provider": "ethereum",
+      "name": "requestAccounts",
+      "body": {
+        "address": "0x1212121212121212121212121212121212121212",
+        "chainId": "0x1",
+        "object": {
+          "vendorExtra": {
+            "unknown": [
+              null,
+              true,
+              1.25,
+              {
+                "__proto__": "literal",
+                "toJSON": "literal"
+              }
+            ]
+          },
+          "transaction": {
+            "customExtension": 42
+          }
+        }
+      },
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "favicon": "https://wallet.example/icon.png",
+      "privateKey": "untrusted"
+    }
+  },
+  {
+    "name": "workflow version",
+    "type": "WorkflowVersion",
+    "valid": true,
+    "value": 4
+  },
+  {
+    "name": "queue unavailable object",
+    "type": "PopupQueueUnavailable",
+    "valid": true,
+    "value": {
+      "status": "unavailable"
+    }
+  },
+  {
+    "name": "integer error code",
+    "type": "ErrorCode",
+    "valid": true,
+    "value": -32603
+  },
+  {
+    "name": "boolean error code",
+    "type": "ErrorCode",
+    "valid": false,
+    "value": true
+  },
+  {
+    "name": "WorkerRequest content hop RuntimeDappRequest",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "workflowVersion": 4,
+      "subject": "message-to-wallet",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "WorkerRequest content hop RuntimeDisconnect",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "WorkerRequest content hop RuntimeRPC",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "WorkerRequest content hop RuntimeResponseRequest",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "WorkerRequest content hop RuntimeConfigurationRequest",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "WorkerRequest content hop RuntimeManualSwitchIntent",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "WorkerRequest popup hop RuntimeApplyCompletedResponse",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "applyCompletedResponse",
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "WorkerRequest popup hop RuntimeBadgeUpdate",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "subject": "updatePendingRequestBadge",
+      "workflowVersion": 4,
+      "hasPendingRequests": true
+    }
+  },
+  {
+    "name": "WorkerRequest popup hop RuntimeConfigurationRequest",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "WorkerRequest popup ready 0",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "id": 91
+    }
+  },
+  {
+    "name": "WorkerRequest popup ready 1",
+    "type": "WorkerRequest",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "ids": [
+        91,
+        92
+      ]
+    }
+  },
+  {
+    "name": "ContentMessage worker content 0",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "id": 91
+    }
+  },
+  {
+    "name": "ContentMessage worker content 1",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "responseReady",
+      "workflowVersion": 4,
+      "ids": [
+        91,
+        92
+      ]
+    }
+  },
+  {
+    "name": "ContentMessage worker content 2",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "configurationInvalidated",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "ContentMessage worker content 3",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "workflowProbe",
+      "workflowVersion": 4,
+      "nonce": "0123456789abcdef0123456789abcdef"
+    }
+  },
+  {
+    "name": "ContentMessage popup content WorkflowProbe",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "workflowProbe",
+      "workflowVersion": 4,
+      "nonce": "0123456789abcdef0123456789abcdef"
+    }
+  },
+  {
+    "name": "ContentMessage worker content 4",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "ContentMessage popup content ManualSwitchIntent",
+    "type": "ContentMessage",
+    "valid": true,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "configurationKey": "https://wallet.example"
+    }
+  },
+  {
+    "name": "PageToContentMessage page disconnect envelope ethereum{'id': 91}",
+    "type": "PageToContentMessage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "disconnect",
+      "message": {
+        "provider": "ethereum",
+        "subject": "disconnect",
+        "id": 91
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "PageToContentMessage page disconnect envelope solana{}",
+    "type": "PageToContentMessage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "disconnect",
+      "message": {
+        "provider": "solana",
+        "subject": "disconnect"
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "PageToContentMessage page disconnect envelope solana{'id': 92}",
+    "type": "PageToContentMessage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "disconnect",
+      "message": {
+        "provider": "solana",
+        "subject": "disconnect",
+        "id": 92
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "PageToContentMessage page request envelope",
+    "type": "PageToContentMessage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "request",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "providerGeneration": "generation-1",
+      "observedRevision": 2
+    }
+  },
+  {
+    "name": "PageToContentMessage page rpc envelope",
+    "type": "PageToContentMessage",
+    "valid": true,
+    "value": {
+      "direction": "big-wallet-provider-v1",
+      "kind": "rpc",
+      "message": {
+        "id": 91,
+        "chainId": "0x1",
+        "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+        "subject": "rpc"
+      },
+      "providerGeneration": "generation-1"
+    }
+  },
+  {
+    "name": "error code positive JS Int64 boundary",
+    "type": "ErrorCode",
+    "valid": true,
+    "value": 9223372036854775808
+  },
+  {
+    "name": "error code negative Int64 boundary",
+    "type": "ErrorCode",
+    "valid": true,
+    "value": -9223372036854775808
+  },
+  {
+    "name": "error code above positive JS Int64 boundary",
+    "type": "ErrorCode",
+    "valid": false,
+    "value": 9223372036854777856
+  },
+  {
+    "name": "error code below negative Int64 boundary",
+    "type": "ErrorCode",
+    "valid": false,
+    "value": -9223372036854777856
+  },
+  {
+    "name": "completed response applied",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": true,
+    "value": {
+      "applied": true
+    }
+  },
+  {
+    "name": "completed response missing",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "missing": true
+    }
+  },
+  {
+    "name": "completed response applied numeric",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": false,
+    "value": {
+      "applied": 1
+    }
+  },
+  {
+    "name": "completed response applied false",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": false,
+    "value": {
+      "applied": false
+    }
+  },
+  {
+    "name": "completed response applied extra",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": false,
+    "value": {
+      "applied": true,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "completed response missing numeric ID",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": false,
+    "value": {
+      "id": true,
+      "missing": true
+    }
+  },
+  {
+    "name": "completed response mixed outcomes",
+    "type": "RuntimeApplyCompletedReply",
+    "valid": false,
+    "value": {
+      "applied": true,
+      "id": 91,
+      "missing": true
+    }
+  },
+  {
+    "name": "RPC decimal results remain opaque",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "jsonrpc": "2.0",
+      "result": {
+        "decimals": [0.023359359010151733, 0.00033461068556032595, 0.1234567890123456789],
+        "nested": {"value": 0.023359359010151733}
+      }
+    }
+  },
+  {
+    "name": "RPC decimal error data remains opaque",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "error": {
+        "code": -32603,
+        "message": "Upstream error",
+        "data": {
+          "decimals": [0.023359359010151733, 0.00033461068556032595, 0.1234567890123456789],
+          "nested": {"value": 0.00033461068556032595}
+        }
+      }
+    }
+  },
+  {
+    "name": "RPC extreme finite numbers remain opaque",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "result": [5e-324, 1e-300, 1e300, 1.7976931348623157e308]
+    }
+  }
+]

@@ -140,11 +140,94 @@ final class NativeAuthorityTransportTests: XCTestCase {
         for provider in [InpageProvider.unknown, .multiple] {
             var unsupported = selected
             unsupported["coin"] = provider.rawValue
-            guard case .popup(.approveRequest(_, let payload)) = try approval(unsupported).command else {
-                return XCTFail("Unsupported selection providers remain subject to semantic validation")
-            }
-            XCTAssertEqual(payload.selectedAccounts?.first?.coin, provider)
+            XCTAssertThrowsError(try approval(unsupported))
         }
+    }
+
+    func testInternalCommandRejectsMalformedNumbersAndExplicitNullOptionals() throws {
+        let valid: [String: Any] = [
+            "id": 1,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "subject": "approveRequest",
+            "requestToken": requestToken,
+            "reviewToken": requestToken,
+            "payload": [:],
+        ]
+        func parse(_ json: [String: Any]) throws -> InternalSafariRequest {
+            try JSONDecoder().decode(InternalSafariRequest.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        for invalidID: Any in [true, 1.5, 9_007_199_254_740_992] {
+            var invalid = valid
+            invalid["id"] = invalidID
+            XCTAssertThrowsError(try parse(invalid))
+        }
+        for field in ["selectedAccounts", "chainId", "cluster"] {
+            var invalid = valid
+            invalid["payload"] = [field: NSNull()]
+            XCTAssertThrowsError(try parse(invalid), field)
+        }
+        var invalidVersion = valid
+        invalidVersion["workflowVersion"] = true
+        XCTAssertThrowsError(try parse(invalidVersion))
+    }
+
+    func testRPCRelayProjectsMetadataAndPreservesOpaquePayloads() throws {
+        let payload: [String: Any] = [
+            "vendor": ["unknown": [1, NSNull(), true], "__proto__": "literal"],
+            "data": ["nested": ["customTransactionField": "preserved"]],
+        ]
+        for field in ["result", "error"] {
+            let upstream: [String: Any] = [
+                "id": 91, "jsonrpc": "2.0", field: payload,
+                "providerMetadata": ["requestID": "vendor-id"],
+            ]
+            let response = try XCTUnwrap(RPCResponseToExtension(upstream: upstream, expectedResponseID: 91))
+            XCTAssertEqual(response.json as NSDictionary, [
+                "id": 91, "jsonrpc": "2.0", field: payload,
+            ] as NSDictionary)
+            XCTAssertNotNil(upstream["providerMetadata"])
+        }
+        let nullResult = try XCTUnwrap(RPCResponseToExtension(
+            upstream: ["id": 91, "result": NSNull(), "providerMetadata": true],
+            expectedResponseID: 91
+        ))
+        XCTAssertTrue(nullResult.json["result"] is NSNull)
+    }
+
+    func testRPCRelayRejectsMalformedCorrelationAndAmbiguousPayloads() {
+        let valid: [String: Any] = ["id": 91, "jsonrpc": "2.0", "result": [:]]
+        for invalidID: Any in [true, 91.5, "91", NSNull(), 92] {
+            var invalid = valid
+            invalid["id"] = invalidID
+            XCTAssertNil(RPCResponseToExtension(upstream: invalid, expectedResponseID: 91))
+        }
+        for invalidVersion: Any in ["1.0", 2, true, NSNull()] {
+            var invalid = valid
+            invalid["jsonrpc"] = invalidVersion
+            XCTAssertNil(RPCResponseToExtension(upstream: invalid, expectedResponseID: 91))
+        }
+        var ambiguous = valid
+        ambiguous["error"] = ["code": -32603, "data": ["custom": true]]
+        XCTAssertNil(RPCResponseToExtension(upstream: ambiguous, expectedResponseID: 91))
+        XCTAssertNil(RPCResponseToExtension(upstream: ["id": 91], expectedResponseID: 91))
+    }
+
+    func testNativeErrorCodeRetainsTheLargestSwiftInteger() throws {
+        let request = try XCTUnwrap(SafariRequest(json: [
+            "id": 91, "name": "signMessage", "provider": "ethereum",
+            "body": ["address": "", "chainId": "0x1"],
+            "host": "wallet.example", "configurationKey": "https://wallet.example",
+            "enqueueAttempt": String(repeating: "a", count: 32),
+            "admissionDeadline": 2_000_000_900_000,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+        ]))
+        let produced = ResponseToExtension(for: request, payload: .error(.init(
+            message: "Upstream code", code: Int.max
+        )))
+        XCTAssertTrue(WireProtocol.validate(.nativeResponse, value: produced.json))
+        let decoded = try XCTUnwrap(ResponseToExtension(json: produced.json))
+        guard case .error(let error) = decoded.payload else { return XCTFail("Expected native error") }
+        XCTAssertEqual(error.code, Int.max)
     }
 
     func testRecoveryDiscoveryCannotSupplyAProfileOrGrant() throws {

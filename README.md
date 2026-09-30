@@ -12,6 +12,12 @@ download on the [app store](https://lil.org/get)
 * run the xcode project
 * recurring manual chores live in [MAINTENANCE.md](MAINTENANCE.md)
 
+### Safari wire protocol
+
+`Safari Shared/Protocol/wire-protocol.json` defines the shared Swift and JavaScript wire contract. After editing it, run `node Scripts/generate_wire_protocol.mjs --write`, then `Scripts/build_inpage_provider.sh` to rebuild the page provider. Commit the definition and generated files together.
+
+`Scripts/check_wire_protocol.sh` checks that the generated files are current without modifying them. Xcode builds, npm build/test commands, version bumps, and release preflight run this check. The generator uses Node.js built-ins and adds no package dependencies. `BUILD_VERSION` remains release metadata in `bridge_wire.js` and is updated by the existing version-bump script.
+
 ### Safari authorization
 
 Native storage owns connected accounts, selected chains, and permission revisions, partitioned by Safari profile and origin. Permission changes and request results commit together. The extension validates Safari's sender metadata before relaying an origin; native messaging supplies the profile. Native storage does not independently attest a webpage's origin.

@@ -21,7 +21,7 @@ const TRANSACTION_EDITOR_FIELDS = {
 var configurationIdentityForURL = BigWalletBridgeWire.configurationIdentityForURL;
 var genId = BigWalletBridgeWire.genId;
 var genPrivateToken = BigWalletBridgeWire.genPrivateToken;
-var hasExactKeys = BigWalletBridgeWire.hasExactKeys;
+var decodeWireMessage = BigWalletBridgeWire.decodeMessage;
 var isCanonicalEthereumChainId = BigWalletBridgeWire.isCanonicalEthereumChainId;
 var isRequestToken = BigWalletBridgeWire.isRequestToken;
 var isPendingRequestAvailable = BigWalletBridgeWire.isPendingRequestAvailable;
@@ -1308,13 +1308,9 @@ async function updateRecoveryTabFor(tab) {
     const probe = await settleExtensionMessage(pendingProbe);
     if (probe.status === "timeout") { return tab; }
     if (probe.status !== "response") { return null; }
-    if (hasExactKeys(probe.response, [
-        "buildVersion", "nonce", "subject", "workflowVersion",
-    ]) && probe.response.nonce === nonce &&
-        typeof probe.response.buildVersion === "string" &&
-        probe.response.subject === "workflowProbe" &&
-        probe.response.workflowVersion === WORKFLOW_VERSION) {
-        return probe.response.buildVersion === BUILD_VERSION ? null : tab;
+    const reply = decodeWireMessage("WorkflowProbeReply", probe.response);
+    if (reply?.nonce === nonce) {
+        return reply.buildVersion === BUILD_VERSION ? null : tab;
     }
     return typeof probe.response === "undefined" ? tab : null;
 }
@@ -1492,14 +1488,9 @@ async function applyCompletedResponse(request) {
     }
     const outcome = await settleExtensionMessage(pending, RESPONSE_DELIVERY_TIMEOUT);
     if (outcome.status !== "response") { return "failure"; }
-    if (hasExactKeys(outcome.response, ["applied"]) &&
-        outcome.response.applied === true) {
-        return "applied";
-    }
-    if (hasExactKeys(outcome.response, ["id", "missing"]) &&
-        outcome.response.id === request.id && outcome.response.missing === true) {
-        return "missing";
-    }
+    const reply = decodeWireMessage("RuntimeApplyCompletedReply", outcome.response);
+    if (reply?.applied === true) { return "applied"; }
+    if (reply?.id === request.id && reply.missing === true) { return "missing"; }
     return "failure";
 }
 

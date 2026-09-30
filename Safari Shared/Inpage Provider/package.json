@@ -4,7 +4,11 @@
     "description": "inpage provider",
     "main": "index.js",
     "scripts": {
+        "protocol:generate": "node ../../Scripts/generate_wire_protocol.mjs --write",
+        "protocol:check": "node ../../Scripts/generate_wire_protocol.mjs --check",
+        "prebuild": "npm run protocol:check",
         "build": "esbuild index.js --bundle --minify --target=safari15 --format=iife --outfile=../Resources/inpage.js",
+        "pretest": "npm run protocol:check",
         "test": "node --test ../Tests/*.test.mjs"
     },
     "repository": {

@@ -78,8 +78,13 @@ struct SafariRequest {
         self.init(json: json)
     }
 
+    init?(wire: WireProtocol.DappRequest) {
+        self.init(json: wire.json)
+    }
+
     init?(json: [String: Any]) {
-        guard let id = json["id"] as? Int,
+        guard let idValue = json["id"], WireProtocol.validate(.requestID, value: idValue),
+              let id = idValue as? Int,
               let name = json["name"] as? String,
               let jsonBody = json["body"] as? [String: Any],
               let providerValue = json["provider"] as? String,
@@ -89,10 +94,8 @@ struct SafariRequest {
               let configurationKey = json["configurationKey"] as? String,
               let enqueueAttempt = json["enqueueAttempt"] as? String,
               let admissionDeadlineValue = json["admissionDeadline"],
-              CFGetTypeID(admissionDeadlineValue as CFTypeRef) != CFBooleanGetTypeID(),
+              WireProtocol.validate(.positiveInteger, value: admissionDeadlineValue),
               let admissionDeadlineMilliseconds = admissionDeadlineValue as? Int,
-              admissionDeadlineMilliseconds > 0,
-              admissionDeadlineMilliseconds <= 9_007_199_254_740_991,
               let workflowVersion = json["workflowVersion"] as? Int
         else { return nil }
         

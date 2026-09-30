@@ -27,6 +27,7 @@
       "run_at": "document_start",
       "all_frames": false,
       "js": [
+        "protocol.generated.js",
         "bridge_wire.js",
         "content.js"
       ]

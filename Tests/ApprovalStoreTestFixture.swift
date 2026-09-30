@@ -423,6 +423,9 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             account.coin == .solana && authority.solanaAccount == account { return }
         let ethereum = account.coin == .ethereum
         let id = Int.random(in: 1_000_000...2_000_000)
+        let body: [String: Any] = ethereum
+            ? ["address": "", "chainId": "0x1"]
+            : ["publicKey": "", "object": [String: Any]()]
         let request = try XCTUnwrap(SafariRequest(json: [
             "id": id, "name": ethereum ? "requestAccounts" : "connect",
             "provider": ethereum ? "ethereum" : "solana",
@@ -432,7 +435,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             "admissionDeadline": Int(clock().addingTimeInterval(ExtensionBridge.requestTTL).timeIntervalSince1970 * 1_000),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "authority": authority.version.json,
-            "body": ethereum ? ["address": "", "chainId": "0x1"] : ["publicKey": ""],
+            "body": body,
         ]))
         let raw: [String: Any] = [
             "id": request.id, "name": request.name, "provider": request.provider.rawValue,
@@ -440,7 +443,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             "enqueueAttempt": request.enqueueAttempt,
             "admissionDeadline": Int(request.admissionDeadline.timeIntervalSince1970 * 1_000),
             "workflowVersion": request.workflowVersion, "authority": authority.version.json,
-            "body": ethereum ? ["address": "", "chainId": "0x1"] : ["publicKey": ""],
+            "body": body,
         ]
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
               case .accepted(let handle, _, _, _, _) = await bridge.enqueue(ingress: ingress, profileIdentifier: profileIdentifier),

@@ -1,0 +1,2816 @@
+{
+  "definitionVersion": 1,
+  "constants": {
+    "WORKFLOW_VERSION": 4,
+    "PAGE_TO_CONTENT_DIRECTION": "big-wallet-provider-v1",
+    "CONTENT_TO_PAGE_DIRECTION": "big-wallet-content-v1",
+    "PROVIDER_REPLACED_ERROR_CODE": 4900,
+    "PROVIDER_REPLACED_MESSAGE": "Big Wallet provider was replaced",
+    "PRIVATE_BROWSING_KEY": "__bwPrivateBrowsing",
+    "MAX_RESPONSE_READY_IDS": 16,
+    "MANUAL_SWITCH_INTENT_SUBJECT": "manualSwitchIntent",
+    "MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT": "manualSwitchAcknowledged",
+    "MAX_MANUAL_SWITCH_JSON_LENGTH": 262144,
+    "MAX_PAYLOAD_BYTES": 262144,
+    "MAX_POPUP_RESPONSE_BYTES": 524288,
+    "WORKFLOW_POLICY": {
+      "maximumNativeChainIdHex": "7fffffffffffffff",
+      "maximumRequests": 8,
+      "maximumRequestsPerHost": 4,
+      "maximumRetainedRequests": 16,
+      "requestTTLMilliseconds": 900000,
+      "responseExpiryMilliseconds": 3600000,
+      "selectionAccountCoins": [
+        "ethereum",
+        "solana"
+      ],
+      "solanaClusterValues": [
+        "mainnetBeta",
+        "devnet",
+        "testnet"
+      ]
+    },
+    "RUNTIME_MESSAGE_SUBJECTS": {
+      "worker": {
+        "content": [
+          "rpc",
+          "message-to-wallet",
+          "manualSwitchIntent",
+          "getResponse",
+          "getLatestConfiguration",
+          "disconnect"
+        ],
+        "popup": [
+          "applyCompletedResponse",
+          "getLatestConfiguration",
+          "updatePendingRequestBadge",
+          "responseReady"
+        ]
+      },
+      "content": {
+        "worker": [
+          "workflowProbe",
+          "manualSwitchIntent",
+          "configurationInvalidated",
+          "responseReady"
+        ],
+        "popup": [
+          "workflowProbe",
+          "manualSwitchIntent"
+        ]
+      },
+      "popup": {
+        "worker": [
+          "pendingRequestAvailable"
+        ]
+      }
+    },
+    "MAX_JSON_DEPTH": 64
+  },
+  "types": {
+    "RequestID": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "NonnegativeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "PositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "PrivateToken": {
+      "type": "string",
+      "format": "privateToken"
+    },
+    "RequestToken": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "EthereumChainID": {
+      "type": "string",
+      "format": "ethereumChain"
+    },
+    "SolanaPublicKey": {
+      "type": "string",
+      "format": "solanaPublicKey"
+    },
+    "AuthorityContext": {
+      "type": "string",
+      "format": "authorityContext"
+    },
+    "Provider": {
+      "enum": [
+        "ethereum",
+        "solana"
+      ]
+    },
+    "RequestProvider": {
+      "enum": [
+        "ethereum",
+        "solana",
+        "unknown"
+      ]
+    },
+    "SolanaCluster": {
+      "enum": [
+        "mainnetBeta",
+        "devnet",
+        "testnet"
+      ]
+    },
+    "Revisions": {
+      "type": "object",
+      "required": {
+        "ethereum": {
+          "ref": "NonnegativeInteger"
+        },
+        "solana": {
+          "ref": "NonnegativeInteger"
+        }
+      },
+      "optional": {}
+    },
+    "ProviderRevisions": {
+      "ref": "Revisions"
+    },
+    "AuthorityVersion": {
+      "type": "object",
+      "required": {
+        "context": {
+          "ref": "AuthorityContext"
+        },
+        "revisions": {
+          "ref": "Revisions"
+        }
+      },
+      "optional": {}
+    },
+    "EthereumConfiguration": {
+      "type": "object",
+      "required": {
+        "address": {
+          "type": "string"
+        },
+        "chainId": {
+          "ref": "EthereumChainID"
+        }
+      },
+      "optional": {}
+    },
+    "SolanaConfiguration": {
+      "type": "object",
+      "required": {
+        "publicKey": {
+          "ref": "SolanaPublicKey"
+        }
+      },
+      "optional": {}
+    },
+    "ConfigurationSnapshot": {
+      "type": "object",
+      "required": {
+        "context": {
+          "ref": "AuthorityContext"
+        },
+        "revisions": {
+          "ref": "Revisions"
+        },
+        "ethereum": {
+          "ref": "EthereumConfiguration"
+        },
+        "solana": {
+          "oneOf": [
+            {
+              "ref": "SolanaConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "optional": {}
+    },
+    "SelectedAccount": {
+      "type": "object",
+      "required": {
+        "walletId": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "coin": {
+          "ref": "Provider"
+        },
+        "derivationPath": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "ApprovalPayload": {
+      "type": "object",
+      "required": {},
+      "optional": {
+        "selectedAccounts": {
+          "type": "array",
+          "items": {
+            "ref": "SelectedAccount"
+          }
+        },
+        "chainId": {
+          "type": "string"
+        },
+        "cluster": {
+          "ref": "SolanaCluster"
+        }
+      }
+    },
+    "TransactionSpeedPayload": {
+      "type": "object",
+      "required": {
+        "interaction": {
+          "enum": [
+            "ended",
+            "cancelled"
+          ]
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "optional": {}
+    },
+    "TransactionEditsPayload": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "mode": {
+              "const": "suggested"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "mode": {
+              "const": "custom"
+            },
+            "nonce": {
+              "type": "string"
+            }
+          },
+          "optional": {
+            "gasPriceGwei": {
+              "type": "string"
+            },
+            "maxPriorityFeePerGasGwei": {
+              "type": "string"
+            },
+            "maxFeePerGasGwei": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "ApprovalAlertPayload": {
+      "type": "object",
+      "required": {
+        "action": {
+          "enum": [
+            "acknowledge",
+            "retry",
+            "edit",
+            "cancel"
+          ]
+        }
+      },
+      "optional": {}
+    },
+    "NativeCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "openApp"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "getRecoveryRequests"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "getPendingRequests"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "rpc"
+            },
+            "body": {
+              "type": "string"
+            },
+            "chainId": {
+              "type": "string"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "getLatestConfiguration"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "disconnect"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "provider": {
+              "ref": "Provider"
+            },
+            "attempt": {
+              "ref": "PrivateToken"
+            },
+            "authority": {
+              "ref": "AuthorityVersion"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "getResponse"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "acknowledgeResponse"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "showApproval"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "prepareResponseDelivery"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "maintainRequest"
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            },
+            "allowDelivery": {
+              "type": "boolean"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "getApprovalState"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "retryApproval"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "rejectRequest"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "approveRequest"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            },
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "payload": {
+              "ref": "ApprovalPayload"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "setTransactionSpeed"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            },
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "payload": {
+              "ref": "TransactionSpeedPayload"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "applyTransactionEdits"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            },
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "payload": {
+              "ref": "TransactionEditsPayload"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "resolveApprovalAlert"
+            },
+            "requestToken": {
+              "ref": "RequestToken"
+            },
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "payload": {
+              "ref": "ApprovalAlertPayload"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "EthereumRequestBody": {
+      "type": "object",
+      "required": {
+        "address": {
+          "type": "string"
+        }
+      },
+      "optional": {
+        "chainId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "object": {
+          "type": "json"
+        }
+      }
+    },
+    "SolanaRequestObject": {
+      "type": "object",
+      "required": {},
+      "optional": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "params": {
+          "type": "json"
+        },
+        "method": {
+          "type": "string"
+        }
+      }
+    },
+    "SolanaRequestBody": {
+      "type": "object",
+      "required": {
+        "publicKey": {
+          "type": "string"
+        },
+        "object": {
+          "ref": "SolanaRequestObject"
+        }
+      },
+      "optional": {}
+    },
+    "ManualProviderConfiguration": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "provider": {
+              "const": "ethereum"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "chainId": {
+              "type": "string"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "provider": {
+              "const": "solana"
+            },
+            "publicKey": {
+              "type": "string"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "ManualRequestBody": {
+      "type": "object",
+      "required": {},
+      "optional": {
+        "latestConfigurations": {
+          "type": "array",
+          "items": {
+            "ref": "ManualProviderConfiguration"
+          }
+        }
+      }
+    },
+    "ProviderRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "provider": {
+              "const": "ethereum"
+            },
+            "name": {
+              "enum": [
+                "signTransaction",
+                "signPersonalMessage",
+                "signMessage",
+                "signTypedMessage",
+                "ecRecover",
+                "requestAccounts",
+                "addEthereumChain",
+                "switchEthereumChain"
+              ]
+            },
+            "body": {
+              "ref": "EthereumRequestBody"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "provider": {
+              "const": "solana"
+            },
+            "name": {
+              "enum": [
+                "connect",
+                "signMessage",
+                "signTransaction",
+                "signAllTransactions",
+                "signAndSendTransaction"
+              ]
+            },
+            "body": {
+              "ref": "SolanaRequestBody"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "DappRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enqueueAttempt": {
+              "ref": "PrivateToken"
+            },
+            "admissionDeadline": {
+              "ref": "PositiveInteger"
+            },
+            "authority": {
+              "ref": "AuthorityVersion"
+            },
+            "provider": {
+              "const": "ethereum"
+            },
+            "name": {
+              "enum": [
+                "signTransaction",
+                "signPersonalMessage",
+                "signMessage",
+                "signTypedMessage",
+                "ecRecover",
+                "requestAccounts",
+                "addEthereumChain",
+                "switchEthereumChain"
+              ]
+            },
+            "body": {
+              "ref": "EthereumRequestBody"
+            }
+          },
+          "optional": {
+            "favicon": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "replayOnly": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enqueueAttempt": {
+              "ref": "PrivateToken"
+            },
+            "admissionDeadline": {
+              "ref": "PositiveInteger"
+            },
+            "authority": {
+              "ref": "AuthorityVersion"
+            },
+            "provider": {
+              "const": "solana"
+            },
+            "name": {
+              "enum": [
+                "connect",
+                "signMessage",
+                "signTransaction",
+                "signAllTransactions",
+                "signAndSendTransaction"
+              ]
+            },
+            "body": {
+              "ref": "SolanaRequestBody"
+            }
+          },
+          "optional": {
+            "favicon": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "replayOnly": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "configurationKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enqueueAttempt": {
+              "ref": "PrivateToken"
+            },
+            "admissionDeadline": {
+              "ref": "PositiveInteger"
+            },
+            "authority": {
+              "ref": "AuthorityVersion"
+            },
+            "provider": {
+              "const": "unknown"
+            },
+            "name": {
+              "enum": [
+                "switchAccount"
+              ]
+            },
+            "body": {
+              "ref": "ManualRequestBody"
+            }
+          },
+          "optional": {
+            "favicon": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "replayOnly": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "ProviderError": {
+      "type": "object",
+      "required": {
+        "code": {
+          "ref": "ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "optional": {
+        "data": {
+          "type": "json"
+        }
+      }
+    },
+    "NativeResult": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "publicKey": {
+              "type": "string"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "NativeResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "name": {
+              "type": "string",
+              "excluding": [
+                "switchAccount"
+              ]
+            },
+            "provider": {
+              "ref": "Provider"
+            },
+            "approvalCommitted": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "result"
+            },
+            "result": {
+              "ref": "NativeResult"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "name": {
+              "type": "string",
+              "excluding": [
+                "switchAccount"
+              ]
+            },
+            "provider": {
+              "ref": "Provider"
+            },
+            "approvalCommitted": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "error"
+            },
+            "error": {
+              "ref": "ProviderError"
+            },
+            "authorizationFailure": {
+              "type": "boolean"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "name": {
+              "const": "switchAccount"
+            },
+            "provider": {
+              "const": "multiple"
+            },
+            "approvalCommitted": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "result"
+            },
+            "result": {
+              "type": "null"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "name": {
+              "const": "switchAccount"
+            },
+            "provider": {
+              "const": "multiple"
+            },
+            "approvalCommitted": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "error"
+            },
+            "error": {
+              "type": "object",
+              "required": {
+                "code": {
+                  "ref": "ErrorCode"
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "optional": {
+                "data": {
+                  "type": "json"
+                }
+              }
+            },
+            "authorizationFailure": {
+              "type": "boolean"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "PageResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "kind": {
+              "const": "configuration"
+            },
+            "state": {
+              "ref": "ConfigurationSnapshot"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "kind": {
+              "const": "configurationError"
+            },
+            "error": {
+              "ref": "ProviderError"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "name": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provider": {
+              "ref": "Provider"
+            },
+            "state": {
+              "oneOf": [
+                {
+                  "ref": "ConfigurationSnapshot"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "result"
+            },
+            "result": {
+              "type": "json"
+            },
+            "approvalCommitted": {
+              "type": "boolean"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "name": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provider": {
+              "ref": "Provider"
+            },
+            "state": {
+              "oneOf": [
+                {
+                  "ref": "ConfigurationSnapshot"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "error"
+            },
+            "error": {
+              "ref": "ProviderError"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "NativeEnqueueAcknowledgement": {
+      "type": "object",
+      "required": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        },
+        "approvalRequired": {
+          "type": "boolean"
+        },
+        "admissionKind": {
+          "enum": [
+            "new",
+            "replay",
+            "coalesced"
+          ]
+        },
+        "state": {
+          "ref": "ConfigurationSnapshot"
+        }
+      },
+      "optional": {}
+    },
+    "NativeAdmission": {
+      "ref": "NativeEnqueueAcknowledgement"
+    },
+    "NativeDelivery": {
+      "type": "object",
+      "required": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "response": {
+          "ref": "NativeResponse"
+        },
+        "state": {
+          "ref": "ConfigurationSnapshot"
+        }
+      },
+      "optional": {}
+    },
+    "NativeStatus": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "pending": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "ready": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "missing": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "unavailable": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "NativeConfigurationReply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "state": {
+              "ref": "ConfigurationSnapshot"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "unavailable": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "NativeDisconnectReply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "state": {
+              "ref": "ConfigurationSnapshot"
+            },
+            "revoked": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "state": {
+              "ref": "ConfigurationSnapshot"
+            },
+            "stale": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "unavailable": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "NativeAcknowledgementReply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "acknowledged": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "missing": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "NativeOpenReply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "opened": {
+              "type": "boolean"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "ref": "NativeStatus"
+        }
+      ]
+    },
+    "RecoveryRequest": {
+      "type": "object",
+      "required": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manual": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "approved",
+            "completed"
+          ]
+        }
+      },
+      "optional": {}
+    },
+    "NativeRecoveryReply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "requests": {
+              "type": "array",
+              "items": {
+                "ref": "RecoveryRequest"
+              },
+              "minItems": 0,
+              "maxItems": 16
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "unavailable": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "RPCResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "result": {
+              "type": "json"
+            }
+          },
+          "optional": {
+            "jsonrpc": {
+              "const": "2.0"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "error": {
+              "type": "json"
+            }
+          },
+          "optional": {
+            "jsonrpc": {
+              "const": "2.0"
+            }
+          }
+        }
+      ]
+    },
+    "PopupDisplayAccount": {
+      "type": "object",
+      "required": {
+        "name": {
+          "type": "string"
+        },
+        "croppedAddress": {
+          "type": "string"
+        }
+      },
+      "optional": {
+        "icon": {
+          "type": "string"
+        }
+      }
+    },
+    "PopupSelectableAccount": {
+      "type": "object",
+      "required": {
+        "name": {
+          "type": "string"
+        },
+        "croppedAddress": {
+          "type": "string"
+        },
+        "walletId": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "coin": {
+          "ref": "Provider"
+        },
+        "derivationPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isSelected": {
+          "type": "boolean"
+        }
+      },
+      "optional": {
+        "icon": {
+          "type": "string"
+        }
+      }
+    },
+    "PopupNetworkOption": {
+      "type": "object",
+      "required": {
+        "chainId": {
+          "ref": "EthereumChainID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "isSelected": {
+          "type": "boolean"
+        }
+      },
+      "optional": {
+        "isCustom": {
+          "type": "boolean"
+        }
+      }
+    },
+    "PopupClusterOption": {
+      "type": "object",
+      "required": {
+        "value": {
+          "ref": "SolanaCluster"
+        },
+        "label": {
+          "type": "string"
+        },
+        "isSelected": {
+          "type": "boolean"
+        }
+      },
+      "optional": {}
+    },
+    "PopupTransactionSlider": {
+      "type": "object",
+      "required": {
+        "visible": {
+          "type": "boolean"
+        },
+        "position": {
+          "type": "number"
+        },
+        "maximum": {
+          "type": "number"
+        }
+      },
+      "optional": {}
+    },
+    "PopupTransactionEditor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "usesEIP1559": {
+              "const": false
+            },
+            "nonce": {
+              "type": "string"
+            },
+            "gasPriceGwei": {
+              "type": "string"
+            }
+          },
+          "optional": {
+            "suggestedGasPriceGwei": {
+              "type": "string"
+            },
+            "maxPriorityFeePerGasGwei": {
+              "type": "string"
+            },
+            "maxFeePerGasGwei": {
+              "type": "string"
+            },
+            "suggestedMaxPriorityFeePerGasGwei": {
+              "type": "string"
+            },
+            "suggestedMaxFeePerGasGwei": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "usesEIP1559": {
+              "const": true
+            },
+            "nonce": {
+              "type": "string"
+            },
+            "maxPriorityFeePerGasGwei": {
+              "type": "string"
+            },
+            "maxFeePerGasGwei": {
+              "type": "string"
+            }
+          },
+          "optional": {
+            "suggestedMaxPriorityFeePerGasGwei": {
+              "type": "string"
+            },
+            "suggestedMaxFeePerGasGwei": {
+              "type": "string"
+            },
+            "gasPriceGwei": {
+              "type": "string"
+            },
+            "suggestedGasPriceGwei": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "PopupTransactionAlert": {
+      "type": "object",
+      "required": {
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": {
+              "title": {
+                "type": "string"
+              },
+              "action": {
+                "enum": [
+                  "acknowledge",
+                  "retry",
+                  "edit",
+                  "cancel"
+                ]
+              }
+            },
+            "optional": {}
+          },
+          "minItems": 1
+        }
+      },
+      "optional": {}
+    },
+    "PopupReview": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "title": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "accountSelection"
+            },
+            "accounts": {
+              "type": "array",
+              "items": {
+                "ref": "PopupSelectableAccount"
+              }
+            },
+            "canSelectNetwork": {
+              "type": "boolean"
+            },
+            "allowsEmptySelection": {
+              "type": "boolean"
+            }
+          },
+          "optional": {
+            "networks": {
+              "type": "array",
+              "items": {
+                "ref": "PopupNetworkOption"
+              }
+            },
+            "emptyMessage": {
+              "type": "string"
+            },
+            "primaryTitle": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "title": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "signMessage"
+            },
+            "meta": {
+              "type": "string"
+            },
+            "account": {
+              "ref": "PopupDisplayAccount"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "title": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "signMessage"
+            },
+            "meta": {
+              "type": "string"
+            },
+            "account": {
+              "ref": "PopupDisplayAccount"
+            },
+            "clusters": {
+              "type": "array",
+              "items": {
+                "ref": "PopupClusterOption"
+              },
+              "minItems": 1
+            },
+            "requiresClusterSelection": {
+              "type": "boolean"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "title": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "sendTransaction"
+            },
+            "account": {
+              "ref": "PopupDisplayAccount"
+            },
+            "networkName": {
+              "type": "string"
+            },
+            "feeLines": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "slider": {
+              "ref": "PopupTransactionSlider"
+            },
+            "editor": {
+              "ref": "PopupTransactionEditor"
+            }
+          },
+          "optional": {
+            "balance": {
+              "type": "string"
+            },
+            "valueLine": {
+              "type": "string"
+            },
+            "dataInterpretation": {
+              "type": "string"
+            },
+            "alert": {
+              "ref": "PopupTransactionAlert"
+            },
+            "editorRequestToken": {
+              "ref": "NonnegativeInteger"
+            },
+            "canBackOffRefresh": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "reviewToken": {
+              "ref": "RequestToken"
+            },
+            "title": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "addChain"
+            },
+            "chainName": {
+              "type": "string"
+            },
+            "rpcURL": {
+              "type": "string"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "PopupApprovalState": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "const": "review"
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "approve",
+                  "reject",
+                  "editTransaction",
+                  "setTransactionSpeed",
+                  "resolveApprovalAlert"
+                ]
+              }
+            },
+            "review": {
+              "ref": "PopupReview"
+            }
+          },
+          "optional": {
+            "error": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "state": {
+              "const": "error"
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "retry",
+                  "reject"
+                ]
+              },
+              "minItems": 1
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "optional": {
+            "host": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "state": {
+              "enum": [
+                "missing",
+                "authenticating",
+                "working"
+              ]
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            }
+          },
+          "optional": {
+            "host": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "PopupPendingRequest": {
+      "type": "object",
+      "required": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receivedAt": {
+          "type": "number"
+        },
+        "sequence": {
+          "ref": "NonnegativeInteger"
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "ref": "RequestProvider"
+        }
+      },
+      "optional": {
+        "enqueueAttempt": {
+          "ref": "PrivateToken"
+        }
+      }
+    },
+    "PopupCompletedResponse": {
+      "type": "object",
+      "required": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        }
+      },
+      "optional": {}
+    },
+    "PopupQueue": {
+      "type": "object",
+      "required": {
+        "requests": {
+          "type": "array",
+          "items": {
+            "ref": "PopupPendingRequest"
+          }
+        },
+        "completedResponses": {
+          "type": "array",
+          "items": {
+            "ref": "PopupCompletedResponse"
+          }
+        }
+      },
+      "optional": {
+        "strings": {
+          "type": "dictionary",
+          "values": {
+            "type": "string"
+          }
+        },
+        "layoutDirection": {
+          "enum": [
+            "ltr",
+            "rtl"
+          ]
+        }
+      }
+    },
+    "PopupCommandResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "status": {
+              "const": "ok"
+            },
+            "approval": {
+              "ref": "PopupApprovalState"
+            }
+          },
+          "optional": {
+            "editsError": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "status": {
+              "const": "ignored"
+            },
+            "approval": {
+              "oneOf": [
+                {
+                  "ref": "PopupApprovalState"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "status": {
+              "const": "unavailable"
+            },
+            "approval": {
+              "type": "null"
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "PopupResponse": {
+      "oneOf": [
+        {
+          "ref": "PopupQueue"
+        },
+        {
+          "ref": "PopupCommandResult"
+        },
+        {
+          "ref": "PopupQueueUnavailable"
+        }
+      ]
+    },
+    "PageDisconnect": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "provider": {
+              "const": "ethereum"
+            },
+            "subject": {
+              "const": "disconnect"
+            },
+            "id": {
+              "ref": "RequestID"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "provider": {
+              "const": "solana"
+            },
+            "subject": {
+              "const": "disconnect"
+            }
+          },
+          "optional": {
+            "id": {
+              "ref": "RequestID"
+            }
+          }
+        }
+      ]
+    },
+    "PageRPC": {
+      "type": "object",
+      "required": {
+        "id": {
+          "ref": "RequestID"
+        },
+        "body": {
+          "type": "string"
+        },
+        "chainId": {
+          "type": "string"
+        },
+        "subject": {
+          "const": "rpc"
+        }
+      },
+      "optional": {}
+    },
+    "PageToContent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "direction": {
+              "constant": "PAGE_TO_CONTENT_DIRECTION"
+            },
+            "kind": {
+              "const": "request"
+            },
+            "message": {
+              "ref": "ProviderRequest"
+            },
+            "observedRevision": {
+              "ref": "NonnegativeInteger"
+            },
+            "providerGeneration": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "direction": {
+              "constant": "PAGE_TO_CONTENT_DIRECTION"
+            },
+            "kind": {
+              "const": "rpc"
+            },
+            "message": {
+              "ref": "PageRPC"
+            },
+            "providerGeneration": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "direction": {
+              "constant": "PAGE_TO_CONTENT_DIRECTION"
+            },
+            "kind": {
+              "const": "disconnect"
+            },
+            "message": {
+              "ref": "PageDisconnect"
+            },
+            "providerGeneration": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "ContentToPage": {
+      "type": "object",
+      "required": {
+        "direction": {
+          "constant": "CONTENT_TO_PAGE_DIRECTION"
+        },
+        "kind": {
+          "enum": [
+            "response",
+            "rpc"
+          ]
+        },
+        "response": {
+          "ref": "PageResponse"
+        },
+        "providerGeneration": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {
+        "id": {
+          "ref": "RequestID"
+        }
+      }
+    },
+    "ResponseReady": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "responseReady"
+            },
+            "id": {
+              "ref": "RequestID"
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "subject": {
+              "const": "responseReady"
+            },
+            "ids": {
+              "type": "array",
+              "items": {
+                "ref": "RequestID"
+              },
+              "minItems": 1,
+              "maxItems": 16
+            }
+          },
+          "optional": {}
+        }
+      ]
+    },
+    "PendingRequestAvailable": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "pendingRequestAvailable"
+        }
+      },
+      "optional": {}
+    },
+    "ConfigurationInvalidated": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "configurationInvalidated"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "ManualSwitchAcknowledgement": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "constant": "MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT"
+        },
+        "id": {
+          "ref": "RequestID"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        },
+        "approvalRequired": {
+          "type": "boolean"
+        },
+        "state": {
+          "ref": "ConfigurationSnapshot"
+        }
+      },
+      "optional": {}
+    },
+    "WorkflowProbe": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "workflowProbe"
+        },
+        "nonce": {
+          "ref": "PrivateToken"
+        }
+      },
+      "optional": {}
+    },
+    "WorkflowProbeReply": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "workflowProbe"
+        },
+        "nonce": {
+          "ref": "PrivateToken"
+        },
+        "buildVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "ManualSwitchIntent": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "constant": "MANUAL_SWITCH_INTENT_SUBJECT"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeManualSwitchIntent": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "constant": "MANUAL_SWITCH_INTENT_SUBJECT"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeConfigurationRequest": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "getLatestConfiguration"
+        },
+        "host": {
+          "type": "string"
+        },
+        "configurationKey": {
+          "type": "string"
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeDappRequest": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "message-to-wallet"
+        },
+        "message": {
+          "ref": "ProviderRequest"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enqueueAttempt": {
+          "ref": "PrivateToken"
+        },
+        "admissionDeadline": {
+          "ref": "PositiveInteger"
+        },
+        "authority": {
+          "ref": "AuthorityVersion"
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeDisconnect": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "disconnect"
+        },
+        "id": {
+          "ref": "RequestID"
+        },
+        "provider": {
+          "ref": "Provider"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "ref": "PrivateToken"
+        },
+        "authority": {
+          "ref": "AuthorityVersion"
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeRPC": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "rpc"
+        },
+        "id": {
+          "ref": "RequestID"
+        },
+        "body": {
+          "type": "string"
+        },
+        "chainId": {
+          "ref": "EthereumChainID"
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeResponseRequest": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "getResponse"
+        },
+        "id": {
+          "ref": "RequestID"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeBadgeUpdate": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "updatePendingRequestBadge"
+        },
+        "hasPendingRequests": {
+          "type": "boolean"
+        }
+      },
+      "optional": {}
+    },
+    "RuntimeApplyCompletedResponse": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "applyCompletedResponse"
+        },
+        "id": {
+          "ref": "RequestID"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestToken": {
+          "ref": "RequestToken"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "ContentToWorker": {
+      "oneOf": [
+        {
+          "ref": "RuntimeRPC"
+        },
+        {
+          "ref": "RuntimeDappRequest"
+        },
+        {
+          "ref": "RuntimeManualSwitchIntent"
+        },
+        {
+          "ref": "RuntimeResponseRequest"
+        },
+        {
+          "ref": "RuntimeConfigurationRequest"
+        },
+        {
+          "ref": "RuntimeDisconnect"
+        }
+      ]
+    },
+    "PopupToWorker": {
+      "oneOf": [
+        {
+          "ref": "RuntimeApplyCompletedResponse"
+        },
+        {
+          "ref": "RuntimeConfigurationRequest"
+        },
+        {
+          "ref": "RuntimeBadgeUpdate"
+        },
+        {
+          "ref": "ResponseReady"
+        }
+      ]
+    },
+    "WorkerToContent": {
+      "oneOf": [
+        {
+          "ref": "WorkflowProbe"
+        },
+        {
+          "ref": "ManualSwitchIntent"
+        },
+        {
+          "ref": "ConfigurationInvalidated"
+        },
+        {
+          "ref": "ResponseReady"
+        }
+      ]
+    },
+    "PopupToContent": {
+      "oneOf": [
+        {
+          "ref": "WorkflowProbe"
+        },
+        {
+          "ref": "ManualSwitchIntent"
+        }
+      ]
+    },
+    "WorkerToPopup": {
+      "ref": "PendingRequestAvailable"
+    },
+    "WorkerRequest": {
+      "oneOf": [
+        {
+          "ref": "ContentToWorker"
+        },
+        {
+          "ref": "PopupToWorker"
+        }
+      ]
+    },
+    "PageToContentMessage": {
+      "ref": "PageToContent"
+    },
+    "ContentMessage": {
+      "oneOf": [
+        {
+          "ref": "WorkerToContent"
+        },
+        {
+          "ref": "PopupToContent"
+        }
+      ]
+    },
+    "WorkflowVersion": {
+      "constant": "WORKFLOW_VERSION"
+    },
+    "PopupQueueUnavailable": {
+      "type": "object",
+      "required": {
+        "status": {
+          "const": "unavailable"
+        }
+      },
+      "optional": {}
+    },
+    "ErrorCode": {
+      "type": "wholeNumber",
+      "minimum": -9223372036854775808,
+      "maximum": 9223372036854775808
+    },
+    "RuntimeApplyCompletedReply": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "applied": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "missing": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
+    }
+  },
+  "depthReservations": {
+    "NativeResponse": 1,
+    "RPCResponse": 1,
+    "PageResponse": 1
+  }
+}

@@ -2491,7 +2491,12 @@ extension PopupRequestSessionsTests {
         for provider in ["unknown", "multiple"] {
             var invalidSelection = validSelection
             invalidSelection["coin"] = provider
-            selections.append([validSelection, invalidSelection])
+            XCTAssertThrowsError(try popupCommand(
+                subject: "approveRequest", id: 40,
+                requestToken: "00000000-0000-4000-8000-000000000040",
+                reviewToken: "00000000-0000-4000-8000-000000000041",
+                payload: ["selectedAccounts": [validSelection, invalidSelection]]
+            ), provider)
         }
         for (key, value) in [
             ("address", firstAccount.address.uppercased()),

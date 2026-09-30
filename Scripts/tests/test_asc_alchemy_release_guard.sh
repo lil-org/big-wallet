@@ -757,6 +757,7 @@ record_event() {
   fi
 }
 require_cmd() { :; }
+validate_wire_protocol_sources() { record_event protocol; }
 validate_alchemy_release_inputs() { record_event inputs; }
 validate_export_options() { :; }
 validate_local_version_sources() { :; }
@@ -883,10 +884,11 @@ run_orchestration() {
   set -e
 }
 
-for failed_gate in inputs worker artifact-validation upload receipt none; do
+for failed_gate in protocol inputs worker artifact-validation upload receipt none; do
   run_orchestration "publish-$failed_gate" publish "$failed_gate"
   if [[ "$failed_gate" == none ]]; then
     [[ "$orchestration_status" -eq 0 ]] || fail "publish fixture failed"
+    assert_event_before protocol inputs
     assert_event_before inputs lookup
     assert_event_before worker artifact-validation
     assert_event_before artifact-validation upload
@@ -904,6 +906,7 @@ for failed_gate in inputs worker artifact-validation upload receipt none; do
     [[ "$orchestration_status" -ne 0 && ! -s "$orchestration_stdout" ]] \
       || fail "$orchestration_case produced a successful result"
     case "$failed_gate" in
+      protocol) assert_no_event inputs; assert_no_event lookup ;;
       inputs) assert_no_event lookup ;;
       worker|artifact-validation) assert_no_event upload; assert_no_event receipt ;;
       upload) assert_no_event receipt ;;
@@ -935,14 +938,16 @@ for failed_gate in receipt artifact-validation worker none; do
     assert_no_event review-boundary
   fi
 done
-for failed_gate in inputs none; do
+for failed_gate in protocol inputs none; do
   run_orchestration "preflight-$failed_gate" publish_check "$failed_gate"
   if [[ "$failed_gate" == none ]]; then
     [[ "$orchestration_status" -eq 0 ]] || fail "valid preflight failed"
+    assert_event_before protocol inputs
     grep -F -x 'inputs|' "$orchestration_events" >/dev/null \
       || fail "preflight skipped release validation"
   else
     [[ "$orchestration_status" -ne 0 ]] || fail "preflight ignored $failed_gate failure"
+    if [[ "$failed_gate" == protocol ]]; then assert_no_event inputs; fi
   fi
 done
 

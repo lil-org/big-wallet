@@ -180,14 +180,30 @@ function bigWalletPageMessage(event) {
         event.data.direction !== bigWalletPageDirection) {
         return;
     }
-    const generation = event.data.providerGeneration;
-    if (event.data.kind === "rpc") {
-        bigWalletRPC(event.data.message, generation);
-    } else if (event.data.kind === "request") {
-        if (event.data.message?.provider === "unknown") { return; }
-        bigWalletEnqueue(event.data.message, generation, event.data.observedRevision);
-    } else if (event.data.kind === "disconnect") {
-        bigWalletDisconnect(event.data.message, generation);
+    const envelope = bigWalletWire.decodeMessage("PageToContent", event.data);
+    if (!envelope) {
+        const {message, kind, providerGeneration: generation} = event.data;
+        if (!bigWalletMatchesGeneration(generation) || !bigWalletWire.isRecord(message) ||
+            !bigWalletWire.isValidRequestId(message.id)) { return; }
+        if (kind === "rpc") {
+            bigWalletPostRPC(message.id, undefined, generation);
+        } else if (["ethereum", "solana"].includes(message.provider)) {
+            if (kind === "request" && typeof message.name === "string") {
+                bigWalletDeliverFailure(message, generation);
+            } else if (kind === "disconnect") {
+                bigWalletPostDisconnect(message, undefined, generation);
+            }
+        }
+        return;
+    }
+    const generation = envelope.providerGeneration;
+    if (envelope.kind === "rpc") {
+        bigWalletRPC(envelope.message, generation);
+    } else if (envelope.kind === "request") {
+        if (envelope.message.provider === "unknown") { return; }
+        bigWalletEnqueue(envelope.message, generation, envelope.observedRevision);
+    } else if (envelope.kind === "disconnect") {
+        bigWalletDisconnect(envelope.message, generation);
     }
 }
 
@@ -376,7 +392,7 @@ async function bigWalletReadResponse(state) {
         }), bigWalletResponsePollTimeout);
     } catch {}
     if (!bigWalletIsCurrent(state, "waiting")) { return; }
-    if (bigWalletWire.hasExactKeys(response, ["id", "missing"]) &&
+    if (bigWalletWire.isMessage("NativeStatus", response) &&
         response.id === state.message.id && response.missing === true) {
         bigWalletFail(state);
         return;
@@ -391,7 +407,7 @@ async function bigWalletReadResponse(state) {
 
 function bigWalletRetryResponse(state, response, startedAt) {
     const retryDelay = document.visibilityState === "visible" ? 1000 : 5000;
-    if (bigWalletWire.hasExactKeys(response, ["id", "pending"]) &&
+    if (bigWalletWire.isMessage("NativeStatus", response) &&
         response.id === state.message.id && response.pending === true) {
         state.responseFailureMilliseconds = 0;
         state.lastResponseFailureAt = null;
@@ -602,12 +618,9 @@ function bigWalletRuntimeMessage(
     contentBuildVersion
 ) {
 
-    if (bigWalletWire.hasExactKeys(request, [
-        "nonce", "subject", "workflowVersion",
-    ]) &&
-        request.subject === "workflowProbe" &&
-        request.workflowVersion === bigWalletWorkflowVersion &&
-        bigWalletWire.isPrivateToken(request.nonce) &&
+    request = bigWalletWire.decodeMessage(senderContext.kind === "worker" ? "WorkerToContent" : "PopupToContent", request);
+    if (!request) { sendResponse(); return true; }
+    if (request.subject === "workflowProbe" &&
         typeof contentBuildVersion === "string" &&
         contentBuildVersion.length > 0) {
         sendResponse({
@@ -639,10 +652,7 @@ function bigWalletRuntimeMessage(
     }
     if (request?.subject === bigWalletWire.MANUAL_SWITCH_INTENT_SUBJECT) {
         const identity = bigWalletCurrentIdentity();
-        if (!bigWalletWire.hasExactKeys(request, [
-                "configurationKey", "subject", "workflowVersion",
-            ]) || request.workflowVersion !== bigWalletWorkflowVersion ||
-            request.configurationKey !== identity?.configurationKey ||
+        if (request.configurationKey !== identity?.configurationKey ||
             typeof bigWalletProviderGeneration !== "string") {
             sendResponse();
             return true;

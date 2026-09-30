@@ -15,6 +15,7 @@ unset _asc_entrypoint_source _asc_entrypoint_directory
 require_cmd asc
 require_cmd git
 require_cmd jq
+validate_wire_protocol_sources
 
 mode="${1:-version}"
 xcode_version_files=(

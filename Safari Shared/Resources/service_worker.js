@@ -1,6 +1,6 @@
 // ∅ 2026 lil org
 
-importScripts("bridge_wire.js");
+importScripts("protocol.generated.js", "bridge_wire.js");
 
 const WIRE = BigWalletBridgeWire;
 const WORKFLOW_VERSION = WIRE.WORKFLOW_VERSION;
@@ -47,12 +47,8 @@ function nativeRequestIdentity(request) {
 }
 
 function nativeRequestStatus(response, id) {
-    for (const status of ["pending", "ready", "missing", "unavailable"]) {
-        if (WIRE.hasExactKeys(response, ["id", status]) && response.id === id && response[status] === true) {
-            return response;
-        }
-    }
-    return undefined;
+    const decoded = WIRE.decodeMessage("NativeStatus", response);
+    return decoded?.id === id ? decoded : undefined;
 }
 
 function pageFailure(id, provider, name, message = "Failed to communicate with Big Wallet", code = -32603) {
@@ -64,10 +60,9 @@ function pageConfigurationFailure() {
 }
 
 function decodedNativeDelivery(response, id) {
-    if (WIRE.hasExactKeys(response, ["id", "response", "state"]) && response.id === id) {
-        const terminal = WIRE.decodeNativeResponse(response.response, id);
-        const state = WIRE.decodeConfigurationSnapshot(response.state);
-        return terminal && state ? {terminal, state} : null;
+    const delivery = WIRE.decodeMessage("NativeDelivery", response);
+    if (delivery?.id === id && delivery.response.id === id) {
+        return {terminal: delivery.response, state: delivery.state};
     }
     const terminal = WIRE.decodeNativeResponse(response, id);
     return terminal?.kind === "error" ? {terminal, state: null} : null;
@@ -88,14 +83,13 @@ async function readNativeConfiguration(configurationKey, privateBrowsing = false
     const response = await WIRE.withTimeout(sendNativeMessage({
         subject: "getLatestConfiguration", id, configurationKey, workflowVersion: WORKFLOW_VERSION,
     }, privateBrowsing), TRANSPORT_TIMEOUT);
-    return WIRE.hasExactKeys(response, ["id", "state"]) && response.id === id
-        ? WIRE.decodeConfigurationSnapshot(response.state) : null;
+    const decoded = WIRE.decodeMessage("NativeConfigurationReply", response);
+    return decoded?.id === id ? decoded.state ?? null : null;
 }
 
 async function latestConfiguration(request, context) {
     const identity = requestIdentity(request, context);
-    if (!identity || !WIRE.hasExactKeys(request, ["configurationKey", "host", "subject", "workflowVersion"]) ||
-        request.workflowVersion !== WORKFLOW_VERSION) { return pageConfigurationFailure(); }
+    if (!identity) { return pageConfigurationFailure(); }
     if (context.privateBrowsing) {
         return {kind: "configurationError", error: {code: 4200, message: privateBrowsingUnsupportedMessage()}};
     }
@@ -108,14 +102,7 @@ async function latestConfiguration(request, context) {
 async function handleDappRequest(request, context) {
     const identity = requestIdentity(request, context);
     const message = request.message;
-    if (!identity || !WIRE.hasExactKeys(request, ["admissionDeadline", "authority", "configurationKey",
-            "enqueueAttempt", "host", "message", "subject", "workflowVersion"]) ||
-        request.workflowVersion !== WORKFLOW_VERSION || !WIRE.isAuthorityVersion(request.authority) ||
-        !Number.isSafeInteger(request.admissionDeadline) || request.admissionDeadline <= 0 ||
-        !WIRE.isPrivateToken(request.enqueueAttempt) ||
-        !WIRE.hasExactKeys(message, ["body", "id", "name", "provider"]) ||
-        !WIRE.isValidRequestId(message.id) || typeof message.name !== "string" ||
-        !WIRE.isRecord(message.body) || !["ethereum", "solana"].includes(message.provider)) { return undefined; }
+    if (!identity || !["ethereum", "solana"].includes(message.provider)) { return undefined; }
     if (context.privateBrowsing) {
         return pageFailure(message.id, message.provider, message.name, privateBrowsingUnsupportedMessage(), 4200);
     }
@@ -145,11 +132,7 @@ async function handleDappRequest(request, context) {
 }
 
 function validContentResponseRequest(request, context) {
-    return !context.privateBrowsing && WIRE.hasExactKeys(request, [
-        "configurationKey", "id", "requestToken", "subject", "workflowVersion",
-    ]) && request.workflowVersion === WORKFLOW_VERSION &&
-        context.identity?.configurationKey === request.configurationKey &&
-        WIRE.isValidRequestId(request.id) && WIRE.isRequestToken(request.requestToken);
+    return !context.privateBrowsing && context.identity?.configurationKey === request.configurationKey;
 }
 
 async function handleGetResponse(request, context) {
@@ -177,9 +160,8 @@ async function acknowledgeCompletedResponse(request) {
     const response = await WIRE.withTimeout(sendNativeMessage({
         ...nativeRequestIdentity(request), subject: "acknowledgeResponse",
     }, false), TRANSPORT_TIMEOUT);
-    return response?.id === request.id && (
-        WIRE.hasExactKeys(response, ["id", "acknowledged"]) && response.acknowledged === true ||
-        WIRE.hasExactKeys(response, ["id", "missing"]) && response.missing === true);
+    return WIRE.isMessage("NativeAcknowledgementReply", response) && response.id === request.id &&
+        (response.acknowledged === true || response.missing === true);
 }
 
 function consumeStoredResponse(request) {
@@ -198,42 +180,35 @@ function consumeStoredResponse(request) {
 }
 
 async function applyCompletedResponse(request, context) {
-    if (context.privateBrowsing || !requestIdentity(request, context) ||
-        !WIRE.hasExactKeys(request, ["configurationKey", "host", "id", "requestToken", "subject", "workflowVersion"]) ||
-        request.workflowVersion !== WORKFLOW_VERSION || !WIRE.isValidRequestId(request.id) ||
-        !WIRE.isRequestToken(request.requestToken)) { return undefined; }
+    if (context.privateBrowsing || !requestIdentity(request, context)) { return undefined; }
     const completed = await consumeStoredResponse(request);
     return completed?.delivery ? {applied: true}
         : completed?.status?.missing ? completed.status : undefined;
 }
 
 async function disconnect(request, context) {
-    if (!WIRE.isValidDisconnectRequest(request) || !requestIdentity(request, context) ||
-        !WIRE.hasExactKeys(request, ["subject", "id", "provider", "host", "configurationKey", "attempt", "authority", "workflowVersion"]) ||
-        !WIRE.isPrivateToken(request.attempt) || !WIRE.isAuthorityVersion(request.authority) ||
-        request.workflowVersion !== WORKFLOW_VERSION || context.privateBrowsing) { return undefined; }
+    if (!requestIdentity(request, context) || context.privateBrowsing) { return undefined; }
     const response = await WIRE.withTimeout(sendNativeMessage({
         subject: "disconnect", id: request.id, provider: request.provider,
         configurationKey: request.configurationKey, attempt: request.attempt, authority: request.authority,
         workflowVersion: WORKFLOW_VERSION,
     }, false), TRANSPORT_TIMEOUT);
-    const state = WIRE.decodeConfigurationSnapshot(response?.state);
-    if (response?.id !== request.id || !state) { return pageFailure(request.id, request.provider, "revokePermissions"); }
-    if (WIRE.hasExactKeys(response, ["id", "state", "revoked"]) && response.revoked === true) {
+    const decoded = WIRE.decodeMessage("NativeDisconnectReply", response);
+    const state = decoded?.state;
+    if (decoded?.id !== request.id || !state) { return pageFailure(request.id, request.provider, "revokePermissions"); }
+    if (decoded.revoked === true) {
         await broadcastConfigurationInvalidated(request.configurationKey);
         return {id: request.id, provider: request.provider, name: "revokePermissions",
             kind: "result", result: null, approvalCommitted: false, state};
     }
-    if (WIRE.hasExactKeys(response, ["id", "state", "stale"]) && response.stale === true) {
+    if (decoded.stale === true) {
         return {...pageFailure(request.id, request.provider, "revokePermissions", "Authorization changed while the request was pending", 4100), state};
     }
     return pageFailure(request.id, request.provider, "revokePermissions");
 }
 
 async function handleRPC(request, context) {
-    if (!WIRE.hasExactKeys(request, ["body", "chainId", "id", "subject", "workflowVersion"]) ||
-        request.workflowVersion !== WORKFLOW_VERSION || !WIRE.isValidRequestId(request.id) ||
-        typeof request.body !== "string" || !WIRE.isCanonicalEthereumChainId(request.chainId) || context.privateBrowsing) {
+    if (context.privateBrowsing) {
         return pageFailure(request?.id, "ethereum", null);
     }
     try {
@@ -307,10 +282,8 @@ async function recoveryAdmissionWindows() {
 }
 
 function validRecoveryRequest(request) {
-    return WIRE.hasExactKeys(request, ["id", "requestToken", "configurationKey", "manual", "state"]) &&
-        WIRE.isValidRequestId(request.id) && WIRE.isRequestToken(request.requestToken) &&
-        WIRE.configurationIdentityForURL(request.configurationKey)?.configurationKey === request.configurationKey &&
-        typeof request.manual === "boolean" && ["pending", "approved", "completed"].includes(request.state);
+    return WIRE.isMessage("RecoveryRequest", request) &&
+        WIRE.configurationIdentityForURL(request.configurationKey)?.configurationKey === request.configurationKey;
 }
 
 function recoverRequests() {
@@ -324,9 +297,8 @@ function recoverRequests() {
         const response = await WIRE.withTimeout(sendNativeMessage({
             subject: "getRecoveryRequests", id, workflowVersion: WORKFLOW_VERSION,
         }, false), TRANSPORT_TIMEOUT);
-        if (!WIRE.hasExactKeys(response, ["id", "requests"]) || response.id !== id ||
-            !Array.isArray(response.requests) || response.requests.length > WIRE.WORKFLOW_POLICY.maximumRetainedRequests ||
-            !response.requests.every(validRecoveryRequest)) { return; }
+        if (!WIRE.isMessage("NativeRecoveryReply", response) || response.id !== id ||
+            !response.requests?.every(validRecoveryRequest)) { return; }
         if (response.requests.length === 0) {
             await updateRecoveryAlarm(async () => {
                 const windows = await recoveryAdmissionWindows();
@@ -415,8 +387,7 @@ function beginManualSwitch(identity) {
 
 async function handleManualSwitchIntent(request, context) {
     const identity = requestIdentity(request, context);
-    if (context.privateBrowsing || !identity || !WIRE.hasExactKeys(request, ["configurationKey", "host", "subject", "workflowVersion"]) ||
-        request.workflowVersion !== WORKFLOW_VERSION) { return undefined; }
+    if (context.privateBrowsing || !identity) { return undefined; }
     return beginManualSwitch({...identity, favicon: identity.configurationKey.startsWith("file:") ? "" : context.favicon || ""});
 }
 
@@ -441,13 +412,7 @@ function notifyPendingRequestAvailable() {
 }
 
 function updateBadge(request, context) {
-    if (context.privateBrowsing ||
-        !WIRE.hasExactKeys(request, [
-            "hasPendingRequests", "subject", "workflowVersion",
-        ]) || typeof request.hasPendingRequests !== "boolean" ||
-        request.workflowVersion !== WORKFLOW_VERSION) {
-        return undefined;
-    }
+    if (context.privateBrowsing) { return undefined; }
     if (!hasConfiguredPopup()) { return clearBadgeWithoutPopup(); }
     try {
         return browser.action?.setBadgeText?.({
@@ -507,7 +472,7 @@ async function showManualSwitchApproval(response, configurationKey) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
             const opened = await WIRE.withTimeout(sendNativeMessage(request, false), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
-            if (WIRE.hasExactKeys(opened, ["id", "opened"]) && opened.id === response.id && opened.opened === true) {
+            if (WIRE.isMessage("NativeOpenReply", opened) && opened.id === response.id && opened.opened === true) {
                 return true;
             }
             const status = nativeRequestStatus(opened, response.id);
@@ -600,6 +565,12 @@ async function handleMessage(request, context) {
             provider, error: "Big Wallet was updated. Reload this page to continue.", errorCode: -32603,
         })), providersToDisconnect: []};
     }
+    const decoded = WIRE.decodeMessage(context.kind === "content" ? "ContentToWorker" : "PopupToWorker", request);
+    if (!decoded) {
+        return request.subject === "rpc" && WIRE.isValidRequestId(request.id)
+            ? pageFailure(request.id, "ethereum", null) : undefined;
+    }
+    request = decoded;
     switch (request.subject) {
     case "rpc": return handleRPC(request, context);
     case "message-to-wallet": return handleDappRequest(request, context);

@@ -34,6 +34,9 @@ fixture="$test_root/repository"
 for relative_file in \
     Scripts/asc/common.sh \
     Scripts/asc/bump.sh \
+    Scripts/check_wire_protocol.sh \
+    Scripts/generate_wire_protocol.mjs \
+    Scripts/inpage_provider_toolchain.sh \
     Scripts/alchemy_jwt_request_proof_key_common.sh \
     Wallet.xcodeproj/project.pbxproj \
     "App iOS/Info.plist" \
@@ -42,9 +45,13 @@ for relative_file in \
     "Safari Shared/Resources/manifest.json" \
     "Safari macOS/Resources/manifest.json" \
     "Safari Shared/Resources/bridge_wire.js" \
+    "Safari Shared/Protocol/wire-protocol.json" \
+    "Safari Shared/Protocol/WireProtocol.generated.swift" \
+    "Safari Shared/Resources/protocol.generated.js" \
     "Safari Shared/Resources/inpage.js" \
     "Workers/alchemy-jwt/.nvmrc"
 do
+    /bin/mkdir -p "$fixture/${relative_file%/*}"
     /bin/cp -p \
         "$repository_directory/$relative_file" \
         "$fixture/$relative_file"
@@ -235,6 +242,8 @@ prepare_bump_fixture() {
     for relative_file in \
         Scripts/asc/common.sh \
         Scripts/asc/bump.sh \
+        Scripts/check_wire_protocol.sh \
+        Scripts/generate_wire_protocol.mjs \
         Scripts/alchemy_jwt_request_proof_key_common.sh \
         Scripts/build_inpage_provider.sh \
         Scripts/inpage_provider_toolchain.sh \
@@ -245,6 +254,9 @@ prepare_bump_fixture() {
         "Safari Shared/Resources/manifest.json" \
         "Safari macOS/Resources/manifest.json" \
         "Safari Shared/Resources/bridge_wire.js" \
+        "Safari Shared/Protocol/wire-protocol.json" \
+        "Safari Shared/Protocol/WireProtocol.generated.swift" \
+        "Safari Shared/Resources/protocol.generated.js" \
         "Safari Shared/Resources/inpage.js" \
         "Workers/alchemy-jwt/.nvmrc"
     do
@@ -352,6 +364,16 @@ assert_no_bump_commit
 [ ! -s "$case_root/asc.log" ] || fail "stale generated bundle reached ASC"
 fixture_git diff --quiet -- 'Safari Shared/Resources/inpage.js' && fail "stale bundle was not regenerated"
 fixture_git diff --cached --quiet || fail "failed preflight staged files"
+
+prepare_bump_fixture stale-protocol
+printf '\n' >> "$fixture/Safari Shared/Resources/protocol.generated.js"
+fixture_git diff > "$case_root/before-check"
+if run_bump build; then fail "stale generated protocol allowed a bump"; fi
+assert_no_bump_commit
+[ ! -s "$case_root/asc.log" ] || fail "stale generated protocol reached ASC"
+fixture_git diff > "$case_root/after-check"
+/usr/bin/cmp "$case_root/before-check" "$case_root/after-check" || fail "protocol check modified files"
+fixture_git diff --cached --quiet || fail "protocol check staged files"
 
 prepare_bump_fixture stale-after
 /bin/mv "$fixture/Scripts/build_inpage_provider.sh" "$fixture/Scripts/build_inpage_provider_real.sh"
