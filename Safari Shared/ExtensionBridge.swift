@@ -263,16 +263,20 @@ actor ExtensionBridge {
 
         init?(rawValue: Any?) {
             guard let rawValue,
-                  let value = WireProtocol.decode(.revisions, value: rawValue) as? [String: Any],
-                  let ethereum = value["ethereum"] as? Int,
-                  let solana = value["solana"] as? Int else { return nil }
+                  let value = WireProtocol.decode(.revisions, value: rawValue) as? [String: Any] else { return nil }
+            self.init(validatedJSON: value)
+        }
+
+        fileprivate init?(validatedJSON: [String: Any]) {
+            guard let ethereum = validatedJSON["ethereum"] as? Int,
+                  let solana = validatedJSON["solana"] as? Int else { return nil }
             self.ethereum = ethereum
             self.solana = solana
         }
 
         init(from decoder: Decoder) throws {
             let wire = try WireProtocol.Revisions(from: decoder)
-            guard let value = Self(rawValue: wire.json) else {
+            guard let value = Self(validatedJSON: wire.json) else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: decoder.codingPath, debugDescription: "invalid provider revisions"
                 ))
@@ -294,15 +298,20 @@ actor ExtensionBridge {
 
         init?(rawValue: Any?) {
             guard let rawValue,
-                  let value = WireProtocol.decode(.authorityVersion, value: rawValue) as? [String: Any],
-                  let context = value["context"] as? String,
-                  let revisions = ProviderRevisions(rawValue: value["revisions"]) else { return nil }
+                  let value = WireProtocol.decode(.authorityVersion, value: rawValue) as? [String: Any] else { return nil }
+            self.init(validatedJSON: value)
+        }
+
+        init?(validatedJSON: [String: Any]) {
+            guard let context = validatedJSON["context"] as? String,
+                  let values = validatedJSON["revisions"] as? [String: Any],
+                  let revisions = ProviderRevisions(validatedJSON: values) else { return nil }
             self.init(context: context, revisions: revisions)
         }
 
         init(from decoder: Decoder) throws {
             let wire = try WireProtocol.AuthorityVersion(from: decoder)
-            guard let version = Self(rawValue: wire.json) else {
+            guard let version = Self(validatedJSON: wire.json) else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: decoder.codingPath, debugDescription: "invalid authority version"
                 ))

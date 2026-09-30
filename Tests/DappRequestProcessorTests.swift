@@ -770,6 +770,119 @@ final class DappRequestProcessorTests: XCTestCase {
         ) else { return XCTFail("Insufficient fees must be an invalid decision") }
     }
 
+    func testApprovalTransactionPreservesFullWidthExecutionQuantities() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let network = try XCTUnwrap(resolvedEthereumNetworkResolution().resolvedNetwork)
+        let original = Transaction(
+            from: account.address, to: account.address, nonce: "0x1", gas: "0x5208",
+            value: "0x0", data: "0x", preparedFee: .legacy(gasPrice: 10)
+        )
+        let action = SendTransactionAction(
+            transaction: original, resolvedNetwork: network,
+            walletId: "wallet", account: account
+        )
+        let maximum = Transaction.maximumUInt256
+        let fees: [PreparedTransactionFee] = [
+            .legacy(gasPrice: maximum),
+            .eip1559(maxPriorityFeePerGas: maximum - 1, maxFeePerGas: maximum),
+        ]
+        for fee in fees {
+            var reviewed = original
+            reviewed.nonce = "0x00" + maximum.toHexString()
+            reviewed.gas = "0x00" + maximum.toHexString()
+            reviewed.replacePreparedFee(fee, provenance: .init(source: .manual, for: fee))
+            reviewed.currentBaseFeePerGas = 1
+            reviewed.nextBaseFeePerGas = maximum
+            let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+                reviewed, reviewedNetwork: network,
+                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            ))
+            let rebuilt = try XCTUnwrap(execution.applying(to: action))
+            XCTAssertEqual(rebuilt.nonce, maximum.toHexString(withPrefix: true))
+            XCTAssertEqual(rebuilt.gas, maximum.toHexString(withPrefix: true))
+            XCTAssertEqual(rebuilt.preparedFee, fee)
+            XCTAssertEqual(rebuilt.feeProvenance, reviewed.feeProvenance)
+            XCTAssertEqual(rebuilt.currentBaseFeePerGas, maximum)
+            XCTAssertNil(rebuilt.nextBaseFeePerGas)
+        }
+    }
+
+    func testApprovalTransactionRejectsInvalidExecutionQuantitiesAtConstruction() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let network = try XCTUnwrap(resolvedEthereumNetworkResolution().resolvedNetwork)
+        let transaction = Transaction(
+            from: account.address, to: account.address, nonce: "0x1", gas: "0x5208",
+            value: "0x0", data: "0x", preparedFee: .legacy(gasPrice: 10)
+        )
+        let invalidQuantities: [String?] = [
+            nil,
+            "0x",
+            "-1",
+            (Transaction.maximumUInt256 + 1).toHexString(withPrefix: true),
+        ]
+        for quantity in invalidQuantities {
+            for field in [\Transaction.nonce, \Transaction.gas] {
+                var invalid = transaction
+                invalid[keyPath: field] = quantity
+                XCTAssertNil(DappApprovalDecision.TransactionExecution(
+                    invalid, reviewedNetwork: network,
+                    approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: account)
+                ))
+            }
+        }
+    }
+
+    func testApprovalTransactionRetainsSemanticRejectionsWhenApplying() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let network = try XCTUnwrap(resolvedEthereumNetworkResolution().resolvedNetwork)
+        let original = Transaction(
+            from: account.address, to: account.address, nonce: "0x1", gas: "0x5208",
+            value: "0x0", data: "0x", preparedFee: .legacy(gasPrice: 10)
+        )
+        let action = SendTransactionAction(
+            transaction: original, resolvedNetwork: network,
+            walletId: "wallet", account: account
+        )
+        let overflow = Transaction.maximumUInt256 + 1
+        let invalidEdits: [(String, (inout Transaction) -> Void)] = [
+            ("zero gas", { $0.gas = "0x0" }),
+            ("legacy fee overflow", { $0.preparedFee = .legacy(gasPrice: overflow) }),
+            ("priority fee overflow", {
+                $0.preparedFee = .eip1559(maxPriorityFeePerGas: overflow, maxFeePerGas: overflow)
+            }),
+            ("maximum fee overflow", {
+                $0.preparedFee = .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: overflow)
+            }),
+            ("priority exceeds maximum", {
+                $0.preparedFee = .eip1559(maxPriorityFeePerGas: 11, maxFeePerGas: 10)
+            }),
+            ("legacy priority provenance", { $0.feeProvenance.maxPriorityFeePerGas = .manual }),
+            ("legacy maximum provenance", { $0.feeProvenance.maxFeePerGas = .manual }),
+            ("dynamic legacy provenance", {
+                $0.preparedFee = .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 10)
+                $0.feeProvenance.gasPrice = .manual
+            }),
+            ("current base fee overflow", { $0.currentBaseFeePerGas = overflow }),
+            ("next base fee overflow", { $0.nextBaseFeePerGas = overflow }),
+        ]
+        for (name, edit) in invalidEdits {
+            var invalid = original
+            edit(&invalid)
+            let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+                invalid, reviewedNetwork: network,
+                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+            ), name)
+            XCTAssertNil(execution.applying(to: action), name)
+            guard case .failure(.staleTransaction) = DappApprovalValidator.resolve(
+                action: .approveTransaction(action), decision: .transaction(execution),
+                accounts: nil, networkResolver: { _ in nil }
+            ) else { return XCTFail("Invalid execution fields must remain stale: \(name)") }
+        }
+    }
+
     func testEmptyAccountSelectionDisconnectsAfterItsNetworkDisappears() async throws {
         let request = try XCTUnwrap(SafariRequest(json: [
             "id": 1,

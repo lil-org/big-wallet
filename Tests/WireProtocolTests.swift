@@ -46,8 +46,12 @@ final class WireProtocolTests: XCTestCase {
     }
 
     func testEveryNativeCommandFixtureAdaptsToItsDomainRequest() throws {
-        for fixture in try fixtures() where fixture.message == .nativeCommand && fixture.valid {
+        for fixture in try fixtures() where fixture.message == .nativeCommand {
             let data = try JSONSerialization.data(withJSONObject: fixture.value)
+            if !fixture.valid {
+                XCTAssertThrowsError(try JSONDecoder().decode(InternalSafariRequest.self, from: data), fixture.name)
+                continue
+            }
             let request = try JSONDecoder().decode(InternalSafariRequest.self, from: data)
             let json = try XCTUnwrap(fixture.value as? [String: Any])
             XCTAssertEqual(request.id, json["id"] as? Int, fixture.name)
@@ -59,6 +63,120 @@ final class WireProtocolTests: XCTestCase {
             )
             XCTAssertEqual(roundTrip.json as NSDictionary, json as NSDictionary, fixture.name)
         }
+    }
+
+    func testApprovalMappingPreservesSelectionAndAbsentOptionals() throws {
+        let accounts: [[String: Any]] = [
+            ["walletId": "first", "address": "0xABcd", "coin": "ethereum", "derivationPath": "m/44'/60'/0'/0/1"],
+            ["walletId": "second", "address": "CaseSensitive", "coin": "solana", "derivationPath": "m/44'/501'/0'/0'"],
+        ]
+        let body: [String: Any] = ["selectedAccounts": accounts, "chainId": "0xA", "cluster": "devnet"]
+        guard case .popup(.approveRequest(_, let payload)) = try popupCommand("approveRequest", payload: body).command else {
+            return XCTFail("Expected approval")
+        }
+        let mapped = try XCTUnwrap(payload.selectedAccounts)
+        XCTAssertEqual(mapped.map(\.walletId), ["first", "second"])
+        XCTAssertEqual(mapped.map(\.address), ["0xABcd", "CaseSensitive"])
+        XCTAssertEqual(mapped.map(\.coin), [.ethereum, .solana])
+        XCTAssertEqual(mapped.map(\.derivationPath), accounts.compactMap { $0["derivationPath"] as? String })
+        XCTAssertEqual(payload.chainId, "0xA")
+        XCTAssertEqual(payload.cluster, .devnet)
+
+        for body: [String: Any] in [[:], ["selectedAccounts": []]] {
+            guard case .popup(.approveRequest(_, let empty)) = try popupCommand("approveRequest", payload: body).command else {
+                return XCTFail("Expected approval")
+            }
+            XCTAssertEqual(empty.selectedAccounts?.count, body["selectedAccounts"] == nil ? nil : 0)
+            XCTAssertNil(empty.chainId)
+            XCTAssertNil(empty.cluster)
+        }
+    }
+
+    func testTransactionPayloadMappingPreservesNumbersAndEnums() throws {
+        for (interaction, value): (String, Any) in [("cancelled", 200), ("ended", 137.5)] {
+            let body: [String: Any] = ["interaction": interaction, "value": value]
+            guard case .popup(.setTransactionSpeed(_, let payload)) = try popupCommand("setTransactionSpeed", payload: body).command else {
+                return XCTFail("Expected speed change")
+            }
+            XCTAssertEqual(payload.interaction.rawValue, interaction)
+            XCTAssertEqual(payload.value, (value as? NSNumber)?.doubleValue)
+        }
+        let custom: [String: Any] = [
+            "mode": "custom", "nonce": "001", "maxPriorityFeePerGasGwei": "0.123456789",
+            "maxFeePerGasGwei": "2.000000001",
+        ]
+        guard case .popup(.applyTransactionEdits(_, .custom(let edits))) = try popupCommand("applyTransactionEdits", payload: custom).command,
+              case .popup(.applyTransactionEdits(_, .suggested)) = try popupCommand("applyTransactionEdits", payload: ["mode": "suggested"]).command,
+              case .popup(.resolveApprovalAlert(_, let alert)) = try popupCommand("resolveApprovalAlert", payload: ["action": "edit"]).command else {
+            return XCTFail("Expected mapped transaction commands")
+        }
+        XCTAssertEqual(edits.nonce, "001")
+        XCTAssertEqual(edits.maxPriorityFeePerGasGwei, "0.123456789")
+        XCTAssertEqual(edits.maxFeePerGasGwei, "2.000000001")
+        XCTAssertNil(edits.gasPriceGwei)
+        XCTAssertEqual(alert.action, .edit)
+    }
+
+    func testAuthorityMappingRetainsIntegerBoundsAcrossEntryPoints() throws {
+        let revisions: [String: Any] = ["ethereum": 0, "solana": 9_007_199_254_740_991]
+        let authority: [String: Any] = ["context": String(repeating: "a", count: 64), "revisions": revisions]
+        let command: [String: Any] = [
+            "id": 1, "workflowVersion": WireProtocol.workflowVersion, "subject": "disconnect",
+            "configurationKey": "https://wallet.example", "provider": "solana",
+            "attempt": String(repeating: "b", count: 32), "authority": authority,
+        ]
+        guard case .page(.disconnect(let disconnect)) = try decodeJSON(InternalSafariRequest.self, command).command else {
+            return XCTFail("Expected disconnect")
+        }
+        let decoded = try decodeJSON(ExtensionBridge.AuthorityVersion.self, authority)
+        let raw = try XCTUnwrap(ExtensionBridge.AuthorityVersion(rawValue: authority))
+        XCTAssertEqual(disconnect.provider, .solana)
+        XCTAssertEqual(disconnect.authority, decoded)
+        XCTAssertEqual(raw, decoded)
+        XCTAssertEqual(decoded.context, authority["context"] as? String)
+        XCTAssertEqual(decoded.revisions.ethereum, 0)
+        XCTAssertEqual(decoded.revisions.solana, 9_007_199_254_740_991)
+        XCTAssertEqual(try decodeJSON(ExtensionBridge.ProviderRevisions.self, revisions), decoded.revisions)
+        XCTAssertEqual(ExtensionBridge.ProviderRevisions(rawValue: revisions), decoded.revisions)
+
+        for invalid: Any in [true, -1, 1.5, 9_007_199_254_740_992] {
+            let invalidRevisions: [String: Any] = ["ethereum": invalid, "solana": 0]
+            let invalidAuthority: [String: Any] = ["context": authority["context"]!, "revisions": invalidRevisions]
+            var invalidCommand = command
+            invalidCommand["authority"] = invalidAuthority
+            XCTAssertThrowsError(try decodeJSON(InternalSafariRequest.self, invalidCommand))
+            XCTAssertThrowsError(try decodeJSON(ExtensionBridge.AuthorityVersion.self, invalidAuthority))
+            XCTAssertThrowsError(try decodeJSON(ExtensionBridge.ProviderRevisions.self, invalidRevisions))
+            XCTAssertNil(ExtensionBridge.AuthorityVersion(rawValue: invalidAuthority))
+            XCTAssertNil(ExtensionBridge.ProviderRevisions(rawValue: invalidRevisions))
+        }
+    }
+
+    func testStandalonePayloadDecodersRetainTheirStrictBoundaries() throws {
+        let allFixtures = try fixtures()
+        func check<Value: Decodable>(_ type: Value.Type, message: WireProtocol.Message, invalid: [[String: Any]] = []) throws {
+            for fixture in allFixtures where fixture.message == message {
+                if fixture.valid {
+                    XCTAssertNoThrow(try decodeJSON(type, fixture.value), fixture.name)
+                    var extra = try XCTUnwrap(fixture.value as? [String: Any])
+                    extra["unexpected"] = true
+                    XCTAssertThrowsError(try decodeJSON(type, extra), fixture.name)
+                } else {
+                    XCTAssertThrowsError(try decodeJSON(type, fixture.value), fixture.name)
+                }
+            }
+            for value in invalid { XCTAssertThrowsError(try decodeJSON(type, value), message.rawValue) }
+        }
+        try check(InternalSafariRequest.SelectedAccount.self, message: .selectedAccount)
+        try check(InternalSafariRequest.ApprovalPayload.self, message: .approvalPayload, invalid: [["cluster": "mainnet"]])
+        try check(InternalSafariRequest.TransactionSpeedPayload.self, message: .transactionSpeedPayload, invalid: [
+            ["interaction": "ended", "value": true], ["interaction": "ended", "value": NSNull()],
+            ["interaction": "unknown", "value": 100],
+        ])
+        try check(InternalSafariRequest.TransactionEditsPayload.self, message: .transactionEditsPayload, invalid: [["mode": "unknown"]])
+        try check(InternalSafariRequest.ApprovalAlertPayload.self, message: .approvalAlertPayload, invalid: [["action": "unknown"]])
+        try check(ExtensionBridge.ProviderRevisions.self, message: .revisions)
+        try check(ExtensionBridge.AuthorityVersion.self, message: .authorityVersion)
     }
 
     func testEveryDappFixtureAdaptsWithoutLosingOpaquePayloads() throws {
@@ -176,5 +294,17 @@ final class WireProtocolTests: XCTestCase {
 
     private func canonicalJSON(_ value: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys])
+    }
+
+    private func decodeJSON<Value: Decodable>(_ type: Value.Type, _ value: Any) throws -> Value {
+        try JSONDecoder().decode(type, from: JSONSerialization.data(withJSONObject: value))
+    }
+
+    private func popupCommand(_ subject: String, payload: [String: Any]) throws -> InternalSafariRequest {
+        try decodeJSON(InternalSafariRequest.self, [
+            "id": 1, "workflowVersion": WireProtocol.workflowVersion, "subject": subject,
+            "requestToken": "00000000-0000-4000-8000-000000000001",
+            "reviewToken": "00000000-0000-4000-8000-000000000002", "payload": payload,
+        ])
     }
 }

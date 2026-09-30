@@ -24,11 +24,6 @@ enum DappApprovalDecision: Equatable, Sendable {
         }
     }
 
-    enum TransactionFee: Equatable, Sendable {
-        case legacy(gasPrice: String)
-        case eip1559(maxPriorityFeePerGas: String, maxFeePerGas: String)
-    }
-
     struct NetworkIdentity: Equatable, Sendable {
 
         enum Source: String, Equatable, Sendable {
@@ -86,11 +81,11 @@ enum DappApprovalDecision: Equatable, Sendable {
 
     struct TransactionExecution: Equatable, Sendable {
         let approvedAccount: WalletAccountDescriptor
-        let nonce: String
-        let gasLimit: String
-        let fee: TransactionFee
+        let nonce: BigUInt
+        let gasLimit: BigUInt
+        let fee: PreparedTransactionFee
         let feeProvenance: TransactionFeeProvenance
-        let feeBasisBaseFeePerGas: String?
+        let feeBasisBaseFeePerGas: BigUInt?
         let reviewedNetwork: NetworkIdentity
 
         init?(
@@ -108,21 +103,12 @@ enum DappApprovalDecision: Equatable, Sendable {
                   let networkIdentity = NetworkIdentity(reviewedNetwork) else {
                 return nil
             }
-            self.nonce = nonce.toHexString(withPrefix: true)
+            self.nonce = nonce
             self.approvedAccount = approvedAccount
-            self.gasLimit = gasLimit.toHexString(withPrefix: true)
-            switch preparedFee {
-            case .legacy(let gasPrice):
-                fee = .legacy(gasPrice: gasPrice.toHexString(withPrefix: true))
-            case .eip1559(let priority, let maximum):
-                fee = .eip1559(
-                    maxPriorityFeePerGas: priority.toHexString(withPrefix: true),
-                    maxFeePerGas: maximum.toHexString(withPrefix: true)
-                )
-            }
+            self.gasLimit = gasLimit
+            fee = preparedFee
             feeProvenance = transaction.feeProvenance
-            feeBasisBaseFeePerGas = transaction.feeBasisBaseFeePerGas?
-                .toHexString(withPrefix: true)
+            feeBasisBaseFeePerGas = transaction.feeBasisBaseFeePerGas
             self.reviewedNetwork = networkIdentity
         }
 
@@ -135,49 +121,26 @@ enum DappApprovalDecision: Equatable, Sendable {
         private func applyingTransactionFields(
             to transaction: Transaction
         ) -> Transaction? {
-            guard Self.uint256(nonce) != nil,
-                  let gasLimitValue = Self.uint256(gasLimit),
-                  !gasLimitValue.isZero else { return nil }
-            let preparedFee: PreparedTransactionFee
+            guard !gasLimit.isZero,
+                  fee.isStructurallyValid,
+                  feeBasisBaseFeePerGas.map(Transaction.isValidUInt256) != false else { return nil }
             switch fee {
-            case .legacy(let gasPrice):
-                guard let value = Self.uint256(gasPrice),
-                      feeProvenance.maxPriorityFeePerGas == nil,
+            case .legacy:
+                guard feeProvenance.maxPriorityFeePerGas == nil,
                       feeProvenance.maxFeePerGas == nil else { return nil }
-                preparedFee = .legacy(gasPrice: value)
-            case .eip1559(let priority, let maximum):
-                guard let priorityValue = Self.uint256(priority),
-                      let maximumValue = Self.uint256(maximum),
-                      maximumValue >= priorityValue,
-                      feeProvenance.gasPrice == nil else { return nil }
-                preparedFee = .eip1559(
-                    maxPriorityFeePerGas: priorityValue,
-                    maxFeePerGas: maximumValue
-                )
-            }
-            guard preparedFee.isStructurallyValid else { return nil }
-            let feeBasis: BigUInt?
-            if let rawFeeBasis = feeBasisBaseFeePerGas {
-                guard let value = Self.uint256(rawFeeBasis) else { return nil }
-                feeBasis = value
-            } else {
-                feeBasis = nil
+            case .eip1559:
+                guard feeProvenance.gasPrice == nil else { return nil }
             }
             var result = transaction
-            result.nonce = nonce
-            result.gas = gasLimit
+            result.nonce = nonce.toHexString(withPrefix: true)
+            result.gas = gasLimit.toHexString(withPrefix: true)
             result.replacePreparedFee(
-                preparedFee,
+                fee,
                 provenance: feeProvenance
             )
-            result.currentBaseFeePerGas = feeBasis
+            result.currentBaseFeePerGas = feeBasisBaseFeePerGas
             result.nextBaseFeePerGas = nil
             return result
-        }
-
-        private static func uint256(_ value: String) -> BigUInt? {
-            guard value.count <= 66 else { return nil }
-            return EthereumQuantity.parseUInt256(value, allowPrefixless: true)
         }
     }
 

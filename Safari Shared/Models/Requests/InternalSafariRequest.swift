@@ -10,10 +10,14 @@ struct InternalSafariRequest: Decodable {
         let derivationPath: String
 
         init(from decoder: Decoder) throws {
-            let fields = NativeRequestFields(try WireProtocol.SelectedAccount(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.SelectedAccount(from: decoder).json)
+        }
+
+        fileprivate init(validatedJSON: [String: Any]) throws {
+            let fields = NativeRequestFields(validatedJSON)
             walletId = try fields.value("walletId")
             address = try fields.value("address")
-            coin = try fields.decode("coin")
+            coin = try fields.enumValue("coin")
             derivationPath = try fields.value("derivationPath")
         }
     }
@@ -24,10 +28,15 @@ struct InternalSafariRequest: Decodable {
         let cluster: Solana.Cluster?
 
         init(from decoder: Decoder) throws {
-            let fields = NativeRequestFields(try WireProtocol.ApprovalPayload(from: decoder).json)
-            selectedAccounts = try fields.decodeOptional("selectedAccounts")
+            try self.init(validatedJSON: WireProtocol.ApprovalPayload(from: decoder).json)
+        }
+
+        fileprivate init(validatedJSON: [String: Any]) throws {
+            let fields = NativeRequestFields(validatedJSON)
+            let accounts: [[String: Any]]? = try fields.optional("selectedAccounts")
+            selectedAccounts = try accounts?.map(SelectedAccount.init(validatedJSON:))
             chainId = try fields.optional("chainId")
-            cluster = try fields.decodeOptional("cluster")
+            cluster = try fields.optionalEnumValue("cluster")
         }
     }
 
@@ -38,8 +47,12 @@ struct InternalSafariRequest: Decodable {
         let value: Double
 
         init(from decoder: Decoder) throws {
-            let fields = NativeRequestFields(try WireProtocol.TransactionSpeedPayload(from: decoder).json)
-            interaction = try fields.decode("interaction")
+            try self.init(validatedJSON: WireProtocol.TransactionSpeedPayload(from: decoder).json)
+        }
+
+        fileprivate init(validatedJSON: [String: Any]) throws {
+            let fields = NativeRequestFields(validatedJSON)
+            interaction = try fields.enumValue("interaction")
             value = try fields.value("value")
         }
     }
@@ -56,7 +69,11 @@ struct InternalSafariRequest: Decodable {
         }
 
         init(from decoder: Decoder) throws {
-            let fields = NativeRequestFields(try WireProtocol.TransactionEditsPayload(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.TransactionEditsPayload(from: decoder).json)
+        }
+
+        fileprivate init(validatedJSON: [String: Any]) throws {
+            let fields = NativeRequestFields(validatedJSON)
             let mode: String = try fields.value("mode")
             if mode == "suggested" {
                 self = .suggested
@@ -75,8 +92,12 @@ struct InternalSafariRequest: Decodable {
         let action: TransactionApprovalAlertAction
 
         init(from decoder: Decoder) throws {
-            let fields = NativeRequestFields(try WireProtocol.ApprovalAlertPayload(from: decoder).json)
-            action = try fields.decode("action")
+            try self.init(validatedJSON: WireProtocol.ApprovalAlertPayload(from: decoder).json)
+        }
+
+        fileprivate init(validatedJSON: [String: Any]) throws {
+            let fields = NativeRequestFields(validatedJSON)
+            action = try fields.enumValue("action")
         }
     }
 
@@ -174,11 +195,14 @@ struct InternalSafariRequest: Decodable {
         case "getLatestConfiguration":
             command = .page(try .getLatestConfiguration(configurationKey: fields.value("configurationKey")))
         case "disconnect":
+            guard let authority = ExtensionBridge.AuthorityVersion(validatedJSON: try fields.value("authority")) else {
+                throw fields.invalid("authority")
+            }
             command = .page(.disconnect(try DisconnectIdentity(
                 configurationKey: fields.value("configurationKey"),
-                provider: fields.decode("provider"),
+                provider: fields.enumValue("provider"),
                 attempt: fields.value("attempt"),
-                authority: fields.decode("authority")
+                authority: authority
             )))
         case "getResponse":
             command = .page(.getResponse(try fields.responseIdentity()))
@@ -204,13 +228,21 @@ struct InternalSafariRequest: Decodable {
         case "retryApproval":
             command = .popup(.retryApproval(try fields.popupIdentity()))
         case "approveRequest":
-            command = .popup(try .approveRequest(fields.popupIdentity(), fields.decode("payload")))
+            command = .popup(try .approveRequest(
+                fields.popupIdentity(), ApprovalPayload(validatedJSON: fields.value("payload"))
+            ))
         case "setTransactionSpeed":
-            command = .popup(try .setTransactionSpeed(fields.popupIdentity(), fields.decode("payload")))
+            command = .popup(try .setTransactionSpeed(
+                fields.popupIdentity(), TransactionSpeedPayload(validatedJSON: fields.value("payload"))
+            ))
         case "applyTransactionEdits":
-            command = .popup(try .applyTransactionEdits(fields.popupIdentity(), fields.decode("payload")))
+            command = .popup(try .applyTransactionEdits(
+                fields.popupIdentity(), TransactionEditsPayload(validatedJSON: fields.value("payload"))
+            ))
         case "resolveApprovalAlert":
-            command = .popup(try .resolveApprovalAlert(fields.popupIdentity(), fields.decode("payload")))
+            command = .popup(try .resolveApprovalAlert(
+                fields.popupIdentity(), ApprovalAlertPayload(validatedJSON: fields.value("payload"))
+            ))
         default:
             throw fields.invalid("subject")
         }
@@ -232,16 +264,14 @@ private struct NativeRequestFields {
         return try value(key)
     }
 
-    func decode<Value: Decodable>(_ key: String) throws -> Value {
-        guard let value = json[key] else { throw invalid(key) }
-        return try JSONDecoder().decode(Value.self, from: JSONSerialization.data(
-            withJSONObject: value, options: .fragmentsAllowed
-        ))
+    func enumValue<Value: RawRepresentable>(_ key: String) throws -> Value where Value.RawValue == String {
+        guard let result = Value(rawValue: try value(key)) else { throw invalid(key) }
+        return result
     }
 
-    func decodeOptional<Value: Decodable>(_ key: String) throws -> Value? {
+    func optionalEnumValue<Value: RawRepresentable>(_ key: String) throws -> Value? where Value.RawValue == String {
         guard json[key] != nil else { return nil }
-        return try decode(key)
+        return try enumValue(key)
     }
 
     func token() throws -> ExtensionBridge.RequestToken {
