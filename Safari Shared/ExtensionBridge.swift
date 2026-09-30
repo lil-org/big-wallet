@@ -300,7 +300,7 @@ actor ExtensionBridge {
         }
 
         init(from decoder: Decoder) throws {
-            let wire = try WireProtocol.Revisions(from: decoder)
+            let wire = try WireProtocol.object(.revisions, from: decoder)
             guard let value = Self(validatedJSON: wire.json) else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: decoder.codingPath, debugDescription: "invalid provider revisions"
@@ -335,7 +335,7 @@ actor ExtensionBridge {
         }
 
         init(from decoder: Decoder) throws {
-            let wire = try WireProtocol.AuthorityVersion(from: decoder)
+            let wire = try WireProtocol.object(.authorityVersion, from: decoder)
             guard let version = Self(validatedJSON: wire.json) else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: decoder.codingPath, debugDescription: "invalid authority version"
@@ -410,12 +410,21 @@ actor ExtensionBridge {
         let fileURL: URL
         private let lock: CrossProcessFileLock
         private let stateLock = NSLock()
+        private var adoptedForExecution = false
         private var consumed = false
         private var released = false
 
         init(fileURL: URL, lock: CrossProcessFileLock) {
             self.fileURL = fileURL
             self.lock = lock
+        }
+
+        func adoptForExecution() -> Bool {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            guard !adoptedForExecution, !consumed, !released else { return false }
+            adoptedForExecution = true
+            return true
         }
 
         func consume() -> Bool {
@@ -575,14 +584,15 @@ actor ExtensionBridge {
         request: SafariRequest,
         rawObject: [String: Any]
     ) -> DappIngressResult {
-        guard let wire = WireProtocol.DappRequest(json: rawObject) else { return .invalid }
+        guard let wire = WireProtocol.object(.dappRequest, value: rawObject) else { return .invalid }
         return dappIngressResult(request: request, wire: wire)
     }
 
     static func dappIngressResult(
         request: SafariRequest,
-        wire: WireProtocol.DappRequest
+        wire: WireProtocol.ValidatedObject
     ) -> DappIngressResult {
+        guard wire.contract == .dappRequest else { return .invalid }
         var rawObject = wire.json
         let replayOnly = rawObject.removeValue(forKey: "replayOnly") as? Bool ?? false
         guard request.workflowVersion == workflowVersion,

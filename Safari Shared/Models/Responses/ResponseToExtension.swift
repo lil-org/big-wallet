@@ -182,7 +182,7 @@ struct ResponseToExtension: Sendable {
     }
 
     init?(json: [String: Any]) {
-        guard let wire = WireProtocol.NativeResponse(json: json),
+        guard let wire = WireProtocol.object(.nativeResponse, value: json),
               let id = wire.json["id"] as? Int,
               let name = wire.json["name"] as? String,
               let rawProvider = wire.json["provider"] as? String,
@@ -224,7 +224,7 @@ struct ResponseToExtension: Sendable {
 }
 
 struct RPCResponseToExtension {
-    private let wire: WireProtocol.RPCResponse
+    private let wire: WireProtocol.ValidatedObject
 
     init?(upstream: [String: Any], expectedResponseID: Int) {
         var envelope = [String: Any]()
@@ -232,7 +232,7 @@ struct RPCResponseToExtension {
         envelope["jsonrpc"] = upstream["jsonrpc"]
         envelope["result"] = upstream["result"]
         envelope["error"] = upstream["error"]
-        guard let wire = WireProtocol.RPCResponse(json: envelope),
+        guard let wire = WireProtocol.object(.rpcResponse, value: envelope),
               wire.json["id"] as? Int == expectedResponseID else { return nil }
         self.wire = wire
     }

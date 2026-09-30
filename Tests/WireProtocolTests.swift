@@ -3,6 +3,20 @@ import XCTest
 @testable import Big_Wallet
 
 final class WireProtocolTests: XCTestCase {
+    private struct DecodedObject: Decodable {
+        static let contractKey = CodingUserInfoKey(rawValue: "wireContract")!
+        let value: WireProtocol.ValidatedObject
+
+        init(from decoder: Decoder) throws {
+            guard let contract = decoder.userInfo[Self.contractKey] as? WireProtocol.Message else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath, debugDescription: "Missing test contract"
+                ))
+            }
+            value = try WireProtocol.object(contract, from: decoder)
+        }
+    }
+
     private struct Fixture {
         let name: String
         let message: WireProtocol.Message
@@ -32,6 +46,11 @@ final class WireProtocolTests: XCTestCase {
             let decoded = WireProtocol.decode(fixture.message, value: fixture.value)
             XCTAssertEqual(decoded != nil, fixture.valid, fixture.name)
             XCTAssertEqual(WireProtocol.validate(fixture.message, value: fixture.value), fixture.valid, fixture.name)
+            let object = WireProtocol.object(fixture.message, value: fixture.value)
+            XCTAssertEqual(object != nil, fixture.valid && fixture.value is [String: Any], fixture.name)
+            if let object {
+                XCTAssertEqual(object.contract, fixture.message, fixture.name)
+            }
             if let decoded, fixture.valid {
                 let expected = try JSONSerialization.data(withJSONObject: fixture.value, options: [.fragmentsAllowed, .sortedKeys])
                 let actual = try JSONSerialization.data(withJSONObject: decoded, options: [.fragmentsAllowed, .sortedKeys])
@@ -45,6 +64,22 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertEqual(covered, Set(WireProtocol.Message.allCases))
     }
 
+    func testValidatedObjectDetachesMutableFoundationContainers() throws {
+        let item = NSMutableDictionary(dictionary: ["value": "original"])
+        let items = NSMutableArray(object: item)
+        let source = NSMutableDictionary(dictionary: ["id": 91, "result": ["items": items]])
+        let object = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: source))
+
+        source["id"] = 92
+        item["value"] = "changed"
+        items.add("later")
+
+        XCTAssertEqual(object.contract, .rpcResponse)
+        XCTAssertEqual(object.json["id"] as? Int, 91)
+        let result = try XCTUnwrap(object.json["result"] as? [String: Any])
+        XCTAssertEqual(result["items"] as? [[String: String]], [["value": "original"]])
+    }
+
     func testEveryNativeCommandFixtureAdaptsToItsDomainRequest() throws {
         for fixture in try fixtures() where fixture.message == .nativeCommand {
             let data = try JSONSerialization.data(withJSONObject: fixture.value)
@@ -56,11 +91,9 @@ final class WireProtocolTests: XCTestCase {
             let json = try XCTUnwrap(fixture.value as? [String: Any])
             XCTAssertEqual(request.id, json["id"] as? Int, fixture.name)
             XCTAssertEqual(request.workflowVersion, WireProtocol.workflowVersion, fixture.name)
-            let wire = try JSONDecoder().decode(WireProtocol.NativeCommand.self, from: data)
+            let wire = try Self.decodeObject(.nativeCommand, from: data)
             XCTAssertEqual(wire.json as NSDictionary, json as NSDictionary, fixture.name)
-            let roundTrip = try JSONDecoder().decode(
-                WireProtocol.NativeCommand.self, from: JSONEncoder().encode(wire)
-            )
+            let roundTrip = try Self.decodeObject(.nativeCommand, from: canonicalJSON(wire.json))
             XCTAssertEqual(roundTrip.json as NSDictionary, json as NSDictionary, fixture.name)
         }
     }
@@ -182,7 +215,7 @@ final class WireProtocolTests: XCTestCase {
     func testEveryDappFixtureAdaptsWithoutLosingOpaquePayloads() throws {
         for fixture in try fixtures() where fixture.message == .dappRequest && fixture.valid {
             let json = try XCTUnwrap(fixture.value as? [String: Any])
-            let wire = try XCTUnwrap(WireProtocol.DappRequest(json: json), fixture.name)
+            let wire = try XCTUnwrap(WireProtocol.object(.dappRequest, value: json), fixture.name)
             let request = try XCTUnwrap(SafariRequest(wire: wire), fixture.name)
             XCTAssertEqual(request.id, json["id"] as? Int, fixture.name)
             XCTAssertEqual(request.name, json["name"] as? String, fixture.name)
@@ -190,7 +223,7 @@ final class WireProtocolTests: XCTestCase {
         }
     }
 
-    func testGeneratedDTOsRetainStrictDecoding() throws {
+    func testValidatedObjectsRetainStrictDecoding() throws {
         let command: [String: Any] = [
             "id": 1, "workflowVersion": WireProtocol.workflowVersion, "subject": "getRecoveryRequests",
         ]
@@ -198,12 +231,12 @@ final class WireProtocolTests: XCTestCase {
             var invalid = command
             invalid[field] = "untrusted"
             let data = try JSONSerialization.data(withJSONObject: invalid)
-            XCTAssertThrowsError(try JSONDecoder().decode(WireProtocol.NativeCommand.self, from: data), field)
+            XCTAssertThrowsError(try Self.decodeObject(.nativeCommand, from: data), field)
             XCTAssertThrowsError(try JSONDecoder().decode(InternalSafariRequest.self, from: data), field)
         }
     }
 
-    func testOpaqueRPCNumbersSurviveNativeAndCodableAdapters() throws {
+    func testOpaqueRPCNumbersSurviveNativeAndDecoderAdapters() throws {
         for literal in [
             "0.023359359010151733", "0.00033461068556032595", "0.1234567890123456789",
             "5e-324", "1e-300", "1e300", "1.7976931348623157e308",
@@ -213,11 +246,10 @@ final class WireProtocolTests: XCTestCase {
                     let data = Data("{\"id\":91,\"jsonrpc\":\"2.0\",\(field)}".utf8)
                     let source = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
                     let expected = try canonicalJSON(source)
-                    let wire = try XCTUnwrap(WireProtocol.RPCResponse(json: source), literal)
+                    let wire = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: source), literal)
                     let relay = try XCTUnwrap(RPCResponseToExtension(upstream: source, expectedResponseID: 91), literal)
-                    let decoded = try JSONDecoder().decode(WireProtocol.RPCResponse.self, from: data)
-                    let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded))
-                    for value in [wire.json, relay.json, decoded.json, encoded] {
+                    let decoded = try Self.decodeObject(.rpcResponse, from: data)
+                    for value in [wire.json, relay.json, decoded.json] {
                         XCTAssertEqual(try canonicalJSON(value), expected, field)
                     }
                 }
@@ -236,12 +268,11 @@ final class WireProtocolTests: XCTestCase {
             let revisions: [String: Any] = ["ethereum": object, "solana": 0]
             let data = try PropertyListSerialization.data(fromPropertyList: revisions, format: .binary, options: 0)
             XCTAssertFalse(WireProtocol.validate(.revisions, value: revisions))
-            XCTAssertThrowsError(try PropertyListDecoder().decode(WireProtocol.Revisions.self, from: data))
+            XCTAssertNil(WireProtocol.object(.revisions, value: revisions))
             XCTAssertThrowsError(try PropertyListDecoder().decode(ExtensionBridge.ProviderRevisions.self, from: data))
 
             let response: [String: Any] = ["id": 1, "result": object]
-            let responseData = try PropertyListSerialization.data(fromPropertyList: response, format: .binary, options: 0)
-            let decoded = try PropertyListDecoder().decode(WireProtocol.RPCResponse.self, from: responseData)
+            let decoded = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: response))
             XCTAssertEqual(try canonicalJSON(decoded.json), try canonicalJSON(response))
         }
     }
@@ -265,13 +296,13 @@ final class WireProtocolTests: XCTestCase {
                 let valid = depth <= limit
                 XCTAssertEqual(WireProtocol.validate(.rpcResponse, value: source), valid)
                 XCTAssertEqual(WireProtocol.decode(.rpcResponse, value: source) != nil, valid)
-                XCTAssertEqual(WireProtocol.RPCResponse(json: source) != nil, valid)
+                XCTAssertEqual(WireProtocol.object(.rpcResponse, value: source) != nil, valid)
                 XCTAssertEqual(RPCResponseToExtension(upstream: source, expectedResponseID: 91) != nil, valid)
                 if valid {
-                    let decoded = try JSONDecoder().decode(WireProtocol.RPCResponse.self, from: data)
+                    let decoded = try Self.decodeObject(.rpcResponse, from: data)
                     XCTAssertEqual(try canonicalJSON(decoded.json), try canonicalJSON(source))
                 } else {
-                    XCTAssertThrowsError(try JSONDecoder().decode(WireProtocol.RPCResponse.self, from: data))
+                    XCTAssertThrowsError(try Self.decodeObject(.rpcResponse, from: data))
                 }
             }
         }
@@ -285,15 +316,21 @@ final class WireProtocolTests: XCTestCase {
             let source = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
             return !WireProtocol.validate(.rpcResponse, value: source) &&
                 WireProtocol.decode(.rpcResponse, value: source) == nil &&
-                WireProtocol.RPCResponse(json: source) == nil &&
+                WireProtocol.object(.rpcResponse, value: source) == nil &&
                 RPCResponseToExtension(upstream: source, expectedResponseID: 91) == nil &&
-                (try? JSONDecoder().decode(WireProtocol.RPCResponse.self, from: data)) == nil
+                (try? Self.decodeObject(.rpcResponse, from: data)) == nil
         }.value
         XCTAssertTrue(rejected)
     }
 
     private func canonicalJSON(_ value: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys])
+    }
+
+    private static func decodeObject(_ contract: WireProtocol.Message, from data: Data) throws -> WireProtocol.ValidatedObject {
+        let decoder = JSONDecoder()
+        decoder.userInfo[DecodedObject.contractKey] = contract
+        return try decoder.decode(DecodedObject.self, from: data).value
     }
 
     private func decodeJSON<Value: Decodable>(_ type: Value.Type, _ value: Any) throws -> Value {

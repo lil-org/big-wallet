@@ -33,6 +33,118 @@ enum ApprovalStoreTestPersistence {
 }
 
 @MainActor
+func reviewCatalogForTesting(
+    action: DappRequestAction,
+    accounts: [SpecificWalletAccount]? = nil
+) -> WalletReviewCatalog {
+    let derivedAccounts: [SpecificWalletAccount]
+    if let accounts {
+        derivedAccounts = accounts
+    } else {
+        switch action {
+        case .selectAccount(let selection), .switchAccount(let selection):
+            derivedAccounts = Array(selection.selectedAccounts)
+        case .approveMessage(let message):
+            derivedAccounts = [.init(walletId: message.walletId, account: message.account)]
+        case .approveTransaction(let transaction):
+            derivedAccounts = [.init(walletId: transaction.walletId, account: transaction.account)]
+        case .addEthereumChain:
+            derivedAccounts = []
+        }
+    }
+    return WalletReviewCatalog(
+        identity: .init(generation: nil, catalogData: Data()),
+        orderedAccounts: derivedAccounts
+    )
+}
+
+@MainActor
+func preparationForTesting(
+    binding: ExtensionBridge.RequestBinding,
+    action: DappRequestAction,
+    accounts: [SpecificWalletAccount]? = nil
+) -> DappRequestPreparation {
+    let processor = DappRequestProcessor(ethereumNetworkResolver: { chainID in
+        if case .approveTransaction(let transaction) = action,
+           transaction.chain.chainId == chainID {
+            return .resolved(transaction.resolvedNetwork)
+        }
+        return Nodes.resolution(chainId: chainID)
+    })
+    return processor.prepare(binding, catalog: reviewCatalogForTesting(action: action, accounts: accounts))
+}
+
+@MainActor
+func reviewIntentForTesting(
+    binding: ExtensionBridge.RequestBinding,
+    action: DappRequestAction,
+    accounts: [SpecificWalletAccount]? = nil
+) throws -> BoundApprovalIntent {
+    guard case .approval(let intent) = preparationForTesting(binding: binding, action: action, accounts: accounts) else {
+        throw CocoaError(.coderInvalidValue)
+    }
+    return intent
+}
+
+func requestBodyForTesting(_ request: SafariRequest) -> [String: Any] {
+    switch request.body {
+    case .ethereum(let body):
+        var value: [String: Any] = ["address": body.address]
+        value["chainId"] = body.currentChainId.map { String.hex($0, withPrefix: true) }
+        value["object"] = body.parameters
+        return value
+    case .solana(let body):
+        var parameters: [String: Any] = ["onlyIfTrusted": body.onlyIfTrusted]
+        parameters["message"] = body.message
+        parameters["messages"] = body.messages
+        parameters["transaction"] = body.transaction
+        parameters["options"] = body.sendOptions
+        switch body.signMessageEncoding {
+        case .hex?: parameters["messageEncoding"] = "hex"
+        case .utf8?: parameters["messageEncoding"] = "utf8"
+        case nil: parameters["messageEncoding"] = "unsupported"
+        }
+        if body.displayHex { parameters["display"] = "hex" }
+        return ["publicKey": body.publicKey, "object": ["params": parameters]]
+    case .unknown(let body):
+        return ["latestConfigurations": body.providerConfigurations.map { configuration in
+            var value: [String: Any] = ["provider": configuration.provider.rawValue]
+            if configuration.provider == .ethereum {
+                value["results"] = configuration.address.map { [$0] } ?? []
+                value["chainId"] = configuration.chainId
+            } else {
+                value["publicKey"] = configuration.address
+            }
+            return value
+        }]
+    }
+}
+
+@MainActor
+func requestBindingForTesting(_ request: SafariRequest) throws -> ExtensionBridge.RequestBinding {
+    let fixture = try ApprovedExecutionTestFixture()
+    let origin = request.configurationKey.contains("://")
+        ? request.configurationKey : "https://" + request.configurationKey
+    let chainID: Int
+    if case .ethereum(let body) = request.body { chainID = body.currentChainId ?? 1 }
+    else { chainID = 1 }
+    let network = Networks.withChainIdHex(String.hex(chainID, withPrefix: true)) ?? EthereumNetwork(
+        chainId: chainID, name: "Fixture", symbol: "ETH",
+        rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
+        isTestnet: true, mightShowPrice: false, explorer: nil
+    )
+    let accounts = Set(request.connectedAccounts + [request.authorizedAccount].compactMap { $0 })
+    for account in accounts {
+        try fixture.establishGrant(account, configurationKey: origin, network: network)
+    }
+    let snapshot = try fixture.enqueue(
+        id: request.id, name: request.name, provider: request.provider,
+        body: requestBodyForTesting(request), configurationKey: origin
+    )
+    return try XCTUnwrap(snapshot.requestBinding)
+}
+
+@MainActor
 func reviewConsentForTesting(
     snapshot: ExtensionBridge.Snapshot,
     action: DappRequestAction,
@@ -40,10 +152,16 @@ func reviewConsentForTesting(
     approvedAt: Date,
     nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? = nil
 ) throws -> ReviewConsent {
-    let review = try XCTUnwrap(ApprovalReview(
-        binding: try XCTUnwrap(snapshot.requestBinding),
-        action: action
-    ))
+    let accounts: [SpecificWalletAccount]?
+    if case .accountSelection(let selection) = decision {
+        accounts = selection.accounts.map(\.specificAccount)
+    } else {
+        accounts = nil
+    }
+    let intent = try reviewIntentForTesting(
+        binding: XCTUnwrap(snapshot.requestBinding), action: action, accounts: accounts
+    )
+    let review = ApprovalReview(intent: intent)
     let consent: ReviewConsent?
     switch decision {
     case .accountSelection(let selection):
@@ -79,10 +197,20 @@ func resolvedApprovalForTesting(
     approvedAt: Date,
     nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? = nil
 ) throws -> ResolvedDappApproval {
-    try reviewConsentForTesting(
+    let consent = try reviewConsentForTesting(
         snapshot: snapshot, action: action, decision: decision,
         approvedAt: approvedAt, nativeReceipt: nativeReceipt
-    ).resolve(accounts: accounts, networkResolver: networkResolver).get()
+    )
+    let currentAccounts = reviewCatalogForTesting(action: action, accounts: accounts).orderedAccounts
+    return try consent.resolve(
+        accounts: currentAccounts, networkResolver: networkResolver,
+        transactionNetworkResolver: { chainID in
+            if case .approveTransaction(let transaction) = action, transaction.chain.chainId == chainID {
+                return transaction.resolvedNetwork
+            }
+            return Nodes.resolution(chainId: chainID).resolvedNetwork
+        }
+    ).get()
 }
 
 func approvedFailureForTesting(
@@ -94,9 +222,10 @@ func approvedFailureForTesting(
 
 @MainActor
 func reviewActionForTesting(
-    request: SafariRequest,
+    binding: ExtensionBridge.RequestBinding,
     decision: DappApprovalDecision
 ) throws -> DappRequestAction {
+    let request = binding.request
     switch decision {
     case .accountSelection(let selection):
         let initiallyConnected = Set(request.connectedAccounts.map(\.coin.correspondingInpageProvider))
@@ -112,10 +241,10 @@ func reviewActionForTesting(
             identity: .init(generation: nil, catalogData: Data()),
             orderedAccounts: [approval.approvedAccount.specificAccount]
         )
-        guard case .approval(let action) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+        guard case .approval(let intent) = DappRequestProcessor().prepare(binding, catalog: catalog) else {
             throw CocoaError(.coderInvalidValue)
         }
-        return action
+        return intent.action
     case .transaction(let execution):
         guard case .ethereum(let body) = request.body,
               case .success(let transaction) = body.transactionParsingResult,
@@ -503,10 +632,9 @@ func approvedWalletSigningOperationForTesting(
         identity: .init(generation: nil, catalogData: Data()),
         orderedAccounts: [approvedAccount.specificAccount]
     )
-    guard let request = snapshot.request,
-          case .approval(.approveMessage(let action)) = DappRequestProcessor().prepare(request, catalog: catalog) else {
-        throw CocoaError(.coderInvalidValue)
-    }
+    guard case .approval(let intent) = DappRequestProcessor().prepare(
+        try XCTUnwrap(snapshot.requestBinding), catalog: catalog
+    ), case .approveMessage(let action) = intent.action else { throw CocoaError(.coderInvalidValue) }
     XCTAssertEqual(action.subject, subject)
     let permit = try fixture.authorize(
         snapshot: snapshot,
@@ -745,7 +873,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         let approvedAt = approvedAt ?? clock()
         return try await MainActor.run {
             let reviewed = try action ?? reviewActionForTesting(
-                request: XCTUnwrap(snapshot.request), decision: decision
+                binding: XCTUnwrap(snapshot.requestBinding), decision: decision
             )
             return try reviewConsentForTesting(
                 snapshot: snapshot, action: reviewed, decision: decision,

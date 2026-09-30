@@ -26,14 +26,9 @@ final class PopupRequestSession {
     private enum Lifecycle {
         case review(feedback: String?)
         case claiming
-        case working(ApprovalContext)
-        case authenticating(ApprovalContext)
+        case working(feedback: String?)
+        case authenticating(feedback: String?)
         case error(message: String)
-    }
-
-    private struct ApprovalContext {
-        let claim: ExtensionBridge.ApprovalClaim
-        var feedback: String?
     }
 
     let handle: ExtensionBridge.Handle
@@ -47,16 +42,14 @@ final class PopupRequestSession {
     private(set) var reviewToken = UUID()
     private(set) var presentationRevision: UInt64 = 0
 
-    init?(
-        binding: ExtensionBridge.RequestBinding,
-        action: DappRequestAction,
+    init(
+        intent: BoundApprovalIntent,
         reviewCatalog: WalletReviewCatalog? = nil
     ) {
-        guard let review = ApprovalReview(binding: binding, action: action) else { return nil }
-        handle = binding.handle
-        request = binding.request
-        preparedAction = action
-        approvalReview = review
+        handle = intent.binding.handle
+        request = intent.binding.request
+        preparedAction = intent.action
+        approvalReview = ApprovalReview(intent: intent)
         self.reviewCatalog = reviewCatalog
         lifecycle = .review(feedback: nil)
     }
@@ -104,12 +97,12 @@ final class PopupRequestSession {
         }
     }
 
-    var approvalClaim: ExtensionBridge.ApprovalClaim? {
+    var hasActiveClaim: Bool {
         switch lifecycle {
-        case .working(let context), .authenticating(let context):
-            return context.claim
+        case .working, .authenticating:
+            return true
         case .review, .claiming, .error:
-            return nil
+            return false
         }
     }
 
@@ -117,8 +110,8 @@ final class PopupRequestSession {
         switch lifecycle {
         case .review(let feedback):
             return feedback
-        case .working(let context), .authenticating(let context):
-            return context.feedback
+        case .working(let feedback), .authenticating(let feedback):
+            return feedback
         case .error(let message):
             return message
         case .claiming:
@@ -130,8 +123,10 @@ final class PopupRequestSession {
         switch lifecycle {
         case .review:
             lifecycle = .review(feedback: message)
-        case .working, .authenticating:
-            updateApprovalContext { $0.feedback = message }
+        case .working:
+            lifecycle = .working(feedback: message)
+        case .authenticating:
+            lifecycle = .authenticating(feedback: message)
         case .error:
             lifecycle = .error(message: message)
         case .claiming:
@@ -166,36 +161,27 @@ final class PopupRequestSession {
         return reviewToken == token
     }
 
-    func acceptClaim(
-        _ claim: ExtensionBridge.ApprovalClaim,
-        token: UUID
-    ) -> Bool {
+    func acceptClaim(token: UUID) -> Bool {
         guard case .claiming = lifecycle, isCurrent(token) else { return false }
-        lifecycle = .working(ApprovalContext(claim: claim))
+        lifecycle = .working(feedback: nil)
         return true
     }
 
-    func beginAuthentication(
-        claim: ExtensionBridge.ApprovalClaim,
-        token: UUID
-    ) -> Bool {
-        guard case .working(let context) = lifecycle,
-              isCurrent(token), context.claim == claim else {
+    func beginAuthentication(token: UUID) -> Bool {
+        guard case .working(let feedback) = lifecycle,
+              isCurrent(token) else {
             return false
         }
-        lifecycle = .authenticating(context)
+        lifecycle = .authenticating(feedback: feedback)
         return true
     }
 
-    func finishAuthentication(
-        claim: ExtensionBridge.ApprovalClaim,
-        token: UUID
-    ) -> Bool {
-        guard case .authenticating(let context) = lifecycle,
-              isCurrent(token), context.claim == claim else {
+    func finishAuthentication(token: UUID) -> Bool {
+        guard case .authenticating(let feedback) = lifecycle,
+              isCurrent(token) else {
             return false
         }
-        lifecycle = .working(context)
+        lifecycle = .working(feedback: feedback)
         return true
     }
 
@@ -218,30 +204,10 @@ final class PopupRequestSession {
         reviewToken = UUID()
     }
 
-    private func updateApprovalContext(
-        _ update: (inout ApprovalContext) -> Void
-    ) {
-        switch lifecycle {
-        case .working(var context):
-            update(&context)
-            lifecycle = .working(context)
-        case .authenticating(var context):
-            update(&context)
-            lifecycle = .authenticating(context)
-        case .review, .claiming, .error:
-            break
-        }
-    }
-
 }
 
 @MainActor
 final class PopupRequestSessions {
-
-    private struct ClaimedApproval {
-        let claim: ExtensionBridge.ApprovalClaim
-        let token: UUID
-    }
 
     private enum AuthenticationOutcome: Sendable {
         case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
@@ -542,7 +508,7 @@ final class PopupRequestSessions {
         let staleHandles = entries.compactMap { handle, entry -> ExtensionBridge.Handle? in
             guard handle.profileIdentifier == profileIdentifier,
                   !currentHandles.contains(handle),
-                  entry.session?.approvalClaim == nil else { return nil }
+                  entry.session?.hasActiveClaim != true else { return nil }
             return handle
         }
         staleHandles.forEach { discardEntry(handle: $0) }
@@ -573,7 +539,7 @@ final class PopupRequestSessions {
         }
         if let session = entries[snapshot.handle]?.session {
             if snapshot.phase == .approving &&
-                session.approvalClaim == nil {
+                !session.hasActiveClaim {
                 return .absent
             }
             if snapshot.phase == .queued,
@@ -591,13 +557,14 @@ final class PopupRequestSessions {
             }
             return .available(session)
         }
-        guard case .queued(let request, .unowned) = snapshot.state else { return .absent }
+        guard case .queued(_, .unowned) = snapshot.state,
+              let binding = snapshot.requestBinding else { return .absent }
         if case .immediateResponse(let persistence) = entries[snapshot.handle] {
             return .immediateResponse(persistence.state)
         }
         let preparation: DappRequestPreparation
         var preparedCatalog: WalletReviewCatalog?
-        if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
+        if let walletIndependent = requestProcessor.prepareWithoutWallets(binding) {
             preparation = walletIndependent
         } else {
             guard let walletAccess = walletEnvironment.currentReviewCatalog() else {
@@ -605,7 +572,7 @@ final class PopupRequestSessions {
             }
             preparedCatalog = walletAccess
             preparation = requestProcessor.prepare(
-                request,
+                binding,
                 catalog: walletAccess
             )
         }
@@ -613,15 +580,11 @@ final class PopupRequestSessions {
         case .immediate(let response):
             persistImmediateResponse(response, handle: snapshot.handle)
             return .immediateResponse(.working)
-        case .approval(let action):
-            guard let binding = snapshot.requestBinding,
-                  let session = PopupRequestSession(
-                    binding: binding,
-                    action: action,
-                    reviewCatalog: preparedCatalog
-                  ) else { return .absent }
+        case .approval(let intent):
+            guard intent.binding == binding else { return .absent }
+            let session = PopupRequestSession(intent: intent, reviewCatalog: preparedCatalog)
             entries[snapshot.handle] = .session(session)
-            if case .approveTransaction(let transactionAction) = action {
+            if case .approveTransaction(let transactionAction) = intent.action {
                 setupTransaction(for: session, action: transactionAction)
             }
             return .available(session)
@@ -802,19 +765,15 @@ final class PopupRequestSessions {
                 cluster: nil
             ) else { return .ignored }
         case .addEthereumChain:
-            guard let approval = await beginAndClaimApproval(for: session) else {
-                return .ignored
+            var accepted = true
+            let claimed = await runClaimedApproval(for: session) { _, _ in
+                guard let consent = session.acceptAddEthereumChain(approvedAt: self.clock()) else {
+                    accepted = false
+                    return .release(.resume)
+                }
+                return .ready(consent: consent, signing: .none)
             }
-            guard let consent = session.acceptAddEthereumChain(approvedAt: clock()) else {
-                await releaseApproval(approval.claim, for: session, token: approval.token)
-                return .ignored
-            }
-            await beginExecution(
-                claim: approval.claim,
-                consent: consent,
-                for: session,
-                token: approval.token
-            )
+            guard claimed, accepted else { return .ignored }
         }
         return .ok()
     }
@@ -881,63 +840,44 @@ final class PopupRequestSessions {
             selectedAccounts: Set(resolved.accounts),
             network: resolved.network
         )
-        guard let approval = await beginAndClaimApproval(for: session) else { return false }
-        guard let refreshedCatalog = refreshWalletsAndNetworks() else {
-            session.setFeedback(Strings.somethingWentWrong)
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token
-            )
-            return true
-        }
-        guard refreshedCatalog.identity == reviewedCatalog.identity else {
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token,
-                rematerializeOnSuccess: true
-            )
-            return true
-        }
-        guard let refreshed = DappApprovalValidator.resolveSelection(
-            action: action,
-            selection: selection,
-            accounts: refreshedCatalog.orderedAccounts,
-            networkResolver: selectionNetworkResolver
-        ) else {
+        var accepted = true
+        let claimed = await runClaimedApproval(for: session) { _, _ in
+            guard let refreshedCatalog = self.refreshWalletsAndNetworks() else {
+                session.setFeedback(Strings.somethingWentWrong)
+                return .release(.resume)
+            }
+            guard refreshedCatalog.identity == reviewedCatalog.identity else {
+                return .release(.refresh)
+            }
+            guard let refreshed = DappApprovalValidator.resolveSelection(
+                action: action,
+                selection: selection,
+                accounts: refreshedCatalog.orderedAccounts,
+                networkResolver: self.selectionNetworkResolver
+            ) else {
+                session.selectionDraft = .init(
+                    selectedAccounts: [],
+                    network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                        .flatMap(self.selectionNetworkResolver)
+                )
+                session.setFeedback(Strings.somethingWentWrong)
+                return .release(.resume)
+            }
             session.selectionDraft = .init(
-                selectedAccounts: [],
-                network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                    .flatMap(selectionNetworkResolver)
+                selectedAccounts: Set(refreshed.accounts),
+                network: refreshed.network
             )
-            session.setFeedback(Strings.somethingWentWrong)
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token
+            let acceptedSelection = DappApprovalDecision.AccountSelection(
+                accounts: selection.accounts,
+                ethereumChainID: refreshed.network?.chainIdHexString ?? selection.ethereumChainID
             )
-            return true
+            guard let consent = session.acceptAccounts(acceptedSelection, approvedAt: self.clock()) else {
+                accepted = false
+                return .release(.resume)
+            }
+            return .ready(consent: consent, signing: .none)
         }
-        session.selectionDraft = .init(
-            selectedAccounts: Set(refreshed.accounts),
-            network: refreshed.network
-        )
-        let acceptedSelection = DappApprovalDecision.AccountSelection(
-            accounts: selection.accounts,
-            ethereumChainID: refreshed.network?.chainIdHexString ?? selection.ethereumChainID
-        )
-        guard let consent = session.acceptAccounts(acceptedSelection, approvedAt: clock()) else {
-            await releaseApproval(approval.claim, for: session, token: approval.token)
-            return false
-        }
-        await beginExecution(
-            claim: approval.claim,
-            consent: consent,
-            for: session,
-            token: approval.token
-        )
-        return true
+        return claimed && accepted
     }
 
     private func approveMessageSigning(
@@ -985,155 +925,113 @@ final class PopupRequestSessions {
         case .selectAccount, .switchAccount, .addEthereumChain:
             return false
         }
-        guard let approval = await beginAndClaimApproval(for: session) else { return false }
-        let executionDeadline = approval.claim.executionDeadline
-        let authorization = WalletSigningAuthorization(
-            handle: approval.claim.handle,
-            approvedAccount: approvedAccount,
-            signingDeadline: executionDeadline
-        )
-        let transactionToken = transactionSession?.beginApproval()
-        if transactionSession != nil && transactionToken == nil {
-            await releaseApproval(approval.claim, for: session, token: approval.token)
-            return true
-        }
-        let authentication = await authenticateClaimedSession(
-            session: session,
-            approval: approval,
-            reason: reason,
-            authorization: authorization
-        )
-        guard case .unlocked(let catalog, let signer) = authentication else {
-            if let transactionSession, let transactionToken {
-                _ = await transactionSession.finishAuthentication(
-                    token: transactionToken,
-                    succeeded: false
-                )
-            }
-            let rematerialize: Bool
-            switch authentication {
-            case .cancelled:
-                rematerialize = false
-            case .unavailable(let feedback):
-                if isCurrent(session, token: approval.token) {
-                    session.setFeedback(feedback)
-                }
-                rematerialize = false
-            case .reviewChanged, .superseded:
-                rematerialize = true
-            case .unlocked:
-                preconditionFailure()
-            }
-            await releaseApproval(
-                approval.claim,
-                for: session,
-                token: approval.token,
-                rematerializeOnSuccess: rematerialize
+        return await runClaimedApproval(for: session) { context, token in
+            let executionDeadline = context.executionDeadline
+            let authorization = WalletSigningAuthorization(
+                handle: context.handle,
+                approvedAccount: approvedAccount,
+                signingDeadline: executionDeadline
             )
-            return true
-        }
-        defer { signer.invalidate() }
-        let decision: DappApprovalDecision
-        if let transactionSession, let transactionToken,
-           case .approveTransaction(let reviewedAction) = action {
-            guard clock() < executionDeadline else {
-                await releaseApproval(
-                    approval.claim, for: session, token: approval.token,
-                    rematerializeOnSuccess: true
-                )
-                return true
+            let transactionToken = transactionSession?.beginApproval()
+            if transactionSession != nil && transactionToken == nil {
+                return .release(.resume)
             }
-            let timeout = Task { @MainActor in
-                do {
-                    try await Task.sleep(for: .seconds(max(
-                        0, executionDeadline.timeIntervalSince(self.clock())
-                    )))
-                } catch {
-                    return
-                }
-                guard !Task.isCancelled else { return }
-                signer.invalidate()
-                transactionSession.invalidate()
-            }
-            let preflight = await transactionSession.finishAuthentication(
-                token: transactionToken,
-                succeeded: true
+            let authentication = await self.authenticateClaimedSession(
+                session: session,
+                token: token,
+                reason: reason,
+                authorization: authorization
             )
-            timeout.cancel()
-            switch preflight {
-            case .approved(let transaction):
-                guard let execution = DappApprovalDecision.TransactionExecution(
-                    transaction,
-                    reviewedNetwork: reviewedAction.resolvedNetwork,
-                    approvedAccount: approvedAccount
-                ) else {
-                    await releaseApproval(
-                        approval.claim, for: session, token: approval.token,
-                        rematerializeOnSuccess: true
+            guard case .unlocked(let catalog, let signer) = authentication else {
+                if let transactionSession, let transactionToken {
+                    _ = await transactionSession.finishAuthentication(
+                        token: transactionToken,
+                        succeeded: false
                     )
-                    return true
                 }
-                decision = .transaction(execution)
-            case .reviewRequired:
-                await releaseApproval(approval.claim, for: session, token: approval.token)
-                return true
-            case .invalidated:
-                await releaseApproval(
-                    approval.claim, for: session, token: approval.token,
-                    rematerializeOnSuccess: true
-                )
-                return true
+                switch authentication {
+                case .cancelled:
+                    return .release(.resume)
+                case .unavailable(let feedback):
+                    if self.isCurrent(session, token: token) {
+                        session.setFeedback(feedback)
+                    }
+                    return .release(.resume)
+                case .reviewChanged, .superseded:
+                    return .release(.refresh)
+                case .unlocked:
+                    preconditionFailure()
+                }
             }
-        } else {
-            decision = .message(.init(approvedAccount: approvedAccount, solanaCluster: cluster))
+            var untransferredSigner: WalletSigningSession? = signer
+            defer { untransferredSigner?.invalidate() }
+            let decision: DappApprovalDecision
+            if let transactionSession, let transactionToken,
+               case .approveTransaction(let reviewedAction) = action {
+                guard self.clock() < executionDeadline else { return .release(.refresh) }
+                let timeout = Task { @MainActor in
+                    do {
+                        try await Task.sleep(for: .seconds(max(
+                            0, executionDeadline.timeIntervalSince(self.clock())
+                        )))
+                    } catch {
+                        return
+                    }
+                    guard !Task.isCancelled else { return }
+                    signer.invalidate()
+                    transactionSession.invalidate()
+                }
+                let preflight = await transactionSession.finishAuthentication(
+                    token: transactionToken,
+                    succeeded: true
+                )
+                timeout.cancel()
+                switch preflight {
+                case .approved(let transaction):
+                    guard let execution = DappApprovalDecision.TransactionExecution(
+                        transaction,
+                        reviewedNetwork: reviewedAction.resolvedNetwork,
+                        approvedAccount: approvedAccount
+                    ) else { return .release(.refresh) }
+                    decision = .transaction(execution)
+                case .reviewRequired:
+                    return .release(.resume)
+                case .invalidated:
+                    return .release(.refresh)
+                }
+            } else {
+                decision = .message(.init(approvedAccount: approvedAccount, solanaCluster: cluster))
+            }
+            guard case .valid = await self.validateSigningAccess(
+                for: session,
+                reviewedAction: action,
+                token: token,
+                catalog: catalog,
+                signer: signer
+            ) else { return .release(.refresh) }
+            let consent: ReviewConsent?
+            switch decision {
+            case .transaction(let execution):
+                consent = session.acceptTransaction(execution, approvedAt: self.clock())
+            case .message(let message):
+                consent = session.acceptMessage(cluster: message.solanaCluster, approvedAt: self.clock())
+            case .accountSelection, .addEthereumChain:
+                consent = nil
+            }
+            guard let consent else { return .release(.refresh) }
+            untransferredSigner = nil
+            return .ready(consent: consent, signing: .unlocked(signer))
         }
-        guard case .valid = await validateSigningAccess(
-            for: session,
-            reviewedAction: action,
-            approval: approval,
-            catalog: catalog,
-            signer: signer
-        ) else {
-            await releaseApproval(
-                approval.claim, for: session, token: approval.token,
-                rematerializeOnSuccess: true
-            )
-            return true
-        }
-        let consent: ReviewConsent?
-        switch decision {
-        case .transaction(let execution):
-            consent = session.acceptTransaction(execution, approvedAt: clock())
-        case .message(let message):
-            consent = session.acceptMessage(cluster: message.solanaCluster, approvedAt: clock())
-        case .accountSelection, .addEthereumChain:
-            consent = nil
-        }
-        guard let consent else {
-            await releaseApproval(
-                approval.claim, for: session, token: approval.token,
-                rematerializeOnSuccess: true
-            )
-            return true
-        }
-        await beginExecution(
-            claim: approval.claim,
-            consent: consent,
-            for: session,
-            token: approval.token,
-            signingSession: signer
-        )
-        return true
     }
 
     private func validateSigningAccess(
         for session: PopupRequestSession,
         reviewedAction: DappRequestAction,
-        approval: ClaimedApproval,
+        token: UUID,
         catalog: WalletReviewCatalog,
         signer: WalletSigningSession
     ) async -> SigningValidation {
-        guard isCurrent(session, token: approval.token) else { return .superseded }
+        guard isCurrent(session, token: token) else { return .superseded }
         let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
         guard clock() < signer.authorization.signingDeadline else { return .reviewChanged }
         let walletsAvailable = refreshWalletsAndNetworks() != nil
@@ -1155,38 +1053,47 @@ final class PopupRequestSessions {
               networkMatches else {
             return .reviewChanged
         }
-        return isCurrent(session, token: approval.token) ? .valid : .superseded
+        return isCurrent(session, token: token) ? .valid : .superseded
     }
 
-    private func beginAndClaimApproval(
-        for session: PopupRequestSession
-    ) async -> ClaimedApproval? {
-        let presentationRevision = session.presentationRevision
-        guard let token = session.beginApproval(),
-              let claim = await claimApproval(
-                  for: session,
-                  token: token
-              ) else { return nil }
-        guard session.presentationRevision == presentationRevision else {
-            await releaseApproval(claim, for: session, token: token)
-            return nil
-        }
-        return ClaimedApproval(claim: claim, token: token)
-    }
-
-    private func claimApproval(
+    private func runClaimedApproval(
         for session: PopupRequestSession,
-        token: UUID
-    ) async -> ExtensionBridge.ApprovalClaim? {
-        let result = await store.claim(handle: session.handle)
-        switch result {
+        prepare: @MainActor (DurableApprovalExecutor.ClaimContext, UUID) async -> DurableApprovalExecutor.Preparation
+    ) async -> Bool {
+        let presentationRevision = session.presentationRevision
+        guard let token = session.beginApproval() else { return false }
+        switch await store.claim(handle: session.handle) {
         case .claimed(let claim):
-            guard isCurrent(session, token: token),
-                  session.acceptClaim(claim, token: token) else {
-                _ = await store.release(claim: claim)
-                return nil
-            }
-            return claim
+            var accepted = true
+            let result = await durableApprovalExecutor.execute(claim: claim, prepare: { context in
+                guard self.isCurrent(session, token: token),
+                      session.acceptClaim(token: token) else {
+                    accepted = false
+                    return .release(.refresh)
+                }
+                guard session.presentationRevision == presentationRevision else {
+                    accepted = false
+                    return .release(.resume)
+                }
+                return await prepare(context, token)
+            }, resolve: { consent in
+                let accounts: [SpecificWalletAccount]?
+                if case .addEthereumChain = consent.intent.action {
+                    accounts = nil
+                } else {
+                    guard let catalog = self.refreshWalletsAndNetworks() else { return .release(.refresh) }
+                    accounts = catalog.orderedAccounts
+                }
+                guard self.isCurrent(session, token: token),
+                      case .success(let resolved) = consent.resolve(
+                        accounts: accounts,
+                        networkResolver: self.selectionNetworkResolver,
+                        transactionNetworkResolver: self.signingNetworkResolver
+                      ) else { return .release(.refresh) }
+                return .approved(resolved)
+            })
+            finishExecution(result, for: session, token: token)
+            return accepted
         case .executing, .responded, .missing:
             if entries[session.handle]?.session === session {
                 discardSession(handle: session.handle)
@@ -1196,27 +1103,20 @@ final class PopupRequestSessions {
                 session.fail(Strings.failedToLoad, token: token)
             }
         }
-        return nil
+        return false
     }
 
     private func authenticateClaimedSession(
         session: PopupRequestSession,
-        approval: ClaimedApproval,
+        token: UUID,
         reason: String,
         authorization: WalletSigningAuthorization
     ) async -> AuthenticationOutcome {
-        guard session.beginAuthentication(
-            claim: approval.claim,
-            token: approval.token
-        ) else { return .superseded }
+        guard session.beginAuthentication(token: token) else { return .superseded }
         let outcome = await boundedAuthentication(
             session: session, reason: reason, authorization: authorization
         )
-        guard isCurrent(session, token: approval.token),
-              session.finishAuthentication(
-                claim: approval.claim,
-                token: approval.token
-              ) else {
+        guard isCurrent(session, token: token), session.finishAuthentication(token: token) else {
             if case .unlocked(_, let signer) = outcome {
                 signer.invalidate()
             }
@@ -1307,106 +1207,22 @@ final class PopupRequestSessions {
         }
     }
 
-    private func beginExecution(
-        claim: ExtensionBridge.ApprovalClaim,
-        consent: ReviewConsent,
-        for session: PopupRequestSession,
-        token: UUID,
-        signingSession: WalletSigningSession? = nil
-    ) async {
-        defer { claim.releaseIfUnconsumed() }
-        guard isCurrent(session, token: token) else {
-            await releaseApproval(claim, for: session, token: token)
-            return
-        }
-        let reservation: ExtensionBridge.ExecutionReservation
-        switch await store.begin(claim: claim) {
-        case .began(let value):
-            reservation = value
-        case .ownershipLost:
-            finishExecution(.ownershipLost, for: session, token: token)
-            return
-        case .retryablePersistenceFailure:
-            let result: DurableApprovalExecutor.Result
-            switch await store.release(claim: claim) {
-            case .persisted: result = .released
-            case .ownershipLost: result = .ownershipLost
-            case .retryablePersistenceFailure: result = .retryablePersistenceFailure
-            }
-            finishExecution(result, for: session, token: token)
-            return
-        }
-        defer { reservation.releaseLease() }
-        let accounts: [SpecificWalletAccount]?
-        if case .accountSelection = consent.decision {
-            accounts = refreshWalletsAndNetworks()?.orderedAccounts
-        } else {
-            accounts = nil
-        }
-        guard isCurrent(session, token: token),
-              case .success(let resolved) = consent.resolve(
-                accounts: accounts,
-                networkResolver: selectionNetworkResolver
-              ) else {
-            let result: DurableApprovalExecutor.Result
-            switch await store.rollback(reservation: reservation) {
-            case .persisted: result = .released
-            case .ownershipLost: result = .ownershipLost
-            case .retryablePersistenceFailure: result = .retryablePersistenceFailure
-            }
-            finishExecution(result, for: session, token: token)
-            return
-        }
-        let result: DurableApprovalExecutor.Result
-        if let signingSession {
-            result = await durableApprovalExecutor.executeSigning(
-                reservation: reservation,
-                approval: resolved,
-                session: signingSession
-            )
-        } else {
-            result = await durableApprovalExecutor.executeOrdinary(
-                reservation: reservation,
-                approval: resolved
-            )
-        }
-        finishExecution(result, for: session, token: token)
-    }
-
     private func finishExecution(
         _ result: DurableApprovalExecutor.Result,
         for session: PopupRequestSession,
         token: UUID
     ) {
         switch result {
-        case .persisted, .ownershipLost, .released:
+        case .persisted, .ownershipLost:
             if entries[session.handle]?.session === session {
                 discardSession(handle: session.handle)
             }
-        case .retryablePersistenceFailure:
-            if isCurrent(session, token: token) {
-                session.fail(Strings.failedToLoad, token: token)
-            }
-        }
-    }
-
-    private func releaseApproval(
-        _ claim: ExtensionBridge.ApprovalClaim,
-        for session: PopupRequestSession,
-        token: UUID,
-        rematerializeOnSuccess: Bool = false
-    ) async {
-        switch await store.release(claim: claim) {
-        case .persisted:
-            if isCurrent(session, token: token) {
-                if rematerializeOnSuccess {
-                    discardSession(handle: session.handle)
-                } else {
-                    _ = session.returnToReview(token: token)
-                }
-            }
-        case .ownershipLost:
-            if entries[session.handle]?.session === session {
+        case .released(let disposition):
+            guard isCurrent(session, token: token) else { return }
+            switch disposition {
+            case .resume:
+                _ = session.returnToReview(token: token)
+            case .refresh:
                 discardSession(handle: session.handle)
             }
         case .retryablePersistenceFailure:

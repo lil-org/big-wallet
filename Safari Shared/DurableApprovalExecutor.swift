@@ -5,11 +5,47 @@ import Foundation
 @MainActor
 final class DurableApprovalExecutor {
 
+    struct ClaimContext {
+        let handle: ExtensionBridge.Handle
+        let executionDeadline: Date
+    }
+
+    enum ReviewDisposition: Equatable {
+        case resume, refresh
+    }
+
+    typealias SourceSignerFactory = (
+        ApprovedWalletSigningOperation,
+        @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
+    ) -> any WalletSigning
+
+    enum SigningAccess {
+        case none
+        case unlocked(WalletSigningSession)
+        case source(SourceSignerFactory)
+
+        var session: WalletSigningSession? {
+            guard case .unlocked(let session) = self else { return nil }
+            return session
+        }
+    }
+
+    enum Preparation {
+        case ready(consent: ReviewConsent, signing: SigningAccess)
+        case release(ReviewDisposition)
+    }
+
+    enum Resolution {
+        case approved(ResolvedDappApproval)
+        case immediate(ImmediateResolution)
+        case release(ReviewDisposition)
+    }
+
     enum Result: Equatable {
         case persisted
         case ownershipLost
         case retryablePersistenceFailure
-        case released
+        case released(ReviewDisposition)
     }
 
     nonisolated static let defaultBroadcastTimeoutNanoseconds: UInt64 =
@@ -36,63 +72,69 @@ final class DurableApprovalExecutor {
         self.clock = clock
     }
 
-    func executeOrdinary(
-        reservation: ExtensionBridge.ExecutionReservation,
-        approval: ResolvedDappApproval
+    func execute(
+        claim: ExtensionBridge.ApprovalClaim,
+        prepare: @MainActor (ClaimContext) async -> Preparation,
+        resolve: @MainActor (ReviewConsent) -> Resolution
     ) async -> Result {
+        guard claim.adoptForExecution() else { return .ownershipLost }
+        defer { claim.releaseIfUnconsumed() }
+        let consent: ReviewConsent
+        let signing: SigningAccess
+        switch await prepare(ClaimContext(handle: claim.handle, executionDeadline: claim.executionDeadline)) {
+        case .ready(let preparedConsent, let preparedSigning):
+            consent = preparedConsent
+            signing = preparedSigning
+        case .release(let disposition):
+            return await release(claim: claim, disposition: disposition)
+        }
+        defer { signing.session?.invalidate() }
+        guard signingAccessMatches(signing, claim: claim) else {
+            return await release(claim: claim, disposition: .refresh)
+        }
+        let reservation: ExtensionBridge.ExecutionReservation
+        switch await store.begin(claim: claim) {
+        case .began(let value):
+            reservation = value
+        case .ownershipLost:
+            return .ownershipLost
+        case .retryablePersistenceFailure:
+            return await release(claim: claim, disposition: .refresh)
+        }
         defer { reservation.releaseLease() }
-        guard case .ordinary = reservation.authority else { return .ownershipLost }
-        return await execute(
-            reservation: reservation,
-            approval: approval,
-            makeSigner: { _ in nil }
-        )
-    }
-
-    func executeSigning(
-        reservation: ExtensionBridge.ExecutionReservation,
-        approval: ResolvedDappApproval,
-        session: WalletSigningSession
-    ) async -> Result {
-        defer { reservation.releaseLease() }
-        guard case .ordinary = reservation.authority,
-              session.authorization.handle == reservation.handle,
-              session.authorization.signingDeadline == reservation.executionDeadline,
-              session.requiresCommitLease else { return .ownershipLost }
-        return await execute(
-            reservation: reservation,
-            approval: approval,
-            signingSession: session,
-            makeSigner: { permit in
-                guard let operation = ApprovedWalletSigningOperation(permit: permit),
-                      session.bind(
-                        operation: operation,
-                        authorityIsCurrent: { await self.store.authorityIsCurrent(handle: $0) }
-                      ) else { return nil }
-                return session
+        if let expired = await rollbackIfExpired(reservation: reservation) { return expired }
+        guard nativeDecisionIsFresh(reservation) else {
+            return await complete(reservation: reservation, resolution: Self.staleResolution)
+        }
+        switch resolve(consent) {
+        case .approved(let approval):
+            guard nativeDecisionIsFresh(reservation) else {
+                return await complete(reservation: reservation, resolution: Self.staleResolution)
             }
-        )
+            return await executeApproved(reservation: reservation, approval: approval, signing: signing)
+        case .immediate(let resolution):
+            return await complete(reservation: reservation, resolution: resolution)
+        case .release(let disposition):
+            return await rollback(reservation: reservation, disposition: disposition)
+        }
     }
 
-    func executeNative(
-        reservation: ExtensionBridge.ExecutionReservation,
-        approval: ResolvedDappApproval,
-        makeSigner: (ExtensionBridge.ApprovedExecutionPermit) -> (any WalletSigning)?
-    ) async -> Result {
-        defer { reservation.releaseLease() }
-        guard case .native = reservation.authority else { return .ownershipLost }
-        return await execute(
-            reservation: reservation,
-            approval: approval,
-            makeSigner: makeSigner
-        )
+    private func signingAccessMatches(_ signing: SigningAccess, claim: ExtensionBridge.ApprovalClaim) -> Bool {
+        switch (claim.authority, signing) {
+        case (.ordinary, .none), (.native, .source):
+            return true
+        case (.ordinary, .unlocked(let session)):
+            return session.authorization.handle == claim.handle &&
+                session.authorization.signingDeadline == claim.executionDeadline && session.requiresCommitLease
+        default:
+            return false
+        }
     }
 
-    private func execute(
+    private func executeApproved(
         reservation: ExtensionBridge.ExecutionReservation,
         approval: ResolvedDappApproval,
-        signingSession: WalletSigningSession? = nil,
-        makeSigner: (ExtensionBridge.ApprovedExecutionPermit) -> (any WalletSigning)?
+        signing: SigningAccess
     ) async -> Result {
         if let expired = await rollbackIfExpired(reservation: reservation) {
             return expired
@@ -106,9 +148,10 @@ final class DurableApprovalExecutor {
         case .retryablePersistenceFailure:
             return await rollback(reservation: reservation)
         }
-        defer { signingSession?.invalidate(); permit.releaseLease() }
-        let signer = makeSigner(permit)
-        defer { signer?.invalidate() }
+        defer { permit.releaseLease() }
+        let signingSession = signing.session
+        let signer = makeSigner(signing, permit: permit)
+        defer { if signingSession == nil { signer?.invalidate() } }
         guard approval.approval.signingAccount == nil || signer != nil else {
             return await rollback(permit: permit)
         }
@@ -177,13 +220,46 @@ final class DurableApprovalExecutor {
         reservation: ExtensionBridge.ExecutionReservation,
         permit: ExtensionBridge.ApprovedExecutionPermit? = nil
     ) async -> Result? {
-        if case .native = reservation.authority, Task.isCancelled {
+        if case .native(_, let context) = reservation.authority,
+           Task.isCancelled || clock() < context.observedAt {
             if let permit { return await rollback(permit: permit) }
             return await rollback(reservation: reservation)
         }
         guard clock() >= reservation.executionDeadline else { return nil }
         if let permit { return await rollback(permit: permit) }
         return await rollback(reservation: reservation)
+    }
+
+    private func makeSigner(
+        _ signing: SigningAccess,
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> (any WalletSigning)? {
+        guard permit.approval.signingAccount != nil else { return nil }
+        switch signing {
+        case .none:
+            return nil
+        case .unlocked(let session):
+            guard let operation = ApprovedWalletSigningOperation(permit: permit),
+                  session.bind(operation: operation, authorityIsCurrent: {
+                      await self.store.authorityIsCurrent(handle: $0)
+                  }) else { return nil }
+            return session
+        case .source(let factory):
+            guard let operation = ApprovedWalletSigningOperation(permit: permit) else { return nil }
+            return factory(operation) { await self.store.authorityIsCurrent(handle: $0) }
+        }
+    }
+
+    private func complete(
+        reservation: ExtensionBridge.ExecutionReservation,
+        resolution: ImmediateResolution
+    ) async -> Result {
+        if let expired = await rollbackIfExpired(reservation: reservation) { return expired }
+        switch await store.complete(reservation: reservation, resolution: resolution) {
+        case .persisted: return .persisted
+        case .ownershipLost: return .ownershipLost
+        case .retryablePersistenceFailure: return .retryablePersistenceFailure
+        }
     }
 
     private func complete(
@@ -203,11 +279,12 @@ final class DurableApprovalExecutor {
     }
 
     private func rollback(
-        reservation: ExtensionBridge.ExecutionReservation
+        reservation: ExtensionBridge.ExecutionReservation,
+        disposition: ReviewDisposition = .refresh
     ) async -> Result {
         switch await store.rollback(reservation: reservation) {
         case .persisted:
-            return .released
+            return .released(disposition)
         case .ownershipLost:
             return .ownershipLost
         case .retryablePersistenceFailure:
@@ -217,10 +294,39 @@ final class DurableApprovalExecutor {
 
     private func rollback(permit: ExtensionBridge.ApprovedExecutionPermit) async -> Result {
         switch await store.rollback(permit: permit) {
-        case .persisted: return .released
+        case .persisted: return .released(.refresh)
         case .ownershipLost: return .ownershipLost
         case .retryablePersistenceFailure: return .retryablePersistenceFailure
         }
+    }
+
+    private func release(claim: ExtensionBridge.ApprovalClaim, disposition: ReviewDisposition) async -> Result {
+        switch await store.release(claim: claim) {
+        case .persisted: return .released(disposition)
+        case .ownershipLost: return .ownershipLost
+        case .retryablePersistenceFailure: return .retryablePersistenceFailure
+        }
+    }
+
+    private func nativeDecisionIsFresh(_ reservation: ExtensionBridge.ExecutionReservation) -> Bool {
+        guard case .native(let approvedAt, _) = reservation.authority else { return true }
+        let requiresFreshDecision: Bool
+        switch reservation.request.body {
+        case .ethereum(let body):
+            requiresFreshDecision = body.method == .signTransaction
+        case .solana(let body):
+            requiresFreshDecision = body.method == .signTransaction || body.method == .signAllTransactions ||
+                body.method == .signAndSendTransaction
+        case .unknown:
+            requiresFreshDecision = false
+        }
+        guard requiresFreshDecision else { return true }
+        let age = clock().timeIntervalSince(approvedAt)
+        return age >= 0 && age <= ExtensionBridge.maximumTransactionDecisionAge
+    }
+
+    private static var staleResolution: ImmediateResolution {
+        .failure(ProviderResponseError(message: Strings.providerNotReady, code: 4100))
     }
 
     private func boundedOperation(

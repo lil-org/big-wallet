@@ -201,8 +201,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let testClock = try XCTUnwrap(clock)
             bridge = makeBridge(clock: { testClock.now })
             guard case .found(let snapshot) = await bridge.load(handle: handle),
-                  let request = snapshot.request,
-                  case .approval(.switchAccount(let action)) = processor.prepare(request, catalog: catalog) else {
+                  let binding = snapshot.requestBinding,
+                  case .approval(let intent) = processor.prepare(binding, catalog: catalog),
+                  case .switchAccount(let action) = intent.action else {
                 return XCTFail("Expected the persisted manual switch")
             }
             XCTAssertEqual(Set(action.selectedAccounts.map {
@@ -211,7 +212,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let missingGrantedAccounts = WalletReviewCatalog(
                 identity: catalog.identity, orderedAccounts: duplicates.map(\.specificAccount)
             )
-            guard case .approval(.switchAccount(let unavailable)) = processor.prepare(request, catalog: missingGrantedAccounts) else {
+            guard case .approval(let unavailableIntent) = processor.prepare(binding, catalog: missingGrantedAccounts),
+                  case .switchAccount(let unavailable) = unavailableIntent.action else {
                 return XCTFail("Expected manual selection without the granted wallets")
             }
             XCTAssertTrue(unavailable.selectedAccounts.isEmpty)
@@ -238,7 +240,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             XCTAssertEqual(current.ethereumAccount, ethereum)
             XCTAssertEqual(current.solanaAccount, solana)
             XCTAssertEqual(current.ethereumChainId, chainID)
-            let acknowledged = await bridge.acknowledgeResponse(handle: handle, configurationKey: request.configurationKey)
+            let acknowledged = await bridge.acknowledgeResponse(handle: handle, configurationKey: binding.request.configurationKey)
             XCTAssertEqual(acknowledged, .persisted)
         }
 
@@ -423,7 +425,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let claimed = try await admittedSigning(account, id: 64_013)
         let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
         let permit = try reviewedExecution(try executionPermit(await bridge.begin(claim: claim)))
-        let selection = try makeFixture(id: 64_014, name: "requestAccounts")
+        let selection = try makeManualFixture(id: 64_014, enqueueAttempt: attempt(for: 64_014), latestConfigurations: [])
         let selectionHandle = try accepted(await bridge.enqueue(ingress: selection.ingress, profileIdentifier: nil)).handle
         let selectionClaim = try approvalClaim(await bridge.claim(handle: selectionHandle))
         let selectionPermit = try reviewedExecution(try executionPermit(await bridge.begin(claim: selectionClaim)), accounts: [account])
@@ -2445,17 +2447,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 ? ["address": "", "object": NSNull()]
                 : ["publicKey": account.normalizedAddress, "object": ["params": ["messages": NSNull()]]]
             let fixture = try authorityFixture(raw)
-            guard case .immediate(let expected) = DappRequestProcessor().prepareWithoutWallets(fixture.request) else {
+            let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+            guard case .found(let originalSnapshot) = await bridge.load(handle: admitted.handle),
+                  let originalBinding = originalSnapshot.requestBinding,
+                  case .immediate(let expected) = DappRequestProcessor().prepareWithoutWallets(originalBinding) else {
                 return XCTFail("Expected the existing deferred provider error")
             }
-            let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
             bridge = makeBridge(clock: { self.clock.now })
             guard case .found(let snapshot) = await bridge.load(handle: admitted.handle),
-                  let request = snapshot.request,
-                  case .immediate(let actual) = DappRequestProcessor().prepareWithoutWallets(request) else {
+                  let binding = snapshot.requestBinding,
+                  case .immediate(let actual) = DappRequestProcessor().prepareWithoutWallets(binding) else {
                 return XCTFail("Expected the deferred provider error after restart")
             }
-            XCTAssertEqual(actual.response(for: request)?.json as NSDictionary?, expected.response(for: fixture.request)?.json as NSDictionary?)
+            XCTAssertEqual(actual.response(for: binding.request)?.json as NSDictionary?, expected.response(for: originalBinding.request)?.json as NSDictionary?)
         }
     }
 
@@ -5255,12 +5259,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let request = reservation.request
         let account = try XCTUnwrap(request.authorizedAccount)
         let catalog = WalletReviewCatalog(identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [account.specificAccount])
-        guard case .approval(let action) = DappRequestProcessor().prepare(request, catalog: catalog),
-              case .approveTransaction(let transaction) = action,
+        guard case .approval(let intent) = DappRequestProcessor().prepare(reservation.binding, catalog: catalog),
+              case .approveTransaction(let transaction) = intent.action,
               case .found(let snapshot) = await bridge.load(handle: handle) else { return XCTFail("Expected transaction review") }
         let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(preparedTransactionForStorage(transaction), reviewedNetwork: transaction.resolvedNetwork, approvedAccount: account))
         let wrongReceipt = ExtensionBridge.NativeDeliveryReceipt(nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: storedRequestNativeOwner())
-        let wrongApproval = try resolvedApprovalForTesting(snapshot: snapshot, action: action, decision: .transaction(execution), approvedAt: clock.now, nativeReceipt: wrongReceipt)
+        let wrongApproval = try resolvedApprovalForTesting(snapshot: snapshot, action: intent.action, decision: .transaction(execution), approvedAt: clock.now, nativeReceipt: wrongReceipt)
         let rejected = await bridge.authorize(reservation: reservation, approval: wrongApproval)
         XCTAssertEqual(rejected, .ownershipLost)
         let valid = try reviewedExecution(reservation)
@@ -5368,8 +5372,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let fixture = try makeTransactionFixture(id: 997 + operationIndex * 2 + failureIndex)
                 let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
                 let claim = try approvalClaim(await bridge.claim(handle: handle))
-                let reservation = try executionPermit(await bridge.begin(claim: claim))
-                let approval = try reviewedApproval(reservation)
+                guard case .found(let snapshot) = await bridge.load(handle: handle) else { throw Failure.expectedValue }
+                let consent = try reviewedConsent(snapshot, approvedAt: clock.now)
+                let approval = try consent.resolve(
+                    accounts: [try XCTUnwrap(snapshot.request?.authorizedAccount).specificAccount],
+                    networkResolver: Networks.withChainIdHex
+                ).get()
                 let processor = StorageExecutionProcessor(broadcasts: broadcasts)
                 let sender = StorageBroadcastSender()
                 let writer = makeBridge(clock: { self.clock.now }, atomicWrite: { data, url in
@@ -5381,11 +5389,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     clock: { self.clock.now }
                 )
                 let signing = makeWalletSigningSessionForTesting(authorization: .init(
-                    handle: reservation.handle,
+                    handle: claim.handle,
                     approvedAccount: try XCTUnwrap(approval.approval.signingAccount),
-                    signingDeadline: reservation.executionDeadline
+                    signingDeadline: claim.executionDeadline
                 ))
-                let result = await executor.executeSigning(reservation: reservation, approval: approval, session: signing)
+                let result = await executor.execute(claim: claim, prepare: { _ in
+                    .ready(consent: consent, signing: .unlocked(signing))
+                }, resolve: { _ in .approved(approval) })
                 XCTAssertEqual(result, .retryablePersistenceFailure)
                 XCTAssertEqual(processor.calls, 1)
                 XCTAssertEqual(sender.calls, 0)
@@ -5833,8 +5843,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeTransactionFixture(id: 980)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let reservation = try executionPermit(await bridge.begin(claim: claim))
-        let approval = try reviewedApproval(reservation)
+        guard case .found(let snapshot) = await bridge.load(handle: handle) else { throw Failure.expectedValue }
+        let consent = try reviewedConsent(snapshot, approvedAt: clock.now)
+        let approval = try consent.resolve(
+                    accounts: [try XCTUnwrap(snapshot.request?.authorizedAccount).specificAccount],
+                    networkResolver: Networks.withChainIdHex
+                ).get()
         var synchronizationAttempts = 0
         let synchronize: (URL) throws -> Void = { _ in
             synchronizationAttempts += 1
@@ -5848,11 +5862,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let sender = StorageBroadcastSender()
         let executor = DurableApprovalExecutor(store: writer, requestProcessor: processor, broadcastSender: sender, clock: { self.clock.now })
         let signing = makeWalletSigningSessionForTesting(authorization: .init(
-            handle: reservation.handle,
+            handle: claim.handle,
             approvedAccount: try XCTUnwrap(approval.approval.signingAccount),
-            signingDeadline: reservation.executionDeadline
+            signingDeadline: claim.executionDeadline
         ))
-        let result = await executor.executeSigning(reservation: reservation, approval: approval, session: signing)
+        let result = await executor.execute(claim: claim, prepare: { _ in
+            .ready(consent: consent, signing: .unlocked(signing))
+        }, resolve: { _ in .approved(approval) })
         XCTAssertEqual(result, .retryablePersistenceFailure)
         XCTAssertEqual(synchronizationAttempts, 1)
         XCTAssertEqual(processor.calls, 1)
@@ -6114,7 +6130,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 id: handle.id, configurationKey: fixture.request.configurationKey,
                 requestToken: handle.requestToken, profileIdentifier: nil
             ) else { return XCTFail("Expected durable response delivery") }
-            let wire = try XCTUnwrap(WireProtocol.NativeDelivery(json: envelope))
+            let wire = try XCTUnwrap(WireProtocol.object(.nativeDelivery, value: envelope))
             let delivered = try XCTUnwrap(wire.json["response"] as? [String: Any])
             XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
             if depth == 61 || broadcast {
@@ -8493,12 +8509,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         init(broadcasts: Bool) { self.broadcasts = broadcasts }
 
-        func prepare(_ request: SafariRequest, catalog: WalletReviewCatalog) -> DappRequestPreparation {
-            DappRequestProcessor().prepare(request, catalog: catalog)
+        func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog) -> DappRequestPreparation {
+            DappRequestProcessor().prepare(binding, catalog: catalog)
         }
 
-        func prepareWithoutWallets(_ request: SafariRequest) -> DappRequestPreparation? {
-            DappRequestProcessor().prepareWithoutWallets(request)
+        func prepareWithoutWallets(_ binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation? {
+            DappRequestProcessor().prepareWithoutWallets(binding)
         }
 
         func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {
@@ -8616,31 +8632,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    private func reviewedApproval(
-        _ reservation: ExtensionBridge.ExecutionReservation,
+    private func reviewedConsent(
+        _ snapshot: ExtensionBridge.Snapshot,
+        approvedAt: Date,
         accounts: [WalletAccountDescriptor]? = nil,
         chainID: String = "0x1"
-    ) throws -> ResolvedDappApproval {
-        let store = removalStore()
-        guard case .found(let snapshot) = store.load(handle: reservation.handle) else { throw Failure.expectedValue }
-        let request = reservation.request
+    ) throws -> ReviewConsent {
+        let request = try XCTUnwrap(snapshot.request)
         let descriptors = accounts ?? request.authorizedAccount.map { [$0] } ?? []
         let catalog = WalletReviewCatalog(
             identity: .init(generation: nil, catalogData: Data()),
             orderedAccounts: descriptors.map(\.specificAccount)
         )
-        let action: DappRequestAction
-        switch DappRequestProcessor().prepare(request, catalog: catalog) {
-        case .approval(let prepared): action = prepared
-        case .immediate:
-            switch request.body {
-            case .ethereum(let body) where body.method == .requestAccounts:
-                action = .selectAccount(.init(coinType: .ethereum, selectedAccounts: [], initiallyConnectedProviders: [], network: Networks.withChainIdHex(chainID)))
-            case .solana(let body) where body.method == .connect:
-                action = .selectAccount(.init(coinType: .solana, selectedAccounts: [], initiallyConnectedProviders: [], network: nil))
-            default: throw Failure.expectedValue
-            }
-        }
+        guard case .approval(let intent) = DappRequestProcessor().prepare(
+            try XCTUnwrap(snapshot.requestBinding), catalog: catalog
+        ) else { throw Failure.expectedValue }
+        let action = intent.action
         let decision: DappApprovalDecision
         switch action {
         case .selectAccount, .switchAccount:
@@ -8657,15 +8664,28 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             )))
         case .addEthereumChain: decision = .addEthereumChain
         }
+        return try reviewConsentForTesting(
+            snapshot: snapshot, action: action, decision: decision,
+            approvedAt: approvedAt, nativeReceipt: snapshot.nativeDeliveryReceipt
+        )
+    }
+
+    @MainActor
+    private func reviewedApproval(
+        _ reservation: ExtensionBridge.ExecutionReservation,
+        accounts: [WalletAccountDescriptor]? = nil,
+        chainID: String = "0x1"
+    ) throws -> ResolvedDappApproval {
+        let store = removalStore()
+        guard case .found(let snapshot) = store.load(handle: reservation.handle) else { throw Failure.expectedValue }
         let approvedAt: Date
         if case .native(let value, _) = reservation.authority { approvedAt = value }
         else { approvedAt = clock.now }
-        let resolved = try resolvedApprovalForTesting(
-            snapshot: snapshot, action: action, decision: decision,
-            accounts: catalog.orderedAccounts, approvedAt: approvedAt,
-            nativeReceipt: snapshot.nativeDeliveryReceipt
-        )
-        return resolved
+        let consent = try reviewedConsent(snapshot, approvedAt: approvedAt, accounts: accounts, chainID: chainID)
+        let descriptors = accounts ?? reservation.request.authorizedAccount.map { [$0] } ?? []
+        return try consent.resolve(
+            accounts: descriptors.map(\.specificAccount), networkResolver: Networks.withChainIdHex
+        ).get()
     }
 
     @MainActor

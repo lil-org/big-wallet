@@ -10,7 +10,7 @@ struct InternalSafariRequest: Decodable {
         let derivationPath: String
 
         init(from decoder: Decoder) throws {
-            try self.init(validatedJSON: WireProtocol.SelectedAccount(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.object(.selectedAccount, from: decoder).json)
         }
 
         fileprivate init(validatedJSON: [String: Any]) throws {
@@ -28,7 +28,7 @@ struct InternalSafariRequest: Decodable {
         let cluster: Solana.Cluster?
 
         init(from decoder: Decoder) throws {
-            try self.init(validatedJSON: WireProtocol.ApprovalPayload(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.object(.approvalPayload, from: decoder).json)
         }
 
         fileprivate init(validatedJSON: [String: Any]) throws {
@@ -47,7 +47,7 @@ struct InternalSafariRequest: Decodable {
         let value: Double
 
         init(from decoder: Decoder) throws {
-            try self.init(validatedJSON: WireProtocol.TransactionSpeedPayload(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.object(.transactionSpeedPayload, from: decoder).json)
         }
 
         fileprivate init(validatedJSON: [String: Any]) throws {
@@ -69,7 +69,7 @@ struct InternalSafariRequest: Decodable {
         }
 
         init(from decoder: Decoder) throws {
-            try self.init(validatedJSON: WireProtocol.TransactionEditsPayload(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.object(.transactionEditsPayload, from: decoder).json)
         }
 
         fileprivate init(validatedJSON: [String: Any]) throws {
@@ -92,7 +92,7 @@ struct InternalSafariRequest: Decodable {
         let action: TransactionApprovalAlertAction
 
         init(from decoder: Decoder) throws {
-            try self.init(validatedJSON: WireProtocol.ApprovalAlertPayload(from: decoder).json)
+            try self.init(validatedJSON: WireProtocol.object(.approvalAlertPayload, from: decoder).json)
         }
 
         fileprivate init(validatedJSON: [String: Any]) throws {
@@ -183,7 +183,7 @@ struct InternalSafariRequest: Decodable {
     }
 
     init(from decoder: Decoder) throws {
-        let fields = NativeRequestFields(try WireProtocol.NativeCommand(from: decoder).json)
+        let fields = NativeRequestFields(try WireProtocol.object(.nativeCommand, from: decoder).json)
         id = try fields.value("id")
         workflowVersion = try fields.value("workflowVersion")
         let subject: String = try fields.value("subject")

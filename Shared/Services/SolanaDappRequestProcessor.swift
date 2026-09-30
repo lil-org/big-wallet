@@ -34,7 +34,7 @@ struct SolanaDappRequestProcessor {
         request: SafariRequest,
         body: SafariRequest.Solana,
         catalog: WalletReviewCatalog
-    ) -> DappRequestPreparation {
+    ) -> UnboundDappRequestPreparation {
         switch body.method {
         case .connect:
             return prepareConnect(request: request, body: body, catalog: catalog)
@@ -50,7 +50,7 @@ struct SolanaDappRequestProcessor {
     static func prepareWithoutWallets(
         request: SafariRequest,
         body: SafariRequest.Solana
-    ) -> DappRequestPreparation? {
+    ) -> UnboundDappRequestPreparation? {
         switch body.method {
         case .connect:
             if let account = request.authorizedAccount, account.coin == .solana {
@@ -70,10 +70,6 @@ struct SolanaDappRequestProcessor {
         }
     }
 
-    static func signingReviewContent(for body: SafariRequest.Solana) -> SigningReviewContent? {
-        try? preparedSigningReviewContent(body: body).get()
-    }
-
     static func decodedSignMessage(
         _ message: String,
         messageEncoding: SafariRequest.Solana.MessageEncoding
@@ -90,7 +86,7 @@ struct SolanaDappRequestProcessor {
         request: SafariRequest,
         body: SafariRequest.Solana,
         catalog: WalletReviewCatalog
-    ) -> DappRequestPreparation {
+    ) -> UnboundDappRequestPreparation {
         if let response = prepareWithoutWallets(request: request, body: body) { return response }
         let action = SelectAccountAction(
             coinType: .solana,
@@ -105,7 +101,7 @@ struct SolanaDappRequestProcessor {
         request: SafariRequest,
         body: SafariRequest.Solana,
         catalog: WalletReviewCatalog
-    ) -> DappRequestPreparation {
+    ) -> UnboundDappRequestPreparation {
         if body.method == .signAllTransactions, body.messages == nil {
             return .immediate(immediateFailure(to: request, error: .malformedPayload))
         }

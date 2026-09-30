@@ -241,16 +241,14 @@ final class PopupStringsTests: XCTestCase {
             id: 91, name: "switchAccount", provider: .unknown,
             body: ["latestConfigurations": []]
         )
-        let handle = snapshot.handle
         let action = DappRequestAction.switchAccount(SelectAccountAction(
             coinType: nil,
             selectedAccounts: [],
             initiallyConnectedProviders: [],
             network: nil
         ))
-        let session = try XCTUnwrap(PopupRequestSession(
-            binding: try XCTUnwrap(snapshot.requestBinding),
-            action: action
+        let session = PopupRequestSession(intent: try reviewIntentForTesting(
+            binding: XCTUnwrap(snapshot.requestBinding), action: action
         ))
         let presenter = PopupApprovalStatePresenter()
         let review = popupApprovalJSON(presenter.approvalState(
@@ -263,11 +261,10 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertNil(review["reviewToken"])
 
         let token = try XCTUnwrap(session.beginApproval())
-        let claim = try makeApprovalClaimForTesting(handle: handle)
         for expectedState in ["working", "authenticating"] {
             if expectedState == "authenticating" {
-                XCTAssertTrue(session.acceptClaim(claim, token: token))
-                XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
+                XCTAssertTrue(session.acceptClaim(token: token))
+                XCTAssertTrue(session.beginAuthentication(token: token))
             }
             let busy = popupApprovalJSON(presenter.approvalState(
                 for: session,

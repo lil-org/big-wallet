@@ -578,9 +578,11 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         let retry = try connection(in: store, id: 2, origin: origin)
         let retryRequest = try XCTUnwrap(retry.request)
         XCTAssertNil(retryRequest.authorizedAccount)
-        XCTAssertNil(DappRequestProcessor().prepareWithoutWallets(retryRequest))
+        let binding = try XCTUnwrap(retry.requestBinding)
+        XCTAssertNil(DappRequestProcessor().prepareWithoutWallets(binding))
         let catalog = try XCTUnwrap(manager.reviewCatalog())
-        guard case .approval(.selectAccount) = DappRequestProcessor().prepare(retryRequest, catalog: catalog) else {
+        guard case .approval(let intent) = DappRequestProcessor().prepare(binding, catalog: catalog),
+              case .selectAccount = intent.action else {
             return XCTFail("Reimported keys require a fresh site approval")
         }
         XCTAssertTrue(catalog.orderedAccounts.contains { $0.walletId == reimported.id })
@@ -1226,9 +1228,14 @@ final class WalletSigningScopeTests: XCTestCase {
                             )
                             XCTAssertEqual(operation.approvedAccount, approved)
                         } else {
-                            XCTAssertNil(ApprovalReview(
-                                binding: try XCTUnwrap(snapshot.requestBinding), action: .approveMessage(action)
-                            ))
+                            let intent = try reviewIntentForTesting(
+                                binding: XCTUnwrap(snapshot.requestBinding), action: .approveMessage(action)
+                            )
+                            guard case .approveMessage(let canonical) = intent.action else {
+                                return XCTFail("Expected the canonical stored message")
+                            }
+                            XCTAssertEqual(canonical.payload.coin, approved.coin)
+                            XCTAssertNotEqual(canonical.payload.coin, coin)
                         }
                     case .failure:
                         XCTAssertFalse(validCluster)
@@ -1387,7 +1394,7 @@ final class WalletSigningScopeTests: XCTestCase {
             orderedAccounts: [account.specificAccount]
         )
         for messages in [[message, "0"], ["0", message]] {
-            let request = try XCTUnwrap(SafariRequest(json: [
+            var request = try XCTUnwrap(SafariRequest(json: [
                 "id": 2, "name": "signAllTransactions", "provider": "solana",
                 "host": "wallet.example", "configurationKey": "https://wallet.example",
                 "enqueueAttempt": String(repeating: "a", count: 32),
@@ -1395,7 +1402,9 @@ final class WalletSigningScopeTests: XCTestCase {
                 "workflowVersion": ExtensionBridge.workflowVersion,
                 "body": ["publicKey": account.normalizedAddress, "object": ["params": ["messages": messages]]],
             ]))
-            guard case .immediate(let resolution) = DappRequestProcessor().prepare(request, catalog: catalog) else {
+            request.authorizedAccount = account
+            let binding = try requestBindingForTesting(request)
+            guard case .immediate(let resolution) = DappRequestProcessor().prepare(binding, catalog: catalog) else {
                 return XCTFail("A malformed batch must not issue a partial signing approval")
             }
             let response = try XCTUnwrap(resolution.response(for: request))

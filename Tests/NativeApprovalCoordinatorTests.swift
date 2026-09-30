@@ -45,7 +45,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             var capturedDecision: DappApprovalDecision?
             let fixture = try makeFixture(clock: clock, environment: .init(
                 now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
-                prepareWithoutWallets: { _ in .approval(action) },
+                prepareWithoutWallets: { self.approvalPreparation($0, action: action) },
                 attemptNativeDecision: { _, authorization in
                     decisions += 1
                     capturedDecision = authorization.decision
@@ -618,6 +618,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     private final class TrackingWindow: NSWindow {
         private(set) var activationCount = 0
         private(set) var deminiaturizationCount = 0
+        private(set) var closeCount = 0
 
         override func deminiaturize(_ sender: Any?) {
             deminiaturizationCount += 1
@@ -626,6 +627,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         override func makeKeyAndOrderFront(_ sender: Any?) {
             activationCount += 1
             super.makeKeyAndOrderFront(sender)
+        }
+
+        override func close() {
+            closeCount += 1
+            super.close()
         }
 
         func resetActivationCount() {
@@ -1171,7 +1177,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     try? await Task.sleep(nanoseconds: 60_000_000_000)
                 }
             },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            prepareWithoutWallets: { self.approvalPreparation($0) }
         ))
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -1241,9 +1247,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 reloads += 1
                 return reloads > 1
             },
-            prepare: { _ in
+            prepare: { binding in
                 preparations += 1
-                return .approval(self.accountSelectionAction())
+                return self.approvalPreparation(binding)
             }
         ))
         fixture.store.recordHandler = { _, _, _ in
@@ -2177,14 +2183,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.now },
             uptime: { clock.uptime },
             wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             reloadWallets: {
                 XCTFail("Wallet-independent preparation must not reload wallets")
                 return false
             },
-            prepare: { _ in
+            prepare: { binding in
                 XCTFail("Wallet-independent preparation must not access wallets")
-                return .approval(self.accountSelectionAction())
+                return self.approvalPreparation(binding)
             }
         ))
         start(fixture)
@@ -2446,7 +2452,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var authorizations = [ReviewConsent]()
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { snapshot, authorization in
                 snapshots.append(snapshot)
                 authorizations.append(authorization)
@@ -2568,16 +2574,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(decisions, 1)
     }
 
-    func testPendingFinalizationPollsWithBackoffAndRetainsAuthorization() async throws {
+    func testPendingFinalizationObservesWithBackoffWithoutReplayingDecision() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
-        var authorizations = [ReviewConsent]()
+        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let started = expectation(description: "finalization started")
+        var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-            attemptNativeDecision: { _, authorization in
-                authorizations.append(authorization)
-                return authorizations.count == 4 ? .responseReady : .pending
+            prepareWithoutWallets: { self.approvalPreparation($0) },
+            attemptNativeDecision: { _, _ in
+                decisions += 1
+                started.fulfill()
+                return await finalizer.run()
             }
         ))
         defer { waits.resumeAll() }
@@ -2587,21 +2596,26 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .reviewing)
         await waitForScheduledWait(waits, count: 1)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await fulfillment(of: [started], timeout: 1)
+        fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
+        finalizer.resume(.pending)
         await waitForScheduledWait(waits, count: 2)
-        XCTAssertEqual(authorizations.count, 1)
+        XCTAssertEqual(decisions, 1)
         for index in 1...3 {
+            if index == 3 {
+                fixture.store.snapshot = try ownedSnapshot(fixture, phase: .responded)
+            }
             clock.now.addTimeInterval(Double(waits.delays[index]) / 1_000_000_000)
             waits.resume(index)
             if index < 3 { await waitForScheduledWait(waits, count: index + 2) }
         }
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(Array(waits.delays.dropFirst()), [1_000_000_000, 2_000_000_000, 4_000_000_000])
-        XCTAssertEqual(authorizations.count, 4)
-        XCTAssertEqual(Set(authorizations.map(\.approvedAt)).count, 1)
-        XCTAssertTrue(authorizations.allSatisfy { $0.nativeReceipt == authorizations[0].nativeReceipt })
+        XCTAssertEqual(decisions, 1)
+        XCTAssertEqual(fixture.store.interruptionCount, 0)
     }
 
-    func testClaimedExecutionIsObservedWithoutReplayingDecision() async throws {
+    func testPendingExecutionReturningToQueueInterruptsWithoutReplayingDecision() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
         let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
@@ -2609,7 +2623,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _, _ in
                 decisions += 1
                 started.fulfill()
@@ -2631,9 +2645,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForScheduledWait(waits, count: 3)
         XCTAssertEqual(decisions, 1)
         XCTAssertEqual(fixture.store.interruptionCount, 0)
-        fixture.store.snapshot = try ownedSnapshot(fixture, phase: .responded)
+        fixture.store.snapshot = try ownedSnapshot(fixture, phase: .queued)
         waits.resume(2)
         await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(decisions, 1)
+        XCTAssertEqual(fixture.store.interruptionCount, 1)
+        guard case .interrupted? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("An abandoned execution requires a fresh review")
+        }
+        fixture.coordinator.retryRecovery()
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         XCTAssertEqual(decisions, 1)
     }
 
@@ -2643,7 +2664,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _, _ in decisions += 1; return .interruptionRequired }
         ))
         defer { waits.resumeAll() }
@@ -2998,8 +3019,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now },
                 uptime: { clock.uptime },
                 wait: { _ in },
-                prepareWithoutWallets: { _ in
-                    .approval(self.accountSelectionAction())
+                prepareWithoutWallets: { binding in
+                    self.approvalPreparation(binding)
                 }
             )
         )
@@ -3054,8 +3075,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 wait: { _ in
                     try? await Task.sleep(nanoseconds: 60_000_000_000)
                 },
-                prepareWithoutWallets: { _ in
-                    .approval(self.accountSelectionAction())
+                prepareWithoutWallets: { binding in
+                    self.approvalPreparation(binding)
                 }
             )
         )
@@ -3105,15 +3126,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testCanceledObservationWaitCannotPollTheNewApprovalState() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
+        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let started = expectation(description: "finalization started")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now },
             uptime: { clock.uptime },
             wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _, _ in
                 finalizations += 1
-                return .pending
+                started.fulfill()
+                return await finalizer.run()
             }
         ))
         defer { waits.resumeAll() }
@@ -3126,6 +3150,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         clock.now.addTimeInterval(2)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForState(fixture.coordinator, .waiting)
+        await fulfillment(of: [started], timeout: 1)
+        store.snapshot = try ownedSnapshot(fixture, phase: .approving)
+        finalizer.resume(.pending)
         await waitForScheduledWait(waits, count: 2)
         var loads = 0
         store.loadHandler = { _ in
@@ -3151,13 +3178,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let waits = ScheduledWaits()
         let probe = AsyncGate<ExtensionBridge.SnapshotResult>()
         let probeStarted = expectation(description: "observation load suspended")
+        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizerStarted = expectation(description: "finalization started")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now },
             uptime: { clock.uptime },
             wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
-            attemptNativeDecision: { _, _ in finalizations += 1; return .pending }
+            prepareWithoutWallets: { self.approvalPreparation($0) },
+            attemptNativeDecision: { _, _ in
+                finalizations += 1
+                finalizerStarted.fulfill()
+                return await finalizer.run()
+            }
         ))
         defer { waits.resumeAll() }
         start(fixture)
@@ -3179,6 +3212,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         waits.resume(0)
         await fulfillment(of: [probeStarted], timeout: 1)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await fulfillment(of: [finalizerStarted], timeout: 1)
+        store.snapshot = try ownedSnapshot(fixture, phase: .approving)
+        finalizer.resume(.pending)
         await waitForScheduledWait(waits, count: 2)
         XCTAssertEqual(loads, 2)
         XCTAssertEqual(finalizations, 1)
@@ -3199,7 +3235,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.peer?.title, "wallet.example")
         XCTAssertEqual(fixture.coordinator.order, originalOrder)
         XCTAssertEqual(fixture.coordinator.phase, .waiting)
-        XCTAssertEqual(finalizations, 2)
+        XCTAssertEqual(finalizations, 1)
         XCTAssertEqual(loads, readsBeforeOldObservationReturns)
         XCTAssertEqual(store.maximumOutstandingWrites, 1)
         XCTAssertEqual(fixture.events.presentations.count, 3)
@@ -3219,7 +3255,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.now },
             uptime: { clock.uptime },
             wait: waits.wait,
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _, _ in
                 finalizations += 1
                 finalizerStarted.fulfill()
@@ -3256,7 +3292,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now },
                 uptime: { clock.uptime },
                 wait: waits.wait,
-                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+                prepareWithoutWallets: { self.approvalPreparation($0) }
             ))
             weak var coordinator = fixture?.coordinator
             let events = try XCTUnwrap(fixture?.events)
@@ -3293,7 +3329,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { _ in await Task.yield() },
-                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                prepareWithoutWallets: { self.approvalPreparation($0) },
                 attemptNativeDecision: { _, _ in started.fulfill(); return await finalizer.run() }
             ))
             weak var coordinator = fixture?.coordinator
@@ -3391,7 +3427,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             },
             prepareWithoutWallets: { _ in nil },
             reloadWallets: { available },
-            prepare: { _ in .approval(self.accountSelectionAction()) }
+            prepare: { self.approvalPreparation($0) }
         ))
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -3430,9 +3466,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     await Task.yield()
                 } else { await waits.wait(delay) }
             },
-            prepareWithoutWallets: { _ in
+            prepareWithoutWallets: { binding in
                 preparations += 1
-                return .approval(self.accountSelectionAction())
+                return self.approvalPreparation(binding)
             }
         ))
         defer { waits.resumeAll() }
@@ -3467,7 +3503,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { _ in await Task.yield() },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+            prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _, _ in executions += 1; return .responseReady }
         ))
         start(fixture)
@@ -3493,7 +3529,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     try? await Task.sleep(nanoseconds: 60_000_000_000)
                 }
             },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            prepareWithoutWallets: { self.approvalPreparation($0) }
         ))
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -3629,9 +3665,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
         }
         defer {
-            fixture.coordinator.onEvent = nil
-            gate.resume(.persisted)
-            approval.windowController?.close()
+            withExtendedLifetime(agent) {
+                fixture.coordinator.onEvent = nil
+                gate.resume(.persisted)
+                approval.windowController?.close()
+            }
         }
         fixture.coordinator.resumeAfterAuthentication()
         await fulfillment(of: [started], timeout: 1)
@@ -3647,11 +3685,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             handle: fixture.key.handle,
             nativeDeliveryNonce: fixture.key.nativeDeliveryNonce
         )
-        agent.process(route: route)
-        let window = try XCTUnwrap(approval.windowController?.window)
+        let window = TrackingWindow(
+            contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
         window.isReleasedWhenClosed = false
+        approval.windowController = WalletWindowController(window: window)
+        XCTAssertFalse(window.isVisible)
+        agent.process(route: route)
         let waiting = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         XCTAssertTrue(window.isVisible)
+        XCTAssertGreaterThan(window.activationCount, 0)
         XCTAssertFalse(waiting.progressIndicator.isHidden)
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         agent.process(route: route)
@@ -3664,6 +3708,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         gate.resume(.persisted)
         await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(window.closeCount, 1)
         XCTAssertFalse(window.isVisible)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
@@ -3787,7 +3832,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let fixture = try makeFixture(clock: clock, environment: .init(
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { _ in observationWaits += 1; await Task.yield() },
-                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                prepareWithoutWallets: { self.approvalPreparation($0) },
                 attemptNativeDecision: { _, _ in decisions += 1; return .responseReady }
             ))
             fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
@@ -3901,7 +3946,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let fixture = try makeFixture(clock: clock, environment: .init(
                 now: { clock.now }, uptime: { clock.uptime },
                 wait: { await waits.wait($0) },
-                prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) },
+                prepareWithoutWallets: { self.approvalPreparation($0) },
                 attemptNativeDecision: { _, _ in started.fulfill(); return await finalizer.run() }
             ))
             start(fixture)
@@ -4029,7 +4074,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     await Task.yield()
                 } else { await waits.wait(delay) }
             },
-            prepareWithoutWallets: { _ in .approval(self.accountSelectionAction()) }
+            prepareWithoutWallets: { self.approvalPreparation($0) }
         ))
         defer { waits.resumeAll() }
         start(fixture)
@@ -4194,9 +4239,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { _ in await Task.yield() },
-            prepareWithoutWallets: { _ in
+            prepareWithoutWallets: { binding in
                 preparations += 1
-                return .approval(.approveTransaction(SendTransactionAction(
+                return self.approvalPreparation(binding, action: .approveTransaction(SendTransactionAction(
                     transaction: transaction, resolvedNetwork: network, walletId: "wallet", account: account
                 )))
             },
@@ -4352,7 +4397,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 now: { clock.now },
                 uptime: { clock.uptime },
                 wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
-                prepareWithoutWallets: { _ in .approval(action) },
+                prepareWithoutWallets: { self.approvalPreparation($0, action: action) },
                 attemptNativeDecision: attemptNativeDecision
             )
         )
@@ -4485,6 +4530,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             token: .init(value: UUID()),
             profileIdentifier: nil
         )
+    }
+
+    private func approvalPreparation(
+        _ binding: ExtensionBridge.RequestBinding,
+        action: DappRequestAction? = nil
+    ) -> DappRequestPreparation? {
+        preparationForTesting(binding: binding, action: action ?? accountSelectionAction())
     }
 
     private func accountSelectionAction() -> DappRequestAction {

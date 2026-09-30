@@ -1481,6 +1481,7 @@ extension ExtensionBridge {
             self.handle == handle && self.value == value
         }
 
+        func adoptForExecution() -> Bool { lease.adoptForExecution() }
         func releaseIfUnconsumed() { lease.releaseIfUnconsumed() }
 
         static func == (lhs: Self, rhs: Self) -> Bool {

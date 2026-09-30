@@ -213,7 +213,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         privateBrowsing: Bool,
         context: NSExtensionContext
     ) {
-        guard let wire = WireProtocol.DappRequest(json: message),
+        guard let wire = WireProtocol.object(.dappRequest, value: message),
               let request = SafariRequest(wire: wire) else {
             context.cancelRequest(withError: HandlerError.invalidMessage)
             return

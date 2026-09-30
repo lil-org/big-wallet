@@ -3,12 +3,12 @@
 @MainActor
 protocol DappRequestProcessing {
     func prepare(
-        _ request: SafariRequest,
+        _ binding: ExtensionBridge.RequestBinding,
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation
 
     func prepareWithoutWallets(
-        _ request: SafariRequest
+        _ binding: ExtensionBridge.RequestBinding
     ) -> DappRequestPreparation?
 
     func execute(

@@ -65,52 +65,90 @@ func awaitBackgroundOperation<Value: Sendable>(
     }
 }
 
+struct BoundApprovalIntent: Sendable {
+    let binding: ExtensionBridge.RequestBinding
+    let action: DappRequestAction
+
+    fileprivate init(binding: ExtensionBridge.RequestBinding, action: DappRequestAction) {
+        self.binding = binding
+        self.action = action
+    }
+}
+
 struct DappRequestProcessor: DappRequestProcessing {
 
-    nonisolated init() {}
+    private let ethereumNetworkResolver: @MainActor (Int) -> EthereumNetworkResolution
+
+    nonisolated init(
+        ethereumNetworkResolver: @escaping @MainActor (Int) -> EthereumNetworkResolution = {
+            Nodes.resolution(chainId: $0)
+        }
+    ) {
+        self.ethereumNetworkResolver = ethereumNetworkResolver
+    }
 
     func prepare(
-        _ request: SafariRequest,
+        _ binding: ExtensionBridge.RequestBinding,
         catalog: WalletReviewCatalog
     ) -> DappRequestPreparation {
+        let request = binding.request
+        let preparation: UnboundDappRequestPreparation
         switch request.body {
         case .ethereum(let body):
-            return EthereumDappRequestProcessor.prepare(
+            preparation = EthereumDappRequestProcessor.prepare(
                 request: request,
                 body: body,
-                catalog: catalog
+                catalog: catalog,
+                networkResolver: ethereumNetworkResolver
             )
         case .solana(let body):
-            return SolanaDappRequestProcessor.prepare(
+            preparation = SolanaDappRequestProcessor.prepare(
                 request: request,
                 body: body,
                 catalog: catalog
             )
         case .unknown(let body):
-            return Self.prepareSwitchAccount(
+            preparation = Self.prepareSwitchAccount(
                 request: request,
                 body: body,
                 catalog: catalog
             )
         }
+        return bind(preparation, to: binding)
     }
 
     func prepareWithoutWallets(
-        _ request: SafariRequest
+        _ binding: ExtensionBridge.RequestBinding
     ) -> DappRequestPreparation? {
+        let request = binding.request
+        let preparation: UnboundDappRequestPreparation?
         switch request.body {
         case .ethereum(let body):
-            return EthereumDappRequestProcessor.prepareWithoutWallets(
+            preparation = EthereumDappRequestProcessor.prepareWithoutWallets(
                 request: request,
-                body: body
+                body: body,
+                networkResolver: ethereumNetworkResolver
             )
         case .solana(let body):
-            return SolanaDappRequestProcessor.prepareWithoutWallets(
+            preparation = SolanaDappRequestProcessor.prepareWithoutWallets(
                 request: request,
                 body: body
             )
         case .unknown:
             return nil
+        }
+        return preparation.map { bind($0, to: binding) }
+    }
+
+    private func bind(
+        _ preparation: UnboundDappRequestPreparation,
+        to binding: ExtensionBridge.RequestBinding
+    ) -> DappRequestPreparation {
+        switch preparation {
+        case .immediate(let resolution):
+            return .immediate(resolution)
+        case .approval(let action):
+            return .approval(BoundApprovalIntent(binding: binding, action: action))
         }
     }
 
@@ -164,22 +202,11 @@ struct DappRequestProcessor: DappRequestProcessing {
         ApprovedCompletion.failure(error, permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
     }
 
-    static func signingReviewContent(for request: SafariRequest) -> SigningReviewContent? {
-        switch request.body {
-        case .ethereum(let body):
-            return EthereumDappRequestProcessor.signingReviewContent(for: body)
-        case .solana(let body):
-            return SolanaDappRequestProcessor.signingReviewContent(for: body)
-        case .unknown:
-            return nil
-        }
-    }
-
     private static func prepareSwitchAccount(
         request: SafariRequest,
         body: SafariRequest.Unknown,
         catalog: WalletReviewCatalog
-    ) -> DappRequestPreparation {
+    ) -> UnboundDappRequestPreparation {
         let initiallyConnectedProviders = connectedProviders(in: body.providerConfigurations)
         let preselectedAccounts = initiallyConnectedProviders.isEmpty
             ? catalog.suggestedAccounts()

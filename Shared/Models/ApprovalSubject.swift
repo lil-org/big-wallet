@@ -1,6 +1,6 @@
 // ∅ 2026 lil org
 
-enum ApprovalSubject {
+enum ApprovalSubject: Sendable {
     case signMessage
     case signPersonalMessage
     case signTypedData

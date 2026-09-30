@@ -46,20 +46,20 @@ final class DappRequestAdmission {
         case .missing, .unavailable:
             return .unavailable
         }
-        let request: SafariRequest
         switch snapshot.state {
         case .responded:
             return .responseReady
         case .approving:
             return .approvalRequired
-        case .queued(let pendingRequest, .unowned):
-            request = pendingRequest
+        case .queued(_, .unowned):
+            break
         case .queued:
             return .approvalRequired
         }
+        guard let binding = snapshot.requestBinding else { return .unavailable }
         guard await store.authorityIsCurrent(handle: handle) else { return .unavailable }
         let preparation: DappRequestPreparation
-        if let walletIndependent = requestProcessor.prepareWithoutWallets(request) {
+        if let walletIndependent = requestProcessor.prepareWithoutWallets(binding) {
             preparation = walletIndependent
         } else if reviewCatalog == nil {
             return await currentAdmissionDisposition(
@@ -74,7 +74,7 @@ final class DappRequestAdmission {
                 )
             }
             preparation = requestProcessor.prepare(
-                request,
+                binding,
                 catalog: catalog
             )
         }

@@ -6,27 +6,33 @@ struct EthereumDappRequestProcessor {
 
     private static let ethereum = Ethereum.shared
 
+    @MainActor
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        catalog: WalletReviewCatalog
-    ) -> DappRequestPreparation {
-        prepareAvailable(request: request, body: body, catalog: catalog)
+        catalog: WalletReviewCatalog,
+        networkResolver: @MainActor (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) }
+    ) -> UnboundDappRequestPreparation {
+        prepareAvailable(request: request, body: body, catalog: catalog, networkResolver: networkResolver)
             ?? .immediate(immediateFailure(to: request, error: .internalError))
     }
 
+    @MainActor
     static func prepareWithoutWallets(
         request: SafariRequest,
-        body: SafariRequest.Ethereum
-    ) -> DappRequestPreparation? {
-        prepareAvailable(request: request, body: body, catalog: nil)
+        body: SafariRequest.Ethereum,
+        networkResolver: @MainActor (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) }
+    ) -> UnboundDappRequestPreparation? {
+        prepareAvailable(request: request, body: body, catalog: nil, networkResolver: networkResolver)
     }
 
+    @MainActor
     private static func prepareAvailable(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        catalog: WalletReviewCatalog?
-    ) -> DappRequestPreparation? {
+        catalog: WalletReviewCatalog?,
+        networkResolver: @MainActor (Int) -> EthereumNetworkResolution
+    ) -> UnboundDappRequestPreparation? {
         lazy var walletAndAccount = request.authorizedAccount.flatMap { descriptor in
             guard descriptor.coin == .ethereum,
                   descriptor.normalizedAddress == WalletCoin.ethereum.normalizedAddress(body.address)
@@ -36,7 +42,7 @@ struct EthereumDappRequestProcessor {
 
         switch body.method {
         case .addEthereumChain:
-            return prepareAddChain(request: request, body: body)
+            return prepareAddChain(request: request, body: body, networkResolver: networkResolver)
         case .requestAccounts:
             if let account = request.authorizedAccount, account.coin == .ethereum {
                 return .immediate(.existingEthereumAccounts)
@@ -76,7 +82,8 @@ struct EthereumDappRequestProcessor {
                 ))
             }
             guard let chainId = body.currentChainId,
-                  case .resolved(let resolvedNetwork) = Nodes.resolution(chainId: chainId) else {
+                  case .resolved(let resolvedNetwork) = networkResolver(chainId),
+                  resolvedNetwork.network.chainId == chainId else {
                 return .immediate(immediateFailure(to: request, error: .internalError))
             }
             guard catalog != nil else { return nil }
@@ -107,7 +114,7 @@ struct EthereumDappRequestProcessor {
             ))
         case .switchEthereumChain:
             guard let chainId = body.switchToChainId,
-                  Nodes.url(chainId: chainId) != nil else {
+                  networkResolver(chainId).resolvedNetwork != nil else {
                 return .immediate(immediateFailure(
                     to: request,
                     error: .init(message: Strings.unrecognizedChainId, code: 4902)
@@ -197,17 +204,33 @@ struct EthereumDappRequestProcessor {
         }
     }
 
+    @MainActor
     private static func prepareAddChain(
         request: SafariRequest,
-        body: SafariRequest.Ethereum
-    ) -> DappRequestPreparation {
+        body: SafariRequest.Ethereum,
+        networkResolver: @MainActor (Int) -> EthereumNetworkResolution
+    ) -> UnboundDappRequestPreparation {
         guard let chainToAdd = EthereumNetworkFromDapp.from(body.parameters),
               let chainId = Int(hexString: chainToAdd.chainId),
               chainId > 0 else {
             return .immediate(immediateGenericFailure(to: request))
         }
 
-        switch Nodes.resolution(chainId: chainId) {
+        if let immediate = chainAdditionResolution(chainToAdd, networkResolver: networkResolver) {
+            return .immediate(immediate)
+        }
+        return .approval(.addEthereumChain(AddEthereumChainAction(chainToAdd: chainToAdd)))
+    }
+
+    @MainActor
+    static func chainAdditionResolution(
+        _ chainToAdd: EthereumNetworkFromDapp,
+        networkResolver: @MainActor (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) }
+    ) -> ImmediateResolution? {
+        guard let chainId = Int(hexString: chainToAdd.chainId), chainId > 0 else {
+            return .failure(.init(message: Strings.somethingWentWrong))
+        }
+        switch networkResolver(chainId) {
         case .resolved(let resolvedNetwork):
             guard existingChainAdditionMatches(
                 approvedNetwork: chainToAdd,
@@ -218,17 +241,16 @@ struct EthereumDappRequestProcessor {
                     )
                 }
             ) else {
-                return .immediate(immediateGenericFailure(to: request))
+                return .failure(.init(message: Strings.somethingWentWrong))
             }
-            return .immediate(.ethereumChain(String.hex(chainId, withPrefix: true)))
+            return .ethereumChain(String.hex(chainId, withPrefix: true))
         case .catalogOwnedButUnavailable:
-            return .immediate(immediateGenericFailure(to: request))
+            return .failure(.init(message: Strings.somethingWentWrong))
         case .unknown:
             guard chainToAdd.defaultRpcURL != nil else {
-                return .immediate(immediateGenericFailure(to: request))
+                return .failure(.init(message: Strings.somethingWentWrong))
             }
-            let action = AddEthereumChainAction(chainToAdd: chainToAdd)
-            return .approval(.addEthereumChain(action))
+            return nil
         }
     }
 

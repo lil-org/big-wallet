@@ -391,11 +391,11 @@ private func unconsumedSigningOperationForSessionTests(
     let catalog = WalletReviewCatalog(
         identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [approvedAccount.specificAccount]
     )
-    guard case .approval(let action) = DappRequestProcessor().prepare(try XCTUnwrap(snapshot.request), catalog: catalog) else {
+    guard case .approval(let intent) = DappRequestProcessor().prepare(try XCTUnwrap(snapshot.requestBinding), catalog: catalog) else {
         throw CocoaError(.coderInvalidValue)
     }
     let permit = try fixture.authorize(
-        snapshot: snapshot, action: action,
+        snapshot: snapshot, action: intent.action,
         decision: .message(.init(approvedAccount: approvedAccount, solanaCluster: nil))
     )
     return (permit, try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit)))

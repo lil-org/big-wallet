@@ -2,15 +2,31 @@
 
 import Foundation
 
-enum DappRequestAction {
+enum DappRequestAction: Sendable {
     case switchAccount(SelectAccountAction)
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)
     case approveTransaction(SendTransactionAction)
     case addEthereumChain(AddEthereumChainAction)
+
+    var signingAccount: WalletAccountDescriptor? {
+        switch self {
+        case .approveMessage(let action):
+            return WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+        case .approveTransaction(let action):
+            return WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+        case .selectAccount, .switchAccount, .addEthereumChain:
+            return nil
+        }
+    }
 }
 
-enum DappRequestPreparation {
+enum DappRequestPreparation: Sendable {
+    case immediate(ImmediateResolution)
+    case approval(BoundApprovalIntent)
+}
+
+enum UnboundDappRequestPreparation: Sendable {
     case immediate(ImmediateResolution)
     case approval(DappRequestAction)
 }
@@ -320,7 +336,7 @@ struct DappBroadcastSender: ApprovedBroadcastSending {
     }
 }
 
-struct SelectAccountAction {
+struct SelectAccountAction: Sendable {
     let coinType: WalletCoin?
     let selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
@@ -336,13 +352,13 @@ struct SelectAccountAction {
     }
 }
 
-struct SigningReviewContent {
+struct SigningReviewContent: Sendable {
     let subject: ApprovalSubject
     let meta: String
     let payload: SignMessageAction.Payload
 }
 
-struct SignMessageAction {
+struct SignMessageAction: Sendable {
     enum Payload: Sendable {
         case ethereumMessage(Data)
         case ethereumPersonalMessage(Data)
@@ -404,7 +420,7 @@ struct SolanaClusterOptions {
     }
 }
 
-struct SendTransactionAction {
+struct SendTransactionAction: Sendable {
     let transaction: Transaction
     let resolvedNetwork: ResolvedEthereumNetwork
     let walletId: String
@@ -419,6 +435,6 @@ struct SendTransactionAction {
     }
 }
 
-struct AddEthereumChainAction {
+struct AddEthereumChainAction: Sendable {
     let chainToAdd: EthereumNetworkFromDapp
 }

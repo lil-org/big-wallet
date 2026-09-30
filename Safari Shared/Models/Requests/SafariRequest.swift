@@ -78,7 +78,8 @@ struct SafariRequest {
         self.init(json: json)
     }
 
-    init?(wire: WireProtocol.DappRequest) {
+    init?(wire: WireProtocol.ValidatedObject) {
+        guard wire.contract == .dappRequest else { return nil }
         self.init(json: wire.json)
     }
 
