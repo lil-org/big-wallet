@@ -275,6 +275,10 @@ struct ReviewConsent: Sendable {
     var binding: ExtensionBridge.RequestBinding { intent.binding }
     var request: SafariRequest { binding.request }
 
+    func invalidateAuthorization() {
+        _ = authorizationUse.consume()
+    }
+
     @MainActor
     func resolve(
         accounts: [SpecificWalletAccount]?,

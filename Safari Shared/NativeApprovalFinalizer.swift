@@ -66,6 +66,7 @@ final class NativeApprovalFinalizer {
     ) async -> NativeApprovalFinalizationResult {
         switch snapshot.state {
         case .responded:
+            consent.invalidateAuthorization()
             return .responseReady
         case .approving:
             return .pending
@@ -97,8 +98,10 @@ final class NativeApprovalFinalizer {
         case .executing:
             return .pending
         case .responded, .missing:
+            consent.invalidateAuthorization()
             return .responseReady
         case .ownershipLost, .unavailable:
+            consent.invalidateAuthorization()
             return .interruptionRequired
         }
         let result = await executor.execute(claim: claim, prepare: { _ in
@@ -107,7 +110,7 @@ final class NativeApprovalFinalizer {
         switch result {
         case .persisted:
             return .responseReady
-        case .ownershipLost, .retryablePersistenceFailure, .released:
+        case .ownershipLost, .retryablePersistenceFailure, .abandoned:
             return .interruptionRequired
         }
     }
@@ -129,7 +132,7 @@ final class NativeApprovalFinalizer {
         } else {
             currentNetwork = nil
         }
-        guard let catalog = refreshWalletCatalog() else { return .release(.refresh) }
+        guard let catalog = refreshWalletCatalog() else { return .abandon }
         if let approvedAccount = consent.intent.action.signingAccount,
            catalog.specificAccount(descriptor: approvedAccount) == nil {
             return .immediate(missingSigningAccountResolution(for: consent.request))

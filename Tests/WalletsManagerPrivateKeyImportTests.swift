@@ -623,8 +623,8 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             accounts: [account.specificAccount], approvedAt: Date()
         )
         guard case .claimed(let claim) = store.claim(handle: initial.handle),
-              case .began(let reservation) = store.begin(claim: claim),
-              case .authorized(let permit) = store.authorize(reservation: reservation, approval: approval),
+              claim.adoptForExecution(),
+              case .authorized(let permit) = store.authorize(claim: claim, approval: approval),
               permit.consumeExecution(),
               let completion = ApprovedCompletion.accountSelection(permit: permit),
               store.complete(permit: permit, result: completion) == .persisted else {

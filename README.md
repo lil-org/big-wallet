@@ -24,7 +24,11 @@ Native storage owns connected accounts, selected chains, and permission revision
 
 Claiming a request reserves ownership; it does not authorize privileged work. Accepting the current review produces process-local consent bound to the stored request and authority revisions. The store issues a one-use execution permit for account grants, signing, and new-network additions, and a separate dispatch permit only after a transaction broadcast checkpoint is durable. Stored responses and delivery receipts cannot recreate these capabilities. Ordinary completion is limited to failures, existing connections, address recovery, and known-chain selection.
 
+A shared execution lifecycle owns the request lock and tracks preparation, authorization, execution, signing use, and broadcast dispatch. Claims capture the stored request binding and authorize directly; there is no intermediate reservation. Copied capabilities share consumption state, and cleanup from an old claim cannot release an approved execution. Consent consumption remains independent so a new claim cannot reuse an earlier acceptance.
+
 Request preparation produces one immutable approval intent from a store-issued request binding. Review and execution use that same payload; execution refreshes account availability, network identity, and authority without rebuilding the approved request. The shared executor owns each acquired claim through authentication, preflight, authorization, completion, and cleanup.
+
+Abandoning an execution releases its local ownership and uses the same recovery rules as a stopped process. Terminal publication receives one attempt; uncertain writes are observed or recovered without repeating privileged work. Popup recovery requires fresh approval and preserves only validated nonce and fee edits when the request, account, and network still match. Preflight warnings retain their correction controls without retaining execution authority.
 
 Native consent receives one finalization attempt. Subsequent polling only observes the existing execution. If that execution returns to the queue, the approval is interrupted and requires a fresh review; observation cannot reuse the old consent. A durable broadcast checkpoint continues to provide recovery without repeating dispatch.
 

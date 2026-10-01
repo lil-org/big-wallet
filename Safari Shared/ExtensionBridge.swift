@@ -409,60 +409,13 @@ actor ExtensionBridge {
     final class OperationLease: @unchecked Sendable {
         let fileURL: URL
         private let lock: CrossProcessFileLock
-        private let stateLock = NSLock()
-        private var adoptedForExecution = false
-        private var consumed = false
-        private var released = false
 
         init(fileURL: URL, lock: CrossProcessFileLock) {
             self.fileURL = fileURL
             self.lock = lock
         }
 
-        func adoptForExecution() -> Bool {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            guard !adoptedForExecution, !consumed, !released else { return false }
-            adoptedForExecution = true
-            return true
-        }
-
-        func consume() -> Bool {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            guard !consumed, !released else { return false }
-            consumed = true
-            return true
-        }
-
-        var isActive: Bool {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            return consumed && !released
-        }
-
-        var isUnconsumed: Bool {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            return !consumed && !released
-        }
-
-        func releaseIfUnconsumed() {
-            release(onlyIfUnconsumed: true)
-        }
-
         func release() {
-            release(onlyIfUnconsumed: false)
-        }
-
-        private func release(onlyIfUnconsumed: Bool) {
-            stateLock.lock()
-            guard !released, !onlyIfUnconsumed || !consumed else {
-                stateLock.unlock()
-                return
-            }
-            released = true
-            stateLock.unlock()
             lock.release()
         }
         deinit { release() }
@@ -507,10 +460,6 @@ actor ExtensionBridge {
 
     enum NativeInterruptionResult: Equatable {
         case interrupted, responseReady, ownershipLost, retryablePersistenceFailure
-    }
-
-    enum BeginExecutionResult: Equatable {
-        case began(ExecutionReservation), ownershipLost, retryablePersistenceFailure
     }
 
     enum AuthorizeExecutionResult: Equatable {
@@ -820,7 +769,7 @@ actor ExtensionBridge {
         )
     }
 
-    func release(claim: ApprovalClaim) -> StoreMutationResult { store.release(claim: claim) }
+    func abandon(claim: ApprovalClaim) -> StoreMutationResult { store.abandon(claim: claim) }
 
     func completeImmediate(handle: Handle, resolution: ImmediateResolution) -> StoreMutationResult {
         store.completeImmediate(handle: handle, resolution: resolution)
@@ -830,19 +779,15 @@ actor ExtensionBridge {
         store.reject(handle: handle)
     }
 
-    func begin(claim: ApprovalClaim) -> BeginExecutionResult {
-        store.begin(claim: claim)
-    }
-
     func authorize(
-        reservation: ExecutionReservation,
+        claim: ApprovalClaim,
         approval: ResolvedDappApproval
     ) -> AuthorizeExecutionResult {
-        store.authorize(reservation: reservation, approval: approval)
+        store.authorize(claim: claim, approval: approval)
     }
 
-    func complete(reservation: ExecutionReservation, resolution: ImmediateResolution) -> StoreMutationResult {
-        store.complete(reservation: reservation, resolution: resolution)
+    func complete(claim: ApprovalClaim, resolution: ImmediateResolution) -> StoreMutationResult {
+        store.complete(claim: claim, resolution: resolution)
     }
 
     func prepareBroadcast(
@@ -856,12 +801,8 @@ actor ExtensionBridge {
         store.complete(permit: permit, result: result)
     }
 
-    func rollback(reservation: ExecutionReservation) -> StoreMutationResult {
-        store.rollback(reservation: reservation)
-    }
-
-    func rollback(permit: ApprovedExecutionPermit) -> StoreMutationResult {
-        store.rollback(permit: permit)
+    func abandon(permit: ApprovedExecutionPermit) -> StoreMutationResult {
+        store.abandon(permit: permit)
     }
 
     func prepareResponseDelivery(
@@ -897,14 +838,13 @@ protocol PopupRequestStore: AnyObject {
     func claim(handle: ExtensionBridge.Handle) async -> ExtensionBridge.ApprovalClaimResult
     func completeImmediate(handle: ExtensionBridge.Handle, resolution: ImmediateResolution) async -> ExtensionBridge.StoreMutationResult
     func reject(handle: ExtensionBridge.Handle) async -> ExtensionBridge.StoreMutationResult
-    func release(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult
-    func begin(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.BeginExecutionResult
+    func abandon(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult
     func authorize(
-        reservation: ExtensionBridge.ExecutionReservation,
+        claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval
     ) async -> ExtensionBridge.AuthorizeExecutionResult
     func complete(
-        reservation: ExtensionBridge.ExecutionReservation,
+        claim: ExtensionBridge.ApprovalClaim,
         resolution: ImmediateResolution
     ) async -> ExtensionBridge.StoreMutationResult
     func prepareBroadcast(
@@ -915,8 +855,7 @@ protocol PopupRequestStore: AnyObject {
         permit: ExtensionBridge.ApprovedExecutionPermit,
         result: ApprovedCompletion
     ) async -> ExtensionBridge.StoreMutationResult
-    func rollback(reservation: ExtensionBridge.ExecutionReservation) async -> ExtensionBridge.StoreMutationResult
-    func rollback(permit: ExtensionBridge.ApprovedExecutionPermit) async -> ExtensionBridge.StoreMutationResult
+    func abandon(permit: ExtensionBridge.ApprovedExecutionPermit) async -> ExtensionBridge.StoreMutationResult
 }
 
 extension ExtensionBridge: PopupRequestStore {}

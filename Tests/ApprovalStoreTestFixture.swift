@@ -383,8 +383,8 @@ final class ApprovedExecutionTestFixture {
             approvedAt: now
         )
         guard case .claimed(let claim) = store.claim(handle: snapshot.handle),
-              case .began(let reservation) = store.begin(claim: claim),
-              case .authorized(let permit) = store.authorize(reservation: reservation, approval: approved) else {
+              claim.adoptForExecution(),
+              case .authorized(let permit) = store.authorize(claim: claim, approval: approved) else {
             throw CocoaError(.fileWriteUnknown)
         }
         return permit
@@ -471,7 +471,7 @@ extension XCTestCase {
             throw CocoaError(.fileWriteUnknown)
         }
         addTeardownBlock {
-            claim.releaseIfUnconsumed()
+            claim.releaseUnapproved()
             try FileManager.default.removeItem(at: directory)
         }
         return claim
@@ -715,14 +715,14 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var cleanupContinuation: CheckedContinuation<Void, Never>?
     private var nextClaimObserver: (@MainActor (ExtensionBridge.ApprovalClaim) -> Void)?
     private var nextRejectResult: ExtensionBridge.StoreMutationResult?
-    private var nextReleaseResult: ExtensionBridge.StoreMutationResult?
+    private var nextAbandonResult: ExtensionBridge.StoreMutationResult?
     private var nextClaimResult: ExtensionBridge.ApprovalClaimResult?
     private var nextLoadTransform: ((ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot)?
     private var nextCompletionReceipt: ExtensionBridge.NativeDeliveryReceipt?
     private var shouldFailNextCompletion = false
-    private var shouldFailNextBegin = false
+    private var shouldFailNextAuthorization = false
     private var checkpointFailureAfterWriting: Bool?
-    private var beginHook: (@MainActor () -> Void)?
+    private var authorizationHook: (@MainActor () -> Void)?
     private var permitCompletionHook: (@Sendable () -> Void)?
     private var broadcastCheckpointHook: (@Sendable () -> Void)?
     private var broadcastCheckpointCommittedHook: (@Sendable () -> Void)?
@@ -757,7 +757,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         if activeOperations > 0 {
             await withCheckedContinuation { cleanupContinuation = $0 }
         }
-        for claim in retainedClaims { _ = await bridge.release(claim: claim) }
+        for claim in retainedClaims { _ = await bridge.abandon(claim: claim) }
         retainedClaims.removeAll()
         try FileManager.default.removeItem(at: rootURL)
     }
@@ -951,8 +951,8 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             accounts: [selectedAccount], approvedAt: clock()
         )
         guard case .claimed(let claim) = await bridge.claim(handle: handle),
-              case .began(let reservation) = await bridge.begin(claim: claim),
-              case .authorized(let permit) = await bridge.authorize(reservation: reservation, approval: approval),
+              claim.adoptForExecution(),
+              case .authorized(let permit) = await bridge.authorize(claim: claim, approval: approval),
               permit.consumeExecution(),
               let completion = ApprovedCompletion.accountSelection(permit: permit),
               await bridge.complete(permit: permit, result: completion) == .persisted else {
@@ -990,13 +990,13 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         nextClaimObserver = observer
     }
     func forceNextRejectResult(_ result: ExtensionBridge.StoreMutationResult) { nextRejectResult = result }
-    func forceNextReleaseResult(_ result: ExtensionBridge.StoreMutationResult) { nextReleaseResult = result }
+    func forceNextAbandonResult(_ result: ExtensionBridge.StoreMutationResult) { nextAbandonResult = result }
     func forceNextClaimResult(_ result: ExtensionBridge.ApprovalClaimResult) { nextClaimResult = result }
     func forceNextCompletionOwnershipLoss(receipt: ExtensionBridge.NativeDeliveryReceipt) { nextCompletionReceipt = receipt }
     func failNextCompletion() { shouldFailNextCompletion = true }
-    func failNextBegin() { shouldFailNextBegin = true }
+    func failNextAuthorization() { shouldFailNextAuthorization = true }
     func failNextCheckpoint(afterWriting: Bool) { checkpointFailureAfterWriting = afterWriting }
-    func setBeginHook(_ hook: @escaping @MainActor () -> Void) { beginHook = hook }
+    func setAuthorizationHook(_ hook: @escaping @MainActor () -> Void) { authorizationHook = hook }
     func setPermitCompletionHook(_ hook: @escaping @Sendable () -> Void) { permitCompletionHook = hook }
     func setBroadcastCheckpointHook(_ hook: @escaping @Sendable () -> Void) { broadcastCheckpointHook = hook }
     func setBroadcastCheckpointCommittedHook(_ hook: @escaping @Sendable () -> Void) {
@@ -1077,7 +1077,12 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             handle: handle, nativeDeliveryNonce: nativeDeliveryNonce,
             runtimeInstanceIdentifier: runtimeInstanceIdentifier, approvedAt: approvedAt
         )
-        if case .claimed = result { eventValues.append("nativeClaim") }
+        if case .claimed(let claim) = result {
+            eventValues.append("nativeClaim")
+            let observer = nextClaimObserver
+            nextClaimObserver = nil
+            await observer?(claim)
+        }
         return result
     }
     func interruptNativeApproval(
@@ -1117,42 +1122,34 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         return await bridge.reject(handle: handle)
     }
-    func release(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult {
+    func abandon(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
-        eventValues.append("release")
-        if let result = nextReleaseResult {
-            nextReleaseResult = nil
+        eventValues.append("abandon")
+        if let result = nextAbandonResult {
+            nextAbandonResult = nil
             return result
         }
-        return await bridge.release(claim: claim)
-    }
-    func begin(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.BeginExecutionResult {
-        guard !isClosing else { return .ownershipLost }
-        activeOperations += 1
-        defer { finishOperation() }
-        eventValues.append("begin")
-        await beginHook?()
-        if shouldFailNextBegin {
-            shouldFailNextBegin = false
-            return .retryablePersistenceFailure
-        }
-        guard authorityCurrent else { return .ownershipLost }
-        return await bridge.begin(claim: claim)
+        return await bridge.abandon(claim: claim)
     }
     func authorize(
-        reservation: ExtensionBridge.ExecutionReservation,
+        claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval
     ) async -> ExtensionBridge.AuthorizeExecutionResult {
         guard !isClosing, authorityCurrent else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
-        return await bridge.authorize(reservation: reservation, approval: approval)
+        await authorizationHook?()
+        if shouldFailNextAuthorization {
+            shouldFailNextAuthorization = false
+            return .retryablePersistenceFailure
+        }
+        return await bridge.authorize(claim: claim, approval: approval)
     }
 
     func complete(
-        reservation: ExtensionBridge.ExecutionReservation,
+        claim: ExtensionBridge.ApprovalClaim,
         resolution: ImmediateResolution
     ) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
@@ -1160,7 +1157,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         defer { finishOperation() }
         permitCompletionHook?()
         if let result = await beforeCompletion() { return result }
-        let result = await bridge.complete(reservation: reservation, resolution: resolution)
+        let result = await bridge.complete(claim: claim, resolution: resolution)
         recordCompletion(result)
         return result
     }
@@ -1194,21 +1191,12 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         return result
     }
-    func rollback(reservation: ExtensionBridge.ExecutionReservation) async -> ExtensionBridge.StoreMutationResult {
+    func abandon(permit: ExtensionBridge.ApprovedExecutionPermit) async -> ExtensionBridge.StoreMutationResult {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
-        let result = await bridge.rollback(reservation: reservation)
-        if result == .persisted { eventValues.append("rollback") }
-        return result
-    }
-
-    func rollback(permit: ExtensionBridge.ApprovedExecutionPermit) async -> ExtensionBridge.StoreMutationResult {
-        guard !isClosing else { return .ownershipLost }
-        activeOperations += 1
-        defer { finishOperation() }
-        let result = await bridge.rollback(permit: permit)
-        if result == .persisted { eventValues.append("rollback") }
+        let result = await bridge.abandon(permit: permit)
+        eventValues.append("abandon")
         return result
     }
 

@@ -88,22 +88,66 @@ final class DappRequestProcessorTests: XCTestCase {
         let first = try consent.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
         let copy = try consent.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
         guard case .claimed(let claim) = fixture.store.claim(handle: snapshot.handle),
-              case .began(let reservation) = fixture.store.begin(claim: claim),
-              case .authorized(let firstPermit) = fixture.store.authorize(reservation: reservation, approval: first) else {
+              claim.adoptForExecution(),
+              case .authorized(let firstPermit) = fixture.store.authorize(claim: claim, approval: first) else {
             return XCTFail("Expected the accepted review to authorize")
         }
-        XCTAssertEqual(fixture.store.rollback(permit: firstPermit), .persisted)
+        XCTAssertEqual(fixture.store.abandon(permit: firstPermit), .persisted)
         guard case .claimed(let nextClaim) = fixture.store.claim(handle: snapshot.handle),
-              case .began(let nextReservation) = fixture.store.begin(claim: nextClaim) else {
-            return XCTFail("Expected a new execution reservation")
+              nextClaim.adoptForExecution() else {
+            return XCTFail("Expected a new execution claim")
         }
-        guard case .ownershipLost = fixture.store.authorize(reservation: nextReservation, approval: copy) else {
+        guard case .ownershipLost = fixture.store.authorize(claim: nextClaim, approval: copy) else {
             return XCTFail("Copies of an accepted consent must share authorization consumption")
         }
-        XCTAssertEqual(fixture.store.rollback(reservation: nextReservation), .persisted)
+        XCTAssertEqual(fixture.store.abandon(claim: nextClaim), .persisted)
         let invalidated = ApprovalReview(intent: intent)
         invalidated.invalidate()
         XCTAssertNil(invalidated.acceptAccounts(selection: selection, approvedAt: fixture.now))
+    }
+
+    func testExecutorAbandonRetiresConsentWithoutIssuingAnExecutionPermit() async throws {
+        let fixture = try ApprovedExecutionTestFixture()
+        let snapshot = try fixture.enqueue(
+            id: 44, name: "requestAccounts", provider: .ethereum,
+            body: ["address": "", "chainId": "0x1", "object": [:]]
+        )
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let catalog = processorCatalog(accounts: [account])
+        guard case .approval(let intent) = DappRequestProcessor().prepare(
+            try XCTUnwrap(snapshot.requestBinding), catalog: catalog
+        ) else { return XCTFail("Expected account review") }
+        let review = ApprovalReview(intent: intent)
+        let selection = DappApprovalDecision.AccountSelection(
+            accounts: [WalletAccountDescriptor(walletID: "wallet", account: account)], ethereumChainID: "0x1"
+        )
+        let consent = try XCTUnwrap(review.acceptAccounts(selection: selection, approvedAt: fixture.now))
+        guard case .claimed(let claim) = fixture.store.claim(handle: snapshot.handle) else {
+            return XCTFail("Expected execution claim")
+        }
+        let executor = DurableApprovalExecutor(
+            store: ExtensionBridge(store: fixture.store), clock: { fixture.now }
+        )
+        let result = await executor.execute(claim: claim, prepare: { _ in
+            .ready(consent: consent, signing: .none)
+        }, resolve: { _ in .abandon })
+        XCTAssertEqual(result, .abandoned)
+        let retiredApproval = try consent.resolve(
+            accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex
+        ).get()
+        guard case .claimed(let freshClaim) = fixture.store.claim(handle: snapshot.handle),
+              freshClaim.adoptForExecution() else { return XCTFail("Expected fresh review ownership") }
+        let replay = fixture.store.authorize(claim: freshClaim, approval: retiredApproval)
+        XCTAssertEqual(replay, .ownershipLost)
+        let freshConsent = try XCTUnwrap(review.renewed().acceptAccounts(selection: selection, approvedAt: fixture.now))
+        let freshApproval = try freshConsent.resolve(
+            accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex
+        ).get()
+        guard case .authorized(let permit) = fixture.store.authorize(claim: freshClaim, approval: freshApproval) else {
+            return XCTFail("An abandoned attempt requires new consent without poisoning the fresh claim")
+        }
+        XCTAssertEqual(fixture.store.abandon(permit: permit), .persisted)
     }
 
     func testRenewedReviewKeepsOldAcceptanceClosedAndUsesFreshConsent() throws {

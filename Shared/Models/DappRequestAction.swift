@@ -212,6 +212,10 @@ struct PreparedBroadcast: Sendable {
         self.transaction = transaction
     }
 
+    func hasSameIdentity(as other: Self) -> Bool {
+        executionID == other.executionID && identity == other.identity
+    }
+
     static func signed(
         _ output: WalletSigningOutput,
         permit: ExtensionBridge.ApprovedExecutionPermit

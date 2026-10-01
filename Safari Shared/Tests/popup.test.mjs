@@ -3143,3 +3143,73 @@ test("a new Edit alert request still opens exclusive advanced editing", async ()
     assert.equal(harness.get("editor-apply").disabled, false);
     assert.equal(harness.get("button-approve").disabled, true);
 });
+
+test("a rebuilt transaction review allows the next alert Edit to reuse its request token", async () => {
+    const alert = {title: "Unsafe fees", message: "Edit the fee", actions: [
+        {title: "Edit", action: "edit"},
+    ]};
+    const harness = await reviewedPopup(request => transactionState(request, {alert}));
+    const controller = harness.controller;
+    let editRequests = 0;
+    let approvals = 0;
+    harness.handlers.native = (message, fallback) => {
+        let state;
+        if (message.subject === "resolveApprovalAlert") {
+            state = transactionState(controller.request, {
+                editorRequestToken: 1, reviewToken: requestToken(++editRequests === 1 ? 102 : 106),
+            });
+        } else if (message.subject === "applyTransactionEdits") {
+            state = transactionState(controller.request, {
+                editorRequestToken: 1, reviewToken: requestToken(103),
+            });
+        } else if (message.subject === "approveRequest") {
+            state = transactionState(controller.request, ++approvals === 1
+                ? {reviewToken: requestToken(104)}
+                : {reviewToken: requestToken(105), alert});
+        } else {
+            return fallback(message);
+        }
+        harness.setState(controller.request, state);
+        return commandReply(state);
+    };
+
+    await harness.get("alert-buttons").children[0].click();
+    assert.equal(harness.get("tx-editor").open, true);
+    controller.editField("gasPriceGwei", "3");
+    await harness.get("editor-apply").click();
+    assert.equal(harness.get("tx-editor").open, false);
+
+    await controller.approveCurrent();
+    assert.equal(controller.state.review.editorRequestToken, undefined);
+    assert.equal(harness.get("tx-editor").open, false);
+    await controller.approveCurrent();
+    await harness.get("alert-buttons").children[0].click();
+
+    assert.equal(editRequests, 2);
+    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
+    assert.equal(harness.get("tx-editor").open, true);
+    assert.equal(controller.activity.kind, "editing");
+    assert.equal(controller.activity.draft.reviewToken, requestToken(106));
+});
+
+test("review updates and busy states do not reopen a consumed editor request", async () => {
+    const harness = await reviewedPopup(request => transactionState(request, {editorRequestToken: 1}));
+    const controller = harness.controller;
+    assert.equal(harness.get("tx-editor").open, true);
+    harness.get("tx-editor").open = false;
+    await harness.get("tx-editor").emit("toggle");
+
+    let revision = 101;
+    for (const busyState of [null, "working", "authenticating"]) {
+        if (busyState) {
+            harness.setState(controller.request, {id: controller.request.id, state: busyState, actions: []});
+            await controller.readState();
+        }
+        harness.setState(controller.request, transactionState(controller.request, {
+            editorRequestToken: 1, reviewToken: requestToken(++revision),
+        }));
+        await controller.readState();
+        assert.equal(harness.get("tx-editor").open, false);
+        assert.equal(controller.activity.kind, "viewing");
+    }
+});

@@ -436,6 +436,9 @@ class PopupRequestController {
             activity = activity.kind === "submitting"
                 ? {...activity, source: {kind: "viewing"}} : {kind: "viewing"};
         }
+        if (state?.review?.kind === "sendTransaction" && state.review.editorRequestToken === undefined) {
+            this.presentation.lastEditorRequestKey = null;
+        }
         const editorToken = nextState?.review?.editorRequestToken;
         if (!terminal && !["submitting", "failed"].includes(activity.kind) &&
             hasApprovalAction(nextState, "editTransaction") && typeof editorToken === "number") {
