@@ -1924,6 +1924,84 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.subpathsOfDirectory(atPath: rootURL.path).sorted(), originalPaths)
     }
 
+    func testAuthorityReconciliationDoesNotRecoverUnrelatedRequests() async throws {
+        for interrupt in [false, true] {
+            let id = interrupt ? 986 : 983
+            let target = try makeFixture(id: id)
+            let admission = try accepted(await bridge.enqueue(ingress: target.ingress, profileIdentifier: nil))
+            let owner = storedRequestNativeOwner()
+            if interrupt {
+                let result = await bridge.recordNativeDeliveryReceipt(
+                    handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce, owner: owner
+                )
+                XCTAssertEqual(result, .persisted)
+            }
+            let expired = try makeFixture(id: id + 1, admissionDeadline: clock.now.addingTimeInterval(1))
+            _ = try accepted(await bridge.enqueue(ingress: expired.ingress, profileIdentifier: nil))
+            let abandoned = try makeFixture(id: id + 2)
+            let abandonedHandle = try accepted(await bridge.enqueue(ingress: abandoned.ingress, profileIdentifier: nil)).handle
+            let claim = try approvalClaim(await bridge.claim(handle: abandonedHandle))
+            claim.releaseUnapproved()
+            clock.now = clock.now.addingTimeInterval(2)
+            let recordsBefore = try XCTUnwrap(storedProfile()["records"] as? [[String: Any]])
+                .filter { ($0["id"] as? Int) == id + 1 || ($0["id"] as? Int) == id + 2 }
+            XCTAssertEqual(recordsBefore.count, 2)
+
+            if interrupt {
+                let result = await bridge.interruptNativeApproval(
+                    handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier
+                )
+                XCTAssertEqual(result, .interrupted)
+            } else {
+                let result = await bridge.completeImmediate(
+                    handle: admission.handle, resolution: immediateResolution(for: target.request)
+                )
+                XCTAssertEqual(result, .persisted)
+            }
+
+            let recordsAfter = try XCTUnwrap(storedProfile()["records"] as? [[String: Any]])
+                .filter { ($0["id"] as? Int) == id + 1 || ($0["id"] as? Int) == id + 2 }
+            XCTAssertEqual(recordsAfter as NSArray, recordsBefore as NSArray)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: operationLockURL(abandonedHandle).path))
+        }
+    }
+
+    func testAuthorityReconciliationDoesNotRepairPermissionCorruption() async throws {
+        for interrupt in [false, true] {
+            let target = try makeFixture(id: interrupt ? 989 : 988)
+            let admission = try accepted(await bridge.enqueue(ingress: target.ingress, profileIdentifier: nil))
+            let owner = storedRequestNativeOwner()
+            if interrupt {
+                let result = await bridge.recordNativeDeliveryReceipt(
+                    handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce, owner: owner
+                )
+                XCTAssertEqual(result, .persisted)
+            }
+            try mutateStoredPermissions { $0[target.request.configurationKey] = "incompatible permissions" }
+            let original = try Data(contentsOf: defaultProfileURL)
+            let strict = makeBridge(
+                clock: { self.clock.now },
+                atomicWrite: { _, _ in XCTFail("Authority reconciliation repaired storage"); throw Failure.injectedWrite },
+                synchronizePublishedFile: { _ in XCTFail("Authority reconciliation synchronized storage"); throw Failure.injectedWrite }
+            )
+
+            if interrupt {
+                let result = await strict.interruptNativeApproval(
+                    handle: admission.handle, nativeDeliveryNonce: admission.nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier
+                )
+                XCTAssertEqual(result, .retryablePersistenceFailure)
+            } else {
+                let result = await strict.completeImmediate(
+                    handle: admission.handle, resolution: immediateResolution(for: target.request)
+                )
+                XCTAssertEqual(result, .retryablePersistenceFailure)
+            }
+            XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
+        }
+    }
+
     func testReadyStatusDoesNotSynchronizeOrAcknowledgeResponse() async throws {
         let fixture = try makeFixture(id: 952)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle

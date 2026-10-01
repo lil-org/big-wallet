@@ -161,28 +161,68 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(approval.currentReview === freshReview)
     }
 
-    func testClosingApprovalPasswordTearsDownReviewWithoutCompletingAuthentication() {
-        let lifetime = NativeApprovalReviewLifetime()
+    func testClosingApprovalPasswordTearsDownReviewWithoutCompletingAuthentication() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, approval, window) = try attachApprovalWindow(to: fixture)
+        defer { fixture.coordinator.onEvent = nil; window.close() }
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
+        let accounts = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
+        let selection = try XCTUnwrap(accounts.accountSelection)
+        let lifetime = try XCTUnwrap(approval.currentReview)
         let originalController = ReviewTeardownController()
         var cleanupCount = 0
-        originalController.onInvalidate = { cleanupCount += 1 }
+        originalController.onInvalidate = {
+            XCTAssertFalse(lifetime.isActive)
+            XCTAssertFalse(approval.acceptsReviewActions)
+            cleanupCount += 1
+        }
         lifetime.register(originalController)
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in
+            rejections += 1
+            return .persisted
+        }
         var completionCount = 0
         let password = PasswordViewController.with(
             mode: .enter,
             reviewLifetime: lifetime,
             completion: { _ in completionCount += 1 }
         )
-        _ = password.view
+        window.contentViewController = password
+        password.viewDidAppear()
 
-        let notification = Notification(name: NSWindow.willCloseNotification)
-        password.windowWillClose(notification)
-        password.windowWillClose(notification)
+        window.close()
+        window.close()
         password.cancelButtonTapped(password.cancelButton)
+        selection.complete(accounts: [])
+        _ = accounts.perform(NSSelectorFromString("didClickImportAccount"))
+        await waitForState(fixture.coordinator, .finished)
 
         XCTAssertFalse(lifetime.isActive)
         XCTAssertEqual(cleanupCount, 1)
         XCTAssertEqual(completionCount, 0)
+        XCTAssertEqual(rejections, 1)
+    }
+
+    func testClosingOrdinaryPasswordCancelsAuthenticationOnce() {
+        var completions = [Bool]()
+        let password = PasswordViewController.with(mode: .enter) { completions.append($0) }
+        let window = NSWindow(
+            contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentViewController = password
+        window.orderFront(nil)
+        password.viewDidAppear()
+        window.close()
+        window.close()
+        password.cancelButtonTapped(password.cancelButton)
+        XCTAssertEqual(completions, [false])
     }
 
     func testApprovalPickerBlocksWalletManagementActions() throws {
@@ -357,10 +397,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer { window.close() }
         let menu = TrackingMenu()
         controller.addButton.menu = menu
-        let notification = Notification(name: NSWindow.willCloseNotification, object: window)
 
-        controller.windowWillClose(notification)
-        controller.windowWillClose(notification)
+        window.close()
+        window.close()
         _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
 
         XCTAssertNil(controller.accountSelection)
@@ -1617,6 +1656,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             publicKey: "",
             extendedPublicKey: ""
         )
+        var outgoingCloses = 0
+        let outgoing = WaitingViewController.with(reason: "Waiting") { outgoingCloses += 1 }
+        windowController.contentViewController = outgoing
+        outgoing.viewDidAppear()
         let controller = ApproveViewController.with(
             subject: .signMessage,
             meta: "Review this message",
@@ -1647,6 +1690,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         XCTAssertTrue(controller.metaTextView.string.hasSuffix("Review this message"))
         controller.invalidateNativeApprovalReview()
+        withExtendedLifetime(outgoing) { window.close() }
+        XCTAssertEqual(outgoingCloses, 0)
     }
 
     func testApprovalHostingSheetPreservesMainContentAndSize() throws {

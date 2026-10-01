@@ -5,76 +5,28 @@ import Foundation
 @MainActor
 final class PopupTransactionSession {
 
-    struct Draft {
-        let nonce: UInt?
-        let suggestedNonce: String?
-        let fee: PreparedTransactionFee?
-        let provenance: TransactionFeeProvenance
-        let baseFee: BigUInt?
-
-        func applying(to original: Transaction, on chain: EthereumNetwork) -> Transaction {
-            var transaction = original
-            let nonceText = nonce.map(String.init) ?? original.editableFields.nonce
-            guard let fee else {
-                _ = transaction.apply(.init(nonce: nonce))
-                return transaction
-            }
-            let fields: Transaction.EditableFields
-            switch fee {
-            case .legacy(let price):
-                fields = .init(nonce: nonceText,
-                               gasPriceGwei: Transaction.editableGwei(fromWei: price) ?? "",
-                               maxPriorityFeePerGasGwei: "", maxFeePerGasGwei: "")
-            case .eip1559(let priority, let maximum):
-                fields = .init(nonce: nonceText, gasPriceGwei: "",
-                               maxPriorityFeePerGasGwei: Transaction.editableGwei(fromWei: priority) ?? "",
-                               maxFeePerGasGwei: Transaction.editableGwei(fromWei: maximum) ?? "")
-            }
-            guard let validated = original.edits(from: fields, on: chain, resettingFeeTo: fee) else {
-                _ = transaction.apply(.init(nonce: nonce))
-                return transaction
-            }
-            _ = transaction.apply(.init(
-                preparedFee: fee,
-                source: provenance.dominantSource(for: fee),
-                replacementFeeProvenance: provenance,
-                restoresSuggestedFee: provenance == TransactionFeeProvenance(source: .automatic, for: fee),
-                nonce: validated.nonce
-            ))
-            transaction.currentBaseFeePerGas = baseFee
-            transaction.nextBaseFeePerGas = nil
-            return transaction
-        }
-    }
-
-    enum PreflightOutcome {
+    enum PreflightOutcome: Sendable {
         case approved(Transaction)
         case reviewRequired
         case invalidated
     }
 
     private let coordinator: TransactionApprovalCoordinator
-    private let restoresDraft: Bool
     private var authenticationToken: TransactionApprovalRequestToken?
     private var preflightContinuation: CheckedContinuation<PreflightOutcome, Never>?
-    private var editedNonce: UInt?
     var editorRequestToken = 0
     var balance: String?
     var onChange: () -> Void = {}
 
     init(
         action: SendTransactionAction,
-        operations: TransactionApprovalOperations,
-        draft: Draft? = nil
+        operations: TransactionApprovalOperations
     ) {
-        editedNonce = draft?.nonce
-        restoresDraft = draft != nil
         coordinator = TransactionApprovalCoordinator(
-            transaction: draft?.applying(to: action.transaction, on: action.chain) ?? action.transaction,
+            transaction: action.transaction,
             network: action.chain,
             authenticationPolicy: .required,
-            operations: operations,
-            suggestedNonce: draft?.nonce == nil ? nil : draft?.suggestedNonce
+            operations: operations
         )
         coordinator.onOutput = { [weak self] output in
             guard let self else { return }
@@ -94,13 +46,6 @@ final class PopupTransactionSession {
         activeAlert != nil || snapshot.phase == .editing || snapshot.phase == .reviewingFees
     }
 
-    var draft: Draft {
-        let transaction = snapshot.transaction
-        return Draft(nonce: editedNonce, suggestedNonce: snapshot.suggestedNonce,
-                     fee: transaction.preparedFee,
-                     provenance: transaction.feeProvenance, baseFee: transaction.feeBasisBaseFeePerGas)
-    }
-
     var hasGasSpeedInfo: Bool {
         coordinator.hasGasSpeedInfo
     }
@@ -110,7 +55,7 @@ final class PopupTransactionSession {
     }
 
     func start() {
-        coordinator.startPreparation(forceGasCheck: restoresDraft)
+        coordinator.startPreparation(forceGasCheck: false)
     }
 
     func invalidate() {
@@ -235,7 +180,6 @@ final class PopupTransactionSession {
     private func commit(_ edits: Transaction.Edits) -> Bool {
         guard snapshot.canEdit else { return false }
         guard coordinator.apply(edits: edits) else { return true }
-        if let nonce = edits.nonce { editedNonce = nonce }
         coordinator.startPreparation(forceGasCheck: true)
         return true
     }

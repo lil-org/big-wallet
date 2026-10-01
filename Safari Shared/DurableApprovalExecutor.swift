@@ -5,9 +5,62 @@ import Foundation
 @MainActor
 final class DurableApprovalExecutor {
 
+    @MainActor
     struct ClaimContext {
+        enum DeadlineResult<Value: Sendable>: Sendable {
+            case value(Value)
+            case expired
+        }
+
         let handle: ExtensionBridge.Handle
         let executionDeadline: Date
+        private let clock: () -> Date
+        private let waitForDeadline: @MainActor (Date) async -> Void
+
+        fileprivate init(
+            handle: ExtensionBridge.Handle,
+            executionDeadline: Date,
+            clock: @escaping () -> Date,
+            waitForDeadline: @escaping @MainActor (Date) async -> Void
+        ) {
+            self.handle = handle
+            self.executionDeadline = executionDeadline
+            self.clock = clock
+            self.waitForDeadline = waitForDeadline
+        }
+
+        func runBeforeDeadline<Value: Sendable>(
+            onTimeout: @MainActor () -> Void = {},
+            discardValue: @escaping @Sendable (Value) -> Void = { _ in },
+            operation: @escaping @MainActor () async -> Value
+        ) async -> DeadlineResult<Value> {
+            guard clock() < executionDeadline else {
+                onTimeout()
+                return .expired
+            }
+            let result = await ApprovalResolution<DeadlineResult<Value>>().value(
+                timeoutValue: .expired,
+                callerCancellation: .ignore,
+                waitForTimeout: { await waitForDeadline(executionDeadline) },
+                onDiscardedValue: { result in
+                    if case .value(let value) = result { discardValue(value) }
+                },
+                operation: { @MainActor in
+                    guard !Task.isCancelled, clock() < executionDeadline else { return .expired }
+                    return .value(await operation())
+                }
+            )
+            if case .value(let value) = result {
+                guard clock() < executionDeadline else {
+                    discardValue(value)
+                    onTimeout()
+                    return .expired
+                }
+                return .value(value)
+            }
+            onTimeout()
+            return .expired
+        }
     }
 
     typealias SourceSignerFactory = (
@@ -52,6 +105,7 @@ final class DurableApprovalExecutor {
     private let broadcastSender: any ApprovedBroadcastSending
     private let broadcastTimeoutNanoseconds: UInt64
     private let clock: () -> Date
+    private let waitForExecutionDeadline: @MainActor (Date) async -> Void
 
     init(
         store: PopupRequestStore,
@@ -59,13 +113,17 @@ final class DurableApprovalExecutor {
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping () -> Date = Date.init
+        clock: @escaping () -> Date = Date.init,
+        waitForExecutionDeadline: (@MainActor (Date) async -> Void)? = nil
     ) {
         self.store = store
         self.requestProcessor = requestProcessor ?? DappRequestProcessor()
         self.broadcastSender = broadcastSender ?? DappBroadcastSender()
         self.broadcastTimeoutNanoseconds = broadcastTimeoutNanoseconds
         self.clock = clock
+        self.waitForExecutionDeadline = waitForExecutionDeadline ?? { deadline in
+            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSince(clock()))))
+        }
     }
 
     func execute(
@@ -75,9 +133,15 @@ final class DurableApprovalExecutor {
     ) async -> Result {
         guard claim.adoptForExecution() else { return .ownershipLost }
         defer { claim.releaseUnapproved() }
+        let context = ClaimContext(
+            handle: claim.handle,
+            executionDeadline: claim.executionDeadline,
+            clock: clock,
+            waitForDeadline: waitForExecutionDeadline
+        )
         let consent: ReviewConsent
         let signing: SigningAccess
-        switch await prepare(ClaimContext(handle: claim.handle, executionDeadline: claim.executionDeadline)) {
+        switch await prepare(context) {
         case .ready(let preparedConsent, let preparedSigning):
             consent = preparedConsent
             signing = preparedSigning
@@ -100,7 +164,7 @@ final class DurableApprovalExecutor {
             guard nativeDecisionIsFresh(claim) else {
                 return await complete(claim: claim, resolution: Self.staleResolution)
             }
-            return await executeApproved(claim: claim, approval: approval, signing: signing)
+            return await executeApproved(claim: claim, approval: approval, signing: signing, context: context)
         case .immediate(let resolution):
             return await complete(claim: claim, resolution: resolution)
         case .abandon:
@@ -123,7 +187,8 @@ final class DurableApprovalExecutor {
     private func executeApproved(
         claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval,
-        signing: SigningAccess
+        signing: SigningAccess,
+        context: ClaimContext
     ) async -> Result {
         guard !hasExpired(claim) else {
             return await abandon(claim: claim)
@@ -144,11 +209,9 @@ final class DurableApprovalExecutor {
         guard approval.approval.signingAccount == nil || signer != nil else {
             return await abandon(permit: permit)
         }
-        guard let operationResult = await boundedOperation(
-            deadline: claim.executionDeadline,
-            permit: permit,
-            signer: signer
-        ) else {
+        guard case .value(let operationResult) = await context.runBeforeDeadline(operation: {
+            await self.requestProcessor.execute(permit: permit, signer: signer)
+        }) else {
             return await abandon(permit: permit)
         }
         if case .rollback = operationResult {
@@ -289,22 +352,6 @@ final class DurableApprovalExecutor {
 
     private static var staleResolution: ImmediateResolution {
         .failure(ProviderResponseError(message: Strings.providerNotReady, code: 4100))
-    }
-
-    private func boundedOperation(
-        deadline: Date,
-        permit: ExtensionBridge.ApprovedExecutionPermit,
-        signer: (any WalletSigning)?
-    ) async -> ApprovedExecutionResult? {
-        let remaining = deadline.timeIntervalSince(clock())
-        guard remaining > 0 else { return nil }
-        let timeout = UInt64(min(
-            remaining * 1_000_000_000,
-            Double(UInt64.max)
-        ))
-        return await bounded(timeoutNanoseconds: timeout, timeoutValue: nil) {
-            await self.requestProcessor.execute(permit: permit, signer: signer)
-        }
     }
 
     private func boundedBroadcast(

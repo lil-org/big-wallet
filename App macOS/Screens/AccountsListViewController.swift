@@ -1216,14 +1216,9 @@ extension AccountsListViewController: NSMenuDelegate {
 extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        if let reviewLifetime {
-            reviewLifetime.invalidate()
-        } else {
-            guard !isClosed else { return }
-            isClosed = true
-            invalidateNativeApprovalReview()
-        }
-        closeAllPopupsIfNeeded()
+        guard reviewLifetime == nil, !isClosed else { return }
+        isClosed = true
+        invalidateNativeApprovalReview()
     }
     
 }

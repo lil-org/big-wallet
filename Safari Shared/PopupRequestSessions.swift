@@ -251,20 +251,6 @@ final class PopupRequestSessions {
         }
     }
 
-    private struct TransactionDraft {
-        let binding: ExtensionBridge.RequestBinding
-        let account: WalletAccountDescriptor
-        let network: DappApprovalDecision.NetworkIdentity
-        let values: PopupTransactionSession.Draft
-
-        @MainActor
-        func matches(_ session: PopupRequestSession, action: SendTransactionAction) -> Bool {
-            binding == session.binding &&
-                account.matches(walletID: action.walletId, account: action.account) &&
-                network == DappApprovalDecision.NetworkIdentity(action.resolvedNetwork)
-        }
-    }
-
 #if os(iOS) || os(visionOS)
     static let shared = PopupRequestSessions(
         store: ExtensionBridge.shared,
@@ -288,11 +274,9 @@ final class PopupRequestSessions {
     private let selectionNetworkResolver: (String) -> EthereumNetwork?
     private let signingNetworkResolver: (Int) -> ResolvedEthereumNetwork?
     private let clock: () -> Date
-    private let waitForAuthenticationDeadline: @MainActor (Date) async -> Void
     private let durableApprovalExecutor: DurableApprovalExecutor
     private let presenter: PopupApprovalStatePresenter
     private var entries = [ExtensionBridge.Handle: RequestEntry]()
-    private var transactionDrafts = [ExtensionBridge.Handle: TransactionDraft]()
 
     init(
         store: PopupRequestStore,
@@ -314,7 +298,7 @@ final class PopupRequestSessions {
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
         clock: @escaping () -> Date = Date.init,
-        waitForAuthenticationDeadline: (@MainActor (Date) async -> Void)? = nil
+        waitForExecutionDeadline: (@MainActor (Date) async -> Void)? = nil
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
@@ -325,15 +309,13 @@ final class PopupRequestSessions {
         self.selectionNetworkResolver = selectionNetworkResolver
         self.signingNetworkResolver = signingNetworkResolver
         self.clock = clock
-        self.waitForAuthenticationDeadline = waitForAuthenticationDeadline ?? { deadline in
-            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSince(clock()))))
-        }
         durableApprovalExecutor = DurableApprovalExecutor(
             store: store,
             requestProcessor: requestProcessor,
             broadcastSender: broadcastSender,
             broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds,
-            clock: clock
+            clock: clock,
+            waitForExecutionDeadline: waitForExecutionDeadline
         )
         presenter = PopupApprovalStatePresenter()
     }
@@ -416,7 +398,7 @@ final class PopupRequestSessions {
             if retry, case .queued(_, .unowned) = snapshot.state {
                 switch entries[handle] {
                 case .session(let session) where session.state == .error:
-                    discardSession(handle: handle, preservingDraft: true)
+                    discardSession(handle: handle)
                 case .immediateResponse(let persistence) where persistence.state == .failed:
                     discardEntry(handle: handle)
                 default:
@@ -523,9 +505,6 @@ final class PopupRequestSessions {
                 : $0.createdAt < $1.createdAt
         }
         let currentHandles = Set(snapshots.map(\.handle))
-        transactionDrafts = transactionDrafts.filter {
-            $0.key.profileIdentifier != profileIdentifier || currentHandles.contains($0.key)
-        }
         let staleHandles = entries.compactMap { handle, entry -> ExtensionBridge.Handle? in
             guard handle.profileIdentifier == profileIdentifier,
                   !currentHandles.contains(handle),
@@ -572,7 +551,7 @@ final class PopupRequestSessions {
                 }
                 if currentAccess.identity != reviewedAccess.identity ||
                     currentAccess.orderedAccounts != reviewedAccess.orderedAccounts {
-                    discardSession(handle: snapshot.handle, preservingDraft: true)
+                    discardSession(handle: snapshot.handle)
                     return ensureSession(snapshot: snapshot)
                 }
             }
@@ -639,30 +618,13 @@ final class PopupRequestSessions {
         return ensureSession(snapshot: snapshot)
     }
 
-    private func discardSession(handle: ExtensionBridge.Handle, preservingDraft: Bool = false) {
-        guard case .session(let session) = entries[handle] else { return }
-        if preservingDraft { saveTransactionDraft(for: session) }
-        else { transactionDrafts.removeValue(forKey: handle) }
-        entries.removeValue(forKey: handle)
-        session.invalidate()
+    private func discardSession(handle: ExtensionBridge.Handle) {
+        guard case .session = entries[handle] else { return }
+        discardEntry(handle: handle)
     }
 
     private func discardEntry(handle: ExtensionBridge.Handle) {
-        transactionDrafts.removeValue(forKey: handle)
-        let entry = entries.removeValue(forKey: handle)
-        entry?.session?.invalidate()
-    }
-
-    private func saveTransactionDraft(for session: PopupRequestSession) {
-        guard case .approveTransaction(let action) = session.preparedAction,
-              let transaction = session.transaction,
-              let network = DappApprovalDecision.NetworkIdentity(action.resolvedNetwork) else { return }
-        transactionDrafts[session.handle] = TransactionDraft(
-            binding: session.binding,
-            account: WalletAccountDescriptor(walletID: action.walletId, account: action.account),
-            network: network,
-            values: transaction.draft
-        )
+        entries.removeValue(forKey: handle)?.session?.invalidate()
     }
 
     private func canMutateTransaction(
@@ -721,6 +683,7 @@ final class PopupRequestSessions {
         if session.state == .error {
             return PopupApprovalStatePresenter.errorState(
                 id: handle.id,
+                actions: [.retry, .reject],
                 host: snapshot.host,
                 error: session.errorText ?? Strings.failedToLoad
             )
@@ -977,7 +940,8 @@ final class PopupRequestSessions {
                 session: session,
                 token: token,
                 reason: reason,
-                authorization: authorization
+                authorization: authorization,
+                context: context
             )
             guard case .unlocked(let catalog, let signer) = authentication else {
                 if let transactionSession, let transactionToken {
@@ -1005,24 +969,16 @@ final class PopupRequestSessions {
             let decision: DappApprovalDecision
             if let transactionSession, let transactionToken,
                case .approveTransaction(let reviewedAction) = action {
-                guard self.clock() < executionDeadline else { return .abandon }
-                let timeout = Task { @MainActor in
-                    do {
-                        try await Task.sleep(for: .seconds(max(
-                            0, executionDeadline.timeIntervalSince(self.clock())
-                        )))
-                    } catch {
-                        return
-                    }
-                    guard !Task.isCancelled else { return }
+                let preflight = await context.runBeforeDeadline(onTimeout: {
                     signer.invalidate()
                     transactionSession.invalidate()
+                }) {
+                    await transactionSession.finishAuthentication(
+                        token: transactionToken,
+                        succeeded: true
+                    )
                 }
-                let preflight = await transactionSession.finishAuthentication(
-                    token: transactionToken,
-                    succeeded: true
-                )
-                timeout.cancel()
+                guard case .value(let preflight) = preflight else { return .abandon }
                 switch preflight {
                 case .approved(let transaction):
                     guard let execution = DappApprovalDecision.TransactionExecution(
@@ -1137,6 +1093,7 @@ final class PopupRequestSessions {
             }
         case .unavailable:
             if isCurrent(session, token: token) {
+                session.invalidate()
                 session.fail(Strings.failedToLoad, token: token)
             }
         }
@@ -1147,12 +1104,20 @@ final class PopupRequestSessions {
         session: PopupRequestSession,
         token: UUID,
         reason: String,
-        authorization: WalletSigningAuthorization
+        authorization: WalletSigningAuthorization,
+        context: DurableApprovalExecutor.ClaimContext
     ) async -> AuthenticationOutcome {
         guard session.beginAuthentication(token: token) else { return .superseded }
-        let outcome = await boundedAuthentication(
-            session: session, reason: reason, authorization: authorization
-        )
+        let result = await context.runBeforeDeadline(discardValue: { outcome in
+            if case .unlocked(_, let signer) = outcome { signer.invalidate() }
+        }) {
+            await self.authenticate(session: session, reason: reason, authorization: authorization)
+        }
+        let outcome: AuthenticationOutcome
+        switch result {
+        case .value(let value): outcome = value
+        case .expired: outcome = .cancelled
+        }
         guard isCurrent(session, token: token), session.finishAuthentication(token: token) else {
             if case .unlocked(_, let signer) = outcome {
                 signer.invalidate()
@@ -1160,32 +1125,6 @@ final class PopupRequestSessions {
             return .superseded
         }
         return outcome
-    }
-
-    private func boundedAuthentication(
-        session: PopupRequestSession,
-        reason: String,
-        authorization: WalletSigningAuthorization
-    ) async -> AuthenticationOutcome {
-        let deadline = authorization.signingDeadline
-        guard clock() < deadline else { return .cancelled }
-        return await ApprovalResolution<AuthenticationOutcome>().value(
-            timeoutValue: .cancelled,
-            callerCancellation: .ignore,
-            waitForTimeout: { await self.waitForAuthenticationDeadline(deadline) },
-            onDiscardedValue: { outcome in
-                if case .unlocked(_, let signer) = outcome { signer.invalidate() }
-            }
-        ) { @MainActor in
-            let outcome = await self.authenticate(
-                session: session, reason: reason, authorization: authorization
-            )
-            guard !Task.isCancelled, self.clock() < deadline else {
-                if case .unlocked(_, let signer) = outcome { signer.invalidate() }
-                return .cancelled
-            }
-            return outcome
-        }
     }
 
     private func authenticate(
@@ -1254,10 +1193,9 @@ final class PopupRequestSessions {
             if entries[session.handle]?.session === session {
                 discardSession(handle: session.handle)
             }
+            return
         case .ownershipLost:
-            if entries[session.handle]?.session === session {
-                discardSession(handle: session.handle, preservingDraft: true)
-            }
+            break
         case .abandoned:
             guard isCurrent(session, token: token) else { return }
             if session.transaction?.requiresUserCorrection == true,
@@ -1271,22 +1209,16 @@ final class PopupRequestSessions {
                DappApprovalDecision.NetworkIdentity(network) == DappApprovalDecision.NetworkIdentity(action.resolvedNetwork),
                isCurrent(session, token: token) {
                 _ = session.returnToReview(token: token)
-            } else if isCurrent(session, token: token) {
-                if let feedback = session.errorText {
-                    saveTransactionDraft(for: session)
-                    session.invalidate()
-                    session.fail(feedback, token: token)
-                } else {
-                    discardSession(handle: session.handle, preservingDraft: true)
-                }
+                return
             }
         case .retryablePersistenceFailure:
-            if isCurrent(session, token: token) {
-                saveTransactionDraft(for: session)
-                session.invalidate()
-                session.fail(Strings.failedToLoad, token: token)
-            }
+            guard isCurrent(session, token: token) else { return }
+            session.setFeedback(Strings.failedToLoad)
         }
+        guard isCurrent(session, token: token) else { return }
+        let feedback = session.errorText ?? Strings.approvalInterrupted
+        session.invalidate()
+        session.fail(feedback, token: token)
     }
 
     private func isCurrent(
@@ -1301,12 +1233,9 @@ final class PopupRequestSessions {
         for session: PopupRequestSession,
         action: SendTransactionAction
     ) {
-        let saved = transactionDrafts.removeValue(forKey: session.handle)
-        let draft = saved.flatMap { $0.matches(session, action: action) ? $0.values : nil }
         let transactionSession = PopupTransactionSession(
             action: action,
-            operations: transactionApprovalOperations,
-            draft: draft
+            operations: transactionApprovalOperations
         )
         transactionSession.onChange = { [weak self, weak session] in
             guard let self,

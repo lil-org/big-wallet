@@ -481,14 +481,12 @@ struct TransactionApprovalReducer {
     init(
         transaction: Transaction,
         network: EthereumNetwork,
-        authenticationPolicy: TransactionApprovalAuthenticationPolicy,
-        suggestedNonce: String? = nil
+        authenticationPolicy: TransactionApprovalAuthenticationPolicy
     ) {
         state = State(
             transaction: transaction,
             network: network,
-            authenticationPolicy: authenticationPolicy,
-            suggestedNonce: suggestedNonce
+            authenticationPolicy: authenticationPolicy
         )
     }
 
@@ -1037,14 +1035,12 @@ final class TransactionApprovalCoordinator {
         network: EthereumNetwork,
         authenticationPolicy: TransactionApprovalAuthenticationPolicy,
         operations: TransactionApprovalOperations = .live(),
-        suggestedNonce: String? = nil,
         onOutput: @escaping (TransactionApprovalOutput) -> Void = { _ in }
     ) {
         reducer = TransactionApprovalReducer(
             transaction: transaction,
             network: network,
-            authenticationPolicy: authenticationPolicy,
-            suggestedNonce: suggestedNonce
+            authenticationPolicy: authenticationPolicy
         )
         self.operations = operations
         self.onOutput = onOutput

@@ -597,8 +597,4 @@ extension ApproveTransactionViewController: NSWindowDelegate {
         }
     }
     
-    func windowWillClose(_ notification: Notification) {
-        reviewLifetime.invalidate()
-    }
-    
 }

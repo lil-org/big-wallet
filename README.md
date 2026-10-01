@@ -28,7 +28,7 @@ A shared execution lifecycle owns the request lock and tracks preparation, autho
 
 Request preparation produces one immutable approval intent from a store-issued request binding. Review and execution use that same payload; execution refreshes account availability, network identity, and authority without rebuilding the approved request. The shared executor owns each acquired claim through authentication, preflight, authorization, completion, and cleanup.
 
-Abandoning an execution releases its local ownership and uses the same recovery rules as a stopped process. Terminal publication receives one attempt; uncertain writes are observed or recovered without repeating privileged work. Popup recovery requires fresh approval and preserves only validated nonce and fee edits when the request, account, and network still match. Preflight warnings retain their correction controls without retaining execution authority.
+Abandoning an execution releases its local ownership and uses the same recovery rules as a stopped process. Terminal publication receives one attempt; uncertain writes are observed or recovered without repeating privileged work. Interrupted popup approvals require explicit Retry, which builds a fresh review from the current request, account, and network and discards previous nonce and fee edits. Preflight warnings retain their correction controls without retaining execution authority.
 
 Native consent receives one finalization attempt. Subsequent polling only observes the existing execution. If that execution returns to the queue, the approval is interrupted and requires a fresh review; observation cannot reuse the old consent. A durable broadcast checkpoint continues to provide recovery without repeating dispatch.
 

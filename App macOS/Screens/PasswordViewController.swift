@@ -175,10 +175,7 @@ extension PasswordViewController: NSTextFieldDelegate {
 extension PasswordViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        if let reviewLifetime {
-            reviewLifetime.invalidate()
-            return
-        }
+        guard reviewLifetime == nil else { return }
         callCompletion(result: false)
     }
     

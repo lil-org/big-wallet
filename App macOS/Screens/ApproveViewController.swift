@@ -91,7 +91,7 @@ class ApproveViewController: NSViewController {
                 peerLogoImageView?.layer?.cornerRadius = 0
             }
         }
-        view.window?.delegate = self
+        view.window?.delegate = nil
         view.window?.makeFirstResponder(view)
     }
     
@@ -187,12 +187,4 @@ extension ApproveViewController: NativeApprovalReviewTeardown {
         localWindowCloseCompletion = nil
     }
 
-}
-
-extension ApproveViewController: NSWindowDelegate {
-    
-    func windowWillClose(_ notification: Notification) {
-        reviewLifetime.invalidate()
-    }
-    
 }
