@@ -1188,7 +1188,6 @@ final class WalletSigningScopeTests: XCTestCase {
         ).get()
         let options = try Solana.preparedSendOptions(from: [:]).get()
         let cases: [(SignMessageAction.Payload, WalletCoin, Bool)] = [
-            (.signature(.ethereumMessage(Vectors.ethereumRawSignDigest)), .ethereum, false),
             (.signature(.ethereumPersonalMessage(walletSigningTestMessage)), .ethereum, false),
             (.signature(.ethereumTypedData(Vectors.typedDataJSON)), .ethereum, false),
             (.signature(.solanaMessage(walletSigningTestMessage)), .solana, false),
@@ -1201,7 +1200,8 @@ final class WalletSigningScopeTests: XCTestCase {
             let fixture = try ApprovedExecutionTestFixture()
             try fixture.establishGrant(approved)
             let snapshot = try fixture.enqueue(
-                id: 1, name: "signMessage", provider: approved.coin == .ethereum ? .ethereum : .solana,
+                id: 1, name: approved.coin == .ethereum ? "signPersonalMessage" : "signMessage",
+                provider: approved.coin == .ethereum ? .ethereum : .solana,
                 body: approved.coin == .ethereum
                     ? ["address": approved.normalizedAddress, "chainId": "0x1", "object": ["data": "01"]]
                     : ["publicKey": approved.normalizedAddress, "object": ["params": ["message": "01"]]]
@@ -1248,7 +1248,6 @@ final class WalletSigningScopeTests: XCTestCase {
 
     func testEthereumSigningModesUseTheCapturedPayload() async throws {
         let cases: [(SignMessageAction.Payload, String)] = [
-            (.signature(.ethereumMessage(Vectors.ethereumRawSignDigest)), Vectors.ethereumRawSignature),
             (.signature(.ethereumPersonalMessage(Vectors.ethereumPersonalMessage)), Vectors.ethereumPersonalMessageSignature),
             (.signature(.ethereumTypedData(Vectors.typedDataJSON)), Vectors.ethereumTypedDataSignature),
         ]

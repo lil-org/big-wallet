@@ -273,7 +273,7 @@ test("validates enqueue and response correlations", () => {
         ...native,
         revisions: {ethereum: 2, solana: -1},
     }, 7), false);
-    const response = nativeResult({id: 7, name: "signMessage", provider: "ethereum", result: "ok"});
+    const response = nativeResult({id: 7, name: "signPersonalMessage", provider: "ethereum", result: "ok"});
     assert.notEqual(wire.decodeNativeResponse(response, 7), null);
     assert.equal(wire.decodeNativeResponse(response, 8), null);
 });

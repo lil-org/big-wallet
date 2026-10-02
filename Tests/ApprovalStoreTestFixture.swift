@@ -600,10 +600,6 @@ func approvedWalletSigningOperationForTesting(
     let subject: ApprovalSubject
     let parameters: [String: Any]
     switch payload {
-    case .signature(.ethereumMessage(let data)):
-        name = "signMessage"
-        subject = .signMessage
-        parameters = ["data": WalletCrypto.hexString(data: data)]
     case .signature(.ethereumPersonalMessage(let data)):
         name = "signPersonalMessage"
         subject = .signPersonalMessage

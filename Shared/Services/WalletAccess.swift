@@ -327,10 +327,6 @@ struct ApprovedWalletSigningOperation: Sendable {
         with privateKey: WalletPrivateKey
     ) -> Result<WalletSigningOutput, WalletSigningFailure> {
         switch payload {
-        case .ethereumMessage(let data):
-            guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
-            else { return .failure(.failedToSign) }
-            return .success(.ethereumSignature(signature))
         case .ethereumPersonalMessage(let data):
             guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }

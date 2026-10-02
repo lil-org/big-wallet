@@ -7306,7 +7306,6 @@ extension PopupRequestSessionsTests {
     func testNativeFinalizerDoesNotAgeMessageSigning() async throws {
         let approvedAt = Date(timeIntervalSince1970: 2_170_000_000)
         let methods: [(InpageProvider, String)] = [
-            (.ethereum, "signMessage"),
             (.ethereum, "signPersonalMessage"),
             (.solana, "signMessage"),
         ]
@@ -8698,7 +8697,7 @@ private func popupSnapshot(
                 "address": popupTestAccount().address, "chainId": "0x1",
                 "object": try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(network)) as? [String: Any]),
             ]
-        } else if name == "signPersonalMessage" || name == "signMessage" {
+        } else if name == "signPersonalMessage" {
             body = [
                 "address": popupTestAccount().address, "chainId": "0x1",
                 "object": ["data": WalletCrypto.hexString(data: Data("reviewed".utf8))],

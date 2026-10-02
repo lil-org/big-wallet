@@ -55,7 +55,7 @@ struct EthereumDappRequestProcessor {
                 network: nil
             )
             return .approval(.selectAccount(action))
-        case .signTypedMessage, .signMessage, .signPersonalMessage:
+        case .signTypedMessage, .signPersonalMessage:
             guard let content = signingReviewContent(for: body) else {
                 return .immediate(immediateGenericFailure(to: request))
             }
@@ -141,13 +141,6 @@ struct EthereumDappRequestProcessor {
                 subject: .signTypedData,
                 meta: raw,
                 payload: .signature(.ethereumTypedData(raw))
-            )
-        case .signMessage:
-            guard let data = body.message else { return nil }
-            return SigningReviewContent(
-                subject: .signMessage,
-                meta: WalletCrypto.hexString(data: data),
-                payload: .signature(.ethereumMessage(data))
             )
         case .signPersonalMessage:
             guard let data = body.message else { return nil }

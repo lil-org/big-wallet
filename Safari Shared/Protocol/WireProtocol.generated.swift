@@ -960,7 +960,7 @@ enum WireProtocol {
 
     private static func n103(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "signTransaction" || value == "signPersonalMessage" || value == "signMessage" || value == "signTypedMessage" || value == "ecRecover" || value == "requestAccounts" || value == "addEthereumChain" || value == "switchEthereumChain"
+        return value == "signTransaction" || value == "signPersonalMessage" || value == "signTypedMessage" || value == "ecRecover" || value == "requestAccounts" || value == "addEthereumChain" || value == "switchEthereumChain"
     }
 
     private static func n104(_ value: Any) -> Bool {

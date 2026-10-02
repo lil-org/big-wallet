@@ -1258,36 +1258,101 @@ test("Ethereum chain request arrays retain their original wire shape", async () 
     }
 });
 
-test("queued Ethereum string signing dispatch does not invoke inherited serializers", async () => {
-    for (const method of ["personal_sign", "eth_sign"]) {
+for (const phase of ["loading", "connected", "disconnected"]) {
+    test(`Ethereum rejects eth_sign through every public API while ${phase}`, async () => {
         const harness = ethereumHarness();
-        const pending = harness.provider.request({
-            method,
-            params: method === "personal_sign" ? ["0x41"] : ["0xaccount", "0x41"],
-        });
-        const prototype = vm.runInContext("Object.prototype", harness.context);
-        let calls = 0;
-        prototype.toJSON = () => {
-            calls += 1;
-            throw new Error("Object prototype serializer called");
-        };
-        try {
-            applyEthereumConfiguration(harness);
-            assert.equal(harness.requests.length, 1);
-            assert.equal(harness.requests[0].name, "signPersonalMessage");
-            assert.deepEqual(structuredClone(harness.requests[0].data), {data: "0x41"});
-            assert.equal(calls, 0);
-        } finally {
-            delete prototype.toJSON;
+        if (phase !== "loading") {
+            applyEthereumConfiguration(harness, phase === "connected" ? "0x" + "12".repeat(20) : "");
         }
-        harness.applyDecodedEnvelope({
-            id: harness.requests[0].id,
-            kind: "result",
-            name: "signPersonalMessage",
-            result: "0xsignature",
+        let callbackCount = 0;
+        const callbackRequest = invoke => new Promise((resolve, reject) => {
+            invoke((error, result) => {
+                callbackCount += 1;
+                assert.equal(result, null);
+                if (error) { reject(error); } else { resolve(result); }
+            });
         });
-        assert.equal(await pending, "0xsignature");
+        const unsupported = error => error.code === 4200 &&
+            error.message === "Big Wallet does not support eth_sign";
+        const methods = [
+            payload => harness.provider.request(payload),
+            payload => harness.provider.send(payload),
+            payload => callbackRequest(callback => harness.provider.send(payload, callback)),
+            payload => callbackRequest(callback => harness.provider.sendAsync(payload, callback)),
+        ];
+        const messages = ["0x6869", "0x" + "ff".repeat(32), new Uint8Array(32).fill(255)];
+        for (const message of messages) {
+            for (const invoke of methods) {
+                await assert.rejects(invoke({
+                    id: 1, method: "eth_sign", params: ["0x" + "12".repeat(20), message],
+                }), unsupported);
+            }
+        }
+        await assert.rejects(harness.provider.send("eth_sign"), unsupported);
+        await assert.rejects(callbackRequest(callback =>
+            harness.provider.send("eth_sign", callback)), unsupported);
+        await assert.rejects(callbackRequest(callback => harness.provider.sendAsync([
+            {id: 2, method: "eth_sign", params: ["0xaccount", messages[0]]},
+            {id: 3, method: "eth_sign", params: ["0xaccount", messages[1]]},
+            {id: 4, method: "eth_chainId"},
+        ], callback)), unsupported);
+        assert.equal(callbackCount, 8);
+        assert.deepEqual(harness.requests, []);
+        assert.deepEqual(harness.rpc, []);
+        assert.deepEqual(harness.disconnects, []);
+
+        if (phase === "loading") { applyEthereumConfiguration(harness); }
+        assert.equal(await harness.provider.request({method: "eth_chainId"}), "0x1");
+        assert.deepEqual(harness.requests, []);
+        assert.deepEqual(harness.rpc, []);
+        assert.equal(callbackCount, 8);
+    });
+}
+
+test("Ethereum rejects eth_sign without inspecting its parameters or filling the loading queue", async () => {
+    const harness = ethereumHarness();
+    const payload = {
+        method: "eth_sign",
+        get params() { assert.fail("Disabled signing must not read parameters"); },
+    };
+    for (let index = 0; index < 65; index += 1) {
+        await assert.rejects(harness.provider.request(payload), error => error.code === 4200);
     }
+    const accounts = harness.provider.request({method: "eth_accounts"});
+    applyEthereumConfiguration(harness, "0x" + "12".repeat(20));
+    assert.deepEqual(normalized(await accounts), [harness.provider.selectedAddress]);
+    assert.deepEqual(harness.requests, []);
+    assert.deepEqual(harness.rpc, []);
+});
+
+test("queued Ethereum personal signing dispatch does not invoke inherited serializers", async () => {
+    const harness = ethereumHarness();
+    const pending = harness.provider.request({
+        method: "personal_sign",
+        params: ["0x41"],
+    });
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    let calls = 0;
+    prototype.toJSON = () => {
+        calls += 1;
+        throw new Error("Object prototype serializer called");
+    };
+    try {
+        applyEthereumConfiguration(harness);
+        assert.equal(harness.requests.length, 1);
+        assert.equal(harness.requests[0].name, "signPersonalMessage");
+        assert.deepEqual(structuredClone(harness.requests[0].data), {data: "0x41"});
+        assert.equal(calls, 0);
+    } finally {
+        delete prototype.toJSON;
+    }
+    harness.applyDecodedEnvelope({
+        id: harness.requests[0].id,
+        kind: "result",
+        name: "signPersonalMessage",
+        result: "0xsignature",
+    });
+    assert.equal(await pending, "0xsignature");
 });
 
 test("Ethereum personal signing snapshots data after buffer conversion hooks", async () => {

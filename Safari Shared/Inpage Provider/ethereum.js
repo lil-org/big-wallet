@@ -26,7 +26,6 @@ import {
     trustedOutboundRecord,
 } from "./outbound_snapshot";
 import Utils from "./utils";
-import isUtf8 from "isutf8";
 import BigWalletBridgeWire from "../Resources/bridge_wire";
 
 const objectKeysNormally = Object.keys;
@@ -162,7 +161,7 @@ function authorizationIsCurrent(state, authorization) {
 }
 
 function signingResponse(name) {
-    return name === "signMessage" || name === "signPersonalMessage" ||
+    return name === "signPersonalMessage" ||
         name === "signTypedMessage" || name === "signTransaction";
 }
 
@@ -198,6 +197,9 @@ function normalizeRequestPayload(payload) {
     const method = payload.method;
     if (typeof method !== "string" || method.length === 0) {
         throw new ProviderRpcError(-32600, "Invalid request");
+    }
+    if (method === "eth_sign") {
+        throw new ProviderRpcError(4200, "Big Wallet does not support eth_sign");
     }
     const normalized = createObjectNormally(null);
     normalized.method = method;
@@ -441,7 +443,7 @@ function dispatchOperation(provider, record) {
     const params = paramsFor(record);
     if (record.metadata.expectedAddress &&
         record.metadata.expectedAddress !== state.address &&
-        (method === "eth_sign" || method === "personal_sign" ||
+        (method === "personal_sign" ||
             applyFunction(stringStartsWithNormally, method, ["eth_signTypedData"]) || method === "eth_sendTransaction")) {
         throw authorizationChangedError();
     }
@@ -461,17 +463,6 @@ function dispatchOperation(provider, record) {
             return postWalletRequest(provider, state, record, "requestAccounts", {});
         case "eth_requestAccounts":
             return postWalletRequest(provider, state, record, "requestAccounts", {});
-        case "eth_sign": {
-            const buffer = Utils.messageToBuffer(requireParameter(params, 1));
-            const hex = Utils.bufferToHex(buffer);
-            return postWalletRequest(
-                provider,
-                state,
-                record,
-                isUtf8(buffer) ? "signPersonalMessage" : "signMessage",
-                {data: hex}
-            );
-        }
         case "personal_sign": {
             const message = requireParameter(params, 0);
             const buffer = Utils.messageToBuffer(message);

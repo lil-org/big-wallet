@@ -435,7 +435,7 @@ struct ExtensionRequestProfile {
             switch body.method {
             case .requestAccounts:
                 return request.authorizedAccount.map(removal.matches) ?? true
-            case .signMessage, .signPersonalMessage, .signTypedMessage, .signTransaction:
+            case .signPersonalMessage, .signTypedMessage, .signTransaction:
                 return request.authorizedAccount.map(removal.matches) == true
             case .addEthereumChain, .switchEthereumChain, .ecRecover:
                 return false
@@ -578,7 +578,7 @@ struct ExtensionRequestProfile {
             switch body.method {
             case .requestAccounts, .addEthereumChain, .switchEthereumChain, .ecRecover:
                 return true
-            case .signMessage, .signPersonalMessage, .signTypedMessage, .signTransaction:
+            case .signPersonalMessage, .signTypedMessage, .signTransaction:
                 guard let account = snapshot.ethereumAccount,
                       account.coin.normalizedAddress(body.address) == account.normalizedAddress else { return false }
                 if let chain = body.currentChainId, String.hex(chain, withPrefix: true) != snapshot.ethereumChainId { return false }

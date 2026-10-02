@@ -20,6 +20,36 @@ final class NativeAuthorityTransportTests: XCTestCase {
         )
     }
 
+    func testRawEthereumSigningIsRejectedBeforeNativeAdmission() throws {
+        var request: [String: Any] = [
+            "id": 91, "name": "signPersonalMessage", "provider": "ethereum",
+            "body": [
+                "address": "0x" + String(repeating: "12", count: 20), "chainId": "0x1",
+                "object": ["data": "0x" + String(repeating: "ff", count: 32)],
+            ],
+            "host": "wallet.example", "configurationKey": "https://wallet.example",
+            "enqueueAttempt": String(repeating: "a", count: 32),
+            "admissionDeadline": 2_000_000_900_000,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "authority": authority,
+        ]
+        XCTAssertNotNil(WireProtocol.object(.dappRequest, value: request))
+        XCTAssertNotNil(SafariRequest(json: request))
+
+        request["name"] = "signMessage"
+        XCTAssertNil(WireProtocol.object(.dappRequest, value: request))
+        XCTAssertNil(SafariRequest(json: request))
+        XCTAssertNil(SafariRequest(data: try JSONSerialization.data(withJSONObject: request)))
+
+        request["provider"] = "solana"
+        request["body"] = [
+            "publicKey": String(repeating: "1", count: 32),
+            "object": ["params": ["message": "ff", "messageEncoding": "hex"]],
+        ]
+        XCTAssertNotNil(WireProtocol.object(.dappRequest, value: request))
+        XCTAssertNotNil(SafariRequest(json: request))
+    }
+
     func testSnapshotReadCannotChooseItsNativeProfile() throws {
         let body: [String: Any] = [
             "subject": "getLatestConfiguration",
@@ -236,7 +266,7 @@ final class NativeAuthorityTransportTests: XCTestCase {
 
     func testNativeErrorCodeRetainsTheLargestSwiftInteger() throws {
         let request = try XCTUnwrap(SafariRequest(json: [
-            "id": 91, "name": "signMessage", "provider": "ethereum",
+            "id": 91, "name": "signPersonalMessage", "provider": "ethereum",
             "body": ["address": "", "chainId": "0x1"],
             "host": "wallet.example", "configurationKey": "https://wallet.example",
             "enqueueAttempt": String(repeating: "a", count: 32),

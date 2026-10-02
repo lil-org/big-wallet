@@ -154,8 +154,7 @@ struct ApprovedCompletion: Sendable {
               case .signing(_, let payload) = permit.approval.kind else { return nil }
         let result: ResponseToExtension.Result
         switch (payload, output) {
-        case (.signature(.ethereumMessage), .ethereumSignature(let signature)),
-             (.signature(.ethereumPersonalMessage), .ethereumSignature(let signature)),
+        case (.signature(.ethereumPersonalMessage), .ethereumSignature(let signature)),
              (.signature(.ethereumTypedData), .ethereumSignature(let signature)):
             result = .string(signature)
         case (.signature(.solanaMessage), .solanaSignature(let signature)),
@@ -355,7 +354,6 @@ struct SigningReviewContent: Sendable {
 }
 
 enum SignaturePayload: Sendable {
-    case ethereumMessage(Data)
     case ethereumPersonalMessage(Data)
     case ethereumTypedData(String)
     case solanaMessage(Data)
@@ -364,7 +362,7 @@ enum SignaturePayload: Sendable {
 
     var coin: WalletCoin {
         switch self {
-        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
+        case .ethereumPersonalMessage, .ethereumTypedData:
             return .ethereum
         case .solanaMessage, .solanaTransaction, .solanaTransactions:
             return .solana

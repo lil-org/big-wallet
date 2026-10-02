@@ -2222,13 +2222,22 @@ for (const address of ["0x" + "2".repeat(40), ""]) {
     });
 }
 
+test("raw Ethereum signing cannot enter the content relay", async () => {
+    const harness = makeHarness();
+    await settle();
+    harness.dispatchPage("request", {...dappRequest(), name: "signMessage"});
+    await settle();
+    assert.equal(harness.runtimeMessages.filter(value => value.subject === "message-to-wallet").length, 0);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+});
+
 test("signing and ambiguous admissions never retry with refreshed authority", async () => {
     const harness = makeHarness({sendMessage: message => message.subject === "message-to-wallet" ? {
-        kind: "error", id: message.message.id, provider: "ethereum", name: "signMessage",
+        kind: "error", id: message.message.id, provider: "ethereum", name: "signPersonalMessage",
         state: configurationState({ethereum: 1, solana: 0}), error: {code: 4100, message: "Changed"},
     } : undefined});
     await settle();
-    harness.dispatchPage("request", {...dappRequest(), name: "signMessage"});
+    harness.dispatchPage("request", {...dappRequest(), name: "signPersonalMessage"});
     await settle();
     assert.equal(harness.runtimeMessages.filter(value => value.subject === "message-to-wallet").length, 1);
     assert.equal(harness.postedMessages.at(-1).message.response.error.code, 4100);
@@ -2320,12 +2329,12 @@ for (const provider of ["ethereum", "solana"]) {
                 assert.equal(message.authority.revisions[provider], observed);
                 assert.equal(message.authority.revisions[provider === "ethereum" ? "solana" : "ethereum"], current);
                 assert.deepEqual(Object.keys(message.message).sort(), ["body", "id", "name", "provider"]);
-                return {kind: "error", id: message.message.id, provider, name: "signMessage",
+                return {kind: "error", id: message.message.id, provider, name: message.message.name,
                     state: refreshedState, error: {code: 4100, message: "Authorization changed"}};
             }});
         await settle();
         const generation = harness.generation();
-        const queued = {id: 7, provider, name: "signMessage", body: provider === "ethereum"
+        const queued = {id: 7, provider, name: provider === "ethereum" ? "signPersonalMessage" : "signMessage", body: provider === "ethereum"
             ? {address: "", chainId: "0x1", object: {data: "0x01"}}
             : {publicKey: "", object: {method: "signMessage", params: {message: "2"}}}};
         harness.context.bigWalletPublishConfiguration(refreshedState, "https://wallet.example", generation);

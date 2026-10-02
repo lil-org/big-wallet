@@ -81,10 +81,6 @@ struct Ethereum {
         request()
     }
     
-    static func sign(data: Data, privateKey: WalletPrivateKey) throws -> String {
-        return try sign(digest: data, privateKey: privateKey)
-    }
-    
     static func signPersonalMessage(
         data: Data,
         privateKey: WalletPrivateKey

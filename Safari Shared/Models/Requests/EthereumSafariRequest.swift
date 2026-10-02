@@ -7,7 +7,6 @@ extension SafariRequest {
         enum Method: String {
             case signTransaction
             case signPersonalMessage
-            case signMessage
             case signTypedMessage
             case ecRecover
             case requestAccounts

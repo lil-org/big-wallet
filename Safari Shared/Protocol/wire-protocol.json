@@ -748,7 +748,6 @@
               "enum": [
                 "signTransaction",
                 "signPersonalMessage",
-                "signMessage",
                 "signTypedMessage",
                 "ecRecover",
                 "requestAccounts",
@@ -823,7 +822,6 @@
               "enum": [
                 "signTransaction",
                 "signPersonalMessage",
-                "signMessage",
                 "signTypedMessage",
                 "ecRecover",
                 "requestAccounts",

@@ -668,8 +668,6 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.hexString(rawSignature), Vectors.ethereumHelloRawWalletCoreSignature)
         XCTAssertEqual(batchSignatures, [rawSignature])
         XCTAssertEqual(try XCTUnwrap(privateKey.sign(digests: [Data](), coin: .ethereum)), [])
-        XCTAssertEqual(try Ethereum.sign(data: Vectors.ethereumHelloRawSignDigest, privateKey: privateKey),
-                       Vectors.ethereumHelloRawSignature)
         XCTAssertNil(privateKey.sign(digest: Data([1, 2, 3]), coin: .ethereum))
     }
 
@@ -805,14 +803,24 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
                        Vectors.ethereumSignerAddress)
     }
 
-    func testEthereumRawAndTypedSigningMatchMigrationVectors() throws {
+    func testEthereumDigestSigningMatchesVectorsAndRejectsInvalidDigests() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
+        for (digest, encodedSignature) in [
+            (Vectors.ethereumRawSignDigest, Vectors.ethereumRawSignature),
+            (Vectors.ethereumMaxRawSignDigest, Vectors.ethereumMaxRawSignature),
+        ] {
+            let signature = try XCTUnwrap(privateKey.sign(digest: digest, coin: .ethereum))
+            var expected = try XCTUnwrap(WalletCrypto.hexData(encodedSignature))
+            expected[64] -= 27
+            XCTAssertEqual(signature, expected)
+        }
+        for digest in [Data([1, 2, 3]), Vectors.ethereumZeroRawSignDigest, Vectors.ethereumOverlongRawSignDigest] {
+            XCTAssertNil(privateKey.sign(digest: digest, coin: .ethereum))
+        }
+    }
 
-        XCTAssertEqual(try Ethereum.sign(data: Vectors.ethereumRawSignDigest, privateKey: privateKey),
-                       Vectors.ethereumRawSignature)
-        XCTAssertEqual(try Ethereum.sign(data: Vectors.ethereumMaxRawSignDigest, privateKey: privateKey),
-                       Vectors.ethereumMaxRawSignature)
-        XCTAssertNil(privateKey.sign(digest: Vectors.ethereumZeroRawSignDigest, coin: .ethereum))
+    func testEthereumTypedSigningMatchesMigrationVectors() throws {
+        let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
         XCTAssertEqual(try Ethereum.sign(typedData: Vectors.typedDataJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
         XCTAssertEqual(try Ethereum.sign(typedData: Vectors.typedDataMinifiedJSON, privateKey: privateKey),
@@ -823,24 +831,6 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
                        Vectors.permitTypedDataSignature)
         XCTAssertEqual(try Ethereum.sign(typedData: Vectors.complexTypedDataJSON, privateKey: privateKey),
                        Vectors.complexTypedDataSignature)
-        XCTAssertThrowsError(try Ethereum.sign(data: Data([1, 2, 3]), privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
-                XCTFail("Expected failedToSign for short raw signing input, got \($0)")
-                return
-            }
-        }
-        XCTAssertThrowsError(try Ethereum.sign(data: Vectors.ethereumZeroRawSignDigest, privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
-                XCTFail("Expected failedToSign for zero raw signing input, got \($0)")
-                return
-            }
-        }
-        XCTAssertThrowsError(try Ethereum.sign(data: Vectors.ethereumOverlongRawSignDigest, privateKey: privateKey)) {
-            guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
-                XCTFail("Expected failedToSign for overlong raw signing input, got \($0)")
-                return
-            }
-        }
         XCTAssertThrowsError(try Ethereum.sign(typedData: Vectors.malformedTypedDataJSON, privateKey: privateKey)) {
             guard let error = $0 as? Ethereum.SigningFailure, case .failedToSign = error else {
                 XCTFail("Expected failedToSign for malformed typed data, got \($0)")

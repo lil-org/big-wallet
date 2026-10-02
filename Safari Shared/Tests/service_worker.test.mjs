@@ -544,12 +544,22 @@ test("admission relays native authority preconditions and obtains native ACK", a
     assert.deepEqual(harness.storageWrites, []);
 });
 
+test("raw Ethereum signing cannot reach native messaging", async () => {
+    const harness = makeHarness();
+    await settle();
+    const nativeCalls = harness.nativeMessages.length;
+    const response = await harness.dispatch(request(7, {message: {name: "signMessage"}}));
+    assert.equal(response, undefined);
+    assert.equal(harness.nativeMessages.length, nativeCalls);
+    assert.equal(harness.popupCalls.length, 0);
+});
+
 test("native rejection wins over a cached account and carries a fresh snapshot", async () => {
     const state = snapshot({revisions: {ethereum: 9, solana: 0}});
     const harness = makeHarness({native: message => ({id: message.id, state, response: nativeError({
         id: message.id, name: message.name, provider: message.provider, error: {code: 4100, message: "Revoked"},
     })})});
-    const response = await harness.dispatch(request(7, {message: {name: "signMessage", body: {address: "0x01"}}}));
+    const response = await harness.dispatch(request(7, {message: {name: "signPersonalMessage", body: {address: "0x01"}}}));
     assert.equal(response.error.code, 4100);
     assert.deepEqual(clone(response.state), state);
     assert.deepEqual(harness.storageWrites, []);

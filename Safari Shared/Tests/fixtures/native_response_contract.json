@@ -4,7 +4,7 @@
       "name": "signature",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -15,7 +15,7 @@
       "name": "committed-signature",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -121,7 +121,7 @@
       "name": "generic-error",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -136,7 +136,7 @@
       "name": "error-null-data",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -152,7 +152,7 @@
       "name": "error-array-data",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -172,7 +172,7 @@
       "name": "error-rpc-data",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -190,7 +190,7 @@
       "name": "error-transaction-hash",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -271,7 +271,7 @@
       "name": "large-positive-error-code",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -289,7 +289,7 @@
       "name": "large-negative-error-code",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -309,7 +309,7 @@
       "name": "boolean-id",
       "response": {
         "id": true,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -320,7 +320,7 @@
       "name": "fractional-id",
       "response": {
         "id": 1.5,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -331,7 +331,7 @@
       "name": "unsafe-id",
       "response": {
         "id": 9007199254740992,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -342,7 +342,7 @@
       "name": "string-committed",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -364,7 +364,7 @@
       "name": "wrong-kind",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "success",
         "result": "0xsigned",
@@ -375,7 +375,7 @@
       "name": "both-outcomes",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -390,7 +390,7 @@
       "name": "extra-field",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -402,7 +402,7 @@
       "name": "invalid-result",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": {
@@ -415,7 +415,7 @@
       "name": "invalid-array-result",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": [
@@ -454,7 +454,7 @@
       "name": "native-effect-field-cross-provider-mutation",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -473,7 +473,7 @@
       "name": "native-effect-field-invalid-chain",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -488,7 +488,7 @@
       "name": "native-effect-field-unknown-update",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -505,7 +505,7 @@
       "name": "native-effect-field-injected-worker-revision",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned",
@@ -545,7 +545,7 @@
       "name": "native-effect-field-error-with-accounts",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -566,7 +566,7 @@
       "name": "missing-error-message",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -580,7 +580,7 @@
       "name": "boolean-error-code",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -595,7 +595,7 @@
       "name": "fractional-error-code",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -610,7 +610,7 @@
       "name": "invalid-authorization-flag",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "error",
         "error": {
@@ -644,7 +644,7 @@
       "name": "missing-result",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "approvalCommitted": false
@@ -654,7 +654,7 @@
       "name": "missing-approvalCommitted",
       "response": {
         "id": 1,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "0xsigned"

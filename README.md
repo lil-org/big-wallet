@@ -20,6 +20,8 @@ download on the [app store](https://lil.org/get)
 
 ### Safari authorization
 
+Ethereum `eth_sign` is unsupported and returns error `4200` without opening an approval. Use `personal_sign` or typed-data signing; there is no raw-signing opt-in or automatic conversion.
+
 Native storage owns connected accounts, selected chains, and permission revisions, partitioned by Safari profile and origin. Permission changes and request results commit together. The extension validates Safari's sender metadata before relaying an origin; native messaging supplies the profile. Native storage does not independently attest a webpage's origin.
 
 Claiming a request reserves ownership; it does not authorize privileged work. Accepting the current review produces process-local consent bound to the stored request and authority revisions. The store issues a one-use execution permit for account grants, signing, and new-network additions, and a separate dispatch permit only after a transaction broadcast checkpoint is durable. Stored responses and delivery receipts cannot recreate these capabilities. Ordinary completion is limited to failures, existing connections, address recovery, and known-chain selection.

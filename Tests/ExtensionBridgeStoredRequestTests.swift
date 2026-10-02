@@ -9196,7 +9196,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let hash = try XCTUnwrap(Ethereum.transactionHash(signedTransaction: signed))
                 broadcast = try XCTUnwrap(PreparedBroadcast.signed(.ethereumTransaction(signedTransaction: signed, transactionHash: hash), permit: permit))
                 completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
-            case .signature(.ethereumMessage), .signature(.ethereumPersonalMessage), .signature(.ethereumTypedData):
+            case .signature(.ethereumPersonalMessage), .signature(.ethereumTypedData):
                 completion = try XCTUnwrap(ApprovedCompletion.signed(.ethereumSignature("0xsigned"), permit: permit))
             case .signature(.solanaMessage), .signature(.solanaTransaction):
                 completion = try XCTUnwrap(ApprovedCompletion.signed(.solanaSignature("1111"), permit: permit))

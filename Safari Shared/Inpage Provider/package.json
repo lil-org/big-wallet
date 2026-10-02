@@ -24,8 +24,7 @@
     },
     "dependencies": {
         "buffer": "^6.0.3",
-        "events": "^3.3.0",
-        "isutf8": "^4.0.1"
+        "events": "^3.3.0"
     },
     "devDependencies": {
         "@solana/web3.js": "1.98.4",

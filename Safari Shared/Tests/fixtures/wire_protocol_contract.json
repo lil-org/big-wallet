@@ -1192,9 +1192,9 @@
     }
   },
   {
-    "name": "provider request ethereum signMessage",
+    "name": "rejects provider request ethereum signMessage",
     "type": "ProviderRequest",
-    "valid": true,
+    "valid": false,
     "value": {
       "id": 91,
       "provider": "ethereum",
@@ -1222,9 +1222,9 @@
     }
   },
   {
-    "name": "native admission ethereum signMessage",
+    "name": "rejects native admission ethereum signMessage",
     "type": "DappRequest",
-    "valid": true,
+    "valid": false,
     "value": {
       "id": 91,
       "provider": "ethereum",
@@ -2196,7 +2196,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2209,7 +2209,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2333,7 +2333,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2350,7 +2350,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2368,7 +2368,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2390,7 +2390,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2410,7 +2410,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2501,7 +2501,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2521,7 +2521,7 @@
     "valid": true,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2541,7 +2541,7 @@
     "valid": false,
     "value": {
       "id": true,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2554,7 +2554,7 @@
     "valid": false,
     "value": {
       "id": 1.5,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2567,7 +2567,7 @@
     "valid": false,
     "value": {
       "id": 9007199254740992,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2580,7 +2580,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2606,7 +2606,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "success",
       "result": "0xsigned",
@@ -2619,7 +2619,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2636,7 +2636,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2650,7 +2650,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": {
@@ -2665,7 +2665,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": [
@@ -2710,7 +2710,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2731,7 +2731,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2748,7 +2748,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2767,7 +2767,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned",
@@ -2811,7 +2811,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2834,7 +2834,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2850,7 +2850,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2867,7 +2867,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2884,7 +2884,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "error",
       "error": {
@@ -2922,7 +2922,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "approvalCommitted": false
@@ -2934,7 +2934,7 @@
     "valid": false,
     "value": {
       "id": 1,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "0xsigned"
@@ -3026,7 +3026,7 @@
     "valid": true,
     "value": {
       "id": 91,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "state": {
         "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3068,7 +3068,7 @@
     "valid": true,
     "value": {
       "id": 91,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "state": {
         "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3265,7 +3265,7 @@
       "id": 91,
       "response": {
         "id": 91,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "signature",
@@ -3295,7 +3295,7 @@
       "id": 91,
       "response": {
         "id": 91,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "signature",
@@ -5647,7 +5647,7 @@
       "kind": "response",
       "response": {
         "id": 91,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "state": {
           "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5695,7 +5695,7 @@
       "kind": "response",
       "response": {
         "id": 91,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "state": {
           "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -6418,7 +6418,7 @@
     "valid": false,
     "value": {
       "id": 91,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "signature",
@@ -6434,7 +6434,7 @@
     "valid": false,
     "value": {
       "id": 91,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "kind": "result",
       "result": "signature",
@@ -6501,7 +6501,7 @@
     "valid": false,
     "value": {
       "id": 91,
-      "name": "signMessage",
+      "name": "signPersonalMessage",
       "provider": "ethereum",
       "state": {
         "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -7302,7 +7302,7 @@
     "value": {
       "response": {
         "id": 91,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "signature",
@@ -7354,7 +7354,7 @@
       "id": 91,
       "response": {
         "id": 91,
-        "name": "signMessage",
+        "name": "signPersonalMessage",
         "provider": "ethereum",
         "kind": "result",
         "result": "signature",
