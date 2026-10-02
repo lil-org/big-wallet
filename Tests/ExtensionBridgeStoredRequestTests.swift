@@ -2474,7 +2474,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             try bodyData(for: fixture.ingress)
         )
         let payload = try XCTUnwrap(firstStoredState("pending")["request"] as? [String: Any])
-        XCTAssertEqual(Set(payload.keys), ["name", "provider", "favicon", "admissionDeadlineMilliseconds", "bodyData"])
+        XCTAssertEqual(Set(payload.keys), ["name", "provider", "admissionDeadlineMilliseconds", "bodyData"])
         XCTAssertEqual(payload["admissionDeadlineMilliseconds"] as? Int, fixture.request.admissionDeadlineMilliseconds)
         bridge = makeBridge(clock: { self.clock.now })
         guard case .found(let pending) = await bridge.load(handle: handle) else {
@@ -2533,7 +2533,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     func testStoredBodyPreservesJSONTypesUnknownFieldsAndRetryFingerprint() async throws {
-        let template = try makeFixture(id: 86, favicon: "/icon.png")
+        let template = try makeFixture(id: 86)
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
         let deadline = template.request.admissionDeadlineMilliseconds - 1
         raw["admissionDeadline"] = deadline
@@ -2556,7 +2556,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         let request = try XCTUnwrap(snapshot.request)
         XCTAssertEqual(request.admissionDeadlineMilliseconds, deadline)
-        XCTAssertEqual(request.favicon, "https://wallet.example/icon.png")
         XCTAssertEqual(try firstStoredBody("pending"), try bodyData(for: fixture.ingress))
         let replay = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
         XCTAssertEqual(replay.handle, admitted.handle)
@@ -2608,16 +2607,31 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testStoredPayloadEnvelopeLimitIncludesFaviconMetadata() async throws {
-        _ = try accepted(await bridge.enqueue(ingress: try makeFixture(id: 89).ingress, profileIdentifier: nil))
+    func testStoredPayloadEnvelopeLimitIncludesRequestMetadata() async throws {
+        let fixture = try makeFixture(id: 89, message: "")
+        _ = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+        var body = try XCTUnwrap(raw["body"] as? [String: Any])
+        let bodyOverhead = try bodyData(for: fixture.ingress).count
+        body["object"] = ["data": String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes - bodyOverhead)]
+        let oversizedBodyData = try XCTUnwrap(ExtensionBridge.payloadData(body, options: [.sortedKeys]))
+        XCTAssertEqual(oversizedBodyData.count, ExtensionBridge.maximumPayloadBytes)
+        raw["body"] = body
+        XCTAssertTrue(WireProtocol.validate(.dappRequest, value: raw))
+        XCTAssertGreaterThan(
+            try XCTUnwrap(ExtensionBridge.payloadData(raw, options: [.sortedKeys])).count,
+            ExtensionBridge.maximumPayloadBytes
+        )
+        let fingerprint = try XCTUnwrap(ExtensionBridge.correlationFingerprint(raw))
         try mutateFirstStoredRecord { record in
             var state = try XCTUnwrap(record["state"] as? [String: Any])
             var pending = try XCTUnwrap(state["pending"] as? [String: Any])
             var request = try XCTUnwrap(pending["request"] as? [String: Any])
-            request["favicon"] = String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes)
+            request["bodyData"] = oversizedBodyData
             pending["request"] = request
             state["pending"] = pending
             record["state"] = state
+            record["requestFingerprint"] = fingerprint
         }
         try await assertStoredProfileUnavailableAndUnchanged()
     }
@@ -3622,14 +3636,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try makeFixture(
             id: 4,
             name: "requestAccounts",
-            enqueueAttempt: attempt,
-            favicon: "https://wallet.example/first.png"
-        )
-        let changedFavicon = try makeFixture(
-            id: 4,
-            name: "requestAccounts",
-            enqueueAttempt: attempt,
-            favicon: "https://wallet.example/second.png"
+            enqueueAttempt: attempt
         )
         var changedAuthority = try XCTUnwrap(JSONSerialization.jsonObject(with: original.ingress.canonicalData) as? [String: Any])
         changedAuthority["authority"] = ["context": original.ingress.authority.context, "revisions": ["ethereum": 1, "solana": 0]]
@@ -3638,21 +3645,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: original.ingress,
             profileIdentifier: nil
         ))
-        let faviconRetry = try accepted(await bridge.enqueue(
-            ingress: changedFavicon.ingress,
+        let retry = try accepted(await bridge.enqueue(
+            ingress: original.ingress,
             profileIdentifier: nil
         ))
         XCTAssertEqual(admitted.admissionKind, .new)
-        XCTAssertEqual(faviconRetry.admissionKind, .replay)
-        XCTAssertEqual(faviconRetry.handle, admitted.handle)
-        XCTAssertEqual(faviconRetry.revisions, admitted.revisions)
+        XCTAssertEqual(retry.admissionKind, .replay)
+        XCTAssertEqual(retry.handle, admitted.handle)
+        XCTAssertEqual(retry.revisions, admitted.revisions)
         guard case .found(let stored) = await bridge.load(handle: admitted.handle) else {
             return XCTFail("Expected stored request")
         }
-        XCTAssertEqual(
-            stored.request?.favicon,
-            "https://wallet.example/first.png"
-        )
         XCTAssertEqual(stored.revisions, admitted.revisions)
         let revisionRetry = try accepted(await bridge.enqueue(
             ingress: changedRevisions.ingress,
@@ -8935,7 +8938,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         enqueueAttempt: String? = nil,
         admissionDeadline: Date? = nil,
         message: String = "0x48656c6c6f",
-        favicon: String = "",
         replayOnly: Bool = false
     ) throws -> Fixture {
         let configurationKey = configurationKey ?? "https://\(host)"
@@ -8952,7 +8954,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 )).timeIntervalSince1970 * 1_000
             ),
             "workflowVersion": ExtensionBridge.workflowVersion,
-            "favicon": favicon,
             "authority": try authorityVersion(configurationKey).json,
             "body": [
                 "address": "0x0000000000000000000000000000000000000042",
@@ -9044,7 +9045,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         enqueueAttempt: String? = nil,
         admissionDeadline: Date? = nil,
         message: String = "0x",
-        favicon: String = "",
         replayOnly: Bool = false
     ) throws -> Fixture {
         let configurationKey = configurationKey ?? "https://\(host)"
@@ -9053,7 +9053,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let template = try makeFixture(
             id: id, host: host, configurationKey: configurationKey,
             enqueueAttempt: enqueueAttempt, admissionDeadline: admissionDeadline,
-            message: message, favicon: favicon, replayOnly: replayOnly
+            message: message, replayOnly: replayOnly
         )
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
         raw["name"] = "signTransaction"
@@ -9362,7 +9362,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 )).timeIntervalSince1970 * 1_000
             ),
             "workflowVersion": ExtensionBridge.workflowVersion,
-            "favicon": "",
             "authority": try authorityVersion(configurationKey).json,
             "body": ["latestConfigurations": latestConfigurations],
         ]

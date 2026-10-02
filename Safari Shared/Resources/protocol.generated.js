@@ -907,7 +907,7 @@
     }
 
     function n109(value, context) {
-        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
+        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["replayOnly"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -921,7 +921,6 @@
             put(result, "provider", n94(read(value, "provider"), context));
             put(result, "name", n103(read(value, "name"), context));
             put(result, "body", n104(read(value, "body"), context));
-            if (descriptor(value, "favicon")) { put(result, "favicon", n87(read(value, "favicon"), context)); }
             if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n111(read(value, "replayOnly"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
@@ -936,7 +935,7 @@
     }
 
     function n112(value, context) {
-        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
+        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["replayOnly"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -950,14 +949,13 @@
             put(result, "provider", n97(read(value, "provider"), context));
             put(result, "name", n106(read(value, "name"), context));
             put(result, "body", n107(read(value, "body"), context));
-            if (descriptor(value, "favicon")) { put(result, "favicon", n87(read(value, "favicon"), context)); }
             if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n111(read(value, "replayOnly"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n113(value, context) {
-        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
+        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["replayOnly"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -971,7 +969,6 @@
             put(result, "provider", n114(read(value, "provider"), context));
             put(result, "name", n115(read(value, "name"), context));
             put(result, "body", n116(read(value, "body"), context));
-            if (descriptor(value, "favicon")) { put(result, "favicon", n87(read(value, "favicon"), context)); }
             if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n111(read(value, "replayOnly"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
@@ -2585,7 +2582,7 @@
     /** @typedef {({provider: "ethereum", results: Array<string>, chainId: string}|{provider: "solana", publicKey: string})} ManualProviderConfiguration */
     /** @typedef {{latestConfigurations?: Array<ManualProviderConfiguration>}} ManualRequestBody */
     /** @typedef {({id: RequestID, provider: "ethereum", name: ("signTransaction"|"signPersonalMessage"|"signMessage"|"signTypedMessage"|"ecRecover"|"requestAccounts"|"addEthereumChain"|"switchEthereumChain"), body: EthereumRequestBody}|{id: RequestID, provider: "solana", name: ("connect"|"signMessage"|"signTransaction"|"signAllTransactions"|"signAndSendTransaction"), body: SolanaRequestBody})} ProviderRequest */
-    /** @typedef {({id: RequestID, workflowVersion: WorkflowVersion, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, provider: "ethereum", name: ("signTransaction"|"signPersonalMessage"|"signMessage"|"signTypedMessage"|"ecRecover"|"requestAccounts"|"addEthereumChain"|"switchEthereumChain"), body: EthereumRequestBody, favicon?: (string|null), replayOnly?: boolean}|{id: RequestID, workflowVersion: WorkflowVersion, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, provider: "solana", name: ("connect"|"signMessage"|"signTransaction"|"signAllTransactions"|"signAndSendTransaction"), body: SolanaRequestBody, favicon?: (string|null), replayOnly?: boolean}|{id: RequestID, workflowVersion: WorkflowVersion, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, provider: "unknown", name: ("switchAccount"), body: ManualRequestBody, favicon?: (string|null), replayOnly?: boolean})} DappRequest */
+    /** @typedef {({id: RequestID, workflowVersion: WorkflowVersion, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, provider: "ethereum", name: ("signTransaction"|"signPersonalMessage"|"signMessage"|"signTypedMessage"|"ecRecover"|"requestAccounts"|"addEthereumChain"|"switchEthereumChain"), body: EthereumRequestBody, replayOnly?: boolean}|{id: RequestID, workflowVersion: WorkflowVersion, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, provider: "solana", name: ("connect"|"signMessage"|"signTransaction"|"signAllTransactions"|"signAndSendTransaction"), body: SolanaRequestBody, replayOnly?: boolean}|{id: RequestID, workflowVersion: WorkflowVersion, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, provider: "unknown", name: ("switchAccount"), body: ManualRequestBody, replayOnly?: boolean})} DappRequest */
     /** @typedef {{code: ErrorCode, message: string, data?: ProtocolJSONValue}} ProviderError */
     /** @typedef {(null|string|Array<string>|{publicKey: string})} NativeResult */
     /** @typedef {({id: RequestID, name: string, provider: Provider, approvalCommitted: boolean, kind: "result", result: NativeResult}|{id: RequestID, name: string, provider: Provider, approvalCommitted: boolean, kind: "error", error: ProviderError, authorizationFailure: boolean}|{id: RequestID, name: "switchAccount", provider: "multiple", approvalCommitted: boolean, kind: "result", result: null}|{id: RequestID, name: "switchAccount", provider: "multiple", approvalCommitted: boolean, kind: "error", error: {code: ErrorCode, message: string, data?: ProtocolJSONValue}, authorizationFailure: boolean})} NativeResponse */

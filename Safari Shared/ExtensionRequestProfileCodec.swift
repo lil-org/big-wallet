@@ -36,7 +36,7 @@ struct ExtensionRequestProfileCodec {
         case .unknown:
             bound.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
         }
-        guard let payload = ExtensionRequestProfile.ActiveRequestPayload(request: bound, body: body, favicon: raw["favicon"] as? String) else { return nil }
+        guard let payload = ExtensionRequestProfile.ActiveRequestPayload(request: bound, body: body) else { return nil }
         return (bound, payload)
     }
 

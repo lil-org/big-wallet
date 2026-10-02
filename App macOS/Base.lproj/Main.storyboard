@@ -705,19 +705,11 @@ DQ
                             <stackView distribution="fill" orientation="vertical" alignment="leading" spacing="0.0" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="1000" verticalHuggingPriority="1000" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="teC-wK-5y1">
                                 <rect key="frame" x="125" y="396" width="0.0" height="0.0"/>
                                 <subviews>
-                                    <stackView hidden="YES" distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="1000" verticalCompressionResistancePriority="1000" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="H9M-qt-ZuF">
-                                        <rect key="frame" x="0.0" y="-16" width="119" height="16"/>
+                                    <stackView hidden="YES" distribution="fill" orientation="horizontal" alignment="top" spacing="0.0" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="1000" verticalCompressionResistancePriority="1000" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="H9M-qt-ZuF">
+                                        <rect key="frame" x="0.0" y="-16" width="97" height="16"/>
                                         <subviews>
-                                            <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="25J-Lu-4aq">
-                                                <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
-                                                <constraints>
-                                                    <constraint firstAttribute="height" constant="16" id="9BR-I3-Qat"/>
-                                                    <constraint firstAttribute="width" constant="16" id="c28-0n-EPd"/>
-                                                </constraints>
-                                                <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="9eJ-C5-e6g"/>
-                                            </imageView>
                                             <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Khi-cn-EGb">
-                                                <rect key="frame" x="20" y="0.0" width="101" height="16"/>
+                                                <rect key="frame" x="-2" y="0.0" width="101" height="16"/>
                                                 <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="CM5-MZ-VQq">
                                                     <font key="font" metaFont="systemBold"/>
                                                     <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
@@ -727,10 +719,8 @@ DQ
                                         </subviews>
                                         <visibilityPriorities>
                                             <integer value="1000"/>
-                                            <integer value="1000"/>
                                         </visibilityPriorities>
                                         <customSpacing>
-                                            <real value="3.4028234663852886e+38"/>
                                             <real value="3.4028234663852886e+38"/>
                                         </customSpacing>
                                     </stackView>
@@ -828,7 +818,6 @@ DQ
                         <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
                         <outlet property="titleLabel" destination="dkh-kG-EFj" id="xDn-bP-HWG"/>
                         <outlet property="titleLabelTopConstraint" destination="fig-45-iff" id="oIf-XA-wf5"/>
-                        <outlet property="websiteLogoImageView" destination="25J-Lu-4aq" id="GrB-Xe-SUU"/>
                         <outlet property="websiteNameLabel" destination="Khi-cn-EGb" id="Qf9-nL-7eP"/>
                         <outlet property="websiteNameStackView" destination="H9M-qt-ZuF" id="598-jz-EmW"/>
                     </connections>
@@ -991,19 +980,11 @@ DQ
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                             </scrollView>
-                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="YGo-wh-cCt">
-                                <rect key="frame" x="67" y="340" width="117" height="16"/>
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="0.0" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="YGo-wh-cCt">
+                                <rect key="frame" x="77.5" y="340" width="95" height="16"/>
                                 <subviews>
-                                    <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="q4c-q5-CsH">
-                                        <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
-                                        <constraints>
-                                            <constraint firstAttribute="width" constant="16" id="H1c-bs-rQy"/>
-                                            <constraint firstAttribute="height" constant="16" id="beh-4A-Dsj"/>
-                                        </constraints>
-                                        <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="eOs-XT-voj"/>
-                                    </imageView>
                                     <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="LKE-ra-fan">
-                                        <rect key="frame" x="20" y="0.0" width="99" height="16"/>
+                                        <rect key="frame" x="-2" y="0.0" width="99" height="16"/>
                                         <textFieldCell key="cell" lineBreakMode="truncatingTail" title="unknown dapp" id="lo2-i6-DId">
                                             <font key="font" metaFont="systemBold"/>
                                             <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
@@ -1013,10 +994,8 @@ DQ
                                 </subviews>
                                 <visibilityPriorities>
                                     <integer value="1000"/>
-                                    <integer value="1000"/>
                                 </visibilityPriorities>
                                 <customSpacing>
-                                    <real value="3.4028234663852886e+38"/>
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
@@ -1045,7 +1024,6 @@ DQ
                         <outlet property="cancelButton" destination="orP-ex-jdo" id="5ZQ-qT-aed"/>
                         <outlet property="metaTextView" destination="nek-dW-Y7v" id="tX9-hL-ZQD"/>
                         <outlet property="okButton" destination="xdD-3r-3YP" id="f8Z-et-2Th"/>
-                        <outlet property="peerLogoImageView" destination="q4c-q5-CsH" id="ndd-hX-A0S"/>
                         <outlet property="peerNameLabel" destination="LKE-ra-fan" id="rdG-Ew-TzR"/>
                         <outlet property="progressIndicator" destination="gop-Xs-5xN" id="O3h-SK-jct"/>
                         <outlet property="titleLabel" destination="PdV-Nr-oOY" id="AZx-pJ-I7F"/>
@@ -1367,19 +1345,11 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="7ck-5c-yRP">
-                                <rect key="frame" x="67" y="373" width="117" height="16"/>
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="0.0" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="7ck-5c-yRP">
+                                <rect key="frame" x="77.5" y="373" width="95" height="16"/>
                                 <subviews>
-                                    <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="g8t-xf-H1l">
-                                        <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
-                                        <constraints>
-                                            <constraint firstAttribute="height" constant="16" id="dET-c7-cqQ"/>
-                                            <constraint firstAttribute="width" constant="16" id="tQe-uA-ymj"/>
-                                        </constraints>
-                                        <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="DGI-qz-sBc"/>
-                                    </imageView>
                                     <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Ji7-6C-gUp">
-                                        <rect key="frame" x="20" y="0.0" width="99" height="16"/>
+                                        <rect key="frame" x="-2" y="0.0" width="99" height="16"/>
                                         <textFieldCell key="cell" lineBreakMode="truncatingTail" title="unknown dapp" id="csk-3U-RLL">
                                             <font key="font" metaFont="systemBold"/>
                                             <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
@@ -1389,10 +1359,8 @@ DQ
                                 </subviews>
                                 <visibilityPriorities>
                                     <integer value="1000"/>
-                                    <integer value="1000"/>
                                 </visibilityPriorities>
                                 <customSpacing>
-                                    <real value="3.4028234663852886e+38"/>
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
@@ -1435,7 +1403,6 @@ DQ
                         <outlet property="infoTextViewBottomConstraint" destination="fxj-xB-6jl" id="f2p-uL-Wac"/>
                         <outlet property="metaTextView" destination="EuZ-5b-EGk" id="UyV-K8-7Og"/>
                         <outlet property="okButton" destination="JBO-6Q-5eC" id="JHm-Kl-fys"/>
-                        <outlet property="peerLogoImageView" destination="g8t-xf-H1l" id="CqE-7d-LAU"/>
                         <outlet property="peerNameLabel" destination="Ji7-6C-gUp" id="J9c-ml-tXd"/>
                         <outlet property="slowSpeedLabel" destination="Jcz-Um-efA" id="TBN-lQ-Njc"/>
                         <outlet property="speedContainerStackView" destination="pLD-2z-PFP" id="PV3-l7-3pR"/>

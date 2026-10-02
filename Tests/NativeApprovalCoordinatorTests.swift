@@ -328,6 +328,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             controller.openWalletManagement = { completion in launches += 1; completion(true) }
             XCTAssertFalse(controller.websiteNameStackView.isHidden)
             XCTAssertEqual(controller.websiteNameLabel.stringValue, "wallet.example")
+            XCTAssertEqual(controller.websiteNameStackView.arrangedSubviews.count, 1)
+            XCTAssertTrue(controller.websiteNameStackView.arrangedSubviews.first === controller.websiteNameLabel)
             XCTAssertEqual(controller.titleLabel.stringValue,
                            (mode == .selectAccount ? Strings.selectAccount : Strings.switchAccount)
                             .replacingOccurrences(of: " ", with: "\n"))
@@ -1636,7 +1638,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(controller.okButton.isEnabled)
     }
 
-    func testMessageApprovalRestoresFaviconAndNameRowWhenReplacingVisibleContent() async throws {
+    func testMessageApprovalRestoresRequesterNameWhenReplacingVisibleContent() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1679,11 +1681,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(controller.view.window === window)
         XCTAssertEqual(controller.view.frame.size, NSSize(width: 250, height: 372))
         XCTAssertEqual(controller.peerNameLabel.stringValue, "wallet.example")
-        XCTAssertTrue(
-            controller.peerNameLabel.superview === controller.peerLogoImageView.superview
-        )
-        XCTAssertFalse(try XCTUnwrap(controller.peerNameLabel.superview).isHidden)
-        XCTAssertEqual(controller.peerLogoImageView.frame.size, NSSize(width: 16, height: 16))
+        let requesterRow = try XCTUnwrap(controller.peerNameLabel.superview as? NSStackView)
+        XCTAssertFalse(requesterRow.isHidden)
+        XCTAssertEqual(requesterRow.arrangedSubviews.count, 1)
+        XCTAssertTrue(requesterRow.arrangedSubviews.first === controller.peerNameLabel)
         XCTAssertEqual(
             try titleTopSpacing(controller.titleLabel, in: controller.view),
             46

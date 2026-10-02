@@ -618,7 +618,6 @@ actor ExtensionBridge {
 
     static func correlationFingerprint(_ rawObject: [String: Any]) -> Data? {
         var correlationObject = rawObject
-        correlationObject.removeValue(forKey: "favicon")
         correlationObject.removeValue(forKey: "authority")
 
         if correlationObject["provider"] as? String == InpageProvider.unknown.rawValue,

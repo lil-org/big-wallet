@@ -870,9 +870,6 @@
 		FC7CDB5CFEC2D6AB8BF28CB3 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		FF404425774AF3AE0D7F2B3E /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C728B602AFBFAF100E4DD47 /* Image.swift */; };
 		FF6953A51811D3F7C4884094 /* DurableApprovalExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249CB855F657541977C5004B /* DurableApprovalExecutor.swift */; };
-		FACA00000000000000000011 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000001 /* RemoteImageLoader.swift */; };
-		FACA00000000000000000012 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000001 /* RemoteImageLoader.swift */; };
-		FACA00000000000000000013 /* RemoteImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000002 /* RemoteImageLoaderTests.swift */; };
 		C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
 		C0DE0B200000000000000011 /* ResponseDeliveryPollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */; };
 		C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
@@ -1214,8 +1211,6 @@
 		DB2B8110AC144397915962B1 /* NetworkCatalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = NetworkCatalog.json; sourceTree = "<group>"; };
 		E1E425CE4050A1EE7120DCFB /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		F5043FECAA8BA2EEB19DA712 /* PeerMeta.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
-		FACA00000000000000000001 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
-		FACA00000000000000000002 /* RemoteImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoaderTests.swift; sourceTree = "<group>"; };
 		C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAuthorityTransportTests.swift; sourceTree = "<group>"; };
 		C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseDeliveryPollerTests.swift; sourceTree = "<group>"; };
 		65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocol.generated.swift; sourceTree = "<group>"; };
@@ -1344,7 +1339,6 @@
 				2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */,
 				2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */,
 				A8B200002FC3000000000001 /* NativeApprovalCoordinatorTests.swift */,
-				FACA00000000000000000002 /* RemoteImageLoaderTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -1776,7 +1770,6 @@
 			isa = PBXGroup;
 			children = (
 				D0A100012FD1000000000001 /* WalletAccess.swift */,
-				FACA00000000000000000001 /* RemoteImageLoader.swift */,
 				2FA300000000000000000001 /* AlchemyJWTProvider.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				BF3C00012FB2000000000000 /* DeviceAuthentication.swift */,
@@ -3274,7 +3267,6 @@
 				88FA3502258DACEFB0EC6463 /* ApproveViewController.swift in Sources */,
 				84E4EDBA338FB3ECFD12DB0F /* WaitingViewController.swift in Sources */,
 				EC90B67206A889D7ED0E52F5 /* PeerMeta.swift in Sources */,
-				FACA00000000000000000011 /* RemoteImageLoader.swift in Sources */,
 				FBC23ECE1F9B298FB2265AFA /* EditTransactionView.swift in Sources */,
 				4B3CF891ECE90EA2569AED0C /* NetworksListView.swift in Sources */,
 				0116FE5F2C90433188343E29 /* DappApprovalDecision.swift in Sources */,
@@ -3643,7 +3635,6 @@
 				8123E82655465B1DF7F30C29 /* ApproveViewController.swift in Sources */,
 				A4D9374752C920CF9FA80188 /* WaitingViewController.swift in Sources */,
 				32E601E3CA4B19106269DC01 /* PeerMeta.swift in Sources */,
-				FACA00000000000000000012 /* RemoteImageLoader.swift in Sources */,
 				F005F722978C41C60B039650 /* EditTransactionView.swift in Sources */,
 				FAFE2FE3B281DF1B53EA2BEC /* NetworksListView.swift in Sources */,
 				33A92FE79328033EE2F8B0E3 /* DappApprovalDecision.swift in Sources */,
@@ -3788,7 +3779,6 @@
 				2CE02C832BAA0F9800381D70 /* TransactionInspectorTests.swift in Sources */,
 				2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */,
 				A8B201012FC3000000000001 /* NativeApprovalCoordinatorTests.swift in Sources */,
-				FACA00000000000000000013 /* RemoteImageLoaderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

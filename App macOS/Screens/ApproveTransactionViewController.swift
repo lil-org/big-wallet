@@ -24,13 +24,6 @@ class ApproveTransactionViewController: NSViewController {
     @IBOutlet weak var slowSpeedLabel: NSTextField!
     @IBOutlet weak var fastSpeedLabel: NSTextField!
     @IBOutlet weak var peerNameLabel: NSTextField!
-    @IBOutlet weak var peerLogoImageView: NSImageView! {
-        didSet {
-            peerLogoImageView.wantsLayer = true
-            peerLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
-            peerLogoImageView.layer?.cornerRadius = 5
-        }
-    }
     
     private let agent = Agent.shared
     private let ethereum = Ethereum.shared
@@ -111,11 +104,6 @@ class ApproveTransactionViewController: NSViewController {
         
     }
 
-    override func viewWillDisappear() {
-        super.viewWillDisappear()
-        peerLogoImageView.cancelRemoteImageLoad()
-    }
-    
     override func viewDidAppear() {
         super.viewDidAppear()
         updateRequester()
@@ -128,13 +116,6 @@ class ApproveTransactionViewController: NSViewController {
         let peer = nativeApprovalPeer
         peerNameLabel.stringValue = peer?.name ?? ""
         peerNameLabel.superview?.isHidden = peer == nil
-        if peerLogoImageView.image == nil {
-            peerLogoImageView.setRemoteImage(with: peer?.iconURLString) { [weak peerLogoImageView] image in
-                guard image != nil else { return }
-                peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
-                peerLogoImageView?.layer?.cornerRadius = 0
-            }
-        }
     }
 
     private func handleApprovalOutput(
@@ -550,7 +531,6 @@ extension ApproveTransactionViewController:
     NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        peerLogoImageView?.cancelRemoteImageLoad()
         cancelAuthentication()
         pendingApprovalAlert = nil
         sheetState = .idle

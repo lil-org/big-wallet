@@ -836,16 +836,6 @@
             }
           },
           "optional": {
-            "favicon": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "replayOnly": {
               "type": "boolean"
             }
@@ -894,16 +884,6 @@
             }
           },
           "optional": {
-            "favicon": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "replayOnly": {
               "type": "boolean"
             }
@@ -948,16 +928,6 @@
             }
           },
           "optional": {
-            "favicon": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "replayOnly": {
               "type": "boolean"
             }

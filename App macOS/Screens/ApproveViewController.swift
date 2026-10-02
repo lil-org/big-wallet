@@ -16,13 +16,6 @@ class ApproveViewController: NSViewController {
     @IBOutlet weak var okButton: NSButton!
     @IBOutlet weak var cancelButton: NSButton!
     @IBOutlet weak var peerNameLabel: NSTextField!
-    @IBOutlet weak var peerLogoImageView: NSImageView! {
-        didSet {
-            peerLogoImageView.wantsLayer = true
-            peerLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
-            peerLogoImageView.layer?.cornerRadius = 5
-        }
-    }
     
     private var subject: ApprovalSubject!
     private var approveTitle: String!
@@ -74,23 +67,11 @@ class ApproveViewController: NSViewController {
         updateOkButtonState()
     }
 
-    override func viewWillDisappear() {
-        super.viewWillDisappear()
-        peerLogoImageView.cancelRemoteImageLoad()
-    }
-    
     override func viewDidAppear() {
         super.viewDidAppear()
         let peer = nativeApprovalPeer
         peerNameLabel.stringValue = peer?.name ?? ""
         peerNameLabel.superview?.isHidden = peer == nil
-        if peerLogoImageView.image == nil {
-            peerLogoImageView.setRemoteImage(with: peer?.iconURLString) { [weak peerLogoImageView] image in
-                guard image != nil else { return }
-                peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
-                peerLogoImageView?.layer?.cornerRadius = 0
-            }
-        }
         view.window?.delegate = nil
         view.window?.makeFirstResponder(view)
     }
@@ -182,7 +163,6 @@ extension ApproveViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
         didCallCompletion = true
-        peerLogoImageView?.cancelRemoteImageLoad()
         localWindowCloseCompletion?()
         localWindowCloseCompletion = nil
     }

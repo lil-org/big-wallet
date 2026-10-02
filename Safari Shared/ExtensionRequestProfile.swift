@@ -25,20 +25,18 @@ struct ExtensionRequestProfile {
     struct ActiveRequestPayload: Codable {
         let name: String
         let provider: InpageProvider
-        let favicon: String?
         let admissionDeadlineMilliseconds: Int
         let bodyData: Data
         let body: SafariRequest.Body
 
         private enum CodingKeys: String, CodingKey {
-            case name, provider, favicon, admissionDeadlineMilliseconds, bodyData
+            case name, provider, admissionDeadlineMilliseconds, bodyData
         }
 
-        init?(request: SafariRequest, body: [String: Any], favicon: String?) {
+        init?(request: SafariRequest, body: [String: Any]) {
             guard let bodyData = ExtensionBridge.payloadData(body, options: [.sortedKeys]) else { return nil }
             name = request.name
             provider = request.provider
-            self.favicon = favicon
             admissionDeadlineMilliseconds = request.admissionDeadlineMilliseconds
             self.bodyData = bodyData
             self.body = request.body
@@ -48,7 +46,6 @@ struct ExtensionRequestProfile {
             let values = try decoder.container(keyedBy: CodingKeys.self)
             name = try values.decode(String.self, forKey: .name)
             provider = try values.decode(InpageProvider.self, forKey: .provider)
-            favicon = try values.decodeIfPresent(String.self, forKey: .favicon)
             admissionDeadlineMilliseconds = try values.decode(Int.self, forKey: .admissionDeadlineMilliseconds)
             bodyData = try values.decode(Data.self, forKey: .bodyData)
             guard admissionDeadlineMilliseconds > 0,
@@ -69,7 +66,6 @@ struct ExtensionRequestProfile {
                 body: body,
                 host: record.host,
                 configurationKey: record.configurationKey,
-                favicon: SafariRequest.normalizedFavicon(favicon, host: record.host),
                 enqueueAttempt: record.enqueueAttempt,
                 admissionDeadlineMilliseconds: admissionDeadlineMilliseconds,
                 authority: record.authority,
@@ -79,7 +75,7 @@ struct ExtensionRequestProfile {
 
         func wireObject(for record: Record) -> [String: Any]? {
             guard let body = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else { return nil }
-            var object: [String: Any] = [
+            let object: [String: Any] = [
                 "id": record.id,
                 "name": name,
                 "provider": provider.rawValue,
@@ -91,7 +87,6 @@ struct ExtensionRequestProfile {
                 "authority": record.authority.json,
                 "workflowVersion": ExtensionBridge.workflowVersion,
             ]
-            object["favicon"] = favicon
             return object
         }
     }

@@ -10,7 +10,6 @@ struct SafariRequest {
     let body: Body
     let host: String
     let configurationKey: String
-    let favicon: String?
     let enqueueAttempt: String
     let admissionDeadlineMilliseconds: Int
     let workflowVersion: Int
@@ -51,7 +50,6 @@ struct SafariRequest {
         body: Body,
         host: String,
         configurationKey: String,
-        favicon: String?,
         enqueueAttempt: String,
         admissionDeadlineMilliseconds: Int,
         authority: ExtensionBridge.AuthorityVersion?,
@@ -63,7 +61,6 @@ struct SafariRequest {
         self.body = body
         self.host = host
         self.configurationKey = configurationKey
-        self.favicon = favicon
         self.enqueueAttempt = enqueueAttempt
         self.admissionDeadlineMilliseconds = admissionDeadlineMilliseconds
         workflowVersion = ExtensionBridge.workflowVersion
@@ -110,21 +107,10 @@ struct SafariRequest {
         authority = ExtensionBridge.AuthorityVersion(rawValue: json["authority"])
         authorizedAccount = nil
         
-        favicon = Self.normalizedFavicon(json["favicon"] as? String, host: host)
-        
         self.provider = provider
         
         guard let body = Body(provider: provider, name: name, json: jsonBody) else { return nil }
         self.body = body
     }
 
-    static func normalizedFavicon(_ favicon: String?, host: String) -> String? {
-        guard let favicon, !favicon.isEmpty else { return nil }
-        if favicon.hasPrefix("//") { return "https:" + favicon }
-        if favicon.first == "/" { return "https://" + host + favicon }
-        if favicon.first == "." { return "https://" + host + favicon.dropFirst() }
-        if favicon.hasPrefix("http") { return favicon }
-        return "https://" + host + "/" + favicon
-    }
-    
 }

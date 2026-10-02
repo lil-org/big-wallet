@@ -990,7 +990,7 @@ enum WireProtocol {
     }
 
     private static func n109(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["replayOnly"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
         guard let field2 = value["host"], n28(field2) else { return false }
@@ -1001,7 +1001,6 @@ enum WireProtocol {
         guard let field7 = value["provider"], n94(field7) else { return false }
         guard let field8 = value["name"], n103(field8) else { return false }
         guard let field9 = value["body"], n104(field9) else { return false }
-        if let field = value["favicon"], !n87(field) { return false }
         if let field = value["replayOnly"], !n111(field) { return false }
         return true
     }
@@ -1015,7 +1014,7 @@ enum WireProtocol {
     }
 
     private static func n112(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["replayOnly"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
         guard let field2 = value["host"], n28(field2) else { return false }
@@ -1026,13 +1025,12 @@ enum WireProtocol {
         guard let field7 = value["provider"], n97(field7) else { return false }
         guard let field8 = value["name"], n106(field8) else { return false }
         guard let field9 = value["body"], n107(field9) else { return false }
-        if let field = value["favicon"], !n87(field) { return false }
         if let field = value["replayOnly"], !n111(field) { return false }
         return true
     }
 
     private static func n113(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["replayOnly"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
         guard let field2 = value["host"], n28(field2) else { return false }
@@ -1043,7 +1041,6 @@ enum WireProtocol {
         guard let field7 = value["provider"], n114(field7) else { return false }
         guard let field8 = value["name"], n115(field8) else { return false }
         guard let field9 = value["body"], n116(field9) else { return false }
-        if let field = value["favicon"], !n87(field) { return false }
         if let field = value["replayOnly"], !n111(field) { return false }
         return true
     }

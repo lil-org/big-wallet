@@ -278,7 +278,6 @@ function makeHarness({
         tab: {
             id: 9,
             url: "https://wallet.example/dapp",
-            favIconUrl: "https://wallet.example/icon.png",
             incognito: privateBrowsing,
         },
     };
@@ -418,7 +417,6 @@ function contentSender(tab = {}) {
         tab: {
             id: 9,
             url: "https://wallet.example/dapp",
-            favIconUrl: "https://wallet.example/icon.png",
             incognito: false,
             ...tab,
         },
@@ -1325,18 +1323,15 @@ test("toolbar private and unidentifiable tabs never ask content for an account",
     }
 });
 
-test("toolbar uses trusted tab identity and bounds its favicon metadata", async () => {
-    for (const [tab, configurationKey, favicon] of [
-        [{id: 3, url: "", pendingUrl: "https://wallet.example/path", favIconUrl: "https://wallet.example/icon.png"},
-            "https://wallet.example", "https://wallet.example/icon.png"],
-        [{id: 3, url: "file:///tmp/dapp.html?query#fragment", favIconUrl: "https://wallet.example/icon.png"},
-            "file:///tmp/dapp.html", ""],
-        [{id: 3, url: "https://wallet.example", favIconUrl: "x".repeat(16385)}, "https://wallet.example", ""],
+test("toolbar derives the request identity from the tab URL", async () => {
+    for (const [tab, configurationKey] of [
+        [{id: 3, url: "", pendingUrl: "https://wallet.example/path"}, "https://wallet.example"],
+        [{id: 3, url: "file:///tmp/dapp.html?query#fragment"}, "file:///tmp/dapp.html"],
+        [{id: 3, url: "https://wallet.example"}, "https://wallet.example"],
     ]) {
         const harness = makeHarness({configuredPopup: false, native: message => {
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
             assert.equal(message.configurationKey, configurationKey);
-            assert.equal(message.favicon, favicon);
             return {id: message.id, admissionKind: "new", approvalRequired: false, requestToken, state: snapshot()};
         }});
         await harness.read(`handleToolbarClick(${JSON.stringify(tab)})`);

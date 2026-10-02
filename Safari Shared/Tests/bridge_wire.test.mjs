@@ -333,7 +333,7 @@ const runtimeSenders = {
         id: runtime.id,
         url: "https://wallet.example/path",
         frameId: 0,
-        tab: {id: 4, url: "https://other.example", favIconUrl: "https://wallet.example/icon.png"},
+        tab: {id: 4, url: "https://other.example"},
     },
     popup: {id: runtime.id, url: runtime.getURL("popup.html")},
     worker: {id: runtime.id, url: runtime.getURL("")},
@@ -430,21 +430,18 @@ test("runtime authorization snapshots identity exclusively from the content send
         const result = wire.authorizeRuntimeMessage("worker", request, sender, runtime);
         assert.deepEqual(normalized(result), {
             kind: "content", identity: expected, privateBrowsing: false, tabId: 4,
-            favicon: "https://wallet.example/icon.png",
         });
         assert.equal(Object.isFrozen(result), true);
         assert.equal(Object.isFrozen(result.identity), true);
         sender.url = "https://changed.example";
         sender.tab.id = 99;
-        sender.tab.favIconUrl = "changed";
         request.origin = "https://changed.example";
         assert.deepEqual(normalized(result.identity), expected);
         assert.equal(result.tabId, 4);
-        assert.equal(result.favicon, "https://wallet.example/icon.png");
     }
 });
 
-test("runtime authorization retains only browser supplied privacy and optional favicon", () => {
+test("runtime authorization retains only browser supplied privacy", () => {
     for (const tabIncognito of [undefined, false, true, "true"]) {
         for (const incognito of [undefined, false, true, "true"]) {
             const sender = {...runtimeSenders.content, incognito, tab: {id: 0, incognito: tabIncognito}};
@@ -453,7 +450,6 @@ test("runtime authorization retains only browser supplied privacy and optional f
             }, sender, runtime);
             assert.equal(result.privateBrowsing, tabIncognito === true || incognito === true);
             assert.equal(result.tabId, 0);
-            assert.equal(result.favicon, null);
         }
     }
     for (const kind of ["popup", "worker"]) {
@@ -462,7 +458,7 @@ test("runtime authorization retains only browser supplied privacy and optional f
         const result = wire.authorizeRuntimeMessage(receiver, {subject}, {
             ...runtimeSenders[kind], incognito: true,
         }, runtime);
-        assert.deepEqual(normalized(result), {kind, identity: null, privateBrowsing: true, tabId: null, favicon: null});
+        assert.deepEqual(normalized(result), {kind, identity: null, privateBrowsing: true, tabId: null});
         assert.equal(Object.isFrozen(result), true);
     }
 });
@@ -529,7 +525,7 @@ test("runtime authorization fails closed on accessors and runtime failures", () 
         Object.defineProperty(hostileSender, field, {get: fail});
         assert.equal(wire.authorizeRuntimeMessage("worker", request, hostileSender, runtime), null);
     }
-    for (const field of ["id", "incognito", "favIconUrl"]) {
+    for (const field of ["id", "incognito"]) {
         const tab = {...sender.tab};
         Object.defineProperty(tab, field, {get: fail});
         assert.equal(wire.authorizeRuntimeMessage("worker", request, {...sender, tab}, runtime), null);

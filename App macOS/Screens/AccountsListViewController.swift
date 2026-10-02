@@ -128,13 +128,6 @@ class AccountsListViewController: NSViewController {
     @IBOutlet weak var titleLabelTopConstraint: NSLayoutConstraint!
     @IBOutlet weak var websiteNameStackView: NSStackView!
     @IBOutlet weak var websiteNameLabel: NSTextField!
-    @IBOutlet weak var websiteLogoImageView: NSImageView! {
-        didSet {
-            websiteLogoImageView.wantsLayer = true
-            websiteLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
-            websiteLogoImageView.layer?.cornerRadius = 5
-        }
-    }
     @IBOutlet weak var networkButton: NSButton! {
         didSet {
             networkButton.image = Images.network.with(pointSize: 14, weight: .regular)
@@ -225,11 +218,6 @@ class AccountsListViewController: NSViewController {
         
     }
     
-    override func viewWillDisappear() {
-        super.viewWillDisappear()
-        websiteLogoImageView.cancelRemoteImageLoad()
-    }
-
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         guard acceptsUserActions, let accountSelection else { return }
         accountSelection.complete(accounts: specificWalletAccounts) {
@@ -297,17 +285,9 @@ class AccountsListViewController: NSViewController {
             websiteNameLabel.stringValue = peer.name
             titleLabelTopConstraint.constant = 14
             websiteNameStackView.isHidden = false
-            if websiteLogoImageView.image == nil {
-                websiteLogoImageView.setRemoteImage(with: peer.iconURLString) { [weak websiteLogoImageView] image in
-                    guard image != nil else { return }
-                    websiteLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
-                    websiteLogoImageView?.layer?.cornerRadius = 0
-                }
-            }
         } else {
             titleLabelTopConstraint.constant = 8
             websiteNameStackView.isHidden = true
-            websiteLogoImageView.cancelRemoteImageLoad()
         }
     }
 
@@ -1189,7 +1169,6 @@ extension AccountsListViewController: NSTableViewDataSource {
 extension AccountsListViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        websiteLogoImageView?.cancelRemoteImageLoad()
         cancelMenuTracking()
         authenticationContext?.invalidate()
         authenticationContext = nil

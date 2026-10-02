@@ -1197,7 +1197,7 @@ test("malformed account images reject the review without modifying its source", 
     }
 });
 
-test("approval reviews use a bundled requester icon and preserve account images", async () => {
+test("approval reviews preserve account images", async () => {
     for (const images of [{}, {icon: "data:image/png;base64,aW1hZ2U="}]) {
         const request = pendingRequest();
         const response = messageState(request, {
@@ -1209,8 +1209,6 @@ test("approval reviews use a bundled requester icon and preserve account images"
         await harness.boot();
 
         assert.deepEqual(normalized(harness.controller.state), response);
-        assert.equal(harness.get("requester-icon").classList.contains("hidden"), false);
-        assert.equal(harness.get("requester-icon").src, "images/requester-globe.svg");
         const accountImages = harness.get("signing-account").children.filter(child => child.className === "account-icon");
         assert.equal(accountImages.length, images.icon ? 1 : 0);
         if (images.icon) { assert.equal(accountImages[0].src, images.icon); }

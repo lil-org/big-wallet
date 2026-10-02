@@ -130,7 +130,6 @@
             let kind;
             let identity = null;
             let tabId = null;
-            let favicon = null;
             if (tab !== undefined) {
                 if (!hasOwn(sender, "tab") || !isRecord(tab)) { return null; }
                 tabId = pageValue(tab, "id");
@@ -140,8 +139,6 @@
                 identity = configurationIdentityForURL(url);
                 if (!identity) { return null; }
                 kind = "content";
-                const faviconURL = tab.favIconUrl;
-                favicon = typeof faviconURL === "string" ? faviconURL : null;
                 freeze(identity);
             } else if (url === runtime.getURL("popup.html")) {
                 kind = "popup";
@@ -159,7 +156,6 @@
                 identity,
                 privateBrowsing: tab?.incognito === true || sender.incognito === true,
                 tabId,
-                favicon,
             });
         } catch {
             return null;

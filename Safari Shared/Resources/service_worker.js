@@ -113,8 +113,6 @@ async function handleDappRequest(request, context) {
     const response = await WIRE.withTimeout(sendNativeAdmission({
         ...message, ...identity, authority: request.authority,
         admissionDeadline: request.admissionDeadline, enqueueAttempt: request.enqueueAttempt,
-        favicon: identity.configurationKey.startsWith("file:") ? ""
-            : typeof context.favicon === "string" && context.favicon.length <= 16 * 1024 ? context.favicon : "",
         workflowVersion: WORKFLOW_VERSION,
     }), TRANSPORT_TIMEOUT);
     if (WIRE.isNativeEnqueueAcknowledgement(response, message.id)) {
@@ -341,7 +339,7 @@ function beginManualSwitch(identity) {
 async function handleManualSwitchIntent(request, context) {
     const identity = requestIdentity(request, context);
     if (context.privateBrowsing || !identity) { return undefined; }
-    return beginManualSwitch({...identity, favicon: identity.configurationKey.startsWith("file:") ? "" : context.favicon || ""});
+    return beginManualSwitch(identity);
 }
 
 function cuePopup() {
@@ -457,11 +455,7 @@ async function handleToolbarClick(tab) {
     };
     updateFailure(false);
     try {
-        const response = await beginManualSwitch({
-            ...identity,
-            favicon: !identity.configurationKey.startsWith("file:") &&
-                typeof tab.favIconUrl === "string" && tab.favIconUrl.length <= 16 * 1024 ? tab.favIconUrl : "",
-        });
+        const response = await beginManualSwitch(identity);
         const acknowledged = WIRE.isManualSwitchAcknowledgement(response, response?.id, identity.configurationKey);
         const terminal = WIRE.isManualSwitchTerminalResponse(response, response?.id);
         const succeeded = acknowledged ? !response.approvalRequired ||

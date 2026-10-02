@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {createPopupHarness, flushPopup, popupMarkup, popupMarkupInventory} from "./popup_harness.mjs";
 import {deferred} from "./test_helpers.mjs";
@@ -19,18 +18,6 @@ test("popup inventory preserves actual IDs, classes, and fallback localization",
     assert.ok(labels.some(element => element.id === "" && element.dataset.string === "gasPrice" &&
         element.textContent === "Gas price (gwei)"));
     assert.throws(() => harness.document.querySelectorAll("button"), /Unsupported popup selector/);
-});
-
-test("requester decoration uses a bundled image without an accessible name", async () => {
-    const icon = popupMarkupInventory(popupMarkup).elements.find(element =>
-        element.attributes.id === "requester-icon"
-    );
-    assert.equal(icon.attributes.src, "images/requester-globe.svg");
-    assert.equal(icon.attributes.alt, "");
-    assert.equal(icon.attributes["aria-hidden"], "true");
-    const asset = await readFile(new URL(`../Resources/${icon.attributes.src}`, import.meta.url), "utf8");
-    assert.match(asset, /^<svg\b/);
-    assert.doesNotMatch(asset, /<(?:script|foreignObject|image)\b|\b(?:href|style|on\w+)\s*=/i);
 });
 
 test("popup runtime notifications carry realistic and overridable sender metadata", () => {
@@ -73,7 +60,7 @@ test("unsupported inventory assumptions and duplicate IDs fail explicitly", () =
         'href="popup.css"', 'href="https://example.com/popup.css"'
     )), /local CSS files/);
     assert.throws(() => popupMarkupInventory(popupMarkup.replace(
-        'src="images/requester-globe.svg"', 'src="https://example.com/icon.svg"'
+        '<body>', '<body><img src="https://example.com/icon.svg">'
     )), /bundled images/);
     for (const attribute of ['onclick="alert(1)"', 'style="display:block"']) {
         assert.throws(() => popupMarkupInventory(popupMarkup.replace(

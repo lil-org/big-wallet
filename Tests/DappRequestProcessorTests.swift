@@ -3392,7 +3392,6 @@ final class DappRequestProcessorTests: XCTestCase {
         for field in [
             "host",
             "name",
-            "favicon",
             "unexpected",
             "enqueueAttempt",
             "admissionDeadline",
