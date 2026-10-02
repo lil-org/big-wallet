@@ -187,8 +187,7 @@ struct DappRequestProcessor: DappRequestProcessing {
                 return Self.approvedFailure(error, permit: permit)
             }
         case .addEthereumChain:
-            guard EthereumDappRequestProcessor.completeApprovedChainAddition(permit: permit),
-                  let completion = ApprovedCompletion.chainAdded(permit: permit) else {
+            guard let completion = ApprovedCompletion.chainAdded(permit: permit) else {
                 return Self.approvedFailure(.init(message: Strings.somethingWentWrong), permit: permit)
             }
             return .completed(completion)

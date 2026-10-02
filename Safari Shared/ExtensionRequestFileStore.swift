@@ -12,6 +12,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     typealias ReadData = (URL) throws -> Data
     typealias ReadFileSize = (URL) throws -> Int?
     typealias RemoveItem = (URL) throws -> Void
+    typealias CompleteChainAddition = (ExtensionBridge.ApprovedExecutionPermit) -> Bool
 
     struct Dependencies {
         let clock: () -> Date
@@ -26,6 +27,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let readData: ReadData
         let readFileSize: ReadFileSize
         let removeItem: RemoveItem
+        let completeChainAddition: CompleteChainAddition
 
         init(
             clock: @escaping () -> Date = Date.init,
@@ -39,7 +41,9 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             persistenceOperations: DurableProfilePersistence.Operations = .live,
             readData: @escaping ReadData = ExtensionRequestFileStore.defaultReadData,
             readFileSize: @escaping ReadFileSize = ExtensionRequestFileStore.defaultReadFileSize,
-            removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem
+            removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem,
+            completeChainAddition: @escaping CompleteChainAddition =
+                EthereumDappRequestProcessor.completeApprovedChainAddition
         ) {
             self.clock = clock
             self.token = token
@@ -53,6 +57,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             self.readData = readData
             self.readFileSize = readFileSize
             self.removeItem = removeItem
+            self.completeChainAddition = completeChainAddition
         }
     }
 
@@ -72,6 +77,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private let clock: () -> Date
     private let token: () -> UUID
     private let revocationEpoch: () -> UUID
+    private let completeChainAddition: CompleteChainAddition
     private let files: ExtensionRequestStoreFiles
     private var codec: ExtensionRequestProfileCodec
 
@@ -116,6 +122,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         clock = dependencies.clock
         token = dependencies.token
         revocationEpoch = dependencies.revocationEpoch
+        completeChainAddition = dependencies.completeChainAddition
         codec = ExtensionRequestProfileCodec()
         files = ExtensionRequestStoreFiles(
             rootURL: rootURL,
@@ -934,7 +941,15 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) -> ExtensionBridge.StoreMutationResult {
         guard let response = result.response(for: permit) else { return .ownershipLost }
         defer { permit.releaseLease() }
-        return completeExecution(claim: permit.claim, approvedPermit: permit) { _ in response }
+        return completeExecution(claim: permit.claim, approvedPermit: permit) { _ in
+            guard response.addsEthereumChain else { return response }
+            guard self.completeChainAddition(permit) else {
+                return ApprovedCompletion.failure(
+                    .init(message: Strings.somethingWentWrong), permit: permit
+                )?.response(for: permit)
+            }
+            return response
+        }
     }
 
     private func completeExecution(

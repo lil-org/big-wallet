@@ -5328,6 +5328,112 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
+    func testRevokedChainAdditionDoesNotInsertNetwork() async throws {
+        var additions = 0
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            clock: { self.clock.now }, atomicWrite: ApprovalStoreTestPersistence.write,
+            completeChainAddition: { _ in additions += 1; return true }
+        ))
+        let permit = try authorizeChainAddition(in: store)
+        guard case .snapshot(let authority) = store.configurationSnapshot(
+            configurationKey: permit.request.configurationKey, profileIdentifier: nil
+        ), case .revoked = store.revoke(
+            configurationKey: permit.request.configurationKey, provider: .ethereum,
+            attempt: attempt(for: 77_040), expected: authority.version, profileIdentifier: nil
+        ), case .completed(let completion) = await DappRequestProcessor().execute(permit: permit, signer: nil) else {
+            return XCTFail("Expected revocation between authorization and execution")
+        }
+        XCTAssertEqual(store.complete(permit: permit, result: completion), .persisted)
+        XCTAssertEqual(additions, 0)
+        let delivery = try await deliveredAuthority(permit.handle)
+        XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+        XCTAssertEqual((delivery.state["ethereum"] as? [String: String])?["chainId"], "0x1")
+    }
+
+    @MainActor
+    func testChainAdditionInsertsOnceUnderAuthorityLock() async throws {
+        var additions = 0
+        let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            clock: { self.clock.now }, atomicWrite: ApprovalStoreTestPersistence.write,
+            completeChainAddition: { permit in
+                XCTAssertTrue(permit.isExecuting)
+                XCTAssertEqual(try? competingLock.tryAcquireExisting(), false)
+                additions += 1
+                return true
+            }
+        ))
+        let permit = try authorizeChainAddition(in: store)
+        guard case .completed(let completion) = await DappRequestProcessor().execute(permit: permit, signer: nil) else {
+            return XCTFail("Expected deferred chain addition")
+        }
+        XCTAssertEqual(additions, 0)
+        XCTAssertEqual(store.complete(permit: permit, result: completion), .persisted)
+        XCTAssertEqual(store.complete(permit: permit, result: completion), .persisted)
+        XCTAssertEqual(additions, 1)
+        XCTAssertTrue(try competingLock.tryAcquireExisting())
+        competingLock.release()
+        let delivery = try await deliveredAuthority(permit.handle)
+        XCTAssertTrue(delivery.response["result"] is NSNull)
+        XCTAssertEqual((delivery.state["ethereum"] as? [String: String])?["chainId"], "0x7ffffffffffffffe")
+    }
+
+    @MainActor
+    func testFailedChainAdditionDoesNotChangeSelectedNetwork() async throws {
+        var additions = 0
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            clock: { self.clock.now }, atomicWrite: ApprovalStoreTestPersistence.write,
+            completeChainAddition: { _ in additions += 1; return false }
+        ))
+        let permit = try authorizeChainAddition(in: store)
+        guard case .completed(let completion) = await DappRequestProcessor().execute(permit: permit, signer: nil) else {
+            return XCTFail("Expected deferred chain addition")
+        }
+        XCTAssertEqual(store.complete(permit: permit, result: completion), .persisted)
+        XCTAssertEqual(additions, 1)
+        let delivery = try await deliveredAuthority(permit.handle)
+        XCTAssertNotNil(delivery.response["error"])
+        XCTAssertEqual((delivery.state["ethereum"] as? [String: String])?["chainId"], "0x1")
+    }
+
+    @MainActor
+    func testChainAdditionFailureCompletionDoesNotInsertNetwork() async throws {
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            clock: { self.clock.now }, atomicWrite: ApprovalStoreTestPersistence.write,
+            completeChainAddition: { _ in XCTFail("Failed approvals must not insert networks"); return true }
+        ))
+        let permit = try authorizeChainAddition(in: store)
+        XCTAssertTrue(permit.consumeExecution())
+        let completion = try XCTUnwrap(ApprovedCompletion.failure(.internalError, permit: permit))
+        XCTAssertEqual(store.complete(permit: permit, result: completion), .persisted)
+        let delivery = try await deliveredAuthority(permit.handle)
+        XCTAssertNotNil(delivery.response["error"])
+        XCTAssertEqual((delivery.state["ethereum"] as? [String: String])?["chainId"], "0x1")
+    }
+
+    @MainActor
+    private func authorizeChainAddition(
+        in store: ExtensionRequestFileStore
+    ) throws -> ExtensionBridge.ApprovedExecutionPermit {
+        let template = try makeFixture(id: 76_040, name: "addEthereumChain")
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        raw["body"] = ["address": "", "chainId": "0x1", "object": [
+            "chainId": "0x7ffffffffffffffe", "chainName": "Test Network",
+            "rpcUrls": ["https://rpc.example"], "blockExplorerUrls": [],
+            "nativeCurrency": ["decimals": 18, "name": "Test Ether", "symbol": "TETH"],
+        ]]
+        let fixture = try authorityFixture(raw)
+        let handle = try accepted(store.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
+        let claim = try approvalClaim(store.claim(handle: handle))
+        let approval = try reviewedApproval(claim)
+        guard claim.adoptForExecution(),
+              case .authorized(let permit) = store.authorize(claim: claim, approval: approval) else {
+            throw Failure.expectedValue
+        }
+        return permit
+    }
+
+    @MainActor
     func testAuthorizationRejectsAbandonedExpiredAndRevokedClaims() async throws {
         for (index, invalidation) in ["abandoned", "expired", "revoked"].enumerated() {
             let fixture = try makeTransactionFixture(id: 76_020 + index, host: "boundary-\(index).example")
