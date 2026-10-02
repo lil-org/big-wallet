@@ -120,7 +120,7 @@ final class NativeApprovalFinalizer {
             if let resolution = EthereumDappRequestProcessor.chainAdditionResolution(action.chainToAdd) {
                 return .immediate(resolution)
             }
-            return resolvedConsent(consent, accounts: nil, transactionNetwork: nil)
+            return resolvedConsent(consent, context: .init(accounts: []))
         }
         CustomNetworkCache.shared.invalidate()
         let currentNetwork: ResolvedEthereumNetwork?
@@ -133,24 +133,31 @@ final class NativeApprovalFinalizer {
             currentNetwork = nil
         }
         guard let catalog = refreshWalletCatalog() else { return .abandon }
-        if let approvedAccount = consent.intent.action.signingAccount,
-           catalog.specificAccount(descriptor: approvedAccount) == nil {
-            return .immediate(missingSigningAccountResolution(for: consent.request))
+        let selectionNetwork: EthereumNetwork?
+        switch (consent.intent.action, consent.decision) {
+        case (.selectAccount(let action), .accountSelection(let selection)),
+             (.switchAccount(let action), .accountSelection(let selection)):
+            selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                .flatMap(networkResolver)
+        default:
+            selectionNetwork = nil
         }
-        return resolvedConsent(consent, accounts: catalog.orderedAccounts, transactionNetwork: currentNetwork)
+        return resolvedConsent(consent, context: .init(
+            accounts: catalog.orderedAccounts,
+            selectionNetwork: selectionNetwork,
+            transactionNetwork: currentNetwork
+        ))
     }
 
     private func resolvedConsent(
         _ consent: ReviewConsent,
-        accounts: [SpecificWalletAccount]?,
-        transactionNetwork: ResolvedEthereumNetwork?
+        context: ApprovalResolutionContext
     ) -> DurableApprovalExecutor.Resolution {
-        switch consent.resolve(
-            accounts: accounts, networkResolver: networkResolver,
-            transactionNetworkResolver: { _ in transactionNetwork }
-        ) {
+        switch consent.resolve(context: context) {
         case .success(let approval):
             return .approved(approval)
+        case .failure(.accountUnavailable):
+            return .immediate(missingSigningAccountResolution(for: consent.request))
         case .failure(.staleTransaction), .failure(.staleAccount):
             return .immediate(Self.staleResolution)
         case .failure(.invalidDecision):

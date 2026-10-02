@@ -871,7 +871,8 @@ final class PopupRequestSessions {
             action: action,
             selection: selection,
             accounts: reviewedCatalog.orderedAccounts,
-            networkResolver: selectionNetworkResolver
+            network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                .flatMap(selectionNetworkResolver)
         ) else {
             session.setFeedback(Strings.somethingWentWrong)
             return true
@@ -893,7 +894,8 @@ final class PopupRequestSessions {
                 action: action,
                 selection: selection,
                 accounts: refreshedCatalog.orderedAccounts,
-                networkResolver: self.selectionNetworkResolver
+                network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                    .flatMap(self.selectionNetworkResolver)
             ) else {
                 session.selectionDraft = .init(
                     selectedAccounts: [],
@@ -925,15 +927,7 @@ final class PopupRequestSessions {
         action: SignMessageAction,
         cluster: Solana.Cluster?
     ) async -> Bool {
-        guard case .success = DappApprovalValidator.resolve(
-            action: .approveMessage(action),
-            decision: .message(.init(
-                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account),
-                solanaCluster: cluster
-            )),
-            accounts: nil,
-            networkResolver: selectionNetworkResolver
-        ) else {
+        guard DappApprovalValidator.resolveMessagePayload(action.payload, cluster: cluster) != nil else {
             session.setFeedback(Strings.somethingWentWrong)
             return true
         }
@@ -1102,19 +1096,34 @@ final class PopupRequestSessions {
                 }
                 return await prepare(context, token)
             }, resolve: { consent in
-                let accounts: [SpecificWalletAccount]?
+                let accounts: [SpecificWalletAccount]
                 if case .addEthereumChain = consent.intent.action {
-                    accounts = nil
+                    accounts = []
                 } else {
                     guard let catalog = self.refreshWalletsAndNetworks() else { return .abandon }
                     accounts = catalog.orderedAccounts
                 }
-                guard self.isCurrent(session, token: token),
-                      case .success(let resolved) = consent.resolve(
-                        accounts: accounts,
-                        networkResolver: self.selectionNetworkResolver,
-                        transactionNetworkResolver: self.signingNetworkResolver
-                      ) else { return .abandon }
+                guard self.isCurrent(session, token: token) else { return .abandon }
+                let selectionNetwork: EthereumNetwork?
+                switch (consent.intent.action, consent.decision) {
+                case (.selectAccount(let action), .accountSelection(let selection)),
+                     (.switchAccount(let action), .accountSelection(let selection)):
+                    selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                        .flatMap(self.selectionNetworkResolver)
+                default:
+                    selectionNetwork = nil
+                }
+                let transactionNetwork: ResolvedEthereumNetwork?
+                if case .approveTransaction(let action) = consent.intent.action {
+                    transactionNetwork = self.signingNetworkResolver(action.chain.chainId)
+                } else {
+                    transactionNetwork = nil
+                }
+                guard case .success(let resolved) = consent.resolve(context: .init(
+                    accounts: accounts,
+                    selectionNetwork: selectionNetwork,
+                    transactionNetwork: transactionNetwork
+                )) else { return .abandon }
                 return .approved(resolved)
             })
             await finishExecution(result, for: session, token: token)

@@ -85,8 +85,11 @@ final class DappRequestProcessorTests: XCTestCase {
         )
         let consent = try XCTUnwrap(review.acceptAccounts(selection: selection, approvedAt: fixture.now))
         XCTAssertNil(review.acceptAccounts(selection: selection, approvedAt: fixture.now))
-        let first = try consent.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
-        let copy = try consent.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
+        let context = ApprovalResolutionContext(
+            accounts: catalog.orderedAccounts, selectionNetwork: Networks.ethereum
+        )
+        let first = try consent.resolve(context: context).get()
+        let copy = try consent.resolve(context: context).get()
         guard case .claimed(let claim) = fixture.store.claim(handle: snapshot.handle),
               claim.adoptForExecution(),
               case .authorized(let firstPermit) = fixture.store.authorize(claim: claim, approval: first) else {
@@ -133,17 +136,16 @@ final class DappRequestProcessorTests: XCTestCase {
             .ready(consent: consent, signing: .none)
         }, resolve: { _ in .abandon })
         XCTAssertEqual(result, .abandoned)
-        let retiredApproval = try consent.resolve(
-            accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex
-        ).get()
+        let context = ApprovalResolutionContext(
+            accounts: catalog.orderedAccounts, selectionNetwork: Networks.ethereum
+        )
+        let retiredApproval = try consent.resolve(context: context).get()
         guard case .claimed(let freshClaim) = fixture.store.claim(handle: snapshot.handle),
               freshClaim.adoptForExecution() else { return XCTFail("Expected fresh review ownership") }
         let replay = fixture.store.authorize(claim: freshClaim, approval: retiredApproval)
         XCTAssertEqual(replay, .ownershipLost)
         let freshConsent = try XCTUnwrap(review.renewed().acceptAccounts(selection: selection, approvedAt: fixture.now))
-        let freshApproval = try freshConsent.resolve(
-            accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex
-        ).get()
+        let freshApproval = try freshConsent.resolve(context: context).get()
         guard case .authorized(let permit) = fixture.store.authorize(claim: freshClaim, approval: freshApproval) else {
             return XCTFail("An abandoned attempt requires new consent without poisoning the fresh claim")
         }
@@ -175,9 +177,12 @@ final class DappRequestProcessorTests: XCTestCase {
         let second = try XCTUnwrap(next.acceptAccounts(selection: selection, approvedAt: fixture.now))
         XCTAssertNil(next.acceptAccounts(selection: selection, approvedAt: fixture.now))
 
-        let firstApproval = try first.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
-        let copiedFirst = try first.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
-        let secondApproval = try second.resolve(accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex).get()
+        let context = ApprovalResolutionContext(
+            accounts: catalog.orderedAccounts, selectionNetwork: Networks.ethereum
+        )
+        let firstApproval = try first.resolve(context: context).get()
+        let copiedFirst = try first.resolve(context: context).get()
+        let secondApproval = try second.resolve(context: context).get()
         XCTAssertTrue(firstApproval.consumeAuthorization())
         XCTAssertFalse(copiedFirst.consumeAuthorization())
         XCTAssertTrue(secondApproval.consumeAuthorization())
@@ -199,17 +204,22 @@ final class DappRequestProcessorTests: XCTestCase {
         ) else { return XCTFail("Expected message review") }
         let review = ApprovalReview(intent: intent)
         let consent = try XCTUnwrap(review.acceptMessage(cluster: .devnet, approvedAt: fixture.now))
-        guard case .failure(.staleAccount) = consent.resolve(
-            accounts: [.init(walletId: "other-wallet", account: account)],
-            networkResolver: Networks.withChainIdHex
+        guard case .failure(.accountUnavailable) = consent.resolve(
+            context: .init(
+                accounts: [.init(walletId: "other-wallet", account: account)]
+            )
         ) else { return XCTFail("A removed account must take precedence over an invalid cluster") }
         guard case .failure(.invalidDecision) = consent.resolve(
-            accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex
+            context: .init(
+                accounts: catalog.orderedAccounts
+            )
         ) else { return XCTFail("Ethereum message approval must reject a Solana cluster") }
 
         let validConsent = try XCTUnwrap(review.renewed().acceptMessage(cluster: nil, approvedAt: fixture.now))
         let resolved = try validConsent.resolve(
-            accounts: catalog.orderedAccounts, networkResolver: Networks.withChainIdHex
+            context: .init(
+                accounts: catalog.orderedAccounts
+            )
         ).get()
         guard case .signing(_, .ethereumPersonalMessage(let data)) = resolved.approval.kind else {
             return XCTFail("Expected the canonical message payload")
@@ -227,15 +237,17 @@ final class DappRequestProcessorTests: XCTestCase {
         let changedNetwork = ResolvedEthereumNetwork(
             network: action.chain, source: action.rpcSource == .custom ? .alchemy : .custom
         )
-        guard case .failure(.staleAccount) = consent.resolve(
-            accounts: [.init(walletId: "other-wallet", account: action.account)],
-            networkResolver: Networks.withChainIdHex,
-            transactionNetworkResolver: { _ in changedNetwork }
+        guard case .failure(.accountUnavailable) = consent.resolve(
+            context: .init(
+                accounts: [.init(walletId: "other-wallet", account: action.account)],
+                transactionNetwork: changedNetwork
+            )
         ) else { return XCTFail("A removed account must take precedence over a changed network") }
         guard case .failure(.staleTransaction) = consent.resolve(
-            accounts: [.init(walletId: action.walletId, account: action.account)],
-            networkResolver: Networks.withChainIdHex,
-            transactionNetworkResolver: { _ in changedNetwork }
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)],
+                transactionNetwork: changedNetwork
+            )
         ) else { return XCTFail("A changed network must invalidate the accepted transaction") }
     }
 
@@ -251,9 +263,10 @@ final class DappRequestProcessorTests: XCTestCase {
         ))
         let consent = try XCTUnwrap(review.acceptTransaction(execution: execution, approvedAt: fixture.now))
         let result = consent.resolve(
-            accounts: [.init(walletId: action.walletId, account: action.account)],
-            networkResolver: Networks.withChainIdHex,
-            transactionNetworkResolver: { _ in action.resolvedNetwork }
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)],
+                transactionNetwork: action.resolvedNetwork
+            )
         )
         guard case .success(let resolved) = result else {
             return XCTFail("Accepted execution fields must remain ready: \(result)")
@@ -270,6 +283,9 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(transaction.data, action.transaction.data)
         XCTAssertEqual(transaction.feeIntent, action.transaction.feeIntent)
         XCTAssertEqual(network, action.resolvedNetwork)
+        guard case .failure(.staleTransaction) = consent.resolve(context: .init(
+            accounts: [.init(walletId: action.walletId, account: action.account)]
+        )) else { return XCTFail("Final resolution requires the current network") }
     }
 
     func testSerializedSolanaReviewRetainsRequestCosignatureAtBindingAndResolution() throws {
@@ -302,8 +318,9 @@ final class DappRequestProcessorTests: XCTestCase {
         let review = ApprovalReview(intent: actionIntent)
         let consent = try XCTUnwrap(review.acceptMessage(cluster: .testnet, approvedAt: fixture.now))
         let resolved = try consent.resolve(
-            accounts: processorCatalog(accounts: [account]).orderedAccounts,
-            networkResolver: Networks.withChainIdHex
+            context: .init(
+                accounts: processorCatalog(accounts: [account]).orderedAccounts
+            )
         ).get()
         guard case .signing(_, .solanaSerializedBroadcast(let transaction, let retainedOptions, let cluster)) = resolved.approval.kind else {
             return XCTFail("Expected serialized Solana signing payload")
@@ -537,8 +554,9 @@ final class DappRequestProcessorTests: XCTestCase {
             approval: try DappApprovalValidator.resolve(
                 action: .approveMessage(action),
                 decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: nil)),
-                accounts: nil,
-                networkResolver: Networks.withChainIdHex
+                context: .init(
+                    accounts: [.init(walletId: action.walletId, account: action.account)]
+                )
             ).get(),
             signer: signer
         )
@@ -575,9 +593,12 @@ final class DappRequestProcessorTests: XCTestCase {
                 ethereumChainID: "0x1"
             ))
             let resolved = DappApprovalValidator.resolve(
-                action: intent.action, decision: decision,
-                accounts: catalog.orderedAccounts,
-                networkResolver: Networks.withChainIdHex
+                action: intent.action,
+                decision: decision,
+                context: .init(
+                    accounts: catalog.orderedAccounts,
+                    selectionNetwork: Networks.ethereum
+                )
             )
             if path == account.derivationPath {
                 let (permit, result) = try await executeProcessor(
@@ -622,10 +643,12 @@ final class DappRequestProcessorTests: XCTestCase {
         guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
             action: .approveMessage(action),
             decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: nil)),
-            accounts: nil, networkResolver: Networks.withChainIdHex
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)]
+            )
         ) else { return XCTFail("A missing cluster must fail validation") }
 
-        guard case .solanaLegacyBroadcast(let preparedTransaction, let options) = action.payload else {
+        guard case .solanaLegacyBroadcast(let preparedTransaction, _) = action.payload else {
             return XCTFail("Expected a legacy broadcast payload")
         }
         let signedTransaction = try XCTUnwrap(Solana.signedTransactionForSignAndSend(
@@ -637,16 +660,16 @@ final class DappRequestProcessorTests: XCTestCase {
         ))
         let signer = ProcessorWalletSigner(result: .success(.solanaTransaction(
             signedTransaction: signedTransaction,
-            signature: expectedSignature,
-            cluster: .testnet,
-            options: options
+            signature: expectedSignature
         )))
         let (permit, result) = try await executeProcessor(
             request: request,
             approval: try DappApprovalValidator.resolve(
                 action: .approveMessage(action),
                 decision: .message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: .testnet)),
-                accounts: nil, networkResolver: Networks.withChainIdHex
+                context: .init(
+                    accounts: [.init(walletId: action.walletId, account: action.account)]
+                )
             ).get(),
             signer: signer
         )
@@ -665,52 +688,78 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(signer.signCalls, 1)
     }
 
-    func testBroadcastDispatchRequiresTheExactCheckpointedBroadcastAndRunsOnce() async throws {
+    func testBroadcastDispatchUsesApprovedSolanaSettingsAndRunsOnce() async throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 2, count: 32)))
         let account = processorAccount(privateKey: key, coin: .solana)
         let descriptor = WalletAccountDescriptor(walletID: "wallet", account: account)
-        let fixture = try ApprovedExecutionTestFixture()
-        try fixture.establishGrant(descriptor)
         let message = SolanaMessageFixture.wireMessage(
             accountKeys: [key.publicKeyData(coin: .solana)], bodyAfterBlockhash: Data([0])
         )
-        let snapshot = try fixture.enqueue(
-            id: 2, name: "signAndSendTransaction", provider: .solana,
-            body: ["publicKey": account.address, "object": ["params": [
-                "message": WalletCrypto.base58Encode(data: message), "options": ["cluster": "testnet"]
-            ]]]
-        )
-        guard case .approval(let actionIntent) = DappRequestProcessor().prepare(
-            try XCTUnwrap(snapshot.requestBinding), catalog: processorCatalog(accounts: [account])
-        ),
-              case .approveMessage(let action) = actionIntent.action, case .solanaLegacyBroadcast(let transaction, let options) = action.payload else {
-            return XCTFail("Expected a prepared Solana broadcast")
+        let rawOptions: [String: Any] = [
+            "cluster": "devnet", "maxRetries": 4, "minContextSlot": 42,
+            "preflightCommitment": "confirmed", "commitment": "finalized",
+        ]
+        let expectedOptions = try Solana.preparedSendOptions(from: rawOptions).get()
+        for serialized in [false, true] {
+            let fixture = try ApprovedExecutionTestFixture()
+            try fixture.establishGrant(descriptor)
+            let payload = serialized ? Data([1]) + Data(repeating: 0, count: 64) + message : message
+            let snapshot = try fixture.enqueue(
+                id: 2, name: "signAndSendTransaction", provider: .solana,
+                body: ["publicKey": account.address, "object": ["params": [
+                    serialized ? "transaction" : "message": WalletCrypto.base58Encode(data: payload),
+                    "options": rawOptions,
+                ]]]
+            )
+            guard case .approval(let intent) = DappRequestProcessor().prepare(
+                try XCTUnwrap(snapshot.requestBinding), catalog: processorCatalog(accounts: [account])
+            ), case .approveMessage(let action) = intent.action else {
+                return XCTFail("Expected a prepared Solana broadcast")
+            }
+            let signed: String?
+            switch action.payload {
+            case .solanaLegacyBroadcast(let transaction, _):
+                signed = Solana.signedTransactionForSignAndSend(preparedLegacyTransaction: transaction, privateKey: key)
+            case .solanaSerializedBroadcast(let transaction, _):
+                signed = Solana.signedTransactionForSignAndSend(preparedSerializedTransaction: transaction, privateKey: key)
+            default:
+                return XCTFail("Expected a broadcast payload")
+            }
+            let signedTransaction = try XCTUnwrap(signed)
+            let signature = try XCTUnwrap(Solana.transactionSignature(signedTransaction: signedTransaction))
+            let permit = try fixture.authorize(
+                snapshot: snapshot, action: .approveMessage(action),
+                decision: .message(.init(approvedAccount: descriptor, solanaCluster: .testnet))
+            )
+            defer { permit.releaseLease() }
+            XCTAssertTrue(permit.consumeExecution())
+            XCTAssertNil(PreparedBroadcast.signed(.solanaTransaction(
+                signedTransaction: signedTransaction, signature: "wrong-signature"
+            ), permit: permit))
+            XCTAssertNil(PreparedBroadcast.signed(.ethereumSignature("wrong-family"), permit: permit))
+            let output = WalletSigningOutput.solanaTransaction(
+                signedTransaction: signedTransaction, signature: signature
+            )
+            let checkpointed = try XCTUnwrap(PreparedBroadcast.signed(output, permit: permit))
+            let other = try XCTUnwrap(PreparedBroadcast.signed(output, permit: permit))
+            guard case .prepared(let dispatch) = fixture.store.prepareBroadcast(permit: permit, broadcast: checkpointed) else {
+                return XCTFail("Expected a durable broadcast checkpoint")
+            }
+            let sender = ProcessorBroadcastSender()
+            let substituted = await other.dispatch(using: dispatch, sender: sender)
+            XCTAssertNil(substituted)
+            XCTAssertEqual(sender.sends, 0)
+            let completed = await checkpointed.dispatch(using: dispatch, sender: sender)
+            XCTAssertEqual(try XCTUnwrap(completed?.response(for: permit)).json["result"] as? String, signature)
+            let sent = try XCTUnwrap(sender.solanaSettings)
+            XCTAssertEqual(sent.cluster, .testnet)
+            XCTAssertEqual(sent.options.clusterHint, .devnet)
+            XCTAssertEqual(sent.options.rpcOptions as NSDictionary, expectedOptions.rpcOptions as NSDictionary)
+            XCTAssertEqual(sent.options.confirmationCommitment, .finalized)
+            let duplicate = await checkpointed.dispatch(using: dispatch, sender: sender)
+            XCTAssertNil(duplicate)
+            XCTAssertEqual(sender.sends, 1)
         }
-        let permit = try fixture.authorize(
-            snapshot: snapshot, action: .approveMessage(action),
-            decision: .message(.init(approvedAccount: descriptor, solanaCluster: .testnet))
-        )
-        defer { permit.releaseLease() }
-        XCTAssertTrue(permit.consumeExecution())
-        let signed = try XCTUnwrap(Solana.signedTransactionForSignAndSend(preparedLegacyTransaction: transaction, privateKey: key))
-        let signature = try XCTUnwrap(Solana.transactionSignature(signedTransaction: signed))
-        let output = WalletSigningOutput.solanaTransaction(
-            signedTransaction: signed, signature: signature, cluster: .testnet, options: options
-        )
-        let checkpointed = try XCTUnwrap(PreparedBroadcast.signed(output, permit: permit))
-        let other = try XCTUnwrap(PreparedBroadcast.signed(output, permit: permit))
-        guard case .prepared(let dispatch) = fixture.store.prepareBroadcast(permit: permit, broadcast: checkpointed) else {
-            return XCTFail("Expected a durable broadcast checkpoint")
-        }
-        let sender = ProcessorBroadcastSender()
-        let substituted = await other.dispatch(using: dispatch, sender: sender)
-        XCTAssertNil(substituted)
-        XCTAssertEqual(sender.sends, 0)
-        let completed = await checkpointed.dispatch(using: dispatch, sender: sender)
-        XCTAssertEqual(try XCTUnwrap(completed?.response(for: permit)).json["result"] as? String, signature)
-        let duplicate = await checkpointed.dispatch(using: dispatch, sender: sender)
-        XCTAssertNil(duplicate)
-        XCTAssertEqual(sender.sends, 1)
     }
 
     func testUnavailableSigningAuthorizationRollsBackForBothProviders() async throws {
@@ -928,8 +977,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: account),
                 solanaCluster: nil
             )),
-            accounts: nil,
-            networkResolver: Networks.withChainIdHex
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)]
+            )
         ).get())
     }
 
@@ -954,7 +1004,7 @@ final class DappRequestProcessorTests: XCTestCase {
                         derivationPath: account.derivationPath
                     )], ethereumChainID: nil),
                     accounts: catalog,
-                    networkResolver: Networks.withChainIdHex
+                    network: action.network
                 )
                 if coin == .ethereum || address == account.address {
                     XCTAssertEqual(result?.accounts, catalog)
@@ -996,8 +1046,10 @@ final class DappRequestProcessorTests: XCTestCase {
             guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
                 action: .selectAccount(action),
                 decision: .accountSelection(.init(accounts: identities, ethereumChainID: nil)),
-                accounts: catalog.orderedAccounts,
-                networkResolver: Networks.withChainIdHex
+                context: .init(
+                    accounts: catalog.orderedAccounts,
+                    selectionNetwork: action.network
+                )
             ) else { return XCTFail("Invalid selections must fail validation") }
         }
     }
@@ -1018,14 +1070,14 @@ final class DappRequestProcessorTests: XCTestCase {
                         action: action,
                         selection: .init(accounts: [identity], ethereumChainID: explicit),
                         accounts: catalog,
-                        networkResolver: { _ in nil }
+                        network: nil
                     )
                     XCTAssertEqual(result != nil, coin == .solana && fallback == nil && explicit == nil)
                     XCTAssertNotNil(DappApprovalValidator.resolveSelection(
                         action: action,
                         selection: .init(accounts: [], ethereumChainID: explicit),
                         accounts: catalog,
-                        networkResolver: { _ in nil }
+                        network: nil
                     ))
                 }
             }
@@ -1034,7 +1086,7 @@ final class DappRequestProcessorTests: XCTestCase {
             action: .init(coinType: nil, selectedAccounts: [],
                           initiallyConnectedProviders: [], network: nil),
             selection: .init(accounts: [], ethereumChainID: nil),
-            accounts: [], networkResolver: { _ in nil }
+            accounts: [], network: nil
         ))
     }
 
@@ -1048,10 +1100,19 @@ final class DappRequestProcessorTests: XCTestCase {
             )
             for decision in [DappApprovalDecision.message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: .devnet)),
                              .addEthereumChain] {
-                guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
-                    action: .approveMessage(action), decision: decision,
-                    accounts: nil, networkResolver: Networks.withChainIdHex
-                ) else { return XCTFail("Invalid decisions must fail validation") }
+                let result = DappApprovalValidator.resolve(
+                    action: .approveMessage(action),
+                    decision: decision,
+                    context: .init(
+                        accounts: [.init(walletId: action.walletId, account: action.account)]
+                    )
+                )
+                switch (decision, result) {
+                case (.message, .failure(.invalidDecision)), (.addEthereumChain, .failure(.staleAccount)):
+                    break
+                default:
+                    XCTFail("Invalid decisions must fail validation")
+                }
             }
         }
     }
@@ -1109,8 +1170,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 let result = DappApprovalValidator.resolve(
                     action: .approveMessage(action),
                     decision: .message(.init(approvedAccount: descriptor, solanaCluster: cluster)),
-                    accounts: nil,
-                    networkResolver: { _ in nil }
+                    context: .init(
+                        accounts: [.init(walletId: action.walletId, account: action.account)]
+                    )
                 )
                 guard requiresCluster == (cluster != nil) else {
                     guard case .failure(.invalidDecision) = result else {
@@ -1173,8 +1235,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 approvedAccount: WalletAccountDescriptor(walletID: "other-wallet", account: account),
                 solanaCluster: .devnet
             )),
-            accounts: nil,
-            networkResolver: { _ in nil }
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)]
+            )
         ) else { return XCTFail("A stale account must take precedence over a malformed decision") }
     }
 
@@ -1203,8 +1266,11 @@ final class DappRequestProcessorTests: XCTestCase {
                 solanaCluster: nil
             ))
             let approval = try DappApprovalValidator.resolve(
-                action: .approveMessage(reviewed), decision: decision,
-                accounts: nil, networkResolver: { _ in nil }
+                action: .approveMessage(reviewed),
+                decision: decision,
+                context: .init(
+                    accounts: [.init(walletId: reviewed.walletId, account: reviewed.account)]
+                )
             ).get()
             XCTAssertEqual(approval.signingAccount, approvedAccount)
 
@@ -1213,8 +1279,11 @@ final class DappRequestProcessorTests: XCTestCase {
                 catalog: WalletReviewCatalog(identity: identity, orderedAccounts: [duplicate, original])
             ) else { return XCTFail("Reordering must preserve the authorized account") }
             guard case .success(let repeated) = DappApprovalValidator.resolve(
-                action: rematerialized.action, decision: decision,
-                accounts: nil, networkResolver: { _ in nil }
+                action: rematerialized.action,
+                decision: decision,
+                context: .init(
+                    accounts: [duplicate, original]
+                )
             ) else { return XCTFail("The exact grant must remain valid after reordering") }
             XCTAssertEqual(repeated.signingAccount, approvedAccount)
             guard case .immediate = processor.prepare(
@@ -1248,7 +1317,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 let result = DappApprovalValidator.resolve(
                     action: .approveMessage(action),
                     decision: .message(.init(approvedAccount: scope, solanaCluster: nil)),
-                    accounts: nil, networkResolver: { _ in nil }
+                    context: .init(
+                        accounts: [.init(walletId: action.walletId, account: action.account)]
+                    )
                 )
                 if scope == exact {
                     XCTAssertEqual(try result.get().signingAccount, exact)
@@ -1278,8 +1349,12 @@ final class DappRequestProcessorTests: XCTestCase {
             approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         ))
         guard case .success(let approval) = DappApprovalValidator.resolve(
-            action: .approveTransaction(action), decision: .transaction(execution),
-            accounts: nil, networkResolver: { _ in nil }
+            action: .approveTransaction(action),
+            decision: .transaction(execution),
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)],
+                transactionNetwork: action.resolvedNetwork
+            )
         ), case .signing(let approvedAccount, .ethereumTransaction(let rebuilt, let approvedNetwork)) = approval.kind else {
             return XCTFail("Expected a ready reconstructed transaction")
         }
@@ -1294,8 +1369,12 @@ final class DappRequestProcessorTests: XCTestCase {
             walletId: "duplicate-wallet", account: account
         )
         guard case .failure(.staleAccount) = DappApprovalValidator.resolve(
-            action: .approveTransaction(replacedAccountAction), decision: .transaction(execution),
-            accounts: nil, networkResolver: { _ in nil }
+            action: .approveTransaction(replacedAccountAction),
+            decision: .transaction(execution),
+            context: .init(
+                accounts: [.init(walletId: replacedAccountAction.walletId, account: replacedAccountAction.account)],
+                transactionNetwork: replacedAccountAction.resolvedNetwork
+            )
         ) else { return XCTFail("The transaction must remain bound to the reviewed wallet") }
 
         let changedNetwork = try XCTUnwrap(resolvedEthereumNetworkResolution(source: .alchemy).resolvedNetwork)
@@ -1304,8 +1383,12 @@ final class DappRequestProcessorTests: XCTestCase {
             walletId: "wallet", account: account
         )
         guard case .failure(.staleTransaction) = DappApprovalValidator.resolve(
-            action: .approveTransaction(changedAction), decision: .transaction(execution),
-            accounts: nil, networkResolver: { _ in nil }
+            action: .approveTransaction(changedAction),
+            decision: .transaction(execution),
+            context: .init(
+                accounts: [.init(walletId: changedAction.walletId, account: changedAction.account)],
+                transactionNetwork: changedAction.resolvedNetwork
+            )
         ) else { return XCTFail("A changed reviewed network must be stale") }
 
         var unready = transaction
@@ -1315,8 +1398,12 @@ final class DappRequestProcessorTests: XCTestCase {
             approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
         ))
         guard case .failure(.invalidDecision) = DappApprovalValidator.resolve(
-            action: .approveTransaction(action), decision: .transaction(unreadyExecution),
-            accounts: nil, networkResolver: { _ in nil }
+            action: .approveTransaction(action),
+            decision: .transaction(unreadyExecution),
+            context: .init(
+                accounts: [.init(walletId: action.walletId, account: action.account)],
+                transactionNetwork: action.resolvedNetwork
+            )
         ) else { return XCTFail("Insufficient fees must be an invalid decision") }
     }
 
@@ -1427,8 +1514,12 @@ final class DappRequestProcessorTests: XCTestCase {
             ), name)
             XCTAssertNil(execution.applying(to: action), name)
             guard case .failure(.staleTransaction) = DappApprovalValidator.resolve(
-                action: .approveTransaction(action), decision: .transaction(execution),
-                accounts: nil, networkResolver: { _ in nil }
+                action: .approveTransaction(action),
+                decision: .transaction(execution),
+                context: .init(
+                    accounts: [.init(walletId: action.walletId, account: action.account)],
+                    transactionNetwork: action.resolvedNetwork
+                )
             ) else { return XCTFail("Invalid execution fields must remain stale: \(name)") }
         }
     }
@@ -1458,7 +1549,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 decision: .accountSelection(.init(
                     accounts: [], ethereumChainID: "0x7fffffffffffffff"
                 )),
-                accounts: [], networkResolver: Networks.withChainIdHex
+                context: .init(
+                    accounts: []
+                )
             ).get(),
             signer: nil
         )
@@ -3566,6 +3659,7 @@ private final class ProcessorWalletSigner: WalletSigning {
 @MainActor
 private final class ProcessorBroadcastSender: ApprovedBroadcastSending {
     private(set) var sends = 0
+    private(set) var solanaSettings: (cluster: Solana.Cluster, options: Solana.PreparedSendOptions)?
 
     func sendEthereum(signedTransaction: String, network: ResolvedEthereumNetwork) async -> Result<String, EthereumSendFailure> {
         sends += 1
@@ -3574,6 +3668,7 @@ private final class ProcessorBroadcastSender: ApprovedBroadcastSending {
 
     func sendSolana(signedTransaction: String, cluster: Solana.Cluster, options: Solana.PreparedSendOptions) async -> Result<String, Solana.SendTransactionError> {
         sends += 1
+        solanaSettings = (cluster, options)
         return Solana.transactionSignature(signedTransaction: signedTransaction).map(Result.success) ?? .failure(.invalidMessage)
     }
 }

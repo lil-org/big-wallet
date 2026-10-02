@@ -5745,8 +5745,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 guard case .found(let snapshot) = await bridge.load(handle: handle) else { throw Failure.expectedValue }
                 let consent = try reviewedConsent(snapshot, approvedAt: clock.now)
                 let approval = try consent.resolve(
-                    accounts: [try XCTUnwrap(snapshot.request?.authorizedAccount).specificAccount],
-                    networkResolver: Networks.withChainIdHex
+                    context: approvalResolutionContextForTesting(
+                        action: consent.intent.action,
+                        decision: consent.decision,
+                        accounts: [try XCTUnwrap(snapshot.request?.authorizedAccount).specificAccount]
+                    )
                 ).get()
                 let processor = StorageExecutionProcessor(broadcasts: broadcasts)
                 let sender = StorageBroadcastSender()
@@ -6219,9 +6222,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .found(let snapshot) = await bridge.load(handle: handle) else { throw Failure.expectedValue }
         let consent = try reviewedConsent(snapshot, approvedAt: clock.now)
         let approval = try consent.resolve(
-                    accounts: [try XCTUnwrap(snapshot.request?.authorizedAccount).specificAccount],
-                    networkResolver: Networks.withChainIdHex
-                ).get()
+            context: approvalResolutionContextForTesting(
+                action: consent.intent.action,
+                decision: consent.decision,
+                accounts: [try XCTUnwrap(snapshot.request?.authorizedAccount).specificAccount]
+            )
+        ).get()
         var synchronizationAttempts = 0
         let synchronize: (URL) throws -> Void = { _ in
             synchronizationAttempts += 1
@@ -8997,11 +9003,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             guard permit.consumeExecution() else { return .rollback }
             calls += 1
             if broadcasts {
-                guard case .signing(_, .ethereumTransaction(_, let network)) = permit.approval.kind else { return .rollback }
+                guard case .signing(_, .ethereumTransaction) = permit.approval.kind else { return .rollback }
                 let signed = WalletCoreProxyTestVectors.signedEmptySendTransaction
                 guard let hash = Ethereum.transactionHash(signedTransaction: signed),
                       let broadcast = PreparedBroadcast.signed(.ethereumTransaction(
-                        signedTransaction: signed, transactionHash: hash, network: network
+                        signedTransaction: signed, transactionHash: hash
                       ), permit: permit) else { return .rollback }
                 return .broadcast(broadcast)
             }
@@ -9157,7 +9163,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let consent = try reviewedConsent(snapshot, approvedAt: approvedAt, accounts: accounts, chainID: chainID)
         let descriptors = accounts ?? claim.request.authorizedAccount.map { [$0] } ?? []
         return try consent.resolve(
-            accounts: descriptors.map(\.specificAccount), networkResolver: Networks.withChainIdHex
+            context: approvalResolutionContextForTesting(
+                action: consent.intent.action,
+                decision: consent.decision,
+                accounts: descriptors.map(\.specificAccount)
+            )
         ).get()
     }
 
@@ -9181,10 +9191,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             completion = try XCTUnwrap(ApprovedCompletion.chainAdded(permit: permit))
         case .signing(_, let payload):
             switch payload {
-            case .ethereumTransaction(_, let network):
+            case .ethereumTransaction:
                 let signed = WalletCoreProxyTestVectors.signedEmptySendTransaction
                 let hash = try XCTUnwrap(Ethereum.transactionHash(signedTransaction: signed))
-                broadcast = try XCTUnwrap(PreparedBroadcast.signed(.ethereumTransaction(signedTransaction: signed, transactionHash: hash, network: network), permit: permit))
+                broadcast = try XCTUnwrap(PreparedBroadcast.signed(.ethereumTransaction(signedTransaction: signed, transactionHash: hash), permit: permit))
                 completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
             case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
                 completion = try XCTUnwrap(ApprovedCompletion.signed(.ethereumSignature("0xsigned"), permit: permit))
@@ -9192,11 +9202,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 completion = try XCTUnwrap(ApprovedCompletion.signed(.solanaSignature("1111"), permit: permit))
             case .solanaTransactions:
                 throw Failure.expectedValue
-            case .solanaLegacyBroadcast(let transaction, let options, let cluster):
+            case .solanaLegacyBroadcast(let transaction, _, _):
                 let signature = Data(repeating: 7, count: 64)
                 let signed = (Data([1]) + signature + transaction.preparedMessage.messageData).base64EncodedString()
                 broadcast = try XCTUnwrap(PreparedBroadcast.signed(.solanaTransaction(
-                    signedTransaction: signed, signature: WalletCrypto.base58Encode(data: signature), cluster: cluster, options: options
+                    signedTransaction: signed, signature: WalletCrypto.base58Encode(data: signature)
                 ), permit: permit))
                 completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
             case .solanaSerializedBroadcast:

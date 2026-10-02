@@ -1041,7 +1041,6 @@
 		2C452ED22B0EDB8F0017CE2C /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "Inpage Provider/index.js"; sourceTree = "<group>"; };
 		2C452ED32B0EDB8F0017CE2C /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ethereum.js; path = "Inpage Provider/ethereum.js"; sourceTree = "<group>"; };
 		2C452ED42B0EDB8F0017CE2C /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "Inpage Provider/error.js"; sourceTree = "<group>"; };
-		2C452ED62B0EDB8F0017CE2C /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "Inpage Provider/rpc.js"; sourceTree = "<group>"; };
 		2C4768A628258627005E8D4D /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C4768A8282598C5005E8D4D /* PreviewAccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewAccountCellView.swift; sourceTree = "<group>"; };
 		2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
@@ -1461,7 +1460,6 @@
 				2C452ED32B0EDB8F0017CE2C /* ethereum.js */,
 				2C452ED22B0EDB8F0017CE2C /* index.js */,
 				2C452ED12B0EDB8F0017CE2C /* package.json */,
-				2C452ED62B0EDB8F0017CE2C /* rpc.js */,
 				2C452ECF2B0EDB8F0017CE2C /* utils.js */,
 				2C452ED02B0EDB8F0017CE2C /* package-lock.json */,
 			);

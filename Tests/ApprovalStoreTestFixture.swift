@@ -188,6 +188,35 @@ func reviewConsentForTesting(
 }
 
 @MainActor
+func approvalResolutionContextForTesting(
+    action: DappRequestAction,
+    decision: DappApprovalDecision,
+    accounts: [SpecificWalletAccount]? = nil,
+    networkResolver: (String) -> EthereumNetwork? = Networks.withChainIdHex
+) -> ApprovalResolutionContext {
+    let selectionNetwork: EthereumNetwork?
+    switch (action, decision) {
+    case (.selectAccount(let action), .accountSelection(let selection)),
+         (.switchAccount(let action), .accountSelection(let selection)):
+        selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
+            .flatMap(networkResolver)
+    default:
+        selectionNetwork = nil
+    }
+    let transactionNetwork: ResolvedEthereumNetwork?
+    if case .approveTransaction(let transaction) = action {
+        transactionNetwork = transaction.resolvedNetwork
+    } else {
+        transactionNetwork = nil
+    }
+    return ApprovalResolutionContext(
+        accounts: reviewCatalogForTesting(action: action, accounts: accounts).orderedAccounts,
+        selectionNetwork: selectionNetwork,
+        transactionNetwork: transactionNetwork
+    )
+}
+
+@MainActor
 func resolvedApprovalForTesting(
     snapshot: ExtensionBridge.Snapshot,
     action: DappRequestAction,
@@ -201,16 +230,12 @@ func resolvedApprovalForTesting(
         snapshot: snapshot, action: action, decision: decision,
         approvedAt: approvedAt, nativeReceipt: nativeReceipt
     )
-    let currentAccounts = reviewCatalogForTesting(action: action, accounts: accounts).orderedAccounts
-    return try consent.resolve(
-        accounts: currentAccounts, networkResolver: networkResolver,
-        transactionNetworkResolver: { chainID in
-            if case .approveTransaction(let transaction) = action, transaction.chain.chainId == chainID {
-                return transaction.resolvedNetwork
-            }
-            return Nodes.resolution(chainId: chainID).resolvedNetwork
-        }
-    ).get()
+    return try consent.resolve(context: approvalResolutionContextForTesting(
+        action: consent.intent.action,
+        decision: consent.decision,
+        accounts: accounts,
+        networkResolver: networkResolver
+    )).get()
 }
 
 func approvedFailureForTesting(

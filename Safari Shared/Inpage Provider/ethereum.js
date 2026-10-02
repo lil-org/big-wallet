@@ -14,7 +14,6 @@ import {
     hasOwnProperty,
 } from "./intrinsics";
 
-import RPCServer from "./rpc";
 import ProviderRpcError, {
     normalizeEthereumProviderError,
     providerReplacementError,
@@ -23,6 +22,7 @@ import OperationRuntime from "./operation_runtime";
 import {
     nativeJSONClone,
     outboundDataSnapshot,
+    outboundJSONSerialize,
     trustedOutboundRecord,
 } from "./outbound_snapshot";
 import Utils from "./utils";
@@ -397,30 +397,37 @@ function postPermissionRevocation(provider, state, record) {
     return true;
 }
 
+function rpcMessage(chainId, wireId, normalizedPayload) {
+    const request = createObjectNormally(null);
+    request.id = wireId;
+    request.jsonrpc = "2.0";
+    request.method = normalizedPayload.method;
+    if (hasOwnProperty(normalizedPayload, "params")) {
+        request.params = normalizedPayload.params;
+    }
+    const message = createObjectNormally(null);
+    message.body = outboundJSONSerialize(request);
+    message.chainId = chainId;
+    message.id = wireId;
+    message.subject = "rpc";
+    return message;
+}
+
 function dispatchRPC(provider, state, record) {
     setDispatchAuthorization(state, record);
     record.metadata.responseName = null;
-    const payload = createObjectNormally(null);
-    payload.id = record.wireId;
-    payload.method = record.payload.method;
-    if (hasOwnProperty(record.payload, "params")) {
-        payload.params = record.payload.params;
+    const message = rpcMessage(state.chainId, record.wireId, record.payload);
+    if (!transportIsCurrent(state)) {
+        retire(provider, providerReplacementError());
+        return false;
     }
-    const server = state.rpc;
     record.metadata.dispatched = true;
-    const dispatched = server.call(payload, () => {
-        return stateFor(provider) === state && !state.retired &&
-            state.rpc === server && state.runtime.owns(record) &&
-            transportIsCurrent(state);
-    });
-    if (!dispatched && state.runtime.owns(record)) {
-        if (!transportIsCurrent(state)) {
-            retire(provider, providerReplacementError());
-        } else {
-            state.runtime.reject(record, providerStateError());
-        }
+    const posted = state.transport.postRPC(message, state.runtime.generation);
+    if (posted === false) {
+        retire(provider, providerReplacementError());
+        return false;
     }
-    return dispatched;
+    return true;
 }
 
 function dispatchOperation(provider, record) {
@@ -558,21 +565,6 @@ function dispatchSafely(provider, record) {
     }
 }
 
-function createRPCServer(state) {
-    return new RPCServer(
-        state.chainId,
-        state.runtime.generation,
-        (message, generation) => {
-            const posted = state.transport.postRPC(message, generation);
-            if (posted === false) {
-                retire(state.provider, providerReplacementError());
-                return false;
-            }
-            return posted;
-        }
-    );
-}
-
 function prepareConfiguration(provider, configuration, revision) {
     const state = stateFor(provider);
     if (!state || state.retired || !isSafeIntegerNormally(revision) || revision < 0) {
@@ -592,14 +584,6 @@ function prepareConfiguration(provider, configuration, revision) {
         __proto__: null,
         address, chainId, revision, baseline: state.stateEpoch,
         networkVersion: normalizedNetworkVersion(chainId),
-        rpc: state.chainId === chainId ? state.rpc : new RPCServer(
-            chainId, state.runtime.generation,
-            (message, generation) => {
-                const posted = state.transport.postRPC(message, generation);
-                if (posted === false) { retire(provider, providerReplacementError()); }
-                return posted;
-            }
-        ),
     };
 }
 
@@ -617,7 +601,6 @@ function commitConfiguration(provider, prepared) {
     state.address = prepared.address;
     state.chainId = prepared.chainId;
     state.networkVersion = prepared.networkVersion;
-    state.rpc = prepared.rpc;
     if (state.nativeRevision !== prepared.revision) { state.stateEpoch += 1; }
     state.nativeRevision = prepared.revision;
     state.runtime.activate();
@@ -791,9 +774,7 @@ class BigWalletEthereum {
             copiedStateBaseline: null,
             notificationListener: null,
             networkVersion: normalizedNetworkVersion(chainId),
-            provider: this,
             retired: false,
-            rpc: null,
             runtime: new OperationRuntime(providerGeneration, {
                 firstWireId: 1,
                 wireIdStep: 2,
@@ -808,7 +789,6 @@ class BigWalletEthereum {
             };
         }
         setWeakMapValue(providerStates, this, state);
-        state.rpc = createRPCServer(state);
         try {
             applyFunction(setTimeoutNormally, undefined, [() => {
                 if (!state.retired) { emitSafely(this, "_initialized", []); }

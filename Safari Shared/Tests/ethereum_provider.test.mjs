@@ -34,7 +34,6 @@ function bundle(entryPoint, format = "cjs", contents) {
 }
 
 const operationRuntimeSource = bundle("operation_runtime.js");
-const rpcSource = bundle("rpc.js");
 const ethereumSource = bundle("ethereum-harness.js", "cjs", `
     export {
         default, applyDecodedEnvelope, subscribeNotifications, withReadyState,
@@ -686,17 +685,93 @@ test("OperationRuntime rejects all, retires, and keeps IDs monotonic", async () 
 });
 
 
-test("RPCServer reports a false generation-bound transport result", () => {
-    const {exports} = moduleHarness(rpcSource);
-    const RPCServer = exports.default;
-    const server = new RPCServer("0x1", "generation", () => false);
-    const payload = {id: 1, method: "eth_blockNumber", params: []};
-    assert.equal(server.call(payload, () => true), false);
-    assert.deepEqual(payload, {
-        id: 1,
-        method: "eth_blockNumber",
-        params: [],
+test("Ethereum retires queued RPC work when transport returns false", async () => {
+    const h = ethereumHarness();
+    h.setRPCObserver(() => h.setCurrent(false));
+    const first = h.provider.request({method: "eth_blockNumber"});
+    const second = h.provider.request({method: "eth_gasPrice"});
+    const rejected = Promise.all([
+        assert.rejects(first, error => error.code === 4900),
+        assert.rejects(second, error => error.code === 4900),
+    ]);
+
+    applyEthereumConfiguration(h);
+    await rejected;
+    assert.equal(h.rpc.length, 1);
+    assert.equal(h.snapshot().phase, "retired");
+});
+
+for (const queued of [false, true]) {
+    test(`Ethereum RPC transport exceptions preserve subsequent work queued=${queued}`, async () => {
+        const h = ethereumHarness();
+        if (!queued) { applyEthereumConfiguration(h); }
+        const failure = new Error("RPC transport failed");
+        h.setRPCObserver(() => {
+            h.setRPCObserver(null);
+            throw failure;
+        });
+        const first = h.provider.request({method: "eth_blockNumber"});
+        const rejected = assert.rejects(first, error => error === failure);
+        const second = h.provider.request({method: "eth_gasPrice"});
+        if (queued) { applyEthereumConfiguration(h); }
+
+        await rejected;
+        assert.equal(h.isReady(), true);
+        assert.equal(h.rpc.length, 2);
+        h.applyDecodedEnvelope({id: h.rpc[1].message.id, kind: "result", result: "0x20"});
+        assert.equal(await second, "0x20");
     });
+}
+
+for (const change of ["account", "chain"]) {
+    test(`Ethereum preserves a posted RPC across a ${change} update`, async () => {
+        const h = ethereumHarness();
+        const firstAddress = "0x0000000000000000000000000000000000000001";
+        const secondAddress = "0x0000000000000000000000000000000000000002";
+        applyEthereumConfiguration(h, firstAddress, "0x1");
+        const first = h.provider.request({method: "eth_blockNumber"});
+
+        const address = change === "account" ? secondAddress : firstAddress;
+        const chainId = change === "chain" ? "0x2" : "0x1";
+        applyEthereumConfiguration(h, address, chainId);
+        const second = h.provider.request({method: "eth_blockNumber"});
+
+        assert.equal(h.rpc[0].message.chainId, "0x1");
+        assert.equal(h.rpc[1].message.chainId, chainId);
+        h.applyDecodedEnvelope({id: h.rpc[1].message.id, kind: "result", result: "new"});
+        h.applyDecodedEnvelope({id: h.rpc[0].message.id, kind: "result", result: "old"});
+        assert.deepEqual(await Promise.all([first, second]), ["old", "new"]);
+        assert.equal(h.provider.chainId, chainId);
+        assert.equal(h.provider.selectedAddress, address);
+    });
+}
+
+test("Ethereum RPC uses the final chain after caller serialization", async () => {
+    for (const chainChanges of [["0x2"], ["0x2", "0x1"]]) {
+        const h = ethereumHarness();
+        applyEthereumConfiguration(h);
+        let serializationCalls = 0;
+        const pending = h.provider.request({
+            method: "eth_custom",
+            params: [{
+                toJSON() {
+                    serializationCalls += 1;
+                    for (const chainId of chainChanges) {
+                        applyEthereumConfiguration(h, "", chainId);
+                    }
+                    return {value: 7};
+                },
+            }],
+        });
+
+        assert.equal(serializationCalls, 1);
+        assert.equal(h.rpc.length, 1);
+        const {message} = h.rpc[0];
+        assert.equal(message.chainId, chainChanges.at(-1));
+        assert.deepEqual(JSON.parse(message.body).params, [{value: 7}]);
+        h.applyDecodedEnvelope({id: message.id, kind: "result", result: true});
+        assert.equal(await pending, true);
+    }
 });
 
 test("Ethereum waits for configuration and supports local and RPC methods", async () => {

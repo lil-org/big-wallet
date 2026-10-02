@@ -224,24 +224,16 @@ struct PreparedBroadcast: Sendable {
               case .signing(_, let payload) = permit.approval.kind else { return nil }
         let transaction: Transaction
         switch (payload, output) {
-        case (.ethereumTransaction(_, let approvedNetwork),
-              .ethereumTransaction(let signed, let hash, let network)):
-            guard DappApprovalDecision.NetworkIdentity(approvedNetwork) ==
-                    DappApprovalDecision.NetworkIdentity(network),
-                  Ethereum.transactionHash(signedTransaction: signed)?.caseInsensitiveCompare(hash) == .orderedSame
+        case (.ethereumTransaction(_, let network),
+              .ethereumTransaction(let signed, let hash)):
+            guard Ethereum.transactionHash(signedTransaction: signed)?.caseInsensitiveCompare(hash) == .orderedSame
             else { return nil }
             transaction = .ethereum(signed, hash, network)
-        case (.solanaLegacyBroadcast(_, let approvedOptions, let approvedCluster),
-              .solanaTransaction(let signed, let signature, let cluster, let options)),
-             (.solanaSerializedBroadcast(_, let approvedOptions, let approvedCluster),
-              .solanaTransaction(let signed, let signature, let cluster, let options)):
-            guard approvedCluster == cluster,
-                  approvedOptions.clusterHint == options.clusterHint,
-                  approvedOptions.preflightCommitment == options.preflightCommitment,
-                  approvedOptions.maxRetries == options.maxRetries,
-                  approvedOptions.minContextSlot == options.minContextSlot,
-                  approvedOptions.confirmationCommitment == options.confirmationCommitment,
-                  Solana.transactionSignature(signedTransaction: signed) == signature else { return nil }
+        case (.solanaLegacyBroadcast(_, let options, let cluster),
+              .solanaTransaction(let signed, let signature)),
+             (.solanaSerializedBroadcast(_, let options, let cluster),
+              .solanaTransaction(let signed, let signature)):
+            guard Solana.transactionSignature(signedTransaction: signed) == signature else { return nil }
             transaction = .solana(signed, signature, cluster, options)
         default:
             return nil

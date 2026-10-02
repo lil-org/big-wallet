@@ -4010,13 +4010,20 @@ extension PopupRequestSessionsTests {
     func testBroadcastCheckpointsBeforeSendAndCompletion() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 7, provider: .ethereum, method: "signTransaction"), in: store)
-        let sender = PopupBroadcastSender { _, _ in
-                    await store.record("send")
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
-
+        let expectedNetwork = ResolvedEthereumNetwork(network: popupTransactionNetwork(), source: .custom)
+        let sender = PopupBroadcastSender { _, network in
+            XCTAssertEqual(network, expectedNetwork)
+            XCTAssertEqual(network.rpcURL, expectedNetwork.rpcURL)
+            XCTAssertEqual(network.allowsAlchemyAuthorization, expectedNetwork.allowsAlchemyAuthorization)
+            await store.record("send")
+            return .failure(.rpc(.serverError(4001, Strings.canceled)))
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
-            popupPreparedBroadcast(permit: permit)
+            XCTAssertTrue(permit.isExecuting)
+            XCTAssertNil(PreparedBroadcast.signed(.ethereumTransaction(
+                signedTransaction: "0x01", transactionHash: "wrong-hash"
+            ), permit: permit))
+            return popupPreparedBroadcast(permit: permit)
         }) { request in
             .approval(popupTransactionAction())
         }
@@ -6383,7 +6390,14 @@ extension PopupRequestSessionsTests {
                 signerCreations += 1
                 return TestWalletSigner()
             },
-            transactionNetworkResolver: popupSigningNetwork
+            networkResolver: { _ in
+                XCTFail("Message resolution must not look up a selection network")
+                return nil
+            },
+            transactionNetworkResolver: { _ in
+                XCTFail("Message resolution must not look up a transaction network")
+                return nil
+            }
         )
 
         let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
@@ -6514,6 +6528,8 @@ extension PopupRequestSessionsTests {
             let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
 
             var executionCount = 0
+            var catalogRefreshes = 0
+            var networkLookups = 0
             let processor = CompactPopupProcessor(execute: { request, _, _, permit in
                 executionCount += 1
                 return approvedFailureForTesting(.userRejected, permit: permit)
@@ -6528,15 +6544,27 @@ extension PopupRequestSessionsTests {
             let finalizer = NativeApprovalFinalizer(
                 store: store,
                 requestProcessor: processor,
-                refreshWalletCatalog: { WalletReviewCatalog(accounts: scenario.accounts) },
-                networkResolver: { _ in scenario.network },
-                transactionNetworkResolver: popupSigningNetwork
+                refreshWalletCatalog: {
+                    catalogRefreshes += 1
+                    return WalletReviewCatalog(accounts: scenario.accounts)
+                },
+                networkResolver: { chainID in
+                    networkLookups += 1
+                    XCTAssertEqual(chainID, network.chainIdHexString)
+                    return scenario.network
+                },
+                transactionNetworkResolver: { _ in
+                    XCTFail("Account selection must not resolve a transaction network")
+                    return nil
+                }
             )
 
             let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
             let errorCode = await store.completedErrorCode(handle: snapshot.handle)
 
+            XCTAssertEqual(catalogRefreshes, 1, scenario.name)
+            XCTAssertEqual(networkLookups, 1, scenario.name)
             XCTAssertEqual(result, .responseReady, scenario.name)
             XCTAssertEqual(executionCount, scenario.allowed ? 1 : 0, scenario.name)
             XCTAssertEqual(committed, scenario.allowed, scenario.name)
@@ -6687,6 +6715,7 @@ extension PopupRequestSessionsTests {
                 explorer: reviewedNetwork.network.explorer
             )
             var catalogRefreshes = 0
+            var transactionLookups = 0
             let finalizer = NativeApprovalFinalizer(
                 store: store,
                 requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
@@ -6701,8 +6730,14 @@ extension PopupRequestSessionsTests {
                     XCTFail("A missing or changed route must not create a signer")
                     return TestWalletSigner()
                 },
-                transactionNetworkResolver: { _ in
-                    routeIsMissing ? nil : ResolvedEthereumNetwork(network: changedNetwork, source: .custom)
+                networkResolver: { _ in
+                    XCTFail("Transaction resolution must not look up a selection network")
+                    return nil
+                },
+                transactionNetworkResolver: { chainID in
+                    transactionLookups += 1
+                    XCTAssertEqual(chainID, reviewedNetwork.network.chainId)
+                    return routeIsMissing ? nil : ResolvedEthereumNetwork(network: changedNetwork, source: .custom)
                 }
             )
             let result = await attemptNativeDecision(
@@ -6714,6 +6749,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(result, .responseReady)
             XCTAssertEqual(error, routeIsMissing ? ProviderResponseError.internalErrorCode : 4100)
             XCTAssertEqual(catalogRefreshes, routeIsMissing ? 0 : 1)
+            XCTAssertEqual(transactionLookups, 1)
             XCTAssertEqual(events, ["nativeClaim", "complete"])
             XCTAssertFalse(committed)
         }
@@ -8026,9 +8062,11 @@ extension PopupRequestSessionsTests {
             claim = value
         }
         let approval = try consent.resolve(
-            accounts: reviewCatalogForTesting(action: action).orderedAccounts,
-            networkResolver: Networks.withChainIdHex,
-            transactionNetworkResolver: popupSigningNetwork
+            context: approvalResolutionContextForTesting(
+                action: consent.intent.action,
+                decision: consent.decision,
+                accounts: reviewCatalogForTesting(action: action).orderedAccounts
+            )
         ).get()
         return ExecutionSetup(snapshot: snapshot, claim: claim, consent: consent, approval: approval)
     }
@@ -8243,7 +8281,7 @@ private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess,
                   ), let hash = Ethereum.transactionHash(signedTransaction: signed) else {
                 return .failure(.failedToSign)
             }
-            return .success(.ethereumTransaction(signedTransaction: signed, transactionHash: hash, network: network))
+            return .success(.ethereumTransaction(signedTransaction: signed, transactionHash: hash))
         }
         return .success(.ethereumSignature("reviewed-signature"))
     }
@@ -8287,7 +8325,7 @@ private func popupPreparedBroadcast(
             transaction: transaction, privateKey: key, network: network.network
           ), let hash = Ethereum.transactionHash(signedTransaction: signed),
           let broadcast = PreparedBroadcast.signed(
-            .ethereumTransaction(signedTransaction: signed, transactionHash: hash, network: network),
+            .ethereumTransaction(signedTransaction: signed, transactionHash: hash),
             permit: permit
           ) else {
         if !Task.isCancelled { XCTFail("Expected a live approved transaction broadcast") }

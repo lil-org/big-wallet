@@ -1215,8 +1215,9 @@ final class WalletSigningScopeTests: XCTestCase {
                     let result = DappApprovalValidator.resolve(
                         action: .approveMessage(action),
                         decision: .message(.init(approvedAccount: approved, solanaCluster: cluster)),
-                        accounts: nil,
-                        networkResolver: { _ in nil }
+                        context: .init(
+                            accounts: [.init(walletId: action.walletId, account: action.account)]
+                        )
                     )
                     let validCluster = requiresCluster == (cluster != nil)
                     switch result {
@@ -1277,7 +1278,7 @@ final class WalletSigningScopeTests: XCTestCase {
         assertUnavailable(await signer.sign())
     }
 
-    func testEthereumTransactionCapturesFinalNonceFeesAndDestination() async throws {
+    func testEthereumTransactionCapturesFinalNonceAndFees() async throws {
         let cases: [(PreparedTransactionFee, PreparedTransactionFee)] = [
             (.legacy(gasPrice: 10), .legacy(gasPrice: 20)),
             (.eip1559(maxPriorityFeePerGas: 2, maxFeePerGas: 10),
@@ -1335,12 +1336,11 @@ final class WalletSigningScopeTests: XCTestCase {
             final.nonce = "0x8"
             let signer = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
             XCTAssertTrue(signer.bind(operation: operation, authorityIsCurrent: { _ in true }))
-            guard case .success(.ethereumTransaction(let signed, let hash, let destination)) = await signer.sign() else {
+            guard case .success(.ethereumTransaction(let signed, let hash)) = await signer.sign() else {
                 return XCTFail("Expected signed Ethereum transaction")
             }
             XCTAssertEqual(signed, expected)
             XCTAssertEqual(hash, Ethereum.transactionHash(signedTransaction: expected))
-            XCTAssertEqual(destination, network)
             assertUnavailable(await signer.sign())
             if finalFee.isEIP1559 { XCTAssertTrue(signed.hasPrefix("0x02")) }
         }
@@ -1413,7 +1413,7 @@ final class WalletSigningScopeTests: XCTestCase {
         }
     }
 
-    func testSolanaBroadcastPreservesCosignersPlacementClusterAndOptions() async throws {
+    func testSolanaBroadcastPreservesCosignersAndSignaturePlacement() async throws {
         let signerPublicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: Vectors.solanaPreparedSignerPublicKey))
         let cosigner = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 5, count: 32))
         let singleMessage = SolanaMessageFixture.wireMessage(accountKeys: [signerPublicKey], bodyAfterBlockhash: Data.encodeLength(0))
@@ -1444,7 +1444,7 @@ final class WalletSigningScopeTests: XCTestCase {
             )
             let signer = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
             XCTAssertTrue(signer.bind(operation: operation, authorityIsCurrent: { _ in true }))
-            guard case .success(.solanaTransaction(let signed, let signature, let cluster, let capturedOptions)) = await signer.sign() else {
+            guard case .success(.solanaTransaction(let signed, let signature)) = await signer.sign() else {
                 return XCTFail("Expected signed Solana transaction")
             }
             let bytes = try XCTUnwrap(Data(base64Encoded: signed))
@@ -1459,10 +1459,6 @@ final class WalletSigningScopeTests: XCTestCase {
             } else {
                 XCTAssertEqual(signature, WalletCrypto.base58Encode(data: signerSignature))
             }
-            XCTAssertEqual(cluster, .devnet)
-            XCTAssertEqual(capturedOptions.maxRetries, 4)
-            XCTAssertEqual(capturedOptions.minContextSlot, 42)
-            XCTAssertEqual(capturedOptions.preflightCommitment, .confirmed)
             assertUnavailable(await signer.sign())
         }
     }
