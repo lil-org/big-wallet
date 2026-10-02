@@ -142,13 +142,7 @@ async function handleGetResponse(request, context) {
             requestMaintenanceTimes.delete(requestMaintenanceTimes.keys().next().value);
         }
     }
-    const response = await WIRE.withTimeout(sendNativeMessage({
-        ...nativeRequestIdentity(request),
-        ...(maintain ? {subject: "maintainRequest", allowDelivery: true} : {subject: "getResponse"}),
-    }, false), TRANSPORT_TIMEOUT);
-    const status = nativeRequestStatus(response, request.id);
-    if (!status?.ready) { return status; }
-    const completed = await consumeStoredResponse(request);
+    const completed = await consumeStoredResponse(request, maintain ? "interactive" : "none");
     return completed?.delivery ? pageResponse(completed.delivery) : completed?.status;
 }
 
@@ -160,19 +154,26 @@ async function acknowledgeCompletedResponse(request) {
         (response.acknowledged === true || response.missing === true);
 }
 
-function consumeStoredResponse(request) {
-    const pending = (async () => {
-        const response = await WIRE.withTimeout(sendNativeMessage({
-            ...nativeRequestIdentity(request), subject: "prepareResponseDelivery",
-        }, false), TRANSPORT_TIMEOUT);
-        const status = nativeRequestStatus(response, request.id);
-        if (status) { return status.ready ? undefined : {status}; }
-        const delivery = decodedNativeDelivery(response, request.id);
-        if (!delivery || !delivery.state || !await acknowledgeCompletedResponse(request)) { return undefined; }
-        await broadcastConfigurationInvalidated(request.configurationKey);
-        return {delivery};
-    })();
-    return pending;
+async function pollStoredResponse(request, maintenance) {
+    const response = await WIRE.withTimeout(sendNativeMessage({
+        ...nativeRequestIdentity(request), subject: "pollResponse", maintenance,
+    }, false), TRANSPORT_TIMEOUT);
+    const reply = WIRE.decodeMessage("NativeResponsePollReply", response);
+    if (reply?.id !== request.id) { return undefined; }
+    if (!reply.response) { return {status: reply}; }
+    if (reply.response.id !== request.id) { return undefined; }
+    return {delivery: {terminal: reply.response, state: reply.state}};
+}
+
+async function acknowledgePolledResponse(request, polled) {
+    if (!polled?.delivery) { return polled; }
+    if (!await acknowledgeCompletedResponse(request)) { return undefined; }
+    await broadcastConfigurationInvalidated(request.configurationKey);
+    return polled;
+}
+
+async function consumeStoredResponse(request, maintenance = "none") {
+    return acknowledgePolledResponse(request, await pollStoredResponse(request, maintenance));
 }
 
 async function applyCompletedResponse(request, context) {
@@ -267,13 +268,17 @@ function recoverRequests() {
         const ready = [];
         for (const request of response.requests) {
             try {
-                let status = request.state === "completed" ? {ready: true} : nativeRequestStatus(
-                    await WIRE.withTimeout(sendNativeMessage({...nativeRequestIdentity(request),
-                        subject: "maintainRequest", allowDelivery: false}, false), TRANSPORT_TIMEOUT), request.id);
-                if (!status?.ready) { continue; }
+                if (request.state !== "completed" || request.manual) {
+                    const polled = await pollStoredResponse(request, request.state === "completed" ? "none" : "quiet");
+                    if (!polled?.delivery) { continue; }
+                    if (request.manual) {
+                        await broadcastConfigurationInvalidated(request.configurationKey);
+                        await acknowledgeCompletedResponse(request);
+                        continue;
+                    }
+                }
                 await broadcastConfigurationInvalidated(request.configurationKey);
-                if (request.manual) { await consumeStoredResponse(request); }
-                else { ready.push(request.id); }
+                ready.push(request.id);
             } catch {}
         }
         if (ready.length) { await sendResponseReady({subject: "responseReady", ids: ready, workflowVersion: WORKFLOW_VERSION}); }

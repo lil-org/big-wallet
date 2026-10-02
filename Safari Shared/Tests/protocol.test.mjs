@@ -106,6 +106,14 @@ test("canonical identifiers reject trailing newlines and non-JSON numbers", () =
     }
 });
 
+test("response polls exclude bare readiness without narrowing other native statuses", () => {
+    const ready = {id: 91, ready: true};
+    assert.equal(protocol.isValid("NativeStatus", ready), true);
+    assert.equal(protocol.isValid("NativeOpenReply", ready), true);
+    assert.equal(protocol.isValid("NativeResponsePollReply", ready), false);
+    assert.equal(protocol.maximumJSONDepth("NativeResponsePollReply"), 64);
+});
+
 test("generator is deterministic, detects stale output without writes, and validates definitions first", async () => {
     const directory = await mkdtemp(join(tmpdir(), "big-wallet-protocol-"));
     try {

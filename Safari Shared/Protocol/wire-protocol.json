@@ -422,7 +422,7 @@
               "ref": "WorkflowVersion"
             },
             "subject": {
-              "const": "getResponse"
+              "const": "pollResponse"
             },
             "configurationKey": {
               "type": "string",
@@ -430,6 +430,13 @@
             },
             "requestToken": {
               "ref": "RequestToken"
+            },
+            "maintenance": {
+              "enum": [
+                "none",
+                "quiet",
+                "interactive"
+              ]
             }
           },
           "optional": {}
@@ -474,53 +481,6 @@
             },
             "requestToken": {
               "ref": "RequestToken"
-            }
-          },
-          "optional": {}
-        },
-        {
-          "type": "object",
-          "required": {
-            "id": {
-              "ref": "RequestID"
-            },
-            "workflowVersion": {
-              "ref": "WorkflowVersion"
-            },
-            "subject": {
-              "const": "prepareResponseDelivery"
-            },
-            "configurationKey": {
-              "type": "string",
-              "minLength": 1
-            },
-            "requestToken": {
-              "ref": "RequestToken"
-            }
-          },
-          "optional": {}
-        },
-        {
-          "type": "object",
-          "required": {
-            "id": {
-              "ref": "RequestID"
-            },
-            "workflowVersion": {
-              "ref": "WorkflowVersion"
-            },
-            "subject": {
-              "const": "maintainRequest"
-            },
-            "configurationKey": {
-              "type": "string",
-              "minLength": 1
-            },
-            "requestToken": {
-              "ref": "RequestToken"
-            },
-            "allowDelivery": {
-              "type": "boolean"
             }
           },
           "optional": {}
@@ -1321,6 +1281,49 @@
         }
       },
       "optional": {}
+    },
+    "NativeResponsePollReply": {
+      "oneOf": [
+        {
+          "ref": "NativeDelivery"
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "pending": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "missing": {
+              "const": true
+            }
+          },
+          "optional": {}
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "unavailable": {
+              "const": true
+            }
+          },
+          "optional": {}
+        }
+      ]
     },
     "NativeStatus": {
       "oneOf": [

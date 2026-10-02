@@ -53,7 +53,7 @@ function makeHarness({
     storageGet,
     native,
     recoveryNative,
-    executionNative,
+    pollNative,
     localizedMessages = {},
     openPopupMissing = false,
     openPopupRejects = false,
@@ -68,7 +68,7 @@ function makeHarness({
 } = {}) {
     const retainedSwitches = new Map;
     const nativeMessages = [];
-    const executionMessages = [];
+    const pollMessages = [];
     const recoveryMessages = [];
     const alarmGets = [];
     const alarmCreates = [];
@@ -147,12 +147,14 @@ function makeHarness({
                 if (["getExecutionStatus", "executeNativeApproval"].includes(message.subject)) {
                     assert.fail("Worker must not drive native execution");
                 }
-                if (message.subject === "maintainRequest") {
-                    executionMessages.push({application, message: clone(message)});
-                    if (executionNative) { return Promise.resolve(executionNative(message)); }
-                    return Promise.resolve({id: message.id, pending: true});
-                }
                 nativeMessages.push({application, message: clone(message)});
+                if (message.subject === "pollResponse") {
+                    pollMessages.push({application, message: clone(message)});
+                    if (pollNative) { return Promise.resolve(pollNative(message)); }
+                    if (message.maintenance !== "none") {
+                        return Promise.resolve({id: message.id, pending: true});
+                    }
+                }
                 return Promise.resolve(message.subject === "acknowledgeResponse"
                     ? acknowledgeResponse(message)
                     : native ? native(message) : message.subject === "getLatestConfiguration"
@@ -289,7 +291,7 @@ function makeHarness({
         badgeDetails,
         titles,
         nativeMessages,
-        executionMessages,
+        pollMessages,
         recoveryMessages,
         popupCalls,
         runtimeMessages,
@@ -569,7 +571,7 @@ test("malformed Solana trust options return a correlated error without native ad
         }
     }
     assert.equal(harness.nativeMessages.length, 0);
-    assert.equal(harness.executionMessages.length, 0);
+    assert.equal(harness.pollMessages.length, 0);
     assert.equal(harness.alarmGets.length, alarmGets);
 });
 
@@ -616,67 +618,58 @@ test("private browsing never admits or returns a grant", async () => {
     }
 });
 
-test("completion relays an atomically committed native state and only acknowledges delivery", async () => {
+test("completion polls once and only acknowledges an atomically committed native delivery", async () => {
     const state = snapshot({ethereum: ethereumState("0x01"), revisions: {ethereum: 1, solana: 0}});
     const harness = makeHarness({
-        executionNative: message => ({id: message.id, ready: true}),
-        native: () => delivery(7, state, ["0x01"]),
+        pollNative: () => delivery(7, state, ["0x01"]),
         tabs: [{id: 3, url: "https://wallet.example/a"}, {id: 4, url: "https://other.example"},
             {id: 5, url: "https://wallet.example/b", incognito: true}]});
     const response = await harness.dispatch(responseRequest());
     assert.deepEqual(clone(response.state), state);
     assert.deepEqual(clone(response.result), ["0x01"]);
-    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
-    assert.equal(harness.executionMessages.at(-1).message.subject, "maintainRequest");
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse", "acknowledgeResponse"]);
+    assert.equal(harness.pollMessages[0].message.maintenance, "interactive");
     assert.deepEqual(harness.storageWrites, []);
     assert.deepEqual(harness.tabMessages, [{id: 3, message: {
         subject: "configurationInvalidated", configurationKey: "https://wallet.example", workflowVersion: 4,
     }}]);
 });
 
-test("a lost acknowledgement retries delivery without reapplying a grant", async () => {
+test("a lost acknowledgement retries the same delivery with a passive poll", async () => {
     let count = 0;
     const harness = makeHarness({
-        executionNative: message => ({id: message.id, ready: true}),
-        native: message => message.subject === "getResponse" ? {id: message.id, ready: true} : delivery(),
+        pollNative: () => delivery(),
         acknowledgeResponse: message => ++count === 1
         ? undefined : {id: message.id, acknowledged: true}});
     assert.equal(await harness.dispatch(responseRequest()), undefined);
     assert.equal((await harness.dispatch(responseRequest())).kind, "result");
     assert.equal(count, 2);
-    assert.equal(harness.executionMessages.length, 1);
+    assert.deepEqual(harness.pollMessages.map(value => value.message.maintenance), ["interactive", "none"]);
+    assert.deepEqual(harness.pollMessages.map(value => value.message.requestToken), [requestToken, requestToken]);
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
-        "prepareResponseDelivery", "acknowledgeResponse",
-        "getResponse", "prepareResponseDelivery", "acknowledgeResponse",
+        "pollResponse", "acknowledgeResponse", "pollResponse", "acknowledgeResponse",
     ]);
     assert.deepEqual(harness.storageWrites, []);
 });
 
-test("combined response delivery waits for status preparation and acknowledgement in order", async () => {
-    let resolveStatus;
-    let resolvePreparation;
+test("response delivery waits for its poll and acknowledgement before publishing", async () => {
+    let resolvePoll;
     let resolveAcknowledgement;
     const harness = makeHarness({
-        executionNative: () => new Promise(resolve => { resolveStatus = resolve; }),
-        native: () => new Promise(resolve => { resolvePreparation = resolve; }),
+        pollNative: () => new Promise(resolve => { resolvePoll = resolve; }),
         acknowledgeResponse: () => new Promise(resolve => { resolveAcknowledgement = resolve; }),
         tabs: [{id: 3, url: "https://wallet.example/dapp"}],
     });
     await settle();
     const pending = harness.dispatch(responseRequest());
     await settle();
-    assert.equal(harness.executionMessages.length, 1);
-    assert.deepEqual(harness.nativeMessages, []);
-
-    resolveStatus({id: 7, ready: true});
-    await settle();
-    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery"]);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse"]);
     assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, []);
 
-    resolvePreparation(delivery());
+    resolvePoll(delivery());
     await settle();
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
-        "prepareResponseDelivery", "acknowledgeResponse",
+        "pollResponse", "acknowledgeResponse",
     ]);
     assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, []);
     assert.equal(harness.tabQueries(), 0);
@@ -687,42 +680,33 @@ test("combined response delivery waits for status preparation and acknowledgemen
     assert.equal(harness.tabMessages.length, 1);
 });
 
-test("combined response polling forwards nonready statuses without acknowledgement", async () => {
-    for (const stage of ["status", "preparation"]) {
-        for (const status of ["pending", "missing", "unavailable"]) {
-            const response = {id: 7, [status]: true};
-            const harness = makeHarness({
-                executionNative: () => stage === "status" ? response : {id: 7, ready: true},
-                native: () => response,
-            });
-            assert.deepEqual(clone(await harness.dispatch(responseRequest())), response);
-            assert.deepEqual(harness.nativeMessages.map(value => value.message.subject),
-                stage === "status" ? [] : ["prepareResponseDelivery"]);
-            assert.equal(harness.tabQueries(), 0);
-        }
+test("response polling forwards nonterminal statuses without acknowledgement", async () => {
+    for (const status of ["pending", "missing", "unavailable"]) {
+        const response = {id: 7, [status]: true};
+        const harness = makeHarness({pollNative: () => response});
+        assert.deepEqual(clone(await harness.dispatch(responseRequest())), response);
+        assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse"]);
+        assert.equal(harness.tabQueries(), 0);
     }
 });
 
 test("each native delivery stage times out without advancing or publishing a late response", async () => {
-    for (const stage of ["status", "preparation", "acknowledgement"]) {
+    for (const stage of ["poll", "acknowledgement"]) {
         let resolveHungStage;
         const hung = () => new Promise(resolve => { resolveHungStage = resolve; });
         const harness = makeHarness({
-            executionNative: () => stage === "status" ? hung() : {id: 7, ready: true},
-            native: () => stage === "preparation" ? hung() : delivery(),
+            pollNative: () => stage === "poll" ? hung() : delivery(),
             acknowledgeResponse: () => stage === "acknowledgement" ? hung() : {id: 7, acknowledged: true},
         });
         await settle();
         const pending = harness.dispatch(responseRequest());
         await settle();
-        const expected = stage === "status" ? [] : stage === "preparation"
-            ? ["prepareResponseDelivery"] : ["prepareResponseDelivery", "acknowledgeResponse"];
+        const expected = stage === "poll" ? ["pollResponse"] : ["pollResponse", "acknowledgeResponse"];
         assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), expected);
         assert.equal(await harness.runTimer(5000), true);
         assert.equal(await pending, undefined);
 
-        resolveHungStage(stage === "status" ? {id: 7, ready: true} : stage === "preparation"
-            ? delivery() : {id: 7, acknowledged: true});
+        resolveHungStage(stage === "poll" ? delivery() : {id: 7, acknowledged: true});
         await settle();
         assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), expected);
         assert.deepEqual(harness.runtimeDeliveries.at(-1).replies, [undefined]);
@@ -730,10 +714,31 @@ test("each native delivery stage times out without advancing or publishing a lat
     }
 });
 
+test("a lost poll reply can be retried without acknowledging its late delivery", async () => {
+    let resolveLostPoll;
+    let polls = 0;
+    const retained = delivery();
+    const harness = makeHarness({pollNative: () => ++polls === 1
+        ? new Promise(resolve => { resolveLostPoll = resolve; }) : retained});
+    await settle();
+    const first = harness.dispatch(responseRequest());
+    await settle();
+    assert.equal(await harness.runTimer(5000), true);
+    assert.equal(await first, undefined);
+    const replay = await harness.dispatch(responseRequest());
+    assert.deepEqual(clone(replay.state), retained.state);
+    assert.deepEqual(clone(replay.result), retained.response.result);
+    resolveLostPoll(retained);
+    await settle();
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
+        "pollResponse", "pollResponse", "acknowledgeResponse",
+    ]);
+    assert.equal(harness.tabQueries(), 1);
+});
+
 test("acknowledged delivery survives a tab-query timeout", async () => {
     const harness = makeHarness({
-        executionNative: () => ({id: 7, ready: true}),
-        native: () => delivery(),
+        pollNative: () => delivery(),
         queryTabs: () => new Promise(() => {}),
     });
     await settle();
@@ -749,8 +754,7 @@ test("a lost combined reply can replay its acknowledged completion after worker 
     const retained = delivery();
     let acknowledgements = 0;
     const options = {
-        executionNative: () => ({id: 7, ready: true}),
-        native: message => message.subject === "getResponse" ? {id: 7, ready: true} : retained,
+        pollNative: () => retained,
         acknowledgeResponse: () => { acknowledgements += 1; return {id: 7, acknowledged: true}; },
     };
     const original = makeHarness(options);
@@ -762,7 +766,7 @@ test("a lost combined reply can replay its acknowledged completion after worker 
     assert.deepEqual(clone(replay.result), retained.response.result);
     assert.equal(acknowledgements, 2);
     assert.deepEqual(restarted.nativeMessages.map(value => value.message.subject), [
-        "prepareResponseDelivery", "acknowledgeResponse",
+        "pollResponse", "acknowledgeResponse",
     ]);
     assert.deepEqual(original.storageWrites, []);
     assert.deepEqual(restarted.storageWrites, []);
@@ -775,8 +779,7 @@ test("delivery accepts only exact correlated acknowledgement or missing replies"
         [{id: 7, acknowledged: true, missing: true}, false], [undefined, false],
     ]) {
         const harness = makeHarness({
-            executionNative: () => ({id: 7, ready: true}),
-            native: () => delivery(),
+            pollNative: () => delivery(),
             acknowledgeResponse: () => acknowledgement,
         });
         const response = await harness.dispatch(responseRequest());
@@ -785,25 +788,18 @@ test("delivery accepts only exact correlated acknowledgement or missing replies"
     }
 });
 
-test("malformed or cross-correlated completions are never acknowledged", async () => {
+test("malformed or cross-correlated poll replies are never acknowledged", async () => {
     for (const response of [delivery(8), {...delivery(), state: {...snapshot(), context: "wrong"}},
+        {...delivery(), response: {...delivery().response, id: 8}},
         {...delivery(), response: {...delivery().response, mutation: null}},
-        {id: 7, ready: true}, {id: 8, ready: true},
-        nativeResult({id: 7, name: "requestAccounts", provider: "ethereum", result: []})]) {
-        const harness = makeHarness({
-            executionNative: message => ({id: message.id, ready: true}),
-            native: () => response,
-        });
+        {...delivery(), pending: true}, {id: 7, ready: true}, {id: 8, pending: true},
+        {id: 7, pending: true, missing: true},
+        nativeResult({id: 7, name: "requestAccounts", provider: "ethereum", result: []}),
+        nativeError({id: 7, name: "requestAccounts", provider: "ethereum", error: {code: 4001, message: "Canceled"}})]) {
+        const harness = makeHarness({pollNative: () => response});
         assert.equal(await harness.dispatch(responseRequest()), undefined);
-        assert.equal(harness.nativeMessages.some(value => value.message.subject === "acknowledgeResponse"), false);
-    }
-});
-
-test("native status reads cannot directly deliver a signature", async () => {
-    for (const response of [delivery(), {id: 8, ready: true}, {id: 7, ready: true, pending: true}]) {
-        const harness = makeHarness({executionNative: () => response});
-        assert.equal(await harness.dispatch(responseRequest()), undefined);
-        assert.deepEqual(harness.nativeMessages, []);
+        assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse"]);
+        assert.equal(harness.tabQueries(), 0);
     }
 });
 
@@ -833,6 +829,8 @@ test("popup completion does not accept browser revision or deadline authority", 
     const harness = makeHarness({native: () => delivery()});
     const command = {...responseRequest("applyCompletedResponse"), host: "wallet.example"};
     assert.deepEqual(clone(await harness.dispatch(command, popupSender())), {applied: true});
+    assert.equal(harness.pollMessages[0].message.maintenance, "none");
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse", "acknowledgeResponse"]);
     assert.equal(await harness.dispatch({...command, revisions: {ethereum: 0, solana: 0}}, popupSender()), undefined);
     assert.equal(await harness.dispatch({subject: "approveRequestWithCurrentRevisions"}, popupSender()), undefined);
 });
@@ -842,12 +840,12 @@ test("startup and alarm recovery quietly maintain pending approved and manual re
         recoveryDescriptor({state: "pending"}), recoveryDescriptor({state: "approved"})]) {
         const harness = makeHarness({tabs: [],
             recoveryNative: message => ({id: message.id, requests: [descriptor]}),
-            executionNative: message => ({id: message.id, pending: true})});
+            pollNative: message => ({id: message.id, pending: true})});
         await settle();
         await harness.fireAlarm();
         assert.equal(harness.recoveryMessages[0].message.subject, "getRecoveryRequests");
-        assert.deepEqual(harness.executionMessages.map(value => value.message.subject), ["maintainRequest", "maintainRequest"]);
-        assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, false]);
+        assert.deepEqual(harness.pollMessages.map(value => value.message.subject), ["pollResponse", "pollResponse"]);
+        assert.deepEqual(harness.pollMessages.map(value => value.message.maintenance), ["quiet", "quiet"]);
         assert.equal(harness.tabQueries(), 0);
         assert.equal(harness.tabMessages.length, 0);
         assert.deepEqual(harness.storageReads, []);
@@ -856,29 +854,106 @@ test("startup and alarm recovery quietly maintain pending approved and manual re
     }
 });
 
+test("recovery polls once and acknowledges only manual completions", async () => {
+    for (const manual of [false, true]) {
+        for (const state of ["pending", "approved", "completed"]) {
+            const descriptor = recoveryDescriptor({manual, state});
+            const harness = makeHarness({
+                tabs: [{id: 3, url: "https://wallet.example/dapp"}],
+                recoveryNative: message => ({id: message.id, requests: [descriptor]}),
+                pollNative: message => manual
+                    ? {id: message.id, state: snapshot(), response: nativeResult({
+                        id: message.id, name: "switchAccount", provider: "multiple", result: null,
+                    })} : delivery(message.id),
+            });
+            await settle();
+            assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), manual
+                ? ["pollResponse", "acknowledgeResponse"]
+                : state === "completed" ? [] : ["pollResponse"]);
+            assert.deepEqual(harness.pollMessages.map(value => value.message.maintenance),
+                state === "completed" && !manual ? [] : [state === "completed" ? "none" : "quiet"]);
+            assert.deepEqual(harness.tabMessages.map(value => value.message.subject), manual
+                ? ["configurationInvalidated"] : ["configurationInvalidated", "responseReady"]);
+            if (!manual) { assert.deepEqual(harness.tabMessages[1].message.ids, [descriptor.id]); }
+            assert.deepEqual(harness.popupCalls, []);
+        }
+    }
+});
+
+test("manual recovery invalidates before a committed acknowledgement reply is lost", async () => {
+    const descriptor = recoveryDescriptor({state: "completed"});
+    let acknowledged = false;
+    let acknowledgements = 0;
+    const events = [];
+    const options = {
+        tabs: [{id: 3, url: "https://wallet.example/dapp"}],
+        recoveryNative: message => ({id: message.id, requests: acknowledged ? [] : [descriptor]}),
+        pollNative: message => ({id: message.id, state: snapshot(), response: nativeResult({
+            id: message.id, name: "switchAccount", provider: "multiple", result: null,
+        })}),
+        sendTabMessage: (_id, message) => { events.push(message.subject); },
+        acknowledgeResponse: () => {
+            events.push("acknowledgeResponse");
+            acknowledgements += 1;
+            acknowledged = true;
+            return undefined;
+        },
+    };
+    const harness = makeHarness(options);
+    await settle();
+    assert.equal(acknowledgements, 1);
+    assert.deepEqual(events, ["configurationInvalidated", "acknowledgeResponse"]);
+    await harness.fireAlarm();
+    const restarted = makeHarness(options);
+    await settle();
+    await restarted.fireAlarm();
+    assert.equal(acknowledgements, 1);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), [
+        "pollResponse", "acknowledgeResponse",
+    ]);
+    assert.deepEqual(harness.tabMessages.map(value => value.message.subject), ["configurationInvalidated"]);
+    assert.deepEqual(restarted.nativeMessages, []);
+    assert.deepEqual(restarted.tabMessages, []);
+});
+
+test("quiet recovery ignores nonterminal and malformed poll replies without delivery effects", async () => {
+    for (const manual of [false, true]) {
+        const descriptor = recoveryDescriptor({manual});
+        for (const response of [undefined, {id: descriptor.id, ready: true}, delivery(descriptor.id + 1),
+            ...["pending", "missing", "unavailable"].map(status => ({id: descriptor.id, [status]: true}))]) {
+            const harness = makeHarness({
+                recoveryNative: message => ({id: message.id, requests: [descriptor]}),
+                pollNative: () => response,
+            });
+            await settle();
+            assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse"]);
+            assert.deepEqual(harness.tabMessages, []);
+            assert.deepEqual(harness.popupCalls, []);
+        }
+    }
+});
+
 test("live content polls permit exact native redelivery at most once every thirty seconds", async () => {
     let now = 1_700_000_000_000;
     const descriptor = recoveryDescriptor({id: 7, manual: false});
     const harness = makeHarness({tabs: [], dateNow: () => now,
         recoveryNative: message => ({id: message.id, requests: [descriptor]}),
-        executionNative: message => ({id: message.id, pending: true}),
-        native: message => ({id: message.id, pending: true})});
+        pollNative: message => ({id: message.id, pending: true})});
     await settle();
     assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
-    assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, true]);
-    assert.deepEqual(harness.executionMessages[1].message, {
-        subject: "maintainRequest", id: descriptor.id, requestToken: descriptor.requestToken,
+    assert.deepEqual(harness.pollMessages.map(value => value.message.maintenance), ["quiet", "interactive"]);
+    assert.deepEqual(harness.pollMessages[1].message, {
+        subject: "pollResponse", id: descriptor.id, requestToken: descriptor.requestToken,
         configurationKey: descriptor.configurationKey, workflowVersion: 4,
-        allowDelivery: true, __bwPrivateBrowsing: false,
+        maintenance: "interactive", __bwPrivateBrowsing: false,
     });
     now += 29_999;
     assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
-    assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, true]);
-    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["getResponse"]);
+    assert.deepEqual(harness.pollMessages.map(value => value.message.maintenance), ["quiet", "interactive", "none"]);
     now += 1;
     assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
-    assert.deepEqual(harness.executionMessages.map(value => value.message.allowDelivery), [false, true, true]);
-    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["getResponse"]);
+    assert.deepEqual(harness.pollMessages.map(value => value.message.maintenance), ["quiet", "interactive", "none", "interactive"]);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), Array(4).fill("pollResponse"));
     assert.deepEqual(harness.tabMessages, []);
 });
 
@@ -888,12 +963,16 @@ test("unauthorized and malformed status polls never enable native redelivery", a
         [responseRequest("getResponse"), contentSender({url: "https://other.example"})],
         [responseRequest("getResponse"), contentSender({incognito: true})],
         [{...responseRequest("getResponse"), requestToken: "invalid"}, contentSender()],
-        [{...responseRequest("getResponse"), allowDelivery: true}, contentSender()],
+        ...["none", "quiet", "interactive"].map(maintenance => [
+            {...responseRequest("getResponse"), maintenance}, contentSender(),
+        ]),
+        [{...responseRequest("pollResponse"), maintenance: "interactive"}, contentSender()],
+        [{...responseRequest("pollResponse"), maintenance: "interactive"}, popupSender()],
     ]) {
         const harness = makeHarness();
         await settle();
         assert.equal(await harness.dispatch(command, sender), undefined);
-        assert.deepEqual(harness.executionMessages, []);
+        assert.deepEqual(harness.pollMessages, []);
     }
 });
 
@@ -1003,7 +1082,7 @@ for (const [kind, command] of [["dapp", request], ["manual", manualSwitchIntent]
                 assert.equal((await harness.dispatch(command())).requestToken, requestToken);
                 assert.equal(harness.nativeMessages.filter(({message}) => !message.subject).length, 1);
                 assert.ok(harness.recoveryMessages.length >= 1);
-                assert.ok(harness.executionMessages.length >= 1);
+                assert.ok(harness.pollMessages.length >= 1);
                 while (await harness.runTimer(5000)) {}
                 unavailable = false;
                 requests = [];
@@ -1034,7 +1113,7 @@ for (const [kind, command] of [["dapp", request], ["manual", manualSwitchIntent]
         await settle();
         assert.ok([1, 5].includes(harness.alarms.get(recoveryAlarmName).periodInMinutes));
         await harness.fireAlarm();
-        assert.ok(harness.executionMessages.some(({message}) => message.id === requests[0].id));
+        assert.ok(harness.pollMessages.some(({message}) => message.id === requests[0].id));
         assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
         assert.deepEqual(harness.alarmClears, []);
     });
@@ -1059,9 +1138,9 @@ for (const [kind, command] of [["dapp", request], ["manual", manualSwitchIntent]
         assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 5);
         commitAdmission();
         await restarted.fireAlarm();
-        assert.equal(restarted.executionMessages.length, 1);
-        assert.equal(restarted.executionMessages[0].message.id, requests[0].id);
-        assert.equal(restarted.executionMessages[0].message.allowDelivery, false);
+        assert.equal(restarted.pollMessages.length, 1);
+        assert.equal(restarted.pollMessages[0].message.id, requests[0].id);
+        assert.equal(restarted.pollMessages[0].message.maintenance, "quiet");
         assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 1);
         assert.deepEqual(restarted.storageReads, []);
         assert.deepEqual(restarted.storageWrites, []);
@@ -1105,7 +1184,7 @@ test("manual recovery consumes native completion without requiring the original 
     const harness = makeHarness({tabs: [], recoveryNative: message => ({id: message.id, requests: [descriptor]}),
         native: message => ({id: message.id, state: snapshot(), response: nativeResult({id: message.id, name: "switchAccount", provider: "multiple", result: null})})});
     await settle();
-    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["prepareResponseDelivery", "acknowledgeResponse"]);
+    assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse", "acknowledgeResponse"]);
 });
 
 test("native RPC relays preserve error data and reject uncorrelated results", async () => {
@@ -1148,8 +1227,8 @@ test("all runtime routes enforce their sender matrix before effects", async () =
         [{subject: "responseReady", ids: [7], workflowVersion: 4}, ["popup"]],
         [{subject: "updatePendingRequestBadge", hasPendingRequests: true, workflowVersion: 4}, ["popup"]],
         [manualSwitchIntent(), ["content"]],
-        ...["approveRequest", "executeNativeApproval", "getExecutionStatus", "maintainRequest",
-            "prepareResponseDelivery", "requestActive", "constructor", "__proto__"].map(subject => [{subject, workflowVersion: 4}, []]),
+        ...["approveRequest", "executeNativeApproval", "getExecutionStatus", "pollResponse",
+            "requestActive", "constructor", "__proto__"].map(subject => [{subject, workflowVersion: 4}, []]),
     ];
     const senders = {content: contentSender(), popup: popupSender(),
         worker: {id: "extension-id", url: "safari-web-extension://extension-id/service_worker.js"}};
@@ -1209,7 +1288,7 @@ test("failed and malformed discovery retains recovery without executing or ackno
         assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
         assert.deepEqual(harness.alarmCreates, []);
         assert.deepEqual(harness.alarmClears, []);
-        assert.equal(harness.executionMessages.length, 0);
+        assert.equal(harness.pollMessages.length, 0);
         assert.equal(harness.nativeMessages.length, 0);
     }
 });
@@ -1278,8 +1357,7 @@ test("RPC rejects malformed input and ambiguous native replies", async () => {
 
 test("a malformed tab query cannot prevent an acknowledged native result", async () => {
     const harness = makeHarness({
-        executionNative: message => ({id: message.id, ready: true}),
-        native: () => delivery(), queryTabs: () => {throw new Error("closed browser");},
+        pollNative: () => delivery(), queryTabs: () => {throw new Error("closed browser");},
     });
     assert.equal((await harness.dispatch(responseRequest())).kind, "result");
 });
@@ -1313,7 +1391,7 @@ test("a new manual switch drains the previous completion before admitting its ow
         },
         native: message => {
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-            if (message.subject === "prepareResponseDelivery") {
+            if (message.subject === "pollResponse") {
                 return {id: message.id, state: snapshot(), response: nativeResult({
                     id: message.id, name: "switchAccount", provider: "multiple", result: null,
                 })};
@@ -1340,7 +1418,7 @@ test("a new manual switch drains the previous completion before admitting its ow
     assert.equal(attempted[1].admissionDeadline, attempted[2].admissionDeadline);
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject || value.message.name), [
         "getLatestConfiguration", "switchAccount", "getLatestConfiguration", "switchAccount",
-        "prepareResponseDelivery", "acknowledgeResponse", "getLatestConfiguration", "switchAccount",
+        "pollResponse", "acknowledgeResponse", "getLatestConfiguration", "switchAccount",
     ]);
 });
 
@@ -1368,7 +1446,7 @@ test("a coalesced manual completion is drained when separate intents generate th
         },
         native: message => {
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-            if (message.subject === "prepareResponseDelivery") {
+            if (message.subject === "pollResponse") {
                 return {id: message.id, state: snapshot(), response: nativeResult({
                     id: message.id, name: "switchAccount", provider: "multiple", result: null,
                 })};
@@ -1415,7 +1493,7 @@ test("manual-switch completion draining is bounded and requires an acknowledged 
                 ? undefined : {id: message.id, acknowledged: true},
             native: message => {
                 if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-                if (message.subject === "prepareResponseDelivery") {
+                if (message.subject === "pollResponse") {
                     return failure !== "unavailable" ? {id: message.id, state: snapshot(), response: nativeResult({
                         id: message.id, name: "switchAccount", provider: "multiple", result: null,
                     })} : {id: message.id, unavailable: true};
@@ -1543,7 +1621,7 @@ test("toolbar presentation accepts an exact request already executing or complet
                     if (status === "ready") { completed = recoveryDescriptor({id: message.id, state: "completed"}); }
                     return {id: message.id, [status]: true};
                 }
-                if (message.subject === "prepareResponseDelivery") {
+                if (message.subject === "pollResponse") {
                     return completionAvailable ? {id: message.id, state: snapshot(), response: nativeError({
                         id: message.id, name: "switchAccount", provider: "multiple", error: {code: 4001, message: "Canceled"},
                     })} : {id: message.id, unavailable: true};
@@ -1554,7 +1632,7 @@ test("toolbar presentation accepts an exact request already executing or complet
             await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
             await settle();
             assert.equal(harness.nativeMessages.filter(value => value.message.subject === "showApproval").length, 1);
-            assert.equal(harness.nativeMessages.some(value => value.message.subject === "prepareResponseDelivery"), status === "ready");
+            assert.equal(harness.nativeMessages.some(value => value.message.subject === "pollResponse"), status === "ready");
             assert.equal(harness.nativeMessages.some(value => value.message.subject === "openApp"), false);
             assert.deepEqual(harness.badgeDetails.at(-1), {tabId: 3, text: null});
         }
@@ -1602,7 +1680,7 @@ test("toolbar opens a fresh selection after cancellation while the old presentat
             }
             return {id: message.id, opened: true};
         }
-        if (message.subject === "prepareResponseDelivery") {
+        if (message.subject === "pollResponse") {
             return {id: message.id, state: snapshot(), response: nativeError({
                 id: message.id, provider: "multiple", name: "switchAccount", error: {code: 4001, message: "Canceled"},
             })};
@@ -1771,7 +1849,7 @@ test("a lost coalesced reply cannot reopen a canceled selector without another c
         native: message => {
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
             if (message.subject === "showApproval") { return {id: message.id, opened: true}; }
-            if (message.subject === "prepareResponseDelivery") {
+            if (message.subject === "pollResponse") {
                 return {id: message.id, state: snapshot(), response: nativeError({
                     id: message.id, provider: "multiple", name: "switchAccount", error: {code: 4001, message: "Canceled"},
                 })};
@@ -1837,7 +1915,7 @@ for (const sequence of [
             recoveryNative: message => ({id: message.id, requests: []}),
             native: message => {
                 if (message.subject === "getLatestConfiguration") { return {id: message.id, state}; }
-                if (message.subject === "prepareResponseDelivery") {
+                if (message.subject === "pollResponse") {
                     drains += 1;
                     return {id: message.id, state, response: nativeResult({
                         id: message.id, name: "switchAccount", provider: "multiple", result: null,
@@ -1884,7 +1962,7 @@ test("manual-switch completion refresh cannot extend an expired admission deadli
             if (reads === 2) { now = admissionDeadline; }
             return {id: message.id, state: snapshot()};
         }
-        if (message.subject === "prepareResponseDelivery") {
+        if (message.subject === "pollResponse") {
             return {id: message.id, state: snapshot(), response: nativeResult({
                 id: message.id, name: "switchAccount", provider: "multiple", result: null,
             })};

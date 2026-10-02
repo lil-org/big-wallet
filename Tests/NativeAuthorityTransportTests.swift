@@ -36,6 +36,28 @@ final class NativeAuthorityTransportTests: XCTestCase {
         }
     }
 
+    func testResponsePollingIsWorkerOwnedAndCannotChooseItsNativeAuthority() throws {
+        for mode in ["none", "quiet", "interactive"] {
+            let body: [String: Any] = [
+                "subject": "pollResponse",
+                "configurationKey": "https://wallet.example",
+                "requestToken": requestToken,
+                "maintenance": mode,
+            ]
+            guard case .worker(.pollResponse(let identity)) = try decode(body).command else {
+                return XCTFail("Expected worker response poll")
+            }
+            XCTAssertEqual(identity.response.configurationKey, "https://wallet.example")
+            XCTAssertEqual(identity.response.token.rawValue, requestToken)
+            XCTAssertEqual(identity.maintenance.rawValue, mode)
+            for field in ["profileIdentifier", "authority", "revisions", "host", "allowDelivery"] {
+                var invalid = body
+                invalid[field] = "untrusted"
+                XCTAssertThrowsError(try decode(invalid), field)
+            }
+        }
+    }
+
     func testRevocationRequiresAnExactNativeVersionAndAttempt() throws {
         let body: [String: Any] = [
             "subject": "disconnect",

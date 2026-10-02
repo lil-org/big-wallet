@@ -887,17 +887,19 @@ final class PopupRequestSessionsTests: XCTestCase {
         let token = UUID().uuidString.lowercased()
         let response: [String: Any] = [
             "id": 401,
-            "subject": "prepareResponseDelivery",
+            "subject": "pollResponse",
             "workflowVersion": ExtensionBridge.workflowVersion,
             "configurationKey": "https://wallet.example",
             "requestToken": token,
+            "maintenance": "quiet",
         ]
-        guard case .worker(.prepareResponseDelivery(let identity)) =
+        guard case .worker(.pollResponse(let identity)) =
             try decode(response).command else {
             return XCTFail("Expected a worker-only response command")
         }
-        XCTAssertEqual(identity.token.rawValue, token)
-        XCTAssertEqual(identity.configurationKey, "https://wallet.example")
+        XCTAssertEqual(identity.response.token.rawValue, token)
+        XCTAssertEqual(identity.response.configurationKey, "https://wallet.example")
+        XCTAssertEqual(identity.maintenance, .quiet)
         for extra in ["profileIdentifier", "privateBrowsing", "host", "payload", "revisions", "executionDeadline"] {
             for original in [listing, response] {
                 var malformed = original
@@ -905,7 +907,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 XCTAssertThrowsError(try decode(malformed))
             }
         }
-        for field in ["configurationKey", "requestToken"] {
+        for field in ["configurationKey", "requestToken", "maintenance"] {
             var malformed = response
             malformed.removeValue(forKey: field)
             XCTAssertThrowsError(try decode(malformed))

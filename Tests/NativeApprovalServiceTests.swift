@@ -20,29 +20,25 @@
             return fixture
         }
 
-        func testStatusAndMaintenanceCommandsAcceptOnlyResponseIdentity() throws {
+        func testResponsePollCommandAcceptsOnlyResponseIdentityAndMaintenanceMode() throws {
             let token = UUID().uuidString.lowercased()
-            for subject in [
-                "getResponse", "prepareResponseDelivery",
-            ] {
+            for maintenance in ["none", "quiet", "interactive"] {
                 let message: [String: Any] = [
-                    "subject": subject, "id": 41,
+                    "subject": "pollResponse", "id": 41,
                     "workflowVersion": ExtensionBridge.workflowVersion,
                     "configurationKey": "https://wallet.example", "requestToken": token,
+                    "maintenance": maintenance,
                 ]
                 let decoded = try JSONDecoder().decode(
                     InternalSafariRequest.self,
                     from: JSONSerialization.data(withJSONObject: message)
                 )
-                let identity: InternalSafariRequest.ResponseIdentity
-                switch decoded.command {
-                case .page(.getResponse(let value)),
-                     .worker(.prepareResponseDelivery(let value)):
-                    identity = value
-                default: return XCTFail("Unexpected command for \(subject)")
+                guard case .worker(.pollResponse(let identity)) = decoded.command else {
+                    return XCTFail("Expected worker response poll")
                 }
-                XCTAssertEqual(identity.token.rawValue, token)
-                XCTAssertEqual(identity.configurationKey, "https://wallet.example")
+                XCTAssertEqual(identity.response.token.rawValue, token)
+                XCTAssertEqual(identity.response.configurationKey, "https://wallet.example")
+                XCTAssertEqual(identity.maintenance.rawValue, maintenance)
                 for (key, value) in [
                     "claimID": UUID().uuidString.lowercased(),
                     "revisions": ["ethereum": 0, "solana": 0],
@@ -55,30 +51,30 @@
                     XCTAssertThrowsError(try JSONDecoder().decode(
                         InternalSafariRequest.self,
                         from: JSONSerialization.data(withJSONObject: invalid)
-                    ), "\(subject) accepted \(key)")
+                    ), "pollResponse accepted \(key)")
                 }
             }
         }
 
-        func testMaintenanceCommandRequiresDeliveryPermission() throws {
+        func testResponsePollCommandRequiresAnExplicitMaintenanceMode() throws {
             let message: [String: Any] = [
-                "subject": "maintainRequest", "id": 43,
+                "subject": "pollResponse", "id": 43,
                 "workflowVersion": ExtensionBridge.workflowVersion,
                 "configurationKey": "https://wallet.example",
                 "requestToken": UUID().uuidString.lowercased(),
-                "allowDelivery": false,
+                "maintenance": "quiet",
             ]
             let decoded = try JSONDecoder().decode(
                 InternalSafariRequest.self,
                 from: JSONSerialization.data(withJSONObject: message)
             )
-            guard case .worker(.maintainRequest(let maintenance)) = decoded.command else {
-                return XCTFail("Expected maintenance command")
+            guard case .worker(.pollResponse(let identity)) = decoded.command else {
+                return XCTFail("Expected worker response poll")
             }
-            XCTAssertFalse(maintenance.allowDelivery)
-            for value in [nil, 1, "false"] as [Any?] {
+            XCTAssertEqual(identity.maintenance, .quiet)
+            for value in [nil, true, 1, "automatic", NSNull()] as [Any?] {
                 var invalid = message
-                invalid["allowDelivery"] = value
+                invalid["maintenance"] = value
                 XCTAssertThrowsError(try JSONDecoder().decode(
                     InternalSafariRequest.self,
                     from: JSONSerialization.data(withJSONObject: invalid)

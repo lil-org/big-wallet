@@ -53,6 +53,7 @@ enum WireProtocol {
         case nativeEnqueueAcknowledgement = "NativeEnqueueAcknowledgement"
         case nativeAdmission = "NativeAdmission"
         case nativeDelivery = "NativeDelivery"
+        case nativeResponsePollReply = "NativeResponsePollReply"
         case nativeStatus = "NativeStatus"
         case nativeConfigurationReply = "NativeConfigurationReply"
         case nativeDisconnectReply = "NativeDisconnectReply"
@@ -142,59 +143,60 @@ enum WireProtocol {
         case .transactionEditsPayload: return n36(value)
         case .approvalAlertPayload: return n41(value)
         case .nativeCommand: return n43(value)
-        case .ethereumRequestBody: return n90(value)
-        case .solanaRequestObject: return n93(value)
-        case .solanaRequestBody: return n94(value)
-        case .manualProviderConfiguration: return n96(value)
-        case .manualRequestBody: return n102(value)
-        case .providerRequest: return n105(value)
-        case .dappRequest: return n112(value)
-        case .providerError: return n120(value)
-        case .nativeResult: return n122(value)
-        case .nativeResponse: return n124(value)
-        case .pageResponse: return n137(value)
-        case .nativeEnqueueAcknowledgement: return n146(value)
-        case .nativeAdmission: return n148(value)
-        case .nativeDelivery: return n149(value)
-        case .nativeStatus: return n151(value)
-        case .nativeConfigurationReply: return n157(value)
-        case .nativeDisconnectReply: return n159(value)
-        case .nativeAcknowledgementReply: return n162(value)
-        case .nativeOpenReply: return n164(value)
-        case .recoveryRequest: return n167(value)
-        case .nativeRecoveryReply: return n169(value)
-        case .rpcResponse: return n173(value)
-        case .popupDisplayAccount: return n177(value)
-        case .popupSelectableAccount: return n178(value)
-        case .popupNetworkOption: return n179(value)
-        case .popupClusterOption: return n180(value)
-        case .popupTransactionSlider: return n181(value)
-        case .popupTransactionEditor: return n182(value)
-        case .popupTransactionAlert: return n186(value)
-        case .popupReview: return n189(value)
-        case .popupApprovalState: return n209(value)
-        case .popupPendingRequest: return n221(value)
-        case .popupCompletedResponse: return n223(value)
-        case .popupQueue: return n224(value)
-        case .popupCommandResult: return n231(value)
-        case .popupResponse: return n240(value)
-        case .pageDisconnect: return n244(value)
-        case .pageRPC: return n247(value)
-        case .pageToContent: return n248(value)
-        case .contentToPage: return n257(value)
-        case .responseReady: return n261(value)
-        case .pendingRequestAvailable: return n266(value)
-        case .configurationInvalidated: return n268(value)
-        case .manualSwitchAcknowledgement: return n270(value)
-        case .workflowProbe: return n272(value)
-        case .workflowProbeReply: return n274(value)
-        case .manualSwitchIntent: return n275(value)
-        case .runtimeManualSwitchIntent: return n277(value)
-        case .runtimeConfigurationRequest: return n278(value)
-        case .runtimeDappRequest: return n279(value)
-        case .runtimeDisconnect: return n281(value)
-        case .runtimeRPC: return n282(value)
-        case .runtimeResponseRequest: return n283(value)
+        case .ethereumRequestBody: return n86(value)
+        case .solanaRequestObject: return n89(value)
+        case .solanaRequestBody: return n90(value)
+        case .manualProviderConfiguration: return n92(value)
+        case .manualRequestBody: return n98(value)
+        case .providerRequest: return n101(value)
+        case .dappRequest: return n108(value)
+        case .providerError: return n117(value)
+        case .nativeResult: return n119(value)
+        case .nativeResponse: return n121(value)
+        case .pageResponse: return n134(value)
+        case .nativeEnqueueAcknowledgement: return n143(value)
+        case .nativeAdmission: return n145(value)
+        case .nativeDelivery: return n146(value)
+        case .nativeResponsePollReply: return n148(value)
+        case .nativeStatus: return n154(value)
+        case .nativeConfigurationReply: return n156(value)
+        case .nativeDisconnectReply: return n158(value)
+        case .nativeAcknowledgementReply: return n161(value)
+        case .nativeOpenReply: return n163(value)
+        case .recoveryRequest: return n166(value)
+        case .nativeRecoveryReply: return n168(value)
+        case .rpcResponse: return n172(value)
+        case .popupDisplayAccount: return n176(value)
+        case .popupSelectableAccount: return n177(value)
+        case .popupNetworkOption: return n178(value)
+        case .popupClusterOption: return n179(value)
+        case .popupTransactionSlider: return n180(value)
+        case .popupTransactionEditor: return n181(value)
+        case .popupTransactionAlert: return n185(value)
+        case .popupReview: return n188(value)
+        case .popupApprovalState: return n208(value)
+        case .popupPendingRequest: return n220(value)
+        case .popupCompletedResponse: return n222(value)
+        case .popupQueue: return n223(value)
+        case .popupCommandResult: return n230(value)
+        case .popupResponse: return n239(value)
+        case .pageDisconnect: return n243(value)
+        case .pageRPC: return n246(value)
+        case .pageToContent: return n247(value)
+        case .contentToPage: return n256(value)
+        case .responseReady: return n260(value)
+        case .pendingRequestAvailable: return n265(value)
+        case .configurationInvalidated: return n267(value)
+        case .manualSwitchAcknowledgement: return n269(value)
+        case .workflowProbe: return n271(value)
+        case .workflowProbeReply: return n273(value)
+        case .manualSwitchIntent: return n274(value)
+        case .runtimeManualSwitchIntent: return n276(value)
+        case .runtimeConfigurationRequest: return n277(value)
+        case .runtimeDappRequest: return n278(value)
+        case .runtimeDisconnect: return n280(value)
+        case .runtimeRPC: return n281(value)
+        case .runtimeResponseRequest: return n282(value)
         case .runtimeBadgeUpdate: return n284(value)
         case .runtimeApplyCompletedResponse: return n286(value)
         case .contentToWorker: return n288(value)
@@ -596,7 +598,7 @@ enum WireProtocol {
     }
 
     private static func n43(_ value: Any) -> Bool {
-        return n44(value) || n48(value) || n50(value) || n52(value) || n54(value) || n56(value) || n60(value) || n63(value) || n65(value) || n67(value) || n69(value) || n72(value) || n74(value) || n76(value) || n78(value) || n81(value) || n84(value) || n87(value)
+        return n44(value) || n48(value) || n50(value) || n52(value) || n54(value) || n56(value) || n60(value) || n64(value) || n66(value) || n68(value) || n70(value) || n72(value) || n74(value) || n77(value) || n80(value) || n83(value)
     }
 
     private static func n44(_ value: Any) -> Bool {
@@ -695,17 +697,18 @@ enum WireProtocol {
     }
 
     private static func n60(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken", "maintenance"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
         guard let field2 = value["subject"], n61(field2) else { return false }
         guard let field3 = value["configurationKey"], n28(field3) else { return false }
         guard let field4 = value["requestToken"], n62(field4) else { return false }
+        guard let field5 = value["maintenance"], n63(field5) else { return false }
         return true
     }
 
     private static func n61(_ value: Any) -> Bool {
-        return (value as? String) == "getResponse"
+        return (value as? String) == "pollResponse"
     }
 
     private static func n62(_ value: Any) -> Bool {
@@ -713,64 +716,62 @@ enum WireProtocol {
     }
 
     private static func n63(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n64(field2) else { return false }
-        guard let field3 = value["configurationKey"], n28(field3) else { return false }
-        guard let field4 = value["requestToken"], n62(field4) else { return false }
-        return true
+        guard let value = value as? String else { return false }
+        return value == "none" || value == "quiet" || value == "interactive"
     }
 
     private static func n64(_ value: Any) -> Bool {
-        return (value as? String) == "acknowledgeResponse"
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
+        guard let field2 = value["subject"], n65(field2) else { return false }
+        guard let field3 = value["configurationKey"], n28(field3) else { return false }
+        guard let field4 = value["requestToken"], n62(field4) else { return false }
+        return true
     }
 
     private static func n65(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n66(field2) else { return false }
-        guard let field3 = value["configurationKey"], n28(field3) else { return false }
-        guard let field4 = value["requestToken"], n62(field4) else { return false }
-        return true
+        return (value as? String) == "acknowledgeResponse"
     }
 
     private static func n66(_ value: Any) -> Bool {
-        return (value as? String) == "showApproval"
-    }
-
-    private static func n67(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n68(field2) else { return false }
+        guard let field2 = value["subject"], n67(field2) else { return false }
         guard let field3 = value["configurationKey"], n28(field3) else { return false }
         guard let field4 = value["requestToken"], n62(field4) else { return false }
         return true
+    }
+
+    private static func n67(_ value: Any) -> Bool {
+        return (value as? String) == "showApproval"
     }
 
     private static func n68(_ value: Any) -> Bool {
-        return (value as? String) == "prepareResponseDelivery"
-    }
-
-    private static func n69(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "configurationKey", "requestToken", "allowDelivery"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n70(field2) else { return false }
-        guard let field3 = value["configurationKey"], n28(field3) else { return false }
-        guard let field4 = value["requestToken"], n62(field4) else { return false }
-        guard let field5 = value["allowDelivery"], n71(field5) else { return false }
+        guard let field2 = value["subject"], n69(field2) else { return false }
+        guard let field3 = value["requestToken"], n62(field3) else { return false }
         return true
     }
 
+    private static func n69(_ value: Any) -> Bool {
+        return (value as? String) == "getApprovalState"
+    }
+
     private static func n70(_ value: Any) -> Bool {
-        return (value as? String) == "maintainRequest"
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
+        guard let field2 = value["subject"], n71(field2) else { return false }
+        guard let field3 = value["requestToken"], n62(field3) else { return false }
+        return true
     }
 
     private static func n71(_ value: Any) -> Bool {
-        return boolean(value) != nil
+        return (value as? String) == "retryApproval"
     }
 
     private static func n72(_ value: Any) -> Bool {
@@ -783,235 +784,251 @@ enum WireProtocol {
     }
 
     private static func n73(_ value: Any) -> Bool {
-        return (value as? String) == "getApprovalState"
+        return (value as? String) == "rejectRequest"
     }
 
     private static func n74(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken", "reviewToken", "payload"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
         guard let field2 = value["subject"], n75(field2) else { return false }
         guard let field3 = value["requestToken"], n62(field3) else { return false }
+        guard let field4 = value["reviewToken"], n62(field4) else { return false }
+        guard let field5 = value["payload"], n76(field5) else { return false }
         return true
     }
 
     private static func n75(_ value: Any) -> Bool {
-        return (value as? String) == "retryApproval"
-    }
-
-    private static func n76(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n77(field2) else { return false }
-        guard let field3 = value["requestToken"], n62(field3) else { return false }
-        return true
-    }
-
-    private static func n77(_ value: Any) -> Bool {
-        return (value as? String) == "rejectRequest"
-    }
-
-    private static func n78(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken", "reviewToken", "payload"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n79(field2) else { return false }
-        guard let field3 = value["requestToken"], n62(field3) else { return false }
-        guard let field4 = value["reviewToken"], n62(field4) else { return false }
-        guard let field5 = value["payload"], n80(field5) else { return false }
-        return true
-    }
-
-    private static func n79(_ value: Any) -> Bool {
         return (value as? String) == "approveRequest"
     }
 
-    private static func n80(_ value: Any) -> Bool {
+    private static func n76(_ value: Any) -> Bool {
         return n29(value)
     }
 
-    private static func n81(_ value: Any) -> Bool {
+    private static func n77(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken", "reviewToken", "payload"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n82(field2) else { return false }
+        guard let field2 = value["subject"], n78(field2) else { return false }
         guard let field3 = value["requestToken"], n62(field3) else { return false }
         guard let field4 = value["reviewToken"], n62(field4) else { return false }
-        guard let field5 = value["payload"], n83(field5) else { return false }
+        guard let field5 = value["payload"], n79(field5) else { return false }
         return true
     }
 
-    private static func n82(_ value: Any) -> Bool {
+    private static func n78(_ value: Any) -> Bool {
         return (value as? String) == "setTransactionSpeed"
     }
 
-    private static func n83(_ value: Any) -> Bool {
+    private static func n79(_ value: Any) -> Bool {
         return n33(value)
     }
 
-    private static func n84(_ value: Any) -> Bool {
+    private static func n80(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken", "reviewToken", "payload"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n85(field2) else { return false }
+        guard let field2 = value["subject"], n81(field2) else { return false }
         guard let field3 = value["requestToken"], n62(field3) else { return false }
         guard let field4 = value["reviewToken"], n62(field4) else { return false }
-        guard let field5 = value["payload"], n86(field5) else { return false }
+        guard let field5 = value["payload"], n82(field5) else { return false }
         return true
     }
 
-    private static func n85(_ value: Any) -> Bool {
+    private static func n81(_ value: Any) -> Bool {
         return (value as? String) == "applyTransactionEdits"
     }
 
-    private static func n86(_ value: Any) -> Bool {
+    private static func n82(_ value: Any) -> Bool {
         return n36(value)
     }
 
-    private static func n87(_ value: Any) -> Bool {
+    private static func n83(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "subject", "requestToken", "reviewToken", "payload"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["subject"], n88(field2) else { return false }
+        guard let field2 = value["subject"], n84(field2) else { return false }
         guard let field3 = value["requestToken"], n62(field3) else { return false }
         guard let field4 = value["reviewToken"], n62(field4) else { return false }
-        guard let field5 = value["payload"], n89(field5) else { return false }
+        guard let field5 = value["payload"], n85(field5) else { return false }
         return true
     }
 
-    private static func n88(_ value: Any) -> Bool {
+    private static func n84(_ value: Any) -> Bool {
         return (value as? String) == "resolveApprovalAlert"
     }
 
-    private static func n89(_ value: Any) -> Bool {
+    private static func n85(_ value: Any) -> Bool {
         return n41(value)
     }
 
-    private static func n90(_ value: Any) -> Bool {
+    private static func n86(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["address"], optional: ["chainId", "object"]) else { return false }
         guard let field0 = value["address"], n17(field0) else { return false }
-        if let field = value["chainId"], !n91(field) { return false }
-        if let field = value["object"], !n92(field) { return false }
+        if let field = value["chainId"], !n87(field) { return false }
+        if let field = value["object"], !n88(field) { return false }
         return true
     }
 
-    private static func n91(_ value: Any) -> Bool {
+    private static func n87(_ value: Any) -> Bool {
         return n17(value) || n25(value)
     }
 
-    private static func n92(_ value: Any) -> Bool {
+    private static func n88(_ value: Any) -> Bool {
         return true
     }
 
-    private static func n93(_ value: Any) -> Bool {
+    private static func n89(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: [], optional: ["id", "params", "method"]) else { return false }
         if let field = value["id"], !n45(field) { return false }
-        if let field = value["params"], !n92(field) { return false }
+        if let field = value["params"], !n88(field) { return false }
         if let field = value["method"], !n17(field) { return false }
         return true
     }
 
-    private static func n94(_ value: Any) -> Bool {
+    private static func n90(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["publicKey", "object"], optional: []) else { return false }
         guard let field0 = value["publicKey"], n17(field0) else { return false }
-        guard let field1 = value["object"], n95(field1) else { return false }
+        guard let field1 = value["object"], n91(field1) else { return false }
         return true
     }
 
-    private static func n95(_ value: Any) -> Bool {
-        return n93(value)
+    private static func n91(_ value: Any) -> Bool {
+        return n89(value)
     }
 
-    private static func n96(_ value: Any) -> Bool {
-        return n97(value) || n100(value)
+    private static func n92(_ value: Any) -> Bool {
+        return n93(value) || n96(value)
     }
 
-    private static func n97(_ value: Any) -> Bool {
+    private static func n93(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["provider", "results", "chainId"], optional: []) else { return false }
-        guard let field0 = value["provider"], n98(field0) else { return false }
-        guard let field1 = value["results"], n99(field1) else { return false }
+        guard let field0 = value["provider"], n94(field0) else { return false }
+        guard let field1 = value["results"], n95(field1) else { return false }
         guard let field2 = value["chainId"], n17(field2) else { return false }
         return true
     }
 
-    private static func n98(_ value: Any) -> Bool {
+    private static func n94(_ value: Any) -> Bool {
         return (value as? String) == "ethereum"
     }
 
-    private static func n99(_ value: Any) -> Bool {
+    private static func n95(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 0 else { return false }
         return values.allSatisfy { n17($0) }
     }
 
-    private static func n100(_ value: Any) -> Bool {
+    private static func n96(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["provider", "publicKey"], optional: []) else { return false }
-        guard let field0 = value["provider"], n101(field0) else { return false }
+        guard let field0 = value["provider"], n97(field0) else { return false }
         guard let field1 = value["publicKey"], n17(field1) else { return false }
         return true
     }
 
-    private static func n101(_ value: Any) -> Bool {
+    private static func n97(_ value: Any) -> Bool {
         return (value as? String) == "solana"
     }
 
-    private static func n102(_ value: Any) -> Bool {
+    private static func n98(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: [], optional: ["latestConfigurations"]) else { return false }
-        if let field = value["latestConfigurations"], !n103(field) { return false }
+        if let field = value["latestConfigurations"], !n99(field) { return false }
+        return true
+    }
+
+    private static func n99(_ value: Any) -> Bool {
+        guard let values = value as? [Any], values.count >= 0 else { return false }
+        return values.allSatisfy { n100($0) }
+    }
+
+    private static func n100(_ value: Any) -> Bool {
+        return n92(value)
+    }
+
+    private static func n101(_ value: Any) -> Bool {
+        return n102(value) || n105(value)
+    }
+
+    private static func n102(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "provider", "name", "body"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["provider"], n94(field1) else { return false }
+        guard let field2 = value["name"], n103(field2) else { return false }
+        guard let field3 = value["body"], n104(field3) else { return false }
         return true
     }
 
     private static func n103(_ value: Any) -> Bool {
-        guard let values = value as? [Any], values.count >= 0 else { return false }
-        return values.allSatisfy { n104($0) }
-    }
-
-    private static func n104(_ value: Any) -> Bool {
-        return n96(value)
-    }
-
-    private static func n105(_ value: Any) -> Bool {
-        return n106(value) || n109(value)
-    }
-
-    private static func n106(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "provider", "name", "body"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["provider"], n98(field1) else { return false }
-        guard let field2 = value["name"], n107(field2) else { return false }
-        guard let field3 = value["body"], n108(field3) else { return false }
-        return true
-    }
-
-    private static func n107(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "signTransaction" || value == "signPersonalMessage" || value == "signMessage" || value == "signTypedMessage" || value == "ecRecover" || value == "requestAccounts" || value == "addEthereumChain" || value == "switchEthereumChain"
     }
 
-    private static func n108(_ value: Any) -> Bool {
-        return n90(value)
+    private static func n104(_ value: Any) -> Bool {
+        return n86(value)
     }
 
-    private static func n109(_ value: Any) -> Bool {
+    private static func n105(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "provider", "name", "body"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["provider"], n101(field1) else { return false }
-        guard let field2 = value["name"], n110(field2) else { return false }
-        guard let field3 = value["body"], n111(field3) else { return false }
+        guard let field1 = value["provider"], n97(field1) else { return false }
+        guard let field2 = value["name"], n106(field2) else { return false }
+        guard let field3 = value["body"], n107(field3) else { return false }
         return true
     }
 
-    private static func n110(_ value: Any) -> Bool {
+    private static func n106(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "connect" || value == "signMessage" || value == "signTransaction" || value == "signAllTransactions" || value == "signAndSendTransaction"
     }
 
+    private static func n107(_ value: Any) -> Bool {
+        return n90(value)
+    }
+
+    private static func n108(_ value: Any) -> Bool {
+        return n109(value) || n112(value) || n113(value)
+    }
+
+    private static func n109(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
+        guard let field2 = value["host"], n28(field2) else { return false }
+        guard let field3 = value["configurationKey"], n28(field3) else { return false }
+        guard let field4 = value["enqueueAttempt"], n58(field4) else { return false }
+        guard let field5 = value["admissionDeadline"], n110(field5) else { return false }
+        guard let field6 = value["authority"], n59(field6) else { return false }
+        guard let field7 = value["provider"], n94(field7) else { return false }
+        guard let field8 = value["name"], n103(field8) else { return false }
+        guard let field9 = value["body"], n104(field9) else { return false }
+        if let field = value["favicon"], !n87(field) { return false }
+        if let field = value["replayOnly"], !n111(field) { return false }
+        return true
+    }
+
+    private static func n110(_ value: Any) -> Bool {
+        return n2(value)
+    }
+
     private static func n111(_ value: Any) -> Bool {
-        return n94(value)
+        return boolean(value) != nil
     }
 
     private static func n112(_ value: Any) -> Bool {
-        return n113(value) || n115(value) || n116(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
+        guard let field2 = value["host"], n28(field2) else { return false }
+        guard let field3 = value["configurationKey"], n28(field3) else { return false }
+        guard let field4 = value["enqueueAttempt"], n58(field4) else { return false }
+        guard let field5 = value["admissionDeadline"], n110(field5) else { return false }
+        guard let field6 = value["authority"], n59(field6) else { return false }
+        guard let field7 = value["provider"], n97(field7) else { return false }
+        guard let field8 = value["name"], n106(field8) else { return false }
+        guard let field9 = value["body"], n107(field9) else { return false }
+        if let field = value["favicon"], !n87(field) { return false }
+        if let field = value["replayOnly"], !n111(field) { return false }
+        return true
     }
 
     private static func n113(_ value: Any) -> Bool {
@@ -1021,417 +1038,387 @@ enum WireProtocol {
         guard let field2 = value["host"], n28(field2) else { return false }
         guard let field3 = value["configurationKey"], n28(field3) else { return false }
         guard let field4 = value["enqueueAttempt"], n58(field4) else { return false }
-        guard let field5 = value["admissionDeadline"], n114(field5) else { return false }
+        guard let field5 = value["admissionDeadline"], n110(field5) else { return false }
         guard let field6 = value["authority"], n59(field6) else { return false }
-        guard let field7 = value["provider"], n98(field7) else { return false }
-        guard let field8 = value["name"], n107(field8) else { return false }
-        guard let field9 = value["body"], n108(field9) else { return false }
-        if let field = value["favicon"], !n91(field) { return false }
-        if let field = value["replayOnly"], !n71(field) { return false }
+        guard let field7 = value["provider"], n114(field7) else { return false }
+        guard let field8 = value["name"], n115(field8) else { return false }
+        guard let field9 = value["body"], n116(field9) else { return false }
+        if let field = value["favicon"], !n87(field) { return false }
+        if let field = value["replayOnly"], !n111(field) { return false }
         return true
     }
 
     private static func n114(_ value: Any) -> Bool {
-        return n2(value)
-    }
-
-    private static func n115(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["host"], n28(field2) else { return false }
-        guard let field3 = value["configurationKey"], n28(field3) else { return false }
-        guard let field4 = value["enqueueAttempt"], n58(field4) else { return false }
-        guard let field5 = value["admissionDeadline"], n114(field5) else { return false }
-        guard let field6 = value["authority"], n59(field6) else { return false }
-        guard let field7 = value["provider"], n101(field7) else { return false }
-        guard let field8 = value["name"], n110(field8) else { return false }
-        guard let field9 = value["body"], n111(field9) else { return false }
-        if let field = value["favicon"], !n91(field) { return false }
-        if let field = value["replayOnly"], !n71(field) { return false }
-        return true
-    }
-
-    private static func n116(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority", "provider", "name", "body"], optional: ["favicon", "replayOnly"]) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["workflowVersion"], n46(field1) else { return false }
-        guard let field2 = value["host"], n28(field2) else { return false }
-        guard let field3 = value["configurationKey"], n28(field3) else { return false }
-        guard let field4 = value["enqueueAttempt"], n58(field4) else { return false }
-        guard let field5 = value["admissionDeadline"], n114(field5) else { return false }
-        guard let field6 = value["authority"], n59(field6) else { return false }
-        guard let field7 = value["provider"], n117(field7) else { return false }
-        guard let field8 = value["name"], n118(field8) else { return false }
-        guard let field9 = value["body"], n119(field9) else { return false }
-        if let field = value["favicon"], !n91(field) { return false }
-        if let field = value["replayOnly"], !n71(field) { return false }
-        return true
-    }
-
-    private static func n117(_ value: Any) -> Bool {
         return (value as? String) == "unknown"
     }
 
-    private static func n118(_ value: Any) -> Bool {
+    private static func n115(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "switchAccount"
     }
 
-    private static func n119(_ value: Any) -> Bool {
-        return n102(value)
+    private static func n116(_ value: Any) -> Bool {
+        return n98(value)
     }
 
-    private static func n120(_ value: Any) -> Bool {
+    private static func n117(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["code", "message"], optional: ["data"]) else { return false }
-        guard let field0 = value["code"], n121(field0) else { return false }
+        guard let field0 = value["code"], n118(field0) else { return false }
         guard let field1 = value["message"], n17(field1) else { return false }
-        if let field = value["data"], !n92(field) { return false }
+        if let field = value["data"], !n88(field) { return false }
         return true
     }
 
-    private static func n121(_ value: Any) -> Bool {
+    private static func n118(_ value: Any) -> Bool {
         return n314(value)
     }
 
-    private static func n122(_ value: Any) -> Bool {
-        return n25(value) || n17(value) || n99(value) || n123(value)
+    private static func n119(_ value: Any) -> Bool {
+        return n25(value) || n17(value) || n95(value) || n120(value)
     }
 
-    private static func n123(_ value: Any) -> Bool {
+    private static func n120(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["publicKey"], optional: []) else { return false }
         guard let field0 = value["publicKey"], n17(field0) else { return false }
         return true
     }
 
-    private static func n124(_ value: Any) -> Bool {
-        return n125(value) || n129(value) || n132(value) || n135(value)
+    private static func n121(_ value: Any) -> Bool {
+        return n122(value) || n126(value) || n129(value) || n132(value)
     }
 
-    private static func n125(_ value: Any) -> Bool {
+    private static func n122(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "approvalCommitted", "kind", "result"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["name"], n126(field1) else { return false }
+        guard let field1 = value["name"], n123(field1) else { return false }
         guard let field2 = value["provider"], n27(field2) else { return false }
-        guard let field3 = value["approvalCommitted"], n71(field3) else { return false }
-        guard let field4 = value["kind"], n127(field4) else { return false }
-        guard let field5 = value["result"], n128(field5) else { return false }
+        guard let field3 = value["approvalCommitted"], n111(field3) else { return false }
+        guard let field4 = value["kind"], n124(field4) else { return false }
+        guard let field5 = value["result"], n125(field5) else { return false }
         return true
     }
 
-    private static func n126(_ value: Any) -> Bool {
+    private static func n123(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value != "switchAccount"
     }
 
-    private static func n127(_ value: Any) -> Bool {
+    private static func n124(_ value: Any) -> Bool {
         return (value as? String) == "result"
     }
 
-    private static func n128(_ value: Any) -> Bool {
-        return n122(value)
+    private static func n125(_ value: Any) -> Bool {
+        return n119(value)
     }
 
-    private static func n129(_ value: Any) -> Bool {
+    private static func n126(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "approvalCommitted", "kind", "error", "authorizationFailure"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["name"], n126(field1) else { return false }
+        guard let field1 = value["name"], n123(field1) else { return false }
         guard let field2 = value["provider"], n27(field2) else { return false }
-        guard let field3 = value["approvalCommitted"], n71(field3) else { return false }
-        guard let field4 = value["kind"], n130(field4) else { return false }
-        guard let field5 = value["error"], n131(field5) else { return false }
-        guard let field6 = value["authorizationFailure"], n71(field6) else { return false }
+        guard let field3 = value["approvalCommitted"], n111(field3) else { return false }
+        guard let field4 = value["kind"], n127(field4) else { return false }
+        guard let field5 = value["error"], n128(field5) else { return false }
+        guard let field6 = value["authorizationFailure"], n111(field6) else { return false }
         return true
     }
 
-    private static func n130(_ value: Any) -> Bool {
+    private static func n127(_ value: Any) -> Bool {
         return (value as? String) == "error"
     }
 
-    private static func n131(_ value: Any) -> Bool {
-        return n120(value)
+    private static func n128(_ value: Any) -> Bool {
+        return n117(value)
     }
 
-    private static func n132(_ value: Any) -> Bool {
+    private static func n129(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "approvalCommitted", "kind", "result"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["name"], n133(field1) else { return false }
-        guard let field2 = value["provider"], n134(field2) else { return false }
-        guard let field3 = value["approvalCommitted"], n71(field3) else { return false }
-        guard let field4 = value["kind"], n127(field4) else { return false }
+        guard let field1 = value["name"], n130(field1) else { return false }
+        guard let field2 = value["provider"], n131(field2) else { return false }
+        guard let field3 = value["approvalCommitted"], n111(field3) else { return false }
+        guard let field4 = value["kind"], n124(field4) else { return false }
         guard let field5 = value["result"], n25(field5) else { return false }
         return true
     }
 
-    private static func n133(_ value: Any) -> Bool {
+    private static func n130(_ value: Any) -> Bool {
         return (value as? String) == "switchAccount"
     }
 
-    private static func n134(_ value: Any) -> Bool {
+    private static func n131(_ value: Any) -> Bool {
         return (value as? String) == "multiple"
     }
 
-    private static func n135(_ value: Any) -> Bool {
+    private static func n132(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "approvalCommitted", "kind", "error", "authorizationFailure"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["name"], n133(field1) else { return false }
-        guard let field2 = value["provider"], n134(field2) else { return false }
-        guard let field3 = value["approvalCommitted"], n71(field3) else { return false }
-        guard let field4 = value["kind"], n130(field4) else { return false }
-        guard let field5 = value["error"], n136(field5) else { return false }
-        guard let field6 = value["authorizationFailure"], n71(field6) else { return false }
+        guard let field1 = value["name"], n130(field1) else { return false }
+        guard let field2 = value["provider"], n131(field2) else { return false }
+        guard let field3 = value["approvalCommitted"], n111(field3) else { return false }
+        guard let field4 = value["kind"], n127(field4) else { return false }
+        guard let field5 = value["error"], n133(field5) else { return false }
+        guard let field6 = value["authorizationFailure"], n111(field6) else { return false }
+        return true
+    }
+
+    private static func n133(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["code", "message"], optional: ["data"]) else { return false }
+        guard let field0 = value["code"], n118(field0) else { return false }
+        guard let field1 = value["message"], n28(field1) else { return false }
+        if let field = value["data"], !n88(field) { return false }
+        return true
+    }
+
+    private static func n134(_ value: Any) -> Bool {
+        return n135(value) || n138(value) || n140(value) || n142(value)
+    }
+
+    private static func n135(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["kind", "state"], optional: []) else { return false }
+        guard let field0 = value["kind"], n136(field0) else { return false }
+        guard let field1 = value["state"], n137(field1) else { return false }
         return true
     }
 
     private static func n136(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["code", "message"], optional: ["data"]) else { return false }
-        guard let field0 = value["code"], n121(field0) else { return false }
-        guard let field1 = value["message"], n28(field1) else { return false }
-        if let field = value["data"], !n92(field) { return false }
-        return true
+        return (value as? String) == "configuration"
     }
 
     private static func n137(_ value: Any) -> Bool {
-        return n138(value) || n141(value) || n143(value) || n145(value)
+        return n21(value)
     }
 
     private static func n138(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["kind", "state"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["kind", "error"], optional: []) else { return false }
         guard let field0 = value["kind"], n139(field0) else { return false }
-        guard let field1 = value["state"], n140(field1) else { return false }
+        guard let field1 = value["error"], n128(field1) else { return false }
         return true
     }
 
     private static func n139(_ value: Any) -> Bool {
-        return (value as? String) == "configuration"
-    }
-
-    private static func n140(_ value: Any) -> Bool {
-        return n21(value)
-    }
-
-    private static func n141(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["kind", "error"], optional: []) else { return false }
-        guard let field0 = value["kind"], n142(field0) else { return false }
-        guard let field1 = value["error"], n131(field1) else { return false }
-        return true
-    }
-
-    private static func n142(_ value: Any) -> Bool {
         return (value as? String) == "configurationError"
     }
 
-    private static func n143(_ value: Any) -> Bool {
+    private static func n140(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "state", "kind", "result", "approvalCommitted"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["name"], n91(field1) else { return false }
+        guard let field1 = value["name"], n87(field1) else { return false }
         guard let field2 = value["provider"], n27(field2) else { return false }
-        guard let field3 = value["state"], n144(field3) else { return false }
+        guard let field3 = value["state"], n141(field3) else { return false }
+        guard let field4 = value["kind"], n124(field4) else { return false }
+        guard let field5 = value["result"], n88(field5) else { return false }
+        guard let field6 = value["approvalCommitted"], n111(field6) else { return false }
+        return true
+    }
+
+    private static func n141(_ value: Any) -> Bool {
+        return n137(value) || n25(value)
+    }
+
+    private static func n142(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "state", "kind", "error"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["name"], n87(field1) else { return false }
+        guard let field2 = value["provider"], n27(field2) else { return false }
+        guard let field3 = value["state"], n141(field3) else { return false }
         guard let field4 = value["kind"], n127(field4) else { return false }
-        guard let field5 = value["result"], n92(field5) else { return false }
-        guard let field6 = value["approvalCommitted"], n71(field6) else { return false }
+        guard let field5 = value["error"], n128(field5) else { return false }
+        return true
+    }
+
+    private static func n143(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "requestToken", "approvalRequired", "admissionKind", "state"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["requestToken"], n62(field1) else { return false }
+        guard let field2 = value["approvalRequired"], n111(field2) else { return false }
+        guard let field3 = value["admissionKind"], n144(field3) else { return false }
+        guard let field4 = value["state"], n137(field4) else { return false }
         return true
     }
 
     private static func n144(_ value: Any) -> Bool {
-        return n140(value) || n25(value)
-    }
-
-    private static func n145(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "name", "provider", "state", "kind", "error"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["name"], n91(field1) else { return false }
-        guard let field2 = value["provider"], n27(field2) else { return false }
-        guard let field3 = value["state"], n144(field3) else { return false }
-        guard let field4 = value["kind"], n130(field4) else { return false }
-        guard let field5 = value["error"], n131(field5) else { return false }
-        return true
-    }
-
-    private static func n146(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "requestToken", "approvalRequired", "admissionKind", "state"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["requestToken"], n62(field1) else { return false }
-        guard let field2 = value["approvalRequired"], n71(field2) else { return false }
-        guard let field3 = value["admissionKind"], n147(field3) else { return false }
-        guard let field4 = value["state"], n140(field4) else { return false }
-        return true
-    }
-
-    private static func n147(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "new" || value == "replay" || value == "coalesced"
     }
 
-    private static func n148(_ value: Any) -> Bool {
-        return n146(value)
+    private static func n145(_ value: Any) -> Bool {
+        return n143(value)
     }
 
-    private static func n149(_ value: Any) -> Bool {
+    private static func n146(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "response", "state"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["response"], n150(field1) else { return false }
-        guard let field2 = value["state"], n140(field2) else { return false }
+        guard let field1 = value["response"], n147(field1) else { return false }
+        guard let field2 = value["state"], n137(field2) else { return false }
         return true
     }
 
+    private static func n147(_ value: Any) -> Bool {
+        return n121(value)
+    }
+
+    private static func n148(_ value: Any) -> Bool {
+        return n149(value) || n150(value) || n152(value) || n153(value)
+    }
+
+    private static func n149(_ value: Any) -> Bool {
+        return n146(value)
+    }
+
     private static func n150(_ value: Any) -> Bool {
-        return n124(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "pending"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["pending"], n151(field1) else { return false }
+        return true
     }
 
     private static func n151(_ value: Any) -> Bool {
-        return n152(value) || n154(value) || n155(value) || n156(value)
+        return boolean(value) == true
     }
 
     private static func n152(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "pending"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "missing"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["pending"], n153(field1) else { return false }
+        guard let field1 = value["missing"], n151(field1) else { return false }
         return true
     }
 
     private static func n153(_ value: Any) -> Bool {
-        return boolean(value) == true
-    }
-
-    private static func n154(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "ready"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "unavailable"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["ready"], n153(field1) else { return false }
+        guard let field1 = value["unavailable"], n151(field1) else { return false }
         return true
     }
 
+    private static func n154(_ value: Any) -> Bool {
+        return n150(value) || n155(value) || n152(value) || n153(value)
+    }
+
     private static func n155(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "missing"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "ready"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["missing"], n153(field1) else { return false }
+        guard let field1 = value["ready"], n151(field1) else { return false }
         return true
     }
 
     private static func n156(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "unavailable"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["unavailable"], n153(field1) else { return false }
-        return true
+        return n157(value) || n153(value)
     }
 
     private static func n157(_ value: Any) -> Bool {
-        return n158(value) || n156(value)
-    }
-
-    private static func n158(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["state"], n140(field1) else { return false }
+        guard let field1 = value["state"], n137(field1) else { return false }
         return true
     }
 
+    private static func n158(_ value: Any) -> Bool {
+        return n159(value) || n160(value) || n153(value)
+    }
+
     private static func n159(_ value: Any) -> Bool {
-        return n160(value) || n161(value) || n156(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state", "revoked"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["state"], n137(field1) else { return false }
+        guard let field2 = value["revoked"], n151(field2) else { return false }
+        return true
     }
 
     private static func n160(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state", "revoked"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state", "stale"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["state"], n140(field1) else { return false }
-        guard let field2 = value["revoked"], n153(field2) else { return false }
+        guard let field1 = value["state"], n137(field1) else { return false }
+        guard let field2 = value["stale"], n151(field2) else { return false }
         return true
     }
 
     private static func n161(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state", "stale"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["state"], n140(field1) else { return false }
-        guard let field2 = value["stale"], n153(field2) else { return false }
-        return true
+        return n162(value) || n152(value)
     }
 
     private static func n162(_ value: Any) -> Bool {
-        return n163(value) || n155(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "acknowledged"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["acknowledged"], n151(field1) else { return false }
+        return true
     }
 
     private static func n163(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "acknowledged"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["acknowledged"], n153(field1) else { return false }
-        return true
+        return n164(value) || n165(value)
     }
 
     private static func n164(_ value: Any) -> Bool {
-        return n165(value) || n166(value)
-    }
-
-    private static func n165(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "opened"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["opened"], n71(field1) else { return false }
+        guard let field1 = value["opened"], n111(field1) else { return false }
         return true
     }
 
-    private static func n166(_ value: Any) -> Bool {
-        return n151(value)
+    private static func n165(_ value: Any) -> Bool {
+        return n154(value)
     }
 
-    private static func n167(_ value: Any) -> Bool {
+    private static func n166(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "requestToken", "configurationKey", "manual", "state"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["requestToken"], n62(field1) else { return false }
         guard let field2 = value["configurationKey"], n28(field2) else { return false }
-        guard let field3 = value["manual"], n71(field3) else { return false }
-        guard let field4 = value["state"], n168(field4) else { return false }
+        guard let field3 = value["manual"], n111(field3) else { return false }
+        guard let field4 = value["state"], n167(field4) else { return false }
         return true
     }
 
-    private static func n168(_ value: Any) -> Bool {
+    private static func n167(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "pending" || value == "approved" || value == "completed"
     }
 
+    private static func n168(_ value: Any) -> Bool {
+        return n169(value) || n153(value)
+    }
+
     private static func n169(_ value: Any) -> Bool {
-        return n170(value) || n156(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "requests"], optional: []) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["requests"], n170(field1) else { return false }
+        return true
     }
 
     private static func n170(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "requests"], optional: []) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["requests"], n171(field1) else { return false }
-        return true
+        guard let values = value as? [Any], values.count >= 0, values.count <= 16 else { return false }
+        return values.allSatisfy { n171($0) }
     }
 
     private static func n171(_ value: Any) -> Bool {
-        guard let values = value as? [Any], values.count >= 0, values.count <= 16 else { return false }
-        return values.allSatisfy { n172($0) }
+        return n166(value)
     }
 
     private static func n172(_ value: Any) -> Bool {
-        return n167(value)
+        return n173(value) || n175(value)
     }
 
     private static func n173(_ value: Any) -> Bool {
-        return n174(value) || n176(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "result"], optional: ["jsonrpc"]) else { return false }
+        guard let field0 = value["id"], n45(field0) else { return false }
+        guard let field1 = value["result"], n88(field1) else { return false }
+        if let field = value["jsonrpc"], !n174(field) { return false }
+        return true
     }
 
     private static func n174(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "result"], optional: ["jsonrpc"]) else { return false }
-        guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["result"], n92(field1) else { return false }
-        if let field = value["jsonrpc"], !n175(field) { return false }
-        return true
-    }
-
-    private static func n175(_ value: Any) -> Bool {
         return (value as? String) == "2.0"
     }
 
-    private static func n176(_ value: Any) -> Bool {
+    private static func n175(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "error"], optional: ["jsonrpc"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["error"], n92(field1) else { return false }
-        if let field = value["jsonrpc"], !n175(field) { return false }
+        guard let field1 = value["error"], n88(field1) else { return false }
+        if let field = value["jsonrpc"], !n174(field) { return false }
         return true
     }
 
-    private static func n177(_ value: Any) -> Bool {
+    private static func n176(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["name", "croppedAddress"], optional: ["icon"]) else { return false }
         guard let field0 = value["name"], n17(field0) else { return false }
         guard let field1 = value["croppedAddress"], n17(field1) else { return false }
@@ -1439,7 +1426,7 @@ enum WireProtocol {
         return true
     }
 
-    private static func n178(_ value: Any) -> Bool {
+    private static func n177(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["name", "croppedAddress", "walletId", "address", "coin", "derivationPath", "isSelected"], optional: ["icon"]) else { return false }
         guard let field0 = value["name"], n17(field0) else { return false }
         guard let field1 = value["croppedAddress"], n17(field1) else { return false }
@@ -1447,43 +1434,43 @@ enum WireProtocol {
         guard let field3 = value["address"], n17(field3) else { return false }
         guard let field4 = value["coin"], n27(field4) else { return false }
         guard let field5 = value["derivationPath"], n28(field5) else { return false }
-        guard let field6 = value["isSelected"], n71(field6) else { return false }
+        guard let field6 = value["isSelected"], n111(field6) else { return false }
         if let field = value["icon"], !n17(field) { return false }
         return true
     }
 
-    private static func n179(_ value: Any) -> Bool {
+    private static func n178(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["chainId", "name", "isSelected"], optional: ["isCustom"]) else { return false }
         guard let field0 = value["chainId"], n18(field0) else { return false }
         guard let field1 = value["name"], n17(field1) else { return false }
-        guard let field2 = value["isSelected"], n71(field2) else { return false }
-        if let field = value["isCustom"], !n71(field) { return false }
+        guard let field2 = value["isSelected"], n111(field2) else { return false }
+        if let field = value["isCustom"], !n111(field) { return false }
+        return true
+    }
+
+    private static func n179(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["value", "label", "isSelected"], optional: []) else { return false }
+        guard let field0 = value["value"], n32(field0) else { return false }
+        guard let field1 = value["label"], n17(field1) else { return false }
+        guard let field2 = value["isSelected"], n111(field2) else { return false }
         return true
     }
 
     private static func n180(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["value", "label", "isSelected"], optional: []) else { return false }
-        guard let field0 = value["value"], n32(field0) else { return false }
-        guard let field1 = value["label"], n17(field1) else { return false }
-        guard let field2 = value["isSelected"], n71(field2) else { return false }
-        return true
-    }
-
-    private static func n181(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["visible", "position", "maximum"], optional: []) else { return false }
-        guard let field0 = value["visible"], n71(field0) else { return false }
+        guard let field0 = value["visible"], n111(field0) else { return false }
         guard let field1 = value["position"], n35(field1) else { return false }
         guard let field2 = value["maximum"], n35(field2) else { return false }
         return true
     }
 
-    private static func n182(_ value: Any) -> Bool {
-        return n183(value) || n185(value)
+    private static func n181(_ value: Any) -> Bool {
+        return n182(value) || n184(value)
     }
 
-    private static func n183(_ value: Any) -> Bool {
+    private static func n182(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["usesEIP1559", "nonce", "gasPriceGwei"], optional: ["suggestedGasPriceGwei", "maxPriorityFeePerGasGwei", "maxFeePerGasGwei", "suggestedMaxPriorityFeePerGasGwei", "suggestedMaxFeePerGasGwei"]) else { return false }
-        guard let field0 = value["usesEIP1559"], n184(field0) else { return false }
+        guard let field0 = value["usesEIP1559"], n183(field0) else { return false }
         guard let field1 = value["nonce"], n17(field1) else { return false }
         guard let field2 = value["gasPriceGwei"], n17(field2) else { return false }
         if let field = value["suggestedGasPriceGwei"], !n17(field) { return false }
@@ -1494,13 +1481,13 @@ enum WireProtocol {
         return true
     }
 
-    private static func n184(_ value: Any) -> Bool {
+    private static func n183(_ value: Any) -> Bool {
         return boolean(value) == false
     }
 
-    private static func n185(_ value: Any) -> Bool {
+    private static func n184(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["usesEIP1559", "nonce", "maxPriorityFeePerGasGwei", "maxFeePerGasGwei"], optional: ["suggestedMaxPriorityFeePerGasGwei", "suggestedMaxFeePerGasGwei", "gasPriceGwei", "suggestedGasPriceGwei"]) else { return false }
-        guard let field0 = value["usesEIP1559"], n153(field0) else { return false }
+        guard let field0 = value["usesEIP1559"], n151(field0) else { return false }
         guard let field1 = value["nonce"], n17(field1) else { return false }
         guard let field2 = value["maxPriorityFeePerGasGwei"], n17(field2) else { return false }
         guard let field3 = value["maxFeePerGasGwei"], n17(field3) else { return false }
@@ -1511,126 +1498,130 @@ enum WireProtocol {
         return true
     }
 
-    private static func n186(_ value: Any) -> Bool {
+    private static func n185(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["title", "message", "actions"], optional: []) else { return false }
         guard let field0 = value["title"], n17(field0) else { return false }
         guard let field1 = value["message"], n17(field1) else { return false }
-        guard let field2 = value["actions"], n187(field2) else { return false }
+        guard let field2 = value["actions"], n186(field2) else { return false }
         return true
     }
 
-    private static func n187(_ value: Any) -> Bool {
+    private static func n186(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 1 else { return false }
-        return values.allSatisfy { n188($0) }
+        return values.allSatisfy { n187($0) }
     }
 
-    private static func n188(_ value: Any) -> Bool {
+    private static func n187(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["title", "action"], optional: []) else { return false }
         guard let field0 = value["title"], n17(field0) else { return false }
         guard let field1 = value["action"], n42(field1) else { return false }
         return true
     }
 
-    private static func n189(_ value: Any) -> Bool {
-        return n190(value) || n196(value) || n199(value) || n202(value) || n207(value)
+    private static func n188(_ value: Any) -> Bool {
+        return n189(value) || n195(value) || n198(value) || n201(value) || n206(value)
     }
 
-    private static func n190(_ value: Any) -> Bool {
+    private static func n189(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["reviewToken", "title", "kind", "accounts", "canSelectNetwork", "allowsEmptySelection"], optional: ["networks", "emptyMessage", "primaryTitle"]) else { return false }
         guard let field0 = value["reviewToken"], n62(field0) else { return false }
         guard let field1 = value["title"], n17(field1) else { return false }
-        guard let field2 = value["kind"], n191(field2) else { return false }
-        guard let field3 = value["accounts"], n192(field3) else { return false }
-        guard let field4 = value["canSelectNetwork"], n71(field4) else { return false }
-        guard let field5 = value["allowsEmptySelection"], n71(field5) else { return false }
-        if let field = value["networks"], !n194(field) { return false }
+        guard let field2 = value["kind"], n190(field2) else { return false }
+        guard let field3 = value["accounts"], n191(field3) else { return false }
+        guard let field4 = value["canSelectNetwork"], n111(field4) else { return false }
+        guard let field5 = value["allowsEmptySelection"], n111(field5) else { return false }
+        if let field = value["networks"], !n193(field) { return false }
         if let field = value["emptyMessage"], !n17(field) { return false }
         if let field = value["primaryTitle"], !n17(field) { return false }
         return true
     }
 
-    private static func n191(_ value: Any) -> Bool {
+    private static func n190(_ value: Any) -> Bool {
         return (value as? String) == "accountSelection"
     }
 
+    private static func n191(_ value: Any) -> Bool {
+        guard let values = value as? [Any], values.count >= 0 else { return false }
+        return values.allSatisfy { n192($0) }
+    }
+
     private static func n192(_ value: Any) -> Bool {
-        guard let values = value as? [Any], values.count >= 0 else { return false }
-        return values.allSatisfy { n193($0) }
-    }
-
-    private static func n193(_ value: Any) -> Bool {
-        return n178(value)
-    }
-
-    private static func n194(_ value: Any) -> Bool {
-        guard let values = value as? [Any], values.count >= 0 else { return false }
-        return values.allSatisfy { n195($0) }
-    }
-
-    private static func n195(_ value: Any) -> Bool {
-        return n179(value)
-    }
-
-    private static func n196(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["reviewToken", "title", "kind", "meta", "account"], optional: []) else { return false }
-        guard let field0 = value["reviewToken"], n62(field0) else { return false }
-        guard let field1 = value["title"], n17(field1) else { return false }
-        guard let field2 = value["kind"], n197(field2) else { return false }
-        guard let field3 = value["meta"], n17(field3) else { return false }
-        guard let field4 = value["account"], n198(field4) else { return false }
-        return true
-    }
-
-    private static func n197(_ value: Any) -> Bool {
-        return (value as? String) == "signMessage"
-    }
-
-    private static func n198(_ value: Any) -> Bool {
         return n177(value)
     }
 
-    private static func n199(_ value: Any) -> Bool {
+    private static func n193(_ value: Any) -> Bool {
+        guard let values = value as? [Any], values.count >= 0 else { return false }
+        return values.allSatisfy { n194($0) }
+    }
+
+    private static func n194(_ value: Any) -> Bool {
+        return n178(value)
+    }
+
+    private static func n195(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["reviewToken", "title", "kind", "meta", "account"], optional: []) else { return false }
+        guard let field0 = value["reviewToken"], n62(field0) else { return false }
+        guard let field1 = value["title"], n17(field1) else { return false }
+        guard let field2 = value["kind"], n196(field2) else { return false }
+        guard let field3 = value["meta"], n17(field3) else { return false }
+        guard let field4 = value["account"], n197(field4) else { return false }
+        return true
+    }
+
+    private static func n196(_ value: Any) -> Bool {
+        return (value as? String) == "signMessage"
+    }
+
+    private static func n197(_ value: Any) -> Bool {
+        return n176(value)
+    }
+
+    private static func n198(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["reviewToken", "title", "kind", "meta", "account", "clusters", "requiresClusterSelection"], optional: []) else { return false }
         guard let field0 = value["reviewToken"], n62(field0) else { return false }
         guard let field1 = value["title"], n17(field1) else { return false }
-        guard let field2 = value["kind"], n197(field2) else { return false }
+        guard let field2 = value["kind"], n196(field2) else { return false }
         guard let field3 = value["meta"], n17(field3) else { return false }
-        guard let field4 = value["account"], n198(field4) else { return false }
-        guard let field5 = value["clusters"], n200(field5) else { return false }
-        guard let field6 = value["requiresClusterSelection"], n71(field6) else { return false }
+        guard let field4 = value["account"], n197(field4) else { return false }
+        guard let field5 = value["clusters"], n199(field5) else { return false }
+        guard let field6 = value["requiresClusterSelection"], n111(field6) else { return false }
         return true
+    }
+
+    private static func n199(_ value: Any) -> Bool {
+        guard let values = value as? [Any], values.count >= 1 else { return false }
+        return values.allSatisfy { n200($0) }
     }
 
     private static func n200(_ value: Any) -> Bool {
-        guard let values = value as? [Any], values.count >= 1 else { return false }
-        return values.allSatisfy { n201($0) }
+        return n179(value)
     }
 
     private static func n201(_ value: Any) -> Bool {
-        return n180(value)
-    }
-
-    private static func n202(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["reviewToken", "title", "kind", "account", "networkName", "feeLines", "slider", "editor"], optional: ["balance", "valueLine", "dataInterpretation", "alert", "editorRequestToken", "canBackOffRefresh"]) else { return false }
         guard let field0 = value["reviewToken"], n62(field0) else { return false }
         guard let field1 = value["title"], n17(field1) else { return false }
-        guard let field2 = value["kind"], n203(field2) else { return false }
-        guard let field3 = value["account"], n198(field3) else { return false }
+        guard let field2 = value["kind"], n202(field2) else { return false }
+        guard let field3 = value["account"], n197(field3) else { return false }
         guard let field4 = value["networkName"], n17(field4) else { return false }
-        guard let field5 = value["feeLines"], n99(field5) else { return false }
-        guard let field6 = value["slider"], n204(field6) else { return false }
-        guard let field7 = value["editor"], n205(field7) else { return false }
+        guard let field5 = value["feeLines"], n95(field5) else { return false }
+        guard let field6 = value["slider"], n203(field6) else { return false }
+        guard let field7 = value["editor"], n204(field7) else { return false }
         if let field = value["balance"], !n17(field) { return false }
         if let field = value["valueLine"], !n17(field) { return false }
         if let field = value["dataInterpretation"], !n17(field) { return false }
-        if let field = value["alert"], !n206(field) { return false }
+        if let field = value["alert"], !n205(field) { return false }
         if let field = value["editorRequestToken"], !n12(field) { return false }
-        if let field = value["canBackOffRefresh"], !n71(field) { return false }
+        if let field = value["canBackOffRefresh"], !n111(field) { return false }
         return true
     }
 
-    private static func n203(_ value: Any) -> Bool {
+    private static func n202(_ value: Any) -> Bool {
         return (value as? String) == "sendTransaction"
+    }
+
+    private static func n203(_ value: Any) -> Bool {
+        return n180(value)
     }
 
     private static func n204(_ value: Any) -> Bool {
@@ -1638,100 +1629,96 @@ enum WireProtocol {
     }
 
     private static func n205(_ value: Any) -> Bool {
-        return n182(value)
+        return n185(value)
     }
 
     private static func n206(_ value: Any) -> Bool {
-        return n186(value)
-    }
-
-    private static func n207(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["reviewToken", "title", "kind", "chainName", "rpcURL"], optional: []) else { return false }
         guard let field0 = value["reviewToken"], n62(field0) else { return false }
         guard let field1 = value["title"], n17(field1) else { return false }
-        guard let field2 = value["kind"], n208(field2) else { return false }
+        guard let field2 = value["kind"], n207(field2) else { return false }
         guard let field3 = value["chainName"], n17(field3) else { return false }
         guard let field4 = value["rpcURL"], n17(field4) else { return false }
         return true
     }
 
-    private static func n208(_ value: Any) -> Bool {
+    private static func n207(_ value: Any) -> Bool {
         return (value as? String) == "addChain"
     }
 
-    private static func n209(_ value: Any) -> Bool {
-        return n210(value) || n215(value) || n218(value)
+    private static func n208(_ value: Any) -> Bool {
+        return n209(value) || n214(value) || n217(value)
     }
 
-    private static func n210(_ value: Any) -> Bool {
+    private static func n209(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "host", "state", "actions", "review"], optional: ["error"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["host"], n28(field1) else { return false }
-        guard let field2 = value["state"], n211(field2) else { return false }
-        guard let field3 = value["actions"], n212(field3) else { return false }
-        guard let field4 = value["review"], n214(field4) else { return false }
+        guard let field2 = value["state"], n210(field2) else { return false }
+        guard let field3 = value["actions"], n211(field3) else { return false }
+        guard let field4 = value["review"], n213(field4) else { return false }
         if let field = value["error"], !n17(field) { return false }
         return true
     }
 
-    private static func n211(_ value: Any) -> Bool {
+    private static func n210(_ value: Any) -> Bool {
         return (value as? String) == "review"
     }
 
-    private static func n212(_ value: Any) -> Bool {
+    private static func n211(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 0 else { return false }
-        return values.allSatisfy { n213($0) }
+        return values.allSatisfy { n212($0) }
     }
 
-    private static func n213(_ value: Any) -> Bool {
+    private static func n212(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "approve" || value == "reject" || value == "editTransaction" || value == "setTransactionSpeed" || value == "resolveApprovalAlert"
     }
 
-    private static func n214(_ value: Any) -> Bool {
-        return n189(value)
+    private static func n213(_ value: Any) -> Bool {
+        return n188(value)
     }
 
-    private static func n215(_ value: Any) -> Bool {
+    private static func n214(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state", "actions", "error"], optional: ["host"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["state"], n130(field1) else { return false }
-        guard let field2 = value["actions"], n216(field2) else { return false }
+        guard let field1 = value["state"], n127(field1) else { return false }
+        guard let field2 = value["actions"], n215(field2) else { return false }
         guard let field3 = value["error"], n17(field3) else { return false }
         if let field = value["host"], !n28(field) { return false }
         return true
     }
 
-    private static func n216(_ value: Any) -> Bool {
+    private static func n215(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 1 else { return false }
-        return values.allSatisfy { n217($0) }
+        return values.allSatisfy { n216($0) }
     }
 
-    private static func n217(_ value: Any) -> Bool {
+    private static func n216(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "retry" || value == "reject"
     }
 
-    private static func n218(_ value: Any) -> Bool {
+    private static func n217(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "state", "actions"], optional: ["host"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
-        guard let field1 = value["state"], n219(field1) else { return false }
-        guard let field2 = value["actions"], n220(field2) else { return false }
+        guard let field1 = value["state"], n218(field1) else { return false }
+        guard let field2 = value["actions"], n219(field2) else { return false }
         if let field = value["host"], !n28(field) { return false }
         return true
     }
 
-    private static func n219(_ value: Any) -> Bool {
+    private static func n218(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "missing" || value == "authenticating" || value == "working"
     }
 
-    private static func n220(_ value: Any) -> Bool {
+    private static func n219(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 0, values.count <= 0 else { return false }
         return values.allSatisfy { n17($0) }
     }
 
-    private static func n221(_ value: Any) -> Bool {
+    private static func n220(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "host", "receivedAt", "sequence", "requestToken", "configurationKey", "provider"], optional: ["enqueueAttempt"]) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["host"], n28(field1) else { return false }
@@ -1739,16 +1726,16 @@ enum WireProtocol {
         guard let field3 = value["sequence"], n12(field3) else { return false }
         guard let field4 = value["requestToken"], n62(field4) else { return false }
         guard let field5 = value["configurationKey"], n28(field5) else { return false }
-        guard let field6 = value["provider"], n222(field6) else { return false }
+        guard let field6 = value["provider"], n221(field6) else { return false }
         if let field = value["enqueueAttempt"], !n58(field) { return false }
         return true
     }
 
-    private static func n222(_ value: Any) -> Bool {
+    private static func n221(_ value: Any) -> Bool {
         return n9(value)
     }
 
-    private static func n223(_ value: Any) -> Bool {
+    private static func n222(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "host", "configurationKey", "requestToken"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["host"], n28(field1) else { return false }
@@ -1757,126 +1744,126 @@ enum WireProtocol {
         return true
     }
 
-    private static func n224(_ value: Any) -> Bool {
+    private static func n223(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["requests", "completedResponses"], optional: ["strings", "layoutDirection"]) else { return false }
-        guard let field0 = value["requests"], n225(field0) else { return false }
-        guard let field1 = value["completedResponses"], n227(field1) else { return false }
-        if let field = value["strings"], !n229(field) { return false }
-        if let field = value["layoutDirection"], !n230(field) { return false }
+        guard let field0 = value["requests"], n224(field0) else { return false }
+        guard let field1 = value["completedResponses"], n226(field1) else { return false }
+        if let field = value["strings"], !n228(field) { return false }
+        if let field = value["layoutDirection"], !n229(field) { return false }
         return true
     }
 
-    private static func n225(_ value: Any) -> Bool {
+    private static func n224(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 0 else { return false }
-        return values.allSatisfy { n226($0) }
+        return values.allSatisfy { n225($0) }
+    }
+
+    private static func n225(_ value: Any) -> Bool {
+        return n220(value)
     }
 
     private static func n226(_ value: Any) -> Bool {
-        return n221(value)
+        guard let values = value as? [Any], values.count >= 0 else { return false }
+        return values.allSatisfy { n227($0) }
     }
 
     private static func n227(_ value: Any) -> Bool {
-        guard let values = value as? [Any], values.count >= 0 else { return false }
-        return values.allSatisfy { n228($0) }
+        return n222(value)
     }
 
     private static func n228(_ value: Any) -> Bool {
-        return n223(value)
-    }
-
-    private static func n229(_ value: Any) -> Bool {
         guard let values = value as? [String: Any] else { return false }
         return values.values.allSatisfy { n17($0) }
     }
 
-    private static func n230(_ value: Any) -> Bool {
+    private static func n229(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "ltr" || value == "rtl"
     }
 
+    private static func n230(_ value: Any) -> Bool {
+        return n231(value) || n234(value) || n237(value)
+    }
+
     private static func n231(_ value: Any) -> Bool {
-        return n232(value) || n235(value) || n238(value)
+        guard let value = value as? [String: Any], exactKeys(value, required: ["status", "approval"], optional: ["editsError"]) else { return false }
+        guard let field0 = value["status"], n232(field0) else { return false }
+        guard let field1 = value["approval"], n233(field1) else { return false }
+        if let field = value["editsError"], !n151(field) { return false }
+        return true
     }
 
     private static func n232(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["status", "approval"], optional: ["editsError"]) else { return false }
-        guard let field0 = value["status"], n233(field0) else { return false }
-        guard let field1 = value["approval"], n234(field1) else { return false }
-        if let field = value["editsError"], !n153(field) { return false }
-        return true
-    }
-
-    private static func n233(_ value: Any) -> Bool {
         return (value as? String) == "ok"
     }
 
-    private static func n234(_ value: Any) -> Bool {
-        return n209(value)
+    private static func n233(_ value: Any) -> Bool {
+        return n208(value)
     }
 
-    private static func n235(_ value: Any) -> Bool {
+    private static func n234(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["status", "approval"], optional: []) else { return false }
-        guard let field0 = value["status"], n236(field0) else { return false }
-        guard let field1 = value["approval"], n237(field1) else { return false }
+        guard let field0 = value["status"], n235(field0) else { return false }
+        guard let field1 = value["approval"], n236(field1) else { return false }
         return true
     }
 
-    private static func n236(_ value: Any) -> Bool {
+    private static func n235(_ value: Any) -> Bool {
         return (value as? String) == "ignored"
     }
 
-    private static func n237(_ value: Any) -> Bool {
-        return n234(value) || n25(value)
+    private static func n236(_ value: Any) -> Bool {
+        return n233(value) || n25(value)
     }
 
-    private static func n238(_ value: Any) -> Bool {
+    private static func n237(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["status", "approval"], optional: []) else { return false }
-        guard let field0 = value["status"], n239(field0) else { return false }
+        guard let field0 = value["status"], n238(field0) else { return false }
         guard let field1 = value["approval"], n25(field1) else { return false }
         return true
     }
 
-    private static func n239(_ value: Any) -> Bool {
+    private static func n238(_ value: Any) -> Bool {
         return (value as? String) == "unavailable"
     }
 
+    private static func n239(_ value: Any) -> Bool {
+        return n240(value) || n241(value) || n242(value)
+    }
+
     private static func n240(_ value: Any) -> Bool {
-        return n241(value) || n242(value) || n243(value)
+        return n223(value)
     }
 
     private static func n241(_ value: Any) -> Bool {
-        return n224(value)
+        return n230(value)
     }
 
     private static func n242(_ value: Any) -> Bool {
-        return n231(value)
-    }
-
-    private static func n243(_ value: Any) -> Bool {
         return n313(value)
     }
 
-    private static func n244(_ value: Any) -> Bool {
-        return n245(value) || n246(value)
+    private static func n243(_ value: Any) -> Bool {
+        return n244(value) || n245(value)
     }
 
-    private static func n245(_ value: Any) -> Bool {
+    private static func n244(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["provider", "subject", "id"], optional: []) else { return false }
-        guard let field0 = value["provider"], n98(field0) else { return false }
+        guard let field0 = value["provider"], n94(field0) else { return false }
         guard let field1 = value["subject"], n57(field1) else { return false }
         guard let field2 = value["id"], n45(field2) else { return false }
         return true
     }
 
-    private static func n246(_ value: Any) -> Bool {
+    private static func n245(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["provider", "subject"], optional: ["id"]) else { return false }
-        guard let field0 = value["provider"], n101(field0) else { return false }
+        guard let field0 = value["provider"], n97(field0) else { return false }
         guard let field1 = value["subject"], n57(field1) else { return false }
         if let field = value["id"], !n45(field) { return false }
         return true
     }
 
-    private static func n247(_ value: Any) -> Bool {
+    private static func n246(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["id", "body", "chainId", "subject"], optional: []) else { return false }
         guard let field0 = value["id"], n45(field0) else { return false }
         guard let field1 = value["body"], n17(field1) else { return false }
@@ -1885,193 +1872,193 @@ enum WireProtocol {
         return true
     }
 
-    private static func n248(_ value: Any) -> Bool {
-        return n249(value) || n253(value) || n255(value)
+    private static func n247(_ value: Any) -> Bool {
+        return n248(value) || n252(value) || n254(value)
     }
 
-    private static func n249(_ value: Any) -> Bool {
+    private static func n248(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["direction", "kind", "message", "observedRevision", "providerGeneration"], optional: []) else { return false }
-        guard let field0 = value["direction"], n250(field0) else { return false }
-        guard let field1 = value["kind"], n251(field1) else { return false }
-        guard let field2 = value["message"], n252(field2) else { return false }
+        guard let field0 = value["direction"], n249(field0) else { return false }
+        guard let field1 = value["kind"], n250(field1) else { return false }
+        guard let field2 = value["message"], n251(field2) else { return false }
         guard let field3 = value["observedRevision"], n12(field3) else { return false }
         guard let field4 = value["providerGeneration"], n28(field4) else { return false }
         return true
     }
 
-    private static func n250(_ value: Any) -> Bool {
+    private static func n249(_ value: Any) -> Bool {
         return (value as? String) == "big-wallet-provider-v1"
     }
 
-    private static func n251(_ value: Any) -> Bool {
+    private static func n250(_ value: Any) -> Bool {
         return (value as? String) == "request"
     }
 
-    private static func n252(_ value: Any) -> Bool {
-        return n105(value)
+    private static func n251(_ value: Any) -> Bool {
+        return n101(value)
     }
 
-    private static func n253(_ value: Any) -> Bool {
+    private static func n252(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["direction", "kind", "message", "providerGeneration"], optional: []) else { return false }
-        guard let field0 = value["direction"], n250(field0) else { return false }
+        guard let field0 = value["direction"], n249(field0) else { return false }
         guard let field1 = value["kind"], n53(field1) else { return false }
-        guard let field2 = value["message"], n254(field2) else { return false }
+        guard let field2 = value["message"], n253(field2) else { return false }
         guard let field3 = value["providerGeneration"], n28(field3) else { return false }
         return true
     }
 
-    private static func n254(_ value: Any) -> Bool {
-        return n247(value)
+    private static func n253(_ value: Any) -> Bool {
+        return n246(value)
     }
 
-    private static func n255(_ value: Any) -> Bool {
+    private static func n254(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["direction", "kind", "message", "observedRevision", "providerGeneration"], optional: []) else { return false }
-        guard let field0 = value["direction"], n250(field0) else { return false }
+        guard let field0 = value["direction"], n249(field0) else { return false }
         guard let field1 = value["kind"], n57(field1) else { return false }
-        guard let field2 = value["message"], n256(field2) else { return false }
+        guard let field2 = value["message"], n255(field2) else { return false }
         guard let field3 = value["observedRevision"], n12(field3) else { return false }
         guard let field4 = value["providerGeneration"], n28(field4) else { return false }
         return true
     }
 
-    private static func n256(_ value: Any) -> Bool {
-        return n244(value)
+    private static func n255(_ value: Any) -> Bool {
+        return n243(value)
     }
 
-    private static func n257(_ value: Any) -> Bool {
+    private static func n256(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["direction", "kind", "response", "providerGeneration"], optional: ["id"]) else { return false }
-        guard let field0 = value["direction"], n258(field0) else { return false }
-        guard let field1 = value["kind"], n259(field1) else { return false }
-        guard let field2 = value["response"], n260(field2) else { return false }
+        guard let field0 = value["direction"], n257(field0) else { return false }
+        guard let field1 = value["kind"], n258(field1) else { return false }
+        guard let field2 = value["response"], n259(field2) else { return false }
         guard let field3 = value["providerGeneration"], n28(field3) else { return false }
         if let field = value["id"], !n45(field) { return false }
         return true
     }
 
-    private static func n258(_ value: Any) -> Bool {
+    private static func n257(_ value: Any) -> Bool {
         return (value as? String) == "big-wallet-content-v1"
     }
 
-    private static func n259(_ value: Any) -> Bool {
+    private static func n258(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
         return value == "response" || value == "rpc"
     }
 
+    private static func n259(_ value: Any) -> Bool {
+        return n134(value)
+    }
+
     private static func n260(_ value: Any) -> Bool {
-        return n137(value)
+        return n261(value) || n263(value)
     }
 
     private static func n261(_ value: Any) -> Bool {
-        return n262(value) || n264(value)
-    }
-
-    private static func n262(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n263(field1) else { return false }
+        guard let field1 = value["subject"], n262(field1) else { return false }
         guard let field2 = value["id"], n45(field2) else { return false }
         return true
     }
 
-    private static func n263(_ value: Any) -> Bool {
+    private static func n262(_ value: Any) -> Bool {
         return (value as? String) == "responseReady"
     }
 
-    private static func n264(_ value: Any) -> Bool {
+    private static func n263(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "ids"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n263(field1) else { return false }
-        guard let field2 = value["ids"], n265(field2) else { return false }
+        guard let field1 = value["subject"], n262(field1) else { return false }
+        guard let field2 = value["ids"], n264(field2) else { return false }
         return true
     }
 
-    private static func n265(_ value: Any) -> Bool {
+    private static func n264(_ value: Any) -> Bool {
         guard let values = value as? [Any], values.count >= 1, values.count <= 16 else { return false }
         return values.allSatisfy { n45($0) }
     }
 
-    private static func n266(_ value: Any) -> Bool {
+    private static func n265(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n267(field1) else { return false }
+        guard let field1 = value["subject"], n266(field1) else { return false }
         return true
     }
 
-    private static func n267(_ value: Any) -> Bool {
+    private static func n266(_ value: Any) -> Bool {
         return (value as? String) == "pendingRequestAvailable"
     }
 
-    private static func n268(_ value: Any) -> Bool {
+    private static func n267(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "configurationKey"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n269(field1) else { return false }
+        guard let field1 = value["subject"], n268(field1) else { return false }
         guard let field2 = value["configurationKey"], n28(field2) else { return false }
         return true
     }
 
-    private static func n269(_ value: Any) -> Bool {
+    private static func n268(_ value: Any) -> Bool {
         return (value as? String) == "configurationInvalidated"
     }
 
-    private static func n270(_ value: Any) -> Bool {
+    private static func n269(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "configurationKey", "requestToken", "approvalRequired", "state"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n271(field1) else { return false }
+        guard let field1 = value["subject"], n270(field1) else { return false }
         guard let field2 = value["id"], n45(field2) else { return false }
         guard let field3 = value["configurationKey"], n28(field3) else { return false }
         guard let field4 = value["requestToken"], n62(field4) else { return false }
-        guard let field5 = value["approvalRequired"], n71(field5) else { return false }
-        guard let field6 = value["state"], n140(field6) else { return false }
+        guard let field5 = value["approvalRequired"], n111(field5) else { return false }
+        guard let field6 = value["state"], n137(field6) else { return false }
         return true
     }
 
-    private static func n271(_ value: Any) -> Bool {
+    private static func n270(_ value: Any) -> Bool {
         return (value as? String) == "manualSwitchAcknowledged"
     }
 
-    private static func n272(_ value: Any) -> Bool {
+    private static func n271(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "nonce"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n273(field1) else { return false }
+        guard let field1 = value["subject"], n272(field1) else { return false }
         guard let field2 = value["nonce"], n58(field2) else { return false }
         return true
     }
 
-    private static func n273(_ value: Any) -> Bool {
+    private static func n272(_ value: Any) -> Bool {
         return (value as? String) == "workflowProbe"
     }
 
-    private static func n274(_ value: Any) -> Bool {
+    private static func n273(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "nonce", "buildVersion"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n273(field1) else { return false }
+        guard let field1 = value["subject"], n272(field1) else { return false }
         guard let field2 = value["nonce"], n58(field2) else { return false }
         guard let field3 = value["buildVersion"], n28(field3) else { return false }
         return true
     }
 
-    private static func n275(_ value: Any) -> Bool {
+    private static func n274(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "configurationKey"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n276(field1) else { return false }
+        guard let field1 = value["subject"], n275(field1) else { return false }
         guard let field2 = value["configurationKey"], n28(field2) else { return false }
         return true
     }
 
-    private static func n276(_ value: Any) -> Bool {
+    private static func n275(_ value: Any) -> Bool {
         return (value as? String) == "manualSwitchIntent"
     }
 
-    private static func n277(_ value: Any) -> Bool {
+    private static func n276(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "host", "configurationKey"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n276(field1) else { return false }
+        guard let field1 = value["subject"], n275(field1) else { return false }
         guard let field2 = value["host"], n28(field2) else { return false }
         guard let field3 = value["configurationKey"], n28(field3) else { return false }
         return true
     }
 
-    private static func n278(_ value: Any) -> Bool {
+    private static func n277(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "host", "configurationKey"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
         guard let field1 = value["subject"], n55(field1) else { return false }
@@ -2080,24 +2067,24 @@ enum WireProtocol {
         return true
     }
 
-    private static func n279(_ value: Any) -> Bool {
+    private static func n278(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "message", "host", "configurationKey", "enqueueAttempt", "admissionDeadline", "authority"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n280(field1) else { return false }
-        guard let field2 = value["message"], n252(field2) else { return false }
+        guard let field1 = value["subject"], n279(field1) else { return false }
+        guard let field2 = value["message"], n251(field2) else { return false }
         guard let field3 = value["host"], n28(field3) else { return false }
         guard let field4 = value["configurationKey"], n28(field4) else { return false }
         guard let field5 = value["enqueueAttempt"], n58(field5) else { return false }
-        guard let field6 = value["admissionDeadline"], n114(field6) else { return false }
+        guard let field6 = value["admissionDeadline"], n110(field6) else { return false }
         guard let field7 = value["authority"], n59(field7) else { return false }
         return true
     }
 
-    private static func n280(_ value: Any) -> Bool {
+    private static func n279(_ value: Any) -> Bool {
         return (value as? String) == "message-to-wallet"
     }
 
-    private static func n281(_ value: Any) -> Bool {
+    private static func n280(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "provider", "host", "configurationKey", "attempt", "authority"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
         guard let field1 = value["subject"], n57(field1) else { return false }
@@ -2110,7 +2097,7 @@ enum WireProtocol {
         return true
     }
 
-    private static func n282(_ value: Any) -> Bool {
+    private static func n281(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "body", "chainId"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
         guard let field1 = value["subject"], n53(field1) else { return false }
@@ -2120,21 +2107,25 @@ enum WireProtocol {
         return true
     }
 
-    private static func n283(_ value: Any) -> Bool {
+    private static func n282(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "configurationKey", "requestToken"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
-        guard let field1 = value["subject"], n61(field1) else { return false }
+        guard let field1 = value["subject"], n283(field1) else { return false }
         guard let field2 = value["id"], n45(field2) else { return false }
         guard let field3 = value["configurationKey"], n28(field3) else { return false }
         guard let field4 = value["requestToken"], n62(field4) else { return false }
         return true
     }
 
+    private static func n283(_ value: Any) -> Bool {
+        return (value as? String) == "getResponse"
+    }
+
     private static func n284(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "hasPendingRequests"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n46(field0) else { return false }
         guard let field1 = value["subject"], n285(field1) else { return false }
-        guard let field2 = value["hasPendingRequests"], n71(field2) else { return false }
+        guard let field2 = value["hasPendingRequests"], n111(field2) else { return false }
         return true
     }
 
@@ -2162,27 +2153,27 @@ enum WireProtocol {
     }
 
     private static func n289(_ value: Any) -> Bool {
-        return n282(value)
+        return n281(value)
     }
 
     private static func n290(_ value: Any) -> Bool {
-        return n279(value)
-    }
-
-    private static func n291(_ value: Any) -> Bool {
-        return n277(value)
-    }
-
-    private static func n292(_ value: Any) -> Bool {
-        return n283(value)
-    }
-
-    private static func n293(_ value: Any) -> Bool {
         return n278(value)
     }
 
+    private static func n291(_ value: Any) -> Bool {
+        return n276(value)
+    }
+
+    private static func n292(_ value: Any) -> Bool {
+        return n282(value)
+    }
+
+    private static func n293(_ value: Any) -> Bool {
+        return n277(value)
+    }
+
     private static func n294(_ value: Any) -> Bool {
-        return n281(value)
+        return n280(value)
     }
 
     private static func n295(_ value: Any) -> Bool {
@@ -2198,7 +2189,7 @@ enum WireProtocol {
     }
 
     private static func n298(_ value: Any) -> Bool {
-        return n261(value)
+        return n260(value)
     }
 
     private static func n299(_ value: Any) -> Bool {
@@ -2206,15 +2197,15 @@ enum WireProtocol {
     }
 
     private static func n300(_ value: Any) -> Bool {
-        return n272(value)
+        return n271(value)
     }
 
     private static func n301(_ value: Any) -> Bool {
-        return n275(value)
+        return n274(value)
     }
 
     private static func n302(_ value: Any) -> Bool {
-        return n268(value)
+        return n267(value)
     }
 
     private static func n303(_ value: Any) -> Bool {
@@ -2222,7 +2213,7 @@ enum WireProtocol {
     }
 
     private static func n304(_ value: Any) -> Bool {
-        return n266(value)
+        return n265(value)
     }
 
     private static func n305(_ value: Any) -> Bool {
@@ -2238,7 +2229,7 @@ enum WireProtocol {
     }
 
     private static func n308(_ value: Any) -> Bool {
-        return n248(value)
+        return n247(value)
     }
 
     private static func n309(_ value: Any) -> Bool {
@@ -2259,7 +2250,7 @@ enum WireProtocol {
 
     private static func n313(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["status"], optional: []) else { return false }
-        guard let field0 = value["status"], n239(field0) else { return false }
+        guard let field0 = value["status"], n238(field0) else { return false }
         return true
     }
 
@@ -2269,12 +2260,12 @@ enum WireProtocol {
     }
 
     private static func n315(_ value: Any) -> Bool {
-        return n316(value) || n155(value)
+        return n316(value) || n152(value)
     }
 
     private static func n316(_ value: Any) -> Bool {
         guard let value = value as? [String: Any], exactKeys(value, required: ["applied"], optional: []) else { return false }
-        guard let field0 = value["applied"], n153(field0) else { return false }
+        guard let field0 = value["applied"], n151(field0) else { return false }
         return true
     }
 }

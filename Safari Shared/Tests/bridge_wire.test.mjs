@@ -364,7 +364,7 @@ test("runtime sender policy permits only the complete sender receiver subject ma
     const subjects = new Set([
         ...[...allowed].map(entry => entry.split(":")[2]),
         "consumeResponse",
-        "executeNativeApproval", "getExecutionStatus", "maintainRequest", "prepareResponseDelivery",
+        "executeNativeApproval", "getExecutionStatus", "pollResponse",
         "unknown", "constructor", "__proto__", "toString", "hasOwnProperty", "",
     ]);
     for (const [kind, sender] of Object.entries(runtimeSenders)) {

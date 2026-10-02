@@ -406,17 +406,15 @@
         try { return n54(value, context); } catch {}
         try { return n56(value, context); } catch {}
         try { return n60(value, context); } catch {}
-        try { return n63(value, context); } catch {}
-        try { return n65(value, context); } catch {}
-        try { return n67(value, context); } catch {}
-        try { return n69(value, context); } catch {}
+        try { return n64(value, context); } catch {}
+        try { return n66(value, context); } catch {}
+        try { return n68(value, context); } catch {}
+        try { return n70(value, context); } catch {}
         try { return n72(value, context); } catch {}
         try { return n74(value, context); } catch {}
-        try { return n76(value, context); } catch {}
-        try { return n78(value, context); } catch {}
-        try { return n81(value, context); } catch {}
-        try { return n84(value, context); } catch {}
-        try { return n87(value, context); } catch {}
+        try { return n77(value, context); } catch {}
+        try { return n80(value, context); } catch {}
+        try { return n83(value, context); } catch {}
         return invalid();
     }
 
@@ -540,7 +538,7 @@
     }
 
     function n60(value, context) {
-        record(value, ["id","workflowVersion","subject","configurationKey","requestToken"], []);
+        record(value, ["id","workflowVersion","subject","configurationKey","requestToken","maintenance"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -549,12 +547,13 @@
             put(result, "subject", n61(read(value, "subject"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
+            put(result, "maintenance", n63(read(value, "maintenance"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n61(value, context) {
-        if (value !== "getResponse") { invalid(); } return value;
+        if (value !== "pollResponse") { invalid(); } return value;
     }
 
     function n62(value, context) {
@@ -562,80 +561,77 @@
     }
 
     function n63(value, context) {
-        record(value, ["id","workflowVersion","subject","configurationKey","requestToken"], []);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n64(read(value, "subject"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
-            put(result, "requestToken", n62(read(value, "requestToken"), context));
-            return freeze(result);
-        } finally { context.path = previous; }
+        if (value !== "none" && value !== "quiet" && value !== "interactive") { invalid(); } return value;
     }
 
     function n64(value, context) {
-        if (value !== "acknowledgeResponse") { invalid(); } return value;
+        record(value, ["id","workflowVersion","subject","configurationKey","requestToken"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n45(read(value, "id"), context));
+            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
+            put(result, "subject", n65(read(value, "subject"), context));
+            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
+            put(result, "requestToken", n62(read(value, "requestToken"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
     }
 
     function n65(value, context) {
-        record(value, ["id","workflowVersion","subject","configurationKey","requestToken"], []);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n66(read(value, "subject"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
-            put(result, "requestToken", n62(read(value, "requestToken"), context));
-            return freeze(result);
-        } finally { context.path = previous; }
+        if (value !== "acknowledgeResponse") { invalid(); } return value;
     }
 
     function n66(value, context) {
-        if (value !== "showApproval") { invalid(); } return value;
-    }
-
-    function n67(value, context) {
         record(value, ["id","workflowVersion","subject","configurationKey","requestToken"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n68(read(value, "subject"), context));
+            put(result, "subject", n67(read(value, "subject"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n68(value, context) {
-        if (value !== "prepareResponseDelivery") { invalid(); } return value;
+    function n67(value, context) {
+        if (value !== "showApproval") { invalid(); } return value;
     }
 
-    function n69(value, context) {
-        record(value, ["id","workflowVersion","subject","configurationKey","requestToken","allowDelivery"], []);
+    function n68(value, context) {
+        record(value, ["id","workflowVersion","subject","requestToken"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n70(read(value, "subject"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
+            put(result, "subject", n69(read(value, "subject"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
-            put(result, "allowDelivery", n71(read(value, "allowDelivery"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
+    function n69(value, context) {
+        if (value !== "getApprovalState") { invalid(); } return value;
+    }
+
     function n70(value, context) {
-        if (value !== "maintainRequest") { invalid(); } return value;
+        record(value, ["id","workflowVersion","subject","requestToken"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n45(read(value, "id"), context));
+            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
+            put(result, "subject", n71(read(value, "subject"), context));
+            put(result, "requestToken", n62(read(value, "requestToken"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
     }
 
     function n71(value, context) {
-        if (typeof value !== "boolean") { invalid(); } return value;
+        if (value !== "retryApproval") { invalid(); } return value;
     }
 
     function n72(value, context) {
@@ -652,11 +648,11 @@
     }
 
     function n73(value, context) {
-        if (value !== "getApprovalState") { invalid(); } return value;
+        if (value !== "rejectRequest") { invalid(); } return value;
     }
 
     function n74(value, context) {
-        record(value, ["id","workflowVersion","subject","requestToken"], []);
+        record(value, ["id","workflowVersion","subject","requestToken","reviewToken","payload"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -664,284 +660,300 @@
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
             put(result, "subject", n75(read(value, "subject"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
+            put(result, "reviewToken", n62(read(value, "reviewToken"), context));
+            put(result, "payload", n76(read(value, "payload"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n75(value, context) {
-        if (value !== "retryApproval") { invalid(); } return value;
-    }
-
-    function n76(value, context) {
-        record(value, ["id","workflowVersion","subject","requestToken"], []);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n77(read(value, "subject"), context));
-            put(result, "requestToken", n62(read(value, "requestToken"), context));
-            return freeze(result);
-        } finally { context.path = previous; }
-    }
-
-    function n77(value, context) {
-        if (value !== "rejectRequest") { invalid(); } return value;
-    }
-
-    function n78(value, context) {
-        record(value, ["id","workflowVersion","subject","requestToken","reviewToken","payload"], []);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n79(read(value, "subject"), context));
-            put(result, "requestToken", n62(read(value, "requestToken"), context));
-            put(result, "reviewToken", n62(read(value, "reviewToken"), context));
-            put(result, "payload", n80(read(value, "payload"), context));
-            return freeze(result);
-        } finally { context.path = previous; }
-    }
-
-    function n79(value, context) {
         if (value !== "approveRequest") { invalid(); } return value;
     }
 
-    function n80(value, context) {
+    function n76(value, context) {
         return n29(value, context);
     }
 
-    function n81(value, context) {
+    function n77(value, context) {
         record(value, ["id","workflowVersion","subject","requestToken","reviewToken","payload"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n82(read(value, "subject"), context));
+            put(result, "subject", n78(read(value, "subject"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
-            put(result, "payload", n83(read(value, "payload"), context));
+            put(result, "payload", n79(read(value, "payload"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n82(value, context) {
+    function n78(value, context) {
         if (value !== "setTransactionSpeed") { invalid(); } return value;
     }
 
-    function n83(value, context) {
+    function n79(value, context) {
         return n33(value, context);
     }
 
-    function n84(value, context) {
+    function n80(value, context) {
         record(value, ["id","workflowVersion","subject","requestToken","reviewToken","payload"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n85(read(value, "subject"), context));
+            put(result, "subject", n81(read(value, "subject"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
-            put(result, "payload", n86(read(value, "payload"), context));
+            put(result, "payload", n82(read(value, "payload"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n85(value, context) {
+    function n81(value, context) {
         if (value !== "applyTransactionEdits") { invalid(); } return value;
     }
 
-    function n86(value, context) {
+    function n82(value, context) {
         return n36(value, context);
     }
 
-    function n87(value, context) {
+    function n83(value, context) {
         record(value, ["id","workflowVersion","subject","requestToken","reviewToken","payload"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n88(read(value, "subject"), context));
+            put(result, "subject", n84(read(value, "subject"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
-            put(result, "payload", n89(read(value, "payload"), context));
+            put(result, "payload", n85(read(value, "payload"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n88(value, context) {
+    function n84(value, context) {
         if (value !== "resolveApprovalAlert") { invalid(); } return value;
     }
 
-    function n89(value, context) {
+    function n85(value, context) {
         return n41(value, context);
     }
 
-    function n90(value, context) {
+    function n86(value, context) {
         record(value, ["address"], ["chainId","object"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "address", n17(read(value, "address"), context));
-            if (descriptor(value, "chainId")) { put(result, "chainId", n91(read(value, "chainId"), context)); }
-            if (descriptor(value, "object")) { put(result, "object", n92(read(value, "object"), context)); }
+            if (descriptor(value, "chainId")) { put(result, "chainId", n87(read(value, "chainId"), context)); }
+            if (descriptor(value, "object")) { put(result, "object", n88(read(value, "object"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n91(value, context) {
+    function n87(value, context) {
         try { return n17(value, context); } catch {}
         try { return n25(value, context); } catch {}
         return invalid();
     }
 
-    function n92(value, context) {
+    function n88(value, context) {
         return json(value, context);
     }
 
-    function n93(value, context) {
+    function n89(value, context) {
         record(value, [], ["id","params","method"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             if (descriptor(value, "id")) { put(result, "id", n45(read(value, "id"), context)); }
-            if (descriptor(value, "params")) { put(result, "params", n92(read(value, "params"), context)); }
+            if (descriptor(value, "params")) { put(result, "params", n88(read(value, "params"), context)); }
             if (descriptor(value, "method")) { put(result, "method", n17(read(value, "method"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n94(value, context) {
+    function n90(value, context) {
         record(value, ["publicKey","object"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "publicKey", n17(read(value, "publicKey"), context));
-            put(result, "object", n95(read(value, "object"), context));
+            put(result, "object", n91(read(value, "object"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n95(value, context) {
-        return n93(value, context);
+    function n91(value, context) {
+        return n89(value, context);
     }
 
-    function n96(value, context) {
-        try { return n97(value, context); } catch {}
-        try { return n100(value, context); } catch {}
+    function n92(value, context) {
+        try { return n93(value, context); } catch {}
+        try { return n96(value, context); } catch {}
         return invalid();
     }
 
-    function n97(value, context) {
+    function n93(value, context) {
         record(value, ["provider","results","chainId"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "provider", n98(read(value, "provider"), context));
-            put(result, "results", n99(read(value, "results"), context));
+            put(result, "provider", n94(read(value, "provider"), context));
+            put(result, "results", n95(read(value, "results"), context));
             put(result, "chainId", n17(read(value, "chainId"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n98(value, context) {
+    function n94(value, context) {
         if (value !== "ethereum") { invalid(); } return value;
     }
 
-    function n99(value, context) {
+    function n95(value, context) {
         return array(value, context, n17, 0, Infinity);
     }
 
-    function n100(value, context) {
+    function n96(value, context) {
         record(value, ["provider","publicKey"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "provider", n101(read(value, "provider"), context));
+            put(result, "provider", n97(read(value, "provider"), context));
             put(result, "publicKey", n17(read(value, "publicKey"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n101(value, context) {
+    function n97(value, context) {
         if (value !== "solana") { invalid(); } return value;
     }
 
-    function n102(value, context) {
+    function n98(value, context) {
         record(value, [], ["latestConfigurations"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            if (descriptor(value, "latestConfigurations")) { put(result, "latestConfigurations", n103(read(value, "latestConfigurations"), context)); }
+            if (descriptor(value, "latestConfigurations")) { put(result, "latestConfigurations", n99(read(value, "latestConfigurations"), context)); }
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n99(value, context) {
+        return array(value, context, n100, 0, Infinity);
+    }
+
+    function n100(value, context) {
+        return n92(value, context);
+    }
+
+    function n101(value, context) {
+        try { return n102(value, context); } catch {}
+        try { return n105(value, context); } catch {}
+        return invalid();
+    }
+
+    function n102(value, context) {
+        record(value, ["id","provider","name","body"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n45(read(value, "id"), context));
+            put(result, "provider", n94(read(value, "provider"), context));
+            put(result, "name", n103(read(value, "name"), context));
+            put(result, "body", n104(read(value, "body"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n103(value, context) {
-        return array(value, context, n104, 0, Infinity);
+        if (value !== "signTransaction" && value !== "signPersonalMessage" && value !== "signMessage" && value !== "signTypedMessage" && value !== "ecRecover" && value !== "requestAccounts" && value !== "addEthereumChain" && value !== "switchEthereumChain") { invalid(); } return value;
     }
 
     function n104(value, context) {
-        return n96(value, context);
+        return n86(value, context);
     }
 
     function n105(value, context) {
-        try { return n106(value, context); } catch {}
-        try { return n109(value, context); } catch {}
-        return invalid();
-    }
-
-    function n106(value, context) {
         record(value, ["id","provider","name","body"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "provider", n98(read(value, "provider"), context));
-            put(result, "name", n107(read(value, "name"), context));
-            put(result, "body", n108(read(value, "body"), context));
+            put(result, "provider", n97(read(value, "provider"), context));
+            put(result, "name", n106(read(value, "name"), context));
+            put(result, "body", n107(read(value, "body"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n107(value, context) {
-        if (value !== "signTransaction" && value !== "signPersonalMessage" && value !== "signMessage" && value !== "signTypedMessage" && value !== "ecRecover" && value !== "requestAccounts" && value !== "addEthereumChain" && value !== "switchEthereumChain") { invalid(); } return value;
+    function n106(value, context) {
+        if (value !== "connect" && value !== "signMessage" && value !== "signTransaction" && value !== "signAllTransactions" && value !== "signAndSendTransaction") { invalid(); } return value;
     }
 
-    function n108(value, context) {
+    function n107(value, context) {
         return n90(value, context);
     }
 
+    function n108(value, context) {
+        try { return n109(value, context); } catch {}
+        try { return n112(value, context); } catch {}
+        try { return n113(value, context); } catch {}
+        return invalid();
+    }
+
     function n109(value, context) {
-        record(value, ["id","provider","name","body"], []);
+        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "provider", n101(read(value, "provider"), context));
-            put(result, "name", n110(read(value, "name"), context));
-            put(result, "body", n111(read(value, "body"), context));
+            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
+            put(result, "host", n28(read(value, "host"), context));
+            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
+            put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context));
+            put(result, "admissionDeadline", n110(read(value, "admissionDeadline"), context));
+            put(result, "authority", n59(read(value, "authority"), context));
+            put(result, "provider", n94(read(value, "provider"), context));
+            put(result, "name", n103(read(value, "name"), context));
+            put(result, "body", n104(read(value, "body"), context));
+            if (descriptor(value, "favicon")) { put(result, "favicon", n87(read(value, "favicon"), context)); }
+            if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n111(read(value, "replayOnly"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n110(value, context) {
-        if (value !== "connect" && value !== "signMessage" && value !== "signTransaction" && value !== "signAllTransactions" && value !== "signAndSendTransaction") { invalid(); } return value;
+        return n2(value, context);
     }
 
     function n111(value, context) {
-        return n94(value, context);
+        if (typeof value !== "boolean") { invalid(); } return value;
     }
 
     function n112(value, context) {
-        try { return n113(value, context); } catch {}
-        try { return n115(value, context); } catch {}
-        try { return n116(value, context); } catch {}
-        return invalid();
+        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n45(read(value, "id"), context));
+            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
+            put(result, "host", n28(read(value, "host"), context));
+            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
+            put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context));
+            put(result, "admissionDeadline", n110(read(value, "admissionDeadline"), context));
+            put(result, "authority", n59(read(value, "authority"), context));
+            put(result, "provider", n97(read(value, "provider"), context));
+            put(result, "name", n106(read(value, "name"), context));
+            put(result, "body", n107(read(value, "body"), context));
+            if (descriptor(value, "favicon")) { put(result, "favicon", n87(read(value, "favicon"), context)); }
+            if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n111(read(value, "replayOnly"), context)); }
+            return freeze(result);
+        } finally { context.path = previous; }
     }
 
     function n113(value, context) {
@@ -954,100 +966,54 @@
             put(result, "host", n28(read(value, "host"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context));
-            put(result, "admissionDeadline", n114(read(value, "admissionDeadline"), context));
+            put(result, "admissionDeadline", n110(read(value, "admissionDeadline"), context));
             put(result, "authority", n59(read(value, "authority"), context));
-            put(result, "provider", n98(read(value, "provider"), context));
-            put(result, "name", n107(read(value, "name"), context));
-            put(result, "body", n108(read(value, "body"), context));
-            if (descriptor(value, "favicon")) { put(result, "favicon", n91(read(value, "favicon"), context)); }
-            if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n71(read(value, "replayOnly"), context)); }
+            put(result, "provider", n114(read(value, "provider"), context));
+            put(result, "name", n115(read(value, "name"), context));
+            put(result, "body", n116(read(value, "body"), context));
+            if (descriptor(value, "favicon")) { put(result, "favicon", n87(read(value, "favicon"), context)); }
+            if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n111(read(value, "replayOnly"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n114(value, context) {
-        return n2(value, context);
-    }
-
-    function n115(value, context) {
-        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "host", n28(read(value, "host"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
-            put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context));
-            put(result, "admissionDeadline", n114(read(value, "admissionDeadline"), context));
-            put(result, "authority", n59(read(value, "authority"), context));
-            put(result, "provider", n101(read(value, "provider"), context));
-            put(result, "name", n110(read(value, "name"), context));
-            put(result, "body", n111(read(value, "body"), context));
-            if (descriptor(value, "favicon")) { put(result, "favicon", n91(read(value, "favicon"), context)); }
-            if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n71(read(value, "replayOnly"), context)); }
-            return freeze(result);
-        } finally { context.path = previous; }
-    }
-
-    function n116(value, context) {
-        record(value, ["id","workflowVersion","host","configurationKey","enqueueAttempt","admissionDeadline","authority","provider","name","body"], ["favicon","replayOnly"]);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "host", n28(read(value, "host"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
-            put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context));
-            put(result, "admissionDeadline", n114(read(value, "admissionDeadline"), context));
-            put(result, "authority", n59(read(value, "authority"), context));
-            put(result, "provider", n117(read(value, "provider"), context));
-            put(result, "name", n118(read(value, "name"), context));
-            put(result, "body", n119(read(value, "body"), context));
-            if (descriptor(value, "favicon")) { put(result, "favicon", n91(read(value, "favicon"), context)); }
-            if (descriptor(value, "replayOnly")) { put(result, "replayOnly", n71(read(value, "replayOnly"), context)); }
-            return freeze(result);
-        } finally { context.path = previous; }
-    }
-
-    function n117(value, context) {
         if (value !== "unknown") { invalid(); } return value;
     }
 
-    function n118(value, context) {
+    function n115(value, context) {
         if (value !== "switchAccount") { invalid(); } return value;
     }
 
-    function n119(value, context) {
-        return n102(value, context);
+    function n116(value, context) {
+        return n98(value, context);
     }
 
-    function n120(value, context) {
+    function n117(value, context) {
         record(value, ["code","message"], ["data"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "code", n121(read(value, "code"), context));
+            put(result, "code", n118(read(value, "code"), context));
             put(result, "message", n17(read(value, "message"), context));
-            if (descriptor(value, "data")) { put(result, "data", n92(read(value, "data"), context)); }
+            if (descriptor(value, "data")) { put(result, "data", n88(read(value, "data"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n121(value, context) {
+    function n118(value, context) {
         return n314(value, context);
     }
 
-    function n122(value, context) {
+    function n119(value, context) {
         try { return n25(value, context); } catch {}
         try { return n17(value, context); } catch {}
-        try { return n99(value, context); } catch {}
-        try { return n123(value, context); } catch {}
+        try { return n95(value, context); } catch {}
+        try { return n120(value, context); } catch {}
         return invalid();
     }
 
-    function n123(value, context) {
+    function n120(value, context) {
         record(value, ["publicKey"], []);
         const previous = enter(value, context);
         try {
@@ -1057,376 +1023,388 @@
         } finally { context.path = previous; }
     }
 
-    function n124(value, context) {
-        try { return n125(value, context); } catch {}
+    function n121(value, context) {
+        try { return n122(value, context); } catch {}
+        try { return n126(value, context); } catch {}
         try { return n129(value, context); } catch {}
         try { return n132(value, context); } catch {}
-        try { return n135(value, context); } catch {}
         return invalid();
     }
 
-    function n125(value, context) {
+    function n122(value, context) {
         record(value, ["id","name","provider","approvalCommitted","kind","result"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "name", n126(read(value, "name"), context));
+            put(result, "name", n123(read(value, "name"), context));
             put(result, "provider", n27(read(value, "provider"), context));
-            put(result, "approvalCommitted", n71(read(value, "approvalCommitted"), context));
-            put(result, "kind", n127(read(value, "kind"), context));
-            put(result, "result", n128(read(value, "result"), context));
+            put(result, "approvalCommitted", n111(read(value, "approvalCommitted"), context));
+            put(result, "kind", n124(read(value, "kind"), context));
+            put(result, "result", n125(read(value, "result"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n126(value, context) {
+    function n123(value, context) {
         if (typeof value !== "string" || value === "switchAccount") { invalid(); } return value;
     }
 
-    function n127(value, context) {
+    function n124(value, context) {
         if (value !== "result") { invalid(); } return value;
     }
 
-    function n128(value, context) {
-        return n122(value, context);
+    function n125(value, context) {
+        return n119(value, context);
     }
 
-    function n129(value, context) {
+    function n126(value, context) {
         record(value, ["id","name","provider","approvalCommitted","kind","error","authorizationFailure"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "name", n126(read(value, "name"), context));
+            put(result, "name", n123(read(value, "name"), context));
             put(result, "provider", n27(read(value, "provider"), context));
-            put(result, "approvalCommitted", n71(read(value, "approvalCommitted"), context));
-            put(result, "kind", n130(read(value, "kind"), context));
-            put(result, "error", n131(read(value, "error"), context));
-            put(result, "authorizationFailure", n71(read(value, "authorizationFailure"), context));
+            put(result, "approvalCommitted", n111(read(value, "approvalCommitted"), context));
+            put(result, "kind", n127(read(value, "kind"), context));
+            put(result, "error", n128(read(value, "error"), context));
+            put(result, "authorizationFailure", n111(read(value, "authorizationFailure"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n130(value, context) {
+    function n127(value, context) {
         if (value !== "error") { invalid(); } return value;
     }
 
-    function n131(value, context) {
-        return n120(value, context);
+    function n128(value, context) {
+        return n117(value, context);
     }
 
-    function n132(value, context) {
+    function n129(value, context) {
         record(value, ["id","name","provider","approvalCommitted","kind","result"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "name", n133(read(value, "name"), context));
-            put(result, "provider", n134(read(value, "provider"), context));
-            put(result, "approvalCommitted", n71(read(value, "approvalCommitted"), context));
-            put(result, "kind", n127(read(value, "kind"), context));
+            put(result, "name", n130(read(value, "name"), context));
+            put(result, "provider", n131(read(value, "provider"), context));
+            put(result, "approvalCommitted", n111(read(value, "approvalCommitted"), context));
+            put(result, "kind", n124(read(value, "kind"), context));
             put(result, "result", n25(read(value, "result"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n133(value, context) {
+    function n130(value, context) {
         if (value !== "switchAccount") { invalid(); } return value;
     }
 
-    function n134(value, context) {
+    function n131(value, context) {
         if (value !== "multiple") { invalid(); } return value;
     }
 
-    function n135(value, context) {
+    function n132(value, context) {
         record(value, ["id","name","provider","approvalCommitted","kind","error","authorizationFailure"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "name", n133(read(value, "name"), context));
-            put(result, "provider", n134(read(value, "provider"), context));
-            put(result, "approvalCommitted", n71(read(value, "approvalCommitted"), context));
-            put(result, "kind", n130(read(value, "kind"), context));
-            put(result, "error", n136(read(value, "error"), context));
-            put(result, "authorizationFailure", n71(read(value, "authorizationFailure"), context));
+            put(result, "name", n130(read(value, "name"), context));
+            put(result, "provider", n131(read(value, "provider"), context));
+            put(result, "approvalCommitted", n111(read(value, "approvalCommitted"), context));
+            put(result, "kind", n127(read(value, "kind"), context));
+            put(result, "error", n133(read(value, "error"), context));
+            put(result, "authorizationFailure", n111(read(value, "authorizationFailure"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n133(value, context) {
+        record(value, ["code","message"], ["data"]);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "code", n118(read(value, "code"), context));
+            put(result, "message", n28(read(value, "message"), context));
+            if (descriptor(value, "data")) { put(result, "data", n88(read(value, "data"), context)); }
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n134(value, context) {
+        try { return n135(value, context); } catch {}
+        try { return n138(value, context); } catch {}
+        try { return n140(value, context); } catch {}
+        try { return n142(value, context); } catch {}
+        return invalid();
+    }
+
+    function n135(value, context) {
+        record(value, ["kind","state"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "kind", n136(read(value, "kind"), context));
+            put(result, "state", n137(read(value, "state"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n136(value, context) {
-        record(value, ["code","message"], ["data"]);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "code", n121(read(value, "code"), context));
-            put(result, "message", n28(read(value, "message"), context));
-            if (descriptor(value, "data")) { put(result, "data", n92(read(value, "data"), context)); }
-            return freeze(result);
-        } finally { context.path = previous; }
+        if (value !== "configuration") { invalid(); } return value;
     }
 
     function n137(value, context) {
-        try { return n138(value, context); } catch {}
-        try { return n141(value, context); } catch {}
-        try { return n143(value, context); } catch {}
-        try { return n145(value, context); } catch {}
-        return invalid();
+        return n21(value, context);
     }
 
     function n138(value, context) {
-        record(value, ["kind","state"], []);
+        record(value, ["kind","error"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "kind", n139(read(value, "kind"), context));
-            put(result, "state", n140(read(value, "state"), context));
+            put(result, "error", n128(read(value, "error"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n139(value, context) {
-        if (value !== "configuration") { invalid(); } return value;
-    }
-
-    function n140(value, context) {
-        return n21(value, context);
-    }
-
-    function n141(value, context) {
-        record(value, ["kind","error"], []);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "kind", n142(read(value, "kind"), context));
-            put(result, "error", n131(read(value, "error"), context));
-            return freeze(result);
-        } finally { context.path = previous; }
-    }
-
-    function n142(value, context) {
         if (value !== "configurationError") { invalid(); } return value;
     }
 
-    function n143(value, context) {
+    function n140(value, context) {
         record(value, ["id","name","provider","state","kind","result","approvalCommitted"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "name", n91(read(value, "name"), context));
+            put(result, "name", n87(read(value, "name"), context));
             put(result, "provider", n27(read(value, "provider"), context));
-            put(result, "state", n144(read(value, "state"), context));
-            put(result, "kind", n127(read(value, "kind"), context));
-            put(result, "result", n92(read(value, "result"), context));
-            put(result, "approvalCommitted", n71(read(value, "approvalCommitted"), context));
+            put(result, "state", n141(read(value, "state"), context));
+            put(result, "kind", n124(read(value, "kind"), context));
+            put(result, "result", n88(read(value, "result"), context));
+            put(result, "approvalCommitted", n111(read(value, "approvalCommitted"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n144(value, context) {
-        try { return n140(value, context); } catch {}
+    function n141(value, context) {
+        try { return n137(value, context); } catch {}
         try { return n25(value, context); } catch {}
         return invalid();
     }
 
-    function n145(value, context) {
+    function n142(value, context) {
         record(value, ["id","name","provider","state","kind","error"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "name", n91(read(value, "name"), context));
+            put(result, "name", n87(read(value, "name"), context));
             put(result, "provider", n27(read(value, "provider"), context));
-            put(result, "state", n144(read(value, "state"), context));
-            put(result, "kind", n130(read(value, "kind"), context));
-            put(result, "error", n131(read(value, "error"), context));
+            put(result, "state", n141(read(value, "state"), context));
+            put(result, "kind", n127(read(value, "kind"), context));
+            put(result, "error", n128(read(value, "error"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n146(value, context) {
+    function n143(value, context) {
         record(value, ["id","requestToken","approvalRequired","admissionKind","state"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
-            put(result, "approvalRequired", n71(read(value, "approvalRequired"), context));
-            put(result, "admissionKind", n147(read(value, "admissionKind"), context));
-            put(result, "state", n140(read(value, "state"), context));
+            put(result, "approvalRequired", n111(read(value, "approvalRequired"), context));
+            put(result, "admissionKind", n144(read(value, "admissionKind"), context));
+            put(result, "state", n137(read(value, "state"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n147(value, context) {
+    function n144(value, context) {
         if (value !== "new" && value !== "replay" && value !== "coalesced") { invalid(); } return value;
     }
 
-    function n148(value, context) {
-        return n146(value, context);
+    function n145(value, context) {
+        return n143(value, context);
     }
 
-    function n149(value, context) {
+    function n146(value, context) {
         record(value, ["id","response","state"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "response", n150(read(value, "response"), context));
-            put(result, "state", n140(read(value, "state"), context));
+            put(result, "response", n147(read(value, "response"), context));
+            put(result, "state", n137(read(value, "state"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n150(value, context) {
-        return n124(value, context);
+    function n147(value, context) {
+        return n121(value, context);
     }
 
-    function n151(value, context) {
+    function n148(value, context) {
+        try { return n149(value, context); } catch {}
+        try { return n150(value, context); } catch {}
         try { return n152(value, context); } catch {}
-        try { return n154(value, context); } catch {}
-        try { return n155(value, context); } catch {}
-        try { return n156(value, context); } catch {}
+        try { return n153(value, context); } catch {}
         return invalid();
     }
 
-    function n152(value, context) {
+    function n149(value, context) {
+        return n146(value, context);
+    }
+
+    function n150(value, context) {
         record(value, ["id","pending"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "pending", n153(read(value, "pending"), context));
+            put(result, "pending", n151(read(value, "pending"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n153(value, context) {
+    function n151(value, context) {
         if (value !== true) { invalid(); } return value;
     }
 
-    function n154(value, context) {
-        record(value, ["id","ready"], []);
-        const previous = enter(value, context);
-        try {
-            const result = create(null);
-            put(result, "id", n45(read(value, "id"), context));
-            put(result, "ready", n153(read(value, "ready"), context));
-            return freeze(result);
-        } finally { context.path = previous; }
-    }
-
-    function n155(value, context) {
+    function n152(value, context) {
         record(value, ["id","missing"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "missing", n153(read(value, "missing"), context));
+            put(result, "missing", n151(read(value, "missing"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n156(value, context) {
+    function n153(value, context) {
         record(value, ["id","unavailable"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "unavailable", n153(read(value, "unavailable"), context));
+            put(result, "unavailable", n151(read(value, "unavailable"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n157(value, context) {
-        try { return n158(value, context); } catch {}
-        try { return n156(value, context); } catch {}
+    function n154(value, context) {
+        try { return n150(value, context); } catch {}
+        try { return n155(value, context); } catch {}
+        try { return n152(value, context); } catch {}
+        try { return n153(value, context); } catch {}
         return invalid();
     }
 
-    function n158(value, context) {
+    function n155(value, context) {
+        record(value, ["id","ready"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n45(read(value, "id"), context));
+            put(result, "ready", n151(read(value, "ready"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n156(value, context) {
+        try { return n157(value, context); } catch {}
+        try { return n153(value, context); } catch {}
+        return invalid();
+    }
+
+    function n157(value, context) {
         record(value, ["id","state"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "state", n140(read(value, "state"), context));
+            put(result, "state", n137(read(value, "state"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n159(value, context) {
+    function n158(value, context) {
+        try { return n159(value, context); } catch {}
         try { return n160(value, context); } catch {}
-        try { return n161(value, context); } catch {}
-        try { return n156(value, context); } catch {}
+        try { return n153(value, context); } catch {}
         return invalid();
     }
 
-    function n160(value, context) {
+    function n159(value, context) {
         record(value, ["id","state","revoked"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "state", n140(read(value, "state"), context));
-            put(result, "revoked", n153(read(value, "revoked"), context));
+            put(result, "state", n137(read(value, "state"), context));
+            put(result, "revoked", n151(read(value, "revoked"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n161(value, context) {
+    function n160(value, context) {
         record(value, ["id","state","stale"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "state", n140(read(value, "state"), context));
-            put(result, "stale", n153(read(value, "stale"), context));
+            put(result, "state", n137(read(value, "state"), context));
+            put(result, "stale", n151(read(value, "stale"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n162(value, context) {
-        try { return n163(value, context); } catch {}
-        try { return n155(value, context); } catch {}
+    function n161(value, context) {
+        try { return n162(value, context); } catch {}
+        try { return n152(value, context); } catch {}
         return invalid();
     }
 
-    function n163(value, context) {
+    function n162(value, context) {
         record(value, ["id","acknowledged"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "acknowledged", n153(read(value, "acknowledged"), context));
+            put(result, "acknowledged", n151(read(value, "acknowledged"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n164(value, context) {
+    function n163(value, context) {
+        try { return n164(value, context); } catch {}
         try { return n165(value, context); } catch {}
-        try { return n166(value, context); } catch {}
         return invalid();
     }
 
-    function n165(value, context) {
+    function n164(value, context) {
         record(value, ["id","opened"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "opened", n71(read(value, "opened"), context));
+            put(result, "opened", n111(read(value, "opened"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n166(value, context) {
-        return n151(value, context);
+    function n165(value, context) {
+        return n154(value, context);
     }
 
-    function n167(value, context) {
+    function n166(value, context) {
         record(value, ["id","requestToken","configurationKey","manual","state"], []);
         const previous = enter(value, context);
         try {
@@ -1434,76 +1412,76 @@
             put(result, "id", n45(read(value, "id"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
-            put(result, "manual", n71(read(value, "manual"), context));
-            put(result, "state", n168(read(value, "state"), context));
+            put(result, "manual", n111(read(value, "manual"), context));
+            put(result, "state", n167(read(value, "state"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n168(value, context) {
+    function n167(value, context) {
         if (value !== "pending" && value !== "approved" && value !== "completed") { invalid(); } return value;
     }
 
-    function n169(value, context) {
-        try { return n170(value, context); } catch {}
-        try { return n156(value, context); } catch {}
+    function n168(value, context) {
+        try { return n169(value, context); } catch {}
+        try { return n153(value, context); } catch {}
         return invalid();
     }
 
-    function n170(value, context) {
+    function n169(value, context) {
         record(value, ["id","requests"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "requests", n171(read(value, "requests"), context));
+            put(result, "requests", n170(read(value, "requests"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
+    function n170(value, context) {
+        return array(value, context, n171, 0, 16);
+    }
+
     function n171(value, context) {
-        return array(value, context, n172, 0, 16);
+        return n166(value, context);
     }
 
     function n172(value, context) {
-        return n167(value, context);
-    }
-
-    function n173(value, context) {
-        try { return n174(value, context); } catch {}
-        try { return n176(value, context); } catch {}
+        try { return n173(value, context); } catch {}
+        try { return n175(value, context); } catch {}
         return invalid();
     }
 
-    function n174(value, context) {
+    function n173(value, context) {
         record(value, ["id","result"], ["jsonrpc"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "result", n92(read(value, "result"), context));
-            if (descriptor(value, "jsonrpc")) { put(result, "jsonrpc", n175(read(value, "jsonrpc"), context)); }
+            put(result, "result", n88(read(value, "result"), context));
+            if (descriptor(value, "jsonrpc")) { put(result, "jsonrpc", n174(read(value, "jsonrpc"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n175(value, context) {
+    function n174(value, context) {
         if (value !== "2.0") { invalid(); } return value;
     }
 
-    function n176(value, context) {
+    function n175(value, context) {
         record(value, ["id","error"], ["jsonrpc"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "error", n92(read(value, "error"), context));
-            if (descriptor(value, "jsonrpc")) { put(result, "jsonrpc", n175(read(value, "jsonrpc"), context)); }
+            put(result, "error", n88(read(value, "error"), context));
+            if (descriptor(value, "jsonrpc")) { put(result, "jsonrpc", n174(read(value, "jsonrpc"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n177(value, context) {
+    function n176(value, context) {
         record(value, ["name","croppedAddress"], ["icon"]);
         const previous = enter(value, context);
         try {
@@ -1515,7 +1493,7 @@
         } finally { context.path = previous; }
     }
 
-    function n178(value, context) {
+    function n177(value, context) {
         record(value, ["name","croppedAddress","walletId","address","coin","derivationPath","isSelected"], ["icon"]);
         const previous = enter(value, context);
         try {
@@ -1526,61 +1504,61 @@
             put(result, "address", n17(read(value, "address"), context));
             put(result, "coin", n27(read(value, "coin"), context));
             put(result, "derivationPath", n28(read(value, "derivationPath"), context));
-            put(result, "isSelected", n71(read(value, "isSelected"), context));
+            put(result, "isSelected", n111(read(value, "isSelected"), context));
             if (descriptor(value, "icon")) { put(result, "icon", n17(read(value, "icon"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n179(value, context) {
+    function n178(value, context) {
         record(value, ["chainId","name","isSelected"], ["isCustom"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "chainId", n18(read(value, "chainId"), context));
             put(result, "name", n17(read(value, "name"), context));
-            put(result, "isSelected", n71(read(value, "isSelected"), context));
-            if (descriptor(value, "isCustom")) { put(result, "isCustom", n71(read(value, "isCustom"), context)); }
+            put(result, "isSelected", n111(read(value, "isSelected"), context));
+            if (descriptor(value, "isCustom")) { put(result, "isCustom", n111(read(value, "isCustom"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n180(value, context) {
+    function n179(value, context) {
         record(value, ["value","label","isSelected"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "value", n32(read(value, "value"), context));
             put(result, "label", n17(read(value, "label"), context));
-            put(result, "isSelected", n71(read(value, "isSelected"), context));
+            put(result, "isSelected", n111(read(value, "isSelected"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n181(value, context) {
+    function n180(value, context) {
         record(value, ["visible","position","maximum"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "visible", n71(read(value, "visible"), context));
+            put(result, "visible", n111(read(value, "visible"), context));
             put(result, "position", n35(read(value, "position"), context));
             put(result, "maximum", n35(read(value, "maximum"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n182(value, context) {
-        try { return n183(value, context); } catch {}
-        try { return n185(value, context); } catch {}
+    function n181(value, context) {
+        try { return n182(value, context); } catch {}
+        try { return n184(value, context); } catch {}
         return invalid();
     }
 
-    function n183(value, context) {
+    function n182(value, context) {
         record(value, ["usesEIP1559","nonce","gasPriceGwei"], ["suggestedGasPriceGwei","maxPriorityFeePerGasGwei","maxFeePerGasGwei","suggestedMaxPriorityFeePerGasGwei","suggestedMaxFeePerGasGwei"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "usesEIP1559", n184(read(value, "usesEIP1559"), context));
+            put(result, "usesEIP1559", n183(read(value, "usesEIP1559"), context));
             put(result, "nonce", n17(read(value, "nonce"), context));
             put(result, "gasPriceGwei", n17(read(value, "gasPriceGwei"), context));
             if (descriptor(value, "suggestedGasPriceGwei")) { put(result, "suggestedGasPriceGwei", n17(read(value, "suggestedGasPriceGwei"), context)); }
@@ -1592,16 +1570,16 @@
         } finally { context.path = previous; }
     }
 
-    function n184(value, context) {
+    function n183(value, context) {
         if (value !== false) { invalid(); } return value;
     }
 
-    function n185(value, context) {
+    function n184(value, context) {
         record(value, ["usesEIP1559","nonce","maxPriorityFeePerGasGwei","maxFeePerGasGwei"], ["suggestedMaxPriorityFeePerGasGwei","suggestedMaxFeePerGasGwei","gasPriceGwei","suggestedGasPriceGwei"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "usesEIP1559", n153(read(value, "usesEIP1559"), context));
+            put(result, "usesEIP1559", n151(read(value, "usesEIP1559"), context));
             put(result, "nonce", n17(read(value, "nonce"), context));
             put(result, "maxPriorityFeePerGasGwei", n17(read(value, "maxPriorityFeePerGasGwei"), context));
             put(result, "maxFeePerGasGwei", n17(read(value, "maxFeePerGasGwei"), context));
@@ -1613,23 +1591,23 @@
         } finally { context.path = previous; }
     }
 
-    function n186(value, context) {
+    function n185(value, context) {
         record(value, ["title","message","actions"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "title", n17(read(value, "title"), context));
             put(result, "message", n17(read(value, "message"), context));
-            put(result, "actions", n187(read(value, "actions"), context));
+            put(result, "actions", n186(read(value, "actions"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n187(value, context) {
-        return array(value, context, n188, 1, Infinity);
+    function n186(value, context) {
+        return array(value, context, n187, 1, Infinity);
     }
 
-    function n188(value, context) {
+    function n187(value, context) {
         record(value, ["title","action"], []);
         const previous = enter(value, context);
         try {
@@ -1640,124 +1618,128 @@
         } finally { context.path = previous; }
     }
 
-    function n189(value, context) {
-        try { return n190(value, context); } catch {}
-        try { return n196(value, context); } catch {}
-        try { return n199(value, context); } catch {}
-        try { return n202(value, context); } catch {}
-        try { return n207(value, context); } catch {}
+    function n188(value, context) {
+        try { return n189(value, context); } catch {}
+        try { return n195(value, context); } catch {}
+        try { return n198(value, context); } catch {}
+        try { return n201(value, context); } catch {}
+        try { return n206(value, context); } catch {}
         return invalid();
     }
 
-    function n190(value, context) {
+    function n189(value, context) {
         record(value, ["reviewToken","title","kind","accounts","canSelectNetwork","allowsEmptySelection"], ["networks","emptyMessage","primaryTitle"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
             put(result, "title", n17(read(value, "title"), context));
-            put(result, "kind", n191(read(value, "kind"), context));
-            put(result, "accounts", n192(read(value, "accounts"), context));
-            put(result, "canSelectNetwork", n71(read(value, "canSelectNetwork"), context));
-            put(result, "allowsEmptySelection", n71(read(value, "allowsEmptySelection"), context));
-            if (descriptor(value, "networks")) { put(result, "networks", n194(read(value, "networks"), context)); }
+            put(result, "kind", n190(read(value, "kind"), context));
+            put(result, "accounts", n191(read(value, "accounts"), context));
+            put(result, "canSelectNetwork", n111(read(value, "canSelectNetwork"), context));
+            put(result, "allowsEmptySelection", n111(read(value, "allowsEmptySelection"), context));
+            if (descriptor(value, "networks")) { put(result, "networks", n193(read(value, "networks"), context)); }
             if (descriptor(value, "emptyMessage")) { put(result, "emptyMessage", n17(read(value, "emptyMessage"), context)); }
             if (descriptor(value, "primaryTitle")) { put(result, "primaryTitle", n17(read(value, "primaryTitle"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n191(value, context) {
+    function n190(value, context) {
         if (value !== "accountSelection") { invalid(); } return value;
     }
 
+    function n191(value, context) {
+        return array(value, context, n192, 0, Infinity);
+    }
+
     function n192(value, context) {
-        return array(value, context, n193, 0, Infinity);
+        return n177(value, context);
     }
 
     function n193(value, context) {
-        return n178(value, context);
+        return array(value, context, n194, 0, Infinity);
     }
 
     function n194(value, context) {
-        return array(value, context, n195, 0, Infinity);
+        return n178(value, context);
     }
 
     function n195(value, context) {
-        return n179(value, context);
-    }
-
-    function n196(value, context) {
         record(value, ["reviewToken","title","kind","meta","account"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
             put(result, "title", n17(read(value, "title"), context));
-            put(result, "kind", n197(read(value, "kind"), context));
+            put(result, "kind", n196(read(value, "kind"), context));
             put(result, "meta", n17(read(value, "meta"), context));
-            put(result, "account", n198(read(value, "account"), context));
+            put(result, "account", n197(read(value, "account"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n197(value, context) {
+    function n196(value, context) {
         if (value !== "signMessage") { invalid(); } return value;
     }
 
-    function n198(value, context) {
-        return n177(value, context);
+    function n197(value, context) {
+        return n176(value, context);
     }
 
-    function n199(value, context) {
+    function n198(value, context) {
         record(value, ["reviewToken","title","kind","meta","account","clusters","requiresClusterSelection"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
             put(result, "title", n17(read(value, "title"), context));
-            put(result, "kind", n197(read(value, "kind"), context));
+            put(result, "kind", n196(read(value, "kind"), context));
             put(result, "meta", n17(read(value, "meta"), context));
-            put(result, "account", n198(read(value, "account"), context));
-            put(result, "clusters", n200(read(value, "clusters"), context));
-            put(result, "requiresClusterSelection", n71(read(value, "requiresClusterSelection"), context));
+            put(result, "account", n197(read(value, "account"), context));
+            put(result, "clusters", n199(read(value, "clusters"), context));
+            put(result, "requiresClusterSelection", n111(read(value, "requiresClusterSelection"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
+    function n199(value, context) {
+        return array(value, context, n200, 1, Infinity);
+    }
+
     function n200(value, context) {
-        return array(value, context, n201, 1, Infinity);
+        return n179(value, context);
     }
 
     function n201(value, context) {
-        return n180(value, context);
-    }
-
-    function n202(value, context) {
         record(value, ["reviewToken","title","kind","account","networkName","feeLines","slider","editor"], ["balance","valueLine","dataInterpretation","alert","editorRequestToken","canBackOffRefresh"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
             put(result, "title", n17(read(value, "title"), context));
-            put(result, "kind", n203(read(value, "kind"), context));
-            put(result, "account", n198(read(value, "account"), context));
+            put(result, "kind", n202(read(value, "kind"), context));
+            put(result, "account", n197(read(value, "account"), context));
             put(result, "networkName", n17(read(value, "networkName"), context));
-            put(result, "feeLines", n99(read(value, "feeLines"), context));
-            put(result, "slider", n204(read(value, "slider"), context));
-            put(result, "editor", n205(read(value, "editor"), context));
+            put(result, "feeLines", n95(read(value, "feeLines"), context));
+            put(result, "slider", n203(read(value, "slider"), context));
+            put(result, "editor", n204(read(value, "editor"), context));
             if (descriptor(value, "balance")) { put(result, "balance", n17(read(value, "balance"), context)); }
             if (descriptor(value, "valueLine")) { put(result, "valueLine", n17(read(value, "valueLine"), context)); }
             if (descriptor(value, "dataInterpretation")) { put(result, "dataInterpretation", n17(read(value, "dataInterpretation"), context)); }
-            if (descriptor(value, "alert")) { put(result, "alert", n206(read(value, "alert"), context)); }
+            if (descriptor(value, "alert")) { put(result, "alert", n205(read(value, "alert"), context)); }
             if (descriptor(value, "editorRequestToken")) { put(result, "editorRequestToken", n12(read(value, "editorRequestToken"), context)); }
-            if (descriptor(value, "canBackOffRefresh")) { put(result, "canBackOffRefresh", n71(read(value, "canBackOffRefresh"), context)); }
+            if (descriptor(value, "canBackOffRefresh")) { put(result, "canBackOffRefresh", n111(read(value, "canBackOffRefresh"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n203(value, context) {
+    function n202(value, context) {
         if (value !== "sendTransaction") { invalid(); } return value;
+    }
+
+    function n203(value, context) {
+        return n180(value, context);
     }
 
     function n204(value, context) {
@@ -1765,113 +1747,109 @@
     }
 
     function n205(value, context) {
-        return n182(value, context);
+        return n185(value, context);
     }
 
     function n206(value, context) {
-        return n186(value, context);
-    }
-
-    function n207(value, context) {
         record(value, ["reviewToken","title","kind","chainName","rpcURL"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "reviewToken", n62(read(value, "reviewToken"), context));
             put(result, "title", n17(read(value, "title"), context));
-            put(result, "kind", n208(read(value, "kind"), context));
+            put(result, "kind", n207(read(value, "kind"), context));
             put(result, "chainName", n17(read(value, "chainName"), context));
             put(result, "rpcURL", n17(read(value, "rpcURL"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n208(value, context) {
+    function n207(value, context) {
         if (value !== "addChain") { invalid(); } return value;
     }
 
-    function n209(value, context) {
-        try { return n210(value, context); } catch {}
-        try { return n215(value, context); } catch {}
-        try { return n218(value, context); } catch {}
+    function n208(value, context) {
+        try { return n209(value, context); } catch {}
+        try { return n214(value, context); } catch {}
+        try { return n217(value, context); } catch {}
         return invalid();
     }
 
-    function n210(value, context) {
+    function n209(value, context) {
         record(value, ["id","host","state","actions","review"], ["error"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
             put(result, "host", n28(read(value, "host"), context));
-            put(result, "state", n211(read(value, "state"), context));
-            put(result, "actions", n212(read(value, "actions"), context));
-            put(result, "review", n214(read(value, "review"), context));
+            put(result, "state", n210(read(value, "state"), context));
+            put(result, "actions", n211(read(value, "actions"), context));
+            put(result, "review", n213(read(value, "review"), context));
             if (descriptor(value, "error")) { put(result, "error", n17(read(value, "error"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n211(value, context) {
+    function n210(value, context) {
         if (value !== "review") { invalid(); } return value;
     }
 
-    function n212(value, context) {
-        return array(value, context, n213, 0, Infinity);
+    function n211(value, context) {
+        return array(value, context, n212, 0, Infinity);
     }
 
-    function n213(value, context) {
+    function n212(value, context) {
         if (value !== "approve" && value !== "reject" && value !== "editTransaction" && value !== "setTransactionSpeed" && value !== "resolveApprovalAlert") { invalid(); } return value;
     }
 
-    function n214(value, context) {
-        return n189(value, context);
+    function n213(value, context) {
+        return n188(value, context);
     }
 
-    function n215(value, context) {
+    function n214(value, context) {
         record(value, ["id","state","actions","error"], ["host"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "state", n130(read(value, "state"), context));
-            put(result, "actions", n216(read(value, "actions"), context));
+            put(result, "state", n127(read(value, "state"), context));
+            put(result, "actions", n215(read(value, "actions"), context));
             put(result, "error", n17(read(value, "error"), context));
             if (descriptor(value, "host")) { put(result, "host", n28(read(value, "host"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n216(value, context) {
-        return array(value, context, n217, 1, Infinity);
+    function n215(value, context) {
+        return array(value, context, n216, 1, Infinity);
     }
 
-    function n217(value, context) {
+    function n216(value, context) {
         if (value !== "retry" && value !== "reject") { invalid(); } return value;
     }
 
-    function n218(value, context) {
+    function n217(value, context) {
         record(value, ["id","state","actions"], ["host"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "id", n45(read(value, "id"), context));
-            put(result, "state", n219(read(value, "state"), context));
-            put(result, "actions", n220(read(value, "actions"), context));
+            put(result, "state", n218(read(value, "state"), context));
+            put(result, "actions", n219(read(value, "actions"), context));
             if (descriptor(value, "host")) { put(result, "host", n28(read(value, "host"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n219(value, context) {
+    function n218(value, context) {
         if (value !== "missing" && value !== "authenticating" && value !== "working") { invalid(); } return value;
     }
 
-    function n220(value, context) {
+    function n219(value, context) {
         return array(value, context, n17, 0, 0);
     }
 
-    function n221(value, context) {
+    function n220(value, context) {
         record(value, ["id","host","receivedAt","sequence","requestToken","configurationKey","provider"], ["enqueueAttempt"]);
         const previous = enter(value, context);
         try {
@@ -1882,17 +1860,17 @@
             put(result, "sequence", n12(read(value, "sequence"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
-            put(result, "provider", n222(read(value, "provider"), context));
+            put(result, "provider", n221(read(value, "provider"), context));
             if (descriptor(value, "enqueueAttempt")) { put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n222(value, context) {
+    function n221(value, context) {
         return n9(value, context);
     }
 
-    function n223(value, context) {
+    function n222(value, context) {
         record(value, ["id","host","configurationKey","requestToken"], []);
         const previous = enter(value, context);
         try {
@@ -1905,156 +1883,156 @@
         } finally { context.path = previous; }
     }
 
-    function n224(value, context) {
+    function n223(value, context) {
         record(value, ["requests","completedResponses"], ["strings","layoutDirection"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "requests", n225(read(value, "requests"), context));
-            put(result, "completedResponses", n227(read(value, "completedResponses"), context));
-            if (descriptor(value, "strings")) { put(result, "strings", n229(read(value, "strings"), context)); }
-            if (descriptor(value, "layoutDirection")) { put(result, "layoutDirection", n230(read(value, "layoutDirection"), context)); }
+            put(result, "requests", n224(read(value, "requests"), context));
+            put(result, "completedResponses", n226(read(value, "completedResponses"), context));
+            if (descriptor(value, "strings")) { put(result, "strings", n228(read(value, "strings"), context)); }
+            if (descriptor(value, "layoutDirection")) { put(result, "layoutDirection", n229(read(value, "layoutDirection"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
+    function n224(value, context) {
+        return array(value, context, n225, 0, Infinity);
+    }
+
     function n225(value, context) {
-        return array(value, context, n226, 0, Infinity);
+        return n220(value, context);
     }
 
     function n226(value, context) {
-        return n221(value, context);
+        return array(value, context, n227, 0, Infinity);
     }
 
     function n227(value, context) {
-        return array(value, context, n228, 0, Infinity);
+        return n222(value, context);
     }
 
     function n228(value, context) {
-        return n223(value, context);
-    }
-
-    function n229(value, context) {
         return dictionary(value, context, n17);
     }
 
-    function n230(value, context) {
+    function n229(value, context) {
         if (value !== "ltr" && value !== "rtl") { invalid(); } return value;
     }
 
-    function n231(value, context) {
-        try { return n232(value, context); } catch {}
-        try { return n235(value, context); } catch {}
-        try { return n238(value, context); } catch {}
+    function n230(value, context) {
+        try { return n231(value, context); } catch {}
+        try { return n234(value, context); } catch {}
+        try { return n237(value, context); } catch {}
         return invalid();
     }
 
-    function n232(value, context) {
+    function n231(value, context) {
         record(value, ["status","approval"], ["editsError"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "status", n233(read(value, "status"), context));
-            put(result, "approval", n234(read(value, "approval"), context));
-            if (descriptor(value, "editsError")) { put(result, "editsError", n153(read(value, "editsError"), context)); }
+            put(result, "status", n232(read(value, "status"), context));
+            put(result, "approval", n233(read(value, "approval"), context));
+            if (descriptor(value, "editsError")) { put(result, "editsError", n151(read(value, "editsError"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n233(value, context) {
+    function n232(value, context) {
         if (value !== "ok") { invalid(); } return value;
     }
 
-    function n234(value, context) {
-        return n209(value, context);
+    function n233(value, context) {
+        return n208(value, context);
     }
 
-    function n235(value, context) {
+    function n234(value, context) {
         record(value, ["status","approval"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "status", n236(read(value, "status"), context));
-            put(result, "approval", n237(read(value, "approval"), context));
+            put(result, "status", n235(read(value, "status"), context));
+            put(result, "approval", n236(read(value, "approval"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n236(value, context) {
+    function n235(value, context) {
         if (value !== "ignored") { invalid(); } return value;
     }
 
-    function n237(value, context) {
-        try { return n234(value, context); } catch {}
+    function n236(value, context) {
+        try { return n233(value, context); } catch {}
         try { return n25(value, context); } catch {}
         return invalid();
     }
 
-    function n238(value, context) {
+    function n237(value, context) {
         record(value, ["status","approval"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "status", n239(read(value, "status"), context));
+            put(result, "status", n238(read(value, "status"), context));
             put(result, "approval", n25(read(value, "approval"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n239(value, context) {
+    function n238(value, context) {
         if (value !== "unavailable") { invalid(); } return value;
     }
 
-    function n240(value, context) {
+    function n239(value, context) {
+        try { return n240(value, context); } catch {}
         try { return n241(value, context); } catch {}
         try { return n242(value, context); } catch {}
-        try { return n243(value, context); } catch {}
         return invalid();
+    }
+
+    function n240(value, context) {
+        return n223(value, context);
     }
 
     function n241(value, context) {
-        return n224(value, context);
+        return n230(value, context);
     }
 
     function n242(value, context) {
-        return n231(value, context);
-    }
-
-    function n243(value, context) {
         return n313(value, context);
     }
 
-    function n244(value, context) {
+    function n243(value, context) {
+        try { return n244(value, context); } catch {}
         try { return n245(value, context); } catch {}
-        try { return n246(value, context); } catch {}
         return invalid();
     }
 
-    function n245(value, context) {
+    function n244(value, context) {
         record(value, ["provider","subject","id"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "provider", n98(read(value, "provider"), context));
+            put(result, "provider", n94(read(value, "provider"), context));
             put(result, "subject", n57(read(value, "subject"), context));
             put(result, "id", n45(read(value, "id"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n246(value, context) {
+    function n245(value, context) {
         record(value, ["provider","subject"], ["id"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "provider", n101(read(value, "provider"), context));
+            put(result, "provider", n97(read(value, "provider"), context));
             put(result, "subject", n57(read(value, "subject"), context));
             if (descriptor(value, "id")) { put(result, "id", n45(read(value, "id"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n247(value, context) {
+    function n246(value, context) {
         record(value, ["id","body","chainId","subject"], []);
         const previous = enter(value, context);
         try {
@@ -2067,248 +2045,248 @@
         } finally { context.path = previous; }
     }
 
-    function n248(value, context) {
-        try { return n249(value, context); } catch {}
-        try { return n253(value, context); } catch {}
-        try { return n255(value, context); } catch {}
+    function n247(value, context) {
+        try { return n248(value, context); } catch {}
+        try { return n252(value, context); } catch {}
+        try { return n254(value, context); } catch {}
         return invalid();
     }
 
-    function n249(value, context) {
+    function n248(value, context) {
         record(value, ["direction","kind","message","observedRevision","providerGeneration"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "direction", n250(read(value, "direction"), context));
-            put(result, "kind", n251(read(value, "kind"), context));
-            put(result, "message", n252(read(value, "message"), context));
+            put(result, "direction", n249(read(value, "direction"), context));
+            put(result, "kind", n250(read(value, "kind"), context));
+            put(result, "message", n251(read(value, "message"), context));
             put(result, "observedRevision", n12(read(value, "observedRevision"), context));
             put(result, "providerGeneration", n28(read(value, "providerGeneration"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n250(value, context) {
+    function n249(value, context) {
         if (value !== "big-wallet-provider-v1") { invalid(); } return value;
     }
 
-    function n251(value, context) {
+    function n250(value, context) {
         if (value !== "request") { invalid(); } return value;
     }
 
-    function n252(value, context) {
-        return n105(value, context);
+    function n251(value, context) {
+        return n101(value, context);
     }
 
-    function n253(value, context) {
+    function n252(value, context) {
         record(value, ["direction","kind","message","providerGeneration"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "direction", n250(read(value, "direction"), context));
+            put(result, "direction", n249(read(value, "direction"), context));
             put(result, "kind", n53(read(value, "kind"), context));
-            put(result, "message", n254(read(value, "message"), context));
+            put(result, "message", n253(read(value, "message"), context));
             put(result, "providerGeneration", n28(read(value, "providerGeneration"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n254(value, context) {
-        return n247(value, context);
+    function n253(value, context) {
+        return n246(value, context);
     }
 
-    function n255(value, context) {
+    function n254(value, context) {
         record(value, ["direction","kind","message","observedRevision","providerGeneration"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "direction", n250(read(value, "direction"), context));
+            put(result, "direction", n249(read(value, "direction"), context));
             put(result, "kind", n57(read(value, "kind"), context));
-            put(result, "message", n256(read(value, "message"), context));
+            put(result, "message", n255(read(value, "message"), context));
             put(result, "observedRevision", n12(read(value, "observedRevision"), context));
             put(result, "providerGeneration", n28(read(value, "providerGeneration"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n256(value, context) {
-        return n244(value, context);
+    function n255(value, context) {
+        return n243(value, context);
     }
 
-    function n257(value, context) {
+    function n256(value, context) {
         record(value, ["direction","kind","response","providerGeneration"], ["id"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "direction", n258(read(value, "direction"), context));
-            put(result, "kind", n259(read(value, "kind"), context));
-            put(result, "response", n260(read(value, "response"), context));
+            put(result, "direction", n257(read(value, "direction"), context));
+            put(result, "kind", n258(read(value, "kind"), context));
+            put(result, "response", n259(read(value, "response"), context));
             put(result, "providerGeneration", n28(read(value, "providerGeneration"), context));
             if (descriptor(value, "id")) { put(result, "id", n45(read(value, "id"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n258(value, context) {
+    function n257(value, context) {
         if (value !== "big-wallet-content-v1") { invalid(); } return value;
     }
 
-    function n259(value, context) {
+    function n258(value, context) {
         if (value !== "response" && value !== "rpc") { invalid(); } return value;
     }
 
-    function n260(value, context) {
-        return n137(value, context);
+    function n259(value, context) {
+        return n134(value, context);
     }
 
-    function n261(value, context) {
-        try { return n262(value, context); } catch {}
-        try { return n264(value, context); } catch {}
+    function n260(value, context) {
+        try { return n261(value, context); } catch {}
+        try { return n263(value, context); } catch {}
         return invalid();
     }
 
-    function n262(value, context) {
+    function n261(value, context) {
         record(value, ["workflowVersion","subject","id"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n263(read(value, "subject"), context));
+            put(result, "subject", n262(read(value, "subject"), context));
             put(result, "id", n45(read(value, "id"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n263(value, context) {
+    function n262(value, context) {
         if (value !== "responseReady") { invalid(); } return value;
     }
 
-    function n264(value, context) {
+    function n263(value, context) {
         record(value, ["workflowVersion","subject","ids"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n263(read(value, "subject"), context));
-            put(result, "ids", n265(read(value, "ids"), context));
+            put(result, "subject", n262(read(value, "subject"), context));
+            put(result, "ids", n264(read(value, "ids"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n265(value, context) {
+    function n264(value, context) {
         return array(value, context, n45, 1, 16);
     }
 
-    function n266(value, context) {
+    function n265(value, context) {
         record(value, ["workflowVersion","subject"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n267(read(value, "subject"), context));
+            put(result, "subject", n266(read(value, "subject"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n267(value, context) {
+    function n266(value, context) {
         if (value !== "pendingRequestAvailable") { invalid(); } return value;
     }
 
-    function n268(value, context) {
+    function n267(value, context) {
         record(value, ["workflowVersion","subject","configurationKey"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n269(read(value, "subject"), context));
+            put(result, "subject", n268(read(value, "subject"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n269(value, context) {
+    function n268(value, context) {
         if (value !== "configurationInvalidated") { invalid(); } return value;
     }
 
-    function n270(value, context) {
+    function n269(value, context) {
         record(value, ["workflowVersion","subject","id","configurationKey","requestToken","approvalRequired","state"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n271(read(value, "subject"), context));
+            put(result, "subject", n270(read(value, "subject"), context));
             put(result, "id", n45(read(value, "id"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
-            put(result, "approvalRequired", n71(read(value, "approvalRequired"), context));
-            put(result, "state", n140(read(value, "state"), context));
+            put(result, "approvalRequired", n111(read(value, "approvalRequired"), context));
+            put(result, "state", n137(read(value, "state"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n271(value, context) {
+    function n270(value, context) {
         if (value !== "manualSwitchAcknowledged") { invalid(); } return value;
     }
 
-    function n272(value, context) {
+    function n271(value, context) {
         record(value, ["workflowVersion","subject","nonce"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n273(read(value, "subject"), context));
+            put(result, "subject", n272(read(value, "subject"), context));
             put(result, "nonce", n58(read(value, "nonce"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n273(value, context) {
+    function n272(value, context) {
         if (value !== "workflowProbe") { invalid(); } return value;
     }
 
-    function n274(value, context) {
+    function n273(value, context) {
         record(value, ["workflowVersion","subject","nonce","buildVersion"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n273(read(value, "subject"), context));
+            put(result, "subject", n272(read(value, "subject"), context));
             put(result, "nonce", n58(read(value, "nonce"), context));
             put(result, "buildVersion", n28(read(value, "buildVersion"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n275(value, context) {
+    function n274(value, context) {
         record(value, ["workflowVersion","subject","configurationKey"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n276(read(value, "subject"), context));
+            put(result, "subject", n275(read(value, "subject"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n276(value, context) {
+    function n275(value, context) {
         if (value !== "manualSwitchIntent") { invalid(); } return value;
     }
 
-    function n277(value, context) {
+    function n276(value, context) {
         record(value, ["workflowVersion","subject","host","configurationKey"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n276(read(value, "subject"), context));
+            put(result, "subject", n275(read(value, "subject"), context));
             put(result, "host", n28(read(value, "host"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n278(value, context) {
+    function n277(value, context) {
         record(value, ["workflowVersion","subject","host","configurationKey"], []);
         const previous = enter(value, context);
         try {
@@ -2321,28 +2299,28 @@
         } finally { context.path = previous; }
     }
 
-    function n279(value, context) {
+    function n278(value, context) {
         record(value, ["workflowVersion","subject","message","host","configurationKey","enqueueAttempt","admissionDeadline","authority"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n280(read(value, "subject"), context));
-            put(result, "message", n252(read(value, "message"), context));
+            put(result, "subject", n279(read(value, "subject"), context));
+            put(result, "message", n251(read(value, "message"), context));
             put(result, "host", n28(read(value, "host"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "enqueueAttempt", n58(read(value, "enqueueAttempt"), context));
-            put(result, "admissionDeadline", n114(read(value, "admissionDeadline"), context));
+            put(result, "admissionDeadline", n110(read(value, "admissionDeadline"), context));
             put(result, "authority", n59(read(value, "authority"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
-    function n280(value, context) {
+    function n279(value, context) {
         if (value !== "message-to-wallet") { invalid(); } return value;
     }
 
-    function n281(value, context) {
+    function n280(value, context) {
         record(value, ["workflowVersion","subject","id","provider","host","configurationKey","attempt","authority"], []);
         const previous = enter(value, context);
         try {
@@ -2359,7 +2337,7 @@
         } finally { context.path = previous; }
     }
 
-    function n282(value, context) {
+    function n281(value, context) {
         record(value, ["workflowVersion","subject","id","body","chainId"], []);
         const previous = enter(value, context);
         try {
@@ -2373,18 +2351,22 @@
         } finally { context.path = previous; }
     }
 
-    function n283(value, context) {
+    function n282(value, context) {
         record(value, ["workflowVersion","subject","id","configurationKey","requestToken"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
-            put(result, "subject", n61(read(value, "subject"), context));
+            put(result, "subject", n283(read(value, "subject"), context));
             put(result, "id", n45(read(value, "id"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "requestToken", n62(read(value, "requestToken"), context));
             return freeze(result);
         } finally { context.path = previous; }
+    }
+
+    function n283(value, context) {
+        if (value !== "getResponse") { invalid(); } return value;
     }
 
     function n284(value, context) {
@@ -2394,7 +2376,7 @@
             const result = create(null);
             put(result, "workflowVersion", n46(read(value, "workflowVersion"), context));
             put(result, "subject", n285(read(value, "subject"), context));
-            put(result, "hasPendingRequests", n71(read(value, "hasPendingRequests"), context));
+            put(result, "hasPendingRequests", n111(read(value, "hasPendingRequests"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
@@ -2433,27 +2415,27 @@
     }
 
     function n289(value, context) {
-        return n282(value, context);
+        return n281(value, context);
     }
 
     function n290(value, context) {
-        return n279(value, context);
-    }
-
-    function n291(value, context) {
-        return n277(value, context);
-    }
-
-    function n292(value, context) {
-        return n283(value, context);
-    }
-
-    function n293(value, context) {
         return n278(value, context);
     }
 
+    function n291(value, context) {
+        return n276(value, context);
+    }
+
+    function n292(value, context) {
+        return n282(value, context);
+    }
+
+    function n293(value, context) {
+        return n277(value, context);
+    }
+
     function n294(value, context) {
-        return n281(value, context);
+        return n280(value, context);
     }
 
     function n295(value, context) {
@@ -2473,7 +2455,7 @@
     }
 
     function n298(value, context) {
-        return n261(value, context);
+        return n260(value, context);
     }
 
     function n299(value, context) {
@@ -2485,15 +2467,15 @@
     }
 
     function n300(value, context) {
-        return n272(value, context);
+        return n271(value, context);
     }
 
     function n301(value, context) {
-        return n275(value, context);
+        return n274(value, context);
     }
 
     function n302(value, context) {
-        return n268(value, context);
+        return n267(value, context);
     }
 
     function n303(value, context) {
@@ -2503,7 +2485,7 @@
     }
 
     function n304(value, context) {
-        return n266(value, context);
+        return n265(value, context);
     }
 
     function n305(value, context) {
@@ -2521,7 +2503,7 @@
     }
 
     function n308(value, context) {
-        return n248(value, context);
+        return n247(value, context);
     }
 
     function n309(value, context) {
@@ -2547,7 +2529,7 @@
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "status", n239(read(value, "status"), context));
+            put(result, "status", n238(read(value, "status"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
@@ -2558,7 +2540,7 @@
 
     function n315(value, context) {
         try { return n316(value, context); } catch {}
-        try { return n155(value, context); } catch {}
+        try { return n152(value, context); } catch {}
         return invalid();
     }
 
@@ -2567,7 +2549,7 @@
         const previous = enter(value, context);
         try {
             const result = create(null);
-            put(result, "applied", n153(read(value, "applied"), context));
+            put(result, "applied", n151(read(value, "applied"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
@@ -2596,7 +2578,7 @@
     /** @typedef {{interaction: ("ended"|"cancelled"), value: number}} TransactionSpeedPayload */
     /** @typedef {({mode: "suggested"}|{mode: "custom", nonce: string, gasPriceGwei?: string, maxPriorityFeePerGasGwei?: string, maxFeePerGasGwei?: string})} TransactionEditsPayload */
     /** @typedef {{action: ("acknowledge"|"retry"|"edit"|"cancel")}} ApprovalAlertPayload */
-    /** @typedef {({id: RequestID, workflowVersion: WorkflowVersion, subject: "openApp"}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getRecoveryRequests"}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getPendingRequests"}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "rpc", body: string, chainId: string}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getLatestConfiguration", configurationKey: string}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "disconnect", configurationKey: string, provider: Provider, attempt: PrivateToken, authority: AuthorityVersion}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getResponse", configurationKey: string, requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "acknowledgeResponse", configurationKey: string, requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "showApproval", configurationKey: string, requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "prepareResponseDelivery", configurationKey: string, requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "maintainRequest", configurationKey: string, requestToken: RequestToken, allowDelivery: boolean}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getApprovalState", requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "retryApproval", requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "rejectRequest", requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "approveRequest", requestToken: RequestToken, reviewToken: RequestToken, payload: ApprovalPayload}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "setTransactionSpeed", requestToken: RequestToken, reviewToken: RequestToken, payload: TransactionSpeedPayload}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "applyTransactionEdits", requestToken: RequestToken, reviewToken: RequestToken, payload: TransactionEditsPayload}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "resolveApprovalAlert", requestToken: RequestToken, reviewToken: RequestToken, payload: ApprovalAlertPayload})} NativeCommand */
+    /** @typedef {({id: RequestID, workflowVersion: WorkflowVersion, subject: "openApp"}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getRecoveryRequests"}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getPendingRequests"}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "rpc", body: string, chainId: string}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getLatestConfiguration", configurationKey: string}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "disconnect", configurationKey: string, provider: Provider, attempt: PrivateToken, authority: AuthorityVersion}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "pollResponse", configurationKey: string, requestToken: RequestToken, maintenance: ("none"|"quiet"|"interactive")}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "acknowledgeResponse", configurationKey: string, requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "showApproval", configurationKey: string, requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "getApprovalState", requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "retryApproval", requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "rejectRequest", requestToken: RequestToken}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "approveRequest", requestToken: RequestToken, reviewToken: RequestToken, payload: ApprovalPayload}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "setTransactionSpeed", requestToken: RequestToken, reviewToken: RequestToken, payload: TransactionSpeedPayload}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "applyTransactionEdits", requestToken: RequestToken, reviewToken: RequestToken, payload: TransactionEditsPayload}|{id: RequestID, workflowVersion: WorkflowVersion, subject: "resolveApprovalAlert", requestToken: RequestToken, reviewToken: RequestToken, payload: ApprovalAlertPayload})} NativeCommand */
     /** @typedef {{address: string, chainId?: (string|null), object?: ProtocolJSONValue}} EthereumRequestBody */
     /** @typedef {{id?: RequestID, params?: ProtocolJSONValue, method?: string}} SolanaRequestObject */
     /** @typedef {{publicKey: string, object: SolanaRequestObject}} SolanaRequestBody */
@@ -2611,6 +2593,7 @@
     /** @typedef {{id: RequestID, requestToken: RequestToken, approvalRequired: boolean, admissionKind: ("new"|"replay"|"coalesced"), state: ConfigurationSnapshot}} NativeEnqueueAcknowledgement */
     /** @typedef {NativeEnqueueAcknowledgement} NativeAdmission */
     /** @typedef {{id: RequestID, response: NativeResponse, state: ConfigurationSnapshot}} NativeDelivery */
+    /** @typedef {(NativeDelivery|{id: RequestID, pending: true}|{id: RequestID, missing: true}|{id: RequestID, unavailable: true})} NativeResponsePollReply */
     /** @typedef {({id: RequestID, pending: true}|{id: RequestID, ready: true}|{id: RequestID, missing: true}|{id: RequestID, unavailable: true})} NativeStatus */
     /** @typedef {({id: RequestID, state: ConfigurationSnapshot}|{id: RequestID, unavailable: true})} NativeConfigurationReply */
     /** @typedef {({id: RequestID, state: ConfigurationSnapshot, revoked: true}|{id: RequestID, state: ConfigurationSnapshot, stale: true}|{id: RequestID, unavailable: true})} NativeDisconnectReply */
@@ -2664,7 +2647,7 @@
     /** @typedef {{status: "unavailable"}} PopupQueueUnavailable */
     /** @typedef {number} ErrorCode */
     /** @typedef {({applied: true}|{id: RequestID, missing: true})} RuntimeApplyCompletedReply */
-    /** @typedef {"RequestID"|"NonnegativeInteger"|"PositiveInteger"|"PrivateToken"|"RequestToken"|"EthereumChainID"|"SolanaPublicKey"|"AuthorityContext"|"Provider"|"RequestProvider"|"SolanaCluster"|"Revisions"|"ProviderRevisions"|"AuthorityVersion"|"EthereumConfiguration"|"SolanaConfiguration"|"ConfigurationSnapshot"|"SelectedAccount"|"ApprovalPayload"|"TransactionSpeedPayload"|"TransactionEditsPayload"|"ApprovalAlertPayload"|"NativeCommand"|"EthereumRequestBody"|"SolanaRequestObject"|"SolanaRequestBody"|"ManualProviderConfiguration"|"ManualRequestBody"|"ProviderRequest"|"DappRequest"|"ProviderError"|"NativeResult"|"NativeResponse"|"PageResponse"|"NativeEnqueueAcknowledgement"|"NativeAdmission"|"NativeDelivery"|"NativeStatus"|"NativeConfigurationReply"|"NativeDisconnectReply"|"NativeAcknowledgementReply"|"NativeOpenReply"|"RecoveryRequest"|"NativeRecoveryReply"|"RPCResponse"|"PopupDisplayAccount"|"PopupSelectableAccount"|"PopupNetworkOption"|"PopupClusterOption"|"PopupTransactionSlider"|"PopupTransactionEditor"|"PopupTransactionAlert"|"PopupReview"|"PopupApprovalState"|"PopupPendingRequest"|"PopupCompletedResponse"|"PopupQueue"|"PopupCommandResult"|"PopupResponse"|"PageDisconnect"|"PageRPC"|"PageToContent"|"ContentToPage"|"ResponseReady"|"PendingRequestAvailable"|"ConfigurationInvalidated"|"ManualSwitchAcknowledgement"|"WorkflowProbe"|"WorkflowProbeReply"|"ManualSwitchIntent"|"RuntimeManualSwitchIntent"|"RuntimeConfigurationRequest"|"RuntimeDappRequest"|"RuntimeDisconnect"|"RuntimeRPC"|"RuntimeResponseRequest"|"RuntimeBadgeUpdate"|"RuntimeApplyCompletedResponse"|"ContentToWorker"|"PopupToWorker"|"WorkerToContent"|"PopupToContent"|"WorkerToPopup"|"WorkerRequest"|"PageToContentMessage"|"ContentMessage"|"WorkflowVersion"|"PopupQueueUnavailable"|"ErrorCode"|"RuntimeApplyCompletedReply"} ProtocolTypeName */
+    /** @typedef {"RequestID"|"NonnegativeInteger"|"PositiveInteger"|"PrivateToken"|"RequestToken"|"EthereumChainID"|"SolanaPublicKey"|"AuthorityContext"|"Provider"|"RequestProvider"|"SolanaCluster"|"Revisions"|"ProviderRevisions"|"AuthorityVersion"|"EthereumConfiguration"|"SolanaConfiguration"|"ConfigurationSnapshot"|"SelectedAccount"|"ApprovalPayload"|"TransactionSpeedPayload"|"TransactionEditsPayload"|"ApprovalAlertPayload"|"NativeCommand"|"EthereumRequestBody"|"SolanaRequestObject"|"SolanaRequestBody"|"ManualProviderConfiguration"|"ManualRequestBody"|"ProviderRequest"|"DappRequest"|"ProviderError"|"NativeResult"|"NativeResponse"|"PageResponse"|"NativeEnqueueAcknowledgement"|"NativeAdmission"|"NativeDelivery"|"NativeResponsePollReply"|"NativeStatus"|"NativeConfigurationReply"|"NativeDisconnectReply"|"NativeAcknowledgementReply"|"NativeOpenReply"|"RecoveryRequest"|"NativeRecoveryReply"|"RPCResponse"|"PopupDisplayAccount"|"PopupSelectableAccount"|"PopupNetworkOption"|"PopupClusterOption"|"PopupTransactionSlider"|"PopupTransactionEditor"|"PopupTransactionAlert"|"PopupReview"|"PopupApprovalState"|"PopupPendingRequest"|"PopupCompletedResponse"|"PopupQueue"|"PopupCommandResult"|"PopupResponse"|"PageDisconnect"|"PageRPC"|"PageToContent"|"ContentToPage"|"ResponseReady"|"PendingRequestAvailable"|"ConfigurationInvalidated"|"ManualSwitchAcknowledgement"|"WorkflowProbe"|"WorkflowProbeReply"|"ManualSwitchIntent"|"RuntimeManualSwitchIntent"|"RuntimeConfigurationRequest"|"RuntimeDappRequest"|"RuntimeDisconnect"|"RuntimeRPC"|"RuntimeResponseRequest"|"RuntimeBadgeUpdate"|"RuntimeApplyCompletedResponse"|"ContentToWorker"|"PopupToWorker"|"WorkerToContent"|"PopupToContent"|"WorkerToPopup"|"WorkerRequest"|"PageToContentMessage"|"ContentMessage"|"WorkflowVersion"|"PopupQueueUnavailable"|"ErrorCode"|"RuntimeApplyCompletedReply"} ProtocolTypeName */
 
     /**
      * @param {ProtocolTypeName} typeName
@@ -2698,59 +2681,60 @@
             case "TransactionEditsPayload": return n36(value, context);
             case "ApprovalAlertPayload": return n41(value, context);
             case "NativeCommand": return n43(value, context);
-            case "EthereumRequestBody": return n90(value, context);
-            case "SolanaRequestObject": return n93(value, context);
-            case "SolanaRequestBody": return n94(value, context);
-            case "ManualProviderConfiguration": return n96(value, context);
-            case "ManualRequestBody": return n102(value, context);
-            case "ProviderRequest": return n105(value, context);
-            case "DappRequest": return n112(value, context);
-            case "ProviderError": return n120(value, context);
-            case "NativeResult": return n122(value, context);
-            case "NativeResponse": return n124(value, context);
-            case "PageResponse": return n137(value, context);
-            case "NativeEnqueueAcknowledgement": return n146(value, context);
-            case "NativeAdmission": return n148(value, context);
-            case "NativeDelivery": return n149(value, context);
-            case "NativeStatus": return n151(value, context);
-            case "NativeConfigurationReply": return n157(value, context);
-            case "NativeDisconnectReply": return n159(value, context);
-            case "NativeAcknowledgementReply": return n162(value, context);
-            case "NativeOpenReply": return n164(value, context);
-            case "RecoveryRequest": return n167(value, context);
-            case "NativeRecoveryReply": return n169(value, context);
-            case "RPCResponse": return n173(value, context);
-            case "PopupDisplayAccount": return n177(value, context);
-            case "PopupSelectableAccount": return n178(value, context);
-            case "PopupNetworkOption": return n179(value, context);
-            case "PopupClusterOption": return n180(value, context);
-            case "PopupTransactionSlider": return n181(value, context);
-            case "PopupTransactionEditor": return n182(value, context);
-            case "PopupTransactionAlert": return n186(value, context);
-            case "PopupReview": return n189(value, context);
-            case "PopupApprovalState": return n209(value, context);
-            case "PopupPendingRequest": return n221(value, context);
-            case "PopupCompletedResponse": return n223(value, context);
-            case "PopupQueue": return n224(value, context);
-            case "PopupCommandResult": return n231(value, context);
-            case "PopupResponse": return n240(value, context);
-            case "PageDisconnect": return n244(value, context);
-            case "PageRPC": return n247(value, context);
-            case "PageToContent": return n248(value, context);
-            case "ContentToPage": return n257(value, context);
-            case "ResponseReady": return n261(value, context);
-            case "PendingRequestAvailable": return n266(value, context);
-            case "ConfigurationInvalidated": return n268(value, context);
-            case "ManualSwitchAcknowledgement": return n270(value, context);
-            case "WorkflowProbe": return n272(value, context);
-            case "WorkflowProbeReply": return n274(value, context);
-            case "ManualSwitchIntent": return n275(value, context);
-            case "RuntimeManualSwitchIntent": return n277(value, context);
-            case "RuntimeConfigurationRequest": return n278(value, context);
-            case "RuntimeDappRequest": return n279(value, context);
-            case "RuntimeDisconnect": return n281(value, context);
-            case "RuntimeRPC": return n282(value, context);
-            case "RuntimeResponseRequest": return n283(value, context);
+            case "EthereumRequestBody": return n86(value, context);
+            case "SolanaRequestObject": return n89(value, context);
+            case "SolanaRequestBody": return n90(value, context);
+            case "ManualProviderConfiguration": return n92(value, context);
+            case "ManualRequestBody": return n98(value, context);
+            case "ProviderRequest": return n101(value, context);
+            case "DappRequest": return n108(value, context);
+            case "ProviderError": return n117(value, context);
+            case "NativeResult": return n119(value, context);
+            case "NativeResponse": return n121(value, context);
+            case "PageResponse": return n134(value, context);
+            case "NativeEnqueueAcknowledgement": return n143(value, context);
+            case "NativeAdmission": return n145(value, context);
+            case "NativeDelivery": return n146(value, context);
+            case "NativeResponsePollReply": return n148(value, context);
+            case "NativeStatus": return n154(value, context);
+            case "NativeConfigurationReply": return n156(value, context);
+            case "NativeDisconnectReply": return n158(value, context);
+            case "NativeAcknowledgementReply": return n161(value, context);
+            case "NativeOpenReply": return n163(value, context);
+            case "RecoveryRequest": return n166(value, context);
+            case "NativeRecoveryReply": return n168(value, context);
+            case "RPCResponse": return n172(value, context);
+            case "PopupDisplayAccount": return n176(value, context);
+            case "PopupSelectableAccount": return n177(value, context);
+            case "PopupNetworkOption": return n178(value, context);
+            case "PopupClusterOption": return n179(value, context);
+            case "PopupTransactionSlider": return n180(value, context);
+            case "PopupTransactionEditor": return n181(value, context);
+            case "PopupTransactionAlert": return n185(value, context);
+            case "PopupReview": return n188(value, context);
+            case "PopupApprovalState": return n208(value, context);
+            case "PopupPendingRequest": return n220(value, context);
+            case "PopupCompletedResponse": return n222(value, context);
+            case "PopupQueue": return n223(value, context);
+            case "PopupCommandResult": return n230(value, context);
+            case "PopupResponse": return n239(value, context);
+            case "PageDisconnect": return n243(value, context);
+            case "PageRPC": return n246(value, context);
+            case "PageToContent": return n247(value, context);
+            case "ContentToPage": return n256(value, context);
+            case "ResponseReady": return n260(value, context);
+            case "PendingRequestAvailable": return n265(value, context);
+            case "ConfigurationInvalidated": return n267(value, context);
+            case "ManualSwitchAcknowledgement": return n269(value, context);
+            case "WorkflowProbe": return n271(value, context);
+            case "WorkflowProbeReply": return n273(value, context);
+            case "ManualSwitchIntent": return n274(value, context);
+            case "RuntimeManualSwitchIntent": return n276(value, context);
+            case "RuntimeConfigurationRequest": return n277(value, context);
+            case "RuntimeDappRequest": return n278(value, context);
+            case "RuntimeDisconnect": return n280(value, context);
+            case "RuntimeRPC": return n281(value, context);
+            case "RuntimeResponseRequest": return n282(value, context);
             case "RuntimeBadgeUpdate": return n284(value, context);
             case "RuntimeApplyCompletedResponse": return n286(value, context);
             case "ContentToWorker": return n288(value, context);
@@ -2798,59 +2782,60 @@
                 case "TransactionEditsPayload": n36(value, context); return true;
                 case "ApprovalAlertPayload": n41(value, context); return true;
                 case "NativeCommand": n43(value, context); return true;
-                case "EthereumRequestBody": n90(value, context); return true;
-                case "SolanaRequestObject": n93(value, context); return true;
-                case "SolanaRequestBody": n94(value, context); return true;
-                case "ManualProviderConfiguration": n96(value, context); return true;
-                case "ManualRequestBody": n102(value, context); return true;
-                case "ProviderRequest": n105(value, context); return true;
-                case "DappRequest": n112(value, context); return true;
-                case "ProviderError": n120(value, context); return true;
-                case "NativeResult": n122(value, context); return true;
-                case "NativeResponse": n124(value, context); return true;
-                case "PageResponse": n137(value, context); return true;
-                case "NativeEnqueueAcknowledgement": n146(value, context); return true;
-                case "NativeAdmission": n148(value, context); return true;
-                case "NativeDelivery": n149(value, context); return true;
-                case "NativeStatus": n151(value, context); return true;
-                case "NativeConfigurationReply": n157(value, context); return true;
-                case "NativeDisconnectReply": n159(value, context); return true;
-                case "NativeAcknowledgementReply": n162(value, context); return true;
-                case "NativeOpenReply": n164(value, context); return true;
-                case "RecoveryRequest": n167(value, context); return true;
-                case "NativeRecoveryReply": n169(value, context); return true;
-                case "RPCResponse": n173(value, context); return true;
-                case "PopupDisplayAccount": n177(value, context); return true;
-                case "PopupSelectableAccount": n178(value, context); return true;
-                case "PopupNetworkOption": n179(value, context); return true;
-                case "PopupClusterOption": n180(value, context); return true;
-                case "PopupTransactionSlider": n181(value, context); return true;
-                case "PopupTransactionEditor": n182(value, context); return true;
-                case "PopupTransactionAlert": n186(value, context); return true;
-                case "PopupReview": n189(value, context); return true;
-                case "PopupApprovalState": n209(value, context); return true;
-                case "PopupPendingRequest": n221(value, context); return true;
-                case "PopupCompletedResponse": n223(value, context); return true;
-                case "PopupQueue": n224(value, context); return true;
-                case "PopupCommandResult": n231(value, context); return true;
-                case "PopupResponse": n240(value, context); return true;
-                case "PageDisconnect": n244(value, context); return true;
-                case "PageRPC": n247(value, context); return true;
-                case "PageToContent": n248(value, context); return true;
-                case "ContentToPage": n257(value, context); return true;
-                case "ResponseReady": n261(value, context); return true;
-                case "PendingRequestAvailable": n266(value, context); return true;
-                case "ConfigurationInvalidated": n268(value, context); return true;
-                case "ManualSwitchAcknowledgement": n270(value, context); return true;
-                case "WorkflowProbe": n272(value, context); return true;
-                case "WorkflowProbeReply": n274(value, context); return true;
-                case "ManualSwitchIntent": n275(value, context); return true;
-                case "RuntimeManualSwitchIntent": n277(value, context); return true;
-                case "RuntimeConfigurationRequest": n278(value, context); return true;
-                case "RuntimeDappRequest": n279(value, context); return true;
-                case "RuntimeDisconnect": n281(value, context); return true;
-                case "RuntimeRPC": n282(value, context); return true;
-                case "RuntimeResponseRequest": n283(value, context); return true;
+                case "EthereumRequestBody": n86(value, context); return true;
+                case "SolanaRequestObject": n89(value, context); return true;
+                case "SolanaRequestBody": n90(value, context); return true;
+                case "ManualProviderConfiguration": n92(value, context); return true;
+                case "ManualRequestBody": n98(value, context); return true;
+                case "ProviderRequest": n101(value, context); return true;
+                case "DappRequest": n108(value, context); return true;
+                case "ProviderError": n117(value, context); return true;
+                case "NativeResult": n119(value, context); return true;
+                case "NativeResponse": n121(value, context); return true;
+                case "PageResponse": n134(value, context); return true;
+                case "NativeEnqueueAcknowledgement": n143(value, context); return true;
+                case "NativeAdmission": n145(value, context); return true;
+                case "NativeDelivery": n146(value, context); return true;
+                case "NativeResponsePollReply": n148(value, context); return true;
+                case "NativeStatus": n154(value, context); return true;
+                case "NativeConfigurationReply": n156(value, context); return true;
+                case "NativeDisconnectReply": n158(value, context); return true;
+                case "NativeAcknowledgementReply": n161(value, context); return true;
+                case "NativeOpenReply": n163(value, context); return true;
+                case "RecoveryRequest": n166(value, context); return true;
+                case "NativeRecoveryReply": n168(value, context); return true;
+                case "RPCResponse": n172(value, context); return true;
+                case "PopupDisplayAccount": n176(value, context); return true;
+                case "PopupSelectableAccount": n177(value, context); return true;
+                case "PopupNetworkOption": n178(value, context); return true;
+                case "PopupClusterOption": n179(value, context); return true;
+                case "PopupTransactionSlider": n180(value, context); return true;
+                case "PopupTransactionEditor": n181(value, context); return true;
+                case "PopupTransactionAlert": n185(value, context); return true;
+                case "PopupReview": n188(value, context); return true;
+                case "PopupApprovalState": n208(value, context); return true;
+                case "PopupPendingRequest": n220(value, context); return true;
+                case "PopupCompletedResponse": n222(value, context); return true;
+                case "PopupQueue": n223(value, context); return true;
+                case "PopupCommandResult": n230(value, context); return true;
+                case "PopupResponse": n239(value, context); return true;
+                case "PageDisconnect": n243(value, context); return true;
+                case "PageRPC": n246(value, context); return true;
+                case "PageToContent": n247(value, context); return true;
+                case "ContentToPage": n256(value, context); return true;
+                case "ResponseReady": n260(value, context); return true;
+                case "PendingRequestAvailable": n265(value, context); return true;
+                case "ConfigurationInvalidated": n267(value, context); return true;
+                case "ManualSwitchAcknowledgement": n269(value, context); return true;
+                case "WorkflowProbe": n271(value, context); return true;
+                case "WorkflowProbeReply": n273(value, context); return true;
+                case "ManualSwitchIntent": n274(value, context); return true;
+                case "RuntimeManualSwitchIntent": n276(value, context); return true;
+                case "RuntimeConfigurationRequest": n277(value, context); return true;
+                case "RuntimeDappRequest": n278(value, context); return true;
+                case "RuntimeDisconnect": n280(value, context); return true;
+                case "RuntimeRPC": n281(value, context); return true;
+                case "RuntimeResponseRequest": n282(value, context); return true;
                 case "RuntimeBadgeUpdate": n284(value, context); return true;
                 case "RuntimeApplyCompletedResponse": n286(value, context); return true;
                 case "ContentToWorker": n288(value, context); return true;

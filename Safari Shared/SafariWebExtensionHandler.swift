@@ -29,6 +29,36 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #if os(macOS)
     @MainActor private static let nativeApprovalService = NativeApprovalService.live
 #endif
+    private static let responsePoller = ResponseDeliveryPoller(
+        responseStatus: { handle, configurationKey in
+            await bridge.responseStatus(handle: handle, configurationKey: configurationKey)
+        },
+        maintain: { handle, configurationKey, maintenance in
+#if os(macOS)
+            let result = await nativeApprovalService.reconcile(
+                .init(handle: handle, configurationKey: configurationKey),
+                intent: .maintenance(allowDelivery: maintenance == .interactive)
+            )
+            switch result {
+            case .pending, .opened: return .pending
+            case .responseReady: return .ready
+            case .missing: return .missing
+            case .unavailable: return .unavailable
+            }
+#else
+            await bridge.performMaintenance(profileIdentifier: handle.profileIdentifier)
+            return await bridge.responseStatus(handle: handle, configurationKey: configurationKey)
+#endif
+        },
+        prepareDelivery: { handle, configurationKey in
+            await bridge.prepareResponseDelivery(
+                id: handle.id,
+                configurationKey: configurationKey,
+                requestToken: handle.token.rawValue,
+                profileIdentifier: handle.profileIdentifier
+            )
+        }
+    )
 
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems.first as? NSExtensionItem,
@@ -156,53 +186,17 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     Self.respond(with: ["id": request.id, "unavailable": true], contract: .nativeStatus, context: context)
                 }
             }
-        case .maintainRequest(let identity):
+        case .pollResponse(let identity):
             Task {
                 let handle = ExtensionBridge.Handle(
                     id: request.id, token: identity.response.token, profileIdentifier: profileIdentifier
                 )
-#if os(macOS)
-                let result = await Self.nativeApprovalService.reconcile(
-                    .init(handle: handle, configurationKey: identity.response.configurationKey),
-                    intent: .maintenance(allowDelivery: identity.allowDelivery)
+                let result = await Self.responsePoller.poll(
+                    handle: handle,
+                    configurationKey: identity.response.configurationKey,
+                    maintenance: identity.maintenance
                 )
-                let status: ExtensionBridge.ResponseStatusResult
-                switch result {
-                case .pending, .opened: status = .pending
-                case .responseReady: status = .ready
-                case .missing: status = .missing
-                case .unavailable: status = .unavailable
-                }
-#else
-                await Self.bridge.performMaintenance(profileIdentifier: profileIdentifier)
-                let status = await Self.bridge.responseStatus(
-                    handle: handle, configurationKey: identity.response.configurationKey
-                )
-#endif
-                Self.respondStatus(status, id: request.id, context: context)
-            }
-        case .prepareResponseDelivery(let identity):
-            Task {
-                let result = await Self.bridge.prepareResponseDelivery(
-                    id: request.id,
-                    configurationKey: identity.configurationKey,
-                    requestToken: identity.token.rawValue,
-                    profileIdentifier: profileIdentifier
-                )
-                switch result {
-                case .response(let response):
-                    if let terminal = response["response"] as? [String: Any],
-                       ResponseToExtension(json: terminal)?.addsEthereumChain == true {
-                        CustomNetworkCache.shared.invalidate()
-                    }
-                    Self.respond(with: response, contract: .nativeDelivery, context: context)
-                case .pending:
-                    Self.respondStatus(.pending, id: request.id, context: context)
-                case .missing:
-                    Self.respondStatus(.missing, id: request.id, context: context)
-                case .unavailable:
-                    Self.respondStatus(.unavailable, id: request.id, context: context)
-                }
+                Self.respondPoll(result, id: request.id, context: context)
             }
         }
     }
@@ -501,34 +495,27 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 }
             }
-        case .getResponse(let identity):
-            readResponseStatus(
-                id: request.id, identity: identity, profileIdentifier: profileIdentifier,
-                privateBrowsing: privateBrowsing, context: context
-            )
         }
     }
 
-    private func readResponseStatus(
+    private static func respondPoll(
+        _ result: ExtensionBridge.ResponseReadResult,
         id: Int,
-        identity: InternalSafariRequest.ResponseIdentity,
-        profileIdentifier: UUID?,
-        privateBrowsing: Bool,
         context: NSExtensionContext
     ) {
-        guard !privateBrowsing else {
-            context.cancelRequest(withError: HandlerError.unsupportedOperation)
-            return
+        let response: [String: Any]
+        switch result {
+        case .response(let delivery):
+            if let terminal = delivery["response"] as? [String: Any],
+               ResponseToExtension(json: terminal)?.addsEthereumChain == true {
+                CustomNetworkCache.shared.invalidate()
+            }
+            response = delivery
+        case .pending: response = ["id": id, "pending": true]
+        case .missing: response = ["id": id, "missing": true]
+        case .unavailable: response = ["id": id, "unavailable": true]
         }
-        Task {
-            let handle = ExtensionBridge.Handle(
-                id: id, token: identity.token, profileIdentifier: profileIdentifier
-            )
-            let status = await Self.bridge.responseStatus(
-                handle: handle, configurationKey: identity.configurationKey
-            )
-            Self.respondStatus(status, id: id, context: context)
-        }
+        respond(with: response, contract: .nativeResponsePollReply, context: context)
     }
 
     private static func respondStatus(

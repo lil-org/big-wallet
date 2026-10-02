@@ -113,9 +113,9 @@ struct InternalSafariRequest: Decodable {
         let authority: ExtensionBridge.AuthorityVersion
     }
 
-    struct MaintenanceIdentity {
+    struct ResponsePollIdentity {
         let response: ResponseIdentity
-        let allowDelivery: Bool
+        let maintenance: ResponseDeliveryPoller.Maintenance
     }
 
     struct ResponseAcknowledgmentIdentity {
@@ -132,15 +132,13 @@ struct InternalSafariRequest: Decodable {
         case rpc(body: String, chainId: String)
         case getLatestConfiguration(configurationKey: String)
         case disconnect(DisconnectIdentity)
-        case getResponse(ResponseIdentity)
         case acknowledgeResponse(ResponseAcknowledgmentIdentity)
         case showApproval(ResponseAcknowledgmentIdentity)
     }
 
     enum WorkerCommand {
         case getRecoveryRequests
-        case maintainRequest(MaintenanceIdentity)
-        case prepareResponseDelivery(ResponseIdentity)
+        case pollResponse(ResponsePollIdentity)
     }
 
     enum PopupCommand {
@@ -204,14 +202,10 @@ struct InternalSafariRequest: Decodable {
                 attempt: fields.value("attempt"),
                 authority: authority
             )))
-        case "getResponse":
-            command = .page(.getResponse(try fields.responseIdentity()))
-        case "maintainRequest":
-            command = .worker(.maintainRequest(try MaintenanceIdentity(
-                response: fields.responseIdentity(), allowDelivery: fields.value("allowDelivery")
+        case "pollResponse":
+            command = .worker(.pollResponse(try ResponsePollIdentity(
+                response: fields.responseIdentity(), maintenance: fields.enumValue("maintenance")
             )))
-        case "prepareResponseDelivery":
-            command = .worker(.prepareResponseDelivery(try fields.responseIdentity()))
         case "getRecoveryRequests":
             command = .worker(.getRecoveryRequests)
         case "acknowledgeResponse", "showApproval":

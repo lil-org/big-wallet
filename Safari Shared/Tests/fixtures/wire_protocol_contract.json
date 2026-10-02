@@ -445,28 +445,30 @@
     }
   },
   {
-    "name": "native command getResponse 6",
+    "name": "native command pollResponse none",
     "type": "NativeCommand",
     "valid": true,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "getResponse",
+      "subject": "pollResponse",
       "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": "none"
     }
   },
   {
-    "name": "extra native command 6",
+    "name": "extra native command pollResponse none",
     "type": "NativeCommand",
     "valid": false,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "getResponse",
+      "subject": "pollResponse",
       "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091",
-      "unexpected": true
+      "unexpected": true,
+      "maintenance": "none"
     }
   },
   {
@@ -520,82 +522,57 @@
     }
   },
   {
-    "name": "native command prepareResponseDelivery 9",
+    "name": "native command pollResponse quiet",
     "type": "NativeCommand",
     "valid": true,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "prepareResponseDelivery",
+      "subject": "pollResponse",
       "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": "quiet"
     }
   },
   {
-    "name": "extra native command 9",
+    "name": "extra native command pollResponse quiet",
     "type": "NativeCommand",
     "valid": false,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "prepareResponseDelivery",
+      "subject": "pollResponse",
       "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091",
-      "unexpected": true
+      "unexpected": true,
+      "maintenance": "quiet"
     }
   },
   {
-    "name": "native command maintainRequest 10",
+    "name": "native command pollResponse interactive",
     "type": "NativeCommand",
     "valid": true,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "maintainRequest",
+      "subject": "pollResponse",
       "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091",
-      "allowDelivery": false
+      "maintenance": "interactive"
     }
   },
   {
-    "name": "extra native command 10",
+    "name": "extra native command pollResponse interactive",
     "type": "NativeCommand",
     "valid": false,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "maintainRequest",
+      "subject": "pollResponse",
       "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091",
-      "allowDelivery": false,
-      "unexpected": true
-    }
-  },
-  {
-    "name": "native command maintainRequest 11",
-    "type": "NativeCommand",
-    "valid": true,
-    "value": {
-      "id": 91,
-      "workflowVersion": 4,
-      "subject": "maintainRequest",
-      "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091",
-      "allowDelivery": true
-    }
-  },
-  {
-    "name": "extra native command 11",
-    "type": "NativeCommand",
-    "valid": false,
-    "value": {
-      "id": 91,
-      "workflowVersion": 4,
-      "subject": "maintainRequest",
-      "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091",
-      "allowDelivery": true,
-      "unexpected": true
+      "unexpected": true,
+      "maintenance": "interactive"
     }
   },
   {
@@ -3322,6 +3299,63 @@
           "publicKey": "11111111111111111111111111111111"
         }
       }
+    }
+  },
+  {
+    "name": "response poll delivery",
+    "type": "NativeResponsePollReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "response": {
+        "id": 91,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "signature",
+        "approvalCommitted": true
+      },
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "response poll pending",
+    "type": "NativeResponsePollReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "pending": true
+    }
+  },
+  {
+    "name": "response poll missing",
+    "type": "NativeResponsePollReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "missing": true
+    }
+  },
+  {
+    "name": "response poll unavailable",
+    "type": "NativeResponsePollReply",
+    "valid": true,
+    "value": {
+      "id": 91,
+      "unavailable": true
     }
   },
   {
@@ -7095,8 +7129,14 @@
       "id": 91,
       "jsonrpc": "2.0",
       "result": {
-        "decimals": [0.023359359010151733, 0.00033461068556032595, 0.1234567890123456789],
-        "nested": {"value": 0.023359359010151733}
+        "decimals": [
+          0.023359359010151733,
+          0.00033461068556032595,
+          0.12345678901234568
+        ],
+        "nested": {
+          "value": 0.023359359010151733
+        }
       }
     }
   },
@@ -7110,8 +7150,14 @@
         "code": -32603,
         "message": "Upstream error",
         "data": {
-          "decimals": [0.023359359010151733, 0.00033461068556032595, 0.1234567890123456789],
-          "nested": {"value": 0.00033461068556032595}
+          "decimals": [
+            0.023359359010151733,
+            0.00033461068556032595,
+            0.12345678901234568
+          ],
+          "nested": {
+            "value": 0.00033461068556032595
+          }
         }
       }
     }
@@ -7122,7 +7168,213 @@
     "valid": true,
     "value": {
       "id": 91,
-      "result": [5e-324, 1e-300, 1e300, 1.7976931348623157e308]
+      "result": [
+        5e-324,
+        1e-300,
+        1e+300,
+        1.7976931348623157e+308
+      ]
+    }
+  },
+  {
+    "name": "response poll rejects absent maintenance",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "pollResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "response poll rejects unknown maintenance",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "pollResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": "automatic"
+    }
+  },
+  {
+    "name": "response poll rejects boolean maintenance",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "pollResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": true
+    }
+  },
+  {
+    "name": "response poll rejects null maintenance",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "pollResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": null
+    }
+  },
+  {
+    "name": "response poll rejects delivery permission",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "pollResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": "none",
+      "allowDelivery": true
+    }
+  },
+  {
+    "name": "response poll rejects caller profile",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "pollResponse",
+      "configurationKey": "https://wallet.example",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "maintenance": "none",
+      "profileIdentifier": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "response poll rejects ready",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "ready": true
+    }
+  },
+  {
+    "name": "response poll rejects uncorrelated status",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "pending": true
+    }
+  },
+  {
+    "name": "response poll rejects invalid correlation",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": true,
+      "pending": true
+    }
+  },
+  {
+    "name": "response poll rejects false status",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "pending": false
+    }
+  },
+  {
+    "name": "response poll rejects multiple statuses",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "pending": true,
+      "unavailable": true
+    }
+  },
+  {
+    "name": "response poll rejects extra fields",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "pending": true,
+      "unexpected": true
+    }
+  },
+  {
+    "name": "response poll rejects delivery without id",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "response": {
+        "id": 91,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "signature",
+        "approvalCommitted": true
+      },
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "response poll rejects delivery without response",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "state": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        },
+        "ethereum": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1"
+        },
+        "solana": {
+          "publicKey": "11111111111111111111111111111111"
+        }
+      }
+    }
+  },
+  {
+    "name": "response poll rejects delivery without state",
+    "type": "NativeResponsePollReply",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "response": {
+        "id": 91,
+        "name": "signMessage",
+        "provider": "ethereum",
+        "kind": "result",
+        "result": "signature",
+        "approvalCommitted": true
+      }
     }
   }
 ]

@@ -3460,20 +3460,22 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertThrowsError(try decodeInternalRequest("rejectRequest"))
     }
 
-    func testWebPageSubjectsStayReachableFromContentScripts() throws {
+    func testResponsePollingIsWorkerOwnedWhileRPCRemainsPageOwned() throws {
         let responseMessage: [String: Any] = [
-            "subject": "getResponse",
+            "subject": "pollResponse",
             "id": 42,
             "workflowVersion": ExtensionBridge.workflowVersion,
             "configurationKey": "wallet.example",
             "requestToken": "00000000-0000-0000-0000-000000000001",
+            "maintenance": "none",
         ]
         let responseRequest = try decodeInternalRequest(responseMessage)
-        guard case .page(.getResponse(let identity)) = responseRequest.command else {
-            return XCTFail("expected getResponse")
+        guard case .worker(.pollResponse(let identity)) = responseRequest.command else {
+            return XCTFail("expected worker response poll")
         }
-        XCTAssertEqual(identity.configurationKey, "wallet.example")
-        XCTAssertEqual(identity.token.rawValue, "00000000-0000-0000-0000-000000000001")
+        XCTAssertEqual(identity.response.configurationKey, "wallet.example")
+        XCTAssertEqual(identity.response.token.rawValue, "00000000-0000-0000-0000-000000000001")
+        XCTAssertEqual(identity.maintenance, .none)
         for field in ["executionDeadline", "revisions"] {
             var malformed = responseMessage
             malformed[field] = field == "revisions" ? ["ethereum": 0, "solana": 0] : 1_700_000_160_000
@@ -3487,7 +3489,11 @@ final class DappRequestProcessorTests: XCTestCase {
             "body": "{}",
             "chainId": "0x1",
         ]
-        XCTAssertNoThrow(try decodeInternalRequest(rpcMessage))
+        guard case .page(.rpc(let body, let chainId)) = try decodeInternalRequest(rpcMessage).command else {
+            return XCTFail("expected page RPC")
+        }
+        XCTAssertEqual(body, "{}")
+        XCTAssertEqual(chainId, "0x1")
     }
 
     private func decodeInternalRequest(_ value: Any) throws -> InternalSafariRequest {

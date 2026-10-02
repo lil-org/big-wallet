@@ -42,6 +42,8 @@ Within a supported native profile, incompatible permission data resets to discon
 
 Disconnect revokes uncommitted requests immediately. Explicitly approved work can finish after its tab closes, and a transaction already committed for broadcast can finish after disconnect. Response retries never restore a revoked grant or repeat its mutation.
 
+The worker retrieves responses through one native poll, with maintenance selected by the worker. Polls without maintenance only observe pending requests; completed responses require fresh authority reconciliation and durable storage synchronization. Acknowledgement remains separate and preserves replay until expiry. Background recovery acknowledges manual account switches and only notifies waiting pages about ordinary request completions.
+
 Removing a wallet or account durably records its revocation before changing the wallet and clears its saved names. Each Safari profile applies outstanding revocations before its next authoritative operation, so an unrelated damaged profile does not block removal. Reimporting or re-enabling the account requires reconnecting. Committed transaction results remain available for recovery until their normal expiry.
 
 Revocation history retains the latest removal of each wallet or account without expiry; repeated removals coalesce. If that history is lost or structurally corrupted, a new history generation invalidates old site permissions as profiles are accessed while preserving request and transaction recovery records. Unreadable storage or a failed durable write still prevents removal.

@@ -284,6 +284,7 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertEqual(WireProtocol.maximumJSONDepth(for: .nativeResponse), 63)
         XCTAssertEqual(WireProtocol.maximumJSONDepth(for: .pageResponse), 63)
         XCTAssertEqual(WireProtocol.maximumJSONDepth(for: .nativeDelivery), 64)
+        XCTAssertEqual(WireProtocol.maximumJSONDepth(for: .nativeResponsePollReply), 64)
         XCTAssertEqual(WireProtocol.maximumJSONDepth(for: .contentToPage), 64)
         for arrays in [false, true] {
             for depth in [limit, limit + 1] {

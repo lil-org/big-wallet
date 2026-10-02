@@ -8,12 +8,19 @@
 
 /* Begin PBXBuildFile section */
 		C0DE00900000000000000011 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000011 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000012 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000012 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000013 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000013 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000014 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000014 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000015 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000015 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000016 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000016 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000017 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		C0DE0B100000000000000017 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
 		4675E5D05F4346D1BEBFD592 /* WalletSigningSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */; };
 		C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000002 /* ApprovalResolutionTests.swift */; };
@@ -867,8 +874,11 @@
 		FACA00000000000000000012 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000001 /* RemoteImageLoader.swift */; };
 		FACA00000000000000000013 /* RemoteImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACA00000000000000000002 /* RemoteImageLoaderTests.swift */; };
 		C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
+		C0DE0B200000000000000011 /* ResponseDeliveryPollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */; };
 		C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
+		C0DE0B200000000000000012 /* ResponseDeliveryPollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */; };
 		C0DE0A900000000000000013 /* NativeAuthorityTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */; };
+		C0DE0B200000000000000013 /* ResponseDeliveryPollerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */; };
 		5215FF67CA0E8CA32268D4E0 /* WireProtocol.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */; };
 		FC8A8A89536DE09243F38F9E /* WireProtocol.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */; };
 		751F21D762F3E444CE09A22D /* WireProtocol.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */; };
@@ -974,6 +984,7 @@
 
 /* Begin PBXFileReference section */
 		C0DE00900000000000000001 /* ApprovalResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolution.swift; sourceTree = "<group>"; };
+		C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseDeliveryPoller.swift; sourceTree = "<group>"; };
 		C0DE00900000000000000002 /* ApprovalResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolutionTests.swift; sourceTree = "<group>"; };
 		D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletSigningSessionTests.swift; sourceTree = "<group>"; };
 		C0DE00500000000000000001 /* NativeAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgentRuntime.swift; sourceTree = "<group>"; };
@@ -1207,6 +1218,7 @@
 		FACA00000000000000000001 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
 		FACA00000000000000000002 /* RemoteImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoaderTests.swift; sourceTree = "<group>"; };
 		C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAuthorityTransportTests.swift; sourceTree = "<group>"; };
+		C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseDeliveryPollerTests.swift; sourceTree = "<group>"; };
 		65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocol.generated.swift; sourceTree = "<group>"; };
 		B47BE6A967E11A172A253056 /* protocol.generated.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = protocol.generated.js; sourceTree = "<group>"; };
 		C10958F2F8BC7BC5AE7D4F95 /* wire-protocol.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-protocol.json"; sourceTree = "<group>"; };
@@ -1312,6 +1324,7 @@
 				2C0000012FA7000000000001 /* BigUIntTests.swift */,
 				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
 				C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */,
+				C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */,
 				BF4000012FB6000000000000 /* PopupStringsTests.swift */,
 				C0DE00900000000000000002 /* ApprovalResolutionTests.swift */,
 				D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */,
@@ -1694,6 +1707,7 @@
 				12F8F1E6BA79CB4183B8B2F4 /* NativeAgentRoute.swift */,
 				249CB855F657541977C5004B /* DurableApprovalExecutor.swift */,
 				C0DE00900000000000000001 /* ApprovalResolution.swift */,
+				C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */,
 				CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */,
 				923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */,
 				A7D400002FFE000000000001 /* NativeApprovalService.swift */,
@@ -3034,6 +3048,7 @@
 				38530D5A7DAD3B1CFFC2D561 /* DappApprovalDecision.swift in Sources */,
 				8BDB2B9574B8A42F68035914 /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000011 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000011 /* ResponseDeliveryPoller.swift in Sources */,
 				40FB4F91F97B18196FB868FA /* NativeAgentRoute.swift in Sources */,
 				B7582E561DBD6717675B43CE /* NativeAgentLauncher.swift in Sources */,
 				A7D401022FFE000000000001 /* NativeApprovalService.swift in Sources */,
@@ -3145,6 +3160,7 @@
 				FB12F6FE618B20F87E5F9E8E /* DappApprovalDecision.swift in Sources */,
 				8617A228000664850D566022 /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000012 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000012 /* ResponseDeliveryPoller.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3267,6 +3283,7 @@
 				6F551D42D70146111F42CBE7 /* NativeAgentRoute.swift in Sources */,
 				B1B97DE11956ECF17232F9B8 /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000013 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000013 /* ResponseDeliveryPoller.swift in Sources */,
 				C7C2E11CE19948DE81D1D989 /* NativeApprovalFinalizer.swift in Sources */,
 				A8B102012FC3000000000001 /* NativeAgentLauncher.swift in Sources */,
 				A7D401012FFE000000000001 /* NativeApprovalService.swift in Sources */,
@@ -3379,6 +3396,7 @@
 				C2E85F200AE9A68DAAA48CAA /* DappApprovalDecision.swift in Sources */,
 				DEF4288923C5F7AC9E2AE1F0 /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000014 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000014 /* ResponseDeliveryPoller.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3469,6 +3487,7 @@
 				3DAE6D4151111D16E57E3B59 /* DappApprovalDecision.swift in Sources */,
 				D0E4B4B1FBEDBC86037563A5 /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000015 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000015 /* ResponseDeliveryPoller.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3481,6 +3500,7 @@
 				BF5C00112FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00012FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */,
+				C0DE0B200000000000000011 /* ResponseDeliveryPollerTests.swift in Sources */,
 				BF4000112FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */,
 				4675E5D05F4346D1BEBFD592 /* WalletSigningSessionTests.swift in Sources */,
@@ -3632,6 +3652,7 @@
 				69424A652579E50C33ED9159 /* NativeAgentRoute.swift in Sources */,
 				FF6953A51811D3F7C4884094 /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000016 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000016 /* ResponseDeliveryPoller.swift in Sources */,
 				A9F700012FE0000000000001 /* NativeApprovalFinalizer.swift in Sources */,
 				A8B101022FC3000000000001 /* AmbientRuntimeIdentity.swift in Sources */,
 			);
@@ -3724,6 +3745,7 @@
 				59A1A94FB148E10F582F87A2 /* DappApprovalDecision.swift in Sources */,
 				DB1C86D19343F197C58BB0DB /* DurableApprovalExecutor.swift in Sources */,
 				C0DE00900000000000000017 /* ApprovalResolution.swift in Sources */,
+				C0DE0B100000000000000017 /* ResponseDeliveryPoller.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3736,6 +3758,7 @@
 				BF5C00122FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00022FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */,
+				C0DE0B200000000000000012 /* ResponseDeliveryPollerTests.swift in Sources */,
 				BF4000122FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */,
 				0C2431432A3F0CE29692BF48 /* WalletSigningSessionTests.swift in Sources */,
@@ -3780,6 +3803,7 @@
 				BF5C00132FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
 				D42A00032FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				C0DE0A900000000000000013 /* NativeAuthorityTransportTests.swift in Sources */,
+				C0DE0B200000000000000013 /* ResponseDeliveryPollerTests.swift in Sources */,
 				BF4000132FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000023 /* ApprovalResolutionTests.swift in Sources */,
 				AA65C4A347D1CDF8E304C3F8 /* WalletSigningSessionTests.swift in Sources */,
