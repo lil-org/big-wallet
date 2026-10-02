@@ -291,8 +291,35 @@ struct ReviewConsent: Sendable {
     var binding: ExtensionBridge.RequestBinding { intent.binding }
     var request: SafariRequest { binding.request }
 
+    var transactionChainID: Int? {
+        guard case .approveTransaction(let action) = intent.action else { return nil }
+        return action.chain.chainId
+    }
+
     func invalidateAuthorization() {
         _ = authorizationUse.consume()
+    }
+
+    @MainActor
+    func resolve(
+        accounts: [SpecificWalletAccount],
+        transactionNetwork: ResolvedEthereumNetwork?,
+        selectionNetworkResolver: (String) -> EthereumNetwork?
+    ) -> Result<ResolvedDappApproval, DappApprovalValidator.Failure> {
+        let selectionNetwork: EthereumNetwork?
+        switch (intent.action, decision) {
+        case (.selectAccount(let action), .accountSelection(let selection)),
+             (.switchAccount(let action), .accountSelection(let selection)):
+            selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
+                .flatMap(selectionNetworkResolver)
+        default:
+            selectionNetwork = nil
+        }
+        return resolve(context: .init(
+            accounts: accounts,
+            selectionNetwork: selectionNetwork,
+            transactionNetwork: transactionNetwork
+        ))
     }
 
     @MainActor
@@ -436,18 +463,8 @@ enum DappApprovalValidator {
             return .solanaLegacyBroadcast(transaction, options, cluster)
         case (.solanaSerializedBroadcast(let transaction, let options), let cluster?):
             return .solanaSerializedBroadcast(transaction, options, cluster)
-        case (.ethereumMessage(let data), nil):
-            return .ethereumMessage(data)
-        case (.ethereumPersonalMessage(let data), nil):
-            return .ethereumPersonalMessage(data)
-        case (.ethereumTypedData(let data), nil):
-            return .ethereumTypedData(data)
-        case (.solanaMessage(let data), nil):
-            return .solanaMessage(data)
-        case (.solanaTransaction(let transaction), nil):
-            return .solanaTransaction(transaction)
-        case (.solanaTransactions(let transactions), nil):
-            return .solanaTransactions(transactions)
+        case (.signature(let payload), nil):
+            return .signature(payload)
         default:
             return nil
         }

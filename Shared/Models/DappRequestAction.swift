@@ -154,14 +154,14 @@ struct ApprovedCompletion: Sendable {
               case .signing(_, let payload) = permit.approval.kind else { return nil }
         let result: ResponseToExtension.Result
         switch (payload, output) {
-        case (.ethereumMessage, .ethereumSignature(let signature)),
-             (.ethereumPersonalMessage, .ethereumSignature(let signature)),
-             (.ethereumTypedData, .ethereumSignature(let signature)):
+        case (.signature(.ethereumMessage), .ethereumSignature(let signature)),
+             (.signature(.ethereumPersonalMessage), .ethereumSignature(let signature)),
+             (.signature(.ethereumTypedData), .ethereumSignature(let signature)):
             result = .string(signature)
-        case (.solanaMessage, .solanaSignature(let signature)),
-             (.solanaTransaction, .solanaSignature(let signature)):
+        case (.signature(.solanaMessage), .solanaSignature(let signature)),
+             (.signature(.solanaTransaction), .solanaSignature(let signature)):
             result = .string(signature)
-        case (.solanaTransactions(let transactions), .solanaSignatures(let signatures)):
+        case (.signature(.solanaTransactions(let transactions)), .solanaSignatures(let signatures)):
             guard transactions.count == signatures.count else { return nil }
             result = .strings(signatures)
         default:
@@ -354,14 +354,27 @@ struct SigningReviewContent: Sendable {
     let payload: SignMessageAction.Payload
 }
 
+enum SignaturePayload: Sendable {
+    case ethereumMessage(Data)
+    case ethereumPersonalMessage(Data)
+    case ethereumTypedData(String)
+    case solanaMessage(Data)
+    case solanaTransaction(SolanaPreparedTransactionMessage)
+    case solanaTransactions([SolanaPreparedTransactionMessage])
+
+    var coin: WalletCoin {
+        switch self {
+        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
+            return .ethereum
+        case .solanaMessage, .solanaTransaction, .solanaTransactions:
+            return .solana
+        }
+    }
+}
+
 struct SignMessageAction: Sendable {
     enum Payload: Sendable {
-        case ethereumMessage(Data)
-        case ethereumPersonalMessage(Data)
-        case ethereumTypedData(String)
-        case solanaMessage(Data)
-        case solanaTransaction(SolanaPreparedTransactionMessage)
-        case solanaTransactions([SolanaPreparedTransactionMessage])
+        case signature(SignaturePayload)
         case solanaLegacyBroadcast(
             Solana.PreparedLegacySignAndSendTransaction,
             Solana.PreparedSendOptions
@@ -373,10 +386,9 @@ struct SignMessageAction: Sendable {
 
         var coin: WalletCoin {
             switch self {
-            case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
-                return .ethereum
-            case .solanaMessage, .solanaTransaction, .solanaTransactions,
-                 .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+            case .signature(let payload):
+                return payload.coin
+            case .solanaLegacyBroadcast, .solanaSerializedBroadcast:
                 return .solana
             }
         }
@@ -393,8 +405,7 @@ struct SignMessageAction: Sendable {
         case .solanaLegacyBroadcast(_, let options),
              .solanaSerializedBroadcast(_, let options):
             return SolanaClusterOptions(suggestedCluster: options.clusterHint)
-        case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData,
-             .solanaMessage, .solanaTransaction, .solanaTransactions:
+        case .signature:
             return nil
         }
     }

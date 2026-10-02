@@ -338,7 +338,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
         let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
         let malformed = try approvedWalletSigningOperationForTesting(
             approvedAccount: approved,
-            payload: .ethereumTypedData(WalletCoreProxyTestVectors.malformedTypedDataJSON)
+            payload: .signature(.ethereumTypedData(WalletCoreProxyTestVectors.malformedTypedDataJSON))
         )
         guard case .failure(.failedToSign) = await sign(malformed, using: signer) else {
             return XCTFail("Malformed typed data must fail cryptographic signing")

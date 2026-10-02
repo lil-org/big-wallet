@@ -221,7 +221,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 accounts: catalog.orderedAccounts
             )
         ).get()
-        guard case .signing(_, .ethereumPersonalMessage(let data)) = resolved.approval.kind else {
+        guard case .signing(_, .signature(.ethereumPersonalMessage(let data))) = resolved.approval.kind else {
             return XCTFail("Expected the canonical message payload")
         }
         XCTAssertEqual(data, Data([1]))
@@ -382,7 +382,7 @@ final class DappRequestProcessorTests: XCTestCase {
         guard case .approval(let messageIntent) = DappRequestProcessor().prepare(
             try XCTUnwrap(messageSnapshot.requestBinding), catalog: catalog
         ), case .approveMessage(let message) = messageIntent.action,
-           case .ethereumPersonalMessage(let data) = message.payload else {
+           case .signature(.ethereumPersonalMessage(let data)) = message.payload else {
             return XCTFail("Expected a canonical message review")
         }
         XCTAssertEqual(data, Data([1]))
@@ -541,7 +541,7 @@ final class DappRequestProcessorTests: XCTestCase {
         )
         guard case .approval(let actionIntent) = preparation,
               case .approveMessage(let action) = actionIntent.action,
-              case .ethereumPersonalMessage(let data) = action.payload else {
+              case .signature(.ethereumPersonalMessage(let data)) = action.payload else {
             return XCTFail("Expected prepared personal-message bytes")
         }
         XCTAssertEqual(data, Data("reviewed".utf8))
@@ -1096,7 +1096,7 @@ final class DappRequestProcessorTests: XCTestCase {
             let account = processorAccount(privateKey: key, coin: coin)
             let action = SignMessageAction(
                 subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
-                payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
+                payload: coin == .ethereum ? .signature(.ethereumMessage(Data())) : .signature(.solanaMessage(Data()))
             )
             for decision in [DappApprovalDecision.message(.init(approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account), solanaCluster: .devnet)),
                              .addEthereumChain] {
@@ -1147,12 +1147,12 @@ final class DappRequestProcessorTests: XCTestCase {
             confirmationCommitment: .finalized
         )
         let cases: [(SignMessageAction.Payload, Bool)] = [
-            (.ethereumMessage(Data("digest".utf8)), false),
-            (.ethereumPersonalMessage(Data("personal message".utf8)), false),
-            (.ethereumTypedData("typed data"), false),
-            (.solanaMessage(Data("solana message".utf8)), false),
-            (.solanaTransaction(transaction), false),
-            (.solanaTransactions([transaction, transaction]), false),
+            (.signature(.ethereumMessage(Data("digest".utf8))), false),
+            (.signature(.ethereumPersonalMessage(Data("personal message".utf8))), false),
+            (.signature(.ethereumTypedData("typed data")), false),
+            (.signature(.solanaMessage(Data("solana message".utf8))), false),
+            (.signature(.solanaTransaction(transaction)), false),
+            (.signature(.solanaTransactions([transaction, transaction])), false),
             (.solanaLegacyBroadcast(legacy, options), true),
             (.solanaSerializedBroadcast(serialized, options), true),
         ]
@@ -1188,15 +1188,15 @@ final class DappRequestProcessorTests: XCTestCase {
                 XCTAssertEqual(approvedPayload.coin, payload.coin)
                 XCTAssertFalse(approvedPayload.isEthereumTransaction)
                 switch (payload, approvedPayload) {
-                case (.ethereumMessage(let expected), .ethereumMessage(let actual)),
-                     (.ethereumPersonalMessage(let expected), .ethereumPersonalMessage(let actual)),
-                     (.solanaMessage(let expected), .solanaMessage(let actual)):
+                case (.signature(.ethereumMessage(let expected)), .signature(.ethereumMessage(let actual))),
+                     (.signature(.ethereumPersonalMessage(let expected)), .signature(.ethereumPersonalMessage(let actual))),
+                     (.signature(.solanaMessage(let expected)), .signature(.solanaMessage(let actual))):
                     XCTAssertEqual(actual, expected)
-                case (.ethereumTypedData(let expected), .ethereumTypedData(let actual)):
+                case (.signature(.ethereumTypedData(let expected)), .signature(.ethereumTypedData(let actual))):
                     XCTAssertEqual(actual, expected)
-                case (.solanaTransaction(let expected), .solanaTransaction(let actual)):
+                case (.signature(.solanaTransaction(let expected)), .signature(.solanaTransaction(let actual))):
                     XCTAssertEqual(actual.messageData, expected.messageData)
-                case (.solanaTransactions(let expected), .solanaTransactions(let actual)):
+                case (.signature(.solanaTransactions(let expected)), .signature(.solanaTransactions(let actual))):
                     XCTAssertEqual(actual.map(\.messageData), expected.map(\.messageData))
                 case (.solanaLegacyBroadcast(let expected, _),
                       .solanaLegacyBroadcast(let actual, let actualOptions, let actualCluster)):
@@ -1227,7 +1227,7 @@ final class DappRequestProcessorTests: XCTestCase {
             walletId: "reviewed-wallet",
             account: account,
             meta: "reviewed",
-            payload: .ethereumMessage(Data())
+            payload: .signature(.ethereumMessage(Data()))
         )
         guard case .failure(.staleAccount) = DappApprovalValidator.resolve(
             action: .approveMessage(action),
@@ -1299,7 +1299,7 @@ final class DappRequestProcessorTests: XCTestCase {
             let account = processorAccount(privateKey: key, coin: coin)
             let action = SignMessageAction(
                 subject: .signMessage, walletId: "wallet", account: account, meta: "reviewed",
-                payload: coin == .ethereum ? .ethereumMessage(Data()) : .solanaMessage(Data())
+                payload: coin == .ethereum ? .signature(.ethereumMessage(Data())) : .signature(.solanaMessage(Data()))
             )
             let exact = WalletAccountDescriptor(walletID: action.walletId, account: account)
             let scopes: [WalletAccountDescriptor] = [

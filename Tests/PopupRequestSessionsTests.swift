@@ -3052,7 +3052,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -3170,7 +3170,7 @@ extension PopupRequestSessionsTests {
                         walletId: "wallet",
                         account: popupTestAccount(),
                         meta: "reviewed",
-                        payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                        payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                     )))
                 },
                 walletEnvironment: popupWalletEnvironment(
@@ -3235,7 +3235,7 @@ extension PopupRequestSessionsTests {
             requestProcessor: CompactPopupProcessor { _ in
                 .approval(.approveMessage(SignMessageAction(
                     subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                    meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             },
             walletEnvironment: popupWalletEnvironment(unlockWallets: { _, _ in .canceled }),
@@ -3280,7 +3280,7 @@ extension PopupRequestSessionsTests {
                 }) { _, _ in
                     .approval(.approveMessage(SignMessageAction(
                         subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                        meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                     )))
                 },
                 walletEnvironment: PopupWalletEnvironment(
@@ -3501,7 +3501,7 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .approval(.approveMessage(SignMessageAction(
                     subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                    meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             },
             walletEnvironment: PopupWalletEnvironment(
@@ -3579,7 +3579,7 @@ extension PopupRequestSessionsTests {
             XCTAssertNotNil(walletAccess)
             XCTAssertTrue(authenticatedAccess?.validateCurrent() == true)
             XCTAssertEqual(authenticatedAccess?.approvedAccount, popupTestAccountDescriptor())
-            guard case .signing(_, .ethereumPersonalMessage(let payload)) = approval.kind else {
+            guard case .signing(_, .signature(.ethereumPersonalMessage(let payload))) = approval.kind else {
                 XCTFail("Expected the reviewed message")
                 return approvedFailureForTesting(.internalError, permit: permit)
             }
@@ -3595,7 +3595,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -3675,7 +3675,7 @@ extension PopupRequestSessionsTests {
                     walletId: approvedAccount.walletID,
                     account: account,
                     meta: "reviewed",
-                    payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 ))
             var preparations = 0
             var executions = 0
@@ -3759,7 +3759,7 @@ extension PopupRequestSessionsTests {
         }) { _ in
             .approval(.approveMessage(SignMessageAction(
                 subject: .signPersonalMessage, walletId: "wallet", account: accounts[0],
-                meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -3786,7 +3786,7 @@ extension PopupRequestSessionsTests {
         let operation = try XCTUnwrap(backingAccess.operations.first)
         XCTAssertEqual(operation.approvedAccount, WalletAccountDescriptor(walletID: "wallet", account: accounts[0]))
         XCTAssertEqual(operation.handle, snapshot.handle)
-        guard case .ethereumPersonalMessage(let message) = operation.payload else {
+        guard case .signature(.ethereumPersonalMessage(let message)) = operation.payload else {
             return XCTFail("Expected the reviewed personal-sign payload")
         }
         XCTAssertEqual(message, Data("reviewed".utf8))
@@ -3810,7 +3810,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -3868,7 +3868,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
@@ -3939,7 +3939,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -4240,7 +4240,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: account,
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -4297,7 +4297,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: account,
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -4753,7 +4753,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: account,
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let controller = PopupRequestSessions(
@@ -4828,7 +4828,7 @@ extension PopupRequestSessionsTests {
                     walletId: "wallet",
                     account: account,
                     meta: "reviewed",
-                    payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             },
             walletEnvironment: PopupWalletEnvironment(
@@ -4885,7 +4885,7 @@ extension PopupRequestSessionsTests {
                 preparedAccounts.append(access.orderedAccounts)
                 return .approval(.approveMessage(SignMessageAction(
                     subject: .signPersonalMessage, walletId: "wallet", account: account,
-                    meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             },
             walletEnvironment: PopupWalletEnvironment(
@@ -4951,7 +4951,7 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .approval(.approveMessage(SignMessageAction(
                     subject: .signPersonalMessage, walletId: "wallet", account: account,
-                    meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             },
             walletEnvironment: PopupWalletEnvironment(
@@ -5013,7 +5013,7 @@ extension PopupRequestSessionsTests {
                     }
                     return .approval(.approveMessage(SignMessageAction(
                         subject: .signPersonalMessage, walletId: "wallet", account: account,
-                        meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                     )))
                 },
                 walletEnvironment: PopupWalletEnvironment(
@@ -5085,7 +5085,7 @@ extension PopupRequestSessionsTests {
                     walletId: "wallet",
                     account: account,
                     meta: "reviewed",
-                    payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             }
             let controller = PopupRequestSessions(
@@ -5152,7 +5152,7 @@ extension PopupRequestSessionsTests {
                     walletId: "wallet",
                     account: account,
                     meta: "reviewed",
-                    payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                    payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                 )))
             }
             let controller = PopupRequestSessions(
@@ -6269,7 +6269,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
@@ -6321,7 +6321,7 @@ extension PopupRequestSessionsTests {
                 walletId: "wallet",
                 account: popupTestAccount(),
                 meta: "reviewed",
-                payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )))
         }
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
@@ -6509,10 +6509,14 @@ extension PopupRequestSessionsTests {
         let specific = SpecificWalletAccount(walletId: "wallet", account: account)
         let identity = WalletAccountDescriptor(walletID: "wallet", account: account)
         let network = popupTransactionNetwork()
-        let cases: [(name: String, accounts: [SpecificWalletAccount], selection: [WalletAccountDescriptor], network: EthereumNetwork?, allowed: Bool)] = [
-            ("normalized identity", [specific], [identity], network, true),
-            ("ambiguous identity", [specific, specific], [identity], network, false),
-            ("disconnect after network removal", [], [], nil, true),
+        let cases: [(name: String, accounts: [SpecificWalletAccount], selection: [WalletAccountDescriptor], selectedChainID: String?, network: EthereumNetwork?, allowed: Bool)] = [
+            ("normalized identity", [specific], [identity], network.chainIdHexString, network, true),
+            ("reviewed network fallback", [specific], [identity], nil, network, true),
+            ("explicit network overrides review", [specific], [identity], "0x1", Networks.ethereum, true),
+            ("missing explicit network does not fall back", [specific], [identity], "0x1", nil, false),
+            ("ambiguous identity", [specific, specific], [identity], network.chainIdHexString, network, false),
+            ("disconnect after selected network removal", [], [], network.chainIdHexString, nil, true),
+            ("disconnect after reviewed network removal", [], [], nil, nil, true),
         ]
         for (index, scenario) in cases.enumerated() {
             let store = try makeStore()
@@ -6523,15 +6527,25 @@ extension PopupRequestSessionsTests {
             let snapshot = try await enqueue(popupSnapshot(id: 800 + index, provider: .unknown), in: store)
             let decision = DappApprovalDecision.accountSelection(.init(
                 accounts: scenario.selection,
-                ethereumChainID: network.chainIdHexString
+                ethereumChainID: scenario.selectedChainID
             ))
             let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
+            guard case .switchAccount(let reviewedSelection) = authorization.intent.action else {
+                return XCTFail("Expected a manual account selection review")
+            }
+            XCTAssertEqual(reviewedSelection.network?.chainIdHexString, network.chainIdHexString, scenario.name)
+            XCTAssertNil(authorization.transactionChainID, scenario.name)
 
             var executionCount = 0
             var catalogRefreshes = 0
             var networkLookups = 0
-            let processor = CompactPopupProcessor(execute: { request, _, _, permit in
+            let processor = CompactPopupProcessor(execute: { _, approval, _, permit in
                 executionCount += 1
+                guard case .accountSelection(_, let selection) = approval.kind else {
+                    XCTFail("Expected the resolved account selection")
+                    return .rollback
+                }
+                XCTAssertEqual(selection.network, scenario.network, scenario.name)
                 return approvedFailureForTesting(.userRejected, permit: permit)
             }) { _ in
                 .approval(.switchAccount(SelectAccountAction(
@@ -6550,7 +6564,7 @@ extension PopupRequestSessionsTests {
                 },
                 networkResolver: { chainID in
                     networkLookups += 1
-                    XCTAssertEqual(chainID, network.chainIdHexString)
+                    XCTAssertEqual(chainID, scenario.selectedChainID ?? network.chainIdHexString, scenario.name)
                     return scenario.network
                 },
                 transactionNetworkResolver: { _ in
@@ -6569,6 +6583,35 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(executionCount, scenario.allowed ? 1 : 0, scenario.name)
             XCTAssertEqual(committed, scenario.allowed, scenario.name)
             XCTAssertEqual(errorCode, scenario.allowed ? 4001 : -32603, scenario.name)
+        }
+    }
+
+    func testConsentResolutionSkipsSelectionNetworksForSigningAndChainAddition() async throws {
+        let account = popupTestAccountDescriptor()
+        let network = try XCTUnwrap(popupSigningNetwork(chainID: popupTransactionNetwork().chainId))
+        let cases: [(method: String, decision: DappApprovalDecision, transactionChainID: Int?)] = [
+            ("signPersonalMessage", .message(.init(approvedAccount: account, solanaCluster: nil)), nil),
+            ("signTransaction", .transaction(try popupTransactionDecision()), network.network.chainId),
+            ("addEthereumChain", .addEthereumChain, nil),
+        ]
+        for (index, scenario) in cases.enumerated() {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(
+                id: 820 + index, provider: .ethereum, method: scenario.method
+            ), in: store)
+            let consent = try await store.prepareNativeApproval(handle: snapshot.handle, decision: scenario.decision)
+            XCTAssertEqual(consent.transactionChainID, scenario.transactionChainID, scenario.method)
+            let accounts = scenario.method == "addEthereumChain" ? [] : [account.specificAccount]
+            let resolved = try consent.resolve(
+                accounts: accounts,
+                transactionNetwork: scenario.transactionChainID == nil ? nil : network,
+                selectionNetworkResolver: { _ in
+                    XCTFail("\(scenario.method) must not resolve an account selection network")
+                    return nil
+                }
+            ).get()
+            XCTAssertEqual(resolved.binding, consent.binding, scenario.method)
+            XCTAssertEqual(resolved.approval.signingAccount, scenario.method == "addEthereumChain" ? nil : account, scenario.method)
         }
     }
 
@@ -7020,7 +7063,7 @@ extension PopupRequestSessionsTests {
                 }) { _ in
                     .approval(.approveMessage(SignMessageAction(
                         subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                        meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
                     )))
                 },
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },

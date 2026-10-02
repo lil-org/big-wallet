@@ -1104,26 +1104,12 @@ final class PopupRequestSessions {
                     accounts = catalog.orderedAccounts
                 }
                 guard self.isCurrent(session, token: token) else { return .abandon }
-                let selectionNetwork: EthereumNetwork?
-                switch (consent.intent.action, consent.decision) {
-                case (.selectAccount(let action), .accountSelection(let selection)),
-                     (.switchAccount(let action), .accountSelection(let selection)):
-                    selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                        .flatMap(self.selectionNetworkResolver)
-                default:
-                    selectionNetwork = nil
-                }
-                let transactionNetwork: ResolvedEthereumNetwork?
-                if case .approveTransaction(let action) = consent.intent.action {
-                    transactionNetwork = self.signingNetworkResolver(action.chain.chainId)
-                } else {
-                    transactionNetwork = nil
-                }
-                guard case .success(let resolved) = consent.resolve(context: .init(
+                let transactionNetwork = consent.transactionChainID.flatMap(self.signingNetworkResolver)
+                guard case .success(let resolved) = consent.resolve(
                     accounts: accounts,
-                    selectionNetwork: selectionNetwork,
-                    transactionNetwork: transactionNetwork
-                )) else { return .abandon }
+                    transactionNetwork: transactionNetwork,
+                    selectionNetworkResolver: self.selectionNetworkResolver
+                ) else { return .abandon }
                 return .approved(resolved)
             })
             await finishExecution(result, for: session, token: token)

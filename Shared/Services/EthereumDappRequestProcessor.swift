@@ -140,21 +140,21 @@ struct EthereumDappRequestProcessor {
             return SigningReviewContent(
                 subject: .signTypedData,
                 meta: raw,
-                payload: .ethereumTypedData(raw)
+                payload: .signature(.ethereumTypedData(raw))
             )
         case .signMessage:
             guard let data = body.message else { return nil }
             return SigningReviewContent(
                 subject: .signMessage,
                 meta: WalletCrypto.hexString(data: data),
-                payload: .ethereumMessage(data)
+                payload: .signature(.ethereumMessage(data))
             )
         case .signPersonalMessage:
             guard let data = body.message else { return nil }
             return SigningReviewContent(
                 subject: .signPersonalMessage,
                 meta: String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data),
-                payload: .ethereumPersonalMessage(data)
+                payload: .signature(.ethereumPersonalMessage(data))
             )
         case .addEthereumChain, .requestAccounts, .signTransaction, .ecRecover, .switchEthereumChain:
             return nil

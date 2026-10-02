@@ -120,10 +120,10 @@ actor NativeApprovalService {
         }
     }
 
-    private struct SharedDelivery {
-        let identifier: UUID
+    private struct DeliveryJob {
         let route: NativeAgentRoute
         let deadline: UInt64
+        let preparationFinished: ApprovalResolution<Void>
         let task: Task<ReconciliationResult, Never>
     }
 
@@ -132,7 +132,7 @@ actor NativeApprovalService {
 
     private let dependencies: Dependencies
     private let launchTimeoutNanoseconds: UInt64
-    private var sharedDeliveries = [SharedDelivery]()
+    private var deliveries = [DeliveryJob]()
     private var preparationTail: ApprovalResolution<Void>?
 
     init(
@@ -184,11 +184,15 @@ actor NativeApprovalService {
     }
 
     func openWallet(waitDeadline: UInt64? = nil) async -> Bool {
-        await scheduleDelivery(
+        let deliveryDeadline = dependencies.deadline(after: launchTimeoutNanoseconds)
+        let callerDeadline = min(deliveryDeadline, waitDeadline ?? UInt64.max)
+        guard dependencies.uptime() < callerDeadline else { return false }
+        let delivery = getOrStartDelivery(
             .showWallet(workflowVersion: ExtensionBridge.workflowVersion),
             reference: nil,
-            waitDeadline: waitDeadline
-        ) == .opened
+            deadline: deliveryDeadline
+        )
+        return await awaitDelivery(delivery, callerDeadline: callerDeadline) == .opened
     }
 
     private func reconcileRequest(
@@ -225,17 +229,27 @@ actor NativeApprovalService {
         waitDeadline: UInt64?
     ) async -> ReconciliationResult {
         let reference = RequestReference(snapshot)
+        let inspectionDeadline: UInt64
         if snapshot.hasActiveExecution {
-            return await inspectOwnership(reference, deadline: deadline)
+            inspectionDeadline = deadline
+        } else {
+            guard let route = reference.route else { return .missing }
+            guard dependencies.uptime() < deadline else { return .unavailable }
+            let delivery = getOrStartDelivery(
+                route, reference: reference,
+                deadline: dependencies.deadline(after: launchTimeoutNanoseconds)
+            )
+            let delivered = await awaitDelivery(delivery, callerDeadline: deadline)
+            guard !Task.isCancelled else { return .unavailable }
+            guard delivered == .unavailable else { return delivered }
+            inspectionDeadline = min(
+                dependencies.deadline(after: NativeApprovalTiming.receiptWaitTimeoutNanoseconds),
+                waitDeadline ?? UInt64.max
+            )
         }
-        let delivered = await deliverRequest(reference, deadline: deadline)
-        guard !Task.isCancelled else { return .unavailable }
-        guard delivered == .unavailable else { return delivered }
-        let receiptDeadline = min(
-            dependencies.deadline(after: NativeApprovalTiming.receiptWaitTimeoutNanoseconds),
-            waitDeadline ?? UInt64.max
-        )
-        return await inspectOwnership(reference, deadline: receiptDeadline)
+        return await bounded(deadline: inspectionDeadline, timeoutValue: ReconciliationResult.unavailable) {
+            await self.reconcileOwnership(reference, deadline: inspectionDeadline).result
+        }
     }
 
     private func reconcileMaintenance(
@@ -265,7 +279,12 @@ actor NativeApprovalService {
             return result
         case .needsDelivery:
             guard !quiet, !snapshot.hasActiveExecution else { return .pending }
-            return await deliverRequest(reference, deadline: deadline)
+            guard let route = reference.route else { return .missing }
+            let delivery = getOrStartDelivery(
+                route, reference: reference,
+                deadline: dependencies.deadline(after: launchTimeoutNanoseconds)
+            )
+            return await delivery.task.value
         case .owned:
             return .pending
         }
@@ -285,7 +304,12 @@ actor NativeApprovalService {
                 return result
             case .needsDelivery:
                 guard !snapshot.hasActiveExecution else { return .pending }
-                let result = await deliverRequest(reference, deadline: deadline)
+                guard let route = reference.route else { return .missing }
+                let delivery = getOrStartDelivery(
+                    route, reference: reference,
+                    deadline: dependencies.deadline(after: launchTimeoutNanoseconds)
+                )
+                let result = await delivery.task.value
                 return result == .pending ? .opened : result
             case .owned(let receipt, let runtime):
                 guard case .found(let current) = await load(reference) else { return .unavailable }
@@ -402,38 +426,16 @@ actor NativeApprovalService {
         return .finished(.unavailable)
     }
 
-    private func inspectOwnership(
-        _ reference: RequestReference,
-        deadline: UInt64
-    ) async -> ReconciliationResult {
-        guard isPending(until: deadline) else { return .unavailable }
-        return await bounded(deadline: deadline, timeoutValue: ReconciliationResult.unavailable) {
-            await self.reconcileOwnership(reference, deadline: deadline).result
-        }
-    }
-
-    private func deliverRequest(
-        _ reference: RequestReference,
-        deadline: UInt64
-    ) async -> ReconciliationResult {
-        guard let route = reference.route else { return .missing }
-        return await scheduleDelivery(route, reference: reference, waitDeadline: deadline)
-    }
-
-    private func scheduleDelivery(
+    private func getOrStartDelivery(
         _ route: NativeAgentRoute,
         reference: RequestReference?,
-        waitDeadline: UInt64?
-    ) async -> ReconciliationResult {
-        let deliveryDeadline = dependencies.deadline(after: launchTimeoutNanoseconds)
-        let callerDeadline = min(deliveryDeadline, waitDeadline ?? UInt64.max)
-        guard dependencies.uptime() < callerDeadline else { return .unavailable }
-        if let shared = sharedDeliveries.first(where: {
+        deadline: UInt64
+    ) -> DeliveryJob {
+        if let delivery = deliveries.first(where: {
             $0.route == route && dependencies.uptime() < $0.deadline
         }) {
-            return await result(of: shared, callerDeadline: callerDeadline)
+            return delivery
         }
-        let identifier = UUID()
         let precedingPreparation = preparationTail
         let preparationFinished = ApprovalResolution<Void>()
         preparationTail = preparationFinished
@@ -443,24 +445,26 @@ actor NativeApprovalService {
                 return ReconciliationResult.unavailable
             }
             let result = await self.bounded(
-                deadline: deliveryDeadline, timeoutValue: ReconciliationResult.unavailable
+                deadline: deadline, timeoutValue: ReconciliationResult.unavailable
             ) {
                 await precedingPreparation?.value()
                 return await self.deliver(
                     route, reference: reference,
-                    preparationFinished: preparationFinished, deadline: deliveryDeadline
+                    preparationFinished: preparationFinished, deadline: deadline
                 )
             }
-            await self.finishDeliveryPreparation(preparationFinished)
-            await self.finishSharedDelivery(identifier: identifier)
+            await self.retireDelivery(preparationFinished)
             return result
         }
-        let shared = SharedDelivery(identifier: identifier, route: route, deadline: deliveryDeadline, task: task)
-        sharedDeliveries.append(shared)
-        return await result(of: shared, callerDeadline: callerDeadline)
+        let delivery = DeliveryJob(
+            route: route, deadline: deadline,
+            preparationFinished: preparationFinished, task: task
+        )
+        deliveries.append(delivery)
+        return delivery
     }
 
-    private func result(of delivery: SharedDelivery, callerDeadline: UInt64) async -> ReconciliationResult {
+    private func awaitDelivery(_ delivery: DeliveryJob, callerDeadline: UInt64) async -> ReconciliationResult {
         if callerDeadline < delivery.deadline {
             return await bounded(deadline: callerDeadline, timeoutValue: ReconciliationResult.unavailable) {
                 await delivery.task.value
@@ -469,11 +473,8 @@ actor NativeApprovalService {
         return await delivery.task.value
     }
 
-    private func finishSharedDelivery(identifier: UUID) {
-        sharedDeliveries.removeAll { $0.identifier == identifier }
-    }
-
-    private func finishDeliveryPreparation(_ completion: ApprovalResolution<Void>) async {
+    private func retireDelivery(_ completion: ApprovalResolution<Void>) async {
+        deliveries.removeAll { $0.preparationFinished === completion }
         if preparationTail === completion {
             preparationTail = nil
         }
@@ -498,11 +499,11 @@ actor NativeApprovalService {
               let target = await dependencies.launcher.resolveTarget(expected: initialExpected, deadline: deadline),
               isPending(until: deadline) else { return .unavailable }
         if case .running = target {
-            await finishDeliveryPreparation(preparationFinished)
+            await preparationFinished.resolve(())
         }
         let sent = await dependencies.launcher.send(route, to: target, deadline: deadline)
         if case .launch = target {
-            await finishDeliveryPreparation(preparationFinished)
+            await preparationFinished.resolve(())
         }
         guard sent, let expected = await dependencies.launcher.expectedRuntime(at: target.url),
               isPending(until: deadline) else { return .unavailable }

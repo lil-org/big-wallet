@@ -31,7 +31,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let actions: [DappRequestAction] = [
             .approveMessage(SignMessageAction(
                 subject: .signPersonalMessage, walletId: approvedAccount.walletID,
-                account: account, meta: "reviewed", payload: .ethereumPersonalMessage(Data("reviewed".utf8))
+                account: account, meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
             )),
             .approveTransaction(SendTransactionAction(
                 transaction: transaction, resolvedNetwork: network,
@@ -4808,7 +4808,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         case .approveMessage(let message):
             let account = WalletAccountDescriptor(walletID: message.walletId, account: message.account)
             try fixture.establishGrant(account, profileIdentifier: handle.profileIdentifier, configurationKey: "https://\(host)")
-            guard case .ethereumPersonalMessage(let data) = message.payload else {
+            guard case .signature(.ethereumPersonalMessage(let data)) = message.payload else {
                 throw CocoaError(.coderInvalidValue)
             }
             name = "signPersonalMessage"

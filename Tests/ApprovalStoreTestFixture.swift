@@ -594,33 +594,33 @@ func approvedWalletSigningOperationForTesting(
     let deadline = authorization?.signingDeadline ?? deadline
     let ethereum = approvedAccount.coin == .ethereum
     let payload = payload ?? (ethereum
-        ? .ethereumPersonalMessage(walletSigningTestMessage)
-        : .solanaMessage(walletSigningTestMessage))
+        ? .signature(.ethereumPersonalMessage(walletSigningTestMessage))
+        : .signature(.solanaMessage(walletSigningTestMessage)))
     let name: String
     let subject: ApprovalSubject
     let parameters: [String: Any]
     switch payload {
-    case .ethereumMessage(let data):
+    case .signature(.ethereumMessage(let data)):
         name = "signMessage"
         subject = .signMessage
         parameters = ["data": WalletCrypto.hexString(data: data)]
-    case .ethereumPersonalMessage(let data):
+    case .signature(.ethereumPersonalMessage(let data)):
         name = "signPersonalMessage"
         subject = .signPersonalMessage
         parameters = ["data": WalletCrypto.hexString(data: data)]
-    case .ethereumTypedData(let raw):
+    case .signature(.ethereumTypedData(let raw)):
         name = "signTypedMessage"
         subject = .signTypedData
         parameters = ["raw": raw]
-    case .solanaMessage(let data):
+    case .signature(.solanaMessage(let data)):
         name = "signMessage"
         subject = .signMessage
         parameters = ["message": WalletCrypto.hexString(data: data), "messageEncoding": "hex"]
-    case .solanaTransaction(let transaction):
+    case .signature(.solanaTransaction(let transaction)):
         name = "signTransaction"
         subject = .approveTransaction
         parameters = ["message": WalletCrypto.base58Encode(data: transaction.messageData)]
-    case .solanaTransactions(let transactions):
+    case .signature(.solanaTransactions(let transactions)):
         name = "signAllTransactions"
         subject = .approveTransaction
         parameters = ["messages": transactions.map { WalletCrypto.base58Encode(data: $0.messageData) }]

@@ -172,7 +172,7 @@ struct SolanaDappRequestProcessor {
                 encodedMessages: messages,
                 preparedMessages: preparedMessages
             ),
-            payload: .solanaTransactions(preparedMessages)
+            payload: .signature(.solanaTransactions(preparedMessages))
         ))
     }
 
@@ -238,7 +238,7 @@ struct SolanaDappRequestProcessor {
                     canonicalMessage: canonicalMessage,
                     decodedMessageData: messageData
                 ),
-                payload: .solanaMessage(messageData)
+                payload: .signature(.solanaMessage(messageData))
             ))
         case .signTransaction:
             return preparedTransactionMessage(
@@ -251,7 +251,7 @@ struct SolanaDappRequestProcessor {
                         message: canonicalMessage,
                         preparedMessage: preparedMessage
                     ),
-                    payload: .solanaTransaction(preparedMessage)
+                    payload: .signature(.solanaTransaction(preparedMessage))
                 )
             }
         case .connect, .signAllTransactions, .signAndSendTransaction:

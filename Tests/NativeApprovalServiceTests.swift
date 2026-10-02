@@ -965,6 +965,116 @@
             XCTAssertEqual(firstResult, .pending)
         }
 
+        func testCompletedPreparationTailsAllowSeveralPendingRunningSends() async throws {
+            let f = try fixture()
+            let requests = try (1...3).map { try f.request(id: $0) }
+            let runtime = f.runtime()
+            f.processes[42] = runtime
+            var completions = [Int: (Bool) -> Void]()
+            f.onLaunch = { _, route, completion in
+                guard case .approval(_, let handle, _) = route else {
+                    return XCTFail("Expected approval delivery")
+                }
+                completions[handle.id] = completion
+            }
+            let service = f.service()
+            var tasks = [Task<NativeApprovalService.ReconciliationResult, Never>]()
+            for request in requests {
+                tasks.append(Task { await service.reconcile(.init(request), intent: .admission) })
+                try await f.eventually { completions[request.handle.id] != nil }
+            }
+
+            XCTAssertEqual(f.launches.map(\.route), requests.map(f.route))
+            XCTAssertTrue(f.launches.allSatisfy {
+                $0.target == .running(url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                                     runtimeInstanceIdentifier: runtime.instanceIdentifier)
+            })
+            for (index, request) in requests.enumerated().reversed() {
+                f.deliver(request, runtime: runtime)
+                completions[request.handle.id]?(true)
+                let result = try await f.finish { await tasks[index].value }
+                XCTAssertEqual(result, .pending)
+            }
+            XCTAssertTrue(f.clock.deadlines.isEmpty)
+        }
+
+        func testOlderDeliveryCompletionDoesNotReleaseSuccessorsColdPreparation() async throws {
+            let f = try fixture()
+            let requests = try (1...3).map { try f.request(id: $0) }
+            let runtime = f.runtime()
+            f.processes[42] = runtime
+            var firstCompletion: ((Bool) -> Void)?
+            var secondCompletion: ((Bool) -> Void)?
+            f.onLaunch = { _, route, completion in
+                if route == f.route(requests[0]) {
+                    firstCompletion = completion
+                } else if route == f.route(requests[1]) {
+                    secondCompletion = completion
+                } else {
+                    f.deliver(requests[2], runtime: runtime)
+                    completion(true)
+                }
+            }
+            let service = f.service()
+            let first = Task { await service.reconcile(.init(requests[0]), intent: .admission) }
+            try await f.eventually { firstCompletion != nil }
+            f.processes.removeAll()
+            let second = Task { await service.reconcile(.init(requests[1]), intent: .admission) }
+            try await f.eventually { secondCompletion != nil }
+
+            f.setState(.responded, for: requests[0])
+            firstCompletion?(true)
+            let firstResult = try await f.finish { await first.value }
+            XCTAssertEqual(firstResult, .responseReady)
+
+            let callerDeadline = f.clock.now + 4_000_000_000
+            let third = Task {
+                await service.reconcile(.init(requests[2]), intent: .admission, waitDeadline: callerDeadline)
+            }
+            try await f.eventually { f.clock.deadlines.contains(callerDeadline) }
+            XCTAssertEqual(f.launches.map(\.route), requests.prefix(2).map(f.route))
+            XCTAssertEqual(f.launches[1].target, .launch(url: f.bundleURL.standardizedFileURL))
+
+            f.deliver(requests[1], runtime: runtime)
+            secondCompletion?(true)
+            let secondResult = try await f.finish { await second.value }
+            let thirdResult = try await f.finish { await third.value }
+            XCTAssertEqual(secondResult, .pending)
+            XCTAssertEqual(thirdResult, .pending)
+            XCTAssertEqual(f.launches.map(\.route), requests.map(f.route))
+            XCTAssertEqual(f.launches[2].target, .running(
+                url: f.bundleURL.standardizedFileURL, processIdentifier: 42,
+                runtimeInstanceIdentifier: runtime.instanceIdentifier
+            ))
+        }
+
+        func testFocusAndMaintenanceWaitWithOneCallerDeadline() async throws {
+            for intent in [NativeApprovalService.ReconciliationIntent.focus, .maintenance(allowDelivery: true)] {
+                let f = try fixture()
+                let request = try f.request()
+                let service = f.service(timeout: 500_000_000)
+                let callerDeadline = f.clock.now + 100_000_000
+                let deliveryDeadline = f.clock.now + 500_000_000
+                var completion: ((Bool) -> Void)?
+                f.onLaunch = { _, _, callback in completion = callback }
+                let caller = Task {
+                    await service.reconcile(.init(request), intent: intent, waitDeadline: callerDeadline)
+                }
+                try await f.eventually { completion != nil && f.clock.deadlines.count >= 2 }
+                XCTAssertEqual(f.clock.deadlines, [callerDeadline, deliveryDeadline])
+
+                f.clock.advance(to: callerDeadline)
+                let result = try await f.finish { await caller.value }
+                XCTAssertEqual(result, .unavailable)
+                XCTAssertEqual(f.clock.deadlines, [deliveryDeadline])
+
+                f.deliver(request)
+                completion?(true)
+                try await f.eventually { f.clock.deadlines.isEmpty }
+                XCTAssertEqual(f.launches.count, 1)
+            }
+        }
+
         func testConcurrentColdDeliveriesLaunchOnceThenUseRunningHelper() async throws {
             let f = try fixture()
             let firstRequest = try f.request()

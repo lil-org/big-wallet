@@ -120,12 +120,12 @@ final class NativeApprovalFinalizer {
             if let resolution = EthereumDappRequestProcessor.chainAdditionResolution(action.chainToAdd) {
                 return .immediate(resolution)
             }
-            return resolvedConsent(consent, context: .init(accounts: []))
+            return resolvedConsent(consent, accounts: [], transactionNetwork: nil)
         }
         CustomNetworkCache.shared.invalidate()
         let currentNetwork: ResolvedEthereumNetwork?
-        if case .approveTransaction(let action) = consent.intent.action {
-            guard let network = transactionNetworkResolver(action.chain.chainId) else {
+        if let chainID = consent.transactionChainID {
+            guard let network = transactionNetworkResolver(chainID) else {
                 return .immediate(.failure(.internalError))
             }
             currentNetwork = network
@@ -133,27 +133,23 @@ final class NativeApprovalFinalizer {
             currentNetwork = nil
         }
         guard let catalog = refreshWalletCatalog() else { return .abandon }
-        let selectionNetwork: EthereumNetwork?
-        switch (consent.intent.action, consent.decision) {
-        case (.selectAccount(let action), .accountSelection(let selection)),
-             (.switchAccount(let action), .accountSelection(let selection)):
-            selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                .flatMap(networkResolver)
-        default:
-            selectionNetwork = nil
-        }
-        return resolvedConsent(consent, context: .init(
+        return resolvedConsent(
+            consent,
             accounts: catalog.orderedAccounts,
-            selectionNetwork: selectionNetwork,
             transactionNetwork: currentNetwork
-        ))
+        )
     }
 
     private func resolvedConsent(
         _ consent: ReviewConsent,
-        context: ApprovalResolutionContext
+        accounts: [SpecificWalletAccount],
+        transactionNetwork: ResolvedEthereumNetwork?
     ) -> DurableApprovalExecutor.Resolution {
-        switch consent.resolve(context: context) {
+        switch consent.resolve(
+            accounts: accounts,
+            transactionNetwork: transactionNetwork,
+            selectionNetworkResolver: networkResolver
+        ) {
         case .success(let approval):
             return .approved(approval)
         case .failure(.accountUnavailable):

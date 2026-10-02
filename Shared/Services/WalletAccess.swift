@@ -228,13 +228,8 @@ struct WalletSigningAuthorization: Equatable, Sendable {
 struct ApprovedWalletSigningOperation: Sendable {
 
     enum Payload: Sendable {
-        case ethereumMessage(Data)
-        case ethereumPersonalMessage(Data)
-        case ethereumTypedData(String)
+        case signature(SignaturePayload)
         case ethereumTransaction(Transaction, ResolvedEthereumNetwork)
-        case solanaMessage(Data)
-        case solanaTransaction(SolanaPreparedTransactionMessage)
-        case solanaTransactions([SolanaPreparedTransactionMessage])
         case solanaLegacyBroadcast(
             Solana.PreparedLegacySignAndSendTransaction,
             Solana.PreparedSendOptions,
@@ -248,11 +243,11 @@ struct ApprovedWalletSigningOperation: Sendable {
 
         var coin: WalletCoin {
             switch self {
-            case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData,
-                 .ethereumTransaction:
+            case .signature(let payload):
+                return payload.coin
+            case .ethereumTransaction:
                 return .ethereum
-            case .solanaMessage, .solanaTransaction, .solanaTransactions,
-                 .solanaLegacyBroadcast, .solanaSerializedBroadcast:
+            case .solanaLegacyBroadcast, .solanaSerializedBroadcast:
                 return .solana
             }
         }
@@ -295,18 +290,8 @@ struct ApprovedWalletSigningOperation: Sendable {
             return .failure(.authorizationUnavailable)
         }
         switch payload {
-        case .ethereumMessage(let data):
-            guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
-            else { return .failure(.failedToSign) }
-            return .success(.ethereumSignature(signature))
-        case .ethereumPersonalMessage(let data):
-            guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
-            else { return .failure(.failedToSign) }
-            return .success(.ethereumSignature(signature))
-        case .ethereumTypedData(let data):
-            guard let signature = try? Ethereum.sign(typedData: data, privateKey: privateKey)
-            else { return .failure(.failedToSign) }
-            return .success(.ethereumSignature(signature))
+        case .signature(let payload):
+            return signSignature(payload, with: privateKey)
         case .ethereumTransaction(let transaction, let network):
             switch Ethereum.signedTransaction(
                 transaction: transaction, privateKey: privateKey, network: network.network
@@ -322,15 +307,6 @@ struct ApprovedWalletSigningOperation: Sendable {
                     signedTransaction: signed, transactionHash: hash
                 ))
             }
-        case .solanaMessage(let data):
-            return solanaSignature(data, privateKey: privateKey)
-        case .solanaTransaction(let transaction):
-            return solanaSignature(transaction.messageData, privateKey: privateKey)
-        case .solanaTransactions(let transactions):
-            guard let signatures = Solana.sign(
-                messageDataList: transactions.map(\.messageData), privateKey: privateKey
-            ), signatures.count == transactions.count else { return .failure(.failedToSign) }
-            return .success(.solanaSignatures(signatures))
         case .solanaLegacyBroadcast(let transaction, _, _):
             return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
@@ -343,6 +319,35 @@ struct ApprovedWalletSigningOperation: Sendable {
                     preparedSerializedTransaction: transaction, privateKey: privateKey
                 )
             )
+        }
+    }
+
+    private func signSignature(
+        _ payload: SignaturePayload,
+        with privateKey: WalletPrivateKey
+    ) -> Result<WalletSigningOutput, WalletSigningFailure> {
+        switch payload {
+        case .ethereumMessage(let data):
+            guard let signature = try? Ethereum.sign(data: data, privateKey: privateKey)
+            else { return .failure(.failedToSign) }
+            return .success(.ethereumSignature(signature))
+        case .ethereumPersonalMessage(let data):
+            guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
+            else { return .failure(.failedToSign) }
+            return .success(.ethereumSignature(signature))
+        case .ethereumTypedData(let data):
+            guard let signature = try? Ethereum.sign(typedData: data, privateKey: privateKey)
+            else { return .failure(.failedToSign) }
+            return .success(.ethereumSignature(signature))
+        case .solanaMessage(let data):
+            return solanaSignature(data, privateKey: privateKey)
+        case .solanaTransaction(let transaction):
+            return solanaSignature(transaction.messageData, privateKey: privateKey)
+        case .solanaTransactions(let transactions):
+            guard let signatures = Solana.sign(
+                messageDataList: transactions.map(\.messageData), privateKey: privateKey
+            ), signatures.count == transactions.count else { return .failure(.failedToSign) }
+            return .success(.solanaSignatures(signatures))
         }
     }
 

@@ -9196,11 +9196,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let hash = try XCTUnwrap(Ethereum.transactionHash(signedTransaction: signed))
                 broadcast = try XCTUnwrap(PreparedBroadcast.signed(.ethereumTransaction(signedTransaction: signed, transactionHash: hash), permit: permit))
                 completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
-            case .ethereumMessage, .ethereumPersonalMessage, .ethereumTypedData:
+            case .signature(.ethereumMessage), .signature(.ethereumPersonalMessage), .signature(.ethereumTypedData):
                 completion = try XCTUnwrap(ApprovedCompletion.signed(.ethereumSignature("0xsigned"), permit: permit))
-            case .solanaMessage, .solanaTransaction:
+            case .signature(.solanaMessage), .signature(.solanaTransaction):
                 completion = try XCTUnwrap(ApprovedCompletion.signed(.solanaSignature("1111"), permit: permit))
-            case .solanaTransactions:
+            case .signature(.solanaTransactions):
                 throw Failure.expectedValue
             case .solanaLegacyBroadcast(let transaction, _, _):
                 let signature = Data(repeating: 7, count: 64)

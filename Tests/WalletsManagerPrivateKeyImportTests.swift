@@ -1188,12 +1188,12 @@ final class WalletSigningScopeTests: XCTestCase {
         ).get()
         let options = try Solana.preparedSendOptions(from: [:]).get()
         let cases: [(SignMessageAction.Payload, WalletCoin, Bool)] = [
-            (.ethereumMessage(Vectors.ethereumRawSignDigest), .ethereum, false),
-            (.ethereumPersonalMessage(walletSigningTestMessage), .ethereum, false),
-            (.ethereumTypedData(Vectors.typedDataJSON), .ethereum, false),
-            (.solanaMessage(walletSigningTestMessage), .solana, false),
-            (.solanaTransaction(transaction), .solana, false),
-            (.solanaTransactions([transaction]), .solana, false),
+            (.signature(.ethereumMessage(Vectors.ethereumRawSignDigest)), .ethereum, false),
+            (.signature(.ethereumPersonalMessage(walletSigningTestMessage)), .ethereum, false),
+            (.signature(.ethereumTypedData(Vectors.typedDataJSON)), .ethereum, false),
+            (.signature(.solanaMessage(walletSigningTestMessage)), .solana, false),
+            (.signature(.solanaTransaction(transaction)), .solana, false),
+            (.signature(.solanaTransactions([transaction])), .solana, false),
             (.solanaLegacyBroadcast(legacy, options), .solana, true),
             (.solanaSerializedBroadcast(serialized, options), .solana, true),
         ]
@@ -1248,9 +1248,9 @@ final class WalletSigningScopeTests: XCTestCase {
 
     func testEthereumSigningModesUseTheCapturedPayload() async throws {
         let cases: [(SignMessageAction.Payload, String)] = [
-            (.ethereumMessage(Vectors.ethereumRawSignDigest), Vectors.ethereumRawSignature),
-            (.ethereumPersonalMessage(Vectors.ethereumPersonalMessage), Vectors.ethereumPersonalMessageSignature),
-            (.ethereumTypedData(Vectors.typedDataJSON), Vectors.ethereumTypedDataSignature),
+            (.signature(.ethereumMessage(Vectors.ethereumRawSignDigest)), Vectors.ethereumRawSignature),
+            (.signature(.ethereumPersonalMessage(Vectors.ethereumPersonalMessage)), Vectors.ethereumPersonalMessageSignature),
+            (.signature(.ethereumTypedData(Vectors.typedDataJSON)), Vectors.ethereumTypedDataSignature),
         ]
         for (payload, expectedSignature) in cases {
             let (account, access) = try unlockedSigningAccess(coin: .ethereum, key: Vectors.ethereumSignerPrivateKey)
@@ -1268,7 +1268,7 @@ final class WalletSigningScopeTests: XCTestCase {
     func testCryptographicFailureConsumesTheBoundSigner() async throws {
         let (account, access) = try unlockedSigningAccess(coin: .ethereum, key: Vectors.ethereumSignerPrivateKey)
         let operation = try approvedWalletSigningOperationForTesting(
-            approvedAccount: account, payload: .ethereumTypedData(Vectors.malformedTypedDataJSON)
+            approvedAccount: account, payload: .signature(.ethereumTypedData(Vectors.malformedTypedDataJSON))
         )
         let signer = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
         XCTAssertTrue(signer.bind(operation: operation, authorityIsCurrent: { _ in true }))
@@ -1358,9 +1358,9 @@ final class WalletSigningScopeTests: XCTestCase {
             ).get()
         }
         let cases: [(SignMessageAction.Payload, [Data])] = [
-            (.solanaMessage(walletSigningTestMessage), [walletSigningTestMessage]),
-            (.solanaTransaction(prepared[0]), [messages[0]]),
-            (.solanaTransactions(prepared), messages),
+            (.signature(.solanaMessage(walletSigningTestMessage)), [walletSigningTestMessage]),
+            (.signature(.solanaTransaction(prepared[0])), [messages[0]]),
+            (.signature(.solanaTransactions(prepared)), messages),
         ]
         let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
         for (payload, expectedMessages) in cases {
