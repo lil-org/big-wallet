@@ -2373,6 +2373,72 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             .appendingPathComponent("bridge-v9.lock").path))
     }
 
+    func testStoreRemovesOrphanedWritesAndPreservesUnrelatedEntries() async throws {
+        let profileDirectory = defaultProfileURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: profileDirectory, withIntermediateDirectories: true)
+        let temporaryName = ".profile-write-\(UUID().uuidString.lowercased()).tmp"
+        var preservedFiles = [URL: Data]()
+        var preservedLinks = [URL]()
+        for directory in [rootURL!, profileDirectory] {
+            for name in ["unrelated.state", ".profile-write-invalid.tmp", temporaryName + ".extra"] {
+                let url = directory.appendingPathComponent(name)
+                let data = Data("preserve".utf8)
+                try data.write(to: url)
+                preservedFiles[url] = data
+            }
+            let link = directory.appendingPathComponent(temporaryName)
+            let target = directory.appendingPathComponent("unrelated.state")
+            try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+            preservedLinks.append(link)
+            let nested = directory.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
+            try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+            let child = nested.appendingPathComponent(temporaryName)
+            let data = Data("preserve nested file".utf8)
+            try data.write(to: child)
+            preservedFiles[child] = data
+        }
+
+        for maintenance in [true, false] {
+            let orphans = [rootURL!, profileDirectory].map {
+                $0.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
+            }
+            for url in orphans { try Data("interrupted snapshot".utf8).write(to: url) }
+            if maintenance {
+                await bridge.performMaintenance()
+            } else {
+                guard case .available = await bridge.list(profileIdentifier: nil) else {
+                    return XCTFail("Expected available store")
+                }
+            }
+            for url in orphans { XCTAssertFalse(FileManager.default.fileExists(atPath: url.path)) }
+            for (url, data) in preservedFiles { XCTAssertEqual(try Data(contentsOf: url), data) }
+            for url in preservedLinks {
+                XCTAssertNoThrow(try FileManager.default.destinationOfSymbolicLink(atPath: url.path))
+            }
+        }
+    }
+
+    func testOrphanedWriteCleanupFailureDoesNotBlockRecoveryAndIsRetried() throws {
+        let orphan = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
+        try Data("interrupted snapshot".utf8).write(to: orphan)
+        var failRemoval = true
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            removeItem: { url in
+                if url == orphan, failRemoval { throw Failure.injectedWrite }
+                try FileManager.default.removeItem(at: url)
+            }
+        ))
+        guard case .available = store.list(profileIdentifier: nil) else {
+            return XCTFail("Cleanup failure must not block recovery")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path))
+        failRemoval = false
+        guard case .available = store.list(profileIdentifier: nil) else {
+            return XCTFail("Expected available store")
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
+    }
+
     func testStoreExcludesBridgeRootFromBackup() async throws {
         var mutableRootURL = try XCTUnwrap(rootURL)
         var includedValues = URLResourceValues()
@@ -8548,15 +8614,20 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeFixture(id: 80)
         let readyURL = rootURL.appendingPathComponent("holder-ready")
         let lockURL = rootURL.appendingPathComponent("bridge-v9.lock")
+        let temporaryURL = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
         try await CrossProcessLockTestFixture.withHeldLock(
             at: lockURL,
             readyURL: readyURL
         ) {
+            try Data("active write".utf8).write(to: temporaryURL)
             guard case .unavailable = await self.bridge.enqueue(
                 ingress: fixture.ingress,
                 profileIdentifier: nil
             ) else { throw Failure.expectedValue }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: temporaryURL.path))
         }
+        _ = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temporaryURL.path))
     }
     #endif
 

@@ -1282,7 +1282,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     }
 
     func performMaintenance() {
-        let candidates = files.discoverProfileCandidates()
+        let candidates = files.withLock(or: []) { files.discoverProfileCandidates() }
         for candidate in candidates {
             let maintained = files.withLock(or: false) {
                 guard files.prepareDirectoriesLocked() else { return false }

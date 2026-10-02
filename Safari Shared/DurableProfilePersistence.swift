@@ -89,6 +89,15 @@ struct DurableProfilePersistence {
         self.temporaryName = temporaryName
     }
 
+    static func isTemporaryFileName(_ name: String) -> Bool {
+        let prefix = ".profile-write-"
+        let suffix = ".tmp"
+        guard name.hasPrefix(prefix), name.hasSuffix(suffix),
+              let identifier = UUID(uuidString: String(name.dropFirst(prefix.count).dropLast(suffix.count)))
+        else { return false }
+        return name == "\(prefix)\(identifier.uuidString.lowercased())\(suffix)"
+    }
+
     func replace(_ data: Data, at url: URL) throws {
         let directories = try openDirectories(for: url)
         defer { directories.reversed().forEach(operations.close) }

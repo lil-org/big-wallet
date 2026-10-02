@@ -333,7 +333,22 @@ final class ExtensionRequestStoreFiles {
             throw WalletAuthorityRemovalError.unavailable
         }
         defer { storeLock.release() }
+        removeOrphanedTemporaryFilesLocked()
         return try body()
+    }
+
+    private func removeOrphanedTemporaryFilesLocked() {
+        guard let rootURL, directoryStatus(at: rootURL) == .directory else { return }
+        for directory in [rootURL, profileDirectoryURL] {
+            guard directoryStatus(at: directory) == .directory,
+                  let entries = try? fileManager.contentsOfDirectory(
+                    at: directory, includingPropertiesForKeys: nil
+                  ) else { continue }
+            for url in entries where DurableProfilePersistence.isTemporaryFileName(url.lastPathComponent) {
+                guard case .regular = regularFileStatusLocked(at: url) else { continue }
+                try? removeItem(url)
+            }
+        }
     }
 
     func profileURL(_ profileIdentifier: UUID?) -> URL {
