@@ -708,14 +708,14 @@ final class WalletSigningSession: WalletSigning, @unchecked Sendable {
         }
         defer { finishSigningAttempt(binding) }
         return await withTaskCancellationHandler {
-            guard isLocallyAuthorizedToSign(binding), binding.operation.isAuthorizedToSign,
+            guard isLocallyAuthorizedToSign(binding),
                   await binding.authorityIsCurrent(authorization.handle),
-                  isLocallyAuthorizedToSign(binding), binding.operation.isAuthorizedToSign,
+                  isLocallyAuthorizedToSign(binding),
                   isCurrent() else { return .failure(.authorizationUnavailable) }
             let result = await access.sign(binding.operation)
-            guard isLocallyAuthorizedToSign(binding), binding.operation.isAuthorizedToSign,
+            guard isLocallyAuthorizedToSign(binding),
                   await binding.authorityIsCurrent(authorization.handle),
-                  isLocallyAuthorizedToSign(binding), binding.operation.isAuthorizedToSign,
+                  isLocallyAuthorizedToSign(binding),
                   isCurrent() else { return .failure(.authorizationUnavailable) }
             return result
         } onCancel: {

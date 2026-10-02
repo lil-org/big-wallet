@@ -151,12 +151,11 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         profileIdentifier: profileIdentifier
                     )
                 }
-                guard let data = try? PopupResponseEncoder.encode(response, for: request),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                guard let object = try? PopupResponseEncoder.encode(response, for: request) else {
                     context.cancelRequest(withError: HandlerError.invalidMessage)
                     return
                 }
-                Self.respond(with: json, contract: .popupResponse, context: context)
+                Self.respond(with: object, context: context)
             }
 #endif
         }
@@ -568,12 +567,19 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         contract: WireProtocol.Message,
         context: NSExtensionContext
     ) {
-        guard let decoded = WireProtocol.decode(contract, value: response) as? [String: Any] else {
+        guard let object = WireProtocol.object(contract, value: response) else {
             context.cancelRequest(withError: HandlerError.invalidMessage)
             return
         }
+        respond(with: object, context: context)
+    }
+
+    private static func respond(
+        with response: WireProtocol.ValidatedObject,
+        context: NSExtensionContext
+    ) {
         let item = NSExtensionItem()
-        item.userInfo = [SFExtensionMessageKey: decoded]
+        item.userInfo = [SFExtensionMessageKey: response.json]
         context.completeRequest(returningItems: [item], completionHandler: nil)
     }
 

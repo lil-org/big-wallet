@@ -187,6 +187,38 @@ final class WalletSigningSessionTests: XCTestCase {
         XCTAssertEqual(material.signCount, 1)
     }
 
+    func testPermitReleasedDuringAuthorityCheckPreventsSigningOrDiscardsResult() async throws {
+        for suspendedCheck in [1, 2] {
+            let (permit, operation) = try unconsumedSigningOperationForSessionTests(approvedAccount: .init(
+                walletID: "session-wallet", coin: .ethereum,
+                normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
+                derivationPath: "m/44'/60'/0'/0/0"
+            ))
+            let material = SessionSigningMaterial { .success(.ethereumSignature("discarded")) }
+            let session = WalletSigningSession(material, authorization: operation.authorization, isCurrent: { true })
+            let authorityCheckStarted = expectation(description: "Authority check \(suspendedCheck) started")
+            let resolution = ApprovalResolution<Bool>()
+            var authorityChecks = 0
+            XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in
+                authorityChecks += 1
+                guard authorityChecks == suspendedCheck else { return true }
+                authorityCheckStarted.fulfill()
+                return await resolution.value()
+            }))
+            XCTAssertTrue(permit.consumeExecution())
+            let signing = Task { await session.sign() }
+            await fulfillment(of: [authorityCheckStarted], timeout: 1)
+            permit.releaseLease()
+            await resolution.resolve(true)
+
+            guard case .failure(.authorizationUnavailable) = await signing.value else {
+                return XCTFail("Ownership lost during authority check \(suspendedCheck) must invalidate signing")
+            }
+            XCTAssertEqual(material.signCount, suspendedCheck - 1)
+            XCTAssertEqual(material.erasureCount, 1)
+        }
+    }
+
     func testSigningResultMustReturnBeforeItsDeadline() async throws {
         let deadline = Date(timeIntervalSince1970: 2_100_000_000)
         for offset: TimeInterval in [-0.001, 0, 0.001] {

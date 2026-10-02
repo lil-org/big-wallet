@@ -95,9 +95,11 @@ final class PopupStringsTests: XCTestCase {
         _ response: PopupResponse,
         for request: InternalSafariRequest
     ) throws -> [String: Any] {
-        let data = try PopupResponseEncoder.encode(response, for: request)
+        let object = try PopupResponseEncoder.encode(response, for: request)
+        XCTAssertEqual(object.contract, .popupResponse)
+        let json = object.json
+        let data = try JSONSerialization.data(withJSONObject: json)
         XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         if case .popup(.getPendingRequests) = request.command { return json }
         XCTAssertEqual(Set(json.keys), ["status", "approval"])
         return try XCTUnwrap(json["approval"] as? [String: Any])
@@ -436,9 +438,11 @@ final class PopupStringsTests: XCTestCase {
     func testOversizedIgnoredCommandPreservesDispositionAndRecovery() throws {
         let state = try XCTUnwrap(oversizedResponse().approvalState)
         let request = try popupRequest(subject: "approveRequest", payload: [:])
-        let data = try PopupResponseEncoder.encode(.command(.init(status: .ignored, approvalState: state)), for: request)
+        let object = try PopupResponseEncoder.encode(.command(.init(status: .ignored, approvalState: state)), for: request)
+        XCTAssertEqual(object.contract, .popupResponse)
+        let reply = object.json
+        let data = try JSONSerialization.data(withJSONObject: reply)
         XCTAssertLessThanOrEqual(data.count, PopupResponseEncoder.maximumResponseBytes)
-        let reply = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(Set(reply.keys), ["status", "approval"])
         XCTAssertEqual(reply["status"] as? String, "ignored")
         let approval = try XCTUnwrap(reply["approval"] as? [String: Any])
