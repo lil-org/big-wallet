@@ -153,15 +153,16 @@ final class DurableApprovalExecutor {
             return await abandon(claim: claim)
         }
         defer { consent.invalidateAuthorization() }
-        guard signingAccessMatches(signing, claim: claim), !hasExpired(claim) else {
+        guard signingAccessMatches(signing, claim: claim),
+              claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return await abandon(claim: claim)
         }
-        guard nativeDecisionIsFresh(claim) else {
+        guard claim.authority.isDecisionFresh(for: claim.request, at: clock()) else {
             return await complete(claim: claim, resolution: Self.staleResolution)
         }
         switch resolve(consent) {
         case .approved(let approval):
-            guard nativeDecisionIsFresh(claim) else {
+            guard claim.authority.isDecisionFresh(for: claim.request, at: clock()) else {
                 return await complete(claim: claim, resolution: Self.staleResolution)
             }
             return await executeApproved(claim: claim, approval: approval, signing: signing, context: context)
@@ -190,7 +191,7 @@ final class DurableApprovalExecutor {
         signing: SigningAccess,
         context: ClaimContext
     ) async -> Result {
-        guard !hasExpired(claim) else {
+        guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return await abandon(claim: claim)
         }
         let permit: ExtensionBridge.ApprovedExecutionPermit
@@ -228,7 +229,7 @@ final class DurableApprovalExecutor {
         defer { acquiredExecutionLease?.release() }
         switch operationResult {
         case .completed(let completion):
-            guard !hasExpired(claim) else {
+            guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
                 return await abandon(permit: permit)
             }
             return await complete(
@@ -239,7 +240,7 @@ final class DurableApprovalExecutor {
             guard let recovery = prepared.recoveryCompletion(for: permit) else {
                 return await abandon(permit: permit)
             }
-            guard !hasExpired(claim) else {
+            guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
                 return await abandon(permit: permit)
             }
             let dispatch: ExtensionBridge.BroadcastDispatchPermit
@@ -261,14 +262,6 @@ final class DurableApprovalExecutor {
         case .rollback:
             return await abandon(permit: permit)
         }
-    }
-
-    private func hasExpired(_ claim: ExtensionBridge.ApprovalClaim) -> Bool {
-        if case .native(_, let context) = claim.authority,
-           Task.isCancelled || clock() < context.observedAt {
-            return true
-        }
-        return clock() >= claim.executionDeadline
     }
 
     private func makeSigner(
@@ -295,7 +288,9 @@ final class DurableApprovalExecutor {
         claim: ExtensionBridge.ApprovalClaim,
         resolution: ImmediateResolution
     ) async -> Result {
-        guard !hasExpired(claim) else { return await abandon(claim: claim) }
+        guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
+            return await abandon(claim: claim)
+        }
         switch await store.complete(claim: claim, resolution: resolution) {
         case .persisted: return .persisted
         case .ownershipLost: return .ownershipLost
@@ -331,23 +326,6 @@ final class DurableApprovalExecutor {
         case .ownershipLost: return .ownershipLost
         case .retryablePersistenceFailure: return .retryablePersistenceFailure
         }
-    }
-
-    private func nativeDecisionIsFresh(_ claim: ExtensionBridge.ApprovalClaim) -> Bool {
-        guard case .native(let approvedAt, _) = claim.authority else { return true }
-        let requiresFreshDecision: Bool
-        switch claim.request.body {
-        case .ethereum(let body):
-            requiresFreshDecision = body.method == .signTransaction
-        case .solana(let body):
-            requiresFreshDecision = body.method == .signTransaction || body.method == .signAllTransactions ||
-                body.method == .signAndSendTransaction
-        case .unknown:
-            requiresFreshDecision = false
-        }
-        guard requiresFreshDecision else { return true }
-        let age = clock().timeIntervalSince(approvedAt)
-        return age >= 0 && age <= ExtensionBridge.maximumTransactionDecisionAge
     }
 
     private static var staleResolution: ImmediateResolution {

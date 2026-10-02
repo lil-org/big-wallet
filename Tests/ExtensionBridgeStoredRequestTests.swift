@@ -6289,6 +6289,109 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
+    func testNativePreparedResultsMayCommitAfterSigningDeadline() async throws {
+        for (index, checkpointsBroadcast) in [false, true].enumerated() {
+            let execution = try await makeExecutableNativePermit(id: 76_070 + index)
+            defer { execution.permit.releaseLease() }
+            let permit = execution.permit.permit
+            XCTAssertTrue(permit.isSigningAuthorized)
+            clock.now = permit.signingDeadline.addingTimeInterval(1)
+            XCTAssertFalse(permit.isSigningAuthorized)
+            XCTAssertTrue(permit.isExecuting)
+
+            if checkpointsBroadcast {
+                let checkpoint = await prepareReviewedBroadcast(execution.permit)
+                XCTAssertEqual(checkpoint, .persisted)
+                clock.now = permit.executionDeadline
+            }
+            let completed = await completeReviewedExecution(execution.permit)
+            XCTAssertEqual(completed, .persisted)
+            let response = try responseJSON(await bridge.prepareResponseDelivery(
+                id: execution.handle.id,
+                configurationKey: execution.request.configurationKey,
+                requestToken: execution.handle.requestToken,
+                profileIdentifier: nil
+            ))
+            XCTAssertEqual(response as NSDictionary, execution.permit.response.json as NSDictionary)
+            XCTAssertEqual(response["approvalCommitted"] as? Bool, true)
+        }
+    }
+
+    @MainActor
+    func testNativeAuthorizationRequiresObservationTime() async throws {
+        let approvedAt = clock.now
+        let fixture = try makeTransactionFixture(
+            id: 76_080, admissionDeadline: approvedAt.addingTimeInterval(100)
+        )
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        )).handle
+        let delivered = try await recordNativeDelivery(handle: handle)
+        XCTAssertEqual(delivered, .persisted)
+        clock.now = approvedAt.addingTimeInterval(10)
+        guard case .claimed(let claim) = await claimDeliveredNativeExecution(
+            in: bridge, handle: handle, approvedAt: approvedAt
+        ) else { return XCTFail("Expected native claim") }
+        defer { claim.releaseUnapproved() }
+        let observedAt = try nativeApproval(claim).context.observedAt
+        let approval = try reviewedApproval(claim)
+        XCTAssertTrue(claim.adoptForExecution())
+
+        clock.now = observedAt.addingTimeInterval(-0.01)
+        XCTAssertGreaterThan(clock.now, approval.approvedAt)
+        XCTAssertTrue(claim.authority.isWithinClaimLifetime(at: clock.now))
+        let rejected = await bridge.authorize(claim: claim, approval: approval)
+        XCTAssertEqual(rejected, .ownershipLost)
+
+        clock.now = observedAt
+        guard case .authorized(let permit) = await bridge.authorize(claim: claim, approval: approval) else {
+            return XCTFail("Execution must remain eligible at its observation time")
+        }
+        defer { permit.releaseLease() }
+        XCTAssertTrue(permit.consumeExecution())
+    }
+
+    @MainActor
+    func testNativeCommitRejectsClockRollbackBeforeObservation() async throws {
+        for (index, checkpointsBroadcast) in [false, true].enumerated() {
+            for (offsetIndex, offset) in [-0.01, 0.0].enumerated() {
+                let execution = try await makeExecutableNativePermit(id: 76_090 + index * 2 + offsetIndex)
+                defer { execution.permit.releaseLease() }
+                guard case .native(_, let context) = execution.permit.authority else {
+                    return XCTFail("Expected native execution authority")
+                }
+                clock.now = context.observedAt.addingTimeInterval(offset)
+                XCTAssertEqual(execution.permit.permit.isExecuting, offset == 0)
+                let result = checkpointsBroadcast
+                    ? await prepareReviewedBroadcast(execution.permit)
+                    : await completeReviewedExecution(execution.permit)
+                XCTAssertEqual(result, offset == 0 ? .persisted : .ownershipLost)
+            }
+        }
+    }
+
+    @MainActor
+    func testOrdinaryCommitRejectsClockRollbackBeyondClaimLifetime() async throws {
+        for (index, checkpointsBroadcast) in [false, true].enumerated() {
+            for (offsetIndex, offset) in [-0.01, 0.0].enumerated() {
+                let fixture = try makeTransactionFixture(id: 76_100 + index * 2 + offsetIndex)
+                let handle = try accepted(await bridge.enqueue(
+                    ingress: fixture.ingress, profileIdentifier: nil
+                )).handle
+                let claim = try approvalClaim(await bridge.claim(handle: handle))
+                let execution = try reviewedExecution(claim)
+                defer { execution.releaseLease() }
+                clock.now = claim.executionDeadline.addingTimeInterval(-ExtensionBridge.executionLifetime + offset)
+                XCTAssertTrue(execution.permit.isExecuting)
+                let result = checkpointsBroadcast
+                    ? await prepareReviewedBroadcast(execution)
+                    : await completeReviewedExecution(execution)
+                XCTAssertEqual(result, offset == 0 ? .persisted : .ownershipLost)
+            }
+        }
+    }
+
+    @MainActor
     func testExecutionDeadlineRejectsCommitAtExactStoreBoundary()
         async throws {
         for (index, checkpointsBroadcast) in [false, true].enumerated() {

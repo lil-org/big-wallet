@@ -571,7 +571,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                     lease.release()
                     return .missing
                 }
-                let deadline = min(clock().addingTimeInterval(ExtensionRequestProfile.executionLifetime), parsed.admissionDeadline)
+                let deadline = min(clock().addingTimeInterval(ExtensionBridge.executionLifetime), parsed.admissionDeadline)
                 guard profile.state.records[index].claim(id: claimID, approval: .ordinary(deadline: deadline)),
                       writeProfileLocked(profile) else {
                     lease.release()
@@ -734,7 +734,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                     revisions: profile.state.records[index].revisions,
                     observedAt: now,
                     executionDeadline: min(
-                        now.addingTimeInterval(ExtensionRequestProfile.executionLifetime),
+                        now.addingTimeInterval(ExtensionBridge.executionLifetime),
                         parsedRequest.admissionDeadline
                     )
                 )
@@ -867,7 +867,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                   approval.approvedAt <= now,
                   record.nativeDeliveryReceipt == claim.nativeReceipt,
                   ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
-                  ExtensionRequestProfile.executionDeadlineIsCurrent(record.claimedApproval?.deadline, now: now),
+                  record.claimedApproval?.authority.isWithinClaimLifetime(at: now) == true,
                   record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled)
             else { return .ownershipLost }
             if case .native(let approvedAt, _) = claim.authority,
@@ -1472,24 +1472,7 @@ extension ExtensionBridge {
             self.value = value
             self.lease = lease
             nativeReceipt = record.nativeDeliveryReceipt
-            let transaction: Bool
-            switch request.body {
-            case .ethereum(let body):
-                transaction = body.method == .signTransaction
-            case .solana(let body):
-                transaction = body.method == .signTransaction || body.method == .signAllTransactions ||
-                    body.method == .signAndSendTransaction
-            case .unknown:
-                transaction = false
-            }
-            if case .native(let approvedAt, _) = authority, transaction {
-                signingDeadline = min(
-                    authority.executionDeadline,
-                    approvedAt.addingTimeInterval(ExtensionBridge.maximumTransactionDecisionAge)
-                )
-            } else {
-                signingDeadline = authority.executionDeadline
-            }
+            signingDeadline = authority.signingDeadline(for: request)
         }
 
         var isPreparing: Bool {
@@ -1565,9 +1548,7 @@ extension ExtensionBridge {
         }
 
         private func executionTimeIsCurrent(_ now: Date) -> Bool {
-            guard now < authority.executionDeadline else { return false }
-            if case .native(_, let context) = authority { return now >= context.observedAt }
-            return true
+            authority.isWithinExecutionWindow(at: now)
         }
 
         private func signingTimeIsCurrent(_ now: Date) -> Bool {

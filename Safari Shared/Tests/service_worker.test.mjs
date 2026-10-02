@@ -29,7 +29,6 @@ const previousBuildVersion = packagedBuildVersion.replace(
     value => String(Math.max(0, Number(value) - 1))
 );
 const recoveryAlarmName = "manualSwitchRecovery";
-const admissionWindowsStorageKey = "recoveryAdmissionWindows";
 function clone(value) {
     return typeof value === "undefined" ? undefined : JSON.parse(JSON.stringify(value));
 }
@@ -46,7 +45,6 @@ function makeHarness({
     acknowledgeResponse = message => ({id: message.id, acknowledged: true}),
     cancelTimeout,
     alarms = new Map,
-    clearAlarm,
     configuredPopup = true,
     createAlarm,
     getAlarm,
@@ -65,7 +63,6 @@ function makeHarness({
     scheduleTimeout,
     sendTabMessage,
     tabs = [{id: 3}, {id: 4}],
-    storageSet,
     storageBeforeSet,
     workerPrivateBrowsing = false,
 } = {}) {
@@ -107,8 +104,7 @@ function makeHarness({
             },
             clear(name) {
                 alarmClears.push(name);
-                return Promise.resolve(clearAlarm ? clearAlarm(name) : true)
-                    .then(result => { alarms.delete(name); return result; });
+                return Promise.resolve(alarms.delete(name));
             },
             create(name, options) {
                 alarmCreates.push({name, options: clone(options)});
@@ -195,9 +191,6 @@ function makeHarness({
                     for (const [key, value] of Object.entries(values)) {
                         storage.set(key, clone(value));
                     }
-                    return storageSet
-                        ? Promise.resolve(storageSet(clone(values)))
-                        : Promise.resolve();
                 },
                 remove(key) {
                     storageRemovals.push(key);
@@ -451,7 +444,7 @@ test("bootstrap reads native and ignores all old browser authority", async () =>
         native: message => ({id: message.id, state})});
     await settle();
     assert.deepEqual(clone(await harness.dispatch(configurationRequest())), {kind: "configuration", state});
-    assert.deepEqual(harness.storageReads, [admissionWindowsStorageKey]);
+    assert.deepEqual(harness.storageReads, []);
     assert.deepEqual(harness.storageWrites, []);
     assert.deepEqual(harness.storageRemovals, []);
     assert.equal(harness.nativeMessages.at(-1).message.subject, "getLatestConfiguration");
@@ -480,7 +473,7 @@ test("unreadable browser records cannot block configuration or account switching
     for (let restart = 0; restart < 2; restart += 1) {
         const harness = makeHarness({storage,
             storageGet: (keys, values) => {
-                assert.ok(["workflowUpdateRecoveryNeeded", admissionWindowsStorageKey].includes(keys));
+                assert.equal(keys, "workflowUpdateRecoveryNeeded");
                 return values;
             },
             native: message => {
@@ -510,12 +503,10 @@ test("unreadable browser records cannot block configuration or account switching
         }
         assert.equal(harness.nativeMessages.filter(({message}) => message.name === "switchAccount").length, origins.length);
         assert.equal(harness.popupCalls.length, origins.length);
-        assert.deepEqual(harness.storageReads.flat().filter(key =>
-            !["workflowUpdateRecoveryNeeded", admissionWindowsStorageKey].includes(key)), []);
-        assert.ok(harness.storageWrites.every(value => Object.keys(value).length === 1 &&
-            Array.isArray(value[admissionWindowsStorageKey])));
+        assert.deepEqual(harness.storageReads, []);
+        assert.deepEqual(harness.storageWrites, []);
         assert.deepEqual(harness.storageRemovals, []);
-        assert.deepEqual(clone([...storage].filter(([key]) => key !== admissionWindowsStorageKey)), originalStorage);
+        assert.deepEqual(clone([...storage]), originalStorage);
     }
 });
 
@@ -549,8 +540,8 @@ test("admission relays native authority preconditions and obtains native ACK", a
     assert.equal(Object.hasOwn(message, "revisions"), false);
     assert.equal(Object.hasOwn(message, "replayOnly"), false);
     assert.equal(harness.popupCalls.length, 1);
-    assert.equal(harness.alarmCreates.length, 1);
-    assert.deepEqual(harness.storageWrites, [{[admissionWindowsStorageKey]: [[admissionDeadline - 960_000, admissionDeadline]]}]);
+    assert.equal(harness.alarms.has(recoveryAlarmName), true);
+    assert.deepEqual(harness.storageWrites, []);
 });
 
 test("native rejection wins over a cached account and carries a fresh snapshot", async () => {
@@ -561,7 +552,7 @@ test("native rejection wins over a cached account and carries a fresh snapshot",
     const response = await harness.dispatch(request(7, {message: {name: "signMessage", body: {address: "0x01"}}}));
     assert.equal(response.error.code, 4100);
     assert.deepEqual(clone(response.state), state);
-    assert.deepEqual(harness.storageWrites, [{[admissionWindowsStorageKey]: [[admissionDeadline - 960_000, admissionDeadline]]}]);
+    assert.deepEqual(harness.storageWrites, []);
 });
 
 test("malformed Solana trust options return a correlated error without native admission", async () => {
@@ -906,28 +897,125 @@ test("unauthorized and malformed status polls never enable native redelivery", a
     }
 });
 
-test("idle recovery without admission history clears the alarm and leaves no active polling timer", async () => {
-    const harness = makeHarness();
+test("idle recovery keeps a five-minute baseline without browser storage or polling timers", async () => {
+    const harness = makeHarness({
+        storageGet: () => assert.fail("recovery must not read browser storage"),
+        storageBeforeSet: () => assert.fail("recovery must not write browser storage"),
+    });
     await settle();
-    assert.equal(harness.alarmCreates.length, 1);
-    assert.deepEqual(harness.alarmClears, [recoveryAlarmName]);
-    assert.equal(harness.alarms.has(recoveryAlarmName), false);
+    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+    await harness.fireAlarm();
+    assert.equal(harness.recoveryMessages.length, 2);
+    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+    assert.deepEqual(harness.alarmClears, []);
     assert.equal(await harness.runTimer(1000), false);
+    assert.equal(await harness.runTimer(5000), false);
 });
 
-test("recovery stops after the native queue drains without stored admission history", async () => {
-    let requests = [recoveryDescriptor()];
-    const harness = makeHarness({recoveryNative: message => ({id: message.id, requests})});
+test("worker evaluation startup and installation repair missing recovery alarms", async () => {
+    const harness = makeHarness();
     await settle();
-    assert.equal(harness.alarms.has(recoveryAlarmName), true);
+    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+    for (const wake of [() => harness.startup(), () => harness.install({reason: "install"})]) {
+        harness.alarms.delete(recoveryAlarmName);
+        wake();
+        await settle();
+        assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+    }
+    assert.equal(harness.recoveryMessages.length, 3);
+    assert.deepEqual(harness.alarmClears, []);
+});
+
+test("private workers do not establish recovery alarms or query native requests", async () => {
+    const harness = makeHarness({workerPrivateBrowsing: true});
+    harness.startup();
+    harness.install({reason: "install"});
+    await settle();
+    assert.deepEqual(harness.alarmGets, []);
+    assert.deepEqual(harness.alarmCreates, []);
+    assert.deepEqual(harness.recoveryMessages, []);
+});
+
+test("native discovery selects active or idle cadence without postponing an existing wakeup", async () => {
+    let now = admissionDeadline - 900_000;
+    let requests = [recoveryDescriptor()];
+    const harness = makeHarness({dateNow: () => now,
+        recoveryNative: message => ({id: message.id, requests})});
+    await settle();
+    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
+    const scheduledTime = harness.alarms.get(recoveryAlarmName).scheduledTime;
+    const creations = harness.alarmCreates.length;
+    now += 30_000;
+    harness.startup();
+    await settle();
+    assert.equal(harness.alarmCreates.length, creations);
+    assert.equal(harness.alarms.get(recoveryAlarmName).scheduledTime, scheduledTime);
     requests = [];
     await harness.fireAlarm();
-    assert.deepEqual(harness.alarmClears, [recoveryAlarmName]);
-    assert.equal(harness.alarms.has(recoveryAlarmName), false);
+    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+    const idleTime = harness.alarms.get(recoveryAlarmName).scheduledTime;
+    now += 30_000;
+    harness.startup();
+    await settle();
+    assert.equal(harness.alarms.get(recoveryAlarmName).scheduledTime, idleTime);
+    assert.deepEqual(harness.alarmClears, []);
 });
 
 for (const [kind, command] of [["dapp", request], ["manual", manualSwitchIntent]]) {
-    test(`stale empty discovery cannot clear recovery after a ${kind} admission`, async () => {
+    test(`${kind} admission accelerates idle recovery without browser storage`, async () => {
+        let requests = [];
+        const harness = makeHarness({
+            storageGet: () => { throw new Error("browser storage unavailable"); },
+            storageBeforeSet: () => { throw new Error("browser storage unavailable"); },
+            recoveryNative: message => ({id: message.id, requests}),
+            native: message => {
+                if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
+                requests = [recoveryDescriptor({id: message.id, manual: kind === "manual"})];
+                return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
+            },
+        });
+        await settle();
+        assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+        assert.equal((await harness.dispatch(command())).requestToken, requestToken);
+        await settle();
+        assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
+        assert.deepEqual(harness.storageReads, []);
+        assert.deepEqual(harness.storageWrites, []);
+    });
+
+    for (const api of ["getAlarm", "createAlarm"]) {
+        for (const failure of ["throw", "reject", "hang"]) {
+            test(`${kind} admission and discovery continue when ${api} ${failure}s`, async () => {
+                let unavailable = true;
+                let requests = [recoveryDescriptor({manual: kind === "manual"})];
+                const harness = makeHarness({
+                    [api]: (_name, value) => {
+                        if (!unavailable) { return api === "getAlarm" ? value : undefined; }
+                        if (failure === "throw") { throw new Error("alarm unavailable"); }
+                        return failure === "reject" ? Promise.reject(new Error("alarm unavailable")) : new Promise(() => {});
+                    },
+                    recoveryNative: message => ({id: message.id, requests}),
+                    native: message => message.subject === "getLatestConfiguration"
+                        ? {id: message.id, state: snapshot()}
+                        : {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()},
+                });
+                await settle();
+                assert.equal((await harness.dispatch(command())).requestToken, requestToken);
+                assert.equal(harness.nativeMessages.filter(({message}) => !message.subject).length, 1);
+                assert.ok(harness.recoveryMessages.length >= 1);
+                assert.ok(harness.executionMessages.length >= 1);
+                while (await harness.runTimer(5000)) {}
+                unavailable = false;
+                requests = [];
+                harness.startup();
+                await settle();
+                assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
+                assert.deepEqual(harness.alarmClears, []);
+            });
+        }
+    }
+
+    test(`stale empty discovery preserves baseline recovery after a ${kind} admission`, async () => {
         let finishDiscovery;
         let requests = [];
         const harness = makeHarness({
@@ -944,331 +1032,59 @@ for (const [kind, command] of [["dapp", request], ["manual", manualSwitchIntent]
         await harness.dispatch(command());
         finishDiscovery();
         await settle();
+        assert.ok([1, 5].includes(harness.alarms.get(recoveryAlarmName).periodInMinutes));
+        await harness.fireAlarm();
+        assert.ok(harness.executionMessages.some(({message}) => message.id === requests[0].id));
+        assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
         assert.deepEqual(harness.alarmClears, []);
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
     });
 
-    test(`${kind} admission waits for alarm clearing and rearms before native submission`, async () => {
-        let finishClear;
-        let requests = [];
-        const harness = makeHarness({
-            clearAlarm: () => finishClear ? true : new Promise(resolve => { finishClear = resolve; }),
-            recoveryNative: message => ({id: message.id, requests}),
-            native: message => {
-                if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-                assert.equal(harness.alarms.has(recoveryAlarmName), true);
-                requests = [recoveryDescriptor({id: message.id, manual: kind === "manual"})];
-                return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
-            },
-        });
-        await settle();
-        const admission = harness.dispatch(command());
-        await settle();
-        assert.equal(requests.length, 0);
-        finishClear(true);
-        await admission;
-        await settle();
-        assert.equal(requests.length, 1);
-        assert.equal(harness.alarmCreates.length, 2);
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-    });
-
-    test(`empty discovery cannot clear recovery when an earlier ${kind} admission finishes during its read`, async () => {
-        let holdDiscovery = false;
-        let finishDiscovery;
-        let finishAdmission;
-        let requests = [];
-        const harness = makeHarness({
-            recoveryNative: message => {
-                if (!holdDiscovery) { return {id: message.id, requests}; }
-                holdDiscovery = false;
-                return new Promise(resolve => { finishDiscovery = () => resolve({id: message.id, requests: []}); });
-            },
-            native: message => {
-                if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-                return new Promise(resolve => { finishAdmission = () => {
-                    requests = [recoveryDescriptor({id: message.id, manual: kind === "manual"})];
-                    resolve({id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()});
-                }; });
-            },
-        });
-        await settle();
-        const admission = harness.dispatch(command());
-        await settle();
-        holdDiscovery = true;
-        const recovery = harness.fireAlarm();
-        await settle();
-        finishAdmission();
-        await admission;
-        finishDiscovery();
-        await recovery;
-        assert.deepEqual(harness.alarmClears, [recoveryAlarmName]);
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-    });
-
-    test(`empty recovery protects a ${kind} admission even after its transport timeout`, async () => {
-        let now = admissionDeadline - 900_000;
-        let finishAdmission;
-        const harness = makeHarness({dateNow: () => now, native: message => message.subject === "getLatestConfiguration"
-            ? {id: message.id, state: snapshot()}
-            : new Promise(resolve => { finishAdmission = resolve; })});
-        await settle();
-        const admission = harness.dispatch(command());
-        await settle();
-        assert.equal(typeof finishAdmission, "function");
-        await harness.fireAlarm();
-        assert.deepEqual(harness.alarmClears, [recoveryAlarmName]);
-        assert.equal(await harness.runTimer(kind === "manual" ? 15000 : 5000), true);
-        assert.equal(await admission, undefined);
-        await harness.fireAlarm();
-        assert.deepEqual(harness.alarmClears, [recoveryAlarmName]);
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-        finishAdmission(undefined);
-        await settle();
-        await harness.fireAlarm();
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-        now = admissionDeadline + 1;
-        await harness.fireAlarm();
-        assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
-    });
-
-    for (const outcome of ["resolve", "reject"]) {
-        test(`${kind} recovery resumes frequent checks after clock correction and late native ${outcome}`, async () => {
-            let now = admissionDeadline - 900_000;
-            let finishAdmission;
-            let requests = [];
-            const harness = makeHarness({dateNow: () => now,
-                recoveryNative: message => ({id: message.id, requests}),
-                native: message => {
-                    if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-                    return new Promise((resolve, reject) => { finishAdmission = () => {
-                        requests = [recoveryDescriptor({id: message.id, manual: kind === "manual"})];
-                        if (outcome === "reject") { reject(new Error("Lost native reply")); }
-                        else { resolve({id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()}); }
-                    }; });
-                },
-            });
-            await settle();
-            const admission = harness.dispatch(command());
-            await settle();
-            assert.equal(await harness.runTimer(kind === "manual" ? 15000 : 5000), true);
-            assert.equal(await admission, undefined);
-            now = admissionDeadline + 1;
-            await harness.fireAlarm();
-            assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
-            now = admissionDeadline - 900_000;
-            finishAdmission();
-            await settle();
-            assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
-            await harness.fireAlarm();
-            assert.ok(harness.executionMessages.some(({message}) => message.id === requests[0].id));
-        });
-    }
-
-    test(`${kind} recovery survives worker termination and clock correction without a native reply`, async () => {
-        let now = admissionDeadline - 900_000;
+    test(`${kind} late native admission is recovered after timeout and worker restart`, async () => {
         const alarms = new Map;
-        const storage = new Map;
         let requests = [];
         let commitAdmission;
-        const first = makeHarness({alarms, storage, dateNow: () => now, native: message => {
+        const first = makeHarness({alarms, native: message => {
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
             commitAdmission = () => { requests = [recoveryDescriptor({id: message.id, manual: kind === "manual"})]; };
             return new Promise(() => {});
         }});
         await settle();
-        void first.dispatch(command());
+        const admission = first.dispatch(command());
         await settle();
-        now = admissionDeadline + 1;
-        const restarted = makeHarness({alarms, storage, dateNow: () => now,
+        assert.equal(await first.runTimer(kind === "manual" ? 15000 : 5000), true);
+        assert.equal(await admission, undefined);
+        const restarted = makeHarness({alarms,
             recoveryNative: message => ({id: message.id, requests})});
         await settle();
-        assert.equal(alarms.get(recoveryAlarmName)?.periodInMinutes, 5);
-        now = admissionDeadline - 900_000;
+        assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 5);
         commitAdmission();
         await restarted.fireAlarm();
         assert.equal(restarted.executionMessages.length, 1);
         assert.equal(restarted.executionMessages[0].message.id, requests[0].id);
+        assert.equal(restarted.executionMessages[0].message.allowDelivery, false);
         assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 1);
-    });
-
-    test(`${kind} recovery survives a restart before native admission is persisted`, async () => {
-        let now = admissionDeadline - 900_000;
-        const alarms = new Map;
-        const storage = new Map;
-        let requests = [];
-        let commitAdmission;
-        const first = makeHarness({alarms, storage, dateNow: () => now, native: message => {
-            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
-            assert.deepEqual(storage.get(admissionWindowsStorageKey), [[message.admissionDeadline - 960_000, message.admissionDeadline]]);
-            commitAdmission = () => { requests = [recoveryDescriptor({id: message.id, manual: kind === "manual"})]; };
-            return new Promise(() => {});
-        }});
-        await settle();
-        void first.dispatch(command());
-        await settle();
-        assert.equal(typeof commitAdmission, "function");
-        const restarted = makeHarness({alarms, storage, dateNow: () => now,
-            recoveryNative: message => ({id: message.id, requests})});
-        await settle();
-        assert.deepEqual(restarted.alarmClears, []);
-        assert.equal(alarms.has(recoveryAlarmName), true);
-        commitAdmission();
-        await restarted.fireAlarm();
-        assert.equal(restarted.executionMessages.length, 1);
-        requests = [];
-        now = admissionDeadline + 1;
-        await restarted.fireAlarm();
-        assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 5);
+        assert.deepEqual(restarted.storageReads, []);
+        assert.deepEqual(restarted.storageWrites, []);
     });
 }
 
-test("slowing recovery after admission expiry requires a fresh empty discovery", async () => {
-    let now = admissionDeadline - 1;
-    let finishDiscovery;
-    const harness = makeHarness({dateNow: () => now,
-        storage: new Map([[admissionWindowsStorageKey, [[admissionDeadline - 960_000, admissionDeadline]]]]),
-        recoveryNative: message => finishDiscovery ? {id: message.id, requests: []}
-            : new Promise(resolve => { finishDiscovery = () => resolve({id: message.id, requests: []}); })});
-    await settle();
-    now = admissionDeadline + 1;
-    finishDiscovery();
-    await settle();
-    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
-    await harness.fireAlarm();
-    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 5);
-});
-
-test("admission protection merges overlapping windows", async () => {
-    const storage = new Map;
-    const harness = makeHarness({storage, dateNow: () => admissionDeadline - 900_000, native: () => undefined});
-    await Promise.all([
-        harness.dispatch(request(7, {admissionDeadline: admissionDeadline + 1000})),
-        harness.dispatch(request(8)),
-    ]);
-    assert.deepEqual(storage.get(admissionWindowsStorageKey), [[admissionDeadline - 960_000, admissionDeadline + 1000]]);
-});
-
-test("clock rollback retains idle checks until native admission can become valid again", async () => {
-    const correctedNow = admissionDeadline - 900_000;
-    let now = correctedNow + 86_400_000;
-    const storage = new Map;
-    const alarms = new Map;
-    const first = makeHarness({storage, alarms, dateNow: () => now, native: message =>
-        message.subject === "getLatestConfiguration" ? {id: message.id, state: snapshot()}
-            : {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()}});
-    await settle();
-    await first.dispatch(manualSwitchIntent());
-    await settle();
-    const [[start, end]] = storage.get(admissionWindowsStorageKey);
-    now = correctedNow;
-    await first.fireAlarm();
-    assert.deepEqual(alarms.get(recoveryAlarmName), {name: recoveryAlarmName, scheduledTime: now + 300_000, periodInMinutes: 5});
-    const restarted = makeHarness({storage, alarms, dateNow: () => now});
-    await settle();
-    assert.deepEqual(alarms.get(recoveryAlarmName), {name: recoveryAlarmName, scheduledTime: now + 300_000, periodInMinutes: 5});
-    now = start - 1000;
-    await restarted.fireAlarm();
-    assert.equal(alarms.get(recoveryAlarmName).scheduledTime, start);
-    now = start;
-    await restarted.fireAlarm();
-    assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 1);
-    now = end + 1;
-    await restarted.fireAlarm();
-    assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 5);
-});
-
-test("new admissions after clock rollback retain separate protection across restart", async () => {
+test("clock jumps retain recovery and repair a far-future active alarm", async () => {
     let now = admissionDeadline - 900_000;
-    const futureStart = now + 86_400_000;
-    const storage = new Map([[admissionWindowsStorageKey, [[futureStart, futureStart + 960_000]]]]);
-    const alarms = new Map;
-    const first = makeHarness({storage, alarms, dateNow: () => now, native: () => new Promise(() => {})});
+    const alarms = new Map([[recoveryAlarmName, {
+        name: recoveryAlarmName, scheduledTime: now + 60_000, periodInMinutes: 1,
+    }]]);
+    const harness = makeHarness({alarms, dateNow: () => now, recoveryNative: () => undefined});
     await settle();
-    assert.equal(alarms.get(recoveryAlarmName).scheduledTime, now + 300_000);
-    void first.dispatch(request());
+    assert.equal(harness.alarmCreates.length, 0);
+    now -= 86_400_000;
+    harness.startup();
     await settle();
-    assert.equal(first.nativeMessages.length, 1);
-    assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 1);
     assert.equal(alarms.get(recoveryAlarmName).scheduledTime, now + 60_000);
-    assert.deepEqual(storage.get(admissionWindowsStorageKey), [
-        [admissionDeadline - 960_000, admissionDeadline], [futureStart, futureStart + 960_000],
-    ]);
-    const restarted = makeHarness({storage, alarms, dateNow: () => now});
-    await settle();
     assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 1);
-    now = admissionDeadline + 1;
-    await restarted.fireAlarm();
-    assert.deepEqual(alarms.get(recoveryAlarmName), {name: recoveryAlarmName, scheduledTime: now + 300_000, periodInMinutes: 5});
-});
-
-test("idle recovery survives a failed wakeup and resumes frequent checks in an active window", async () => {
-    let now = admissionDeadline - 900_000;
-    const start = now + 86_400_000;
-    let failRead = false;
-    const harness = makeHarness({dateNow: () => now,
-        storage: new Map([[admissionWindowsStorageKey, [[start, start + 960_000]]]]),
-        getAlarm: (_name, alarm) => {
-            if (failRead) { failRead = false; throw new Error("Transient alarm failure"); }
-            return alarm;
-        }});
-    await settle();
-    const creations = harness.alarmCreates.length;
-    now = start;
-    failRead = true;
-    await assert.rejects(harness.fireAlarm(), /Transient alarm failure/);
-    assert.deepEqual(harness.alarms.get(recoveryAlarmName), {
-        name: recoveryAlarmName, scheduledTime: now + 300_000, periodInMinutes: 5,
-    });
-    now += 300_000;
+    now += 172_800_000;
     await harness.fireAlarm();
-    assert.equal(harness.recoveryMessages.length, 2);
-    assert.equal(harness.alarmCreates.length, creations + 1);
-    assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
-});
-
-test("an expired native call reduces idle recovery to five-minute checks", async () => {
-    let now = admissionDeadline - 900_000;
-    const harness = makeHarness({dateNow: () => now, native: () => new Promise(() => {})});
-    await settle();
-    const pending = harness.dispatch(request());
-    await settle();
-    await harness.runTimer(5000);
-    assert.equal(await pending, undefined);
-    now = admissionDeadline + 1;
-    await harness.fireAlarm();
-    assert.deepEqual(harness.alarms.get(recoveryAlarmName), {
-        name: recoveryAlarmName, scheduledTime: now + 300_000, periodInMinutes: 5,
-    });
-});
-
-test("recovery windows include native admission's future-clock tolerance", async () => {
-    const native = await readFile(new URL("../ExtensionBridge.swift", import.meta.url), "utf8");
-    const skew = Number(native.match(/static let admissionDeadlineFutureSkew: TimeInterval = (\d+)/)[1]);
-    const harness = makeHarness();
-    assert.equal(harness.read("NATIVE_ADMISSION_WINDOW"), 900_000 + skew * 1000);
-});
-
-test("unreadable admission protection retains recovery and prevents new admission", async () => {
-    for (const options of [
-        {storageGet: () => { throw new Error("unavailable"); }},
-        ...[null, "invalid", -1, [[2, 1]], [[0, "invalid"]]].map(value =>
-            ({storage: new Map([[admissionWindowsStorageKey, value]])})),
-    ]) {
-        const harness = makeHarness({...options, native: () => assert.fail("cannot admit without recovery protection")});
-        await settle();
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
-        assert.equal(await harness.dispatch(request()), undefined);
-        assert.equal(harness.nativeMessages.length, 0);
-        assert.deepEqual(harness.alarmClears, []);
-    }
-});
-
-test("admission protection must be saved before native submission", async () => {
-    const harness = makeHarness({storageBeforeSet: () => { throw new Error("unavailable"); },
-        native: () => assert.fail("cannot admit without persisted recovery protection")});
-    assert.equal(await harness.dispatch(request()), undefined);
-    assert.equal(harness.nativeMessages.length, 0);
+    assert.equal(alarms.get(recoveryAlarmName).periodInMinutes, 1);
+    assert.deepEqual(harness.alarmClears, []);
 });
 
 test("manual switches bootstrap separately even when same-origin callers share the worker", async () => {
@@ -1358,11 +1174,10 @@ test("native read timeout is bounded and does not initialize a cache", async () 
     assert.deepEqual(harness.storageWrites, []);
 });
 
-test("durable recovery is armed before a native admission and survives its lost reply", async () => {
+test("durable recovery survives a lost admission reply and worker restart", async () => {
     const alarms = new Map;
     let admitted = false;
     const first = makeHarness({alarms, native: message => {
-        assert.equal(alarms.has(recoveryAlarmName), true);
         admitted = true;
         return new Promise(() => {});
     }});
@@ -1386,19 +1201,17 @@ test("failed and malformed discovery retains recovery without executing or ackno
     for (const recoveryNative of [() => {throw new Error("offline");}, () => undefined,
         message => ({id: message.id, requests: [{...recoveryDescriptor(), revisions: {ethereum: 0, solana: 0}}]}),
         message => ({id: message.id + 1, requests: [recoveryDescriptor()]})]) {
-        const harness = makeHarness({recoveryNative});
+        const alarms = new Map([[recoveryAlarmName, {
+            name: recoveryAlarmName, scheduledTime: Date.now() + 30_000, periodInMinutes: 1,
+        }]]);
+        const harness = makeHarness({alarms, recoveryNative});
         await settle();
-        assert.equal(harness.alarms.has(recoveryAlarmName), true);
+        assert.equal(harness.alarms.get(recoveryAlarmName).periodInMinutes, 1);
+        assert.deepEqual(harness.alarmCreates, []);
         assert.deepEqual(harness.alarmClears, []);
         assert.equal(harness.executionMessages.length, 0);
         assert.equal(harness.nativeMessages.length, 0);
     }
-});
-
-test("alarm creation failure prevents admission", async () => {
-    const harness = makeHarness({createAlarm: () => {throw new Error("unavailable");},
-        native: () => assert.fail("cannot admit without recovery")});
-    assert.equal(await harness.dispatch(request()), undefined);
 });
 
 test("toolbar opens account selection without depending on page content or its installed build", async () => {

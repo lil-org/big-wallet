@@ -187,6 +187,47 @@ final class WalletSigningSessionTests: XCTestCase {
         XCTAssertEqual(material.signCount, 1)
     }
 
+    func testSigningResultMustReturnBeforeItsDeadline() async throws {
+        let deadline = Date(timeIntervalSince1970: 2_100_000_000)
+        for offset: TimeInterval in [-0.001, 0, 0.001] {
+            let operation = try approvedWalletSigningOperationForTesting(
+                approvedAccount: WalletAccountDescriptor(
+                    walletID: "session-wallet",
+                    coin: .ethereum,
+                    normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
+                    derivationPath: "m/44'/60'/0'/0/0"
+                ),
+                deadline: deadline
+            )
+            var now = deadline.addingTimeInterval(-1)
+            let material = SessionSigningMaterial {
+                await Task.yield()
+                now = deadline.addingTimeInterval(offset)
+                return .success(.ethereumSignature("signed"))
+            }
+            let session = WalletSigningSession(
+                material,
+                authorization: operation.authorization,
+                isCurrent: { true },
+                clock: { now }
+            )
+            XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+
+            let result = await session.sign()
+            if offset < 0 {
+                guard case .success(.ethereumSignature("signed")) = result else {
+                    return XCTFail("A signature returned before the deadline must be available")
+                }
+            } else {
+                guard case .failure(.authorizationUnavailable) = result else {
+                    return XCTFail("A signature returned at or after the deadline must be discarded")
+                }
+            }
+            XCTAssertEqual(material.signCount, 1)
+            XCTAssertEqual(material.erasureCount, 1)
+        }
+    }
+
     private func operation(requestID: Int = 1) throws -> ApprovedWalletSigningOperation {
         try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(

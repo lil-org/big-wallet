@@ -62,15 +62,23 @@ final class PopupApprovalStatePresenter {
 
     func state(
         id: Int,
-        state: PopupRequestSession.State,
-        host: String? = nil
+        host: String? = nil,
+        presentation: PopupRequestSession.Presentation,
+        transactionMutationAllowed: Bool = false
     ) -> PopupApprovalState {
         let content: PopupApprovalState.Content
-        switch state {
+        switch presentation {
+        case .review(let review):
+            return reviewState(
+                id: id,
+                host: host,
+                review: review,
+                transactionMutationAllowed: transactionMutationAllowed
+            )
         case .authenticating: content = .authenticating
         case .working: content = .working
-        case .error, .review:
-            content = .error(message: Strings.failedToLoad, actions: [.retry])
+        case .error(let message):
+            content = .error(message: message, actions: [.retry, .reject])
         }
         return PopupApprovalState(id: id, host: host, content: content)
     }
@@ -88,31 +96,21 @@ final class PopupApprovalStatePresenter {
         )
     }
 
-    func approvalState(
-        for session: PopupRequestSession,
-        action: DappRequestAction,
+    private func reviewState(
+        id: Int,
+        host: String?,
+        review: PopupRequestSession.ReviewPresentation,
         transactionMutationAllowed: Bool
     ) -> PopupApprovalState {
-        guard session.state == .review else {
-            return state(id: session.handle.id, state: session.state, host: session.request.host)
-        }
         let content: PopupReview.Content
         var actions: [PopupApprovalState.Action] = [.approve, .reject]
-        var error = session.errorText
-        switch action {
+        var error = review.feedback
+        switch review.content {
         case .selectAccount(let action), .switchAccount(let action):
-            content = .accountSelection(selectionReview(action: action, reviewCatalog: session.reviewCatalog))
+            content = .accountSelection(selectionReview(action: action, reviewCatalog: review.reviewCatalog))
         case .approveMessage(let action):
             content = .signMessage(messageReview(action: action))
-        case .approveTransaction(let action):
-            guard let transaction = session.transaction else {
-                return Self.errorState(
-                    id: session.handle.id,
-                    actions: [.reject],
-                    host: session.request.host,
-                    error: Strings.failedToLoad
-                )
-            }
+        case .approveTransaction(let action, let transaction):
             actions = [.reject]
             let snapshot = transaction.snapshot
             if snapshot.canApprove { actions.insert(.approve, at: 0) }
@@ -136,11 +134,11 @@ final class PopupApprovalStatePresenter {
             ))
         }
         return PopupApprovalState(
-            id: session.handle.id,
-            host: session.request.host,
+            id: id,
+            host: host,
             content: .review(PopupReview(
-                reviewToken: session.reviewToken,
-                title: title(for: action),
+                reviewToken: review.reviewToken,
+                title: title(for: review.content.action),
                 content: content
             ), actions: actions, feedback: error)
         )

@@ -6,8 +6,6 @@ const WIRE = BigWalletBridgeWire;
 const WORKFLOW_VERSION = WIRE.WORKFLOW_VERSION;
 const APPLICATION_ID = "org.lil.wallet";
 const UPDATE_RECOVERY_STORAGE_KEY = "workflowUpdateRecoveryNeeded";
-const ADMISSION_WINDOWS_STORAGE_KEY = "recoveryAdmissionWindows";
-const NATIVE_ADMISSION_WINDOW = WIRE.WORKFLOW_POLICY.requestTTLMilliseconds + 60 * 1000;
 const TRANSPORT_TIMEOUT = 5000;
 const TAB_QUERY_TIMEOUT = 1000;
 const NATIVE_APPROVAL_TRANSPORT_TIMEOUT = 15 * 1000;
@@ -19,8 +17,6 @@ const requestMaintenanceTimes = new Map;
 const toolbarClicks = new Map;
 let recoveryFlight = null;
 let recoveryQueued = false;
-let alarmFlight = Promise.resolve();
-let admissionRevision = 0;
 
 const sendNativeMessage = WIRE.createTrustedNativeMessageSender({
     sendRawNativeMessage: message => browser.runtime.sendNativeMessage(APPLICATION_ID, message),
@@ -229,56 +225,25 @@ async function handleRPC(request, context) {
     } catch { return pageFailure(request.id, "ethereum", null); }
 }
 
-function updateRecoveryAlarm(operation) {
-    const pending = alarmFlight.then(operation);
-    alarmFlight = pending.catch(() => {});
-    return pending;
-}
-
-function ensureManualSwitchAlarm() {
-    return updateRecoveryAlarm(async () => {
-        const alarm = await browser.alarms.get(MANUAL_SWITCH_RECOVERY_ALARM);
-        if (alarm?.periodInMinutes !== 1 || alarm.scheduledTime > Date.now() + 60 * 1000) {
-            await browser.alarms.create(MANUAL_SWITCH_RECOVERY_ALARM, {delayInMinutes: 1, periodInMinutes: 1});
-        }
-    });
-}
-
-async function sendNativeAdmission(message) {
-    admissionRevision += 1;
+async function ensureRecoveryAlarm(interval) {
+    if (browser.extension?.inIncognitoContext === true) { return; }
     try {
-        await ensureManualSwitchAlarm();
-        await updateRecoveryAlarm(async () => {
-            const windows = (await recoveryAdmissionWindows()).filter(([, end]) => end > Date.now());
-            windows.push([message.admissionDeadline - NATIVE_ADMISSION_WINDOW, message.admissionDeadline]);
-            windows.sort((left, right) => left[0] - right[0]);
-            const merged = [];
-            for (const window of windows) {
-                const previous = merged.at(-1);
-                if (previous && previous[1] >= window[0]) {
-                    previous[1] = Math.max(previous[1], window[1]);
-                } else {
-                    merged.push(window);
-                }
-            }
-            await browser.storage.local.set({[ADMISSION_WINDOWS_STORAGE_KEY]: merged});
-        });
-        return await sendNativeMessage(message, false);
-    } finally {
-        admissionRevision += 1;
-        void ensureManualSwitchAlarm().catch(() => {});
-    }
+        const alarm = await WIRE.withTimeout(
+            browser.alarms.get(MANUAL_SWITCH_RECOVERY_ALARM), TRANSPORT_TIMEOUT
+        );
+        const periodInMinutes = interval ?? ([1, IDLE_RECOVERY_INTERVAL_MINUTES].includes(alarm?.periodInMinutes)
+            ? alarm.periodInMinutes : IDLE_RECOVERY_INTERVAL_MINUTES);
+        if (alarm?.periodInMinutes === periodInMinutes && Number.isFinite(alarm.scheduledTime) &&
+            alarm.scheduledTime <= Date.now() + periodInMinutes * 60 * 1000) { return; }
+        await WIRE.withTimeout(browser.alarms.create(MANUAL_SWITCH_RECOVERY_ALARM, {
+            delayInMinutes: periodInMinutes, periodInMinutes,
+        }), TRANSPORT_TIMEOUT);
+    } catch {}
 }
 
-async function recoveryAdmissionWindows() {
-    const stored = await browser.storage.local.get(ADMISSION_WINDOWS_STORAGE_KEY);
-    const windows = stored[ADMISSION_WINDOWS_STORAGE_KEY];
-    if (windows === undefined) { return []; }
-    if (!Array.isArray(windows) || !windows.every(window => Array.isArray(window) && window.length === 2 &&
-        window.every(Number.isSafeInteger) && window[0] < window[1] && window[1] > 0)) {
-        throw new Error("Invalid recovery admission windows");
-    }
-    return windows;
+function sendNativeAdmission(message) {
+    void ensureRecoveryAlarm(1);
+    return sendNativeMessage(message, false);
 }
 
 function validRecoveryRequest(request) {
@@ -290,32 +255,15 @@ function recoverRequests() {
     if (browser.extension?.inIncognitoContext === true) { return Promise.resolve(); }
     if (recoveryFlight) { recoveryQueued = true; return recoveryFlight; }
     const pending = (async () => {
-        const revision = admissionRevision;
-        await ensureManualSwitchAlarm();
-        const discoveryStartedAt = Date.now();
+        void ensureRecoveryAlarm();
         const id = WIRE.genId();
         const response = await WIRE.withTimeout(sendNativeMessage({
             subject: "getRecoveryRequests", id, workflowVersion: WORKFLOW_VERSION,
         }, false), TRANSPORT_TIMEOUT);
         if (!WIRE.isMessage("NativeRecoveryReply", response) || response.id !== id ||
             !response.requests?.every(validRecoveryRequest)) { return; }
-        if (response.requests.length === 0) {
-            await updateRecoveryAlarm(async () => {
-                const windows = await recoveryAdmissionWindows();
-                if (admissionRevision !== revision) { return; }
-                if (!windows.length) { return browser.alarms.clear(MANUAL_SWITCH_RECOVERY_ALARM); }
-                const now = Date.now();
-                const earliest = Math.min(discoveryStartedAt, now);
-                const latest = Math.max(discoveryStartedAt, now);
-                if (windows.some(([start, end]) => start <= latest && end > earliest)) { return; }
-                const nextStart = Math.min(...windows.filter(([start]) => start > latest).map(([start]) => start));
-                return browser.alarms.create(MANUAL_SWITCH_RECOVERY_ALARM, {
-                    when: Math.min(nextStart, now + IDLE_RECOVERY_INTERVAL_MINUTES * 60 * 1000),
-                    periodInMinutes: IDLE_RECOVERY_INTERVAL_MINUTES,
-                });
-            });
-            return;
-        }
+        void ensureRecoveryAlarm(response.requests.length ? 1 : IDLE_RECOVERY_INTERVAL_MINUTES);
+        if (response.requests.length === 0) { return; }
         const ready = [];
         for (const request of response.requests) {
             try {

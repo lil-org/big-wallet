@@ -249,13 +249,17 @@ final class PopupStringsTests: XCTestCase {
         ))
         let session = PopupRequestSession(intent: try reviewIntentForTesting(
             binding: XCTUnwrap(snapshot.requestBinding), action: action
-        ))
+        ), transactionApprovalOperations: unusedPopupTransactionOperations())
         let presenter = PopupApprovalStatePresenter()
-        let review = popupApprovalJSON(presenter.approvalState(
-            for: session,
-            action: action,
-            transactionMutationAllowed: false
-        ))
+        func renderedPresentation(transactionMutationAllowed: Bool) -> [String: Any] {
+            popupApprovalJSON(presenter.state(
+                id: session.handle.id,
+                host: session.request.host,
+                presentation: session.presentation,
+                transactionMutationAllowed: transactionMutationAllowed
+            ))
+        }
+        let review = renderedPresentation(transactionMutationAllowed: false)
         XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
         XCTAssertNotNil((review["review"] as? [String: Any])?["reviewToken"])
         XCTAssertNil(review["reviewToken"])
@@ -266,16 +270,25 @@ final class PopupStringsTests: XCTestCase {
                 XCTAssertTrue(session.acceptClaim(token: token))
                 XCTAssertTrue(session.beginAuthentication(token: token))
             }
-            let busy = popupApprovalJSON(presenter.approvalState(
-                for: session,
-                action: action,
-                transactionMutationAllowed: true
-            ))
+            let busy = renderedPresentation(transactionMutationAllowed: true)
             XCTAssertEqual(busy["state"] as? String, expectedState)
             XCTAssertEqual(busy["actions"] as? [String], [])
             XCTAssertNil(busy["review"])
             XCTAssertEqual(Set(busy.keys), ["id", "state", "actions", "host"])
         }
+        XCTAssertTrue(session.finishAuthentication(token: token))
+        let working = renderedPresentation(transactionMutationAllowed: true)
+        XCTAssertEqual(working["state"] as? String, "working")
+        XCTAssertEqual(working["actions"] as? [String], [])
+        XCTAssertNil(working["review"])
+
+        session.fail(Strings.approvalInterrupted)
+        let error = renderedPresentation(transactionMutationAllowed: true)
+        XCTAssertEqual(error["state"] as? String, "error")
+        XCTAssertEqual(error["error"] as? String, Strings.approvalInterrupted)
+        XCTAssertEqual(error["actions"] as? [String], ["retry", "reject"])
+        XCTAssertNil(error["review"])
+        XCTAssertEqual(Set(error.keys), ["id", "state", "actions", "host", "error"])
     }
 
     func testRejectableErrorHasExactRejectOnlyEnvelope() {

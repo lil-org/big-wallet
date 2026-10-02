@@ -5,8 +5,35 @@ import Foundation
 @MainActor
 final class PopupRequestSession {
 
-    enum State: String {
-        case review, authenticating, working, error
+    enum Presentation {
+        case review(ReviewPresentation)
+        case authenticating, working
+        case error(message: String)
+    }
+
+    struct ReviewPresentation {
+        let reviewToken: UUID
+        let content: ReviewContent
+        let reviewCatalog: WalletReviewCatalog?
+        let feedback: String?
+    }
+
+    enum ReviewContent {
+        case selectAccount(SelectAccountAction)
+        case switchAccount(SelectAccountAction)
+        case approveMessage(SignMessageAction)
+        case approveTransaction(action: SendTransactionAction, transaction: PopupTransactionSession)
+        case addEthereumChain(AddEthereumChainAction)
+
+        var action: DappRequestAction {
+            switch self {
+            case .selectAccount(let action): .selectAccount(action)
+            case .switchAccount(let action): .switchAccount(action)
+            case .approveMessage(let action): .approveMessage(action)
+            case .approveTransaction(let action, _): .approveTransaction(action)
+            case .addEthereumChain(let action): .addEthereumChain(action)
+            }
+        }
     }
 
     struct SelectionDraft {
@@ -33,24 +60,43 @@ final class PopupRequestSession {
 
     let handle: ExtensionBridge.Handle
     let request: SafariRequest
-    var reviewCatalog: WalletReviewCatalog?
-    let preparedAction: DappRequestAction
+    let reviewCatalog: WalletReviewCatalog?
+    fileprivate let preparedContent: ReviewContent
     private var approvalReview: ApprovalReview
     var selectionDraft: SelectionDraft?
-    var transaction: PopupTransactionSession?
     private var lifecycle: Lifecycle
     private(set) var reviewToken = UUID()
     private(set) var presentationRevision: UInt64 = 0
 
     var binding: ExtensionBridge.RequestBinding { approvalReview.binding }
+    var preparedAction: DappRequestAction { preparedContent.action }
+    var transaction: PopupTransactionSession? {
+        guard case .approveTransaction(_, let transaction) = preparedContent else { return nil }
+        return transaction
+    }
 
     init(
         intent: BoundApprovalIntent,
-        reviewCatalog: WalletReviewCatalog? = nil
+        reviewCatalog: WalletReviewCatalog? = nil,
+        transactionApprovalOperations: TransactionApprovalOperations
     ) {
         handle = intent.binding.handle
         request = intent.binding.request
-        preparedAction = intent.action
+        switch intent.action {
+        case .selectAccount(let action):
+            preparedContent = .selectAccount(action)
+        case .switchAccount(let action):
+            preparedContent = .switchAccount(action)
+        case .approveMessage(let action):
+            preparedContent = .approveMessage(action)
+        case .approveTransaction(let action):
+            preparedContent = .approveTransaction(
+                action: action,
+                transaction: PopupTransactionSession(action: action, operations: transactionApprovalOperations)
+            )
+        case .addEthereumChain(let action):
+            preparedContent = .addEthereumChain(action)
+        }
         approvalReview = ApprovalReview(intent: intent)
         self.reviewCatalog = reviewCatalog
         lifecycle = .review(feedback: nil)
@@ -86,16 +132,21 @@ final class PopupRequestSession {
         approvalReview = approvalReview.renewed()
     }
 
-    var state: State {
+    var presentation: Presentation {
         switch lifecycle {
-        case .review:
-            return .review
+        case .review(let feedback):
+            return .review(ReviewPresentation(
+                reviewToken: reviewToken,
+                content: reviewContent,
+                reviewCatalog: reviewCatalog,
+                feedback: feedback
+            ))
         case .claiming, .working:
             return .working
         case .authenticating:
             return .authenticating
-        case .error:
-            return .error
+        case .error(let message):
+            return .error(message: message)
         }
     }
 
@@ -136,20 +187,23 @@ final class PopupRequestSession {
         }
     }
 
-    var reviewAction: DappRequestAction {
-        guard let selectionDraft else { return preparedAction }
-        switch preparedAction {
+    var reviewAction: DappRequestAction { reviewContent.action }
+
+    private var reviewContent: ReviewContent {
+        guard let selectionDraft else { return preparedContent }
+        switch preparedContent {
         case .selectAccount(let action):
             return .selectAccount(selectionDraft.applying(to: action))
         case .switchAccount(let action):
             return .switchAccount(selectionDraft.applying(to: action))
         case .approveMessage, .approveTransaction, .addEthereumChain:
-            return preparedAction
+            return preparedContent
         }
     }
 
     var canBeginApproval: Bool {
-        return state == .review
+        if case .review = lifecycle { return true }
+        return false
     }
 
     func beginApproval() -> UUID? {
@@ -202,7 +256,7 @@ final class PopupRequestSession {
 
     func rotateReviewToken() {
         presentationRevision &+= 1
-        guard state == .review else { return }
+        guard case .review = lifecycle else { return }
         renewApprovalReview()
         reviewToken = UUID()
     }
@@ -214,16 +268,7 @@ final class PopupRequestSessions {
 
     private enum AuthenticationOutcome: Sendable {
         case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
-        case cancelled
-        case unavailable(feedback: String)
-        case reviewChanged
-        case superseded
-    }
-
-    private enum SigningValidation {
-        case valid
-        case reviewChanged
-        case superseded
+        case abandoned(feedback: String?)
     }
 
     private enum ActiveSessionResult {
@@ -397,8 +442,10 @@ final class PopupRequestSessions {
         case .found(let snapshot):
             if retry, case .queued(_, .unowned) = snapshot.state {
                 switch entries[handle] {
-                case .session(let session) where session.state == .error:
-                    discardSession(handle: handle)
+                case .session(let session):
+                    if case .error = session.presentation {
+                        discardSession(handle: handle)
+                    }
                 case .immediateResponse(let persistence) where persistence.state == .failed:
                     discardEntry(handle: handle)
                 default:
@@ -543,7 +590,7 @@ final class PopupRequestSessions {
                 return .absent
             }
             if snapshot.phase == .queued,
-               session.state == .review,
+               session.canBeginApproval,
                let reviewedAccess = session.reviewCatalog {
                 guard let currentAccess = walletEnvironment.currentReviewCatalog() else {
                     discardSession(handle: snapshot.handle)
@@ -582,10 +629,14 @@ final class PopupRequestSessions {
             return .immediateResponse(.working)
         case .approval(let intent):
             guard intent.binding == binding else { return .absent }
-            let session = PopupRequestSession(intent: intent, reviewCatalog: preparedCatalog)
+            let session = PopupRequestSession(
+                intent: intent,
+                reviewCatalog: preparedCatalog,
+                transactionApprovalOperations: transactionApprovalOperations
+            )
             entries[snapshot.handle] = .session(session)
-            if case .approveTransaction(let transactionAction) = intent.action {
-                setupTransaction(for: session, action: transactionAction)
+            if case .approveTransaction(let action, let transaction) = session.preparedContent {
+                setupTransaction(transaction, for: session, action: action)
             }
             return .available(session)
         }
@@ -646,7 +697,7 @@ final class PopupRequestSessions {
         }
         if snapshot.isQueuedForNativeApproval {
             discardEntry(handle: handle)
-            return presenter.state(id: handle.id, state: .working, host: snapshot.host)
+            return presenter.state(id: handle.id, host: snapshot.host, presentation: .working)
         }
         let sessionWasCached = entries[handle]?.session != nil
         let activeSession = activeSession(snapshot: snapshot)
@@ -665,10 +716,10 @@ final class PopupRequestSessions {
                         error: Strings.failedToLoad
                     )
                 }
-                return presenter.state(id: handle.id, state: .working, host: snapshot.host)
+                return presenter.state(id: handle.id, host: snapshot.host, presentation: .working)
             }
             if snapshot.phase == .approving {
-                return presenter.state(id: handle.id, state: .working, host: snapshot.host)
+                return presenter.state(id: handle.id, host: snapshot.host, presentation: .working)
             }
             switch await store.load(handle: handle) {
             case .found(let current) where current.phase == .responded:
@@ -680,20 +731,8 @@ final class PopupRequestSessions {
             }
             return presenter.missingState(id: handle.id)
         }
-        if session.state == .error {
-            return PopupApprovalStatePresenter.errorState(
-                id: handle.id,
-                actions: [.retry, .reject],
-                host: snapshot.host,
-                error: session.errorText ?? Strings.failedToLoad
-            )
-        }
-        if session.state != .review {
-            return presenter.state(id: handle.id, state: session.state, host: snapshot.host)
-        }
-        let action = session.reviewAction
-        if sessionWasCached, session.state == .review {
-            switch action {
+        if sessionWasCached, session.canBeginApproval {
+            switch session.reviewAction {
             case .selectAccount, .switchAccount:
                 invalidateNetworkCache()
             case .approveMessage, .approveTransaction, .addEthereumChain:
@@ -704,9 +743,10 @@ final class PopupRequestSessions {
             snapshot: snapshot,
             session: session
         )
-        return presenter.approvalState(
-            for: session,
-            action: action,
+        return presenter.state(
+            id: handle.id,
+            host: session.request.host,
+            presentation: session.presentation,
             transactionMutationAllowed: transactionMutationAllowed
         )
     }
@@ -950,19 +990,11 @@ final class PopupRequestSessions {
                         succeeded: false
                     )
                 }
-                switch authentication {
-                case .cancelled:
-                    return .abandon
-                case .unavailable(let feedback):
-                    if self.isCurrent(session, token: token) {
-                        session.setFeedback(feedback)
-                    }
-                    return .abandon
-                case .reviewChanged, .superseded:
-                    return .abandon
-                case .unlocked:
-                    preconditionFailure()
+                if case .abandoned(let feedback?) = authentication,
+                   self.isCurrent(session, token: token) {
+                    session.setFeedback(feedback)
                 }
+                return .abandon
             }
             var untransferredSigner: WalletSigningSession? = signer
             defer { untransferredSigner?.invalidate() }
@@ -995,7 +1027,7 @@ final class PopupRequestSessions {
             } else {
                 decision = .message(.init(approvedAccount: approvedAccount, solanaCluster: cluster))
             }
-            guard case .valid = await self.validateSigningAccess(
+            guard await self.validateSigningAccess(
                 for: session,
                 reviewedAction: action,
                 token: token,
@@ -1023,10 +1055,10 @@ final class PopupRequestSessions {
         token: UUID,
         catalog: WalletReviewCatalog,
         signer: WalletSigningSession
-    ) async -> SigningValidation {
-        guard isCurrent(session, token: token) else { return .superseded }
+    ) async -> Bool {
+        guard isCurrent(session, token: token) else { return false }
         let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
-        guard clock() < signer.authorization.signingDeadline else { return .reviewChanged }
+        guard clock() < signer.authorization.signingDeadline else { return false }
         let walletsAvailable = refreshWalletsAndNetworks() != nil
         let networkMatches: Bool
         if case .approveTransaction(let action) = reviewedAction {
@@ -1044,9 +1076,9 @@ final class PopupRequestSessions {
               session.reviewCatalog?.identity == catalog.identity,
               signer.validateCurrent(),
               networkMatches else {
-            return .reviewChanged
+            return false
         }
-        return isCurrent(session, token: token) ? .valid : .superseded
+        return isCurrent(session, token: token)
     }
 
     private func runClaimedApproval(
@@ -1107,7 +1139,7 @@ final class PopupRequestSessions {
         authorization: WalletSigningAuthorization,
         context: DurableApprovalExecutor.ClaimContext
     ) async -> AuthenticationOutcome {
-        guard session.beginAuthentication(token: token) else { return .superseded }
+        guard session.beginAuthentication(token: token) else { return .abandoned(feedback: nil) }
         let result = await context.runBeforeDeadline(discardValue: { outcome in
             if case .unlocked(_, let signer) = outcome { signer.invalidate() }
         }) {
@@ -1116,13 +1148,13 @@ final class PopupRequestSessions {
         let outcome: AuthenticationOutcome
         switch result {
         case .value(let value): outcome = value
-        case .expired: outcome = .cancelled
+        case .expired: outcome = .abandoned(feedback: nil)
         }
         guard isCurrent(session, token: token), session.finishAuthentication(token: token) else {
             if case .unlocked(_, let signer) = outcome {
                 signer.invalidate()
             }
-            return .superseded
+            return .abandoned(feedback: nil)
         }
         return outcome
     }
@@ -1134,16 +1166,16 @@ final class PopupRequestSessions {
     ) async -> AuthenticationOutcome {
         switch await walletEnvironment.unlock(reason, authorization) {
         case .canceled:
-            return .cancelled
+            return .abandoned(feedback: nil)
         case .unavailable:
             guard let currentCatalog = walletEnvironment.currentReviewCatalog(),
                   currentCatalog.identity == session.reviewCatalog?.identity,
                   currentCatalog.orderedAccounts.contains(where: {
                       authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
                   }) else {
-                return .reviewChanged
+                return .abandoned(feedback: nil)
             }
-            return .unavailable(feedback: Strings.somethingWentWrong)
+            return .abandoned(feedback: Strings.somethingWentWrong)
         case .unlocked(let catalog, let signer):
             guard let reviewedIdentity = session.reviewCatalog?.identity,
                   catalog.identity == reviewedIdentity,
@@ -1153,7 +1185,7 @@ final class PopupRequestSessions {
                   }),
                   signer.validateCurrent() else {
                 signer.invalidate()
-                return .reviewChanged
+                return .abandoned(feedback: nil)
             }
             return .unlocked(catalog: catalog, session: signer)
         }
@@ -1230,20 +1262,16 @@ final class PopupRequestSessions {
     }
 
     private func setupTransaction(
+        _ transactionSession: PopupTransactionSession,
         for session: PopupRequestSession,
         action: SendTransactionAction
     ) {
-        let transactionSession = PopupTransactionSession(
-            action: action,
-            operations: transactionApprovalOperations
-        )
         transactionSession.onChange = { [weak self, weak session] in
             guard let self,
                   let session,
                   entries[session.handle]?.session === session else { return }
             session.rotateReviewToken()
         }
-        session.transaction = transactionSession
         transactionSession.start()
         guard loadsTransactionContext else { return }
         PriceService.shared.update()

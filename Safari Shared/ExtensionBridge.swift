@@ -396,6 +396,53 @@ actor ExtensionBridge {
             case .native(_, let context): return context.executionDeadline
             }
         }
+
+        func isWithinExecutionWindow(at now: Date) -> Bool {
+            guard now < executionDeadline else { return false }
+            if case .native(_, let context) = self { return now >= context.observedAt }
+            return true
+        }
+
+        func allowsExecution(at now: Date, isCancelled: Bool) -> Bool {
+            if case .native = self, isCancelled { return false }
+            return isWithinExecutionWindow(at: now)
+        }
+
+        func isWithinClaimLifetime(at now: Date) -> Bool {
+            let remaining = executionDeadline.timeIntervalSince(now)
+            return remaining > 0 && remaining <= ExtensionBridge.executionLifetime
+        }
+
+        func allowsStoredExecution(at now: Date, isCancelled: Bool) -> Bool {
+            guard allowsExecution(at: now, isCancelled: isCancelled) else { return false }
+            if case .ordinary = self { return isWithinClaimLifetime(at: now) }
+            return true
+        }
+
+        func signingDeadline(for request: SafariRequest) -> Date {
+            min(executionDeadline, nativeTransactionDecisionDeadline(for: request) ?? executionDeadline)
+        }
+
+        func isDecisionFresh(for request: SafariRequest, at now: Date) -> Bool {
+            guard case .native(let approvedAt, _) = self,
+                  let deadline = nativeTransactionDecisionDeadline(for: request) else { return true }
+            return now >= approvedAt && now < deadline
+        }
+
+        private func nativeTransactionDecisionDeadline(for request: SafariRequest) -> Date? {
+            guard case .native(let approvedAt, _) = self else { return nil }
+            let transaction: Bool
+            switch request.body {
+            case .ethereum(let body):
+                transaction = body.method == .signTransaction
+            case .solana(let body):
+                transaction = body.method == .signTransaction || body.method == .signAllTransactions ||
+                    body.method == .signAndSendTransaction
+            case .unknown:
+                transaction = false
+            }
+            return transaction ? approvedAt.addingTimeInterval(ExtensionBridge.maximumTransactionDecisionAge) : nil
+        }
     }
 
     struct Ingress {
@@ -485,6 +532,7 @@ actor ExtensionBridge {
     static let maximumRetainedBytes = maximumRetainedRequests * maximumStoredRecordBytes
     static let maximumRetainedBytesPerOrigin =
         maximumRetainedRequestsPerOrigin * maximumStoredRecordBytes
+    static let executionLifetime: TimeInterval = 150
     static let maximumTransactionDecisionAge: TimeInterval = 30
     static let requestTTL: TimeInterval = TimeInterval(WireProtocol.requestTTLMilliseconds) / 1_000
     static let admissionDeadlineFutureSkew: TimeInterval = 60

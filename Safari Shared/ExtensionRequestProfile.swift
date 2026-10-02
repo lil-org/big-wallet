@@ -313,12 +313,7 @@ struct ExtensionRequestProfile {
             isCancelled: Bool
         ) -> Bool {
             guard claimedApproval?.authority == authority else { return false }
-            switch authority {
-            case .ordinary(let deadline):
-                return ExtensionRequestProfile.executionDeadlineIsCurrent(deadline, now: now)
-            case .native(_, let expected):
-                return !isCancelled && now >= expected.observedAt && now < expected.executionDeadline
-            }
+            return authority.allowsStoredExecution(at: now, isCancelled: isCancelled)
         }
 
 
@@ -432,7 +427,6 @@ struct ExtensionRequestProfile {
     static let maximumMutationReceiptBytes = 256 * 1_024
     static let mutationReceiptLifetime: TimeInterval = 60 * 60
     static let maximumRevision = 9_007_199_254_740_991
-    static let executionLifetime: TimeInterval = 150
     static let futureSkew = ExtensionBridge.admissionDeadlineFutureSkew
 
     struct ReceiptIdentity {
@@ -893,12 +887,6 @@ struct ExtensionRequestProfile {
     static func canRetireAdmissionRecord(_ record: Record, now: Date) -> Bool {
         let retryWindow = ExtensionBridge.requestTTL + Self.futureSkew
         return record.admissionCreatedAt.addingTimeInterval(retryWindow) <= now
-    }
-
-    static func executionDeadlineIsCurrent(_ deadline: Date?, now: Date) -> Bool {
-        guard let deadline else { return false }
-        let remaining = deadline.timeIntervalSince(now)
-        return remaining > 0 && remaining <= Self.executionLifetime
     }
 
     static func receiptMatches(
