@@ -84,7 +84,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testReviewLifetimeInvalidatesBeforeCleanupAndDoesNotRetainParticipants() {
+    func testReviewLifetimeInvalidatesBeforeCleanupAndDoesNotRetainParticipants() async {
         let lifetime = NativeApprovalReviewLifetime()
         var cleanupCount = 0
         let participant = ReviewTeardownController()
@@ -96,7 +96,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         lifetime.register(participant)
         lifetime.register(participant)
         var discarded: ReviewTeardownController? = ReviewTeardownController()
-        weak var weakDiscarded = discarded
+        weak let weakDiscarded = discarded
         lifetime.register(discarded!)
         discarded = nil
         XCTAssertNil(weakDiscarded)
@@ -111,11 +111,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(cleanupCount, 2)
     }
 
-    func testReviewLifetimeKeepsAllParticipantsAliveUntilCleanupFinishes() {
+    func testReviewLifetimeKeepsAllParticipantsAliveUntilCleanupFinishes() async {
         let lifetime = NativeApprovalReviewLifetime()
         let first = ReviewTeardownController()
         var second: ReviewTeardownController? = ReviewTeardownController()
-        weak var weakSecond = second
+        weak let weakSecond = second
         var cleanedSecond = false
         first.onInvalidate = { second = nil }
         second?.onInvalidate = { cleanedSecond = true }
@@ -208,7 +208,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(rejections, 1)
     }
 
-    func testClosingOrdinaryPasswordCancelsAuthenticationOnce() {
+    func testClosingOrdinaryPasswordCancelsAuthenticationOnce() async {
         var completions = [Bool]()
         let password = PasswordViewController.with(mode: .enter) { completions.append($0) }
         let window = NSWindow(
@@ -225,9 +225,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(completions, [false])
     }
 
-    func testApprovalPickerBlocksWalletManagementActions() throws {
+    func testApprovalPickerBlocksWalletManagementActions() async throws {
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
-            let manager = try accountSelectionWalletsManager()
+            let manager = try await accountSelectionWalletsManager()
             let wallet = try XCTUnwrap(manager.wallets.first)
             let selected = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
             let controller = accountSelectionController(
@@ -242,7 +242,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let menu = PopupRecordingMenu()
             header.titleButton.menu = menu
             menu.onPopup = { XCTFail("Approval headers must not open management menus") }
-            let originalData = try XCTUnwrap(wallet.key.exportJSON())
+            let originalAccounts = wallet.accounts
 
             XCTAssertTrue(controller.addButton.isHidden)
             XCTAssertNil(controller.menuForRow(1))
@@ -264,13 +264,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             XCTAssertNil(window.attachedSheet)
             XCTAssertEqual(controller.accountSelection?.selectedAccounts, [selected])
             XCTAssertFalse(try XCTUnwrap(controller.accountSelection).hasCompleted)
-            XCTAssertEqual(wallet.key.exportJSON(), originalData)
+            await assertWalletReload(manager)
+            XCTAssertEqual(manager.currentWallet(id: wallet.id)?.accounts, originalAccounts)
         }
     }
 
-    func testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks() throws {
+    func testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks() async throws {
         let controller = accountSelectionController(
-            manager: try accountSelectionWalletsManager(), mode: .selectAccount,
+            manager: try await accountSelectionWalletsManager(), mode: .selectAccount,
             selectedAccounts: []
         )
         let window = accountSelectionWindow(controller: controller)
@@ -279,33 +280,41 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer { windowController.close() }
         let session = try XCTUnwrap(controller.accountSelection)
         var launches = 0
-        var finishLaunch: ((Bool) -> Void)?
-        controller.openWalletManagement = { completion in
+        var finishLaunch: CheckedContinuation<Bool, Never>?
+        controller.openWalletManagement = {
             launches += 1
-            finishLaunch = completion
+            return await withCheckedContinuation { finishLaunch = $0 }
         }
         let manageRow = controller.numberOfRows(in: controller.tableView) - 1
         try clickAccountRow(manageRow, in: controller, window: window)
         _ = controller.perform(NSSelectorFromString("manageWallets"))
+        await waitForCondition { launches == 1 }
         XCTAssertEqual(launches, 1)
-        finishLaunch?(true)
+        finishLaunch?.resume(returning: true)
+        finishLaunch = nil
+        await waitForCondition { controller.tableView(controller.tableView, rowViewForRow: manageRow)?.alphaValue == 1 }
         XCTAssertTrue(window.contentViewController === controller)
         XCTAssertTrue(session.lifetime.isActive)
         XCTAssertFalse(session.hasCompleted)
         XCTAssertNil(window.attachedSheet)
 
         _ = controller.perform(NSSelectorFromString("manageWallets"))
+        await waitForCondition { launches == 2 }
         XCTAssertEqual(launches, 2)
-        finishLaunch?(false)
+        finishLaunch?.resume(returning: false)
+        finishLaunch = nil
+        await waitForCondition { window.attachedSheet != nil }
         let errorSheet = try XCTUnwrap(window.attachedSheet)
         window.endSheet(errorSheet, returnCode: .alertFirstButtonReturn)
         errorSheet.orderOut(nil)
         XCTAssertFalse(session.hasCompleted)
 
         _ = controller.perform(NSSelectorFromString("manageWallets"))
+        await waitForCondition { launches == 3 }
         XCTAssertEqual(launches, 3)
         session.lifetime.invalidate()
-        finishLaunch?(false)
+        finishLaunch?.resume(returning: false)
+        finishLaunch = nil
         _ = controller.perform(NSSelectorFromString("manageWallets"))
         XCTAssertEqual(launches, 3)
         XCTAssertNil(window.attachedSheet)
@@ -313,10 +322,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(session.hasCompleted)
     }
 
-    func testEmptyApprovalShowsRequesterAndSeparateWalletManagement() throws {
+    func testEmptyApprovalShowsRequesterAndSeparateWalletManagement() async throws {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
             let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
             let window = accountSelectionWindow(controller: controller)
@@ -325,7 +334,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             defer { windowController.close() }
             controller.viewDidAppear()
             var launches = 0
-            controller.openWalletManagement = { completion in launches += 1; completion(true) }
+            controller.openWalletManagement = { launches += 1; return true }
             XCTAssertFalse(controller.websiteNameStackView.isHidden)
             XCTAssertEqual(controller.websiteNameLabel.stringValue, "wallet.example")
             XCTAssertEqual(controller.websiteNameStackView.arrangedSubviews.count, 1)
@@ -345,13 +354,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             try pressDownArrow(in: controller.tableView, window: window)
             XCTAssertEqual(controller.tableView.selectedRow, 1)
             try pressKey(" ", keyCode: 49, in: controller.tableView, window: window)
+            await waitForCondition { launches == 1 }
             XCTAssertEqual(launches, 1)
             XCTAssertTrue(window.contentViewController === controller)
             XCTAssertFalse(try XCTUnwrap(controller.accountSelection).hasCompleted)
         }
     }
 
-    func testApprovalPickerRefreshPreservesOnlyExistingSelectionsWithoutSubmitting() throws {
+    func testApprovalPickerRefreshPreservesOnlyExistingSelectionsWithoutSubmitting() async throws {
         typealias Vectors = WalletCoreProxyTestVectors
         let reader = KeychainCopyMatchingStub()
         let walletID = "selection-wallet"
@@ -359,7 +369,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let key = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
         reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
         let selected = SpecificWalletAccount(walletId: walletID, account: account)
         var submissions = 0
@@ -376,7 +386,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             extendedPublicKey: Vectors.abandonEthereumExtendedPublicKey
         )
         reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
-        manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange()
         XCTAssertEqual(controller.numberOfRows(in: controller.tableView), initialRows + 1)
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [selected])
         XCTAssertTrue(controller.primaryButton.isEnabled)
@@ -384,15 +394,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
-        manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange()
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
         XCTAssertFalse(controller.primaryButton.isEnabled)
         XCTAssertEqual(submissions, 0)
     }
 
-    func testOrdinaryWalletCloseStillFencesRetainedActions() throws {
+    func testOrdinaryWalletCloseStillFencesRetainedActions() async throws {
         let controller = accountSelectionController(
-            manager: try accountSelectionWalletsManager(), mode: nil,
+            manager: try await accountSelectionWalletsManager(), mode: nil,
             selectedAccounts: []
         )
         let window = accountSelectionWindow(controller: controller)
@@ -409,7 +419,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(menu.cancellationCount, 1)
     }
 
-    func testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission() {
+    func testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission() async {
         let lifetime = NativeApprovalReviewLifetime()
         var completions = 0
         let session = NativeAccountSelectionSession(
@@ -430,6 +440,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(completions, 1)
     }
 
+    @MainActor
     private final class Clock {
         var now = Date(timeIntervalSince1970: 1_800_000_000) {
             didSet { uptime += max(0, now.timeIntervalSince(oldValue)) }
@@ -439,7 +450,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    private final class AsyncGate<Value> {
+    private final class AsyncGate<Value: Sendable> {
         var continuation: CheckedContinuation<Value, Never>?
         var pendingResult: Value?
 
@@ -490,22 +501,23 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
+    @MainActor
     private final class CoordinatorStore: NativeDeliveryStore {
         private var outstandingWrites = 0
         private(set) var maximumOutstandingWrites = 0
         var snapshot: ExtensionBridge.Snapshot?
-        var loadHandler: ((ExtensionBridge.Handle) async ->
+        var loadHandler: (@MainActor (ExtensionBridge.Handle) async ->
             ExtensionBridge.SnapshotResult)?
         var recordCount = 0
         var recordedOwner: ExtensionBridge.NativeDeliveryOwner?
-        var recordHandler: ((
+        var recordHandler: (@MainActor (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
             ExtensionBridge.NativeDeliveryOwner
         ) async -> ExtensionBridge.StoreMutationResult)?
-        var unownedRejectHandler: (ExtensionBridge.Handle) async ->
+        var unownedRejectHandler: @MainActor (ExtensionBridge.Handle) async ->
             ExtensionBridge.StoreMutationResult = { _ in .persisted }
-        var completeHandler: (
+        var completeHandler: @MainActor (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
             UUID,
@@ -513,7 +525,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ) async -> ExtensionBridge.StoreMutationResult = { _, _, _, _ in
             .ownershipLost
         }
-        var rejectHandler: (
+        var rejectHandler: @MainActor (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryNonce,
             UUID
@@ -521,6 +533,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             .ownershipLost
         }
 
+        @MainActor
         func load(
             handle: ExtensionBridge.Handle
         ) async -> ExtensionBridge.SnapshotResult {
@@ -528,6 +541,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
         }
 
+        @MainActor
         func recordNativeDeliveryReceipt(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -570,6 +584,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return .persisted
         }
 
+        @MainActor
         func reject(handle: ExtensionBridge.Handle) async ->
             ExtensionBridge.StoreMutationResult {
             beginWrite()
@@ -578,8 +593,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
 
         private(set) var interruptionCount = 0
-        var interruptionHandler: (() async -> ExtensionBridge.NativeInterruptionResult)?
+        var interruptionHandler: (@MainActor () async -> ExtensionBridge.NativeInterruptionResult)?
 
+        @MainActor
         func interruptNativeApproval(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -592,6 +608,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return .interrupted
         }
 
+        @MainActor
         func completeNativeImmediate(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -608,6 +625,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             )
         }
 
+        @MainActor
         func rejectNativeDelivery(
             handle: ExtensionBridge.Handle,
             nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
@@ -622,6 +640,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             )
         }
 
+        @MainActor
         private func beginWrite() {
             outstandingWrites += 1
             maximumOutstandingWrites = max(maximumOutstandingWrites, outstandingWrites)
@@ -640,9 +659,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var onPopup: (() -> Void)?
 
         override func popUp(positioning item: NSMenuItem?, at location: NSPoint, in view: NSView?) -> Bool {
+            MainActor.preconditionIsolated()
             onPopup?()
-            MainActor.assumeIsolated {
-                delegate?.menuDidClose?(self)
+            let selector = #selector(NSMenuDelegate.menuDidClose(_:))
+            if let delegate, delegate.responds(to: selector) {
+                _ = delegate.perform(selector, with: self)
             }
             return false
         }
@@ -680,7 +701,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testInitialAuthenticationFailureFallsBackOnlyOnStart() {
+    func testInitialAuthenticationFailureFallsBackOnlyOnStart() async {
         XCTAssertEqual(
             Agent.localAuthenticationResolution(success: true, onStart: true),
             .authenticated
@@ -695,7 +716,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testAuthenticationPresentationRestoresOnlyItsCurrentWindow() {
+    func testAuthenticationPresentationRestoresOnlyItsCurrentWindow() async {
         let window = TrackingWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
             styleMask: [.titled, .miniaturizable],
@@ -730,7 +751,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(window.deminiaturizationCount, 1)
     }
 
-    func testPendingWalletOpenIntentIsConsumedOnce() {
+    func testPendingWalletOpenIntentIsConsumedOnce() async {
         var intent = PendingWalletOpenIntent()
         intent.record()
         intent.record()
@@ -745,7 +766,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(fallback.consume())
     }
 
-    func testDockOnboardingHandoffDeduplicatesAndCommitsOnlySuccess() {
+    func testDockOnboardingHandoffDeduplicatesAndCommitsOnlySuccess() async {
         var handoff = DockOnboardingHandoff()
         var intent = PendingWalletOpenIntent()
         intent.record()
@@ -766,7 +787,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(handoff.finish(succeeded: true))
     }
 
-    func testDockOnboardingResolvesAppContainingSafariExtensionHelper() {
+    func testDockOnboardingResolvesAppContainingSafariExtensionHelper() async {
         let appURL = URL(
             fileURLWithPath: "/Users/test/Build/Products/Debug/Renamed Wallet.app",
             isDirectory: true
@@ -782,7 +803,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testDockOnboardingRejectsHelpersOutsideExpectedBundleStructure() {
+    func testDockOnboardingRejectsHelpersOutsideExpectedBundleStructure() async {
         let paths = [
             "/Applications/Big Wallet.app",
             "/Applications/Wallet.app/Contents/Helpers/Big Wallet.app",
@@ -1309,6 +1330,35 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = nil
     }
 
+    func testSuccessfulWalletReloadPastDeadlineLeavesLoadingState() async throws {
+        for expiresRequest in [false, true] {
+            let clock = Clock()
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.now }, uptime: { clock.uptime },
+                wait: { _ in XCTFail("Expired preparation must not retry") },
+                prepareWithoutWallets: { _ in nil },
+                reloadWallets: {
+                    if expiresRequest {
+                        clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+                    } else {
+                        clock.advanceUptime(NativeApprovalTiming.recoveryTimeout)
+                    }
+                    return true
+                },
+                prepare: { _ in
+                    XCTFail("Expired preparation must not create a review")
+                    return nil
+                }
+            ))
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication()
+
+            await waitForState(fixture.coordinator, expiresRequest ? .finished : .paused)
+            XCTAssertEqual(fixture.events.presentations.count, 2)
+        }
+    }
+
     func testPostauthenticationLoadingStopsAtAdmissionDeadline() async throws {
         let clock = Clock()
         var reloads = 0
@@ -1473,7 +1523,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(newerWindow.isVisible)
     }
 
-    func testAmbientMissingPasswordRejectsApprovalBeforeOnboarding() {
+    func testAmbientMissingPasswordRejectsApprovalBeforeOnboarding() async {
         XCTAssertEqual(
             Agent.missingPasswordApprovalAction(canCreatePassword: false),
             .rejectAndOpenDock
@@ -1484,7 +1534,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testFinishedApprovalAlwaysClosesExistingWindow() {
+    func testFinishedApprovalAlwaysClosesExistingWindow() async {
         XCTAssertEqual(Agent.ActiveApproval.finishedApprovalWindowAction(
             windowNumber: nil,
             isVisible: true,
@@ -1507,7 +1557,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ), .closeAndActivate)
     }
 
-    func testTransactionApprovalDescriptionPreservesMainSummary() throws {
+    func testTransactionApprovalDescriptionPreservesMainSummary() async throws {
         let destination = "0x1234567890abcdef1234567890abcdef12345678"
         let chain = try XCTUnwrap(Networks.ethereum)
         let transaction = Transaction(
@@ -1529,7 +1579,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(description.contains(destination))
     }
 
-    func testTransactionApprovalDescriptionPreservesContractData() throws {
+    func testTransactionApprovalDescriptionPreservesContractData() async throws {
         let chain = try XCTUnwrap(Networks.ethereum)
         let transaction = Transaction(
             from: "0x0000000000000000000000000000000000000001",
@@ -1572,7 +1622,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(fixture.coordinator.countsTowardUnverifiedLimit)
     }
 
-    func testApprovalWindowContextSurvivesContentReplacement() throws {
+    func testApprovalWindowContextSurvivesContentReplacement() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1587,7 +1637,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(windowController.approvalPeer?.name, "wallet.example")
     }
 
-    func testWalletImportPreservesMainLayout() throws {
+    func testWalletImportPreservesMainLayout() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1609,7 +1659,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         })
     }
 
-    func testApprovalPasswordPreservesMainLayout() throws {
+    func testApprovalPasswordPreservesMainLayout() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1695,7 +1745,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(outgoingCloses, 0)
     }
 
-    func testApprovalHostingSheetPreservesMainContentAndSize() throws {
+    func testApprovalHostingSheetPreservesMainContentAndSize() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1715,7 +1765,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testApprovalAlertPreservesAccessoryAndParentSheet() throws {
+    func testApprovalAlertPreservesAccessoryAndParentSheet() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1742,7 +1792,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testOrdinaryHostingSheetPreservesMainContentAndSize() throws {
+    func testOrdinaryHostingSheetPreservesMainContentAndSize() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -1761,7 +1811,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testSwitchAccountHeaderDoesNotDependOnConnectedProviders() {
+    func testSwitchAccountHeaderDoesNotDependOnConnectedProviders() async {
         let action = SelectAccountAction(
             coinType: nil,
             selectedAccounts: [],
@@ -1781,7 +1831,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testAccountSelectionCompletionUsesSessionNetwork() throws {
+    func testAccountSelectionCompletionUsesSessionNetwork() async throws {
         let action = SelectAccountAction(
             coinType: .ethereum,
             selectedAccounts: [],
@@ -1803,7 +1853,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(completedNetwork, changedNetwork)
     }
 
-    func testAccountSelectionUsesCompactNetworkButtonWithAccessibleIdentity() throws {
+    func testAccountSelectionUsesCompactNetworkButtonWithAccessibleIdentity() async throws {
         let template = try XCTUnwrap(Networks.withChainId(58_008))
         let network = EthereumNetwork(
             chainId: template.chainId,
@@ -1848,7 +1898,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.accountsListBottomConstraint.constant, 62)
     }
 
-    func testWalletListHidesApprovalControls() {
+    func testWalletListHidesApprovalControls() async {
         let controller = instantiate(AccountsListViewController.self)
         controller.loadView()
 
@@ -1857,7 +1907,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.accountsListBottomConstraint.constant, 0)
     }
 
-    func testAccountSelectionSubmissionImmediatelyFencesControls() throws {
+    func testAccountSelectionSubmissionImmediatelyFencesControls() async throws {
         let action = SelectAccountAction(
             coinType: .ethereum,
             selectedAccounts: [],
@@ -1886,8 +1936,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(controller.tableView.isEnabled)
     }
 
-    func testAccountSelectionQueriesDoNotChangeSelectedAccounts() throws {
-        let manager = try accountSelectionWalletsManager()
+    func testAccountSelectionQueriesDoNotChangeSelectedAccounts() async throws {
+        let manager = try await accountSelectionWalletsManager()
         let wallet = try XCTUnwrap(manager.wallets.first)
         let original = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
 
@@ -1907,7 +1957,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testWalletListKeyboardSelectionOpensMenuAndAllowsNextClick() async throws {
         let controller = instantiate(AccountsListViewController.self)
-        controller.walletsManager = try accountSelectionWalletsManager()
+        controller.walletsManager = try await accountSelectionWalletsManager()
         controller.loadView()
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
@@ -1943,7 +1993,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testWalletListPendingMenuDoesNotOpenAfterSelectionClears() async throws {
         let controller = instantiate(AccountsListViewController.self)
-        controller.walletsManager = try accountSelectionWalletsManager()
+        controller.walletsManager = try await accountSelectionWalletsManager()
         controller.loadView()
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
@@ -1964,8 +2014,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(table.selectedRow, -1)
     }
 
-    func testAccountSelectionClickSwitchesAndDeselectsOncePreservingOtherCoin() throws {
-        let manager = try accountSelectionWalletsManager()
+    func testAccountSelectionClickSwitchesAndDeselectsOncePreservingOtherCoin() async throws {
+        let manager = try await accountSelectionWalletsManager()
         let wallet = try XCTUnwrap(manager.wallets.first)
         let accounts = wallet.accounts.map {
             SpecificWalletAccount(walletId: wallet.id, account: $0)
@@ -1992,8 +2042,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testAccountPickerKeyboardNavigatesAndActivatesWithoutSubmitting() throws {
-        let manager = try accountSelectionWalletsManager()
+    func testAccountPickerKeyboardNavigatesAndActivatesWithoutSubmitting() async throws {
+        let manager = try await accountSelectionWalletsManager()
         let wallet = try XCTUnwrap(manager.wallets.first)
         let accounts = wallet.accounts.map {
             SpecificWalletAccount(walletId: wallet.id, account: $0)
@@ -2038,8 +2088,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testAccountPickerKeyboardSkipsDisabledCoinsAndFollowsMouseFocus() throws {
-        let manager = try accountSelectionWalletsManager()
+    func testAccountPickerKeyboardSkipsDisabledCoinsAndFollowsMouseFocus() async throws {
+        let manager = try await accountSelectionWalletsManager()
         let wallet = try XCTUnwrap(manager.wallets.first)
         let account = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
         let controller = accountSelectionController(
@@ -2072,10 +2122,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
     }
 
-    func testEmptyWalletOptionsSupportKeyboardAndMouseImport() throws {
+    func testEmptyWalletOptionsSupportKeyboardAndMouseImport() async throws {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let cases: [(NativeAccountSelectionMode?, Bool)] = [(nil, true), (nil, false)]
         for (mode, useKeyboard) in cases {
             let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
@@ -2104,10 +2154,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testEmptyWalletCreateCanBeActivatedWithReturn() throws {
+    func testEmptyWalletCreateCanBeActivatedWithReturn() async throws {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let controller = accountSelectionController(manager: manager, mode: nil, selectedAccounts: [])
         let window = accountSelectionWindow(controller: controller)
         let windowController = WalletWindowController(window: window)
@@ -2127,7 +2177,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testWalletListCancelledDragClearsSelectionAndAllowsNextClick() async throws {
         let controller = instantiate(AccountsListViewController.self)
-        controller.walletsManager = try accountSelectionWalletsManager()
+        controller.walletsManager = try await accountSelectionWalletsManager()
         controller.loadView()
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
@@ -2155,8 +2205,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testAccountSelectionClickIgnoresOtherCoinAndCanClearSelection() throws {
-        let manager = try accountSelectionWalletsManager()
+    func testAccountSelectionClickIgnoresOtherCoinAndCanClearSelection() async throws {
+        let manager = try await accountSelectionWalletsManager()
         let wallet = try XCTUnwrap(manager.wallets.first)
         let original = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
         let replacement = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[1])
@@ -2181,7 +2231,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(controller.primaryButton.isEnabled)
     }
 
-    func testAccountSelectionTeardownCancelsMenusAndFencesNavigation() throws {
+    func testAccountSelectionTeardownCancelsMenusAndFencesNavigation() async throws {
         let windowController = try XCTUnwrap(
             NSStoryboard.main.instantiateController(
                 withIdentifier: "initial"
@@ -2211,7 +2261,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(windowController.contentViewController === originalContent)
     }
 
-    func testAccountHeaderTeardownCancelsItsMenu() {
+    func testAccountHeaderTeardownCancelsItsMenu() async {
         let row = AccountsHeaderRowView()
         let button = NSButton()
         row.titleButton = button
@@ -2273,7 +2323,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             nonce: nonce,
             deadline: clock.now.addingTimeInterval(300)
         )
-        let request = try XCTUnwrap(snapshot.request)
+        _ = try XCTUnwrap(snapshot.request)
         let response = ImmediateResolution.failure(.userRejected)
         var completionCount = 0
         var failureCount = 0
@@ -2821,7 +2871,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             decisions += 1
             return .responseReady
         })
-        weak var coordinator = fixture?.coordinator
+        weak let coordinator = fixture?.coordinator
         let events = try XCTUnwrap(fixture?.events)
         let store = try XCTUnwrap(fixture?.store)
         start(try XCTUnwrap(fixture))
@@ -3064,7 +3114,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             environment: .init(
                 now: { clock.now },
                 uptime: { clock.uptime },
-                wait: { _ in },
+                wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { binding in
                     self.approvalPreparation(binding)
                 }
@@ -3340,7 +3390,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 wait: waits.wait,
                 prepareWithoutWallets: { self.approvalPreparation($0) }
             ))
-            weak var coordinator = fixture?.coordinator
+            weak let coordinator = fixture?.coordinator
             let events = try XCTUnwrap(fixture?.events)
             if suspendLoad {
                 let loadStarted = expectation(description: "validation load suspended")
@@ -3378,7 +3428,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 prepareWithoutWallets: { self.approvalPreparation($0) },
                 attemptNativeDecision: { _, _ in started.fulfill(); return await finalizer.run() }
             ))
-            weak var coordinator = fixture?.coordinator
+            weak let coordinator = fixture?.coordinator
             let events = try XCTUnwrap(fixture?.events)
             start(try XCTUnwrap(fixture))
             await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
@@ -3461,18 +3511,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testFreshReviewAfterRetryFencesTheNextApproval() async throws {
         let clock = Clock()
-        var available = false
+        let available = LockedTestValue(false)
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { delay in
-                if available { try? await Task.sleep(nanoseconds: 60_000_000_000) }
+                if available.value { try? await Task.sleep(nanoseconds: 60_000_000_000) }
                 else {
                     clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
                     await Task.yield()
                 }
             },
             prepareWithoutWallets: { _ in nil },
-            reloadWallets: { available },
+            reloadWallets: { available.value },
             prepare: { self.approvalPreparation($0) }
         ))
         start(fixture)
@@ -3480,7 +3530,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .paused)
         let pausedRevision = try XCTUnwrap(fixture.coordinator.currentPresentation?.revision)
-        available = true
+        available.value = true
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
         let reviewRevision = try XCTUnwrap(fixture.coordinator.currentPresentation?.revision)
@@ -3502,12 +3552,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testObservationOutagePausesAfterTenSecondsAndRetriesFreshPreparation() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
-        var unavailable = false
+        let unavailable = LockedTestValue(false)
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { delay in
-                if unavailable {
+                if unavailable.value {
                     clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
                     await Task.yield()
                 } else { await waits.wait(delay) }
@@ -3524,7 +3574,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .reviewing)
         await waitForScheduledWait(waits, count: 1)
         var reads = 0
-        unavailable = true
+        unavailable.value = true
         fixture.store.loadHandler = { _ in reads += 1; return .unavailable }
         waits.resume(0)
         await waitForState(fixture.coordinator, .paused)
@@ -3532,7 +3582,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let pausedReads = reads
         for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(reads, pausedReads)
-        unavailable = false
+        unavailable.value = false
         fixture.store.loadHandler = nil
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
@@ -3916,7 +3966,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testRecoveryAndTerminalNotificationsAllowSynchronousReentry() async throws {
         let clock = Clock()
-        var available = false
+        let available = LockedTestValue(false)
         var waits = 0
         var preparations = 0
         var completions = 0
@@ -3930,7 +3980,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 await Task.yield()
             },
             prepareWithoutWallets: { _ in nil },
-            reloadWallets: { available },
+            reloadWallets: { available.value },
             prepare: { request in
                 preparations += 1
                 return .immediate(.failure(.userRejected))
@@ -3946,7 +3996,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             switch snapshot.presentation {
             case .retryRequired:
                 recoveries += 1
-                available = true
+                available.value = true
                 coordinator.retryRecovery()
                 XCTAssertEqual(coordinator.phase, .loading)
                 guard case .waiting? = coordinator.currentPresentation?.presentation else {
@@ -4087,7 +4137,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = nil
     }
 
-    func testWaitingSurfaceReplacesRetryActionAndSpinnerMode() {
+    func testWaitingSurfaceReplacesRetryActionAndSpinnerMode() async {
         var retries = 0
         let controller = WaitingViewController.with(
             reason: Strings.somethingWentWrong,
@@ -4111,11 +4161,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testClosingUnapprovedRecoveryWindowRejectsTheRequest() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()
-        var outage = false
+        let outage = LockedTestValue(false)
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.now }, uptime: { clock.uptime },
             wait: { delay in
-                if outage {
+                if outage.value {
                     clock.advanceUptime(Double(delay) / 1_000_000_000)
                     await Task.yield()
                 } else { await waits.wait(delay) }
@@ -4146,7 +4196,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 agent?.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
             }
         }
-        outage = true
+        outage.value = true
         fixture.store.loadHandler = { _ in .unavailable }
         waits.resume(0)
         await waitForState(fixture.coordinator, .paused)
@@ -4420,7 +4470,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         clock: Clock = Clock(),
         environment: NativeApprovalCoordinator.Environment? = nil,
         requestAction: DappRequestAction? = nil,
-        attemptNativeDecision: @escaping (
+        attemptNativeDecision: @escaping @MainActor @Sendable (
             ExtensionBridge.Snapshot, ReviewConsent
         ) async -> NativeApprovalFinalizationResult = { _, _ in .pending }
     ) throws -> Fixture {
@@ -4502,6 +4552,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             ),
             phase: phase
         )
+    }
+
+    private func waitForCondition(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !condition(), ContinuousClock.now < deadline {
+            do { try await Task.sleep(for: .milliseconds(1)) } catch { break }
+        }
+        XCTAssertTrue(condition(), file: file, line: line)
     }
 
     private func waitForState(
@@ -4594,7 +4652,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ))
     }
 
-    private func accountSelectionWalletsManager() throws -> WalletsManager {
+    private func accountSelectionWalletsManager() async throws -> WalletsManager {
         typealias Vectors = WalletCoreProxyTestVectors
         let key = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
         key.addAccountDerivation(
@@ -4617,7 +4675,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         reader.attributes = [reader.walletAttributes(id: "selection-wallet")]
         reader.walletData = ["selection-wallet": try XCTUnwrap(key.exportJSON())]
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.first?.accounts.count, 3)
         return manager
     }

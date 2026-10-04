@@ -2,15 +2,15 @@
 
 import Foundation
 
-struct Keychain {
+struct Keychain: Sendable {
 
-    typealias CopyMatching = (
+    typealias CopyMatching = @Sendable (
         CFDictionary,
         UnsafeMutablePointer<CFTypeRef?>?
     ) -> OSStatus
-    typealias Add = (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-    typealias Update = (CFDictionary, CFDictionary) -> OSStatus
-    typealias Delete = (CFDictionary) -> OSStatus
+    typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias Update = @Sendable (CFDictionary, CFDictionary) -> OSStatus
+    typealias Delete = @Sendable (CFDictionary) -> OSStatus
 
     enum KeychainError: Error {
         case failedToRead(OSStatus)
@@ -86,7 +86,9 @@ struct Keychain {
         guard let data = password.data(using: .utf8) else { return false }
 #if os(iOS) || os(visionOS)
         do {
-            try await SafariApprovalVaultHost.shared.performSourceMutation(preparing: { data }) { data in
+            try await SafariApprovalVaultHost.shared.performSourceMutation { willMutateSource in
+                try Task.checkCancellation()
+                try willMutateSource()
                 try save(data: data, key: .password)
             }
             return true

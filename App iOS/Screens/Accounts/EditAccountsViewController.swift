@@ -9,13 +9,17 @@ class EditAccountsViewController: UIViewController {
         var isEnabled: Bool
     }
 
-    var wallet: WalletContainer!
+    var wallet: WalletSnapshot!
     private let walletsManager = WalletsManager.shared
+    private var layoutTask: Task<Void, Never>?
     private var cellModels = [PreviewAccountCellModel]()
     private let previewAccountsPreloadThreshold = 4
     private var toggledIndexes = Set<Int>()
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
+    private var previewTask: Task<Void, Never>?
+    private var previewLayoutTask: Task<Void, Never>?
+    private var mutationTask: Task<Void, Never>?
     private var didAppear = false
     private var isSaving = false
     
@@ -44,6 +48,14 @@ class EditAccountsViewController: UIViewController {
         updateAdaptiveLargeTitleLayout(Strings.editAccounts, tableView: tableView)
     }
     
+    isolated deinit {
+        previewLayoutTask?.cancel()
+        layoutTask?.cancel()
+        mutationTask?.cancel()
+        previewTask?.cancel()
+        previewPager?.invalidate()
+    }
+
     private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
         let newCellModels = previewAccounts.map { account in
             let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
@@ -55,7 +67,10 @@ class EditAccountsViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        DispatchQueue.main.async { [weak self] in
+        layoutTask?.cancel()
+        layoutTask = Task { [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             self?.navigationController?.navigationBar.sizeToFit()
         }
     }
@@ -68,6 +83,8 @@ class EditAccountsViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        layoutTask?.cancel()
+        mutationTask?.cancel()
 
         if isBeingDismissed || navigationController?.isBeingDismissed == true {
             invalidatePreviewAccounts()
@@ -103,24 +120,34 @@ class EditAccountsViewController: UIViewController {
         view.isUserInteractionEnabled = false
         isModalInPresentation = true
         navigationItem.leftBarButtonItem?.isEnabled = false
-        Task {
-            defer {
-                isSaving = false
-                updateOkButtonState()
-                view.isUserInteractionEnabled = true
-                isModalInPresentation = false
-                navigationItem.leftBarButtonItem?.isEnabled = true
-            }
+        mutationTask = Task { [weak self, walletsManager] in
             do {
                 try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+                guard let self else { return }
+                finishSaving()
+                guard !Task.isCancelled else { return }
                 dismissAnimated()
             } catch {
+                guard let self else { return }
+                finishSaving()
+                guard !Task.isCancelled else { return }
                 showMessageAlert(text: Strings.somethingWentWrong)
             }
         }
     }
 
+    private func finishSaving() {
+        isSaving = false
+        updateOkButtonState()
+        view.isUserInteractionEnabled = true
+        isModalInPresentation = false
+        navigationItem.leftBarButtonItem?.isEnabled = true
+    }
+
     private func resetPreviewAccounts() {
+        previewLayoutTask?.cancel()
+        previewTask?.cancel()
+        previewTask = nil
         previewPager?.invalidate()
         let previewPager = walletsManager.previewAccountsPager(wallet: wallet)
         self.previewPager = previewPager
@@ -133,16 +160,19 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func invalidatePreviewAccounts() {
+        previewLayoutTask?.cancel()
+        previewLayoutTask = nil
+        previewTask?.cancel()
+        previewTask = nil
         previewPager?.invalidate()
         previewPager = nil
     }
 
     private func loadInitialPreviewAccounts(with previewPager: WalletsManager.PreviewAccountsPager) {
-        previewPager.reset { [weak self, weak previewPager] previewAccounts in
-            guard let self,
-                  let previewPager,
-                  self.previewPager === previewPager
-            else { return }
+        previewTask = Task { [weak self] in
+            let previewAccounts = await previewPager.reset()
+            guard let self, !Task.isCancelled, self.previewPager === previewPager else { return }
+            self.previewTask = nil
 
             guard let previewAccounts else {
                 self.updateOkButtonState()
@@ -156,8 +186,10 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func enablePreviewMoreAccountsAfterCurrentLayout(for previewPager: WalletsManager.PreviewAccountsPager) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.previewPager === previewPager else { return }
+        previewLayoutTask?.cancel()
+        previewLayoutTask = Task { [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled, self.previewPager === previewPager else { return }
             previewPager.enablePaging()
             guard self.didAppear else { return }
             self.previewMoreAccountsIfNeededForCurrentViewport()
@@ -183,12 +215,12 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func previewMoreAccountsIfNeeded() {
-        guard let previewPager else { return }
-        previewPager.previewMoreIfNeeded { [weak self, weak previewPager] previewAccounts, range in
-            guard let self,
-                  let previewPager,
-                  self.previewPager === previewPager
-            else { return }
+        guard let previewPager, previewTask == nil else { return }
+        previewTask = Task { [weak self] in
+            let page = await previewPager.previewMoreIfNeeded()
+            guard let self, !Task.isCancelled, self.previewPager === previewPager else { return }
+            self.previewTask = nil
+            guard let (previewAccounts, range) = page else { return }
 
             self.appendPreviewAccounts(previewAccounts)
             if !previewAccounts.isEmpty {

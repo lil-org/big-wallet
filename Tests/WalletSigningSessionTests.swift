@@ -1,9 +1,55 @@
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
 @MainActor
 final class WalletSigningSessionTests: XCTestCase {
+    func testAuthorityValidationKeepsMainActorResponsiveWhileStoreIsLocked() async throws {
+        let operation = try operation()
+        let material = SessionSigningMaterial { .success(.ethereumSignature("signed")) }
+        let sourceCheckThreads = Mutex([Bool]())
+        let session = WalletSigningSession(
+            material, authorization: operation.authorization,
+            isCurrent: {
+                sourceCheckThreads.withLock { $0.append(Thread.isMainThread) }
+                return true
+            }
+        )
+        let releaseLock = DispatchSemaphore(value: 0)
+        defer { releaseLock.signal() }
+        var releaseTask: Task<Void, Never>?
+        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in
+            if releaseTask == nil {
+                releaseTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(20))
+                    releaseLock.signal()
+                }
+            }
+            return true
+        }))
+        sourceCheckThreads.withLock { $0.removeAll() }
+        let lockHeld = expectation(description: "Approval store lock held by another worker")
+        let holder = Task.detached {
+            operation.withCurrentAuthority {
+                lockHeld.fulfill()
+                return releaseLock.wait(timeout: .now() + 5) == .success
+            } ?? false
+        }
+        await fulfillment(of: [lockHeld], timeout: 2)
+
+        let result = await session.sign()
+        let released = await holder.value
+        await releaseTask?.value
+
+        XCTAssertTrue(released)
+        guard case .success(.ethereumSignature("signed")) = result else {
+            return XCTFail("The main actor must release the lock before authority validation times out")
+        }
+        XCTAssertEqual(sourceCheckThreads.withLock { $0 }, [false, false])
+        XCTAssertEqual(material.signCount, 1)
+    }
+
     func testBindingRejectsAnotherAuthorizationAndCannotBeReplaced() async throws {
         let operation = try operation()
         let material = SessionSigningMaterial { .success(.ethereumSignature("signed")) }
@@ -347,6 +393,26 @@ final class UnlockedAccountSignerTests: XCTestCase {
         assertUnavailable(await sign(valid, using: signer))
     }
 
+    func testSourceIsRevalidatedOnTheWorkerImmediatelyBeforeKeyUse() async throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+        let approved = descriptor(coin: .ethereum, key: key)
+        let sourceChecks = Mutex([Bool]())
+        let signer = try XCTUnwrap(UnlockedAccountSigner(
+            approvedAccount: approved, privateKey: key,
+            sourceIsCurrent: {
+                sourceChecks.withLock { $0.append(Thread.isMainThread) }
+                return false
+            }
+        ))
+        let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+
+        assertUnavailable(await sign(operation, using: signer))
+        XCTAssertEqual(sourceChecks.withLock { $0 }, [false])
+        let retry = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+        assertUnavailable(await sign(retry, using: signer))
+        XCTAssertEqual(sourceChecks.withLock { $0.count }, 1)
+    }
+
     func testConcurrentAttemptsCanProduceOnlyOneSignature() async throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let approved = descriptor(coin: .ethereum, key: key)
@@ -461,7 +527,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
 
     private func signingAttempt(
         _ operation: ApprovedWalletSigningOperation,
-        signing: @escaping @MainActor () async -> Result<WalletSigningOutput, WalletSigningFailure>
+        signing: @escaping @MainActor @Sendable () async -> Result<WalletSigningOutput, WalletSigningFailure>
     ) async -> Result<WalletSigningOutput, WalletSigningFailure> {
         let session = WalletSigningSession(
             SessionSigningMaterial(operation: signing),
@@ -518,25 +584,27 @@ private func unconsumedSigningOperationForSessionTests(
 }
 
 private final class SessionSigningMaterial: OwnedWalletSigningAccess {
-    private let lock = NSLock()
-    private var signs = 0
-    private var erasures = 0
-    private let operation: @MainActor () async -> Result<WalletSigningOutput, WalletSigningFailure>
+    private struct Counts: Sendable {
+        var signs = 0
+        var erasures = 0
+    }
+    private let counts = Mutex(Counts())
+    private let operation: @MainActor @Sendable () async -> Result<WalletSigningOutput, WalletSigningFailure>
 
-    var signCount: Int { lock.withLock { signs } }
-    var erasureCount: Int { lock.withLock { erasures } }
+    var signCount: Int { counts.withLock { $0.signs } }
+    var erasureCount: Int { counts.withLock { $0.erasures } }
 
-    init(operation: @escaping @MainActor () async -> Result<WalletSigningOutput, WalletSigningFailure>) {
+    init(operation: @escaping @MainActor @Sendable () async -> Result<WalletSigningOutput, WalletSigningFailure>) {
         self.operation = operation
     }
 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        lock.withLock { signs += 1 }
+        counts.withLock { $0.signs += 1 }
         return await self.operation()
     }
 
     func invalidate() {
-        lock.withLock { erasures += 1 }
+        counts.withLock { $0.erasures += 1 }
     }
 }

@@ -1,12 +1,14 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 import Security
 import XCTest
 @testable import Big_Wallet
 
 private typealias Vectors = WalletCoreProxyTestVectors
 
+@MainActor
 final class WalletsManagerPreviewTests: XCTestCase {
 
     private enum PreviewTestError: Error {
@@ -15,7 +17,56 @@ final class WalletsManagerPreviewTests: XCTestCase {
 
     private let mnemonic = Vectors.abandonMnemonic
 
-    func testReviewCatalogPreservesAccountMetadataAndSurvivesSourceReload() throws {
+    func testRepositoryReadsStayOffTheMainActor() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONPrivateKeyFixture]
+        let readThreads = Mutex([Bool]())
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            readThreads.withLock { $0.append(Thread.isMainThread) }
+            return reader.copyMatching(query, result)
+        }))
+
+        await assertWalletReload(manager)
+
+        let reads = readThreads.withLock { $0 }
+        XCTAssertFalse(reads.isEmpty)
+        XCTAssertFalse(reads.contains(true))
+        XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
+    }
+
+    func testInvalidatedPreviewDiscardsItsPendingFirstPage() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let readingPassword = expectation(description: "Preview read its password off the main actor")
+        let releaseRead = DispatchSemaphore(value: 0)
+        defer { releaseRead.signal() }
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            let attributes = query as NSDictionary
+            if attributes[kSecAttrAccount as String] as? String == "org.lil.wallet.password" {
+                readingPassword.fulfill()
+                releaseRead.wait()
+            }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let pager = manager.previewAccountsPager(wallet: wallet)
+        let preview = Task { await pager.reset() }
+        await fulfillment(of: [readingPassword], timeout: 2)
+
+        pager.invalidate()
+        releaseRead.signal()
+
+        let accounts = await preview.value
+        XCTAssertNil(accounts)
+        let nextPage = await pager.previewMoreIfNeeded()
+        XCTAssertNil(nextPage)
+    }
+
+    func testReviewCatalogPreservesAccountMetadataAndSurvivesSourceReload() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [
             reader.walletAttributes(id: "wallet-a"),
@@ -26,7 +77,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
             "wallet-b": Vectors.walletCoreJSONPrivateKeyFixture,
         ]
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let originalAccounts = manager.wallets.flatMap { wallet in
             wallet.accounts.map { SpecificWalletAccount(walletId: wallet.id, account: $0) }
         }
@@ -43,15 +94,15 @@ final class WalletsManagerPreviewTests: XCTestCase {
         })
 
         reader.attributes = []
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let emptyCatalog = try XCTUnwrap(manager.reviewCatalog())
         XCTAssertTrue(emptyCatalog.orderedAccounts.isEmpty)
         XCTAssertNotEqual(emptyCatalog.identity, catalog.identity)
         XCTAssertEqual(catalog.orderedAccounts, originalAccounts)
     }
 
-    func testEthereumPreviewReturnsPageOfAccounts() throws {
-        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .ethereum)
+    func testEthereumPreviewReturnsPageOfAccounts() async throws {
+        let accounts = try WalletAccountDerivation.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .ethereum)
 
         XCTAssertEqual(accounts.count, 11)
         XCTAssertTrue(accounts.allSatisfy { $0.coin == .ethereum })
@@ -68,8 +119,8 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
-    func testEthereumPreviewReturnsNextPageOfAccounts() throws {
-        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 1, coin: .ethereum)
+    func testEthereumPreviewReturnsNextPageOfAccounts() async throws {
+        let accounts = try WalletAccountDerivation.previewAccounts(hdWallet: testHDWallet(), page: 1, coin: .ethereum)
 
         XCTAssertEqual(accounts.count, 11)
         XCTAssertTrue(accounts.allSatisfy { $0.coin == .ethereum })
@@ -86,8 +137,8 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
-    func testSolanaPreviewReturnsPageOfAccounts() throws {
-        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .solana)
+    func testSolanaPreviewReturnsPageOfAccounts() async throws {
+        let accounts = try WalletAccountDerivation.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .solana)
 
         XCTAssertEqual(accounts.count, 11)
         XCTAssertTrue(accounts.allSatisfy { $0.coin == .solana })
@@ -107,8 +158,8 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
-    func testSolanaPreviewReturnsNextPageOfAccounts() throws {
-        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 1, coin: .solana)
+    func testSolanaPreviewReturnsNextPageOfAccounts() async throws {
+        let accounts = try WalletAccountDerivation.previewAccounts(hdWallet: testHDWallet(), page: 1, coin: .solana)
 
         XCTAssertEqual(accounts.count, 11)
         XCTAssertTrue(accounts.allSatisfy { $0.coin == .solana })
@@ -126,7 +177,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
-    func testPreviewRejectsOutOfRangePagesWithoutTrapping() throws {
+    func testPreviewRejectsOutOfRangePagesWithoutTrapping() async throws {
         let hdWallet = try testHDWallet()
 
         for coin in [WalletCoin.ethereum, .solana] {
@@ -135,8 +186,8 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
-    func testMulticoinPreviewReturnsInterleavedPageOfAccounts() throws {
-        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: nil)
+    func testMulticoinPreviewReturnsInterleavedPageOfAccounts() async throws {
+        let accounts = try WalletAccountDerivation.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: nil)
         let ethereumIndexTen = try XCTUnwrap(Vectors.abandonEthereumHDVectors.first { $0.index == 10 })
         let solanaIndexTen = try XCTUnwrap(Vectors.abandonSolanaHDVectors.first { $0.index == 10 })
 
@@ -165,12 +216,12 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(accounts.prefix(6).map { $0.previewDerivationIndex }, [0, 0, 1, 1, 2, 2])
     }
 
-    func testMulticoinPreviewCollectorInterleavesSuccessfulCoins() throws {
+    func testMulticoinPreviewCollectorInterleavesSuccessfulCoins() async throws {
         let hdWallet = try testHDWallet()
-        let ethereumAccounts = Array(try WalletsManager.shared.previewAccounts(hdWallet: hdWallet, page: 0, coin: .ethereum).prefix(2))
-        let solanaAccounts = Array(try WalletsManager.shared.previewAccounts(hdWallet: hdWallet, page: 0, coin: .solana).prefix(2))
+        let ethereumAccounts = Array(try WalletAccountDerivation.previewAccounts(hdWallet: hdWallet, page: 0, coin: .ethereum).prefix(2))
+        let solanaAccounts = Array(try WalletAccountDerivation.previewAccounts(hdWallet: hdWallet, page: 0, coin: .solana).prefix(2))
 
-        let accounts = try WalletsManager.collectPreviewAccounts(coins: [.ethereum, .solana]) { coin in
+        let accounts = try WalletAccountDerivation.collectPreviewAccounts(coins: [.ethereum, .solana]) { coin in
             switch coin {
             case .ethereum:
                 return ethereumAccounts
@@ -187,7 +238,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         ])
     }
 
-    func testMulticoinPreviewPreservesSuccessfulCoinsWhenOneFails() throws {
+    func testMulticoinPreviewPreservesSuccessfulCoinsWhenOneFails() async throws {
         let ethereumAccount = WalletAccount(address: "0x0000000000000000000000000000000000000001",
                                       coin: .ethereum,
                                       derivation: .custom,
@@ -195,7 +246,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
                                       publicKey: "public-key",
                                       extendedPublicKey: "extended-public-key")
 
-        let accounts = try WalletsManager.collectPreviewAccounts(coins: [.solana, .ethereum]) { coin in
+        let accounts = try WalletAccountDerivation.collectPreviewAccounts(coins: [.solana, .ethereum]) { coin in
             if coin == .solana {
                 throw PreviewTestError.failed
             }
@@ -207,13 +258,13 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(accounts.first?.address, ethereumAccount.address)
     }
 
-    func testMulticoinPreviewRethrowsWhenAllCoinsFail() {
-        XCTAssertThrowsError(try WalletsManager.collectPreviewAccounts(coins: [.solana]) { _ in
+    func testMulticoinPreviewRethrowsWhenAllCoinsFail() async throws {
+        XCTAssertThrowsError(try WalletAccountDerivation.collectPreviewAccounts(coins: [.solana]) { _ in
             throw PreviewTestError.failed
         })
     }
 
-    func testReviewCatalogLookupPreservesCoinAndAddressNormalization() throws {
+    func testReviewCatalogLookupPreservesCoinAndAddressNormalization() async throws {
         let key = try XCTUnwrap(
             WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture)
         )
@@ -240,7 +291,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
             keychain: Keychain(copyMatching: reader.copyMatching)
         )
 
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let catalog = try XCTUnwrap(manager.reviewCatalog())
         let ethereum = try XCTUnwrap(
             manager.wallets.first?.accounts.first(where: { $0.coin == .ethereum })
@@ -268,7 +319,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         )
     }
 
-    func testPrivateKeyLookupUsesInjectedKeychainPassword() throws {
+    func testPrivateKeyExportUsesInjectedPasswordAndRevalidatesSource() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [reader.walletAttributes(id: "wallet")]
         reader.walletData = ["wallet": Vectors.walletCoreJSONPrivateKeyFixture]
@@ -277,19 +328,15 @@ final class WalletsManagerPreviewTests: XCTestCase {
             keychain: Keychain(copyMatching: reader.copyMatching)
         )
 
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first)
         let account = try XCTUnwrap(wallet.accounts.first)
-        let privateKey = try XCTUnwrap(
-            manager.getPrivateKey(walletId: wallet.id, account: account)
-        )
-        privateKey.withData {
-            XCTAssertEqual($0, Vectors.walletCoreJSONPrivateKeyData)
-        }
-        XCTAssertEqual(reader.passwordReadCount, 1)
+        let exported = try await manager.exportPrivateKey(wallet: wallet, account: account)
+        XCTAssertEqual(WalletCrypto.hexData(string: exported), Vectors.walletCoreJSONPrivateKeyData)
+        XCTAssertEqual(reader.passwordReadCount, 2)
     }
 
-    func testKeychainWalletOrderingIsDeterministicForTiedAndMissingDates() throws {
+    func testKeychainWalletOrderingIsDeterministicForTiedAndMissingDates() async throws {
         let reader = KeychainCopyMatchingStub()
         let earlier = Date(timeIntervalSince1970: 10)
         let tied = Date(timeIntervalSince1970: 20)
@@ -308,7 +355,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(try keychain.readAllWalletIDs(), expected)
     }
 
-    func testWalletReloadPreservesLastGoodStateOnPartialReadFailure() throws {
+    func testWalletReloadPreservesLastGoodStateOnPartialReadFailure() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [
             reader.walletAttributes(id: "wallet-a", createdAt: Date(timeIntervalSince1970: 10)),
@@ -324,22 +371,22 @@ final class WalletsManagerPreviewTests: XCTestCase {
             reloadMetadata: { metadataReloadCount += 1 }
         )
 
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a", "wallet-b"])
         XCTAssertEqual(metadataReloadCount, 1)
 
         reader.walletReadStatuses["wallet-b"] = errSecInteractionNotAllowed
-        XCTAssertFalse(manager.reloadFromStore())
+        await assertWalletReload(manager, succeeds: false)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a", "wallet-b"])
         XCTAssertEqual(metadataReloadCount, 1)
 
         reader.walletReadStatuses["wallet-b"] = errSecItemNotFound
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
         XCTAssertEqual(metadataReloadCount, 2)
     }
 
-    func testWalletReloadTreatsInvalidJSONAsSkippableAndEmptyStoreAsAvailable() {
+    func testWalletReloadTreatsInvalidJSONAsSkippableAndEmptyStoreAsAvailable() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [
             reader.walletAttributes(id: "valid"),
@@ -355,17 +402,17 @@ final class WalletsManagerPreviewTests: XCTestCase {
             reloadMetadata: { metadataReloadCount += 1 }
         )
 
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["valid"])
         XCTAssertEqual(metadataReloadCount, 1)
 
         reader.attributesStatus = errSecItemNotFound
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertTrue(manager.wallets.isEmpty)
         XCTAssertEqual(metadataReloadCount, 2)
     }
 
-    func testWalletReloadPreservesLastGoodStateWhenEnumerationIsUnavailable() {
+    func testWalletReloadPreservesLastGoodStateWhenEnumerationIsUnavailable() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [reader.walletAttributes(id: "wallet")]
         reader.walletData = ["wallet": Vectors.walletCoreJSONPrivateKeyFixture]
@@ -373,15 +420,15 @@ final class WalletsManagerPreviewTests: XCTestCase {
             keychain: Keychain(copyMatching: reader.copyMatching)
         )
 
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
 
         reader.attributesStatus = errSecInteractionNotAllowed
-        XCTAssertFalse(manager.reloadFromStore())
+        await assertWalletReload(manager, succeeds: false)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
     }
 
-    func testFailedInitialStartWaitsForExplicitReload() {
+    func testFailedInitialStartWaitsForExplicitReload() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [reader.walletAttributes(id: "wallet")]
         reader.walletData = ["wallet": Vectors.walletCoreJSONPrivateKeyFixture]
@@ -394,19 +441,20 @@ final class WalletsManagerPreviewTests: XCTestCase {
             publishLocalChange: { localPublicationCount += 1 }
         )
 
-        XCTAssertFalse(manager.start())
+        let started = await manager.start()
+        XCTAssertFalse(started)
         XCTAssertEqual(metadataReloadCount, 0)
         XCTAssertEqual(localPublicationCount, 0)
 
         reader.attributesStatus = errSecSuccess
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
         XCTAssertEqual(metadataReloadCount, 1)
         XCTAssertEqual(localPublicationCount, 0)
     }
 
-    func testExternalWalletChangeRetriesOnlyOnNextExplicitEvent() {
+    func testExternalWalletChangeRetriesOnlyOnNextExplicitEvent() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [reader.walletAttributes(id: "wallet-a")]
         reader.walletData = ["wallet-a": Vectors.walletCoreJSONPrivateKeyFixture]
@@ -418,23 +466,51 @@ final class WalletsManagerPreviewTests: XCTestCase {
             publishLocalChange: { localPublicationCount += 1 }
         )
 
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
 
         reader.attributes = [reader.walletAttributes(id: "wallet-b")]
         reader.walletData = ["wallet-b": Vectors.walletCoreJSONPrivateKeyFixture]
         reader.attributesStatus = errSecInteractionNotAllowed
-        manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange()
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
         XCTAssertEqual(metadataReloadCount, 1)
         XCTAssertEqual(localPublicationCount, 0)
 
         reader.attributesStatus = errSecSuccess
-        manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange()
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-b"])
         XCTAssertEqual(metadataReloadCount, 2)
+        XCTAssertEqual(localPublicationCount, 1)
+    }
+
+    func testExternalReloadPublishesAppliedStateDespiteLateCancellation() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONPrivateKeyFixture]
+        var metadataReloadCount = 0
+        var localPublicationCount = 0
+        let manager = WalletsManager(
+            keychain: Keychain(copyMatching: reader.copyMatching),
+            reloadMetadata: {
+                metadataReloadCount += 1
+                if metadataReloadCount == 2 {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            },
+            publishLocalChange: { localPublicationCount += 1 }
+        )
+        await assertWalletReload(manager)
+        XCTAssertEqual(manager.wallets.count, 1)
+        reader.attributes = []
+
+        let reload = Task { await manager.handleExternalWalletStoreChange() }
+        await reload.value
+
+        XCTAssertTrue(reload.isCancelled)
+        XCTAssertTrue(manager.wallets.isEmpty)
         XCTAssertEqual(localPublicationCount, 1)
     }
 
@@ -452,7 +528,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
                                           hdWallet: WalletHDWallet,
                                           file: StaticString = #filePath,
                                           line: UInt = #line) {
-        XCTAssertThrowsError(try WalletsManager.shared.previewAccounts(hdWallet: hdWallet, page: page, coin: coin),
+        XCTAssertThrowsError(try WalletAccountDerivation.previewAccounts(hdWallet: hdWallet, page: page, coin: coin),
                              file: file,
                              line: line) { error in
             guard case WalletsManager.Error.failedToDeriveAccount = error else {
@@ -480,58 +556,98 @@ final class WalletsManagerPreviewTests: XCTestCase {
 
 }
 
-final class KeychainCopyMatchingStub {
+@MainActor
+func assertWalletReload(_ manager: WalletsManager, succeeds: Bool = true, file: StaticString = #filePath, line: UInt = #line) async {
+    let loaded = await manager.reloadFromStore()
+    XCTAssertEqual(loaded, succeeds, file: file, line: line)
+}
+
+final class KeychainCopyMatchingStub: Sendable {
     private static let walletPrefix = "org.lil.wallet.wallet."
     private static let passwordKey = "org.lil.wallet.password"
 
-    var attributes = [[String: Any]]()
-    var attributesStatus = errSecSuccess
-    var passwordData: Data?
-    var passwordReadCount = 0
-    var walletData = [String: Data]()
-    var walletReadCount = 0
-    var walletReadStatuses = [String: OSStatus]()
+    private struct Attribute: Sendable {
+        let account: String?
+        let createdAt: Date?
 
-    func walletAttributes(id: String, createdAt: Date? = nil) -> [String: Any] {
-        var attributes: [String: Any] = [
-            kSecAttrAccount as String: Self.walletPrefix + id,
-        ]
-        attributes[kSecAttrCreationDate as String] = createdAt
-        return attributes
+        var dictionary: [String: Any] {
+            var result = [String: Any]()
+            result[kSecAttrAccount as String] = account
+            result[kSecAttrCreationDate as String] = createdAt
+            return result
+        }
     }
 
-    func copyMatching(
-        _ query: CFDictionary,
-        _ result: UnsafeMutablePointer<CFTypeRef?>?
-    ) -> OSStatus {
-        let query = query as NSDictionary
-        if query[kSecReturnAttributes as String] as? Bool == true {
-            guard attributesStatus == errSecSuccess else {
-                return attributesStatus
-            }
-            result?.pointee = attributes as CFArray
-            return errSecSuccess
-        }
+    private struct State: Sendable {
+        var attributes = [Attribute]()
+        var attributesStatus = errSecSuccess
+        var passwordData: Data?
+        var passwordReadCount = 0
+        var walletData = [String: Data]()
+        var walletReadCount = 0
+        var walletReadStatuses = [String: OSStatus]()
+    }
 
-        guard let key = query[kSecAttrAccount as String] as? String else {
-            return errSecItemNotFound
+    private let state = Mutex(State())
+
+    var attributes: [[String: Any]] {
+        get { state.withLock { $0.attributes }.map(\.dictionary) }
+        set {
+            let attributes = newValue.map { Attribute(account: $0[kSecAttrAccount as String] as? String, createdAt: $0[kSecAttrCreationDate as String] as? Date) }
+            state.withLock { $0.attributes = attributes }
         }
-        if key == Self.passwordKey {
-            passwordReadCount += 1
-            guard let passwordData else { return errSecItemNotFound }
-            result?.pointee = passwordData as CFData
+    }
+
+    var attributesStatus: OSStatus {
+        get { state.withLock { $0.attributesStatus } }
+        set { state.withLock { $0.attributesStatus = newValue } }
+    }
+
+    var passwordData: Data? {
+        get { state.withLock { $0.passwordData } }
+        set { state.withLock { $0.passwordData = newValue } }
+    }
+
+    var passwordReadCount: Int { state.withLock { $0.passwordReadCount } }
+
+    var walletData: [String: Data] {
+        get { state.withLock { $0.walletData } }
+        set { state.withLock { $0.walletData = newValue } }
+    }
+
+    var walletReadCount: Int { state.withLock { $0.walletReadCount } }
+
+    var walletReadStatuses: [String: OSStatus] {
+        get { state.withLock { $0.walletReadStatuses } }
+        set { state.withLock { $0.walletReadStatuses = newValue } }
+    }
+
+    func walletAttributes(id: String, createdAt: Date? = nil) -> [String: Any] {
+        Attribute(account: Self.walletPrefix + id, createdAt: createdAt).dictionary
+    }
+
+    func copyMatching(_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus {
+        let query = query as NSDictionary
+        return state.withLock { state in
+            if query[kSecReturnAttributes as String] as? Bool == true {
+                guard state.attributesStatus == errSecSuccess else { return state.attributesStatus }
+                result?.pointee = state.attributes.map(\.dictionary) as CFArray
+                return errSecSuccess
+            }
+            guard let key = query[kSecAttrAccount as String] as? String else { return errSecItemNotFound }
+            if key == Self.passwordKey {
+                state.passwordReadCount += 1
+                guard let passwordData = state.passwordData else { return errSecItemNotFound }
+                result?.pointee = passwordData as CFData
+                return errSecSuccess
+            }
+            guard key.hasPrefix(Self.walletPrefix) else { return errSecItemNotFound }
+            state.walletReadCount += 1
+            let id = String(key.dropFirst(Self.walletPrefix.count))
+            if let status = state.walletReadStatuses[id], status != errSecSuccess { return status }
+            guard let data = state.walletData[id] else { return errSecItemNotFound }
+            result?.pointee = data as CFData
             return errSecSuccess
         }
-        guard key.hasPrefix(Self.walletPrefix) else { return errSecItemNotFound }
-        walletReadCount += 1
-        let id = String(key.dropFirst(Self.walletPrefix.count))
-        if let status = walletReadStatuses[id], status != errSecSuccess {
-            return status
-        }
-        guard let data = walletData[id] else {
-            return errSecItemNotFound
-        }
-        result?.pointee = data as CFData
-        return errSecSuccess
     }
 }

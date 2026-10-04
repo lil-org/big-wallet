@@ -2,7 +2,7 @@
 
 import Foundation
 
-protocol NativeDeliveryStore: AnyObject {
+protocol NativeDeliveryStore: AnyObject, Sendable {
     func load(
         handle: ExtensionBridge.Handle
     ) async -> ExtensionBridge.SnapshotResult
@@ -77,56 +77,52 @@ final class NativeApprovalCoordinator {
         let sequence: Int
     }
 
-    struct Environment {
-        let now: () -> Date
-        let uptime: () -> TimeInterval
-        let wait: (UInt64) async -> Void
-        let waitForAuthenticationExpiry: (TimeInterval) async throws -> Void
-        let prepareWithoutWallets: @MainActor (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
-        let reloadWallets: () -> Bool
-        let prepare: @MainActor (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
-        let attemptNativeDecision: (
+    struct Environment: Sendable {
+        let now: @MainActor @Sendable () -> Date
+        let uptime: @MainActor @Sendable () -> TimeInterval
+        let wait: @MainActor @Sendable (UInt64) async -> Void
+        let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
+        let prepareWithoutWallets: @MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
+        let reloadWallets: @MainActor @Sendable () async -> Bool
+        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
+        let attemptNativeDecision: @MainActor @Sendable (
             ExtensionBridge.Snapshot, ReviewConsent
         ) async ->
             NativeApprovalFinalizationResult
 
         init(
-            now: @escaping () -> Date,
-            uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-            wait: @escaping (UInt64) async -> Void,
-            waitForAuthenticationExpiry: @escaping (TimeInterval) async throws -> Void = {
-                try await Task.sleep(for: .seconds($0))
-            },
-            prepareWithoutWallets: @escaping @MainActor (ExtensionBridge.RequestBinding) ->
-                DappRequestPreparation? = {
-                    DappRequestProcessor().prepareWithoutWallets($0)
-                },
-            reloadWallets: @escaping () -> Bool = {
-                WalletsManager.shared.reloadFromStore()
-            },
-            prepare: @escaping @MainActor (ExtensionBridge.RequestBinding) -> DappRequestPreparation? = {
-                guard let catalog = WalletsManager.shared.reviewCatalog() else { return nil }
-                return DappRequestProcessor().prepare($0, catalog: catalog)
-            },
-            attemptNativeDecision: @escaping (
+            now: @escaping @MainActor @Sendable () -> Date,
+            uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
+            wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
+            waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
+            prepareWithoutWallets: (@MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?)? = nil,
+            reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
+            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?)? = nil,
+            attemptNativeDecision: (@MainActor @Sendable (
                 ExtensionBridge.Snapshot, ReviewConsent
-            ) async -> NativeApprovalFinalizationResult = { _, _ in .pending
-            }
+            ) async -> NativeApprovalFinalizationResult)? = nil
         ) {
             self.now = now
-            self.uptime = uptime
+            self.uptime = uptime ?? { ProcessInfo.processInfo.systemUptime }
             self.wait = wait
-            self.waitForAuthenticationExpiry = waitForAuthenticationExpiry
-            self.prepareWithoutWallets = prepareWithoutWallets
-            self.reloadWallets = reloadWallets
-            self.prepare = prepare
-            self.attemptNativeDecision = attemptNativeDecision
+            self.waitForAuthenticationExpiry = waitForAuthenticationExpiry ?? { seconds in
+                let clock = ContinuousClock()
+                try await clock.sleep(until: clock.now.advanced(by: .seconds(seconds)), tolerance: nil)
+            }
+            self.prepareWithoutWallets = prepareWithoutWallets ?? { DappRequestProcessor().prepareWithoutWallets($0) }
+            self.reloadWallets = reloadWallets ?? { await WalletsManager.shared.reloadFromStore() }
+            self.prepare = prepare ?? {
+                guard let catalog = WalletsManager.shared.reviewCatalog() else { return nil }
+                return DappRequestProcessor().prepare($0, catalog: catalog)
+            }
+            self.attemptNativeDecision = attemptNativeDecision ?? { _, _ in .pending }
         }
 
         static let live = Environment(
-            now: Date.init,
+            now: { Date() },
             wait: { nanoseconds in
-                try? await Task.sleep(nanoseconds: nanoseconds)
+                let clock = ContinuousClock()
+                try? await clock.sleep(until: clock.now.advanced(by: .nanoseconds(Int64(clamping: nanoseconds))), tolerance: nil)
             },
             attemptNativeDecision: { snapshot, authorization in
                 await NativeApprovalFinalizer.shared.attempt(snapshot: snapshot, consent: authorization)
@@ -387,7 +383,7 @@ final class NativeApprovalCoordinator {
         terminalDeadline = environment.now().addingTimeInterval(ExtensionBridge.requestTTL)
     }
 
-    deinit { activeWork?.task.cancel() }
+    isolated deinit { activeWork?.task.cancel() }
 
     func start(nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner) {
         if runtime == nil { runtime = nativeDeliveryOwner }
@@ -784,13 +780,17 @@ final class NativeApprovalCoordinator {
             if finishIfResolved(status, work: work) { return }
             if case .pending(let snapshot, .current) = status, let binding = snapshot.requestBinding {
                 guard work.mayAttempt else { break }
-                let preparation = work.update { owner -> DappRequestPreparation? in
-                    if let independent = work.environment.prepareWithoutWallets(binding) {
-                        return independent
-                    }
-                    guard work.environment.reloadWallets() else { return nil }
-                    return work.environment.prepare(binding)
+                var preparation = work.update { _ in
+                    work.environment.prepareWithoutWallets(binding)
                 } ?? nil
+                if preparation == nil, await work.environment.reloadWallets() {
+                    guard work.mayAttempt else { break }
+                    guard let refreshed = await work.load() else { return }
+                    if finishIfResolved(refreshed, work: work) { return }
+                    guard case .pending(let current, .current) = refreshed,
+                          current.requestBinding == binding else { continue }
+                    preparation = work.update { _ in work.environment.prepare(binding) } ?? nil
+                }
                 guard work.mayAttempt else { break }
                 if let preparation {
                     switch preparation {

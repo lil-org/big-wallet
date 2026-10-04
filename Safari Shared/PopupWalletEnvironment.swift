@@ -1,14 +1,13 @@
 import Foundation
 
-@MainActor
-struct PopupWalletEnvironment {
+struct PopupWalletEnvironment: Sendable {
 
-    let currentReviewCatalog: () -> WalletReviewCatalog?
-    let unlock: (String, WalletSigningAuthorization) async -> WalletUnlockResult
+    let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
+    let unlock: @MainActor @Sendable (String, WalletSigningAuthorization) async -> WalletUnlockResult
 
-    init(
-        reviewCatalog: @escaping () -> WalletReviewCatalog?,
-        unlockWallets: @escaping (String, WalletSigningAuthorization) async -> WalletUnlockResult
+    nonisolated init(
+        reviewCatalog: @escaping @MainActor @Sendable () -> WalletReviewCatalog?,
+        unlockWallets: @escaping @MainActor @Sendable (String, WalletSigningAuthorization) async -> WalletUnlockResult
     ) {
         currentReviewCatalog = {
             WalletsMetadataService.reload()

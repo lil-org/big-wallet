@@ -16,6 +16,7 @@ class WelcomeViewController: NSViewController {
     
     private var completion: ((Bool) -> Void)?
     private var didCallCompletion = false
+    private var initialRefreshTask: Task<Void, Never>?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,12 +25,20 @@ class WelcomeViewController: NSViewController {
         messageLabel.stringValue = Strings.welcomeScreenText
         getStartedButton.title = Strings.getStarted
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
-        DispatchQueue.main.async { [weak self] in
+        initialRefreshTask = Task { [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             self?.walletsChanged()
         }
     }
 
-    deinit {
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        initialRefreshTask?.cancel()
+    }
+
+    isolated deinit {
+        initialRefreshTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 

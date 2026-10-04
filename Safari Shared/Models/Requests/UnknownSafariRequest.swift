@@ -4,13 +4,13 @@ import Foundation
 
 extension SafariRequest {
     
-    struct Unknown {
+    struct Unknown: Sendable {
         
-        enum Method: String {
+        enum Method: String, Sendable {
             case switchAccount
         }
         
-        struct ProviderConfiguration {
+        struct ProviderConfiguration: Sendable {
             let provider: InpageProvider
             let address: String?
             let chainId: String?

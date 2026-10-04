@@ -2,7 +2,7 @@
 
 import Foundation
 
-struct ExtensionRequestProfileCodec {
+struct ExtensionRequestProfileCodec: Sendable {
     typealias ProfileState = ExtensionRequestProfile.State
     typealias OriginState = ExtensionRequestProfile.OriginState
     typealias ValidatedProfile = ExtensionRequestProfile
@@ -207,7 +207,7 @@ struct ExtensionRequestProfileCodec {
         return try encoder.encode(value)
     }
 
-    struct DecodedProfile {
+    struct DecodedProfile: Sendable {
         let profile: ExtensionRequestProfile
         let requiresAuthorityPublication: Bool
     }

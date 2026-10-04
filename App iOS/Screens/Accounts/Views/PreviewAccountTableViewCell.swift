@@ -2,6 +2,7 @@
 
 import UIKit
 
+@MainActor
 protocol PreviewAccountTableViewCellDelegate: AnyObject {
     func didToggleSwitch(_ sender: PreviewAccountTableViewCell)
 }

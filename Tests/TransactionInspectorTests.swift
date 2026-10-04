@@ -1,194 +1,104 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
 private typealias Vectors = WalletCoreProxyTestVectors
 
+@MainActor
 final class TransactionInspectorTests: XCTestCase {
 
-    func testInterpretationSharesRequestAndRemovesCancelledSubscriber() {
-        let requestStarted = expectation(
-            description: "method-signature request started"
-        )
-        let firstCompletion = expectation(
-            description: "cancelled subscriber did not complete"
-        )
-        firstCompletion.isInverted = true
-        let secondCompletion = expectation(
-            description: "active subscriber completed"
-        )
-        let cachedCompletion = expectation(
-            description: "cached signature completed"
-        )
-        MethodSignatureURLProtocol.configure(
-            onStart: {
-                requestStarted.fulfill()
-            },
-            onStop: {}
-        )
+    func testInterpretationSharesRequestAndRemovesCancelledSubscriber() async throws {
+        let requestStarted = expectation(description: "method-signature request started")
+        let subscribersRegistered = expectation(description: "both subscribers registered")
+        subscribersRegistered.expectedFulfillmentCount = 2
+        MethodSignatureURLProtocol.configure(onStart: { requestStarted.fulfill() }, onStop: {})
         let session = makeMethodSignatureSession()
-        let inspector = TransactionInspector(urlSession: session)
-        let firstCancellation = EthereumRequestCancellation()
-        let secondCancellation = EthereumRequestCancellation()
+        let inspector = TransactionInspector(urlSession: session, onSubscriberRegistered: {
+            subscribersRegistered.fulfill()
+        })
         let data = "0x12345678" + abiWord("1")
         defer {
             session.invalidateAndCancel()
             MethodSignatureURLProtocol.reset()
         }
-
-        inspector.interpret(
-            data: data,
-            cancellation: firstCancellation
-        ) { _ in
-            firstCompletion.fulfill()
+        let first = Task { try await inspector.interpret(data: data) }
+        let second = Task { try await inspector.interpret(data: data) }
+        await fulfillment(of: [requestStarted, subscribersRegistered], timeout: 2)
+        first.cancel()
+        do {
+            _ = try await first.value
+            XCTFail("Expected canceled subscriber to throw")
+        } catch is CancellationError {
         }
-        inspector.interpret(
-            data: data,
-            cancellation: secondCancellation
-        ) { result in
-            XCTAssertEqual(result, "set(uint256)\n\n1")
-            secondCompletion.fulfill()
-        }
-
-        wait(for: [requestStarted], timeout: 2)
-        firstCancellation.cancel()
         XCTAssertEqual(MethodSignatureURLProtocol.stopLoadingCount, 0)
-        MethodSignatureURLProtocol.complete(
-            data: Data("set(uint256)".utf8)
-        )
-
-        wait(
-            for: [secondCompletion, firstCompletion],
-            timeout: 0.5
-        )
-
-        let cachedCancellation = EthereumRequestCancellation()
-        inspector.interpret(
-            data: data,
-            cancellation: cachedCancellation
-        ) { result in
-            XCTAssertEqual(result, "set(uint256)\n\n1")
-            cachedCompletion.fulfill()
-        }
-        wait(for: [cachedCompletion], timeout: 0.5)
+        MethodSignatureURLProtocol.complete(data: Data("set(uint256)".utf8))
+        let result = try await second.value
+        XCTAssertEqual(result, "set(uint256)\n\n1")
+        let cached = try await inspector.interpret(data: data)
+        XCTAssertEqual(cached, result)
         XCTAssertEqual(MethodSignatureURLProtocol.requestCount, 1)
     }
 
-    func testInterpretationCancellationStopsLastSubscriberRequest() {
-        let requestStarted = expectation(
-            description: "method-signature request started"
-        )
-        let requestStopped = expectation(
-            description: "method-signature request stopped"
-        )
-        let unexpectedCompletion = expectation(
-            description: "cancelled interpretation did not complete"
-        )
-        unexpectedCompletion.isInverted = true
+    func testInterpretationCancellationStopsLastSubscriberRequest() async throws {
+        let requestStarted = expectation(description: "method-signature request started")
+        let requestStopped = expectation(description: "method-signature request stopped")
         MethodSignatureURLProtocol.configure(
-            onStart: {
-                requestStarted.fulfill()
-            },
-            onStop: {
-                requestStopped.fulfill()
-            }
-        )
+            onStart: { requestStarted.fulfill() }, onStop: { requestStopped.fulfill() })
         let session = makeMethodSignatureSession()
         let inspector = TransactionInspector(urlSession: session)
-        let cancellation = EthereumRequestCancellation()
+        let data = "0x87654321" + abiWord("1")
         defer {
             session.invalidateAndCancel()
             MethodSignatureURLProtocol.reset()
         }
-
-        inspector.interpret(
-            data: "0x87654321" + abiWord("1"),
-            cancellation: cancellation
-        ) { _ in
-            unexpectedCompletion.fulfill()
+        let task = Task { try await inspector.interpret(data: data) }
+        await fulfillment(of: [requestStarted], timeout: 2)
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Expected canceled interpretation to throw")
+        } catch is CancellationError {
         }
-
-        wait(for: [requestStarted], timeout: 2)
-        cancellation.cancel()
-        wait(
-            for: [requestStopped, unexpectedCompletion],
-            timeout: 0.5
-        )
+        await fulfillment(of: [requestStopped], timeout: 2)
         XCTAssertEqual(MethodSignatureURLProtocol.requestCount, 1)
         XCTAssertEqual(MethodSignatureURLProtocol.stopLoadingCount, 1)
     }
 
-    func testCancellationDoesNotWaitForDecodingAndSuppressesCompletion() {
-        let requestStarted = expectation(
-            description: "method-signature request started"
-        )
-        let decoderStarted = expectation(
-            description: "decoder started"
-        )
-        let decoderFinished = expectation(
-            description: "decoder finished"
-        )
-        let cancellationStarted = expectation(
-            description: "cancellation started"
-        )
-        let cancellationFinished = expectation(
-            description: "cancellation finished before decoder"
-        )
-        let unexpectedCompletion = expectation(
-            description: "cancelled interpretation did not complete"
-        )
-        unexpectedCompletion.isInverted = true
+    func testCancellationDoesNotWaitForDecodingAndSuppressesCompletion() async throws {
+        let requestStarted = expectation(description: "method-signature request started")
+        let decoderStarted = expectation(description: "decoder started")
+        let decoderFinished = expectation(description: "decoder finished")
         let releaseDecoder = DispatchSemaphore(value: 0)
-        MethodSignatureURLProtocol.configure(
-            onStart: {
-                requestStarted.fulfill()
-            },
-            onStop: {}
-        )
+        MethodSignatureURLProtocol.configure(onStart: { requestStarted.fulfill() }, onStop: {})
         let session = makeMethodSignatureSession()
-        let inspector = TransactionInspector(
-            urlSession: session
-        ) { _, _, _ in
+        let inspector = TransactionInspector(urlSession: session, decoder: { _, _, _ in
             decoderStarted.fulfill()
             releaseDecoder.wait()
             decoderFinished.fulfill()
             return "decoded"
-        }
-        let cancellation = EthereumRequestCancellation()
+        })
+        let data = "0x12345678" + abiWord("1")
         defer {
             releaseDecoder.signal()
             session.invalidateAndCancel()
             MethodSignatureURLProtocol.reset()
         }
-
-        inspector.interpret(
-            data: "0x12345678" + abiWord("1"),
-            cancellation: cancellation
-        ) { _ in
-            unexpectedCompletion.fulfill()
-        }
-
-        wait(for: [requestStarted], timeout: 2)
-        MethodSignatureURLProtocol.complete(
-            data: Data("set(uint256)".utf8)
-        )
-        wait(for: [decoderStarted], timeout: 2)
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            cancellationStarted.fulfill()
-            cancellation.cancel()
-            cancellationFinished.fulfill()
-        }
-        wait(for: [cancellationStarted], timeout: 2)
-        wait(for: [cancellationFinished], timeout: 2)
-
+        let task = Task { try await inspector.interpret(data: data) }
+        await fulfillment(of: [requestStarted], timeout: 2)
+        MethodSignatureURLProtocol.complete(data: Data("set(uint256)".utf8))
+        await fulfillment(of: [decoderStarted], timeout: 2)
+        task.cancel()
+        XCTAssertTrue(task.isCancelled)
         releaseDecoder.signal()
-        wait(
-            for: [decoderFinished, unexpectedCompletion],
-            timeout: 0.5
-        )
+        do {
+            _ = try await task.value
+            XCTFail("Canceled decoding must not publish its result")
+        } catch is CancellationError {
+        }
+        await fulfillment(of: [decoderFinished], timeout: 2)
     }
 
     func testEthereumPreparationDoesNotInspectContractCreationInitcode() {
@@ -313,107 +223,80 @@ private func abiBytes(_ hex: String) -> String {
 }
 
 private final class MethodSignatureURLProtocol: URLProtocol {
-
-    private static let lock = NSLock()
-    private static var activeRequests =
-        [ObjectIdentifier: MethodSignatureURLProtocol]()
-    private static var onStart: (() -> Void)?
-    private static var onStop: (() -> Void)?
-    private static var storedRequestCount = 0
-    private static var storedStopLoadingCount = 0
-
-    static var requestCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedRequestCount
+    // Foundation owns each loader; response and cancellation use its one-shot completion gate.
+    private final class ResponseEndpoint: @unchecked Sendable {
+        private weak var owner: MethodSignatureURLProtocol?
+        init(_ owner: MethodSignatureURLProtocol) { self.owner = owner }
+        func complete(data: Data) { owner?.completeResponse(data: data) }
     }
 
-    static var stopLoadingCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedStopLoadingCount
+    private struct State: Sendable {
+        var activeRequests = [ObjectIdentifier: ResponseEndpoint]()
+        var onStart: (@Sendable () -> Void)?
+        var onStop: (@Sendable () -> Void)?
+        var requestCount = 0
+        var stopLoadingCount = 0
     }
 
-    static func configure(
-        onStart: @escaping () -> Void,
-        onStop: @escaping () -> Void
-    ) {
-        lock.lock()
-        activeRequests.removeAll()
-        self.onStart = onStart
-        self.onStop = onStop
-        storedRequestCount = 0
-        storedStopLoadingCount = 0
-        lock.unlock()
+    private static let state = Mutex(State())
+
+    static var requestCount: Int { state.withLock { $0.requestCount } }
+    static var stopLoadingCount: Int { state.withLock { $0.stopLoadingCount } }
+
+    static func configure(onStart: @escaping @Sendable () -> Void, onStop: @escaping @Sendable () -> Void) {
+        state.withLock { $0 = State(onStart: onStart, onStop: onStop) }
     }
 
     static func complete(data: Data) {
-        lock.lock()
-        let requests = Array(activeRequests.values)
-        activeRequests.removeAll()
-        lock.unlock()
-
-        for request in requests {
-            guard let url = request.request.url,
-                  let response = HTTPURLResponse(
-                    url: url,
-                    statusCode: 200,
-                    httpVersion: nil,
-                    headerFields: nil
-                  ) else {
-                continue
-            }
-            request.client?.urlProtocol(
-                request,
-                didReceive: response,
-                cacheStoragePolicy: .notAllowed
-            )
-            request.client?.urlProtocol(request, didLoad: data)
-            request.client?.urlProtocolDidFinishLoading(request)
+        let requests = state.withLock { value in
+            let requests = Array(value.activeRequests.values)
+            value.activeRequests.removeAll()
+            return requests
         }
+        for endpoint in requests { endpoint.complete(data: data) }
     }
 
-    static func reset() {
-        lock.lock()
-        activeRequests.removeAll()
-        onStart = nil
-        onStop = nil
-        storedRequestCount = 0
-        storedStopLoadingCount = 0
-        lock.unlock()
+    private let responseFinished = Mutex(false)
+
+    private func completeResponse(data: Data) {
+        let canFinish = responseFinished.withLock { finished in
+            guard !finished else { return false }
+            finished = true
+            return true
+        }
+        guard canFinish, let url = request.url,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil) else { return }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
     }
 
-    override class func canInit(with request: URLRequest) -> Bool {
-        true
-    }
+    static func reset() { state.withLock { $0 = State() } }
 
-    override class func canonicalRequest(
-        for request: URLRequest
-    ) -> URLRequest {
-        request
-    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        Self.lock.lock()
-        Self.activeRequests[ObjectIdentifier(self)] = self
-        Self.storedRequestCount += 1
-        let onStart = Self.onStart
-        Self.lock.unlock()
+        let identifier = ObjectIdentifier(self)
+        let endpoint = ResponseEndpoint(self)
+        let onStart = Self.state.withLock { state in
+            state.activeRequests[identifier] = endpoint
+            state.requestCount += 1
+            return state.onStart
+        }
         onStart?()
     }
 
     override func stopLoading() {
-        Self.lock.lock()
-        let didRemove =
-            Self.activeRequests.removeValue(
-                forKey: ObjectIdentifier(self)
-            ) != nil
-        if didRemove {
-            Self.storedStopLoadingCount += 1
+        responseFinished.withLock { $0 = true }
+        let identifier = ObjectIdentifier(self)
+        let onStop = Self.state.withLock { state in
+            guard state.activeRequests.removeValue(forKey: identifier) != nil else {
+                return Optional<@Sendable () -> Void>.none
+            }
+            state.stopLoadingCount += 1
+            return state.onStop
         }
-        let onStop = didRemove ? Self.onStop : nil
-        Self.lock.unlock()
         onStop?()
     }
-
 }

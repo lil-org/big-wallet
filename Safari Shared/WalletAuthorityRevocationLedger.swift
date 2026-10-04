@@ -1,22 +1,22 @@
 import Foundation
 
-struct WalletAuthorityRevocationLedger: Codable, Equatable {
-    struct Cursor: Codable, Equatable {
+struct WalletAuthorityRevocationLedger: Codable, Equatable, Sendable {
+    struct Cursor: Codable, Equatable, Sendable {
         let epoch: UUID
         let sequence: Int
     }
 
-    struct WalletRemoval: Codable, Equatable {
+    struct WalletRemoval: Codable, Equatable, Sendable {
         let walletID: String
         let sequence: Int
     }
 
-    struct AccountRemoval: Codable, Equatable {
+    struct AccountRemoval: Codable, Equatable, Sendable {
         let account: WalletAccountDescriptor
         let sequence: Int
     }
 
-    enum Error: Swift.Error {
+    enum Error: Swift.Error, Sendable {
         case invalidRemoval
         case sequenceExhausted
     }

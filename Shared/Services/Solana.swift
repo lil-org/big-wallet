@@ -924,7 +924,7 @@ enum SolanaTransactionSummaryFormatter {
     }
 }
 
-final class Solana {
+final class Solana: Sendable {
 
     enum Cluster: String, CaseIterable, Hashable, Codable, Sendable {
         case mainnetBeta
@@ -1010,7 +1010,7 @@ final class Solana {
         case sendTransaction
     }
 
-    private enum RPCRequestOutcome<Response> {
+    private enum RPCRequestOutcome<Response: Sendable>: Sendable {
         case response(Response)
         case retryableFailure
         case authorizationAcquisitionFailed
@@ -1024,15 +1024,14 @@ final class Solana {
         )
     }
 
-    private final class ConfirmationAuthorizationBudget:
-        @unchecked Sendable {
+    private struct ConfirmationAuthorizationBudget: Sendable {
 
         let replacementAttempt = OneShotGate()
         let freshAuthorizationPoll = OneShotGate()
 
     }
 
-    private struct SendTransactionResponse: Decodable {
+    private struct SendTransactionResponse: Decodable, Sendable {
         let result: String?
         private let error: RPCResponseError?
 
@@ -1046,7 +1045,7 @@ final class Solana {
         }
     }
 
-    private struct SignatureStatusesResponse: Decodable {
+    private struct SignatureStatusesResponse: Decodable, Sendable {
         private let result: ResultValue?
         private let error: RPCResponseError?
 
@@ -1060,12 +1059,12 @@ final class Solana {
             return error.sendTransactionFailure
         }
 
-        struct ResultValue: Decodable {
+        struct ResultValue: Decodable, Sendable {
             let value: [SignatureStatus?]
         }
     }
 
-    private struct SignatureStatus: Decodable {
+    private struct SignatureStatus: Decodable, Sendable {
         let err: RPCErrorValue?
         let confirmations: Int?
         let confirmationStatus: Commitment?
@@ -1120,7 +1119,7 @@ final class Solana {
         }
     }
 
-    private struct RPCResponseError: Decodable {
+    private struct RPCResponseError: Decodable, Sendable {
         let code: Int?
         let message: String?
         let data: ResponseData?
@@ -1164,7 +1163,7 @@ final class Solana {
                 rawData?.contains(string) == true
         }
 
-        struct ResponseData: Decodable {
+        struct ResponseData: Decodable, Sendable {
             let err: RPCErrorValue?
             let message: String?
 
@@ -1185,7 +1184,7 @@ final class Solana {
         }
     }
 
-    private indirect enum RPCErrorValue: Decodable {
+    private indirect enum RPCErrorValue: Decodable, Sendable {
         case string(String)
         case array([RPCErrorValue])
         case object([String: RPCErrorValue])
@@ -1311,7 +1310,7 @@ final class Solana {
         }
     }
 
-    enum RPCSource: Equatable {
+    enum RPCSource: Equatable, Sendable {
         case alchemy
         case publicFallback
 
@@ -1325,8 +1324,8 @@ final class Solana {
         }
     }
 
-    struct RPCConfiguration {
-        struct Endpoint: Equatable {
+    struct RPCConfiguration: Sendable {
+        struct Endpoint: Equatable, Sendable {
             let url: URL
             let allowsAlchemyAuthorization: Bool
         }
@@ -1373,6 +1372,17 @@ final class Solana {
     static let maxWirePayloadLength = 1_232
     static let maxBase58EncodedWirePayloadLength = 1_683
 
+    struct Timing: Sendable {
+        let now: @Sendable () -> Date
+        let sleep: @Sendable (TimeInterval) async throws -> Void
+
+        static let live = Timing(
+            now: { Date() },
+            sleep: { try await Task.sleep(for: .seconds($0)) }
+        )
+    }
+
+    private let timing: Timing
     private let urlSession: URLSession
     private let rpcConfiguration: RPCConfiguration
     private let authorizationProvider: AlchemyAuthorizationProviding
@@ -1386,10 +1396,12 @@ final class Solana {
 
     init(urlSession: URLSession,
          rpcConfiguration: RPCConfiguration,
-         authorizationProvider: AlchemyAuthorizationProviding = AlchemyJWTProvider.shared) {
+         authorizationProvider: AlchemyAuthorizationProviding = AlchemyJWTProvider.shared,
+         timing: Timing = .live) {
         self.urlSession = urlSession
         self.rpcConfiguration = rpcConfiguration
         self.authorizationProvider = authorizationProvider
+        self.timing = timing
     }
 
     static func preparedSendOptions(from rawOptions: [String: Any]?) -> Result<PreparedSendOptions, SendTransactionError> {
@@ -1617,21 +1629,20 @@ final class Solana {
         return WalletCrypto.base58Encode(data: signature)
     }
 
+    @concurrent
     func sendSignedTransaction(
         _ signedTransaction: String,
         cluster: Cluster,
-        sendOptions: PreparedSendOptions,
-        completion: @escaping (Result<String, SendTransactionError>) -> Void
-    ) {
+        sendOptions: PreparedSendOptions
+    ) async throws -> String {
+        try Task.checkCancellation()
         guard let endpoint = rpcConfiguration.endpoint(for: cluster) else {
-            completion(.failure(.rpcUnavailable))
-            return
+            throw SendTransactionError.rpcUnavailable
         }
-        sendTransaction(
+        return try await sendTransaction(
             signed: signedTransaction,
             endpoint: endpoint,
-            sendOptions: sendOptions,
-            completion: completion
+            sendOptions: sendOptions
         )
     }
 
@@ -1703,257 +1714,100 @@ final class Solana {
         return request
     }
 
-    private func sendTransaction(signed: String,
-                                 endpoint: RPCConfiguration.Endpoint,
-                                 sendOptions: PreparedSendOptions,
-                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        var parameters: [Any] = [signed]
-        parameters.append(sendOptions.rpcOptions)
-
-        performRequest(method: .sendTransaction,
-                       endpoint: endpoint,
-                       parameters: parameters,
-                       acceptsUnauthorizedResponse: { $0.result != nil }) {
-            (outcome: RPCRequestOutcome<SendTransactionResponse>) in
-            switch outcome {
-            case .retryableFailure:
-                completion(.failure(.unknown))
-            case .authorizationAcquisitionFailed:
-                completion(.failure(.notSubmitted))
-            case .authorizationRecoveryFailed(
-                let statusCode,
-                let response
-            ),
-            .authorizationRejectedAfterRecovery(
-                let statusCode,
-                let response
-            ):
-                completion(.failure(
-                    response?.failure
-                        ?? .rpcError(
-                            message: Strings.failedToSend,
-                            code: statusCode
-                        )
-                ))
-            case .response(let response):
-                if let result = response.result {
-                    if let confirmationCommitment = sendOptions.confirmationCommitment {
-                        let authorizationBudget =
-                            ConfirmationAuthorizationBudget()
-                        self.confirmTransaction(
-                            signature: result,
-                            commitment: confirmationCommitment,
-                            endpoint: endpoint,
-                            authorizationBudget: authorizationBudget,
-                            deadline: Date().addingTimeInterval(
-                                self.signatureStatusPollTimeout
-                            ),
-                            nextPollInterval:
-                                self.signatureStatusInitialPollInterval,
-                            lastStatusFailure: nil,
-                            completion: completion
-                        )
-                    } else {
-                        completion(.success(result))
-                    }
-                } else if let failure = response.failure {
-                    completion(.failure(failure))
-                } else {
-                    completion(.failure(.unknown))
-                }
+    private func sendTransaction(
+        signed: String,
+        endpoint: RPCConfiguration.Endpoint,
+        sendOptions: PreparedSendOptions
+    ) async throws -> String {
+        let request = createRequest(
+            method: .sendTransaction,
+            endpointURL: endpoint.url,
+            parameters: [signed, sendOptions.rpcOptions]
+        )
+        let outcome: RPCRequestOutcome<SendTransactionResponse> = try await performRequest(
+            request: request,
+            endpoint: endpoint,
+            acceptsUnauthorizedResponse: { $0.result != nil }
+        )
+        switch outcome {
+        case .retryableFailure:
+            throw SendTransactionError.unknown
+        case .authorizationAcquisitionFailed:
+            throw SendTransactionError.notSubmitted
+        case .authorizationRecoveryFailed(let statusCode, let response),
+             .authorizationRejectedAfterRecovery(let statusCode, let response):
+            throw response?.failure ?? .rpcError(message: Strings.failedToSend, code: statusCode)
+        case .response(let response):
+            guard let signature = response.result else {
+                throw response.failure ?? .unknown
             }
+            guard let commitment = sendOptions.confirmationCommitment else { return signature }
+            return try await confirmTransaction(
+                signature: signature,
+                commitment: commitment,
+                endpoint: endpoint
+            )
         }
     }
 
-    private func confirmTransaction(signature: String,
-                                    commitment: Commitment,
-                                    endpoint: RPCConfiguration.Endpoint,
-                                    authorizationBudget:
-                                        ConfirmationAuthorizationBudget,
-                                    deadline: Date,
-                                    nextPollInterval: TimeInterval,
-                                    lastStatusFailure: SendTransactionError?,
-                                    completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        guard Date() <= deadline else {
-            completion(.failure(lastStatusFailure ?? .confirmationTimedOut(signature: signature)))
-            return
-        }
-
-        let parameters: [Any] = [
-            [signature],
-            ["searchTransactionHistory": true],
-        ]
-        performRequest(method: .getSignatureStatuses,
-                       endpoint: endpoint,
-                       parameters: parameters,
-                       authorizationRecoveryBudget:
-                            authorizationBudget.replacementAttempt) {
-            (outcome: RPCRequestOutcome<SignatureStatusesResponse>) in
-            switch outcome {
-            case .retryableFailure:
-                self.scheduleConfirmationRetry(signature: signature,
-                                               commitment: commitment,
-                                               endpoint: endpoint,
-                                               deadline: deadline,
-                                               nextPollInterval: nextPollInterval,
-                                               lastStatusFailure: lastStatusFailure,
-                                               authorizationBudget:
-                                                    authorizationBudget,
-                                               completion: completion)
-            case .authorizationAcquisitionFailed:
-                self.handleConfirmationAuthorizationFailure(
-                    signature: signature,
-                    commitment: commitment,
-                    endpoint: endpoint,
-                    authorizationBudget: authorizationBudget,
-                    deadline: deadline,
-                    nextPollInterval: nextPollInterval,
-                    failure: self.confirmationFailure(
-                        signature: signature,
-                        failure: .rpcUnavailable
-                    ),
-                    completion: completion
-                )
-            case .authorizationRecoveryFailed(
-                let statusCode,
-                let response
-            ),
-            .authorizationRejectedAfterRecovery(
-                let statusCode,
-                let response
-            ):
-                let failure = response?.failure
-                    ?? .rpcError(
-                        message: Strings.failedToSend,
-                        code: statusCode
-                    )
-                self.handleConfirmationAuthorizationFailure(
-                    signature: signature,
-                    commitment: commitment,
-                    endpoint: endpoint,
-                    authorizationBudget: authorizationBudget,
-                    deadline: deadline,
-                    nextPollInterval: nextPollInterval,
-                    failure: self.confirmationFailure(
-                        signature: signature,
-                        failure: failure
-                    ),
-                    completion: completion
-                )
-            case .response(let response):
-                if let failure = response.failure {
-                    self.scheduleConfirmationRetry(
-                        signature: signature,
-                        commitment: commitment,
-                        endpoint: endpoint,
-                        deadline: deadline,
-                        nextPollInterval: nextPollInterval,
-                        lastStatusFailure: self.confirmationFailure(
-                            signature: signature,
-                            failure: failure
-                        ),
-                        authorizationBudget: authorizationBudget,
-                        completion: completion
-                    )
-                    return
-                }
-
-                guard let status = response.status else {
-                    self.scheduleConfirmationRetry(
-                        signature: signature,
-                        commitment: commitment,
-                        endpoint: endpoint,
-                        deadline: deadline,
-                        nextPollInterval: nextPollInterval,
-                        lastStatusFailure: nil,
-                        authorizationBudget: authorizationBudget,
-                        completion: completion
-                    )
-                    return
-                }
-
-                if let failure = status.failure {
-                    completion(.failure(
-                        self.confirmationFailure(
-                            signature: signature,
-                            failure: failure
-                        )
-                    ))
-                    return
-                }
-
-                if status.satisfies(commitment) {
-                    completion(.success(signature))
-                    return
-                }
-
-                self.scheduleConfirmationRetry(
-                    signature: signature,
-                    commitment: commitment,
-                    endpoint: endpoint,
-                    deadline: deadline,
-                    nextPollInterval: nextPollInterval,
-                    lastStatusFailure: nil,
-                    authorizationBudget: authorizationBudget,
-                    completion: completion
-                )
-            }
-        }
-    }
-
-    private func handleConfirmationAuthorizationFailure(
+    private func confirmTransaction(
         signature: String,
         commitment: Commitment,
-        endpoint: RPCConfiguration.Endpoint,
-        authorizationBudget: ConfirmationAuthorizationBudget,
-        deadline: Date,
-        nextPollInterval: TimeInterval,
-        failure: SendTransactionError,
-        completion: @escaping (Result<String, SendTransactionError>) -> Void
-    ) {
-        guard authorizationBudget.freshAuthorizationPoll.claim() else {
-            completion(.failure(failure))
-            return
-        }
-        scheduleConfirmationRetry(
-            signature: signature,
-            commitment: commitment,
-            endpoint: endpoint,
-            deadline: deadline,
-            nextPollInterval: nextPollInterval,
-            lastStatusFailure: failure,
-            authorizationBudget: authorizationBudget,
-            completion: completion
+        endpoint: RPCConfiguration.Endpoint
+    ) async throws -> String {
+        let authorizationBudget = ConfirmationAuthorizationBudget()
+        let deadline = timing.now().addingTimeInterval(signatureStatusPollTimeout)
+        var pollInterval = signatureStatusInitialPollInterval
+        var lastFailure: SendTransactionError?
+        let request = createRequest(
+            method: .getSignatureStatuses,
+            endpointURL: endpoint.url,
+            parameters: [[signature], ["searchTransactionHistory": true]]
         )
-    }
-
-    private func scheduleConfirmationRetry(signature: String,
-                                           commitment: Commitment,
-                                           endpoint: RPCConfiguration.Endpoint,
-                                           deadline: Date,
-                                           nextPollInterval: TimeInterval,
-                                           lastStatusFailure: SendTransactionError?,
-                                           authorizationBudget:
-                                                ConfirmationAuthorizationBudget,
-                                           completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        let remainingTime = deadline.timeIntervalSinceNow
-        guard remainingTime > 0 else {
-            completion(.failure(lastStatusFailure ?? .confirmationTimedOut(signature: signature)))
-            return
-        }
-
-        let delay = min(nextPollInterval, remainingTime)
-        let followingPollInterval = min(nextPollInterval * signatureStatusPollBackoffMultiplier,
-                                        signatureStatusMaxPollInterval)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.confirmTransaction(signature: signature,
-                                    commitment: commitment,
-                                    endpoint: endpoint,
-                                    authorizationBudget: authorizationBudget,
-                                    deadline: deadline,
-                                    nextPollInterval: followingPollInterval,
-                                    lastStatusFailure: lastStatusFailure,
-                                    completion: completion)
+        while true {
+            try Task.checkCancellation()
+            guard timing.now() <= deadline else {
+                throw lastFailure ?? .confirmationTimedOut(signature: signature)
+            }
+            let outcome: RPCRequestOutcome<SignatureStatusesResponse> = try await performRequest(
+                request: request,
+                endpoint: endpoint,
+                authorizationRecoveryBudget: authorizationBudget.replacementAttempt
+            )
+            switch outcome {
+            case .retryableFailure:
+                break
+            case .authorizationAcquisitionFailed:
+                let failure = confirmationFailure(signature: signature, failure: .rpcUnavailable)
+                lastFailure = failure
+                guard authorizationBudget.freshAuthorizationPoll.claim() else { throw failure }
+            case .authorizationRecoveryFailed(let statusCode, let response),
+                 .authorizationRejectedAfterRecovery(let statusCode, let response):
+                let failure = confirmationFailure(
+                    signature: signature,
+                    failure: response?.failure ?? .rpcError(message: Strings.failedToSend, code: statusCode)
+                )
+                lastFailure = failure
+                guard authorizationBudget.freshAuthorizationPoll.claim() else { throw failure }
+            case .response(let response):
+                if let failure = response.failure {
+                    lastFailure = confirmationFailure(signature: signature, failure: failure)
+                } else if let status = response.status {
+                    if let failure = status.failure {
+                        throw confirmationFailure(signature: signature, failure: failure)
+                    }
+                    if status.satisfies(commitment) { return signature }
+                    lastFailure = nil
+                } else {
+                    lastFailure = nil
+                }
+            }
+            let remaining = deadline.timeIntervalSince(timing.now())
+            guard remaining > 0 else {
+                throw lastFailure ?? .confirmationTimedOut(signature: signature)
+            }
+            try await timing.sleep(min(pollInterval, remaining))
+            pollInterval = min(pollInterval * signatureStatusPollBackoffMultiplier, signatureStatusMaxPollInterval)
         }
     }
 
@@ -2014,145 +1868,84 @@ final class Solana {
         return updatedTransaction.base64EncodedString()
     }
 
-    private func performRequest<Response: Decodable>(method: Method,
-                                                     endpoint: RPCConfiguration.Endpoint,
-                                                     parameters: [Any]? = nil,
-                                                     authorizationRecoveryBudget:
-                                                        OneShotGate? = nil,
-                                                     acceptsUnauthorizedResponse:
-                                                        @escaping (Response) -> Bool = { _ in false },
-                                                     completion: @escaping (RPCRequestOutcome<Response>) -> Void) {
-        let authorizationRecoveryBudget =
-            authorizationRecoveryBudget ?? OneShotGate()
-        let request = createRequest(
-            method: method,
-            endpointURL: endpoint.url,
-            parameters: parameters
-        )
-        Task {
-            do {
-                let authorization: AlchemyAuthorization?
-                if endpoint.allowsAlchemyAuthorization {
-                    authorization = try await self.authorizationProvider.authorization(
-                        for: endpoint.url
-                    )
-                } else {
-                    authorization = nil
-                }
-                self.executeRequest(
-                    request: request,
-                    endpoint: endpoint,
-                    authorization: authorization,
-                    authorizationRecoveryBudget:
-                        authorizationRecoveryBudget,
-                    acceptsUnauthorizedResponse:
-                        acceptsUnauthorizedResponse,
-                    completion: completion
-                )
-            } catch {
-                DispatchQueue.main.async {
-                    completion(.authorizationAcquisitionFailed)
-                }
-            }
+    private func performRequest<Response: Decodable & Sendable>(
+        request: URLRequest,
+        endpoint: RPCConfiguration.Endpoint,
+        authorizationRecoveryBudget: OneShotGate = OneShotGate(),
+        acceptsUnauthorizedResponse: @Sendable (Response) -> Bool = { _ in false }
+    ) async throws -> RPCRequestOutcome<Response> {
+        try Task.checkCancellation()
+        let authorization: AlchemyAuthorization?
+        do {
+            authorization = endpoint.allowsAlchemyAuthorization
+                ? try await authorizationProvider.authorization(for: endpoint.url)
+                : nil
+        } catch {
+            try Task.checkCancellation()
+            return .authorizationAcquisitionFailed
         }
+        return try await executeRequest(
+            request: request,
+            endpoint: endpoint,
+            authorization: authorization,
+            authorizationRecoveryBudget: authorizationRecoveryBudget,
+            acceptsUnauthorizedResponse: acceptsUnauthorizedResponse
+        )
     }
 
-    private func executeRequest<Response: Decodable>(
+    private func executeRequest<Response: Decodable & Sendable>(
         request: URLRequest,
         endpoint: RPCConfiguration.Endpoint,
         authorization: AlchemyAuthorization?,
         authorizationRecoveryBudget: OneShotGate,
-        acceptsUnauthorizedResponse: @escaping (Response) -> Bool,
-        completion: @escaping (RPCRequestOutcome<Response>) -> Void
-    ) {
+        acceptsUnauthorizedResponse: @Sendable (Response) -> Bool
+    ) async throws -> RPCRequestOutcome<Response> {
+        try Task.checkCancellation()
         var authorizedRequest = request
         authorization?.apply(to: &authorizedRequest)
-
-        let dataTask = urlSession.dataTask(with: authorizedRequest) { data, response, _ in
-            let decodedResponse = data.flatMap {
-                try? JSONDecoder().decode(Response.self, from: $0)
+        let transport = try await urlSession.responsePreservingTransportError(for: authorizedRequest)
+        let decodedResponse = transport.data.flatMap { try? JSONDecoder().decode(Response.self, from: $0) }
+        try Task.checkCancellation()
+        if let httpResponse = transport.response as? HTTPURLResponse,
+           httpResponse.statusCode == 401,
+           let authorization {
+            if let decodedResponse, acceptsUnauthorizedResponse(decodedResponse) {
+                await authorizationProvider.invalidateAuthorization(
+                    afterUnauthorized: authorization, for: endpoint.url
+                )
+                try Task.checkCancellation()
+                return .response(decodedResponse)
             }
-
-            if let httpResponse = response as? HTTPURLResponse,
-               httpResponse.statusCode == 401,
-               let authorization {
-                if let decodedResponse,
-                   acceptsUnauthorizedResponse(decodedResponse) {
-                    Task {
-                        await self.authorizationProvider.invalidateAuthorization(
-                            afterUnauthorized: authorization,
-                            for: endpoint.url
-                        )
-                        DispatchQueue.main.async {
-                            completion(.response(decodedResponse))
-                        }
-                    }
-                    return
-                }
-                guard authorizationRecoveryBudget.claim() else {
-                    Task {
-                        await self.authorizationProvider.invalidateAuthorization(
-                            afterUnauthorized: authorization,
-                            for: endpoint.url
-                        )
-                        DispatchQueue.main.async {
-                            completion(.authorizationRejectedAfterRecovery(
-                                statusCode: 401,
-                                response: decodedResponse
-                            ))
-                        }
-                    }
-                    return
-                }
-                Task {
-                    do {
-                        guard let replacement = try await self.authorizationProvider
-                            .replacementAuthorization(
-                                afterUnauthorized: authorization,
-                                for: endpoint.url
-                            ) else {
-                            DispatchQueue.main.async {
-                                completion(.authorizationRecoveryFailed(
-                                    statusCode: 401,
-                                    response: decodedResponse
-                                ))
-                            }
-                            return
-                        }
-                        self.executeRequest(
-                            request: request,
-                            endpoint: endpoint,
-                            authorization: replacement,
-                            authorizationRecoveryBudget:
-                                authorizationRecoveryBudget,
-                            acceptsUnauthorizedResponse:
-                                acceptsUnauthorizedResponse,
-                            completion: completion
-                        )
-                    } catch {
-                        DispatchQueue.main.async {
-                            completion(.authorizationRecoveryFailed(
-                                statusCode: 401,
-                                response: decodedResponse
-                            ))
-                        }
-                    }
-                }
-                return
+            guard authorizationRecoveryBudget.claim() else {
+                await authorizationProvider.invalidateAuthorization(
+                    afterUnauthorized: authorization, for: endpoint.url
+                )
+                try Task.checkCancellation()
+                return .authorizationRejectedAfterRecovery(statusCode: 401, response: decodedResponse)
             }
-
-            guard let decodedResponse else {
-                DispatchQueue.main.async {
-                    completion(.retryableFailure)
-                }
-                return
+            let replacement: AlchemyAuthorization?
+            do {
+                replacement = try await authorizationProvider.replacementAuthorization(
+                    afterUnauthorized: authorization, for: endpoint.url
+                )
+            } catch {
+                try Task.checkCancellation()
+                return .authorizationRecoveryFailed(statusCode: 401, response: decodedResponse)
             }
-
-            DispatchQueue.main.async {
-                completion(.response(decodedResponse))
+            try Task.checkCancellation()
+            guard let replacement else {
+                return .authorizationRecoveryFailed(statusCode: 401, response: decodedResponse)
             }
+            return try await executeRequest(
+                request: request,
+                endpoint: endpoint,
+                authorization: replacement,
+                authorizationRecoveryBudget: authorizationRecoveryBudget,
+                acceptsUnauthorizedResponse: acceptsUnauthorizedResponse
+            )
         }
-        dataTask.resume()
+        guard let decodedResponse else { return .retryableFailure }
+        return .response(decodedResponse)
     }
 
     private func parsedTransaction(serializedTransaction: String) -> Result<ParsedTransaction, SendTransactionError> {

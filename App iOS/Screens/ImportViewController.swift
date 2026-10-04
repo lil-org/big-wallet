@@ -6,6 +6,7 @@ class ImportViewController: UIViewController {
     
     var completion: ((Bool) -> Void)?
     private let walletsManager = WalletsManager.shared
+    private var layoutTask: Task<Void, Never>?
     
     @IBOutlet weak var placeholderLabel: UILabel! {
         didSet {
@@ -19,14 +20,34 @@ class ImportViewController: UIViewController {
             textView.delegate = self
             textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
             textView.layer.cornerRadius = 5
-            textView.layer.borderWidth = CGFloat.pixel
+            textView.layer.borderWidth = CGFloat.pixel(displayScale: textView.traitCollection.displayScale)
             textView.layer.borderColor = UIColor.separator.cgColor
         }
     }
     
     private var isWaiting = false
+    private var validationTask: Task<Void, Never>?
+    private var importTask: Task<Void, Never>?
+    private var deferredImportTask: Task<Void, Never>?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
+    isolated deinit {
+        deferredImportTask?.cancel()
+        layoutTask?.cancel()
+        validationTask?.cancel()
+        importTask?.cancel()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        layoutTask?.cancel()
+        if isBeingDismissed || navigationController?.isBeingDismissed == true {
+            validationTask?.cancel()
+            importTask?.cancel()
+            deferredImportTask?.cancel()
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -50,7 +71,10 @@ class ImportViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        DispatchQueue.main.async { [weak self] in
+        layoutTask?.cancel()
+        layoutTask = Task { [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             self?.navigationController?.navigationBar.sizeToFit()
             self?.textView.becomeFirstResponder()
         }
@@ -78,23 +102,32 @@ class ImportViewController: UIViewController {
     
     private func askPassword() {
         showPasswordAlert(title: Strings.enterKeystorePassword, message: nil) { [weak self] password in
-            guard let password = password else { return }
-            self?.setWaiting(true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
-                self?.importWith(input: self?.textView.text ?? "", password: password)
+            guard let self, let password else { return }
+            let input = textView.text ?? ""
+            setWaiting(true)
+            deferredImportTask?.cancel()
+            deferredImportTask = Task { [weak self] in
+                do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+                guard !Task.isCancelled else { return }
+                self?.importWith(input: input, password: password)
             }
         }
     }
     
     private func importWith(input: String, password: String?) {
         setWaiting(true)
-        Task {
-            defer { setWaiting(false) }
+        importTask = Task { [weak self, walletsManager] in
             do {
                 _ = try await walletsManager.addWallet(input: input, inputPassword: password)
+                guard let self else { return }
+                setWaiting(false)
+                guard !Task.isCancelled else { return }
                 completion?(true)
                 dismissAnimated()
             } catch {
+                guard let self else { return }
+                setWaiting(false)
+                guard !Task.isCancelled else { return }
                 showMessageAlert(text: Strings.failedToImportWallet)
             }
         }
@@ -111,11 +144,16 @@ class ImportViewController: UIViewController {
     
     private func validateInput(proceedIfValid: Bool) {
         placeholderLabel.isHidden = !textView.text.isEmpty
-        inputValidationResult = walletsManager.validateWalletInput(textView.text)
-        let isValid = inputValidationResult != .invalid
-        okButton.isEnabled = isValid
-        if isValid && proceedIfValid {
-            attemptImportWithCurrentInput()
+        validationTask?.cancel()
+        let input = textView.text ?? ""
+        okButton.isEnabled = false
+        validationTask = Task { [weak self, walletsManager] in
+            let result = await walletsManager.validateWalletInput(input)
+            guard let self, !Task.isCancelled, textView.text == input else { return }
+            inputValidationResult = result
+            let isValid = result != .invalid
+            okButton.isEnabled = isValid && !isWaiting
+            if isValid && proceedIfValid { attemptImportWithCurrentInput() }
         }
     }
     

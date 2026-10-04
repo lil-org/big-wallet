@@ -1,28 +1,28 @@
 import Foundation
 
-struct ResponseDeliveryPoller {
+struct ResponseDeliveryPoller: Sendable {
     enum Maintenance: String, Sendable {
         case none, quiet, interactive
     }
 
-    private let responseStatus: (
+    private let responseStatus: @Sendable (
         ExtensionBridge.Handle, String
     ) async -> ExtensionBridge.ResponseStatusResult
-    private let maintain: (
+    private let maintain: @Sendable (
         ExtensionBridge.Handle, String, Maintenance
     ) async -> ExtensionBridge.ResponseStatusResult
-    private let prepareDelivery: (
+    private let prepareDelivery: @Sendable (
         ExtensionBridge.Handle, String
     ) async -> ExtensionBridge.ResponseReadResult
 
     init(
-        responseStatus: @escaping (
+        responseStatus: @escaping @Sendable (
             ExtensionBridge.Handle, String
         ) async -> ExtensionBridge.ResponseStatusResult,
-        maintain: @escaping (
+        maintain: @escaping @Sendable (
             ExtensionBridge.Handle, String, Maintenance
         ) async -> ExtensionBridge.ResponseStatusResult,
-        prepareDelivery: @escaping (
+        prepareDelivery: @escaping @Sendable (
             ExtensionBridge.Handle, String
         ) async -> ExtensionBridge.ResponseReadResult
     ) {

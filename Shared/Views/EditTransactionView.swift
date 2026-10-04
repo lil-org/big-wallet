@@ -424,6 +424,7 @@ private struct MacTransactionTextField: NSViewRepresentable {
         )
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextFieldDelegate {
 
         var text: Binding<String>

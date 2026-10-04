@@ -104,7 +104,7 @@ struct WalletPrivateKey: Sendable {
     }
 }
 
-struct WalletHDWallet {
+struct WalletHDWallet: Sendable {
     private let seed: Data
 
     init?(mnemonic: String, passphrase: String) {

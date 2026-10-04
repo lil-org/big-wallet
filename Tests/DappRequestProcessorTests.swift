@@ -7,32 +7,6 @@ import XCTest
 
 private let dappRequestAdmissionDeadline = 2_000_000_900_000
 
-private final class CancellableCallbackProbe<Value: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var callback: (@Sendable (Value) -> Void)?
-
-    func install(_ callback: @escaping @Sendable (Value) -> Void) {
-        lock.lock()
-        self.callback = callback
-        lock.unlock()
-    }
-
-    func wait() async -> @Sendable (Value) -> Void {
-        while true {
-            if let callback = current() {
-                return callback
-            }
-            await Task.yield()
-        }
-    }
-
-    private func current() -> (@Sendable (Value) -> Void)? {
-        lock.lock()
-        defer { lock.unlock() }
-        return callback
-    }
-}
-
 @MainActor
 final class DappRequestProcessorTests: XCTestCase {
 
@@ -3482,56 +3456,11 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
-    func testCancellableCallbackReturnsCallbackResultExactlyOnce() async {
-        let probe = CancellableCallbackProbe<Int>()
-        let task = Task {
-            await awaitCancellableCallback { probe.install($0) }
-        }
-        let callback = await probe.wait()
-        callback(42)
-        callback(43)
-        let result = await task.value
-        XCTAssertEqual(result, 42)
-    }
-
-    func testCancellableCallbackFinishesOnCancellationAndIgnoresLateCallback() async {
-        let probe = CancellableCallbackProbe<Int>()
-        let task = Task {
-            await awaitCancellableCallback { probe.install($0) }
-        }
-        let callback = await probe.wait()
-        task.cancel()
-        let cancelledResult = await task.value
-        XCTAssertNil(cancelledResult)
-        callback(42)
-        let lateResult = await task.value
-        XCTAssertNil(lateResult)
-    }
-
-    func testCancellableCallbackDoesNotStartAfterPriorCancellation() async {
-        var didStart = false
-        let value: Int? = await Task {
-            withUnsafeCurrentTask { $0?.cancel() }
-            return await awaitCancellableCallback { _ in didStart = true }
-        }.value
-        XCTAssertNil(value)
-        XCTAssertFalse(didStart)
-    }
-
     func testBackgroundOperationLeavesMainActor() async {
         let ranOnMainThread = await Task { @MainActor in
             await awaitBackgroundOperation { Thread.isMainThread }
         }.value
         XCTAssertEqual(ranOnMainThread, false)
-    }
-
-    func testCancellableCallbackStartsOnCallerActor() async {
-        let ranOnMainThread = await Task { @MainActor in
-            await awaitCancellableCallback { completion in
-                completion(Thread.isMainThread)
-            }
-        }.value
-        XCTAssertEqual(ranOnMainThread, true)
     }
 
     func testBackgroundOperationDoesNotStartAfterPriorCancellation() async {

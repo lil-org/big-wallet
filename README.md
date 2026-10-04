@@ -12,6 +12,14 @@ download on the [app store](https://lil.org/get)
 * run the xcode project
 * recurring manual chores live in [MAINTENANCE.md](MAINTENANCE.md)
 
+### Swift toolchain and concurrency
+
+Use Xcode 27 or newer with Swift 6.4. All native targets use Swift 6 language mode. Minimum supported versions are iOS 26, macOS 15, and visionOS 2.
+
+Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
+
+Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test suites, Safari protocol tests, Release crypto performance gates, and focused Thread Sanitizer checks. Individual stages are `build`, `test`, `performance`, and `tsan`. The script uses Xcode's default DerivedData, runs simulator suites serially, and disables coverage collection so sandboxed host profiling files are not required. Set `SWIFT6_IOS_DESTINATION` and `SWIFT6_VISIONOS_DESTINATION` to select installed simulator destinations. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
+
 ### Safari wire protocol
 
 `Safari Shared/Protocol/wire-protocol.json` defines the shared Swift and JavaScript wire contract. After editing it, run `node Scripts/generate_wire_protocol.mjs --write`, then `Scripts/build_inpage_provider.sh` to rebuild the page provider. Commit the definition and generated files together.

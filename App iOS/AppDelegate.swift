@@ -9,14 +9,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     private let walletsManager = WalletsManager.shared
     private let priceService = PriceService.shared
+    private var startupTask: Task<Void, Never>?
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         priceService.start()
-        walletsManager.start()
-        SafariApprovalVaultHost.shared.start(
-            backgroundTask: SafariApprovalVaultHost.backgroundTask(using: application)
-        )
+        let backgroundTask = SafariApprovalVaultHost.backgroundTask(using: application)
+        startupTask = Task { [walletsManager] in
+            await walletsManager.start()
+            await SafariApprovalVaultHost.shared.start(backgroundTask: backgroundTask)
+        }
         return true
     }
 

@@ -15,7 +15,7 @@ enum WireProtocol {
     static let responseExpiryMilliseconds = 3600000
     static let privateBrowsingKey = "__bwPrivateBrowsing"
 
-    enum Message: String, CaseIterable {
+    enum Message: String, CaseIterable, Sendable {
         case requestID = "RequestID"
         case nonnegativeInteger = "NonnegativeInteger"
         case positiveInteger = "PositiveInteger"
@@ -223,19 +223,34 @@ enum WireProtocol {
         return snapshot
     }
 
-    struct ValidatedObject {
-        let contract: Message
-        let json: [String: Any]
+    struct JSONObject: Sendable {
+        private let values: [String: JSONValue]
 
-        fileprivate init(contract: Message, json: [String: Any]) {
+        init?(_ json: [String: Any], maximumDepth: Int = WireProtocol.maximumJSONDepth) {
+            guard case .object(let values) = JSONValue(json, maximumDepth: maximumDepth) else { return nil }
+            self.values = values
+        }
+
+        var json: [String: Any] { values.mapValues(\.json) }
+        subscript(_ key: String) -> Any? { values[key]?.json }
+    }
+
+    struct ValidatedObject: Sendable {
+        let contract: Message
+        private let object: JSONObject
+        var json: [String: Any] { object.json }
+
+        fileprivate init(contract: Message, object: JSONObject) {
             self.contract = contract
-            self.json = json
+            self.object = object
         }
     }
 
     static func object(_ contract: Message, value: Any) -> ValidatedObject? {
-        guard let json = decode(contract, value: value) as? [String: Any] else { return nil }
-        return ValidatedObject(contract: contract, json: json)
+        guard let json = value as? [String: Any],
+              let object = JSONObject(json, maximumDepth: maximumJSONDepth(for: contract)),
+              validShape(contract, value: object.json) else { return nil }
+        return ValidatedObject(contract: contract, object: object)
     }
 
     static func object(_ contract: Message, from decoder: Decoder) throws -> ValidatedObject {
@@ -297,7 +312,7 @@ enum WireProtocol {
         init?(intValue: Int) { return nil }
     }
 
-    private indirect enum JSONValue: Decodable {
+    indirect enum JSONValue: Decodable, Sendable {
         case null, boolean(Bool), integer(Int64), unsignedInteger(UInt64), decimal(Decimal), number(Double), string(String)
         case array([JSONValue]), object([String: JSONValue])
 

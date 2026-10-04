@@ -2,6 +2,7 @@
 
 import Foundation
 import XCTest
+import Synchronization
 @testable import Big_Wallet
 
 final class AlchemyJWTProductionContractTests: XCTestCase {
@@ -183,7 +184,7 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
         body.append(
             Data(repeating: 0x20, count: 16_384 - body.count)
         )
-        let session = makeSession { request in
+        let session = makeSession { [body] request in
             return (
                 try Self.httpResponse(
                     for: request,
@@ -783,52 +784,36 @@ private extension Collection {
 
 }
 
-private final class TestAlchemyJWTNonceSource: @unchecked Sendable {
-
-    private let lock = NSLock()
-    private var values: [Data]
-    private var requests = 0
-
-    init(values: [Data]) {
-        self.values = values
+private final class TestAlchemyJWTNonceSource: Sendable {
+    private struct State {
+        var values: [Data]
+        var requests = 0
     }
+    private let state: Mutex<State>
 
-    var requestCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return requests
-    }
+    init(values: [Data]) { state = Mutex(State(values: values)) }
+    var requestCount: Int { state.withLock { $0.requests } }
 
     func next() throws -> Data {
-        lock.lock()
-        defer { lock.unlock() }
-        requests += 1
-        guard !values.isEmpty else {
-            throw AlchemyJWTRequestProofError.invalidNonce
+        try state.withLock { state in
+            state.requests += 1
+            guard !state.values.isEmpty else { throw AlchemyJWTRequestProofError.invalidNonce }
+            return state.values.removeFirst()
         }
-        return values.removeFirst()
     }
-
 }
 
 private final class ProductionAlchemyJWTURLProtocol: URLProtocol {
 
-    typealias RequestHandler =
-        (URLRequest) throws -> (URLResponse, Data)
-
-    private static let lock = NSLock()
-    private static var requestHandler: RequestHandler?
+    typealias RequestHandler = @Sendable (URLRequest) throws -> (URLResponse, Data)
+    private static let requestHandler = Mutex<RequestHandler?>(nil)
 
     static func setRequestHandler(_ requestHandler: @escaping RequestHandler) {
-        lock.lock()
-        self.requestHandler = requestHandler
-        lock.unlock()
+        Self.requestHandler.withLock { $0 = requestHandler }
     }
 
     static func removeRequestHandler() {
-        lock.lock()
-        requestHandler = nil
-        lock.unlock()
+        requestHandler.withLock { $0 = nil }
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -842,9 +827,7 @@ private final class ProductionAlchemyJWTURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        Self.lock.lock()
-        let requestHandler = Self.requestHandler
-        Self.lock.unlock()
+        let requestHandler = Self.requestHandler.withLock { $0 }
 
         guard let requestHandler else {
             client?.urlProtocol(

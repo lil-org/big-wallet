@@ -2,12 +2,12 @@
 
 import Foundation
 
-enum PopupResponse: Encodable {
+enum PopupResponse: Encodable, Sendable {
     case queue(PopupQueueResponse)
     case command(PopupCommandResponse)
     case queueUnavailable
 
-    private enum CodingKeys: String, CodingKey { case status }
+    private enum CodingKeys: String, CodingKey, Sendable { case status }
 
     var approvalState: PopupApprovalState? {
         switch self {
@@ -38,17 +38,17 @@ enum PopupResponse: Encodable {
     }
 }
 
-enum PopupCommandStatus {
+enum PopupCommandStatus: Sendable {
     case ok(editsError: Bool = false)
     case ignored
     case unavailable
 }
 
-struct PopupCommandResponse: Encodable {
+struct PopupCommandResponse: Encodable, Sendable {
     let status: PopupCommandStatus
     var approvalState: PopupApprovalState?
 
-    private enum CodingKeys: String, CodingKey { case status, approval, editsError }
+    private enum CodingKeys: String, CodingKey, Sendable { case status, approval, editsError }
 
     fileprivate func replacingApprovalState(_ state: PopupApprovalState) -> Self {
         var response = self
@@ -71,8 +71,8 @@ struct PopupCommandResponse: Encodable {
     }
 }
 
-struct PopupQueueResponse: Encodable {
-    enum LayoutDirection: String, Encodable { case ltr, rtl }
+struct PopupQueueResponse: Encodable, Sendable {
+    enum LayoutDirection: String, Encodable, Sendable { case ltr, rtl }
 
     let requests: [PopupPendingRequest]
     let completedResponses: [PopupCompletedResponse]
@@ -80,7 +80,7 @@ struct PopupQueueResponse: Encodable {
     let layoutDirection: LayoutDirection
 }
 
-struct PopupPendingRequest: Encodable {
+struct PopupPendingRequest: Encodable, Sendable {
     let id: Int
     let host: String
     let receivedAt: Double
@@ -91,21 +91,21 @@ struct PopupPendingRequest: Encodable {
     let provider: InpageProvider
 }
 
-struct PopupCompletedResponse: Encodable {
+struct PopupCompletedResponse: Encodable, Sendable {
     let id: Int
     let host: String
     let configurationKey: String
     let requestToken: String
 }
 
-struct PopupApprovalState: Encodable {
-    enum Action: String, Encodable {
+struct PopupApprovalState: Encodable, Sendable {
+    enum Action: String, Encodable, Sendable {
         case approve, reject, editTransaction, setTransactionSpeed, resolveApprovalAlert
     }
 
-    enum RecoveryAction: String, Encodable { case retry, reject }
+    enum RecoveryAction: String, Encodable, Sendable { case retry, reject }
 
-    enum Content {
+    enum Content: Sendable {
         case review(PopupReview, actions: [Action], feedback: String?)
         case authenticating, working, missing
         case error(message: String, actions: [RecoveryAction])
@@ -115,7 +115,7 @@ struct PopupApprovalState: Encodable {
     var host: String?
     var content: Content
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, Sendable {
         case id, host, state, actions, error, review
     }
 
@@ -154,8 +154,8 @@ struct PopupApprovalState: Encodable {
     }
 }
 
-struct PopupReview: Encodable {
-    enum Content {
+struct PopupReview: Encodable, Sendable {
+    enum Content: Sendable {
         case accountSelection(PopupSelectionReview)
         case signMessage(PopupMessageReview)
         case sendTransaction(PopupTransactionReview)
@@ -166,7 +166,7 @@ struct PopupReview: Encodable {
     let title: String
     var content: Content
 
-    private enum CodingKeys: String, CodingKey { case reviewToken, title, kind }
+    private enum CodingKeys: String, CodingKey, Sendable { case reviewToken, title, kind }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -205,13 +205,13 @@ struct PopupReview: Encodable {
     }
 }
 
-struct PopupDisplayAccount: Encodable {
+struct PopupDisplayAccount: Encodable, Sendable {
     let name: String
     let croppedAddress: String
     var icon: String?
 }
 
-struct PopupSelectableAccount: Encodable {
+struct PopupSelectableAccount: Encodable, Sendable {
     var display: PopupDisplayAccount
     let walletId: String
     let address: String
@@ -219,7 +219,7 @@ struct PopupSelectableAccount: Encodable {
     let derivationPath: String
     let isSelected: Bool
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, Sendable {
         case walletId, address, coin, derivationPath, isSelected
     }
 
@@ -234,14 +234,14 @@ struct PopupSelectableAccount: Encodable {
     }
 }
 
-struct PopupNetworkOption: Encodable {
+struct PopupNetworkOption: Encodable, Sendable {
     let chainId: String
     let name: String
     let isCustom: Bool
     let isSelected: Bool
 }
 
-struct PopupSelectionReview: Encodable {
+struct PopupSelectionReview: Encodable, Sendable {
     var accounts: [PopupSelectableAccount]
     let networks: [PopupNetworkOption]?
     let canSelectNetwork: Bool
@@ -254,23 +254,23 @@ struct PopupSelectionReview: Encodable {
     }
 }
 
-struct PopupClusterOption: Encodable {
+struct PopupClusterOption: Encodable, Sendable {
     let value: Solana.Cluster
     let label: String
     let isSelected: Bool
 }
 
-struct PopupClusterSelection {
+struct PopupClusterSelection: Sendable {
     let clusters: [PopupClusterOption]
     let requiresSelection: Bool
 }
 
-struct PopupMessageReview: Encodable {
+struct PopupMessageReview: Encodable, Sendable {
     let meta: String
     var account: PopupDisplayAccount
     let clusterSelection: PopupClusterSelection?
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, Sendable {
         case meta, account, clusters, requiresClusterSelection
     }
 
@@ -285,7 +285,7 @@ struct PopupMessageReview: Encodable {
     }
 }
 
-struct PopupTransactionReview: Encodable {
+struct PopupTransactionReview: Encodable, Sendable {
     var account: PopupDisplayAccount
     let networkName: String
     let balance: String?
@@ -299,14 +299,14 @@ struct PopupTransactionReview: Encodable {
     let editorRequestToken: Int?
 }
 
-struct PopupTransactionSlider: Encodable {
+struct PopupTransactionSlider: Encodable, Sendable {
     let visible: Bool
     let position: Double
     let maximum: Double
 }
 
-struct PopupTransactionEditor: Encodable {
-    enum Fee {
+struct PopupTransactionEditor: Encodable, Sendable {
+    enum Fee: Sendable {
         case legacy(gasPriceGwei: String)
         case eip1559(maxPriorityFeePerGasGwei: String, maxFeePerGasGwei: String)
     }
@@ -315,7 +315,7 @@ struct PopupTransactionEditor: Encodable {
     let fee: Fee
     let suggestedFee: Fee?
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, Sendable {
         case nonce, usesEIP1559, gasPriceGwei, maxPriorityFeePerGasGwei, maxFeePerGasGwei
         case suggestedGasPriceGwei, suggestedMaxPriorityFeePerGasGwei, suggestedMaxFeePerGasGwei
     }
@@ -344,8 +344,8 @@ struct PopupTransactionEditor: Encodable {
     }
 }
 
-struct PopupTransactionAlert: Encodable {
-    struct Action: Encodable {
+struct PopupTransactionAlert: Encodable, Sendable {
+    struct Action: Encodable, Sendable {
         let title: String
         let action: TransactionApprovalAlertAction
     }
@@ -355,12 +355,12 @@ struct PopupTransactionAlert: Encodable {
     let actions: [Action]
 }
 
-struct PopupChainReview: Encodable {
+struct PopupChainReview: Encodable, Sendable {
     let chainName: String
     let rpcURL: String
 }
 
-enum PopupResponseEncoder {
+enum PopupResponseEncoder: Sendable {
     static let maximumResponseBytes = WireProtocol.maximumPopupResponseBytes
 
     static func encode(_ response: PopupResponse, for request: InternalSafariRequest) throws -> WireProtocol.ValidatedObject {

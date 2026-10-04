@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
@@ -147,9 +148,11 @@ final class NativeApprovalResponseTests: XCTestCase {
     }
 }
 
+@MainActor
 private final class AuthorityTestAccess: OwnedWalletSigningAccess {
     var calls = 0
-    var invalidated = false
+    private nonisolated let invalidation = Mutex(false)
+    nonisolated var invalidated: Bool { invalidation.withLock { $0 } }
     var operation: @MainActor () -> Void = {}
 
     @MainActor
@@ -159,8 +162,8 @@ private final class AuthorityTestAccess: OwnedWalletSigningAccess {
         return .success(.ethereumSignature("signed"))
     }
 
-    func invalidate() {
-        invalidated = true
+    nonisolated func invalidate() {
+        invalidation.withLock { $0 = true }
     }
 }
 #endif

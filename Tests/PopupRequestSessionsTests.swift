@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
@@ -21,15 +22,87 @@ private enum PopupRequestSessionsTestError: Error {
     case timedOut
 }
 
+private final class PopupPreparationSource: Sendable {
+    let stream: AsyncThrowingStream<TransactionPreparationEvent, Error>
+    private let continuation: AsyncThrowingStream<TransactionPreparationEvent, Error>.Continuation
+
+    init() { (stream, continuation) = AsyncThrowingStream.makeStream() }
+    func update(_ transaction: Transaction) { continuation.yield(.transactionUpdated(transaction)) }
+    func estimate(_ estimate: GasService.Estimate) { continuation.yield(.feeEstimate(estimate)) }
+    func resolve(_ result: Result<Transaction, TransactionPreparationFailure>) {
+        switch result {
+        case .success(let transaction): continuation.yield(.ready(transaction))
+        case .failure(let error): continuation.finish(throwing: error)
+        }
+    }
+}
+
+private final class PopupCancellationRecorder: Sendable {
+    private let cancelled = Mutex(false)
+    var isCancelled: Bool { cancelled.withLock { $0 } }
+    func cancel() { cancelled.withLock { $0 = true } }
+}
+
+private final class PopupPreflightSource: Sendable {
+    private struct State {
+        var result: TransactionFeePreflightResult?
+        var continuation: CheckedContinuation<TransactionFeePreflightResult, Error>?
+        var resolved = false
+    }
+    private let state = Mutex(State())
+
+    func resolve(_ result: TransactionFeePreflightResult) {
+        let continuation = state.withLock { state in
+            guard !state.resolved else { return CheckedContinuation<TransactionFeePreflightResult, Error>?.none }
+            state.resolved = true
+            let continuation = state.continuation
+            state.continuation = nil
+            if continuation == nil { state.result = result }
+            return continuation
+        }
+        continuation?.resume(returning: result)
+    }
+
+    func value(cancellation: PopupCancellationRecorder? = nil) async throws -> TransactionFeePreflightResult {
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let result: TransactionFeePreflightResult? = state.withLock { state in
+                    if let result = state.result { return result }
+                    state.continuation = continuation
+                    return nil
+                }
+                if let result { continuation.resume(returning: result) }
+                if Task.isCancelled { cancel() }
+            }
+        } onCancel: {
+            cancellation?.cancel()
+            self.cancel()
+        }
+    }
+
+    private func cancel() {
+        let continuation = state.withLock { state in
+            state.resolved = true
+            let continuation = state.continuation
+            state.continuation = nil
+            return continuation
+        }
+        continuation?.resume(throwing: CancellationError())
+    }
+}
+
 func unusedPopupTransactionOperations() -> TransactionApprovalOperations {
     TransactionApprovalOperations(
-        prepare: { _, _, _, _, _, _ in
+        prepare: { _, _, _ in
+            let source = PopupPreparationSource()
             XCTFail("A nontransaction review must not prepare a transaction")
-            return EthereumRequestCancellation()
+            return source.stream
         },
-        preflight: { _, _, _ in
+        preflight: { _, _ in
+            let source = PopupPreflightSource()
             XCTFail("A nontransaction review must not preflight a transaction")
-            return EthereumRequestCancellation()
+            return try await source.value(cancellation: nil)
         }
     )
 }
@@ -91,13 +164,18 @@ final class PopupRequestSessionsTests: XCTestCase {
             walletEnvironment: popupWalletEnvironment(),
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
-                prepare: { incoming, _, _, onUpdate, _, completion in
+                prepare: { incoming, _, _ in
+                    let source = PopupPreparationSource()
                     preparationInput = incoming
-                    preparationUpdate = onUpdate
-                    finishPreparation = completion
-                    return EthereumRequestCancellation()
+                    preparationUpdate = source.update
+                    finishPreparation = source.resolve
+                    return source.stream
                 },
-                preflight: { _, _, _ in EthereumRequestCancellation() }
+                preflight: { _, _ in
+                    let source = PopupPreflightSource()
+
+                    return try await source.value(cancellation: nil)
+                }
             )
         )
         let read = try popupCommand(
@@ -131,7 +209,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(invalid["editsError"] as? Bool, true)
         let unchanged = try XCTUnwrap(invalid["approval"] as? [String: Any])
         XCTAssertNil(unchanged["editsError"])
-        XCTAssertEqual(unchanged as NSDictionary, ready.filter { $0.key != "status" } as NSDictionary)
+        XCTAssertEqual(unchanged as NSDictionary, ready.json.filter { $0.key != "status" } as NSDictionary)
         let refreshed = popupResponseJSON(await controller.dispatch(request: read, profileIdentifier: nil))
         XCTAssertEqual(Set(refreshed.keys), ["status", "approval"])
         XCTAssertEqual(refreshed["approval"] as? NSDictionary, unchanged as NSDictionary)
@@ -194,7 +272,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 isCurrent: { true },
                 acquireCommitLease: { WalletExecutionLease(release: {}) }
             )
-            weak var scopedReference = scoped
+            weak let scopedReference = scoped
 
             XCTAssertTrue(scoped?.validateCurrent() == true)
             if explicitlyInvalidate {
@@ -508,6 +586,47 @@ final class PopupRequestSessionsTests: XCTestCase {
             XCTAssertTrue(state.isReleased)
             if broadcasts { XCTAssertTrue(state.wasReleasedBeforeBroadcast) }
         }
+    }
+
+    func testCatalogResolutionDeadlineReleasesClaimAndDiscardsLateApproval() async throws {
+        let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_700_000_000))
+        let store = try makeStore(clock: { clock.now })
+        let setup = try await makeExecutionSetup(store: store, id: 610, signing: false)
+        let gate = makeGate()
+        let started = expectation(description: "catalog refresh started")
+        let finished = expectation(description: "catalog deadline returned before refresh")
+        let late = expectation(description: "late catalog refresh discarded")
+        let executor = DurableApprovalExecutor(
+            store: store,
+            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                XCTFail("A catalog result arriving after the deadline must not execute")
+                return .rollback
+            }),
+            clock: { setup.claim.executionDeadline.addingTimeInterval(-0.01) }
+        )
+        let task = Task {
+            let result = await executor.execute(
+                claim: setup.claim,
+                prepare: { _ in .ready(consent: setup.consent, signing: .none) },
+                resolve: { _ in
+                    started.fulfill()
+                    await gate.wait()
+                    XCTAssertTrue(Task.isCancelled)
+                    late.fulfill()
+                    return .approved(setup.approval)
+                }
+            )
+            XCTAssertEqual(result, .abandoned)
+            finished.fulfill()
+        }
+        await fulfillment(of: [started, finished], timeout: 1)
+        let beforeLateResult = await store.events()
+        XCTAssertEqual(beforeLateResult, ["claim", "abandon"])
+        await gate.open()
+        await task.value
+        await fulfillment(of: [late], timeout: 1)
+        let afterLateResult = await store.events()
+        XCTAssertEqual(afterLateResult, beforeLateResult)
     }
 
     func testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast() async throws {
@@ -915,10 +1034,11 @@ final class PopupRequestSessionsTests: XCTestCase {
     }
 
     func testTransactionSessionCompletesSynchronousPreflightOnce() async throws {
-        let session = makeTransactionApprovalSession { transaction, _, completion in
-            completion(.safe(transaction, popupTransactionEstimate()))
-            completion(.safe(transaction, popupTransactionEstimate()))
-            return EthereumRequestCancellation()
+        let session = await makeTransactionApprovalSession { transaction, _ in
+            let source = PopupPreflightSource()
+            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            return try await source.value(cancellation: nil)
         }
         let token = try XCTUnwrap(session.beginApproval())
         let result = await session.finishAuthentication(token: token, succeeded: true)
@@ -935,16 +1055,18 @@ final class PopupRequestSessionsTests: XCTestCase {
         var preparationUpdate: ((Transaction) -> Void)?
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         var preflightTransaction: Transaction?
-        let session = makeTransactionApprovalSession(
-            prepare: { transaction, _, _, onUpdate, _, completion in
-                preparationUpdate = onUpdate
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+        let session = await makeTransactionApprovalSession(
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
+                preparationUpdate = source.update
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { transaction, _, completion in
+            preflight: { transaction, _ in
+                let source = PopupPreflightSource()
                 preflightTransaction = transaction
-                preflightCompletion = completion
-                return EthereumRequestCancellation()
+                preflightCompletion = source.resolve
+                return try await source.value(cancellation: nil)
             }
         )
         let reviewedTransaction = session.snapshot.transaction
@@ -971,10 +1093,11 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testTransactionSessionInvalidationWinsAlreadyResumedPreflight() async throws {
         var session: PopupTransactionSession!
-        session = makeTransactionApprovalSession { transaction, _, completion in
-            completion(.safe(transaction, popupTransactionEstimate()))
+        session = await makeTransactionApprovalSession { transaction, _ in
+            let source = PopupPreflightSource()
+            source.resolve(.safe(transaction, popupTransactionEstimate()))
             session.invalidate()
-            return EthereumRequestCancellation()
+            return try await source.value(cancellation: nil)
         }
         let token = try XCTUnwrap(session.beginApproval())
         let result = await session.finishAuthentication(token: token, succeeded: true)
@@ -986,10 +1109,11 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testTransactionSessionAuthenticationRefusalAllowsFreshApproval() async throws {
         var preflightCount = 0
-        let session = makeTransactionApprovalSession { transaction, _, completion in
+        let session = await makeTransactionApprovalSession { transaction, _ in
+            let source = PopupPreflightSource()
             preflightCount += 1
-            completion(.safe(transaction, popupTransactionEstimate()))
-            return EthereumRequestCancellation()
+            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            return try await source.value(cancellation: nil)
         }
         let firstToken = try XCTUnwrap(session.beginApproval())
         let refused = await session.finishAuthentication(token: firstToken, succeeded: false)
@@ -1013,10 +1137,11 @@ final class PopupRequestSessionsTests: XCTestCase {
             (.unavailableFees, { .unavailable($0, $1) }),
         ]
         for (kind, makeResult) in cases {
-            let session = makeTransactionApprovalSession { transaction, _, completion in
-                completion(makeResult(transaction, popupTransactionEstimate()))
-                completion(.safe(transaction, popupTransactionEstimate()))
-                return EthereumRequestCancellation()
+            let session = await makeTransactionApprovalSession { transaction, _ in
+                let source = PopupPreflightSource()
+                source.resolve(makeResult(transaction, popupTransactionEstimate()))
+                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                return try await source.value(cancellation: nil)
             }
             let token = try XCTUnwrap(session.beginApproval())
             let result = await session.finishAuthentication(token: token, succeeded: true)
@@ -1029,9 +1154,10 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testTransactionSessionInvalidationRejectsLateAuthentication() async throws {
         var preflightCount = 0
-        let session = makeTransactionApprovalSession { _, _, _ in
+        let session = await makeTransactionApprovalSession { _, _ in
+            let source = PopupPreflightSource()
             preflightCount += 1
-            return EthereumRequestCancellation()
+            return try await source.value(cancellation: nil)
         }
         let token = try XCTUnwrap(session.beginApproval())
         session.invalidate()
@@ -1045,11 +1171,12 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults()
         async throws {
-        let cancellation = EthereumRequestCancellation()
+        let cancellation = PopupCancellationRecorder()
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
-        let session = makeTransactionApprovalSession { _, _, completion in
-            preflightCompletion = completion
-            return cancellation
+        let session = await makeTransactionApprovalSession { _, _ in
+            let source = PopupPreflightSource()
+            preflightCompletion = source.resolve
+            return try await source.value(cancellation: cancellation)
         }
         let transaction = session.snapshot.transaction
         let token = try XCTUnwrap(session.beginApproval())
@@ -1072,15 +1199,22 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertFalse(session.snapshot.canApprove)
     }
 
+    private func settleTransactionPreparation(_ session: PopupTransactionSession) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while session.snapshot.phase == .preparing, ContinuousClock.now < deadline {
+            await Task.yield()
+        }
+    }
+
     private func makeTransactionApprovalSession(
         transaction: Transaction = popupReadyTransaction(),
-        prepare: @escaping TransactionApprovalOperations.Prepare = {
-            transaction, _, _, _, _, completion in
-            completion(.success(transaction))
-            return EthereumRequestCancellation()
+        prepare: @escaping TransactionApprovalOperations.Prepare = { transaction, _, _ in
+            let source = PopupPreparationSource()
+            source.resolve(.success(transaction))
+            return source.stream
         },
         preflight: @escaping TransactionApprovalOperations.Preflight
-    ) -> PopupTransactionSession {
+    ) async -> PopupTransactionSession {
         let session = PopupTransactionSession(
             action: SendTransactionAction(
                 transaction: transaction,
@@ -1097,10 +1231,11 @@ final class PopupRequestSessionsTests: XCTestCase {
             )
         )
         session.start()
+        await settleTransactionPreparation(session)
         return session
     }
 
-    func testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged() throws {
+    func testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged() async throws {
         let transaction = Transaction(
             from: "0x0000000000000000000000000000000000000001",
             to: "0x0000000000000000000000000000000000000002",
@@ -1139,11 +1274,16 @@ final class PopupRequestSessionsTests: XCTestCase {
         )
         var preparationCount = 0
         let operations = TransactionApprovalOperations(
-            prepare: { _, _, _, _, _, _ in
+            prepare: { _, _, _ in
+                let source = PopupPreparationSource()
                 preparationCount += 1
-                return EthereumRequestCancellation()
+                return source.stream
             },
-            preflight: { _, _, _ in EthereumRequestCancellation() }
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
+
+                return try await source.value(cancellation: nil)
+            }
         )
         let session = PopupTransactionSession(
             action: action,
@@ -1171,7 +1311,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(preparationCount, 1)
     }
 
-    func testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce() throws {
+    func testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce() async throws {
         let transaction = Transaction(
             from: popupTestAccount().address,
             to: "0x0000000000000000000000000000000000000002",
@@ -1187,15 +1327,20 @@ final class PopupRequestSessionsTests: XCTestCase {
             support: .eip1559, endpointChainID: 10
         )
         var preparationCount = 0
-        let session = makeTransactionApprovalSession(
+        let session = await makeTransactionApprovalSession(
             transaction: transaction,
-            prepare: { transaction, _, _, _, onEstimate, completion in
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 preparationCount += 1
-                onEstimate(estimate)
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+                source.estimate(estimate)
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { _, _, _ in EthereumRequestCancellation() }
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
+
+                return try await source.value(cancellation: nil)
+            }
         )
         let selectedPosition = 137.5
         var observedPositions = [Double]()
@@ -1213,6 +1358,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         )
 
         session.setSpeed(payload)
+        await settleTransactionPreparation(session)
 
         XCTAssertEqual(preparationCount, 2)
         XCTAssertEqual(session.snapshot.phase, .ready)
@@ -1222,9 +1368,9 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(session.gasSliderPosition, selectedPosition)
     }
 
-    func testPriorityFeeEditPreservesUntouchedFeeCapProvenance() {
+    func testPriorityFeeEditPreservesUntouchedFeeCapProvenance() async {
         for source in [TransactionFeeSource.automatic, .dapp] {
-            let session = makeFeeEditingSession(provenance: .init(
+            let session = await makeFeeEditingSession(provenance: .init(
                 maxPriorityFeePerGas: source,
                 maxFeePerGas: source
             ))
@@ -1250,9 +1396,9 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testFeeCapEditPreservesUntouchedPriorityFeeProvenance() {
+    func testFeeCapEditPreservesUntouchedPriorityFeeProvenance() async {
         for source in [TransactionFeeSource.automatic, .dapp] {
-            let session = makeFeeEditingSession(provenance: .init(
+            let session = await makeFeeEditingSession(provenance: .init(
                 maxPriorityFeePerGas: source,
                 maxFeePerGas: source
             ))
@@ -1278,7 +1424,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testCustomFeeEditReplacesSliderProvenanceForBothFields() {
+    func testCustomFeeEditReplacesSliderProvenanceForBothFields() async {
         let provenances = [
             TransactionFeeProvenance(
                 maxPriorityFeePerGas: .slider,
@@ -1295,7 +1441,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         ]
         for provenance in provenances {
             for changesPriority in [true, false] {
-                let session = makeFeeEditingSession(provenance: provenance)
+                let session = await makeFeeEditingSession(provenance: provenance)
 
                 XCTAssertTrue(session.applyEdits(
                     .custom(.init(
@@ -1317,13 +1463,13 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testNonceOnlyEditPreservesFeeProvenance() {
+    func testNonceOnlyEditPreservesFeeProvenance() async {
         for source in [TransactionFeeSource.automatic, .dapp, .slider] {
             let provenance = TransactionFeeProvenance(
                 maxPriorityFeePerGas: source,
                 maxFeePerGas: source
             )
-            let session = makeFeeEditingSession(provenance: provenance)
+            let session = await makeFeeEditingSession(provenance: provenance)
 
             XCTAssertTrue(session.applyEdits(
                 .custom(.init(
@@ -1340,7 +1486,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testNonceOnlyEditKeepsFailedTransactionUnapprovable() {
+    func testNonceOnlyEditKeepsFailedTransactionUnapprovable() async {
         let transaction = Transaction(
             from: popupTestAccount().address,
             to: "0x0000000000000000000000000000000000000002",
@@ -1351,16 +1497,18 @@ final class PopupRequestSessionsTests: XCTestCase {
             feeIntent: .automatic
         )
         var preparationCount = 0
-        let session = makeTransactionApprovalSession(
+        let session = await makeTransactionApprovalSession(
             transaction: transaction,
-            prepare: { _, _, _, _, _, completion in
+            prepare: { _, _, _ in
+                let source = PopupPreparationSource()
                 preparationCount += 1
-                completion(.failure(.gasPriceUnavailable))
-                return EthereumRequestCancellation()
+                source.resolve(.failure(.gasPriceUnavailable))
+                return source.stream
             },
-            preflight: { _, _, _ in
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
                 XCTFail("An invalid fee must not reach preflight")
-                return EthereumRequestCancellation()
+                return try await source.value(cancellation: nil)
             }
         )
 
@@ -1374,6 +1522,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             chain: popupTransactionNetwork()
         ))
 
+        await settleTransactionPreparation(session)
         XCTAssertEqual(session.snapshot.transaction.decimalNonceString, "1")
         XCTAssertNil(session.snapshot.transaction.preparedFee)
         XCTAssertEqual(session.snapshot.phase, .failed)
@@ -1381,20 +1530,25 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(preparationCount, 2)
     }
 
-    func testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee() {
+    func testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee() async {
         var transaction = popupReadyTransaction()
         transaction.replacePreparedFee(
             .legacy(gasPrice: 10),
             provenance: .init(gasPrice: .manual)
         )
-        let session = makeTransactionApprovalSession(
+        let session = await makeTransactionApprovalSession(
             transaction: transaction,
-            prepare: { transaction, _, _, _, onFeeEstimate, completion in
-                onFeeEstimate(popupTransactionEstimate())
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
+                source.estimate(popupTransactionEstimate())
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { _, _, _ in EthereumRequestCancellation() }
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
+
+                return try await source.value(cancellation: nil)
+            }
         )
         XCTAssertTrue(session.applyEdits(
             .custom(.init(
@@ -1407,22 +1561,29 @@ final class PopupRequestSessionsTests: XCTestCase {
         ))
         XCTAssertEqual(session.snapshot.transaction.feeProvenance.gasPrice, .manual)
 
+        await settleTransactionPreparation(session)
         XCTAssertTrue(session.applyEdits(.suggested, chain: popupTransactionNetwork()))
+        await settleTransactionPreparation(session)
 
         XCTAssertEqual(session.snapshot.transaction.decimalNonceString, "0")
         XCTAssertEqual(session.snapshot.transaction.preparedFee, .legacy(gasPrice: 10))
         XCTAssertEqual(session.snapshot.transaction.feeProvenance.gasPrice, .automatic)
     }
 
-    func testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation() {
+    func testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation() async {
         var preparationCount = 0
-        let session = makeTransactionApprovalSession(
-            prepare: { transaction, _, _, _, _, completion in
+        let session = await makeTransactionApprovalSession(
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 preparationCount += 1
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { _, _, _ in EthereumRequestCancellation() }
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
+
+                return try await source.value(cancellation: nil)
+            }
         )
         let original = session.snapshot.transaction
 
@@ -1452,7 +1613,7 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     private func makeFeeEditingSession(
         provenance: TransactionFeeProvenance
-    ) -> PopupTransactionSession {
+    ) async -> PopupTransactionSession {
         let transaction = Transaction(
             from: popupTestAccount().address,
             to: "0x0000000000000000000000000000000000000002",
@@ -1479,14 +1640,20 @@ final class PopupRequestSessionsTests: XCTestCase {
                 account: popupTestAccount()
             ),
             operations: TransactionApprovalOperations(
-                prepare: { transaction, _, _, _, _, completion in
-                    completion(.success(transaction))
-                    return EthereumRequestCancellation()
+                prepare: { transaction, _, _ in
+                    let source = PopupPreparationSource()
+                    source.resolve(.success(transaction))
+                    return source.stream
                 },
-                preflight: { _, _, _ in EthereumRequestCancellation() }
+                preflight: { _, _ in
+                    let source = PopupPreflightSource()
+
+                    return try await source.value(cancellation: nil)
+                }
             )
         )
         session.start()
+        await settleTransactionPreparation(session)
         return session
     }
 
@@ -1603,7 +1770,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error", "status"])
+        XCTAssertEqual(Set(response.json.keys), ["id", "state", "actions", "host", "error", "status"])
         XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"])
         XCTAssertEqual(response["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertEqual(response["state"] as? String, "error")
@@ -1812,7 +1979,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(state.keys), ["id", "state", "actions", "host", "status"])
+        XCTAssertEqual(Set(state.json.keys), ["id", "state", "actions", "host", "status"])
         XCTAssertEqual(state["id"] as? Int, snapshot.handle.id)
         XCTAssertEqual(state["state"] as? String, "working")
         XCTAssertEqual(state["host"] as? String, snapshot.host)
@@ -2374,7 +2541,7 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(owned.keys), ["id", "state", "actions", "host", "status"])
+        XCTAssertEqual(Set(owned.json.keys), ["id", "state", "actions", "host", "status"])
         XCTAssertEqual(owned["state"] as? String, "working")
         XCTAssertEqual(owned["host"] as? String, snapshot.host)
         XCTAssertNil((owned["review"] as? [String: Any])?["reviewToken"])
@@ -2419,7 +2586,7 @@ extension PopupRequestSessionsTests {
     func testSelectionCatalogRemovalRequiresSecureSetup() async throws {
         var refreshEvents = [String]()
         let catalog = WalletReviewCatalog(account: popupTestAccount())
-        var catalogAvailable = true
+        let catalogAvailable = LockedTestValue(true)
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 21), in: store)
         let processor = CompactPopupProcessor { request in
@@ -2436,7 +2603,7 @@ extension PopupRequestSessionsTests {
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: {
                     refreshEvents.append("catalog")
-                    return catalogAvailable ? catalog : nil
+                    return catalogAvailable.value ? catalog : nil
                 }
             ),
             loadsTransactionContext: false,
@@ -2452,13 +2619,13 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
         refreshEvents.removeAll()
-        catalogAvailable = false
+        catalogAvailable.value = false
         let response = await controller.dispatchJSON(
             request: request,
             profileIdentifier: nil
         )
 
-        XCTAssertEqual(Set(response.keys), ["id", "state", "actions", "host", "error", "status"])
+        XCTAssertEqual(Set(response.json.keys), ["id", "state", "actions", "host", "error", "status"])
         XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"])
         XCTAssertEqual(response["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertEqual(response["state"] as? String, "error")
@@ -3100,10 +3267,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupProcessor(),
-            walletEnvironment: popupWalletEnvironment { _, _ in
+            walletEnvironment: popupWalletEnvironment(unlockWallets: { _, _ in
                 authentications += 1
                 return authentications == 1 ? .unavailable : .canceled
-            },
+            }),
             loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
@@ -3348,7 +3515,7 @@ extension PopupRequestSessionsTests {
         }
     }
 
-    func testAuthenticationPreflightAndExecutionShareOneDeadline() async throws {
+    func testAuthenticationPreflightCatalogAndExecutionShareOneDeadline() async throws {
         let clock = CompactExecutionClock(Date(timeIntervalSince1970: 1_900_000_000))
         let deadline = clock.now.addingTimeInterval(150)
         let store = try makeStore(clock: { clock.now })
@@ -3376,15 +3543,17 @@ extension PopupRequestSessionsTests {
             },
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
-                prepare: { incoming, _, _, onUpdate, _, completion in
+                prepare: { incoming, _, _ in
+                    let source = PopupPreparationSource()
                     transaction = popupPreparedTransaction(incoming)
-                    onUpdate(transaction)
-                    completion(.success(transaction))
-                    return EthereumRequestCancellation()
+                    source.update(transaction)
+                    source.resolve(.success(transaction))
+                    return source.stream
                 },
-                preflight: { _, _, completion in
-                    preflightCompletion = completion
-                    return EthereumRequestCancellation()
+                preflight: { _, _ in
+                    let source = PopupPreflightSource()
+                    preflightCompletion = source.resolve
+                    return try await source.value(cancellation: nil)
                 }
             ),
             signingNetworkResolver: popupSigningNetwork,
@@ -3407,11 +3576,11 @@ extension PopupRequestSessionsTests {
         try await waitForCondition { deadlines.count == 2 && preflightCompletion != nil }
         clock.now = deadline.addingTimeInterval(-5)
         preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
-        try await waitForCondition { deadlines.count == 3 && executionStarted }
-        XCTAssertEqual(deadlines, [deadline, deadline, deadline])
+        try await waitForCondition { deadlines.count == 4 && executionStarted }
+        XCTAssertEqual(deadlines, [deadline, deadline, deadline, deadline])
         await executionGate.open()
         _ = await task.value
-        try await waitForCondition { cancelledTimers == 3 }
+        try await waitForCondition { cancelledTimers == 4 }
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "complete"])
     }
@@ -3440,18 +3609,20 @@ extension PopupRequestSessionsTests {
             },
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
-                prepare: { transaction, _, _, onUpdate, _, completion in
+                prepare: { transaction, _, _ in
+                    let source = PopupPreparationSource()
                     let prepared = popupPreparedTransaction(transaction)
-                    onUpdate(prepared)
-                    completion(.success(prepared))
-                    return EthereumRequestCancellation()
+                    source.update(prepared)
+                    source.resolve(.success(prepared))
+                    return source.stream
                 },
-                preflight: { transaction, _, completion in
+                preflight: { transaction, _ in
+                    let source = PopupPreflightSource()
                     var updated = transaction
                     updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
-                    completion(.walletManagedUpdated(updated, popupTransactionEstimate()))
+                    source.resolve(.walletManagedUpdated(updated, popupTransactionEstimate()))
                     clock.now = deadline
-                    return EthereumRequestCancellation()
+                    return try await source.value(cancellation: nil)
                 }
             ),
             signingNetworkResolver: popupSigningNetwork,
@@ -3699,16 +3870,18 @@ extension PopupRequestSessionsTests {
                 ),
                 loadsTransactionContext: false,
                 transactionApprovalOperations: TransactionApprovalOperations(
-                    prepare: { transaction, _, _, onUpdate, _, completion in
+                    prepare: { transaction, _, _ in
+                        let source = PopupPreparationSource()
                         let prepared = popupPreparedTransaction(transaction)
-                        onUpdate(prepared)
-                        completion(.success(prepared))
-                        return EthereumRequestCancellation()
+                        source.update(prepared)
+                        source.resolve(.success(prepared))
+                        return source.stream
                     },
-                    preflight: { transaction, _, completion in
+                    preflight: { transaction, _ in
+                        let source = PopupPreflightSource()
                         XCTFail("A mismatched signer must not reach transaction preflight")
-                        completion(.unavailable(transaction, popupTransactionEstimate()))
-                        return EthereumRequestCancellation()
+                        source.resolve(.unavailable(transaction, popupTransactionEstimate()))
+                        return try await source.value(cancellation: nil)
                     }
                 ),
                 signingNetworkResolver: popupSigningNetwork
@@ -4141,7 +4314,7 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(id: 415, provider: .ethereum, method: "signTransaction"), in: store)
         let account = popupTestAccount()
         let catalog = WalletReviewCatalog(account: account)
-        var accessIsCurrent = true
+        let accessIsCurrent = LockedTestValue(true)
         var rotateDuringSigning = true
         let sender = PopupBroadcastSender { _, _ in
                     await store.record("broadcastSent")
@@ -4150,7 +4323,7 @@ extension PopupRequestSessionsTests {
         }
         let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess, permit in
             if rotateDuringSigning {
-                accessIsCurrent = false
+                accessIsCurrent.value = false
             }
             return popupPreparedBroadcast(permit: permit)
         }) { request, _ in
@@ -4163,7 +4336,7 @@ extension PopupRequestSessionsTests {
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
                     .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(authorization: authorization, isCurrent: {
-                        accessIsCurrent
+                        accessIsCurrent.value
                     }))
                 }
             ),
@@ -4192,7 +4365,7 @@ extension PopupRequestSessionsTests {
 
         XCTAssertEqual(events, ["claim", "abandon"])
 
-        accessIsCurrent = true
+        accessIsCurrent.value = true
         rotateDuringSigning = false
         _ = try await retryApproval(controller: controller, snapshot: snapshot)
         let retryToken = try await materializeToken(
@@ -4370,26 +4543,28 @@ extension PopupRequestSessionsTests {
             },
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
-                prepare: { transaction, forceGasCheck, _, onUpdate, onFeeEstimate, completion in
+                prepare: { transaction, forceGasCheck, _ in
+                    let source = PopupPreparationSource()
                     preparationInputs.append(transaction)
                     preparationGasChecks.append(forceGasCheck)
                     var prepared = popupPreparedTransaction(transaction)
                     if forceGasCheck { prepared.gas = "0x10000" }
                     preparedGasLimits.append(prepared.gas)
-                    onFeeEstimate(popupTransactionEstimate())
-                    onUpdate(prepared)
-                    completion(.success(prepared))
-                    return EthereumRequestCancellation()
+                    source.estimate(popupTransactionEstimate())
+                    source.update(prepared)
+                    source.resolve(.success(prepared))
+                    return source.stream
                 },
-                preflight: { _, _, _ in
+                preflight: { _, _ in
+                    let source = PopupPreflightSource()
                     XCTFail("Cancelled authentication must not start preflight")
-                    return EthereumRequestCancellation()
+                    return try await source.value(cancellation: nil)
                 }
             ),
             signingNetworkResolver: popupSigningNetwork
         )
         let initialToken = try await materializeToken(controller: controller, snapshot: snapshot)
-        let edited = await controller.dispatchJSON(request: try popupCommand(
+        let edited = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "applyTransactionEdits", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken, reviewToken: initialToken,
             payload: ["mode": "custom", "nonce": "7", "gasPriceGwei": "0.000000025"]
@@ -4431,7 +4606,7 @@ extension PopupRequestSessionsTests {
         XCTAssertNotEqual(freshTransaction.feeProvenance.gasPrice, .manual)
 
         let staleApproval = await controller.dispatchJSON(request: approve, profileIdentifier: nil)
-        let staleEdit = await controller.dispatchJSON(request: try popupCommand(
+        let staleEdit = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "applyTransactionEdits", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken, reviewToken: editedToken,
             payload: ["mode": "custom", "nonce": "8", "gasPriceGwei": "0.00000003"]
@@ -4445,7 +4620,7 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "abandon"])
 
-        let reset = await controller.dispatchJSON(request: try popupCommand(
+        let reset = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "applyTransactionEdits", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken, reviewToken: freshToken,
             payload: ["mode": "suggested"]
@@ -4465,21 +4640,24 @@ extension PopupRequestSessionsTests {
         )
         var pendingNonce = "0x5"
         let operations = TransactionApprovalOperations(
-            prepare: { transaction, _, _, onUpdate, onFeeEstimate, completion in
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 var prepared = transaction
                 prepared.nonce = prepared.nonce ?? pendingNonce
-                onFeeEstimate(popupTransactionEstimate())
-                onUpdate(prepared)
-                completion(.success(prepared))
-                return EthereumRequestCancellation()
+                source.estimate(popupTransactionEstimate())
+                source.update(prepared)
+                source.resolve(.success(prepared))
+                return source.stream
             },
-            preflight: { _, _, _ in
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
                 XCTFail("Cancelled authentication must not start preflight")
-                return EthereumRequestCancellation()
+                return try await source.value(cancellation: nil)
             }
         )
         let original = PopupTransactionSession(action: action, operations: operations)
         original.start()
+        await settleTransactionPreparation(original)
         XCTAssertEqual(original.snapshot.transaction.decimalNonceString, "5")
         let token = try XCTUnwrap(original.beginApproval())
         guard case .reviewRequired = await original.finishAuthentication(token: token, succeeded: false) else {
@@ -4488,6 +4666,7 @@ extension PopupRequestSessionsTests {
         pendingNonce = "0x6"
         let restored = PopupTransactionSession(action: action, operations: operations)
         restored.start()
+        await settleTransactionPreparation(restored)
         XCTAssertEqual(restored.snapshot.transaction.decimalNonceString, "6")
         XCTAssertEqual(restored.snapshot.suggestedNonce, "6")
         XCTAssertTrue(restored.applyEdits(.suggested, chain: network))
@@ -4529,7 +4708,7 @@ extension PopupRequestSessionsTests {
             signingNetworkResolver: { $0 == network.network.chainId ? network : nil }
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
-        let edited = await controller.dispatchJSON(request: try popupCommand(
+        let edited = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "applyTransactionEdits", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken, reviewToken: token,
             payload: ["mode": "custom", "nonce": "7", "gasPriceGwei": "0.000000025"]
@@ -4578,7 +4757,7 @@ extension PopupRequestSessionsTests {
             signingNetworkResolver: popupSigningNetwork
         )
         let token = try await materializeToken(controller: controller, snapshot: first)
-        let edited = await controller.dispatchJSON(request: try popupCommand(
+        let edited = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "applyTransactionEdits", id: first.handle.id,
             requestToken: first.handle.requestToken, reviewToken: token,
             payload: ["mode": "custom", "nonce": "7", "gasPriceGwei": "0.000000025"]
@@ -4615,7 +4794,7 @@ extension PopupRequestSessionsTests {
         XCTAssertNotEqual(next.handle.requestToken, first.handle.requestToken)
         XCTAssertEqual(next.request?.authorizedAccount, replacement)
 
-        let state = await controller.dispatchJSON(request: try popupCommand(
+        let state = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "getApprovalState", id: next.handle.id,
             requestToken: next.handle.requestToken
         ), profileIdentifier: nil)
@@ -4668,22 +4847,24 @@ extension PopupRequestSessionsTests {
             },
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
-                prepare: { transaction, _, _, onUpdate, _, completion in
+                prepare: { transaction, _, _ in
+                    let source = PopupPreparationSource()
                     let prepared = popupPreparedTransaction(transaction)
-                    onUpdate(prepared)
-                    completion(.success(prepared))
-                    return EthereumRequestCancellation()
+                    source.update(prepared)
+                    source.resolve(.success(prepared))
+                    return source.stream
                 },
-                preflight: { transaction, _, completion in
+                preflight: { transaction, _ in
+                    let source = PopupPreflightSource()
                     preflights += 1
                     if preflights == 1 {
                         var updated = transaction
                         updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
-                        completion(.walletManagedUpdated(updated, popupTransactionEstimate()))
+                        source.resolve(.walletManagedUpdated(updated, popupTransactionEstimate()))
                     } else {
-                        completion(.safe(transaction, popupTransactionEstimate()))
+                        source.resolve(.safe(transaction, popupTransactionEstimate()))
                     }
-                    return EthereumRequestCancellation()
+                    return try await source.value(cancellation: nil)
                 }
             ),
             signingNetworkResolver: popupSigningNetwork
@@ -4712,7 +4893,7 @@ extension PopupRequestSessionsTests {
         let stale = await controller.dispatchJSON(request: approve, profileIdentifier: nil)
         XCTAssertEqual(stale["status"] as? String, "ignored")
         XCTAssertEqual(sessions.count, 1)
-        let acknowledged = await controller.dispatchJSON(request: try popupCommand(
+        let acknowledged = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "resolveApprovalAlert", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken, reviewToken: warningToken,
             payload: ["action": "acknowledge"]
@@ -4935,7 +5116,7 @@ extension PopupRequestSessionsTests {
         let remainingCatalog = WalletReviewCatalog(
             accounts: Array(catalog.orderedAccounts.prefix(1)), identity: catalog.identity
         )
-        var currentCatalog = catalog
+        let currentCatalog = LockedTestValue(catalog)
         var preparations = 0
         let signingAccess = PopupRecordingWalletSigningAccess()
         let controller = PopupRequestSessions(
@@ -4955,14 +5136,14 @@ extension PopupRequestSessionsTests {
                 )))
             },
             walletEnvironment: PopupWalletEnvironment(
-                reviewCatalog: { currentCatalog },
+                reviewCatalog: { currentCatalog.value },
                 unlockWallets: { _, authorization in
-                    currentCatalog = remainingCatalog
-                    return .unlocked(catalog: currentCatalog, session: makeWalletSigningSessionForTesting(
+                    currentCatalog.value = remainingCatalog
+                    return .unlocked(catalog: currentCatalog.value, session: makeWalletSigningSessionForTesting(
                         signingAccess, authorization: authorization,
                         isCurrent: {
-                            currentCatalog.identity == catalog.identity &&
-                                currentCatalog.orderedAccounts.contains(where: {
+                            currentCatalog.value.identity == catalog.identity &&
+                                currentCatalog.value.orderedAccounts.contains(where: {
                                     authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
                                 })
                         }
@@ -5311,15 +5492,17 @@ extension PopupRequestSessionsTests {
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         var dispatchCompleted = false
         let operations = TransactionApprovalOperations(
-            prepare: { incoming, _, _, onUpdate, _, completion in
+            prepare: { incoming, _, _ in
+                let source = PopupPreparationSource()
                 transaction = popupPreparedTransaction(incoming)
-                onUpdate(transaction)
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+                source.update(transaction)
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { _, _, completion in
-                preflightCompletion = completion
-                return EthereumRequestCancellation()
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
+                preflightCompletion = source.resolve
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -5410,17 +5593,19 @@ extension PopupRequestSessionsTests {
         var executionCount = 0
         let backingAccess = PopupRecordingWalletSigningAccess()
         let operations = TransactionApprovalOperations(
-            prepare: { transaction, _, _, onUpdate, _, completion in
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                onUpdate(prepared)
-                completion(.success(prepared))
-                return EthereumRequestCancellation()
+                source.update(prepared)
+                source.resolve(.success(prepared))
+                return source.stream
             },
-            preflight: { canonical, _, completion in
+            preflight: { canonical, _ in
+                let source = PopupPreflightSource()
                 var approved = approvedTransaction
                 approved.id = canonical.id
-                completion(.safe(approved, popupTransactionEstimate()))
-                return EthereumRequestCancellation()
+                source.resolve(.safe(approved, popupTransactionEstimate()))
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -5531,17 +5716,19 @@ extension PopupRequestSessionsTests {
         var authenticationCount = 0
         var resolveCount = 0
         let operations = TransactionApprovalOperations(
-            prepare: { transaction, _, _, onUpdate, _, completion in
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                onUpdate(prepared)
-                completion(.success(prepared))
-                return EthereumRequestCancellation()
+                source.update(prepared)
+                source.resolve(.success(prepared))
+                return source.stream
             },
-            preflight: { canonical, _, completion in
+            preflight: { canonical, _ in
+                let source = PopupPreflightSource()
                 var changed = changedTransaction
                 changed.id = canonical.id
-                completion(.safe(changed, popupTransactionEstimate()))
-                return EthereumRequestCancellation()
+                source.resolve(.safe(changed, popupTransactionEstimate()))
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -5623,15 +5810,17 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         var resolveCount = 0
         let operations = TransactionApprovalOperations(
-            prepare: { transaction, _, _, onUpdate, _, completion in
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                onUpdate(prepared)
-                completion(.success(prepared))
-                return EthereumRequestCancellation()
+                source.update(prepared)
+                source.resolve(.success(prepared))
+                return source.stream
             },
-            preflight: { transaction, _, completion in
-                completion(.safe(transaction, popupTransactionEstimate()))
-                return EthereumRequestCancellation()
+            preflight: { transaction, _ in
+                let source = PopupPreflightSource()
+                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -5700,15 +5889,17 @@ extension PopupRequestSessionsTests {
         let network = popupTransactionNetwork()
         var resolveCount = 0
         let operations = TransactionApprovalOperations(
-            prepare: { transaction, _, _, onUpdate, _, completion in
+            prepare: { transaction, _, _ in
+                let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                onUpdate(prepared)
-                completion(.success(prepared))
-                return EthereumRequestCancellation()
+                source.update(prepared)
+                source.resolve(.success(prepared))
+                return source.stream
             },
-            preflight: { transaction, _, completion in
-                completion(.safe(transaction, popupTransactionEstimate()))
-                return EthereumRequestCancellation()
+            preflight: { transaction, _ in
+                let source = PopupPreflightSource()
+                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -5822,17 +6013,19 @@ extension PopupRequestSessionsTests {
         var preflightCount = 0
         var resolveCount = 0
         let operations = TransactionApprovalOperations(
-            prepare: { incoming, _, _, onUpdate, _, completion in
+            prepare: { incoming, _, _ in
+                let source = PopupPreparationSource()
                 transaction = popupPreparedTransaction(incoming)
-                preparationUpdate = onUpdate
-                onUpdate(transaction)
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+                preparationUpdate = source.update
+                source.update(transaction)
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { transaction, _, completion in
+            preflight: { transaction, _ in
+                let source = PopupPreflightSource()
                 preflightCount += 1
-                completion(.safe(transaction, popupTransactionEstimate()))
-                return EthereumRequestCancellation()
+                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -5933,7 +6126,7 @@ extension PopupRequestSessionsTests {
         var transaction = popupReadyTransaction()
         let catalog = WalletReviewCatalog(account: popupTestAccount())
         var access: WalletSigningSession!
-        let cancellation = EthereumRequestCancellation()
+        let cancellation = PopupCancellationRecorder()
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         var dispatchCompleted = false
         var executionCount = 0
@@ -5962,15 +6155,17 @@ extension PopupRequestSessionsTests {
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
-                prepare: { incoming, _, _, onUpdate, _, completion in
+                prepare: { incoming, _, _ in
+                    let source = PopupPreparationSource()
                     transaction = popupPreparedTransaction(incoming)
-                    onUpdate(transaction)
-                    completion(.success(transaction))
-                    return EthereumRequestCancellation()
+                    source.update(transaction)
+                    source.resolve(.success(transaction))
+                    return source.stream
                 },
-                preflight: { _, _, completion in
-                    preflightCompletion = completion
-                    return cancellation
+                preflight: { _, _ in
+                    let source = PopupPreflightSource()
+                    preflightCompletion = source.resolve
+                    return try await source.value(cancellation: cancellation)
                 }
             ),
             signingNetworkResolver: popupSigningNetwork
@@ -5989,7 +6184,7 @@ extension PopupRequestSessionsTests {
             return result
         }
         try await waitForCondition { preflightCompletion != nil }
-        let request = try XCTUnwrap(snapshot.request)
+        _ = try XCTUnwrap(snapshot.request)
         let released = await store.bridge.abandon(claim: try XCTUnwrap(activeClaim))
         XCTAssertEqual(released, .persisted)
         _ = await store.completeImmediate(
@@ -6019,7 +6214,7 @@ extension PopupRequestSessionsTests {
             var transaction = popupReadyTransaction()
             let catalog = WalletReviewCatalog(account: popupTestAccount())
             var access: WalletSigningSession!
-            let cancellation = EthereumRequestCancellation()
+            let cancellation = PopupCancellationRecorder()
             var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
             var dispatchCompleted = false
             var executionCount = 0
@@ -6047,15 +6242,17 @@ extension PopupRequestSessionsTests {
                 ),
                 loadsTransactionContext: false,
                 transactionApprovalOperations: TransactionApprovalOperations(
-                    prepare: { incoming, _, _, onUpdate, _, completion in
+                    prepare: { incoming, _, _ in
+                        let source = PopupPreparationSource()
                         transaction = popupPreparedTransaction(incoming)
-                        onUpdate(transaction)
-                        completion(.success(transaction))
-                        return EthereumRequestCancellation()
+                        source.update(transaction)
+                        source.resolve(.success(transaction))
+                        return source.stream
                     },
-                    preflight: { _, _, completion in
-                        preflightCompletion = completion
-                        return cancellation
+                    preflight: { _, _ in
+                        let source = PopupPreflightSource()
+                        preflightCompletion = source.resolve
+                        return try await source.value(cancellation: cancellation)
                     }
                 ),
                 signingNetworkResolver: popupSigningNetwork,
@@ -6100,15 +6297,17 @@ extension PopupRequestSessionsTests {
         let network = popupTransactionNetwork()
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
         let operations = TransactionApprovalOperations(
-            prepare: { incoming, _, _, onUpdate, _, completion in
+            prepare: { incoming, _, _ in
+                let source = PopupPreparationSource()
                 transaction = popupPreparedTransaction(incoming)
-                onUpdate(transaction)
-                completion(.success(transaction))
-                return EthereumRequestCancellation()
+                source.update(transaction)
+                source.resolve(.success(transaction))
+                return source.stream
             },
-            preflight: { _, _, completion in
-                preflightCompletion = completion
-                return EthereumRequestCancellation()
+            preflight: { _, _ in
+                let source = PopupPreflightSource()
+                preflightCompletion = source.resolve
+                return try await source.value(cancellation: nil)
             }
         )
         let processor = CompactPopupProcessor { request in
@@ -6874,7 +7073,7 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         var resolves = 0
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
-            guard case .accountSelection(_, let selection) = approval.kind else {
+            guard case .accountSelection = approval.kind else {
                 XCTFail("Expected account selection")
                 return approvedFailureForTesting(.internalError, permit: permit)
             }
@@ -6958,7 +7157,7 @@ extension PopupRequestSessionsTests {
             var signerCreations = 0
             let signingAccess = PopupRecordingWalletSigningAccess()
             let request = try XCTUnwrap(snapshot.request)
-            let recovery = EthereumDappRequestProcessor.transactionSubmissionUnknownResponse(
+            _ = EthereumDappRequestProcessor.transactionSubmissionUnknownResponse(
                 to: request, transactionHash: try popupTransactionHashForTesting()
             )
             let sender = PopupBroadcastSender { _, _ in
@@ -7091,7 +7290,7 @@ extension PopupRequestSessionsTests {
             decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
         )
 
-        let request = try XCTUnwrap(snapshot.request)
+        _ = try XCTUnwrap(snapshot.request)
         let processor = CompactPopupProcessor { _ in
             XCTFail("Revision mismatch must not rematerialize or resolve")
             return .immediate(.failure(.internalError))
@@ -7224,7 +7423,7 @@ extension PopupRequestSessionsTests {
         )
 
         nativeClock.now = now.addingTimeInterval(-1)
-        let request = try XCTUnwrap(snapshot.request)
+        _ = try XCTUnwrap(snapshot.request)
         let finalizer = NativeApprovalFinalizer(
             store: store,
             requestProcessor: CompactPopupProcessor { _ in
@@ -7276,7 +7475,7 @@ extension PopupRequestSessionsTests {
             )
 
             nativeClock.now = now.addingTimeInterval(-1)
-            let request = try XCTUnwrap(snapshot.request)
+            _ = try XCTUnwrap(snapshot.request)
             let finalizer = NativeApprovalFinalizer(
                 store: store,
                 requestProcessor: CompactPopupProcessor { _ in
@@ -7936,7 +8135,7 @@ extension PopupRequestSessionsTests {
         snapshot: ExtensionBridge.Snapshot,
         action: DappRequestAction,
         onPresentation: @escaping () -> Void = {},
-        attempt: @escaping (ExtensionBridge.Snapshot, ReviewConsent) async -> NativeApprovalFinalizationResult
+        attempt: @escaping @MainActor @Sendable (ExtensionBridge.Snapshot, ReviewConsent) async -> NativeApprovalFinalizationResult
     ) -> NativeApprovalCoordinator {
         let coordinator = NativeApprovalCoordinator(
             handle: snapshot.handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
@@ -7947,7 +8146,7 @@ extension PopupRequestSessionsTests {
                 attemptNativeDecision: attempt
             )
         )
-        coordinator.onEvent = { [weak coordinator] event in
+        coordinator.onEvent = { [weak coordinator] (event: NativeApprovalCoordinator.Event) in
             switch event {
             case .authenticationRequired:
                 coordinator?.resumeAfterAuthentication()
@@ -8177,8 +8376,8 @@ extension PopupRequestSessionsTests {
     private func retryApproval(
         controller: PopupRequestSessions,
         snapshot: ExtensionBridge.Snapshot
-    ) async throws -> [String: Any] {
-        await controller.dispatchJSON(request: try popupCommand(
+    ) async throws -> WireProtocol.JSONObject {
+        try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "retryApproval", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken
         ), profileIdentifier: snapshot.handle.profileIdentifier)
@@ -8193,7 +8392,7 @@ extension PopupRequestSessionsTests {
             id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken
         )
-        let state = await controller.dispatchJSON(
+        let state = try await controller.dispatchPreparedJSON(
             request: request,
             profileIdentifier: snapshot.handle.profileIdentifier
         )
@@ -8231,6 +8430,17 @@ private final class CompactPopupProcessor: DappRequestProcessing {
         popupSigningNetwork(chainID: chainID).map(EthereumNetworkResolution.resolved)
             ?? Nodes.resolution(chainId: chainID)
     })
+
+    convenience init(
+        walletIndependent: Bool = false,
+        handler: @escaping (SafariRequest) -> UnboundDappRequestPreparation
+    ) {
+        self.init(
+            walletIndependent: walletIndependent,
+            execute: { _, _, _, permit in approvedFailureForTesting(.userRejected, permit: permit) },
+            handler: handler
+        )
+    }
 
     init(
         walletIndependent: Bool = false,
@@ -8300,22 +8510,24 @@ private final class CompactPopupAccessProcessor: DappRequestProcessing {
     }
 }
 
-private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess, @unchecked Sendable {
-    private let lock = NSLock()
-    private var recordedOperations = [ApprovedWalletSigningOperation]()
-    private var invalidations = 0
+private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess {
+    private struct State {
+        var recordedOperations = [ApprovedWalletSigningOperation]()
+        var invalidations = 0
+    }
+    private let state = Mutex(State())
 
     var operations: [ApprovedWalletSigningOperation] {
-        lock.withLock { recordedOperations }
+        state.withLock { $0.recordedOperations }
     }
 
     var invalidationCount: Int {
-        lock.withLock { invalidations }
+        state.withLock { $0.invalidations }
     }
 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        lock.withLock { recordedOperations.append(operation) }
+        state.withLock { $0.recordedOperations.append(operation) }
         if case .ethereumTransaction(let transaction, let network) = operation.payload {
             guard let key = WalletPrivateKey(data: Data(repeating: 1, count: 32)),
                   case .success(let signed) = Ethereum.signedTransaction(
@@ -8329,7 +8541,7 @@ private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess,
     }
 
     func invalidate() {
-        lock.withLock { invalidations += 1 }
+        state.withLock { $0.invalidations += 1 }
     }
 }
 
@@ -8416,77 +8628,33 @@ private actor CompactPopupGate {
     }
 }
 
-private final class CompactExecutionClock: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: Date
+private final class CompactExecutionClock: Sendable {
+    private let value: Mutex<Date>
 
-    init(_ value: Date) {
-        self.value = value
-    }
+    init(_ value: Date) { self.value = Mutex(value) }
 
     var now: Date {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return value
-        }
-        set {
-            lock.lock()
-            value = newValue
-            lock.unlock()
-        }
+        get { value.withLock { $0 } }
+        set { value.withLock { $0 = newValue } }
     }
 }
 
-private final class CompactExecutionLeaseState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var held: Bool
-    private var heldAtDurableCommit = false
-    private var releasedBeforeBroadcast = false
-
-    init(held: Bool = true) {
-        self.held = held
+private final class CompactExecutionLeaseState: Sendable {
+    private struct State {
+        var held: Bool
+        var heldAtDurableCommit = false
+        var releasedBeforeBroadcast = false
     }
+    private let state: Mutex<State>
 
-    func acquire() {
-        lock.withLock { held = true }
-    }
-
-    var wasHeldAtDurableCommit: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return heldAtDurableCommit
-    }
-
-    var wasReleasedBeforeBroadcast: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return releasedBeforeBroadcast
-    }
-
-    var isReleased: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return !held
-    }
-
-    func observeDurableCommit() {
-        lock.lock()
-        heldAtDurableCommit = heldAtDurableCommit || held
-        lock.unlock()
-    }
-
-    func observeBroadcast() {
-        lock.lock()
-        releasedBeforeBroadcast = !held
-        lock.unlock()
-    }
-
-    func release() {
-        lock.lock()
-        held = false
-        lock.unlock()
-    }
+    init(held: Bool = true) { state = Mutex(State(held: held)) }
+    func acquire() { state.withLock { $0.held = true } }
+    var wasHeldAtDurableCommit: Bool { state.withLock { $0.heldAtDurableCommit } }
+    var wasReleasedBeforeBroadcast: Bool { state.withLock { $0.releasedBeforeBroadcast } }
+    var isReleased: Bool { state.withLock { !$0.held } }
+    func observeDurableCommit() { state.withLock { $0.heldAtDurableCommit = $0.heldAtDurableCommit || $0.held } }
+    func observeBroadcast() { state.withLock { $0.releasedBeforeBroadcast = !$0.held } }
+    func release() { state.withLock { $0.held = false } }
 }
 
 private extension SafariRequest {
@@ -8575,15 +8743,17 @@ private func popupTransactionHashForTesting() throws -> String {
 @MainActor
 private func popupImmediateTransactionOperations() -> TransactionApprovalOperations {
     TransactionApprovalOperations(
-        prepare: { transaction, _, _, onUpdate, _, completion in
+        prepare: { transaction, _, _ in
+            let source = PopupPreparationSource()
             let prepared = popupPreparedTransaction(transaction)
-            onUpdate(prepared)
-            completion(.success(prepared))
-            return EthereumRequestCancellation()
+            source.update(prepared)
+            source.resolve(.success(prepared))
+            return source.stream
         },
-        preflight: { transaction, _, completion in
-            completion(.safe(transaction, popupTransactionEstimate()))
-            return EthereumRequestCancellation()
+        preflight: { transaction, _ in
+            let source = PopupPreflightSource()
+            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            return try await source.value(cancellation: nil)
         }
     )
 }
@@ -8860,8 +9030,8 @@ private func popupCommand(
 
 @MainActor
 private func popupWalletEnvironment(
-    reviewCatalog: (() -> WalletReviewCatalog?)? = nil,
-    unlockWallets: @escaping (String, WalletSigningAuthorization) async -> WalletUnlockResult = { _, _ in .canceled }
+    reviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
+    unlockWallets: @escaping @MainActor @Sendable (String, WalletSigningAuthorization) async -> WalletUnlockResult = { _, _ in .canceled }
 ) -> PopupWalletEnvironment {
     let catalog = WalletReviewCatalog(account: popupTestAccount())
     return PopupWalletEnvironment(
@@ -8872,22 +9042,44 @@ private func popupWalletEnvironment(
 
 @MainActor
 private extension PopupRequestSessions {
+    func dispatchPreparedJSON(
+        request: InternalSafariRequest,
+        profileIdentifier: UUID?
+    ) async throws -> WireProtocol.JSONObject {
+        var state = await dispatchJSON(request: request, profileIdentifier: profileIdentifier)
+        let status = state["status"]
+        let deadline = ContinuousClock.now + .seconds(2)
+        while let review = state["review"] as? [String: Any],
+              review["kind"] as? String == "sendTransaction",
+              review["canBackOffRefresh"] as? Bool == false {
+            guard ContinuousClock.now < deadline else { throw PopupRequestSessionsTestError.timedOut }
+            try await Task.sleep(for: .milliseconds(1))
+            state = await dispatchJSON(
+                request: try popupCommand(subject: "getApprovalState", id: request.id, requestToken: request.requestToken),
+                profileIdentifier: profileIdentifier
+            )
+        }
+        var json = state.json
+        json["status"] = status
+        return try XCTUnwrap(WireProtocol.JSONObject(json))
+    }
+
     func dispatchJSON(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> [String: Any] {
+    ) async -> WireProtocol.JSONObject {
         let json = popupResponseJSON(await dispatch(request: request, profileIdentifier: profileIdentifier))
-        if case .popup(.getPendingRequests) = request.command { return json }
+        if case .popup(.getPendingRequests) = request.command { return WireProtocol.JSONObject(json)! }
         XCTAssertEqual(Set(json.keys), ["status", "approval"])
         let status = json["status"] as? String
         XCTAssertTrue(["ok", "ignored", "unavailable"].contains(status ?? ""))
         if var approval = json["approval"] as? [String: Any] {
             XCTAssertEqual(approval["id"] as? Int, request.id)
             approval["status"] = status
-            return approval
+            return WireProtocol.JSONObject(approval)!
         }
         XCTAssertNotEqual(status, "ok")
         XCTAssertTrue(json["approval"] is NSNull)
-        return json
+        return WireProtocol.JSONObject(json)!
     }
 }

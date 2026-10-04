@@ -4,6 +4,7 @@ import CoreFoundation
 import CryptoKit
 import Darwin
 import Foundation
+import Synchronization
 import Security
 
 @_silgen_name("flock")
@@ -299,7 +300,7 @@ protocol AlchemyJWTRefreshLocking: AnyObject, Sendable {
 
 }
 
-final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProviding {
+final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
 
     static let shared = AlchemyJWTProvider.makeShared()
 
@@ -376,13 +377,13 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         case timedOut
     }
 
-    private struct CachedRecord {
+    private struct CachedRecord: Sendable {
         let record: AlchemyJWTRecord
         let tokenDigest: Data
         let persistenceRevision: UInt64?
     }
 
-    private struct State {
+    private struct State: Sendable {
         var cachedRecord: CachedRecord?
         var tombstones: [Data: AlchemyJWTRejectionTombstone] = [:]
         var lastPersistedState: AlchemyJWTPersistedState?
@@ -426,13 +427,12 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
 #endif
     }()
 
-    private static let notificationName = CFNotificationName(
-        rawValue: "org.lil.wallet.alchemyJWTDidChange.v1" as CFString
-    )
+    private static var notificationName: CFNotificationName {
+        CFNotificationName(rawValue: "org.lil.wallet.alchemyJWTDidChange.v1" as CFString)
+    }
 
-    private let stateLock = NSLock()
-    private let persistenceMutationLock = NSLock()
-    private var state: State
+    private let state: Mutex<State>
+    private let persistenceMutation = Mutex(())
     private let tokenStore: AlchemyJWTStoring
     private let broker: AlchemyJWTBrokerFetching
     private let refreshLock: AlchemyJWTRefreshLocking
@@ -451,8 +451,8 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
     private let proactiveRefreshSleep:
         @Sendable (UInt64) async throws -> Void
     private let notificationCenter: NotificationCenter
-    private var changeObserver: AlchemyJWTDarwinObserver?
-    private var clockChangeObserver: NSObjectProtocol?
+    private let changeObserver = Mutex<AlchemyJWTDarwinObserver?>(nil)
+    private let clockChangeObserver = Mutex<NSObjectProtocol?>(nil)
 
     init(
         tokenStore: AlchemyJWTStoring,
@@ -510,44 +510,49 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
                 sleep: persistenceRepairCooldownSleep
             )
         self.notificationCenter = notificationCenter
-        self.changeObserver = nil
-        self.clockChangeObserver = nil
-        self.state = State()
+        self.state = Mutex(State())
 
-        self.clockChangeObserver = notificationCenter.addObserver(
+        clockChangeObserver.withLock { observer in
+            observer = notificationCenter.addObserver(
             forName: .NSSystemClockDidChange,
             object: nil,
             queue: nil
         ) { [weak self] _ in
             guard let self else { return }
-            self.synchronizeProactiveRefresh(at: self.nowSeconds())
+                self.synchronizeProactiveRefresh(at: self.nowSeconds())
+            }
         }
 
         if observesCrossProcessChanges {
-            self.changeObserver = AlchemyJWTDarwinObserver(
+            changeObserver.withLock { observer in
+                observer = AlchemyJWTDarwinObserver(
                 name: Self.notificationName
             ) { [weak self] in
-                self?.reloadFromPersistence()
+                    self?.reloadFromPersistence()
+                }
             }
         }
     }
 
     deinit {
-        if let clockChangeObserver {
-            notificationCenter.removeObserver(clockChangeObserver)
+        clockChangeObserver.withLock { observer in
+            if let observer { notificationCenter.removeObserver(observer) }
+            observer = nil
         }
-        stateLock.lock()
-        let task = state.proactiveRefreshTask
-        state.proactiveRefreshGeneration &+= 1
-        state.proactiveRefreshTokenDigest = nil
-        state.proactiveRefreshAt = nil
-        state.proactiveRefreshDeadline = nil
-        state.proactiveRefreshInFlightGeneration = nil
-        state.proactiveRefreshTask = nil
-        stateLock.unlock()
+        let task = state.withLock { state in
+            let task = state.proactiveRefreshTask
+            state.proactiveRefreshGeneration &+= 1
+            state.proactiveRefreshTokenDigest = nil
+            state.proactiveRefreshAt = nil
+            state.proactiveRefreshDeadline = nil
+            state.proactiveRefreshInFlightGeneration = nil
+            state.proactiveRefreshTask = nil
+            return task
+        }
         task?.cancel()
     }
 
+    @concurrent
     func authorization(for url: URL) async throws -> AlchemyAuthorization? {
         guard Self.isAlchemyRPCURL(url) else { return nil }
 
@@ -570,6 +575,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         return AlchemyAuthorization(token: record.token)
     }
 
+    @concurrent
     func replacementAuthorization(
         afterUnauthorized rejected: AlchemyAuthorization,
         for url: URL
@@ -647,6 +653,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         }
     }
 
+    @concurrent
     func invalidateAuthorization(
         afterUnauthorized rejected: AlchemyAuthorization,
         for url: URL
@@ -685,6 +692,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         return provider().prewarm()
     }
 
+    @concurrent
     func prewarmForImmediateUse() async {
         let currentTime = nowSeconds()
         if usableMemoryRecord(at: currentTime) != nil
@@ -781,85 +789,60 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
 
     private func synchronizeProactiveRefresh(at currentTime: Int64) {
         let currentUptime = uptimeNanoseconds()
-
-        stateLock.lock()
-        guard let cachedRecord = state.cachedRecord,
-              cachedRecord.record.isTimeUsable(at: currentTime),
-              state.tombstones[cachedRecord.tokenDigest] == nil,
-              let refreshAt = cachedRecord.record.proactiveRefreshAt else {
-            let previousTask = state.proactiveRefreshTask
-            state.cachedRecord = nil
-            state.proactiveRefreshGeneration &+= 1
-            state.proactiveRefreshTokenDigest = nil
-            state.proactiveRefreshAt = nil
-            state.proactiveRefreshDeadline = nil
-            state.proactiveRefreshInFlightGeneration = nil
-            state.proactiveRefreshTask = nil
-            stateLock.unlock()
-            previousTask?.cancel()
-            return
-        }
-        let tokenDigest = cachedRecord.tokenDigest
-
-        if state.proactiveRefreshTask != nil,
-           state.proactiveRefreshTokenDigest == tokenDigest,
-           state.proactiveRefreshInFlightGeneration
-                == state.proactiveRefreshGeneration {
-            stateLock.unlock()
-            return
-        }
-
-        let wallDelay = Self.nanosecondsUntil(
-            refreshAt,
-            from: currentTime
-        )
-        let wallDeadline = Self.monotonicDeadline(
-            after: wallDelay,
-            from: currentUptime
-        )
-        let deadline = max(
-            wallDeadline,
-            state.nextOpportunisticRefreshAt,
-            state.nextBrokerRequestAt
-        )
-        if state.proactiveRefreshTask != nil,
-           state.proactiveRefreshTokenDigest == tokenDigest,
-           state.proactiveRefreshAt == refreshAt,
-           let currentDeadline = state.proactiveRefreshDeadline,
-           Self.absoluteDifference(currentDeadline, deadline)
-               <= Self.proactiveScheduleClockToleranceNanoseconds {
-            stateLock.unlock()
-            return
-        }
-
-        let previousTask = state.proactiveRefreshTask
-        state.proactiveRefreshGeneration &+= 1
-        let generation = state.proactiveRefreshGeneration
-        state.proactiveRefreshTokenDigest = tokenDigest
-        state.proactiveRefreshAt = refreshAt
-        state.proactiveRefreshDeadline = deadline
-        state.proactiveRefreshInFlightGeneration = nil
-        let delay = deadline > currentUptime
-            ? deadline - currentUptime
-            : 0
-        let proactiveRefreshSleep = self.proactiveRefreshSleep
-        let task = Task(priority: .utility) { [weak self] in
-            do {
-                try await proactiveRefreshSleep(delay)
-            } catch {
-                self?.clearProactiveRefreshSchedule(
-                    generation: generation,
-                    tokenDigest: tokenDigest
-                )
-                return
+        let previousTask = state.withLock { state -> Task<Void, Never>? in
+            guard let cachedRecord = state.cachedRecord,
+                cachedRecord.record.isTimeUsable(at: currentTime),
+                state.tombstones[cachedRecord.tokenDigest] == nil,
+                let refreshAt = cachedRecord.record.proactiveRefreshAt
+            else {
+                let previousTask = state.proactiveRefreshTask
+                state.cachedRecord = nil
+                state.proactiveRefreshGeneration &+= 1
+                state.proactiveRefreshTokenDigest = nil
+                state.proactiveRefreshAt = nil
+                state.proactiveRefreshDeadline = nil
+                state.proactiveRefreshInFlightGeneration = nil
+                state.proactiveRefreshTask = nil
+                return previousTask
             }
-            await self?.proactiveRefreshTimerFired(
-                generation: generation,
-                tokenDigest: tokenDigest
-            )
+            let tokenDigest = cachedRecord.tokenDigest
+            if state.proactiveRefreshTask != nil,
+                state.proactiveRefreshTokenDigest == tokenDigest,
+                state.proactiveRefreshInFlightGeneration == state.proactiveRefreshGeneration
+            {
+                return nil
+            }
+            let wallDelay = Self.nanosecondsUntil(refreshAt, from: currentTime)
+            let wallDeadline = Self.monotonicDeadline(after: wallDelay, from: currentUptime)
+            let deadline = max(wallDeadline, state.nextOpportunisticRefreshAt, state.nextBrokerRequestAt)
+            if state.proactiveRefreshTask != nil,
+                state.proactiveRefreshTokenDigest == tokenDigest,
+                state.proactiveRefreshAt == refreshAt,
+                let currentDeadline = state.proactiveRefreshDeadline,
+                Self.absoluteDifference(currentDeadline, deadline) <= Self.proactiveScheduleClockToleranceNanoseconds
+            {
+                return nil
+            }
+            let previousTask = state.proactiveRefreshTask
+            state.proactiveRefreshGeneration &+= 1
+            let generation = state.proactiveRefreshGeneration
+            state.proactiveRefreshTokenDigest = tokenDigest
+            state.proactiveRefreshAt = refreshAt
+            state.proactiveRefreshDeadline = deadline
+            state.proactiveRefreshInFlightGeneration = nil
+            let delay = deadline > currentUptime ? deadline - currentUptime : 0
+            let proactiveRefreshSleep = self.proactiveRefreshSleep
+            state.proactiveRefreshTask = Task(priority: .utility) { [weak self] in
+                do {
+                    try await proactiveRefreshSleep(delay)
+                } catch {
+                    self?.clearProactiveRefreshSchedule(generation: generation, tokenDigest: tokenDigest)
+                    return
+                }
+                await self?.proactiveRefreshTimerFired(generation: generation, tokenDigest: tokenDigest)
+            }
+            return previousTask
         }
-        state.proactiveRefreshTask = task
-        stateLock.unlock()
         previousTask?.cancel()
     }
 
@@ -867,18 +850,18 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         generation: UInt64,
         tokenDigest: Data
     ) {
-        stateLock.lock()
-        guard state.proactiveRefreshGeneration == generation,
-              state.proactiveRefreshTokenDigest == tokenDigest else {
-            stateLock.unlock()
-            return
+        state.withLock { state in
+            guard state.proactiveRefreshGeneration == generation,
+                state.proactiveRefreshTokenDigest == tokenDigest
+            else {
+                return
+            }
+            state.proactiveRefreshTokenDigest = nil
+            state.proactiveRefreshAt = nil
+            state.proactiveRefreshDeadline = nil
+            state.proactiveRefreshInFlightGeneration = nil
+            state.proactiveRefreshTask = nil
         }
-        state.proactiveRefreshTokenDigest = nil
-        state.proactiveRefreshAt = nil
-        state.proactiveRefreshDeadline = nil
-        state.proactiveRefreshInFlightGeneration = nil
-        state.proactiveRefreshTask = nil
-        stateLock.unlock()
     }
 
     private func proactiveRefreshTimerFired(
@@ -933,33 +916,34 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         tokenDigest: Data,
         at currentTime: Int64
     ) -> AlchemyJWTRecord? {
-        stateLock.lock()
-        guard state.proactiveRefreshGeneration == generation,
-              state.proactiveRefreshTokenDigest == tokenDigest else {
-            stateLock.unlock()
-            return nil
-        }
-
-        guard let cachedRecord = state.cachedRecord,
-              cachedRecord.tokenDigest == tokenDigest,
-              cachedRecord.record.isTimeUsable(at: currentTime),
-              state.tombstones[tokenDigest] == nil else {
-            if let cachedRecord = state.cachedRecord,
-               !cachedRecord.record.isTimeUsable(at: currentTime)
-                    || state.tombstones[cachedRecord.tokenDigest] != nil {
-                state.cachedRecord = nil
+        return state.withLock { state in
+            guard state.proactiveRefreshGeneration == generation,
+                state.proactiveRefreshTokenDigest == tokenDigest
+            else {
+                return nil
             }
-            state.proactiveRefreshTokenDigest = nil
-            state.proactiveRefreshAt = nil
-            state.proactiveRefreshDeadline = nil
-            state.proactiveRefreshInFlightGeneration = nil
-            state.proactiveRefreshTask = nil
-            stateLock.unlock()
-            return nil
+
+            guard let cachedRecord = state.cachedRecord,
+                cachedRecord.tokenDigest == tokenDigest,
+                cachedRecord.record.isTimeUsable(at: currentTime),
+                state.tombstones[tokenDigest] == nil
+            else {
+                if let cachedRecord = state.cachedRecord,
+                    !cachedRecord.record.isTimeUsable(at: currentTime)
+                        || state.tombstones[cachedRecord.tokenDigest] != nil
+                {
+                    state.cachedRecord = nil
+                }
+                state.proactiveRefreshTokenDigest = nil
+                state.proactiveRefreshAt = nil
+                state.proactiveRefreshDeadline = nil
+                state.proactiveRefreshInFlightGeneration = nil
+                state.proactiveRefreshTask = nil
+                return nil
+            }
+            state.proactiveRefreshInFlightGeneration = generation
+            return cachedRecord.record
         }
-        state.proactiveRefreshInFlightGeneration = generation
-        stateLock.unlock()
-        return cachedRecord.record
     }
 
     private func refresh(intent: RefreshIntent) async throws -> AlchemyJWTRecord {
@@ -989,6 +973,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         }
     }
 
+    @concurrent
     private func performRefresh(intent: RefreshIntent) async throws
         -> AlchemyJWTRecord {
         let currentTime = nowSeconds()
@@ -1171,11 +1156,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
             _ = mergePersistedState(persistedState, at: currentTime)
         }
 
-        let recordToPersist: AlchemyJWTRecord
-        do {
-            persistenceMutationLock.lock()
-            defer { persistenceMutationLock.unlock() }
-
+        let outcome = try persistenceMutation.withLock { _ -> (record: AlchemyJWTRecord, saved: Bool) in
             let snapshot = persistenceSnapshot(at: currentTime)
             let tombstonedDigests = Set(
                 snapshot.tombstones.map(\.tokenDigest)
@@ -1185,6 +1166,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
                 throw ProviderError.invalidBrokerResponse
             }
 
+            let recordToPersist: AlchemyJWTRecord
             let currentPersistedRecord =
                 snapshot.persistedState?.record.flatMap {
                     let digest = Self.tokenDigest($0.token)
@@ -1207,12 +1189,13 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
             do {
                 try tokenStore.save(envelope)
             } catch {
-                return fetchedRecord
+                return (fetchedRecord, false)
             }
             _ = mergePersistedState(envelope, at: currentTime)
+            return (recordToPersist, true)
         }
-        Self.postChangeNotification()
-        return recordToPersist
+        if outcome.saved { Self.postChangeNotification() }
+        return outcome.record
     }
 
     @discardableResult
@@ -1261,37 +1244,36 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
     }
 
     private func saveRejectionEnvelope(at currentTime: Int64) -> Bool {
-        persistenceMutationLock.lock()
-        defer { persistenceMutationLock.unlock() }
+        return persistenceMutation.withLock { _ in
+            let snapshot = persistenceSnapshot(at: currentTime)
+            let tombstonedDigests = Set(
+                snapshot.tombstones.map(\.tokenDigest)
+            )
+            let revision: UInt64
+            do {
+                revision = try nextPersistenceRevision(snapshot.revision)
+            } catch {
+                return false
+            }
+            let retainedRecord = bestPersistableRecord(
+                at: currentTime,
+                persistedState: snapshot.persistedState,
+                tombstonedDigests: tombstonedDigests
+            )
+            let envelope = AlchemyJWTPersistedState(
+                revision: revision,
+                record: retainedRecord,
+                tombstones: snapshot.tombstones
+            )
 
-        let snapshot = persistenceSnapshot(at: currentTime)
-        let tombstonedDigests = Set(
-            snapshot.tombstones.map(\.tokenDigest)
-        )
-        let revision: UInt64
-        do {
-            revision = try nextPersistenceRevision(snapshot.revision)
-        } catch {
-            return false
+            do {
+                try tokenStore.save(envelope)
+            } catch {
+                return false
+            }
+            _ = mergePersistedState(envelope, at: currentTime)
+            return true
         }
-        let retainedRecord = bestPersistableRecord(
-            at: currentTime,
-            persistedState: snapshot.persistedState,
-            tombstonedDigests: tombstonedDigests
-        )
-        let envelope = AlchemyJWTPersistedState(
-            revision: revision,
-            record: retainedRecord,
-            tombstones: snapshot.tombstones
-        )
-
-        do {
-            try tokenStore.save(envelope)
-        } catch {
-            return false
-        }
-        _ = mergePersistedState(envelope, at: currentTime)
-        return true
     }
 
     private func acquireRefreshLock(
@@ -1343,19 +1325,15 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
     }
 
     private func usableMemoryRecord(at currentTime: Int64) -> AlchemyJWTRecord? {
-        stateLock.lock()
-        guard let record = state.cachedRecord?.record else {
-            stateLock.unlock()
-            synchronizeProactiveRefresh(at: currentTime)
-            return nil
+        let record = state.withLock { state -> AlchemyJWTRecord? in
+            guard let record = state.cachedRecord?.record else { return nil }
+            guard record.isTimeUsable(at: currentTime) else {
+                state.cachedRecord = nil
+                return nil
+            }
+            return record
         }
-        guard record.isTimeUsable(at: currentTime) else {
-            state.cachedRecord = nil
-            stateLock.unlock()
-            synchronizeProactiveRefresh(at: currentTime)
-            return nil
-        }
-        stateLock.unlock()
+        if record == nil { synchronizeProactiveRefresh(at: currentTime) }
         return record
     }
 
@@ -1372,57 +1350,61 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
     }
 
     private func isRefreshAttemptAllowed(for intent: RefreshIntent) -> Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
+        return state.withLock { state in
 
-        let currentUptime = uptimeNanoseconds()
-        guard currentUptime >= state.nextBrokerRequestAt else {
-            return false
-        }
+            let currentUptime = uptimeNanoseconds()
+            guard currentUptime >= state.nextBrokerRequestAt else {
+                return false
+            }
 
-        switch intent {
-        case .opportunistic, .immediateUsePrewarm:
-            return currentUptime >= state.nextOpportunisticRefreshAt
-        case .demand:
-            return currentUptime >= state.nextDemandRefreshAt
-        case .unauthorized:
-            return true
+            switch intent {
+            case .opportunistic, .immediateUsePrewarm:
+                return currentUptime >= state.nextOpportunisticRefreshAt
+            case .demand:
+                return currentUptime >= state.nextDemandRefreshAt
+            case .unauthorized:
+                return true
+            }
         }
     }
 
     private func memoryRecord() -> AlchemyJWTRecord? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return state.cachedRecord?.record
+        return state.withLock { state in
+            return state.cachedRecord?.record
+        }
     }
 
     private func requiresPersistenceRepair() -> Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
+        return state.withLock { state in
 
-        if let cachedRecord = state.cachedRecord,
-           cachedRecord.persistenceRevision == nil {
-            return true
-        }
+            if let cachedRecord = state.cachedRecord,
+                cachedRecord.persistenceRevision == nil
+            {
+                return true
+            }
 
-        let persistedTombstones = state.lastPersistedState?.tombstones ?? []
-        if state.tombstones.isEmpty, persistedTombstones.isEmpty {
-            return false
-        }
+            let persistedTombstones = state.lastPersistedState?.tombstones ?? []
+            if state.tombstones.isEmpty, persistedTombstones.isEmpty {
+                return false
+            }
 
-        let localTombstones = Self.tombstonesByDigest(
-            state.tombstones.values
-        )
-        guard localTombstones == Self.tombstonesByDigest(
-            persistedTombstones
-        ) else {
-            return true
-        }
+            let localTombstones = Self.tombstonesByDigest(
+                state.tombstones.values
+            )
+            guard
+                localTombstones
+                    == Self.tombstonesByDigest(
+                        persistedTombstones
+                    )
+            else {
+                return true
+            }
 
-        guard let persistedRecord = state.lastPersistedState?.record else {
-            return false
+            guard let persistedRecord = state.lastPersistedState?.record else {
+                return false
+            }
+            return localTombstones[Self.tokenDigest(persistedRecord.token)] != nil
         }
-        return localTombstones[Self.tokenDigest(persistedRecord.token)] != nil
     }
 
     private func schedulePersistenceRepairIfNeeded() {
@@ -1441,6 +1423,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         }
     }
 
+    @concurrent
     private func runPersistenceRepairWindow() async -> Bool {
         guard requiresPersistenceRepair() else { return true }
 
@@ -1506,10 +1489,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
             _ = mergePersistedState(persistedState, at: currentTime)
         }
 
-        do {
-            persistenceMutationLock.lock()
-            defer { persistenceMutationLock.unlock() }
-
+        let outcome = persistenceMutation.withLock { _ -> (succeeded: Bool, changed: Bool) in
             let snapshot = persistenceSnapshot(at: currentTime)
             let tombstonedDigests = Set(
                 snapshot.tombstones.map(\.tokenDigest)
@@ -1524,13 +1504,13 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
                currentPersistedState.record == recordToPersist,
                Self.tombstonesByDigest(currentPersistedState.tombstones)
                     == Self.tombstonesByDigest(snapshot.tombstones) {
-                return true
+                return (true, false)
             }
             let revision: UInt64
             do {
                 revision = try nextPersistenceRevision(snapshot.revision)
             } catch {
-                return false
+                return (false, false)
             }
             let envelope = AlchemyJWTPersistedState(
                 revision: revision,
@@ -1540,12 +1520,13 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
             do {
                 try tokenStore.save(envelope)
             } catch {
-                return false
+                return (false, false)
             }
             _ = mergePersistedState(envelope, at: currentTime)
+            return (true, true)
         }
-        Self.postChangeNotification()
-        return true
+        if outcome.changed { Self.postChangeNotification() }
+        return outcome.succeeded
     }
 
     private func bestPersistableRecord(
@@ -1579,43 +1560,45 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         let currentTime = nowSeconds()
         let digest = Self.tokenDigest(token)
 
-        stateLock.lock()
-        let cachedMatchingRecord = state.cachedRecord.flatMap {
-            $0.record.token == token ? $0.record : nil
-        }
-        let rejectedRecord = knownRecord ?? cachedMatchingRecord
-        let fallbackExpiration = Self.addingWithoutOverflow(
-            currentTime,
-            Self.unknownTokenTombstoneLifetime
-        )
-        let tombstone = AlchemyJWTRejectionTombstone(
-            tokenDigest: digest,
-            rejectedAt: currentTime,
-            expiresAt: max(rejectedRecord?.expiresAt ?? fallbackExpiration, currentTime + 1)
-        )
-        if rejectedRecord != nil {
-            let previousRejection = state.tombstones[digest]?.rejectedAt
-                ?? Int64.min
-            state.tombstones[digest] = AlchemyJWTRejectionTombstone(
+        let rejectedRecord = state.withLock { state in
+            let cachedMatchingRecord = state.cachedRecord.flatMap {
+                $0.record.token == token ? $0.record : nil
+            }
+            let rejectedRecord = knownRecord ?? cachedMatchingRecord
+            let fallbackExpiration = Self.addingWithoutOverflow(
+                currentTime,
+                Self.unknownTokenTombstoneLifetime
+            )
+            let tombstone = AlchemyJWTRejectionTombstone(
                 tokenDigest: digest,
-                rejectedAt: max(previousRejection, currentTime),
-                expiresAt: tombstone.expiresAt
+                rejectedAt: currentTime,
+                expiresAt: max(rejectedRecord?.expiresAt ?? fallbackExpiration, currentTime + 1)
             )
-        } else {
-            Self.merge(
-                tombstone,
-                into: &state.tombstones
+            if rejectedRecord != nil {
+                let previousRejection =
+                    state.tombstones[digest]?.rejectedAt
+                    ?? Int64.min
+                state.tombstones[digest] = AlchemyJWTRejectionTombstone(
+                    tokenDigest: digest,
+                    rejectedAt: max(previousRejection, currentTime),
+                    expiresAt: tombstone.expiresAt
+                )
+            } else {
+                Self.merge(
+                    tombstone,
+                    into: &state.tombstones
+                )
+            }
+            state.tombstones = Self.trimmedTombstones(
+                state.tombstones.values,
+                at: currentTime,
+                preserving: digest
             )
+            if cachedMatchingRecord != nil {
+                state.cachedRecord = nil
+            }
+            return rejectedRecord
         }
-        state.tombstones = Self.trimmedTombstones(
-            state.tombstones.values,
-            at: currentTime,
-            preserving: digest
-        )
-        if cachedMatchingRecord != nil {
-            state.cachedRecord = nil
-        }
-        stateLock.unlock()
         synchronizeProactiveRefresh(at: currentTime)
         return rejectedRecord
     }
@@ -1628,95 +1611,98 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         let currentUptime = uptimeNanoseconds()
         let digest = Self.tokenDigest(record.token)
 
-        stateLock.lock()
-        state.tombstones = Self.trimmedTombstones(
-            state.tombstones.values,
-            at: currentTime
-        )
-        if let cached = state.cachedRecord {
-            if state.tombstones[cached.tokenDigest] != nil
-                || !cached.record.isTimeUsable(at: currentTime) {
-                state.cachedRecord = nil
-            }
-        }
-        guard state.tombstones[digest] == nil else {
-            stateLock.unlock()
-            return nil
-        }
-
-        if let existing = state.cachedRecord,
-           existing.record.token != record.token,
-           existing.record.issuedAt >= record.issuedAt {
-        } else {
-            let existingRevision: UInt64?
-            if state.cachedRecord?.record.token == record.token {
-                existingRevision = state.cachedRecord?.persistenceRevision
-            } else {
-                existingRevision = nil
-            }
-            state.cachedRecord = CachedRecord(
-                record: record,
-                tokenDigest: digest,
-                persistenceRevision: existingRevision
+        return state.withLock { state in
+            state.tombstones = Self.trimmedTombstones(
+                state.tombstones.values,
+                at: currentTime
             )
+            if let cached = state.cachedRecord {
+                if state.tombstones[cached.tokenDigest] != nil
+                    || !cached.record.isTimeUsable(at: currentTime)
+                {
+                    state.cachedRecord = nil
+                }
+            }
+            guard state.tombstones[digest] == nil else {
+                return nil
+            }
+
+            if let existing = state.cachedRecord,
+                existing.record.token != record.token,
+                existing.record.issuedAt >= record.issuedAt
+            {
+            } else {
+                let existingRevision: UInt64?
+                if state.cachedRecord?.record.token == record.token {
+                    existingRevision = state.cachedRecord?.persistenceRevision
+                } else {
+                    existingRevision = nil
+                }
+                state.cachedRecord = CachedRecord(
+                    record: record,
+                    tokenDigest: digest,
+                    persistenceRevision: existingRevision
+                )
+            }
+            let installedRecord = state.cachedRecord?.record
+            if case .opportunistic = intent,
+                let installedRecord,
+                installedRecord.shouldRefresh(at: currentTime)
+            {
+                Self.advanceOpportunisticBackoff(&state, at: currentUptime)
+            } else {
+                state.opportunisticFailures = 0
+                state.nextOpportunisticRefreshAt = 0
+            }
+            state.demandFailures = 0
+            state.nextDemandRefreshAt = 0
+            return installedRecord
         }
-        let installedRecord = state.cachedRecord?.record
-        if case .opportunistic = intent,
-           let installedRecord,
-           installedRecord.shouldRefresh(at: currentTime) {
-            advanceOpportunisticBackoffLocked(at: currentUptime)
-        } else {
-            state.opportunisticFailures = 0
-            state.nextOpportunisticRefreshAt = 0
-        }
-        state.demandFailures = 0
-        state.nextDemandRefreshAt = 0
-        stateLock.unlock()
-        return installedRecord
     }
 
     private func recordRefreshFailure(
         for intent: RefreshIntent,
         error: Error
     ) {
-        stateLock.lock()
-        let currentUptime = uptimeNanoseconds()
-        if let brokerError = error as? AlchemyJWTBrokerError,
-           case .rateLimited(let retryAfterSeconds) = brokerError {
-            let deadline = Self.monotonicDeadline(
-                after: Self.nanoseconds(
-                    seconds: TimeInterval(max(retryAfterSeconds, 0))
-                ),
-                from: currentUptime
-            )
-            state.nextBrokerRequestAt = max(
-                state.nextBrokerRequestAt,
-                deadline
-            )
-            stateLock.unlock()
-            return
-        }
+        state.withLock { state in
+            let currentUptime = uptimeNanoseconds()
+            if let brokerError = error as? AlchemyJWTBrokerError,
+                case .rateLimited(let retryAfterSeconds) = brokerError
+            {
+                let deadline = Self.monotonicDeadline(
+                    after: Self.nanoseconds(
+                        seconds: TimeInterval(max(retryAfterSeconds, 0))
+                    ),
+                    from: currentUptime
+                )
+                state.nextBrokerRequestAt = max(
+                    state.nextBrokerRequestAt,
+                    deadline
+                )
+                return
+            }
 
-        switch intent {
-        case .opportunistic, .immediateUsePrewarm:
-            advanceOpportunisticBackoffLocked(at: currentUptime)
-        case .demand:
-            state.demandFailures = min(state.demandFailures + 1, 5)
-            let delay = min(
-                0.25 * pow(2, Double(state.demandFailures - 1)),
-                4
-            )
-            state.nextDemandRefreshAt = Self.monotonicDeadline(
-                after: Self.nanoseconds(seconds: delay),
-                from: currentUptime
-            )
-        case .unauthorized:
-            break
+            switch intent {
+            case .opportunistic, .immediateUsePrewarm:
+                Self.advanceOpportunisticBackoff(&state, at: currentUptime)
+            case .demand:
+                state.demandFailures = min(state.demandFailures + 1, 5)
+                let delay = min(
+                    0.25 * pow(2, Double(state.demandFailures - 1)),
+                    4
+                )
+                state.nextDemandRefreshAt = Self.monotonicDeadline(
+                    after: Self.nanoseconds(seconds: delay),
+                    from: currentUptime
+                )
+            case .unauthorized:
+                break
+            }
         }
-        stateLock.unlock()
     }
 
-    private func advanceOpportunisticBackoffLocked(
+    private static func advanceOpportunisticBackoff(
+        _ state: inout State,
         at currentUptime: UInt64
     ) {
         state.opportunisticFailures = min(
@@ -1737,98 +1723,102 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         _ persistedState: AlchemyJWTPersistedState?,
         at currentTime: Int64
     ) -> AlchemyJWTRecord? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
+        return state.withLock { state in
 
-        state.tombstones = Self.trimmedTombstones(
-            state.tombstones.values,
-            at: currentTime
-        )
+            state.tombstones = Self.trimmedTombstones(
+                state.tombstones.values,
+                at: currentTime
+            )
 
-        if let cached = state.cachedRecord {
-            if state.tombstones[cached.tokenDigest] != nil
-                || !cached.record.isTimeUsable(at: currentTime) {
-                state.cachedRecord = nil
+            if let cached = state.cachedRecord {
+                if state.tombstones[cached.tokenDigest] != nil
+                    || !cached.record.isTimeUsable(at: currentTime)
+                {
+                    state.cachedRecord = nil
+                }
             }
-        }
 
-        guard let persistedState,
-              persistedState.version ==
-                  AlchemyJWTPersistedState.currentVersion else {
-            return state.cachedRecord?.record
-        }
-        if let lastPersistedState = state.lastPersistedState {
-            guard persistedState.revision > lastPersistedState.revision else {
+            guard let persistedState,
+                persistedState.version == AlchemyJWTPersistedState.currentVersion
+            else {
                 return state.cachedRecord?.record
             }
-        }
-
-        let candidate = persistedState.record
-        let usableCandidateDigest = candidate.flatMap { record -> Data? in
-            guard record.isUsable(at: currentTime) else { return nil }
-            return Self.tokenDigest(record.token)
-        }
-        for tombstone in persistedState.tombstones
-            where tombstone.isLive(at: currentTime) {
-            Self.merge(tombstone, into: &state.tombstones)
-        }
-        let rejectedPersistedRecordDigest = usableCandidateDigest.flatMap {
-            state.tombstones[$0] == nil ? nil : $0
-        }
-        state.tombstones = Self.trimmedTombstones(
-            state.tombstones.values,
-            at: currentTime,
-            preserving: rejectedPersistedRecordDigest
-        )
-        state.lastPersistedState = persistedState
-
-        if let cached = state.cachedRecord {
-            if state.tombstones[cached.tokenDigest] != nil
-                || !cached.record.isTimeUsable(at: currentTime) {
-                state.cachedRecord = nil
+            if let lastPersistedState = state.lastPersistedState {
+                guard persistedState.revision > lastPersistedState.revision else {
+                    return state.cachedRecord?.record
+                }
             }
-        }
 
-        guard let candidate,
-              let usableCandidateDigest,
-              state.tombstones[usableCandidateDigest] == nil else {
+            let candidate = persistedState.record
+            let usableCandidateDigest = candidate.flatMap { record -> Data? in
+                guard record.isUsable(at: currentTime) else { return nil }
+                return Self.tokenDigest(record.token)
+            }
+            for tombstone in persistedState.tombstones
+            where tombstone.isLive(at: currentTime) {
+                Self.merge(tombstone, into: &state.tombstones)
+            }
+            let rejectedPersistedRecordDigest = usableCandidateDigest.flatMap {
+                state.tombstones[$0] == nil ? nil : $0
+            }
+            state.tombstones = Self.trimmedTombstones(
+                state.tombstones.values,
+                at: currentTime,
+                preserving: rejectedPersistedRecordDigest
+            )
+            state.lastPersistedState = persistedState
+
+            if let cached = state.cachedRecord {
+                if state.tombstones[cached.tokenDigest] != nil
+                    || !cached.record.isTimeUsable(at: currentTime)
+                {
+                    state.cachedRecord = nil
+                }
+            }
+
+            guard let candidate,
+                let usableCandidateDigest,
+                state.tombstones[usableCandidateDigest] == nil
+            else {
+                return state.cachedRecord?.record
+            }
+
+            let shouldInstall: Bool
+            if let current = state.cachedRecord {
+                if candidate.token == current.record.token {
+                    shouldInstall = true
+                } else if candidate.issuedAt > current.record.issuedAt {
+                    shouldInstall = true
+                } else if candidate.issuedAt == current.record.issuedAt,
+                    let currentRevision = current.persistenceRevision,
+                    persistedState.revision > currentRevision
+                {
+                    shouldInstall = true
+                } else {
+                    shouldInstall = false
+                }
+            } else {
+                shouldInstall = true
+            }
+
+            if shouldInstall {
+                let installsDifferentFreshToken =
+                    state.cachedRecord?.record.token != candidate.token
+                    && !candidate.shouldRefresh(at: currentTime)
+                state.cachedRecord = CachedRecord(
+                    record: candidate,
+                    tokenDigest: usableCandidateDigest,
+                    persistenceRevision: persistedState.revision
+                )
+                if installsDifferentFreshToken {
+                    state.opportunisticFailures = 0
+                    state.nextOpportunisticRefreshAt = 0
+                    state.demandFailures = 0
+                    state.nextDemandRefreshAt = 0
+                }
+            }
             return state.cachedRecord?.record
         }
-
-        let shouldInstall: Bool
-        if let current = state.cachedRecord {
-            if candidate.token == current.record.token {
-                shouldInstall = true
-            } else if candidate.issuedAt > current.record.issuedAt {
-                shouldInstall = true
-            } else if candidate.issuedAt == current.record.issuedAt,
-                      let currentRevision = current.persistenceRevision,
-                      persistedState.revision > currentRevision {
-                shouldInstall = true
-            } else {
-                shouldInstall = false
-            }
-        } else {
-            shouldInstall = true
-        }
-
-        if shouldInstall {
-            let installsDifferentFreshToken =
-                state.cachedRecord?.record.token != candidate.token
-                && !candidate.shouldRefresh(at: currentTime)
-            state.cachedRecord = CachedRecord(
-                record: candidate,
-                tokenDigest: usableCandidateDigest,
-                persistenceRevision: persistedState.revision
-            )
-            if installsDifferentFreshToken {
-                state.opportunisticFailures = 0
-                state.nextOpportunisticRefreshAt = 0
-                state.demandFailures = 0
-                state.nextDemandRefreshAt = 0
-            }
-        }
-        return state.cachedRecord?.record
     }
 
     private func persistenceSnapshot(
@@ -1838,35 +1828,35 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         persistedState: AlchemyJWTPersistedState?,
         tombstones: [AlchemyJWTRejectionTombstone]
     ) {
-        stateLock.lock()
-        state.tombstones = Self.trimmedTombstones(
-            state.tombstones.values,
-            at: currentTime
-        )
-        let persistedState = state.lastPersistedState
-        let revision = persistedState?.revision ?? 0
-        let tombstones = state.tombstones.values.sorted {
-            if $0.rejectedAt == $1.rejectedAt {
-                return $0.tokenDigest.lexicographicallyPrecedes(
-                    $1.tokenDigest
-                )
+        return state.withLock { state in
+            state.tombstones = Self.trimmedTombstones(
+                state.tombstones.values,
+                at: currentTime
+            )
+            let persistedState = state.lastPersistedState
+            let revision = persistedState?.revision ?? 0
+            let tombstones = state.tombstones.values.sorted {
+                if $0.rejectedAt == $1.rejectedAt {
+                    return $0.tokenDigest.lexicographicallyPrecedes(
+                        $1.tokenDigest
+                    )
+                }
+                return $0.rejectedAt > $1.rejectedAt
             }
-            return $0.rejectedAt > $1.rejectedAt
+            return (revision, persistedState, tombstones)
         }
-        stateLock.unlock()
-        return (revision, persistedState, tombstones)
     }
 
     private func isTombstoned(_ token: String, at currentTime: Int64) -> Bool {
         let digest = Self.tokenDigest(token)
-        stateLock.lock()
-        state.tombstones = Self.trimmedTombstones(
-            state.tombstones.values,
-            at: currentTime
-        )
-        let isTombstoned = state.tombstones[digest] != nil
-        stateLock.unlock()
-        return isTombstoned
+        return state.withLock { state in
+            state.tombstones = Self.trimmedTombstones(
+                state.tombstones.values,
+                at: currentTime
+            )
+            let isTombstoned = state.tombstones[digest] != nil
+            return isTombstoned
+        }
     }
 
     private func nextPersistenceRevision(
@@ -2352,7 +2342,7 @@ private actor AlchemyJWTPersistenceRepairCoordinator {
 }
 
 private final class AlchemyJWTKeychainStore:
-    @unchecked Sendable,
+    Sendable,
     AlchemyJWTStoring {
 
     private let accessGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"
@@ -2429,7 +2419,7 @@ private final class AlchemyJWTKeychainStore:
 }
 
 final class CrossProcessFileLock:
-    @unchecked Sendable,
+    Sendable,
     AlchemyJWTRefreshLocking {
 
     private enum FileLockError: Error {
@@ -2440,9 +2430,11 @@ final class CrossProcessFileLock:
     }
 
     private let fileURL: URL?
-    private let descriptorLock = NSLock()
-    private var descriptor: Int32 = -1
-    private var acquisitionInProgress = false
+    private struct DescriptorState {
+        var descriptor: Int32 = -1
+        var acquisitionInProgress = false
+    }
+    private let descriptorState = Mutex(DescriptorState())
 
     init(fileURL: URL?) {
         self.fileURL = fileURL
@@ -2486,13 +2478,13 @@ final class CrossProcessFileLock:
     private func tryAcquire(createIfMissing: Bool) throws -> Bool {
         guard let fileURL else { throw FileLockError.missingFileURL }
 
-        descriptorLock.lock()
-        guard descriptor < 0, !acquisitionInProgress else {
-            descriptorLock.unlock()
-            return false
-        }
-        acquisitionInProgress = true
-        descriptorLock.unlock()
+        guard
+            descriptorState.withLock({ state in
+                guard state.descriptor < 0, !state.acquisitionInProgress else { return false }
+                state.acquisitionInProgress = true
+                return true
+            })
+        else { return false }
 
         var flags = O_RDWR | O_CLOEXEC
         if createIfMissing {
@@ -2523,18 +2515,18 @@ final class CrossProcessFileLock:
             throw FileLockError.lockFailed
         }
 
-        descriptorLock.lock()
-        descriptor = openedDescriptor
-        acquisitionInProgress = false
-        descriptorLock.unlock()
+        descriptorState.withLock { state in
+            state.descriptor = openedDescriptor
+            state.acquisitionInProgress = false
+        }
         return true
     }
 
     func release() {
-        descriptorLock.lock()
-        let openedDescriptor = descriptor
-        descriptor = -1
-        descriptorLock.unlock()
+        let openedDescriptor = descriptorState.withLock { state in
+            defer { state.descriptor = -1 }
+            return state.descriptor
+        }
 
         guard openedDescriptor >= 0 else { return }
         _ = alchemySystemFlock(openedDescriptor, LOCK_UN)
@@ -2542,9 +2534,7 @@ final class CrossProcessFileLock:
     }
 
     private func finishFailedAcquisition() {
-        descriptorLock.lock()
-        acquisitionInProgress = false
-        descriptorLock.unlock()
+        descriptorState.withLock { $0.acquisitionInProgress = false }
     }
 
     deinit {
@@ -2588,14 +2578,12 @@ enum AlchemyJWTRequestProofError: Error, Equatable, Sendable {
     case secureRandomFailure
 }
 
-final class AlchemyJWTRequestProofSigner:
-    @unchecked Sendable,
-    AlchemyJWTRequestProofSigning {
+final class AlchemyJWTRequestProofSigner: AlchemyJWTRequestProofSigning {
 
     static let resourceName = "AlchemyJWTRequestProofKey"
     static let signingPrefix = AlchemyJWTBrokerContract.signingPrefix
 
-    private enum KeySource {
+    private enum KeySource: Sendable {
         case bundle(Bundle)
         case loaded(SymmetricKey)
     }
@@ -2607,8 +2595,7 @@ final class AlchemyJWTRequestProofSigner:
     private let keySource: KeySource
     private let now: @Sendable () -> Date
     private let nonceSource: @Sendable () throws -> Data
-    private let keyLock = NSLock()
-    private var cachedKey: SymmetricKey?
+    private let cachedKey: Mutex<SymmetricKey?>
 
     init(
         bundle: Bundle = .main,
@@ -2618,6 +2605,7 @@ final class AlchemyJWTRequestProofSigner:
         }
     ) {
         self.keySource = .bundle(bundle)
+        self.cachedKey = Mutex(nil)
         self.now = now
         self.nonceSource = nonceSource
     }
@@ -2634,7 +2622,7 @@ final class AlchemyJWTRequestProofSigner:
         self.keySource = .loaded(key)
         self.now = now
         self.nonceSource = nonceSource
-        self.cachedKey = key
+        self.cachedKey = Mutex(key)
     }
 
     func signedRequest() throws -> AlchemyJWTRequestProof {
@@ -2707,22 +2695,16 @@ final class AlchemyJWTRequestProofSigner:
     }
 
     private func signingKey() throws -> SymmetricKey {
-        keyLock.lock()
-        defer { keyLock.unlock() }
-
-        if let cachedKey {
-            return cachedKey
+        try cachedKey.withLock { cachedKey in
+            if let cachedKey { return cachedKey }
+            let key: SymmetricKey
+            switch keySource {
+            case .bundle(let bundle): key = SymmetricKey(data: try Self.loadKeyData(in: bundle))
+            case .loaded(let loadedKey): key = loadedKey
+            }
+            cachedKey = key
+            return key
         }
-
-        let key: SymmetricKey
-        switch keySource {
-        case .bundle(let bundle):
-            key = SymmetricKey(data: try Self.loadKeyData(in: bundle))
-        case .loaded(let loadedKey):
-            key = loadedKey
-        }
-        cachedKey = key
-        return key
     }
 
     private static func secureNonce() throws -> Data {
@@ -2772,7 +2754,7 @@ final class AlchemyJWTRequestProofSigner:
 }
 
 final class AlchemyJWTBrokerClient:
-    @unchecked Sendable,
+    Sendable,
     AlchemyJWTBrokerFetching {
 
     private let urlSession: URLSession
@@ -2787,6 +2769,7 @@ final class AlchemyJWTBrokerClient:
         self.proofSigner = proofSigner
     }
 
+    @concurrent
     func fetchToken() async throws -> AlchemyJWTRecord {
         let signedRequest = try proofSigner.signedRequest()
         var request = URLRequest(url: AlchemyJWTBrokerContract.endpoint)
@@ -2877,9 +2860,9 @@ final class AlchemyJWTBrokerClient:
 private final class AlchemyJWTDarwinObserver {
 
     private let name: CFNotificationName
-    private let callback: () -> Void
+    private let callback: @Sendable () -> Void
 
-    init(name: CFNotificationName, callback: @escaping () -> Void) {
+    init(name: CFNotificationName, callback: @escaping @Sendable () -> Void) {
         self.name = name
         self.callback = callback
 

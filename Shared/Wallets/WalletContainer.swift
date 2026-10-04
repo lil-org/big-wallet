@@ -2,6 +2,39 @@
 
 import Foundation
 
+struct WalletSnapshot: Hashable, Sendable {
+    let id: String
+    let isMnemonic: Bool
+    let accounts: [WalletAccount]
+
+    init(id: String, isMnemonic: Bool, accounts: [WalletAccount]) {
+        self.id = id
+        self.isMnemonic = isMnemonic
+        self.accounts = accounts
+    }
+
+    init(_ wallet: WalletContainer) {
+        self.init(id: wallet.id, isMnemonic: wallet.isMnemonic, accounts: wallet.accounts)
+    }
+
+    func hasAccountMatching(_ account: WalletAccount) -> Bool {
+        let normalizedAddress = account.coin.normalizedAddress(account.address)
+        return accounts.contains {
+            $0.coin == account.coin &&
+                $0.derivationPath == account.derivationPath &&
+                account.coin.normalizedAddress($0.address) == normalizedAddress
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 final class WalletContainer: Hashable, Equatable {
 
     let id: String

@@ -2,6 +2,7 @@
 
 import Cocoa
 
+@MainActor
 extension NSImage {
     
     func tinted(_ tintColor: NSColor) -> NSImage {

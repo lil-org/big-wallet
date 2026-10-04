@@ -2,6 +2,7 @@
 
 import UIKit
 
+@MainActor
 protocol AccountTableViewCellDelegate: AnyObject {
     
     func didTapMoreButton(accountCell: AccountTableViewCell)

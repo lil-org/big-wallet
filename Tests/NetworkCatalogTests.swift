@@ -3,12 +3,14 @@
 import CryptoKit
 import Dispatch
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
+@MainActor
 final class NetworkCatalogTests: XCTestCase {
 
-    func testCatalogInventoryGoldenSHA256() throws {
+    func testCatalogInventoryGoldenSHA256() async throws {
         let rows = try loadedCatalog().records
             .sorted { $0.chainId < $1.chainId }
             .map { String($0.chainId) }
@@ -19,7 +21,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCatalogAlchemyMappingGoldenSHA256() throws {
+    func testCatalogAlchemyMappingGoldenSHA256() async throws {
         let rows = try loadedCatalog().records
             .sorted { $0.chainId < $1.chainId }
             .compactMap { record -> String? in
@@ -33,7 +35,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCatalogFallbackMappingGoldenSHA256() throws {
+    func testCatalogFallbackMappingGoldenSHA256() async throws {
         let rows = try loadedCatalog().records
             .sorted { $0.chainId < $1.chainId }
             .compactMap { record -> String? in
@@ -47,7 +49,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCatalogMetadataGoldenSHA256() throws {
+    func testCatalogMetadataGoldenSHA256() async throws {
         let rows = try loadedCatalog().records
             .sorted { $0.chainId < $1.chainId }
             .map { record in
@@ -69,7 +71,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCatalogSemanticInvariantsAndNetworkProjection() throws {
+    func testCatalogSemanticInvariantsAndNetworkProjection() async throws {
         let catalog = try loadedCatalog()
         let records = catalog.records
 
@@ -151,7 +153,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testCatalogFeeMarketHintsAreRequiredExactAndConservative() throws {
+    func testCatalogFeeMarketHintsAreRequiredExactAndConservative() async throws {
         let catalog = try loadedCatalog()
         let ethereum = try XCTUnwrap(catalog.record(chainId: 1))
         let gnosis = try XCTUnwrap(catalog.record(chainId: 100))
@@ -169,7 +171,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testFeeMarketHintProjectionAndEndpointIdentity() throws {
+    func testFeeMarketHintProjectionAndEndpointIdentity() async throws {
         let checkedAt = "2026-07-23T00:00:00Z"
         let canonicalURL = try XCTUnwrap(
             AlchemyRPC.url(network: "eth-mainnet")
@@ -229,7 +231,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertTrue(mismatchedEndpoint.requiresFeeMarketDetection())
     }
 
-    func testEndpointEqualityAndHashIgnoreFeeMarketTimestamp() throws {
+    func testEndpointEqualityAndHashIgnoreFeeMarketTimestamp() async throws {
         let url = try XCTUnwrap(AlchemyRPC.url(network: "eth-mainnet"))
         let first = EthereumRPCEndpoint.catalog(
             url,
@@ -254,7 +256,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(Set([first, second]).count, 1)
     }
 
-    func testEveryCatalogEndpointHasOneOwner() throws {
+    func testEveryCatalogEndpointHasOneOwner() async throws {
         let catalog = try loadedCatalog()
         var ownerByEndpoint: [String: Int] = [:]
 
@@ -274,7 +276,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(ownerByEndpoint.count, catalog.records.count)
     }
 
-    func testBundledNetworkOwnershipMatchesCatalogExactly() throws {
+    func testBundledNetworkOwnershipMatchesCatalogExactly() async throws {
         let catalog = try loadedCatalog()
         let catalogChainIds = Set(catalog.records.map(\.chainId))
 
@@ -283,14 +285,14 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertFalse(BundledNetworkOwnership.chainIds.contains(64240))
     }
 
-    func testPinnedNetworkOrderRemainsStable() {
+    func testPinnedNetworkOrderRemainsStable() async {
         XCTAssertEqual(
             Networks.pinned.map(\.chainId),
             [1, 7777777, 10, 8453, 42161]
         )
     }
 
-    func testEveryNetworkListSharesOneOrder() {
+    func testEveryNetworkListSharesOneOrder() async {
         let ordered = Networks.ordered
         XCTAssertEqual(
             ordered.prefix(Networks.pinned.count).map(\.chainId),
@@ -306,7 +308,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testAcceptedConflictRecordsHaveExactOwnersAndMetadata() throws {
+    func testAcceptedConflictRecordsHaveExactOwnersAndMetadata() async throws {
         let catalog = try loadedCatalog()
         let expectations: [Int: ConflictExpectation] = [
             300: ConflictExpectation(
@@ -351,7 +353,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testBundledCatalogInventoryAndEndpointDescriptors() throws {
+    func testBundledCatalogInventoryAndEndpointDescriptors() async throws {
         let catalog = try NetworkCatalog.load(in: .main)
         let chainIds = catalog.records.map(\.chainId)
         let alchemyRecords = catalog.records.filter { $0.alchemyNetwork != nil }
@@ -367,7 +369,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertFalse(chainIds.contains(64240))
     }
 
-    func testAccountDisabledAlchemyNetworksAreExplicitFallbackExceptions() throws {
+    func testAccountDisabledAlchemyNetworksAreExplicitFallbackExceptions() async throws {
         let exceptions = try loadedCatalog().records.filter {
             $0.accountDisabledAlchemyNetwork != nil
         }
@@ -380,7 +382,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertNil(taiko.alchemyNetwork)
     }
 
-    func testKaiaRecordsUseCurrentNetworkMetadata() throws {
+    func testKaiaRecordsUseCurrentNetworkMetadata() async throws {
         let catalog = try loadedCatalog()
         let kairos = try XCTUnwrap(catalog.record(chainId: 1001))
         let mainnet = try XCTUnwrap(catalog.record(chainId: 8217))
@@ -398,7 +400,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertFalse(mainnet.isTestnet)
     }
 
-    func testTempoNetworksSuppressNativeBalance() throws {
+    func testTempoNetworksSuppressNativeBalance() async throws {
         let catalog = try loadedCatalog()
         let rpcURL = try XCTUnwrap(URL(string: "https://rpc.example"))
         let tempoNetworks = [
@@ -430,7 +432,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertTrue(unrelatedUSDNetwork.supportsNativeBalance)
     }
 
-    func testAlchemyKeylessURLConstruction() throws {
+    func testAlchemyKeylessURLConstruction() async throws {
         let url = try XCTUnwrap(AlchemyRPC.url(network: "eth-mainnet"))
         XCTAssertEqual(url.scheme, "https")
         XCTAssertEqual(url.host, "eth-mainnet.g.alchemy.com")
@@ -439,7 +441,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertNil(AlchemyRPC.url(network: "invalid/network"))
     }
 
-    func testAlchemyNetworkNameValidationIsStrictlyASCII() {
+    func testAlchemyNetworkNameValidationIsStrictlyASCII() async {
         for network in [
             "a",
             "1",
@@ -467,7 +469,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testResolverPrecedenceAndSourceOwnership() throws {
+    func testResolverPrecedenceAndSourceOwnership() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
             record(chainId: 40, fallbackRPCURL: "https://fallback.example"),
@@ -479,12 +481,12 @@ final class NetworkCatalogTests: XCTestCase {
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
             ]
         )
-        var customSnapshotCount = 0
+        let customSnapshotCount = LockedNetworkCatalogCounter()
         let resolver = NetworkResolver(
             catalog: catalog,
             catalogOwnedChainIds: [1, 40],
             customSnapshot: {
-                customSnapshotCount += 1
+                _ = customSnapshotCount.increment()
                 return customSnapshot
             }
         )
@@ -493,25 +495,25 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(alchemy.source, .alchemy)
         XCTAssertEqual(alchemy.rpcURL.host, "eth-mainnet.g.alchemy.com")
         XCTAssertTrue(alchemy.allowsAlchemyAuthorization)
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
 
         let fallback = try XCTUnwrap(resolver.resolve(chainId: 40).resolvedNetwork)
         XCTAssertEqual(fallback.source, .fallback)
         XCTAssertEqual(fallback.rpcURL.absoluteString, "https://fallback.example")
         XCTAssertFalse(fallback.allowsAlchemyAuthorization)
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
 
         let custom = try XCTUnwrap(resolver.resolve(chainId: 64240).resolvedNetwork)
         XCTAssertEqual(custom.source, .custom)
         XCTAssertEqual(custom.rpcURL.absoluteString, "https://custom-64240.example")
         XCTAssertFalse(custom.allowsAlchemyAuthorization)
-        XCTAssertEqual(customSnapshotCount, 1)
+        XCTAssertEqual(customSnapshotCount.value, 1)
 
         XCTAssertEqual(resolver.resolve(chainId: 123456789), .unknown)
-        XCTAssertEqual(customSnapshotCount, 2)
+        XCTAssertEqual(customSnapshotCount.value, 2)
     }
 
-    func testKeylessAlchemyEndpointDoesNotReviveAnArchivedCustomEndpoint() throws {
+    func testKeylessAlchemyEndpointDoesNotReviveAnArchivedCustomEndpoint() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
             record(chainId: 40, fallbackRPCURL: "https://fallback.example"),
@@ -525,12 +527,12 @@ final class NetworkCatalogTests: XCTestCase {
                 ),
             ]
         )
-        var customSnapshotCount = 0
+        let customSnapshotCount = LockedNetworkCatalogCounter()
         let resolver = NetworkResolver(
             catalog: catalog,
             catalogOwnedChainIds: [1, 40],
             customSnapshot: {
-                customSnapshotCount += 1
+                _ = customSnapshotCount.increment()
                 return customSnapshot
             }
         )
@@ -539,15 +541,15 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(alchemy.source, .alchemy)
         XCTAssertEqual(alchemy.rpcURL.absoluteString, "https://eth-mainnet.g.alchemy.com/v2")
         XCTAssertEqual(resolver.network(chainId: 1)?.chainId, 1)
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
 
         let fallback = try XCTUnwrap(resolver.resolve(chainId: 40).resolvedNetwork)
         XCTAssertEqual(fallback.source, .fallback)
         XCTAssertEqual(fallback.rpcURL.absoluteString, "https://fallback.example")
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
     }
 
-    func testCatalogAlchemyAuthorizationRequiresItsExactCanonicalEndpoint() throws {
+    func testCatalogAlchemyAuthorizationRequiresItsExactCanonicalEndpoint() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
         ])
@@ -569,7 +571,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertFalse(resolved.allowsAlchemyAuthorization)
     }
 
-    func testEthereumRPCEndpointTrustCannotBeSeparatedFromItsURL() throws {
+    func testEthereumRPCEndpointTrustCannotBeSeparatedFromItsURL() async throws {
         let canonicalURL = try XCTUnwrap(
             AlchemyRPC.url(network: "eth-mainnet")
         )
@@ -600,7 +602,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testDecodedEthereumNetworkAlwaysLosesRuntimeEndpointTrust() throws {
+    func testDecodedEthereumNetworkAlwaysLosesRuntimeEndpointTrust() async throws {
         let catalogRecord = record(chainId: 1, alchemyNetwork: "eth-mainnet")
         let rpcURL = try XCTUnwrap(catalogRecord.rpcURL())
         let network = catalogRecord.ethereumNetwork(rpcURL: rpcURL)
@@ -625,7 +627,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertTrue(decoded.rpcEndpoint.requiresFeeMarketDetection())
     }
 
-    func testFallbackOverlapRemainsDormantAndCatalogOwned() throws {
+    func testFallbackOverlapRemainsDormantAndCatalogOwned() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
             record(chainId: 40, fallbackRPCURL: "https://bundled-fallback.example"),
@@ -651,7 +653,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCustom64240SurvivesLegacyNodeRemovalAndUsesLastWrite() throws {
+    func testCustom64240SurvivesLegacyNodeRemovalAndUsesLastWrite() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
         ])
@@ -676,7 +678,7 @@ final class NetworkCatalogTests: XCTestCase {
 
     }
 
-    func testArchivedCustomNetworkEncodingStillDecodes() throws {
+    func testArchivedCustomNetworkEncodingStillDecodes() async throws {
         let archivedData = Data(
             """
             [
@@ -705,7 +707,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(snapshot.entriesByChainId[64240]?.resolvedNetwork.network.symbol, "ARCH")
     }
 
-    func testStoredCustomRPCURLsRetainLegacyHTTPAndPrivateEndpoints() throws {
+    func testStoredCustomRPCURLsRetainLegacyHTTPAndPrivateEndpoints() async throws {
         let snapshot = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 64240, name: "Public HTTPS", rpcURL: "https://rpc.example:8545"),
@@ -748,7 +750,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testMissingOrInvalidCatalogNeverRevivesCatalogOwnedCustomRecords() throws {
+    func testMissingOrInvalidCatalogNeverRevivesCatalogOwnedCustomRecords() async throws {
         let snapshot = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 1, name: "Archived Ethereum", rpcURL: "https://custom-ethereum.example"),
@@ -757,13 +759,13 @@ final class NetworkCatalogTests: XCTestCase {
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
             ]
         )
-        var customSnapshotCount = 0
+        let customSnapshotCount = LockedNetworkCatalogCounter()
         let resolver = NetworkResolver(
             catalog: nil,
             catalogOwnedChainIds: [1, 40],
             decodedChainIds: [300],
             customSnapshot: {
-                customSnapshotCount += 1
+                _ = customSnapshotCount.increment()
                 return snapshot
             }
         )
@@ -772,15 +774,15 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(resolver.resolve(chainId: 1), .catalogOwnedButUnavailable)
         XCTAssertEqual(resolver.resolve(chainId: 40), .catalogOwnedButUnavailable)
         XCTAssertEqual(resolver.resolve(chainId: 300), .catalogOwnedButUnavailable)
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
 
         let custom64240 = try XCTUnwrap(resolver.resolve(chainId: 64240).resolvedNetwork)
         XCTAssertEqual(custom64240.source, .custom)
-        XCTAssertEqual(customSnapshotCount, 1)
+        XCTAssertEqual(customSnapshotCount.value, 1)
         XCTAssertEqual(resolver.visibleCustomNetworks.map(\.chainId), [64240])
     }
 
-    func testIDMismatchedCatalogDisablesAllBundledRecordsAndGuardsUnexpectedIDs() throws {
+    func testIDMismatchedCatalogDisablesAllBundledRecordsAndGuardsUnexpectedIDs() async throws {
         let mismatchedCatalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
             record(chainId: 300, alchemyNetwork: "zksync-sepolia"),
@@ -808,7 +810,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(resolver.visibleCustomNetworks.map(\.chainId), [64240])
     }
 
-    func testInvalidCatalogRecoversUnexpectedIDAndSuppressesItsCustomFallback() throws {
+    func testInvalidCatalogRecoversUnexpectedIDAndSuppressesItsCustomFallback() async throws {
         let unexpectedChainId = 987_654_321
         let invalidCatalogData = try JSONEncoder().encode([
             record(
@@ -845,13 +847,13 @@ final class NetworkCatalogTests: XCTestCase {
                 ),
             ]
         )
-        var customSnapshotCount = 0
+        let customSnapshotCount = LockedNetworkCatalogCounter()
         let resolver = NetworkResolver(
             catalog: nil,
             catalogOwnedChainIds: [1],
             decodedChainIds: recoveredChainIds,
             customSnapshot: {
-                customSnapshotCount += 1
+                _ = customSnapshotCount.increment()
                 return snapshot
             }
         )
@@ -861,12 +863,12 @@ final class NetworkCatalogTests: XCTestCase {
             .catalogOwnedButUnavailable
         )
         XCTAssertNil(resolver.rpcURL(chainId: unexpectedChainId))
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
         XCTAssertEqual(resolver.resolve(chainId: 64240).resolvedNetwork?.source, .custom)
-        XCTAssertEqual(customSnapshotCount, 1)
+        XCTAssertEqual(customSnapshotCount.value, 1)
     }
 
-    func testCatalogPreservesInputOrderAndBundledProjectionUsesNameThenChainIDOrdering() throws {
+    func testCatalogPreservesInputOrderAndBundledProjectionUsesNameThenChainIDOrdering() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 30, name: "Zulu", fallbackRPCURL: "https://zulu.example"),
             record(chainId: 20, name: "Alpha", fallbackRPCURL: "https://alpha-20.example"),
@@ -883,12 +885,12 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(resolver.bundledNetworks.map(\.chainId), [10, 20, 30])
     }
 
-    func testCatalogResolutionAvoidsCustomStorageAcrossRepeatedLookups() throws {
+    func testCatalogResolutionAvoidsCustomStorageAcrossRepeatedLookups() async throws {
         let catalog = try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
             record(chainId: 40, fallbackRPCURL: "https://fallback.example"),
         ])
-        var customSnapshotCount = 0
+        let customSnapshotCount = LockedNetworkCatalogCounter()
         var catalogURLBuildCountByChainId: [Int: Int] = [:]
         let resolver = NetworkResolver(
             catalog: catalog,
@@ -898,7 +900,7 @@ final class NetworkCatalogTests: XCTestCase {
                 return record.rpcURL()
             },
             customSnapshot: {
-                customSnapshotCount += 1
+                _ = customSnapshotCount.increment()
                 return .empty
             }
         )
@@ -916,19 +918,19 @@ final class NetworkCatalogTests: XCTestCase {
         }
 
         XCTAssertGreaterThan(checksum, 0)
-        XCTAssertEqual(customSnapshotCount, 0)
+        XCTAssertEqual(customSnapshotCount.value, 0)
         XCTAssertEqual(catalogURLBuildCountByChainId, [1: 1, 40: 1])
     }
 
-    func testCustomNetworkCacheLoadsOnceUntilInvalidated() throws {
+    func testCustomNetworkCacheLoadsOnceUntilInvalidated() async throws {
         let snapshot = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
             ]
         )
-        var loadCount = 0
+        let loadCount = LockedNetworkCatalogCounter()
         let cache = CustomNetworkCache(loader: {
-            loadCount += 1
+            _ = loadCount.increment()
             return .loaded(snapshot)
         })
         let resolver = NetworkResolver(
@@ -947,14 +949,14 @@ final class NetworkCatalogTests: XCTestCase {
         }
 
         XCTAssertGreaterThan(checksum, 0)
-        XCTAssertEqual(loadCount, 1)
+        XCTAssertEqual(loadCount.value, 1)
 
         cache.invalidate()
         XCTAssertNotNil(resolver.resolve(chainId: 64240).resolvedNetwork)
-        XCTAssertEqual(loadCount, 2)
+        XCTAssertEqual(loadCount.value, 2)
     }
 
-    func testCustomNetworkCacheRetainsLastGoodSnapshotAfterReloadFailure() throws {
+    func testCustomNetworkCacheRetainsLastGoodSnapshotAfterReloadFailure() async throws {
         let snapshot = CustomNetworkSnapshot(records: [
             customRecord(
                 chainId: 64_240,
@@ -962,16 +964,16 @@ final class NetworkCatalogTests: XCTestCase {
                 rpcURL: "https://custom-64240.example"
             ),
         ])
-        var shouldFail = false
+        let shouldFail = Mutex(false)
         let cache = CustomNetworkCache(loader: {
-            return shouldFail ? .unavailable : .loaded(snapshot)
+            return shouldFail.withLock { $0 } ? .unavailable : .loaded(snapshot)
         })
 
         XCTAssertEqual(
             cache.snapshot().entriesByChainId[64_240]?.rpcURL.absoluteString,
             "https://custom-64240.example"
         )
-        shouldFail = true
+        shouldFail.withLock { $0 = true }
         cache.invalidate()
         XCTAssertEqual(
             cache.snapshot().entriesByChainId[64_240]?.rpcURL.absoluteString,
@@ -979,7 +981,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCustomNetworkCacheRetriesUnavailableInitialLoad() {
+    func testCustomNetworkCacheRetriesUnavailableInitialLoad() async {
         let snapshot = CustomNetworkSnapshot(records: [
             customRecord(
                 chainId: 64_240,
@@ -987,18 +989,18 @@ final class NetworkCatalogTests: XCTestCase {
                 rpcURL: "https://custom-64240.example"
             ),
         ])
-        var loadCount = 0
+        let loadCount = LockedNetworkCatalogCounter()
         let cache = CustomNetworkCache(loader: {
-            loadCount += 1
-            return loadCount == 1 ? .unavailable : .loaded(snapshot)
+            _ = loadCount.increment()
+            return loadCount.value == 1 ? .unavailable : .loaded(snapshot)
         })
 
         XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
         XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
-        XCTAssertEqual(loadCount, 2)
+        XCTAssertEqual(loadCount.value, 2)
     }
 
-    func testCustomNetworkCacheFailsClosedAfterCorruptReload() {
+    func testCustomNetworkCacheFailsClosedAfterCorruptReload() async {
         let snapshot = CustomNetworkSnapshot(records: [
             customRecord(
                 chainId: 64_240,
@@ -1006,22 +1008,22 @@ final class NetworkCatalogTests: XCTestCase {
                 rpcURL: "https://custom-64240.example"
             ),
         ])
-        var loadCount = 0
-        var isCorrupt = false
+        let loadCount = LockedNetworkCatalogCounter()
+        let isCorrupt = Mutex(false)
         let cache = CustomNetworkCache(loader: {
-            loadCount += 1
-            return isCorrupt ? .corrupt : .loaded(snapshot)
+            _ = loadCount.increment()
+            return isCorrupt.withLock { $0 } ? .corrupt : .loaded(snapshot)
         })
 
         XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
-        isCorrupt = true
+        isCorrupt.withLock { $0 = true }
         cache.invalidate()
         XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
         XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
-        XCTAssertEqual(loadCount, 2)
+        XCTAssertEqual(loadCount.value, 2)
     }
 
-    func testCustomNetworkCacheInvalidationPublishesNewGenerationToConcurrentReaders() {
+    func testCustomNetworkCacheInvalidationPublishesNewGenerationToConcurrentReaders() async {
         let generationA = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 64240, name: "Generation A", rpcURL: "https://generation-a.example"),
@@ -1032,18 +1034,14 @@ final class NetworkCatalogTests: XCTestCase {
                 customRecord(chainId: 64240, name: "Generation B", rpcURL: "https://generation-b.example"),
             ]
         )
-        let stateLock = NSLock()
-        var activeGeneration = generationA
-        var loadCount = 0
-        var invalidSnapshotCount = 0
+        let generationState = Mutex((generation: generationA, loadCount: 0, invalidSnapshotCount: 0))
         let firstLoadStarted = DispatchSemaphore(value: 0)
         let allowFirstLoadToFinish = DispatchSemaphore(value: 0)
         let cache = CustomNetworkCache(loader: {
-            stateLock.lock()
-            loadCount += 1
-            let currentLoadCount = loadCount
-            let snapshot = activeGeneration
-            stateLock.unlock()
+            let (currentLoadCount, snapshot) = generationState.withLock { state in
+                state.loadCount += 1
+                return (state.loadCount, state.generation)
+            }
 
             if currentLoadCount == 1 {
                 firstLoadStarted.signal()
@@ -1059,9 +1057,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
         XCTAssertEqual(firstLoadStarted.wait(timeout: .now() + 5), .success)
 
-        stateLock.lock()
-        activeGeneration = generationB
-        stateLock.unlock()
+        generationState.withLock { $0.generation = generationB }
 
         let invalidationStarted = DispatchSemaphore(value: 0)
         let invalidationFinished = expectation(description: "Concurrent invalidation finished")
@@ -1072,21 +1068,18 @@ final class NetworkCatalogTests: XCTestCase {
         }
         XCTAssertEqual(invalidationStarted.wait(timeout: .now() + 5), .success)
         allowFirstLoadToFinish.signal()
-        wait(for: [initialReadFinished, invalidationFinished], timeout: 5)
+        await fulfillment(of: [initialReadFinished, invalidationFinished], timeout: 5)
 
         DispatchQueue.concurrentPerform(iterations: 512) { _ in
             let loaded = cache.snapshot()
             if loaded.entriesByChainId[64240]?.rpcURL.absoluteString != "https://generation-b.example" {
-                stateLock.lock()
-                invalidSnapshotCount += 1
-                stateLock.unlock()
+                generationState.withLock { $0.invalidSnapshotCount += 1 }
             }
         }
 
-        stateLock.lock()
-        let finalLoadCount = loadCount
-        let finalInvalidSnapshotCount = invalidSnapshotCount
-        stateLock.unlock()
+        let (finalLoadCount, finalInvalidSnapshotCount) = generationState.withLock {
+            ($0.loadCount, $0.invalidSnapshotCount)
+        }
 
         XCTAssertEqual(finalInvalidSnapshotCount, 0)
         XCTAssertEqual(finalLoadCount, 2)
@@ -1096,7 +1089,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCatalogRejectsMalformedRecords() {
+    func testCatalogRejectsMalformedRecords() async {
         XCTAssertThrowsError(try NetworkCatalog(records: [
             record(chainId: 1, alchemyNetwork: "eth-mainnet"),
             record(chainId: 1, fallbackRPCURL: "https://fallback.example"),
@@ -1219,7 +1212,8 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testEndpointMismatchedFeeMarketHintDoesNotDisableCatalog()
-        throws {
+        async throws
+    {
         let catalog = try NetworkCatalog(records: [
             record(
                 chainId: 1,
@@ -1249,7 +1243,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testCatalogDataRejectsInvalidJSONAndMissingRequiredFields() {
+    func testCatalogDataRejectsInvalidJSONAndMissingRequiredFields() async {
         XCTAssertThrowsError(try NetworkCatalog(data: Data("not-json".utf8)))
         XCTAssertThrowsError(try NetworkCatalog(data: Data(
             """
@@ -1263,7 +1257,7 @@ final class NetworkCatalogTests: XCTestCase {
         )))
     }
 
-    func testCatalogLoaderThrowsForMissingAndInvalidResources() throws {
+    func testCatalogLoaderThrowsForMissingAndInvalidResources() async throws {
         try withFixtureBundle { bundle in
             XCTAssertThrowsError(try NetworkCatalog.load(in: bundle)) { error in
                 XCTAssertEqual(error as? NetworkCatalogLoadError, .missingResource)
@@ -1293,7 +1287,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testSafariRPCClientRoutesReversedConcurrentResponsesToTheirOwnCompletions() throws {
+    func testSafariRPCClientRoutesReversedConcurrentResponsesToTheirOwnCompletions() async throws {
         let requestCount = 32
         let malformedIndex = 11
         let allRequestsStarted = expectation(description: "All RPC requests started")
@@ -1312,20 +1306,16 @@ final class NetworkCatalogTests: XCTestCase {
             SafariRPCClientURLProtocol.reset()
         }
         let client = SafariRPCClient(urlSession: session)
-        let resultLock = NSLock()
         var failures = [String]()
 
         for index in 0..<requestCount {
             let url = try XCTUnwrap(URL(string: "https://rpc.example/request-\(index)"))
             let body = try JSONSerialization.data(withJSONObject: ["request": index])
-            client.send(
-                endpoint: .unauthenticated(url),
-                body: body,
-                expectedResponseID: index
-            ) { response in
-                resultLock.lock()
+            Task { @MainActor in
+                let response =
+                    (try? await client.send(endpoint: .unauthenticated(url), body: body, expectedResponseID: index))?
+                    .json
                 defer {
-                    resultLock.unlock()
                     allRequestsCompleted.fulfill()
                 }
 
@@ -1346,7 +1336,7 @@ final class NetworkCatalogTests: XCTestCase {
             }
         }
 
-        wait(for: [allRequestsStarted], timeout: 5)
+        await fulfillment(of: [allRequestsStarted], timeout: 5)
 
         let requests = SafariRPCClientURLProtocol.pendingRequests
         XCTAssertEqual(requests.count, requestCount)
@@ -1373,14 +1363,12 @@ final class NetworkCatalogTests: XCTestCase {
             return Data("not-json".utf8)
         }
 
-        wait(for: [allRequestsCompleted], timeout: 5)
-        resultLock.lock()
+        await fulfillment(of: [allRequestsCompleted], timeout: 5)
         let recordedFailures = failures
-        resultLock.unlock()
         XCTAssertTrue(recordedFailures.isEmpty, recordedFailures.joined(separator: "\n"))
     }
 
-    func testSafariRPCClientAttachesDynamicAlchemyAuthorization() throws {
+    func testSafariRPCClientAttachesDynamicAlchemyAuthorization() async throws {
         let url = try XCTUnwrap(URL(string: "https://eth-mainnet.g.alchemy.com/v2"))
         let session = makeSafariAuthorizationSession { request in
             XCTAssertEqual(
@@ -1401,21 +1389,21 @@ final class NetworkCatalogTests: XCTestCase {
         let completion = expectation(description: "Authorized Safari RPC completed")
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: Data(#"{"method":"eth_chainId"}"#.utf8),
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response =
+                (try? await client.send(
+                    endpoint: alchemyEndpoint(url), body: Data(#"{"method":"eth_chainId"}"#.utf8), expectedResponseID: 1
+                ))?.json
             XCTAssertEqual(response?["result"] as? String, "ok")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
     }
 
-    func testSafariRPCClientRetriesOnceWithReplacementAuthorizationAfter401() throws {
+    func testSafariRPCClientRetriesOnceWithReplacementAuthorizationAfter401() async throws {
         let url = try XCTUnwrap(URL(string: "https://eth-mainnet.g.alchemy.com/v2"))
         let requestCount = LockedNetworkCatalogCounter()
         let session = makeSafariAuthorizationSession { request in
@@ -1449,23 +1437,23 @@ final class NetworkCatalogTests: XCTestCase {
         let completion = expectation(description: "Safari RPC recovered from 401")
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: Data(#"{"method":"eth_chainId"}"#.utf8),
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response =
+                (try? await client.send(
+                    endpoint: alchemyEndpoint(url), body: Data(#"{"method":"eth_chainId"}"#.utf8), expectedResponseID: 1
+                ))?.json
             XCTAssertEqual(response?["result"] as? String, "ok")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 2)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSafariRPCClientNeverReplaysRawTransactionAfter401() throws {
+    func testSafariRPCClientNeverReplaysRawTransactionAfter401() async throws {
         let url = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2")
         )
@@ -1505,11 +1493,9 @@ final class NetworkCatalogTests: XCTestCase {
         )
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: body,
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+                .json
             XCTAssertEqual(response?["jsonrpc"] as? String, "2.0")
             XCTAssertEqual(response?["id"] as? Int, 1)
             let error = response?["error"] as? [String: Any]
@@ -1523,7 +1509,7 @@ final class NetworkCatalogTests: XCTestCase {
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
@@ -1535,7 +1521,8 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testSafariRPCClientReturnsUniqueMatchingDictionaryFromArrayResponse()
-        throws {
+        async throws
+    {
         let url = try XCTUnwrap(URL(string: "https://rpc.example"))
         let session = makeSafariAuthorizationSession { _ in
             return (
@@ -1554,21 +1541,22 @@ final class NetworkCatalogTests: XCTestCase {
             description: "Safari RPC returned the matching array dictionary"
         )
 
-        client.send(
-            endpoint: .unauthenticated(url),
-            body: Data(#"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8),
-            expectedResponseID: 2
-        ) { response in
+        Task { @MainActor in
+            let response =
+                (try? await client.send(
+                    endpoint: .unauthenticated(url),
+                    body: Data(#"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8), expectedResponseID: 2))?.json
             XCTAssertEqual(response?["id"] as? Int, 2)
             XCTAssertEqual(response?["result"] as? String, "matched")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
     }
 
     func testSafariRPCClientRejectsMismatchedAndAmbiguousResponseIDs()
-        throws {
+        async throws
+    {
         let fixtures: [(path: String, response: String)] = [
             (
                 "wrong-top-level",
@@ -1620,22 +1608,23 @@ final class NetworkCatalogTests: XCTestCase {
             let completion = expectation(
                 description: "Safari RPC rejected \(fixture.path)"
             )
-            client.send(
-                endpoint: .unauthenticated(url),
-                body: Data(
-                    #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId"}"#.utf8
-                ),
-                expectedResponseID: 1
-            ) { response in
+            Task { @MainActor in
+                let response =
+                    (try? await client.send(
+                        endpoint: .unauthenticated(url),
+                        body: Data(
+                            #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId"}"#.utf8
+                        ), expectedResponseID: 1))?.json
                 XCTAssertNil(response, fixture.path)
                 completion.fulfill()
             }
-            wait(for: [completion], timeout: 2)
+            await fulfillment(of: [completion], timeout: 2)
         }
     }
 
     func testSafariRPCClientAcceptsMissingAndNullTopLevelResponseIDs()
-        throws {
+        async throws
+    {
         let fixtures: [(path: String, response: String)] = [
             ("missing", #"{"jsonrpc":"2.0","result":"ok"}"#),
             (
@@ -1664,13 +1653,13 @@ final class NetworkCatalogTests: XCTestCase {
             let completion = expectation(
                 description: "Safari RPC accepted \(fixture.path)"
             )
-            client.send(
-                endpoint: .unauthenticated(url),
-                body: Data(
-                    #"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8
-                ),
-                expectedResponseID: 2
-            ) { response in
+            Task { @MainActor in
+                let response =
+                    (try? await client.send(
+                        endpoint: .unauthenticated(url),
+                        body: Data(
+                            #"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8
+                        ), expectedResponseID: 2))?.json
                 XCTAssertNotNil(response, fixture.path)
                 XCTAssertEqual(
                     response?["id"] as? Int,
@@ -1679,11 +1668,11 @@ final class NetworkCatalogTests: XCTestCase {
                 )
                 completion.fulfill()
             }
-            wait(for: [completion], timeout: 2)
+            await fulfillment(of: [completion], timeout: 2)
         }
     }
 
-    func testSafariRPCClientAcceptsStringResponseIDs() throws {
+    func testSafariRPCClientAcceptsStringResponseIDs() async throws {
         let fixtures: [(path: String, response: String, result: String)] = [
             (
                 "string-single",
@@ -1717,13 +1706,13 @@ final class NetworkCatalogTests: XCTestCase {
             let completion = expectation(
                 description: "Safari RPC accepted \(fixture.path)"
             )
-            client.send(
-                endpoint: .unauthenticated(url),
-                body: Data(
-                    #"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8
-                ),
-                expectedResponseID: 2
-            ) { response in
+            Task { @MainActor in
+                let response =
+                    (try? await client.send(
+                        endpoint: .unauthenticated(url),
+                        body: Data(
+                            #"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8
+                        ), expectedResponseID: 2))?.json
                 XCTAssertNotNil(response, fixture.path)
                 XCTAssertEqual(
                     response?["id"] as? Int,
@@ -1737,11 +1726,11 @@ final class NetworkCatalogTests: XCTestCase {
                 )
                 completion.fulfill()
             }
-            wait(for: [completion], timeout: 2)
+            await fulfillment(of: [completion], timeout: 2)
         }
     }
 
-    func testSafariRPCClientRejectsAllRedirects() throws {
+    func testSafariRPCClientRejectsAllRedirects() async throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
 
@@ -1773,11 +1762,11 @@ final class NetworkCatalogTests: XCTestCase {
                 XCTAssertNil(request)
                 completion.fulfill()
             }
-            wait(for: [completion], timeout: 1)
+            await fulfillment(of: [completion], timeout: 1)
         }
     }
 
-    func testSafariRPCClientRejectsRedirectResponseBody() throws {
+    func testSafariRPCClientRejectsRedirectResponseBody() async throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
         SafariRedirectURLProtocol.configure(
@@ -1802,18 +1791,18 @@ final class NetworkCatalogTests: XCTestCase {
             description: "Replay-safe redirect rejected"
         )
 
-        client.send(
-            endpoint: .unauthenticated(sourceURL),
-            body: Data(
-                #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}"#.utf8
-            ),
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response =
+                (try? await client.send(
+                    endpoint: .unauthenticated(sourceURL),
+                    body: Data(
+                        #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}"#.utf8
+                    ), expectedResponseID: 1))?.json
             XCTAssertNil(response)
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(SafariRedirectURLProtocol.requestCount, 1)
         XCTAssertEqual(
             SafariRedirectURLProtocol.requestedURLs,
@@ -1822,7 +1811,8 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testSafariRPCClientDoesNotReplayRawTransactionWhenReplacementIsUnavailable()
-        throws {
+        async throws
+    {
         let url = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2")
         )
@@ -1855,23 +1845,21 @@ final class NetworkCatalogTests: XCTestCase {
         )
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: body,
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+                .json
             XCTAssertEqual(response?["error"] as? String, "unauthorized")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 1)
     }
 
-    func testSafariRPCClientReplaysSupportedReadOnlyMethodsAfter401() throws {
+    func testSafariRPCClientReplaysSupportedReadOnlyMethodsAfter401() async throws {
         let url = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2")
         )
@@ -1910,16 +1898,14 @@ final class NetworkCatalogTests: XCTestCase {
             #"[{"jsonrpc":"2.0","id":1,"method":"eth_blobBaseFee","params":[]},{"jsonrpc":"2.0","id":2,"method":"eth_estimateUserOperationGas","params":[]},{"jsonrpc":"2.0","id":3,"method":"eth_supportedEntryPoints","params":[]},{"jsonrpc":"2.0","id":4,"method":"txpool_contentFrom","params":[]}]"#.utf8
         )
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: body,
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+                .json
             XCTAssertEqual(response?["result"] as? String, "ok")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 2)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
@@ -1927,7 +1913,8 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testSafariRPCClientFailsClosedForUnknownAndMixedBatchMethodsAfter401()
-        throws {
+        async throws
+    {
         let url = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2")
         )
@@ -1972,15 +1959,14 @@ final class NetworkCatalogTests: XCTestCase {
                 description: "non-replayable Safari RPC \(index) completed"
             )
             completion.assertForOverFulfill = true
-            client.send(
-                endpoint: alchemyEndpoint(url),
-                body: body,
-                expectedResponseID: index + 1
-            ) { response in
+            Task { @MainActor in
+                let response =
+                    (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: index + 1))?
+                    .json
                 XCTAssertEqual(response?["error"] as? String, "unauthorized")
                 completion.fulfill()
             }
-            wait(for: [completion], timeout: 2)
+            await fulfillment(of: [completion], timeout: 2)
         }
 
         XCTAssertEqual(requestCount.value, bodies.count)
@@ -2004,7 +1990,8 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testSafariRPCClientInvalidatesRejectedRawTransactionAuthorizationWithoutReplay()
-        throws {
+        async throws
+    {
         let url = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2")
         )
@@ -2039,16 +2026,14 @@ final class NetworkCatalogTests: XCTestCase {
         )
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: body,
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+                .json
             XCTAssertEqual(response?["error"] as? String, "unauthorized")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
@@ -2060,7 +2045,7 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationURLs, [url])
     }
 
-    func testSafariRPCClientDoesNotRefreshAuthorizationAfter403() throws {
+    func testSafariRPCClientDoesNotRefreshAuthorizationAfter403() async throws {
         let url = try XCTUnwrap(URL(string: "https://eth-mainnet.g.alchemy.com/v2"))
         let requestCount = LockedNetworkCatalogCounter()
         let session = makeSafariAuthorizationSession { request in
@@ -2086,24 +2071,73 @@ final class NetworkCatalogTests: XCTestCase {
         let completion = expectation(description: "Safari RPC returned forbidden response")
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: Data(#"{"method":"eth_chainId"}"#.utf8),
-            expectedResponseID: 1
-        ) { response in
+        Task { @MainActor in
+            let response =
+                (try? await client.send(
+                    endpoint: alchemyEndpoint(url), body: Data(#"{"method":"eth_chainId"}"#.utf8), expectedResponseID: 1
+                ))?.json
             XCTAssertEqual(response?["error"] as? String, "forbidden")
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
+    func testSafariRPCCancellationSurvivesUncooperativeAuthorizationSteps() async throws {
+        let cases: [(SafariAuthorizationProviderStub.Checkpoint, String?)] = [
+            (.authorization, "replacement"),
+            (.replacement, "replacement"),
+            (.replacement, nil),
+            (.invalidation, "replacement")
+        ]
+        for (checkpoint, replacement) in cases {
+            let gate = SafariAuthorizationSuspension()
+            let reachedCheckpoint = expectation(description: "Reached \(checkpoint)")
+            let requestCount = LockedNetworkCatalogCounter()
+            let provider = SafariAuthorizationProviderStub(
+                token: "rejected", replacementToken: replacement,
+                pause: { point in
+                    guard point == checkpoint else { return }
+                    reachedCheckpoint.fulfill()
+                    await gate.wait()
+                }
+            )
+            let session = makeSafariAuthorizationSession { _ in
+                requestCount.increment()
+                return (401, Data(#"{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"rejected"}}"#.utf8))
+            }
+            defer {
+                gate.resume()
+                session.invalidateAndCancel()
+                SafariAuthorizationURLProtocol.removeRequestHandler()
+            }
+            let client = SafariRPCClient(urlSession: session, authorizationProvider: provider)
+            let endpoint = alchemyEndpoint(try XCTUnwrap(URL(string: "https://eth-mainnet.g.alchemy.com/v2")))
+            let method = checkpoint == .invalidation ? "eth_sendRawTransaction" : "eth_chainId"
+            let body = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": 1, "method": method])
+            let task = Task { try await client.send(endpoint: endpoint, body: body, expectedResponseID: 1) }
+            await fulfillment(of: [reachedCheckpoint], timeout: 2)
+            task.cancel()
+            gate.resume()
+            switch await task.result {
+            case .success:
+                XCTFail("Canceled request accepted a response after \(checkpoint)")
+            case .failure(let error):
+                XCTAssertTrue(error is CancellationError, "Unexpected cancellation result: \(error)")
+            }
+            XCTAssertEqual(requestCount.value, checkpoint == .authorization ? 0 : 1)
+            XCTAssertEqual(provider.replacementCallCount, checkpoint == .replacement ? 1 : 0)
+            XCTAssertEqual(provider.invalidationCallCount, checkpoint == .invalidation ? 1 : 0)
+        }
+    }
+
     func testSafariRPCClientDoesNotRefreshAuthorizationAfterNetworkFailure()
-        throws {
-        try assertSafariRawSendDoesNotRecoverAuthorization(
+        async throws
+    {
+        try await assertSafariRawSendDoesNotRecoverAuthorization(
             response: { _ in
                 throw URLError(.networkConnectionLost)
             },
@@ -2114,8 +2148,9 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testSafariRPCClientDoesNotRefreshAuthorizationForHTTP200RPCError()
-        throws {
-        try assertSafariRawSendDoesNotRecoverAuthorization(
+        async throws
+    {
+        try await assertSafariRawSendDoesNotRecoverAuthorization(
             response: { _ in
                 return (
                     200,
@@ -2132,7 +2167,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    func testSafariRPCClientNeverAttachesAuthorizationToCustomOrKeyedURLs() throws {
+    func testSafariRPCClientNeverAttachesAuthorizationToCustomOrKeyedURLs() async throws {
         let keylessCustomURL = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2")
         )
@@ -2153,16 +2188,16 @@ final class NetworkCatalogTests: XCTestCase {
             )
             let completion = expectation(description: "Unauthenticated RPC completed for \(url)")
 
-            client.send(
-                endpoint: .unauthenticated(url),
-                body: Data(#"{"method":"eth_chainId"}"#.utf8),
-                expectedResponseID: 1
-            ) { response in
+            Task { @MainActor in
+                let response =
+                    (try? await client.send(
+                        endpoint: .unauthenticated(url), body: Data(#"{"method":"eth_chainId"}"#.utf8),
+                        expectedResponseID: 1))?.json
                 XCTAssertEqual(response?["result"] as? String, "ok")
                 completion.fulfill()
             }
 
-            wait(for: [completion], timeout: 2)
+            await fulfillment(of: [completion], timeout: 2)
             session.invalidateAndCancel()
             SafariAuthorizationURLProtocol.removeRequestHandler()
         }
@@ -2208,7 +2243,7 @@ final class NetworkCatalogTests: XCTestCase {
         validate: @escaping ([String: Any]?) -> Void,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let url = try XCTUnwrap(
             URL(string: "https://eth-mainnet.g.alchemy.com/v2"),
             file: file,
@@ -2251,16 +2286,14 @@ final class NetworkCatalogTests: XCTestCase {
         )
         completion.assertForOverFulfill = true
 
-        client.send(
-            endpoint: alchemyEndpoint(url),
-            body: body,
-            expectedResponseID: 1
-        ) { result in
+        Task { @MainActor in
+            let result = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+                .json
             validate(result)
             completion.fulfill()
         }
 
-        wait(for: [completion], timeout: 2)
+        await fulfillment(of: [completion], timeout: 2)
         XCTAssertEqual(requestCount.value, 1, file: file, line: line)
         XCTAssertEqual(
             authorizationProvider.authorizationCallCount,
@@ -2282,7 +2315,7 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
-    private static func bodyData(from request: URLRequest) throws -> Data {
+    nonisolated private static func bodyData(from request: URLRequest) throws -> Data {
         if let body = request.httpBody {
             return body
         }
@@ -2387,141 +2420,104 @@ final class NetworkCatalogTests: XCTestCase {
 
 }
 
-private final class SafariAuthorizationProviderStub: AlchemyAuthorizationProviding, @unchecked Sendable {
-
-    private let lock = NSLock()
+private final class SafariAuthorizationProviderStub: AlchemyAuthorizationProviding {
+    enum Checkpoint: Equatable, Sendable { case authorization, replacement, invalidation }
+    private struct State: Sendable {
+        var authorizationCallCount = 0
+        var replacementCallCount = 0
+        var invalidatedTokens = [String]()
+        var invalidationURLs = [URL]()
+    }
+    private let state = Mutex(State())
     private let token: String?
     private let replacementToken: String?
-    private var storedAuthorizationCallCount = 0
-    private var storedReplacementCallCount = 0
-    private var storedInvalidatedTokens = [String]()
-    private var storedInvalidationURLs = [URL]()
+    private let pause: @Sendable (Checkpoint) async -> Void
 
-    init(token: String? = nil, replacementToken: String? = nil) {
+    init(
+        token: String? = nil,
+        replacementToken: String? = nil,
+        pause: @escaping @Sendable (Checkpoint) async -> Void = { _ in }
+    ) {
         self.token = token
         self.replacementToken = replacementToken
+        self.pause = pause
     }
 
-    var authorizationCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedAuthorizationCallCount
-    }
-
-    var replacementCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedReplacementCallCount
-    }
-
-    var invalidationCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedInvalidatedTokens.count
-    }
-
-    var invalidatedTokens: [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedInvalidatedTokens
-    }
-
-    var invalidationURLs: [URL] {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedInvalidationURLs
-    }
+    var authorizationCallCount: Int { state.withLock { $0.authorizationCallCount } }
+    var replacementCallCount: Int { state.withLock { $0.replacementCallCount } }
+    var invalidationCallCount: Int { state.withLock { $0.invalidatedTokens.count } }
+    var invalidatedTokens: [String] { state.withLock { $0.invalidatedTokens } }
+    var invalidationURLs: [URL] { state.withLock { $0.invalidationURLs } }
 
     func authorization(for url: URL) async throws -> AlchemyAuthorization? {
-        let token = recordAuthorizationCall(for: url)
-        return token.map { AlchemyAuthorization(token: $0) }
+        state.withLock { $0.authorizationCallCount += 1 }
+        await pause(.authorization)
+        return AlchemyJWTProvider.isAlchemyRPCURL(url) ? token.map { AlchemyAuthorization(token: $0) } : nil
     }
 
-    func replacementAuthorization(
-        afterUnauthorized rejected: AlchemyAuthorization,
-        for url: URL
-    ) async throws -> AlchemyAuthorization? {
-        let token = recordReplacementCall(for: url)
-        return token.map { AlchemyAuthorization(token: $0) }
+    func replacementAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async throws -> AlchemyAuthorization? {
+        state.withLock { $0.replacementCallCount += 1 }
+        await pause(.replacement)
+        return AlchemyJWTProvider.isAlchemyRPCURL(url) ? replacementToken.map { AlchemyAuthorization(token: $0) } : nil
     }
 
-    func invalidateAuthorization(
-        afterUnauthorized rejected: AlchemyAuthorization,
-        for url: URL
-    ) async {
-        recordInvalidation(token: rejected.token, url: url)
+    func invalidateAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async {
+        state.withLock { state in
+            state.invalidatedTokens.append(rejected.token)
+            state.invalidationURLs.append(url)
+        }
+        await pause(.invalidation)
     }
-
-    private func recordAuthorizationCall(for url: URL) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        storedAuthorizationCallCount += 1
-        return AlchemyJWTProvider.isAlchemyRPCURL(url) ? token : nil
-    }
-
-    private func recordReplacementCall(for url: URL) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        storedReplacementCallCount += 1
-        return AlchemyJWTProvider.isAlchemyRPCURL(url)
-            ? replacementToken
-            : nil
-    }
-
-    private func recordInvalidation(token: String, url: URL) {
-        lock.lock()
-        defer { lock.unlock() }
-        storedInvalidatedTokens.append(token)
-        storedInvalidationURLs.append(url)
-    }
-
 }
 
-private final class LockedNetworkCatalogCounter {
+private final class SafariAuthorizationSuspension: Sendable {
+    private struct State {
+        var released = false
+        var continuation: CheckedContinuation<Void, Never>?
+    }
+    private let state = Mutex(State())
 
-    private let lock = NSLock()
-    private var storedValue = 0
-
-    var value: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedValue
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let resumeNow = state.withLock { state in
+                guard !state.released else { return true }
+                state.continuation = continuation
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
     }
 
+    func resume() {
+        let continuation = state.withLock { state in
+            state.released = true
+            let continuation = state.continuation
+            state.continuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+}
+
+private final class LockedNetworkCatalogCounter: Sendable {
+    private let count = Mutex(0)
+    var value: Int { count.withLock { $0 } }
     @discardableResult
     func increment() -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        storedValue += 1
-        return storedValue
+        count.withLock {
+            $0 += 1; return $0
+        }
     }
-
 }
 
 private final class SafariAuthorizationURLProtocol: URLProtocol {
 
-    typealias RequestHandler = (URLRequest) throws -> (statusCode: Int, data: Data)
+    typealias RequestHandler = @Sendable (URLRequest) throws -> (statusCode: Int, data: Data)
 
-    private static let handlerLock = NSLock()
-    private static var requestHandler: RequestHandler?
-
-    static func setRequestHandler(_ requestHandler: @escaping RequestHandler) {
-        handlerLock.lock()
-        Self.requestHandler = requestHandler
-        handlerLock.unlock()
-    }
-
-    static func removeRequestHandler() {
-        handlerLock.lock()
-        requestHandler = nil
-        handlerLock.unlock()
-    }
-
-    private static func currentRequestHandler() -> RequestHandler? {
-        handlerLock.lock()
-        defer { handlerLock.unlock() }
-        return requestHandler
-    }
+    private static let requestHandler = Mutex<RequestHandler?>(nil)
+    static func setRequestHandler(_ handler: @escaping RequestHandler) { requestHandler.withLock { $0 = handler } }
+    static func removeRequestHandler() { requestHandler.withLock { $0 = nil } }
+    private static func currentRequestHandler() -> RequestHandler? { requestHandler.withLock { $0 } }
 
     override class func canInit(with request: URLRequest) -> Bool {
         return true
@@ -2563,48 +2559,21 @@ private final class SafariAuthorizationURLProtocol: URLProtocol {
 
 private final class SafariRedirectURLProtocol: URLProtocol {
 
-    private static let stateLock = NSLock()
-    private static var configuredRedirectURL: URL?
-    private static var configuredSourceURL: URL?
-    private static var configuredStatusCode = 307
-    private static var configuredResponseData = Data()
-    private static var recordedURLs = [URL]()
-
-    static var requestCount: Int {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return recordedURLs.count
+    private struct Configuration: Sendable {
+        var sourceURL: URL?
+        var redirectURL: URL?
+        var statusCode = 307
+        var responseData = Data()
+        var recordedURLs = [URL]()
     }
+    private static let configuration = Mutex(Configuration())
+    static var requestCount: Int { configuration.withLock { $0.recordedURLs.count } }
+    static var requestedURLs: [URL] { configuration.withLock { $0.recordedURLs } }
 
-    static var requestedURLs: [URL] {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return recordedURLs
+    static func configure(sourceURL: URL, redirectURL: URL, statusCode: Int, responseData: Data) {
+        configuration.withLock { $0 = Configuration(sourceURL: sourceURL, redirectURL: redirectURL, statusCode: statusCode, responseData: responseData) }
     }
-
-    static func configure(
-        sourceURL: URL,
-        redirectURL: URL,
-        statusCode: Int,
-        responseData: Data
-    ) {
-        stateLock.lock()
-        configuredSourceURL = sourceURL
-        configuredRedirectURL = redirectURL
-        configuredStatusCode = statusCode
-        configuredResponseData = responseData
-        recordedURLs = []
-        stateLock.unlock()
-    }
-
-    static func reset() {
-        stateLock.lock()
-        configuredSourceURL = nil
-        configuredRedirectURL = nil
-        configuredResponseData = Data()
-        recordedURLs = []
-        stateLock.unlock()
-    }
+    static func reset() { configuration.withLock { $0 = Configuration() } }
 
     override class func canInit(with request: URLRequest) -> Bool {
         return true
@@ -2623,13 +2592,10 @@ private final class SafariRedirectURLProtocol: URLProtocol {
             return
         }
 
-        Self.stateLock.lock()
-        Self.recordedURLs.append(url)
-        let sourceURL = Self.configuredSourceURL
-        let redirectURL = Self.configuredRedirectURL
-        let statusCode = Self.configuredStatusCode
-        let responseData = Self.configuredResponseData
-        Self.stateLock.unlock()
+        let (sourceURL, redirectURL, statusCode, responseData) = Self.configuration.withLock { configuration in
+            configuration.recordedURLs.append(url)
+            return (configuration.sourceURL, configuration.redirectURL, configuration.statusCode, configuration.responseData)
+        }
 
         guard url == sourceURL,
               let redirectURL,
@@ -2690,72 +2656,79 @@ private final class SafariRedirectURLProtocol: URLProtocol {
 }
 
 private final class SafariRPCClientURLProtocol: URLProtocol {
+    // Only terminal delivery crosses the Foundation boundary; each loader gates completion and cancellation.
+    private final class ResponseEndpoint: @unchecked Sendable {
+        private weak var owner: SafariRPCClientURLProtocol?
+        let identifier: ObjectIdentifier
+        let request: URLRequest
 
-    private static let pendingLock = NSLock()
-    private static var pending = [SafariRPCClientURLProtocol]()
-    private static var requestStarted: (() -> Void)?
+        init(_ owner: SafariRPCClientURLProtocol) {
+            self.owner = owner
+            identifier = ObjectIdentifier(owner)
+            request = owner.request
+        }
 
-    static var pendingRequests: [URLRequest] {
-        pendingLock.lock()
-        defer { pendingLock.unlock() }
-        return pending.map(\.request)
+        func complete(data: Data?) { owner?.completeResponse(data: data) }
     }
 
-    static func reset(requestStarted: (() -> Void)? = nil) {
-        pendingLock.lock()
-        pending = []
-        Self.requestStarted = requestStarted
-        pendingLock.unlock()
+    private struct State: Sendable {
+        var pending = [ResponseEndpoint]()
+        var requestStarted: (@Sendable () -> Void)?
+    }
+    private static let state = Mutex(State())
+    private let responseFinished = Mutex(false)
+
+    static var pendingRequests: [URLRequest] {
+        state.withLock { $0.pending.map(\.request) }
+    }
+
+    static func reset(requestStarted: (@Sendable () -> Void)? = nil) {
+        state.withLock { $0 = State(requestStarted: requestStarted) }
     }
 
     static func completePendingRequestsInReverse(responseData: (URLRequest) -> Data?) {
-        pendingLock.lock()
-        let protocols = Array(pending.reversed())
-        pending = []
-        requestStarted = nil
-        pendingLock.unlock()
-
-        for urlProtocol in protocols {
-            guard let url = urlProtocol.request.url,
-                  let response = HTTPURLResponse(
-                    url: url,
-                    statusCode: 200,
-                    httpVersion: nil,
-                    headerFields: ["Content-Type": "application/json"]
-                  ),
-                  let data = responseData(urlProtocol.request) else {
-                urlProtocol.client?.urlProtocol(
-                    urlProtocol,
-                    didFailWithError: URLError(.cannotParseResponse)
-                )
-                continue
-            }
-            urlProtocol.client?.urlProtocol(
-                urlProtocol,
-                didReceive: response,
-                cacheStoragePolicy: .notAllowed
-            )
-            urlProtocol.client?.urlProtocol(urlProtocol, didLoad: data)
-            urlProtocol.client?.urlProtocolDidFinishLoading(urlProtocol)
+        let endpoints = state.withLock { state in
+            let endpoints = Array(state.pending.reversed())
+            state.pending.removeAll()
+            state.requestStarted = nil
+            return endpoints
         }
+        for endpoint in endpoints { endpoint.complete(data: responseData(endpoint.request)) }
     }
 
-    override class func canInit(with request: URLRequest) -> Bool {
-        return true
+    private func completeResponse(data: Data?) {
+        let canFinish = responseFinished.withLock { finished in
+            guard !finished else { return false }
+            finished = true
+            return true
+        }
+        guard canFinish else { return }
+        guard let url = request.url,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"]),
+              let data else {
+            client?.urlProtocol(self, didFailWithError: URLError(.cannotParseResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        return request
-    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        Self.pendingLock.lock()
-        Self.pending.append(self)
-        let requestStarted = Self.requestStarted
-        Self.pendingLock.unlock()
-        requestStarted?()
+        let endpoint = ResponseEndpoint(self)
+        let started = Self.state.withLock { state in
+            state.pending.append(endpoint)
+            return state.requestStarted
+        }
+        started?()
     }
 
-    override func stopLoading() {}
-
+    override func stopLoading() {
+        responseFinished.withLock { $0 = true }
+        let identifier = ObjectIdentifier(self)
+        Self.state.withLock { $0.pending.removeAll { $0.identifier == identifier } }
+    }
 }

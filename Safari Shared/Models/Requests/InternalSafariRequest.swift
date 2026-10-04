@@ -2,8 +2,8 @@
 
 import Foundation
 
-struct InternalSafariRequest: Decodable {
-    struct SelectedAccount: Decodable {
+struct InternalSafariRequest: Decodable, Sendable {
+    struct SelectedAccount: Decodable, Sendable {
         let walletId: String
         let address: String
         let coin: InpageProvider
@@ -22,7 +22,7 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    struct ApprovalPayload: Decodable {
+    struct ApprovalPayload: Decodable, Sendable {
         let selectedAccounts: [SelectedAccount]?
         let chainId: String?
         let cluster: Solana.Cluster?
@@ -40,8 +40,8 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    struct TransactionSpeedPayload: Decodable {
-        enum Interaction: String, Decodable { case ended, cancelled }
+    struct TransactionSpeedPayload: Decodable, Sendable {
+        enum Interaction: String, Decodable, Sendable { case ended, cancelled }
 
         let interaction: Interaction
         let value: Double
@@ -57,11 +57,11 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    enum TransactionEditsPayload: Decodable {
+    enum TransactionEditsPayload: Decodable, Sendable {
         case suggested
         case custom(Custom)
 
-        struct Custom {
+        struct Custom: Sendable {
             let nonce: String
             let gasPriceGwei: String?
             let maxPriorityFeePerGasGwei: String?
@@ -88,7 +88,7 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    struct ApprovalAlertPayload: Decodable {
+    struct ApprovalAlertPayload: Decodable, Sendable {
         let action: TransactionApprovalAlertAction
 
         init(from decoder: Decoder) throws {
@@ -101,34 +101,34 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    struct ResponseIdentity {
+    struct ResponseIdentity: Sendable {
         let configurationKey: String
         let token: ExtensionBridge.RequestToken
     }
 
-    struct DisconnectIdentity {
+    struct DisconnectIdentity: Sendable {
         let configurationKey: String
         let provider: InpageProvider
         let attempt: String
         let authority: ExtensionBridge.AuthorityVersion
     }
 
-    struct ResponsePollIdentity {
+    struct ResponsePollIdentity: Sendable {
         let response: ResponseIdentity
         let maintenance: ResponseDeliveryPoller.Maintenance
     }
 
-    struct ResponseAcknowledgmentIdentity {
+    struct ResponseAcknowledgmentIdentity: Sendable {
         let configurationKey: String
         let token: ExtensionBridge.RequestToken
     }
 
-    struct PopupIdentity {
+    struct PopupIdentity: Sendable {
         let token: ExtensionBridge.RequestToken
         let reviewToken: UUID?
     }
 
-    enum PageCommand {
+    enum PageCommand: Sendable {
         case rpc(body: String, chainId: String)
         case getLatestConfiguration(configurationKey: String)
         case disconnect(DisconnectIdentity)
@@ -136,12 +136,12 @@ struct InternalSafariRequest: Decodable {
         case showApproval(ResponseAcknowledgmentIdentity)
     }
 
-    enum WorkerCommand {
+    enum WorkerCommand: Sendable {
         case getRecoveryRequests
         case pollResponse(ResponsePollIdentity)
     }
 
-    enum PopupCommand {
+    enum PopupCommand: Sendable {
         case getPendingRequests
         case getApprovalState(PopupIdentity)
         case retryApproval(PopupIdentity)
@@ -164,7 +164,7 @@ struct InternalSafariRequest: Decodable {
         }
     }
 
-    enum Command {
+    enum Command: Sendable {
         case page(PageCommand)
         case worker(WorkerCommand)
         case popup(PopupCommand)

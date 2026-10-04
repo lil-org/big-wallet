@@ -3,6 +3,7 @@
 import CryptoKit
 import Darwin
 import Foundation
+import Synchronization
 import LocalAuthentication
 import OSLog
 import Security
@@ -10,21 +11,42 @@ import Security
 import UIKit
 #endif
 
-final class SafariApprovalReconciliationActivity {
+final class SafariApprovalReconciliationActivity: Sendable {
+    private struct Resources: Sendable {
+        let lease: SafariApprovalVault.CoordinationLease?
+        let end: (@Sendable () -> Void)?
 
-    private let lock = NSRecursiveLock()
-    private var active = true
-    private var lease: SafariApprovalVault.CoordinationLease?
-    private var end: (() -> Void)?
+        func finish() {
+            lease?.release()
+            end?()
+        }
+    }
 
-    init?(begin: (@escaping () -> Void) -> (() -> Void)?) {
+    private struct State {
+        var active = true
+        var operations = 0
+        var lease: SafariApprovalVault.CoordinationLease?
+        var end: (@Sendable () -> Void)?
+
+        mutating func retireIfIdle() -> Resources? {
+            guard !active, operations == 0 else { return nil }
+            let resources = Resources(lease: lease, end: end)
+            lease = nil
+            end = nil
+            return resources
+        }
+    }
+
+    private let state = Mutex(State())
+
+    init?(begin: (@escaping @Sendable () -> Void) -> (@Sendable () -> Void)?) {
         guard let end = begin({ [weak self] in self?.finish() }) else {
             finish()
             return nil
         }
-        let installed = lock.withLock {
-            guard active else { return false }
-            self.end = end
+        let installed = state.withLock { state in
+            guard state.active else { return false }
+            state.end = end
             return true
         }
         guard installed else {
@@ -34,39 +56,43 @@ final class SafariApprovalReconciliationActivity {
     }
 
     func withActive<Result>(_ operation: () throws -> Result) throws -> Result {
-        lock.lock()
-        defer { lock.unlock() }
-        guard active else { throw CancellationError() }
+        let admitted = state.withLock { state in
+            guard state.active else { return false }
+            state.operations += 1
+            return true
+        }
+        guard admitted else { throw CancellationError() }
+        defer {
+            let resources = state.withLock { state in
+                state.operations -= 1
+                return state.retireIfIdle()
+            }
+            resources?.finish()
+        }
         return try operation()
     }
 
     func checkCancellation() throws {
-        try withActive {}
+        guard state.withLock({ $0.active }) else { throw CancellationError() }
     }
 
     func acquireLease(from vault: SafariApprovalVault) throws -> SafariApprovalVault.CoordinationLease? {
         try withActive {
             let acquired = try vault.tryAcquireCoordinationLease()
-            lease = acquired
+            state.withLock { $0.lease = acquired }
             return acquired
         }
     }
 
     func finish() {
-        let end: (() -> Void)? = lock.withLock {
-            active = false
-            lease?.release()
-            lease = nil
-            let end = self.end
-            self.end = nil
-            return end
+        let resources = state.withLock { state in
+            state.active = false
+            return state.retireIfIdle()
         }
-        end?()
+        resources?.finish()
     }
 
-    deinit {
-        finish()
-    }
+    deinit { finish() }
 }
 
 struct SafariApprovalWalletRecord: Codable, Equatable, Sendable {
@@ -74,7 +100,7 @@ struct SafariApprovalWalletRecord: Codable, Equatable, Sendable {
     var storedKeyJSON: Data
 }
 
-struct SafariApprovalSourceSnapshot {
+struct SafariApprovalSourceSnapshot: Sendable {
     let catalog: WalletAccountCatalog
     var password: Data
     var wallets: [SafariApprovalWalletRecord]
@@ -91,7 +117,7 @@ struct SafariApprovalSourceSnapshot {
     }
 }
 
-enum SafariApprovalKeyAvailability: Equatable {
+enum SafariApprovalKeyAvailability: Equatable, Sendable {
     case present
     case authenticationRequired
     case missing
@@ -137,7 +163,50 @@ struct SafariApprovalKeyIdentity: Hashable, Sendable {
     }
 }
 
-protocol SafariApprovalKeyStoring: AnyObject {
+final class SafariApprovalAuthenticationContext: Sendable {
+    // LAContext.invalidate cancels pending authentication; it must bypass a blocked protected-key read.
+    nonisolated(unsafe) private let context: LAContext
+    private let access = Mutex(())
+    private let invalidated = Mutex(false)
+    let identity: ObjectIdentifier
+
+    init() {
+        let context = LAContext()
+        self.context = context
+        identity = ObjectIdentifier(context)
+    }
+
+    var isInvalidated: Bool { invalidated.withLock { $0 } }
+
+    func read<Value: Sendable>(_ operation: @Sendable (LAContext) throws -> Value) rethrows -> Value {
+        try access.withLock { _ in try operation(context) }
+    }
+
+    func invalidate() {
+        let shouldInvalidate = invalidated.withLock { invalidated in
+            guard !invalidated else { return false }
+            invalidated = true
+            return true
+        }
+        if shouldInvalidate { context.invalidate() }
+    }
+
+    func evaluate(policy: LAPolicy, reason: String) async -> Bool {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                read { context in
+                    context.evaluatePolicy(policy, localizedReason: reason) { succeeded, _ in
+                        continuation.resume(returning: succeeded)
+                    }
+                }
+            }
+        } onCancel: {
+            self.invalidate()
+        }
+    }
+}
+
+protocol SafariApprovalKeyStoring: AnyObject, Sendable {
     func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws
     func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data
     func availability(
@@ -146,7 +215,7 @@ protocol SafariApprovalKeyStoring: AnyObject {
     func removeAll() throws
 }
 
-protocol SafariApprovalIntegrityKeyStoring: AnyObject {
+protocol SafariApprovalIntegrityKeyStoring: AnyObject, Sendable {
     func loadOrCreate() throws -> Data
 }
 
@@ -161,23 +230,23 @@ final class SafariApprovalIntegrityKeychainStore:
     static let accessGroup = "8DXC3N7E7P.org.lil.keychain"
     static let service = "org.lil.wallet.safari-approval-integrity.v1"
     static let account = "source-snapshot-hmac"
-    static let accessibility = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    static var accessibility: CFString { kSecAttrAccessibleWhenUnlockedThisDeviceOnly }
 
-    typealias Add = (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-    typealias CopyMatching = (
+    typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias CopyMatching = @Sendable (
         CFDictionary,
         UnsafeMutablePointer<CFTypeRef?>?
     ) -> OSStatus
-    typealias RandomKey = () throws -> Data
+    typealias RandomKey = @Sendable () throws -> Data
 
     private let add: Add
     private let copyMatching: CopyMatching
     private let randomKey: RandomKey
 
     init(
-        add: @escaping Add = SecItemAdd,
-        copyMatching: @escaping CopyMatching = SecItemCopyMatching,
-        randomKey: @escaping RandomKey = SafariApprovalVault.makeRandomKey
+        add: @escaping Add = { SecItemAdd($0, $1) },
+        copyMatching: @escaping CopyMatching = { SecItemCopyMatching($0, $1) },
+        randomKey: @escaping RandomKey = { try SafariApprovalVault.makeRandomKey() }
     ) {
         self.add = add
         self.copyMatching = copyMatching
@@ -253,24 +322,24 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
 
     static let accessGroup = "8DXC3N7E7P.org.lil.wallet.safari-approval"
     static let service = "org.lil.wallet.safari-approval-key.v1"
-    static let accessibility = kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
+    static var accessibility: CFString { kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly }
     static let accessControlFlags = SecAccessControlCreateFlags.userPresence
 
-    typealias Add = (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-    typealias CopyMatching = (
+    typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias CopyMatching = @Sendable (
         CFDictionary,
         UnsafeMutablePointer<CFTypeRef?>?
     ) -> OSStatus
-    typealias Delete = (CFDictionary) -> OSStatus
+    typealias Delete = @Sendable (CFDictionary) -> OSStatus
 
     private let add: Add
     private let copyMatching: CopyMatching
     private let delete: Delete
 
     init(
-        add: @escaping Add = SecItemAdd,
-        copyMatching: @escaping CopyMatching = SecItemCopyMatching,
-        delete: @escaping Delete = SecItemDelete
+        add: @escaping Add = { SecItemAdd($0, $1) },
+        copyMatching: @escaping CopyMatching = { SecItemCopyMatching($0, $1) },
+        delete: @escaping Delete = { SecItemDelete($0) }
     ) {
         self.add = add
         self.copyMatching = copyMatching
@@ -426,13 +495,12 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
 
 }
 
-final class SafariApprovalVault {
+final class SafariApprovalVault: Sendable {
 
-    final class CoordinationLease {
+    final class CoordinationLease: Sendable {
         fileprivate let owner: ObjectIdentifier
         private let lock: CrossProcessFileLock
-        private let stateLock = NSLock()
-        private var active = true
+        private let active = Mutex(true)
 
         fileprivate init(
             owner: ObjectIdentifier,
@@ -443,20 +511,16 @@ final class SafariApprovalVault {
         }
 
         fileprivate var isActive: Bool {
-            stateLock.lock()
-            defer { stateLock.unlock() }
-            return active
+            active.withLock { $0 }
         }
 
         func release() {
-            stateLock.lock()
-            guard active else {
-                stateLock.unlock()
-                return
+            let shouldRelease = active.withLock { active in
+                guard active else { return false }
+                active = false
+                return true
             }
-            active = false
-            stateLock.unlock()
-            lock.release()
+            if shouldRelease { lock.release() }
         }
 
         deinit {
@@ -558,10 +622,10 @@ final class SafariApprovalVault {
     static let maximumEnvelopeBytes = 8 * 1_024 * 1_024
     static let coordinationLockTimeoutNanoseconds: UInt64 = 5_000_000_000
 
-    typealias Authentication = (LAContext, LAPolicy, String) async -> Bool
-    typealias CanEvaluateAuthentication = (LAContext, LAPolicy) -> Bool
-    typealias RandomKey = () throws -> Data
-    typealias AtomicWrite = (Data, URL) throws -> Void
+    typealias Authentication = @Sendable (SafariApprovalAuthenticationContext, LAPolicy, String) async -> Bool
+    typealias CanEvaluateAuthentication = @Sendable (LAContext, LAPolicy) -> Bool
+    typealias RandomKey = @Sendable () throws -> Data
+    typealias AtomicWrite = @Sendable (Data, URL) throws -> Void
 
     private let fileURL: URL?
     private let keyStore: SafariApprovalKeyStoring
@@ -570,7 +634,7 @@ final class SafariApprovalVault {
     private let randomKey: RandomKey
     private let atomicWrite: AtomicWrite
     private let coordinationLockURL: URL?
-    private let lock = NSLock()
+    private let lock = Mutex(())
 
     init(
         fileURL: URL? = FileManager.default.containerURL(
@@ -584,13 +648,9 @@ final class SafariApprovalVault {
             $0.canEvaluatePolicy($1, error: nil)
         },
         authentication: @escaping Authentication = {
-            await SafariApprovalVault.evaluate(
-                context: $0,
-                policy: $1,
-                reason: $2
-            )
+            await $0.evaluate(policy: $1, reason: $2)
         },
-        randomKey: @escaping RandomKey = SafariApprovalVault.makeRandomKey,
+        randomKey: @escaping RandomKey = { try SafariApprovalVault.makeRandomKey() },
         atomicWrite: @escaping AtomicWrite = {
             try $0.write(to: $1, options: .atomic)
         }
@@ -734,70 +794,70 @@ final class SafariApprovalVault {
             else { try operation() }
         }
         let generation = envelope.generation
-        lock.lock()
-        defer { lock.unlock() }
-        try withActive { try writeTombstoneLocked() }
-        var committed = false
-        defer {
-            if !committed {
-                try? withActive {
-                    try? writeTombstoneLocked()
-                    try? deleteAllKeysLocked()
+        return try withLock {
+            try withActive { try writeTombstoneLocked() }
+            var committed = false
+            defer {
+                if !committed {
+                    try? withActive {
+                        try? writeTombstoneLocked()
+                        try? deleteAllKeysLocked()
+                    }
                 }
             }
-        }
-        try withActive { try deleteAllKeysLocked() }
-        for key in keys {
+            try withActive { try deleteAllKeysLocked() }
+            for key in keys {
+                try withActive {
+                    do {
+                        try keyStore.store(key.data, identity: key.identity)
+                    } catch {
+                        SafariApprovalDiagnostics.record("store approval key", error: error)
+                        throw error
+                    }
+                }
+            }
+            try activity?.checkCancellation()
+            let availability = publicationKeyAvailability(identities: keys.map(\.identity))
+            try activity?.checkCancellation()
+            switch availability {
+            case .present, .authenticationRequired:
+                break
+            case .missing:
+                throw Error.keychainFailure(errSecItemNotFound)
+            case .unavailable(let status):
+                throw Error.keychainFailure(status)
+            }
             try withActive {
                 do {
-                    try keyStore.store(key.data, identity: key.identity)
+                    try atomicWrite(envelopeData, fileURL)
                 } catch {
-                    SafariApprovalDiagnostics.record("store approval key", error: error)
-                    throw error
+                    SafariApprovalDiagnostics.record("write envelope", error: error)
+                    throw Error.unavailable
                 }
+                guard let record = loadEnvelopeRecordLocked(),
+                      record.data == envelopeData,
+                      record.envelope == envelope else {
+                    SafariApprovalDiagnostics.record(
+                        "verify envelope",
+                        error: Error.invalidEnvelope
+                    )
+                    throw Error.unavailable
+                }
+                committed = true
             }
+            return Publication(
+                generation: generation,
+                envelopeDigest: Self.digest(envelopeData),
+                sourceMAC: sourceMAC
+            )
         }
-        try activity?.checkCancellation()
-        let availability = publicationKeyAvailability(identities: keys.map(\.identity))
-        try activity?.checkCancellation()
-        switch availability {
-        case .present, .authenticationRequired:
-            break
-        case .missing:
-            throw Error.keychainFailure(errSecItemNotFound)
-        case .unavailable(let status):
-            throw Error.keychainFailure(status)
-        }
-        try withActive {
-            do {
-                try atomicWrite(envelopeData, fileURL)
-            } catch {
-                SafariApprovalDiagnostics.record("write envelope", error: error)
-                throw Error.unavailable
-            }
-            guard let record = loadEnvelopeRecordLocked(),
-                  record.data == envelopeData,
-                  record.envelope == envelope else {
-                SafariApprovalDiagnostics.record(
-                    "verify envelope",
-                    error: Error.invalidEnvelope
-                )
-                throw Error.unavailable
-            }
-            committed = true
-        }
-        return Publication(
-            generation: generation,
-            envelopeDigest: Self.digest(envelopeData),
-            sourceMAC: sourceMAC
-        )
     }
 
     func reviewCatalog() -> WalletReviewCatalog? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let record = loadEnvelopeRecordLocked() else { return nil }
-        return reviewCatalog(in: record)
+        return withLock {
+            guard let record = loadEnvelopeRecordLocked() else { return nil }
+            return reviewCatalog(in: record)
+        }
     }
 
     private func reviewCatalog(in record: EnvelopeRecord) -> WalletReviewCatalog? {
@@ -856,25 +916,26 @@ final class SafariApprovalVault {
         )) == expectedSourceMAC else {
             return .stale
         }
-        lock.lock()
-        defer { lock.unlock() }
-        guard let record = loadEnvelopeRecordLocked() else { return .stale }
-        let envelope = record.envelope
-        guard envelope.generation == expectedGeneration,
-              envelope.catalog == catalogData,
-              Self.digest(record.data) == expectedEnvelopeDigest else {
-            return .stale
-        }
-        switch publicationKeyAvailability(identities: record.keyIdentities) {
-        case .present, .authenticationRequired:
-            return .current
-        case .missing:
-            return .stale
-        case .unavailable(let status):
-            return .unavailable(status)
+        return withLock {
+            guard let record = loadEnvelopeRecordLocked() else { return .stale }
+            let envelope = record.envelope
+            guard envelope.generation == expectedGeneration,
+                  envelope.catalog == catalogData,
+                  Self.digest(record.data) == expectedEnvelopeDigest else {
+                return .stale
+            }
+            switch publicationKeyAvailability(identities: record.keyIdentities) {
+            case .present, .authenticationRequired:
+                return .current
+            case .missing:
+                return .stale
+            case .unavailable(let status):
+                return .unavailable(status)
+            }
         }
     }
 
+    @concurrent
     func unlockResult(
         reason: String,
         authorization: WalletSigningAuthorization
@@ -898,46 +959,50 @@ final class SafariApprovalVault {
         guard keyStore.availability(identities: [keyIdentity])[keyIdentity]?
             .permitsPublishedEnvelope == true else { return .unavailable }
 
-        let context = LAContext()
-        context.localizedCancelTitle = Strings.cancel
-        guard canEvaluateAuthentication(
-                  context,
-                  .deviceOwnerAuthentication
-              ) else { return .unavailable }
-        guard await authentication(
-            context,
-            .deviceOwnerAuthentication,
-            reason
-        ) else { return .canceled }
-
-        guard let unlocked = unlockAccount(
-            encryptedAccount,
-            in: record,
-            context: context,
-            authorization: authorization
-        ) else { return .unavailable }
-        guard isCurrent(snapshotData, keyIdentity: keyIdentity),
-              !Task.isCancelled,
-              Date() < authorization.signingDeadline else {
-            unlocked.signer.invalidate()
-            return .unavailable
-        }
-        return .unlocked(catalog: unlocked.catalog, session: WalletSigningSession(
-            unlocked.signer,
-            authorization: authorization,
-            isCurrent: { [weak self] in
-                self?.isCurrent(snapshotData, keyIdentity: keyIdentity) == true
-            },
-            acquireCommitLease: { [weak self] in
-                await self?.executionLease(ifCurrent: snapshotData, keyIdentity: keyIdentity)
+        let context = SafariApprovalAuthenticationContext()
+        return await withTaskCancellationHandler {
+            context.read { $0.localizedCancelTitle = Strings.cancel }
+            guard context.read({ canEvaluateAuthentication($0, .deviceOwnerAuthentication) }) else {
+                return .unavailable
             }
-        ))
+            guard await authentication(
+                context,
+                .deviceOwnerAuthentication,
+                reason
+            ) else { return .canceled }
+
+            guard let unlocked = unlockAccount(
+                encryptedAccount,
+                in: record,
+                context: context,
+                authorization: authorization
+            ) else { return .unavailable }
+            guard isCurrent(snapshotData, keyIdentity: keyIdentity),
+                  !Task.isCancelled,
+                  Date() < authorization.signingDeadline else {
+                unlocked.signer.invalidate()
+                return .unavailable
+            }
+            let session = WalletSigningSession(
+                unlocked.signer,
+                authorization: authorization,
+                isCurrent: { [weak self] in
+                    self?.isCurrent(snapshotData, keyIdentity: keyIdentity) == true
+                },
+                acquireCommitLease: { [weak self] in
+                    await self?.executionLease(ifCurrent: snapshotData, keyIdentity: keyIdentity)
+                }
+            )
+            return .unlocked(catalog: unlocked.catalog, session: session)
+        } onCancel: {
+            context.invalidate()
+        }
     }
 
     private func unlockAccount(
         _ encryptedAccount: EncryptedAccount,
         in record: EnvelopeRecord,
-        context: LAContext,
+        context: SafariApprovalAuthenticationContext,
         authorization: WalletSigningAuthorization
     ) -> (catalog: WalletReviewCatalog, signer: UnlockedAccountSigner)? {
         guard !Task.isCancelled,
@@ -946,13 +1011,8 @@ final class SafariApprovalVault {
         let approvedAccount = authorization.approvedAccount
         var key: Data
         do {
-            key = try keyStore.load(
-                identity: SafariApprovalKeyIdentity(
-                    generation: envelope.generation,
-                    account: approvedAccount
-                ),
-                context: context
-            )
+            let identity = SafariApprovalKeyIdentity(generation: envelope.generation, account: approvedAccount)
+            key = try context.read { try keyStore.load(identity: identity, context: $0) }
         } catch {
             SafariApprovalDiagnostics.record("load approval key", error: error)
             return nil
@@ -986,7 +1046,10 @@ final class SafariApprovalVault {
               let privateKey = WalletPrivateKey(data: decrypted),
               let signer = UnlockedAccountSigner(
                   approvedAccount: approvedAccount,
-                  privateKey: privateKey
+                  privateKey: privateKey,
+                  sourceIsCurrent: { [weak self, data = record.data, generation = envelope.generation] in
+                      self?.isCurrent(data, keyIdentity: .init(generation: generation, account: approvedAccount)) == true
+                  }
               ) else { return nil }
         guard let catalog = reviewCatalog(in: record),
               catalog.specificAccount(descriptor: approvedAccount) != nil else {
@@ -998,10 +1061,10 @@ final class SafariApprovalVault {
 
     func clear(coordinationLease: CoordinationLease? = nil) throws {
         try withCoordination(coordinationLease) {
-            lock.lock()
-            defer { lock.unlock() }
-            try writeTombstoneLocked()
-            try deleteAllKeysLocked()
+            try withLock {
+                try writeTombstoneLocked()
+                try deleteAllKeysLocked()
+            }
         }
     }
 
@@ -1009,9 +1072,7 @@ final class SafariApprovalVault {
         coordinationLease: CoordinationLease? = nil
     ) throws {
         try withCoordination(coordinationLease) {
-            lock.lock()
-            defer { lock.unlock() }
-            try writeTombstoneLocked()
+            try withLock { try writeTombstoneLocked() }
         }
     }
 
@@ -1019,9 +1080,7 @@ final class SafariApprovalVault {
         coordinationLease: CoordinationLease? = nil
     ) throws {
         try withCoordination(coordinationLease) {
-            lock.lock()
-            defer { lock.unlock() }
-            try deleteAllKeysLocked()
+            try withLock { try deleteAllKeysLocked() }
         }
     }
 
@@ -1198,6 +1257,7 @@ final class SafariApprovalVault {
         }
     }
 
+    @concurrent
     private func executionLease(
         ifCurrent snapshotData: Data,
         keyIdentity: SafariApprovalKeyIdentity
@@ -1244,10 +1304,8 @@ final class SafariApprovalVault {
         return try operation()
     }
 
-    private func withLock<Result>(_ operation: () -> Result) -> Result {
-        lock.lock()
-        defer { lock.unlock() }
-        return operation()
+    private func withLock<Result>(_ operation: () throws -> Result) rethrows -> Result {
+        try lock.withLock { _ in try operation() }
     }
 
     private func canonicalEncoder() -> JSONEncoder {
@@ -1285,28 +1343,6 @@ final class SafariApprovalVault {
         return Self.authenticationCode(for: data, key: integrityKey)
     }
 
-    private static func evaluate(
-        context: LAContext,
-        policy: LAPolicy,
-        reason: String
-    ) async -> Bool {
-        await withTaskCancellationHandler(
-            operation: {
-                await withCheckedContinuation { continuation in
-                    context.evaluatePolicy(
-                        policy,
-                        localizedReason: reason
-                    ) { succeeded, _ in
-                        continuation.resume(returning: succeeded)
-                    }
-                }
-            },
-            onCancel: {
-                context.invalidate()
-            }
-        )
-    }
-
     fileprivate static func makeRandomKey() throws -> Data {
         var key = Data(count: 32)
         let status = key.withUnsafeMutableBytes { bytes in
@@ -1336,79 +1372,113 @@ final class SafariApprovalVault {
 }
 
 #if os(iOS) || os(visionOS)
-final class SafariApprovalVaultHost {
+private final class VaultProtectedDataObservation: Sendable {
+    private let center: NotificationCenter
+    private let token: Mutex<NSObjectProtocol?>
 
-    private struct PublicationMetadata: Codable {
+    init(center: NotificationCenter, name: Notification.Name, action: @escaping @Sendable () -> Void) {
+        self.center = center
+        token = Mutex(center.addObserver(forName: name, object: nil, queue: nil) { _ in action() })
+    }
+
+    deinit {
+        token.withLock { token in
+            if let token { center.removeObserver(token) }
+            token = nil
+        }
+    }
+}
+#endif
+
+#if os(iOS) || os(visionOS)
+actor SafariApprovalVaultHost {
+    private struct PublicationMetadata: Codable, Sendable {
         let generation: UUID
         let envelopeDigest: Data
         let sourceMAC: Data
     }
 
-    typealias SynchronizeDefaults = (UserDefaults) -> Bool
-    typealias ScheduleReconciliationRetry = (DispatchWorkItem) -> Void
-    typealias BackgroundTask = (@escaping () -> Void) -> (() -> Void)?
+    final class ReconciliationRetry: Sendable {
+        private let cancelled = Mutex(false)
+        private let operation: @Sendable () async -> Void
+
+        init(operation: @escaping @Sendable () async -> Void) {
+            self.operation = operation
+        }
+
+        var isCancelled: Bool { cancelled.withLock { $0 } }
+        func cancel() { cancelled.withLock { $0 = true } }
+        func perform() async {
+            guard !isCancelled else { return }
+            await operation()
+        }
+    }
+
+    typealias SynchronizeDefaults = @Sendable (UserDefaults) -> Bool
+    typealias ScheduleReconciliationRetry = @Sendable (ReconciliationRetry) -> Void
+    typealias BackgroundTask = @Sendable (@escaping @Sendable () -> Void) -> (@Sendable () -> Void)?
+
+    private final class PublicationStorage: Sendable {
+        // UserDefaults operations are thread-safe; the coordination lease orders publication transactions.
+        nonisolated(unsafe) private let defaults: UserDefaults
+        private let synchronizeDefaults: SynchronizeDefaults
+
+        init(defaults: UserDefaults, synchronize: @escaping SynchronizeDefaults) {
+            self.defaults = defaults
+            synchronizeDefaults = synchronize
+        }
+
+        func data() -> Data? { defaults.data(forKey: publicationMetadataKey) }
+        func set(_ data: Data) { defaults.set(data, forKey: publicationMetadataKey) }
+        func remove() { defaults.removeObject(forKey: publicationMetadataKey) }
+        func synchronize() -> Bool { synchronizeDefaults(defaults) }
+    }
 
     static let shared = SafariApprovalVaultHost()
 
     private let vault: SafariApprovalVault
-    private let defaults: UserDefaults
+    private let metadata: PublicationStorage
     private let integrityKeyStore: SafariApprovalIntegrityKeyStoring
-    private let synchronizeDefaults: SynchronizeDefaults
-    private let sourceSnapshot: () throws -> SafariApprovalSourceSnapshot?
+    private let sourceSnapshot: @Sendable () async throws -> SafariApprovalSourceSnapshot?
     private let notificationCenter: NotificationCenter
-    private let reconciliationQueue: DispatchQueue
     private let scheduleReconciliationRetry: ScheduleReconciliationRetry
-    private let lock = NSRecursiveLock()
-    private let schedulingLock = NSLock()
-    private var isStarted = false
-    private var isReconciliationPending = false
+    private let protectedDataObservation = Mutex<VaultProtectedDataObservation?>(nil)
     private var backgroundTask: BackgroundTask?
-    private var protectedDataObserver: NSObjectProtocol?
-    private var reconciliationRetry: (id: UUID, work: DispatchWorkItem)?
+    private var reconciliationTask: Task<Void, Never>?
+    private var reconciliationRetry: (id: UUID, work: ReconciliationRetry)?
+    private var isPublishing = false
+    private var reconciliationRequested = false
+    private let waitToReconcile: @Sendable () async -> Void
 
     init(
         vault: SafariApprovalVault = .shared,
-        walletsManager: WalletsManager = .shared,
         defaults: UserDefaults = .standard,
-        integrityKeyStore: SafariApprovalIntegrityKeyStoring =
-            SafariApprovalIntegrityKeychainStore(),
-        synchronizeDefaults: @escaping SynchronizeDefaults = {
-            $0.synchronize()
-        },
+        integrityKeyStore: SafariApprovalIntegrityKeyStoring = SafariApprovalIntegrityKeychainStore(),
+        synchronizeDefaults: @escaping SynchronizeDefaults = { $0.synchronize() },
         notificationCenter: NotificationCenter = .default,
-        reconciliationQueue: DispatchQueue = DispatchQueue(
-            label: "org.lil.wallet.safari-approval-reconciliation",
-            qos: .utility
-        ),
+        waitToReconcile: @escaping @Sendable () async -> Void = {},
         scheduleReconciliationRetry: ScheduleReconciliationRetry? = nil,
-        sourceSnapshot: (() throws -> SafariApprovalSourceSnapshot?)? = nil
+        sourceSnapshot: @escaping @Sendable () async throws -> SafariApprovalSourceSnapshot? = {
+            try await WalletsManager.shared.safariApprovalSourceSnapshot()
+        }
     ) {
         self.vault = vault
-        self.defaults = defaults
+        metadata = PublicationStorage(defaults: defaults, synchronize: synchronizeDefaults)
         self.integrityKeyStore = integrityKeyStore
-        self.synchronizeDefaults = synchronizeDefaults
         self.notificationCenter = notificationCenter
-        self.reconciliationQueue = reconciliationQueue
-        self.scheduleReconciliationRetry = scheduleReconciliationRetry ?? {
-            reconciliationQueue.asyncAfter(
-                deadline: .now() + .milliseconds(100),
-                execute: $0
-            )
+        self.waitToReconcile = waitToReconcile
+        self.scheduleReconciliationRetry = scheduleReconciliationRetry ?? { retry in
+            Task {
+                try? await Task.sleep(for: .milliseconds(100))
+                await retry.perform()
+            }
         }
-        self.sourceSnapshot = sourceSnapshot ?? {
-            try walletsManager.safariApprovalSourceSnapshot()
-        }
-    }
-
-    deinit {
-        if let protectedDataObserver {
-            notificationCenter.removeObserver(protectedDataObserver)
-        }
+        self.sourceSnapshot = sourceSnapshot
     }
 
     @available(iOSApplicationExtension, unavailable)
     @available(visionOSApplicationExtension, unavailable)
-    static func backgroundTask(using application: UIApplication) -> BackgroundTask {
+    nonisolated static func backgroundTask(using application: UIApplication) -> BackgroundTask {
         { expiration in
             let identifier = application.beginBackgroundTask(
                 withName: "Publish Safari approval vault",
@@ -1419,176 +1489,158 @@ final class SafariApprovalVaultHost {
         }
     }
 
-    func start(backgroundTask: @escaping BackgroundTask) {
-        let shouldStart = schedulingLock.withLock {
-            guard !isStarted else { return false }
-            isStarted = true
-            self.backgroundTask = backgroundTask
-            return true
+    func start(backgroundTask: @escaping BackgroundTask) async {
+        guard self.backgroundTask == nil else { return }
+        self.backgroundTask = backgroundTask
+        let observer = VaultProtectedDataObservation(
+            center: notificationCenter,
+            name: UIApplication.protectedDataDidBecomeAvailableNotification
+        ) { [weak self] in
+            Task { await self?.reconcile() }
         }
-        guard shouldStart else { return }
-        protectedDataObserver = notificationCenter.addObserver(
-            forName: UIApplication.protectedDataDidBecomeAvailableNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            self?.reconcile()
-        }
+        protectedDataObservation.withLock { $0 = observer }
         reconcile()
     }
 
     func reconcile() {
-        let shouldSchedule = schedulingLock.withLock {
-            guard !isReconciliationPending else { return false }
-            isReconciliationPending = true
-            return true
-        }
-        guard shouldSchedule else { return }
-        reconciliationQueue.async { [weak self] in
-            self?.runReconciliation()
+        reconciliationRequested = true
+        guard reconciliationTask == nil else { return }
+        reconciliationTask = Task { [weak self] in
+            guard let self else { return }
+            await self.runReconciliation()
         }
     }
 
-    private func runReconciliation() {
-        schedulingLock.withLock { isReconciliationPending = false }
-        lock.lock()
-        defer { lock.unlock() }
-        reconcileIfAvailableLocked()
+    func waitForReconciliation() async {
+        while let reconciliationTask { await reconciliationTask.value }
     }
 
-    private func reconcileIfAvailableLocked() {
-        guard let begin = schedulingLock.withLock({ backgroundTask }),
-              let activity = SafariApprovalReconciliationActivity(begin: begin)
-        else { return }
+    private func runReconciliation() async {
+        defer { reconciliationTask = nil }
+        while reconciliationRequested {
+            await waitToReconcile()
+            reconciliationRequested = false
+            await reconcileIfAvailable()
+        }
+    }
+
+    @concurrent
+    private nonisolated func loadSourceSnapshot() async throws -> SafariApprovalSourceSnapshot? {
+        try await sourceSnapshot()
+    }
+
+    private func reconcileIfAvailable() async {
+        guard let begin = backgroundTask,
+              let activity = SafariApprovalReconciliationActivity(begin: begin) else { return }
         defer { activity.finish() }
         do {
             guard let coordinationLease = try activity.acquireLease(from: vault) else {
-                try activity.withActive { scheduleReconciliationRetryLocked() }
+                try activity.withActive { scheduleRetry() }
                 return
             }
-            cancelReconciliationRetryLocked()
-            reconcileLocked(coordinationLease: coordinationLease, activity: activity)
+            cancelReconciliationRetry()
+            isPublishing = true
+            defer { isPublishing = false }
+            await reconcilePublishedSource(coordinationLease: coordinationLease, activity: activity)
         } catch is CancellationError {
             return
         } catch {
-            cancelReconciliationRetryLocked()
+            cancelReconciliationRetry()
             SafariApprovalDiagnostics.record("acquire coordination lock", error: error)
         }
     }
 
-    private func scheduleReconciliationRetryLocked() {
+    private func scheduleRetry() {
         guard reconciliationRetry == nil else { return }
         let id = UUID()
-        let work = DispatchWorkItem { [weak self] in
-            self?.retryReconciliation(id: id)
+        let work = ReconciliationRetry { [weak self] in
+            await self?.retryReconciliation(id: id)
         }
         reconciliationRetry = (id, work)
         scheduleReconciliationRetry(work)
     }
 
-    private func retryReconciliation(id: UUID) {
-        lock.lock()
-        defer { lock.unlock() }
+    private func retryReconciliation(id: UUID) async {
         guard reconciliationRetry?.id == id else { return }
         reconciliationRetry = nil
-        reconcileIfAvailableLocked()
+        reconcile()
     }
 
-    private func cancelReconciliationRetryLocked() {
+    private func cancelReconciliationRetry() {
         reconciliationRetry?.work.cancel()
         reconciliationRetry = nil
     }
 
-    private enum MutationAttempt<Result> {
-        case publishing
-        case executionBusy
-        case completed(Result)
-    }
-
-    @MainActor
-    func performSourceMutation<Preparation, Result>(
-        preparing prepare: () throws -> Preparation,
-        _ operation: (Preparation) throws -> Result
+    func performSourceMutation<Preparation: Sendable, Result: Sendable>(
+        preparing prepare: @escaping @Sendable () async throws -> Preparation,
+        _ operation: @escaping @Sendable (Preparation) async throws -> Result
     ) async throws -> Result {
         try await performSourceMutation { willMutateSource in
-            let prepared = try prepare()
+            let prepared = try await prepare()
+            try Task.checkCancellation()
             try willMutateSource()
-            return try operation(prepared)
+            try Task.checkCancellation()
+            return try await operation(prepared)
         }
     }
 
-    @MainActor
-    func performSourceMutation<Result>(
-        _ operation: (_ willMutateSource: () throws -> Void) throws -> Result
+    func performSourceMutation<Result: Sendable>(
+        _ operation: @Sendable (_ willMutateSource: @Sendable () throws -> Void) async throws -> Result
     ) async throws -> Result {
-        var remainingExecutionWait = Duration.nanoseconds(
-            Int64(SafariApprovalVault.coordinationLockTimeoutNanoseconds)
-        )
-        var executionWaitStarted: ContinuousClock.Instant?
+        var remainingExecutionWait = Duration.nanoseconds(Int64(SafariApprovalVault.coordinationLockTimeoutNanoseconds))
+        var waitStarted: ContinuousClock.Instant?
+        let lease: SafariApprovalVault.CoordinationLease
         while true {
             try Task.checkCancellation()
-            let attempt = try tryPerformSourceMutation(operation)
-            let now = ContinuousClock.now
-            if let executionWaitStarted {
-                remainingExecutionWait -= executionWaitStarted.duration(to: now)
-            }
-            executionWaitStarted = nil
-            switch attempt {
-            case .completed(let result):
-                return result
-            case .publishing:
-                break
-            case .executionBusy:
-                guard remainingExecutionWait > .zero else {
+            if let waitStarted { remainingExecutionWait -= waitStarted.duration(to: .now) }
+            waitStarted = nil
+            if !isPublishing {
+                do {
+                    if let acquired = try vault.tryAcquireCoordinationLease() {
+                        lease = acquired
+                        break
+                    }
+                } catch {
                     throw SafariApprovalVault.Error.unavailable
                 }
-                executionWaitStarted = now
+                guard remainingExecutionWait > .zero else { throw SafariApprovalVault.Error.unavailable }
+                waitStarted = .now
             }
             try await Task.sleep(for: .milliseconds(10))
         }
-    }
-
-    @MainActor
-    private func tryPerformSourceMutation<Result>(
-        _ operation: (_ willMutateSource: () throws -> Void) throws -> Result
-    ) throws -> MutationAttempt<Result> {
-        guard lock.try() else { return .publishing }
-        defer { lock.unlock() }
-        let coordinationLease: SafariApprovalVault.CoordinationLease
-        do {
-            guard let acquired = try vault.tryAcquireCoordinationLease() else {
-                return .executionBusy
-            }
-            coordinationLease = acquired
-        } catch {
-            SafariApprovalDiagnostics.record("coordinate source mutation", error: error)
-            throw SafariApprovalVault.Error.unavailable
-        }
-        defer { coordinationLease.release() }
-        var attemptedSourceMutation = false
-        var didInvalidateSource = false
+        let mutation = Mutex((attempted: false, invalidated: false))
         defer {
-            if attemptedSourceMutation {
-                cancelReconciliationRetryLocked()
+            lease.release()
+            if mutation.withLock({ $0.attempted }) {
+                cancelReconciliationRetry()
                 reconcile()
             }
         }
-        return .completed(try operation {
-            guard !didInvalidateSource else { return }
-            attemptedSourceMutation = true
-            try willMutateSourceLocked(coordinationLease: coordinationLease)
-            didInvalidateSource = true
-        })
+        let vault = vault
+        let metadata = metadata
+        return try await operation {
+            try mutation.withLock { mutation in
+                guard !mutation.invalidated else { return }
+                mutation.attempted = true
+                do { try vault.clear(coordinationLease: lease) }
+                catch { throw SafariApprovalVault.Error.unavailable }
+                metadata.remove()
+                if !metadata.synchronize() {
+                    SafariApprovalDiagnostics.record("invalidate publication metadata", error: SafariApprovalVault.Error.unavailable)
+                }
+                mutation.invalidated = true
+            }
+        }
     }
 
-    private func reconcileLocked(
+    private func reconcilePublishedSource(
         coordinationLease: SafariApprovalVault.CoordinationLease,
         activity: SafariApprovalReconciliationActivity? = nil
-    ) {
+    ) async {
         var source: SafariApprovalSourceSnapshot
         do {
             try activity?.checkCancellation()
-            guard let loaded = try sourceSnapshot()
+            guard let loaded = try await loadSourceSnapshot()
             else {
                 clearVaultLocked(
                     coordinationLease: coordinationLease,
@@ -1690,25 +1742,8 @@ final class SafariApprovalVaultHost {
         }
     }
 
-    private func willMutateSourceLocked(
-        coordinationLease: SafariApprovalVault.CoordinationLease
-    ) throws {
-        do {
-            try vault.clear(coordinationLease: coordinationLease)
-        } catch {
-            throw SafariApprovalVault.Error.unavailable
-        }
-        defaults.removeObject(forKey: Self.publicationMetadataKey)
-        if !synchronizeDefaults(defaults) {
-            SafariApprovalDiagnostics.record(
-                "invalidate publication metadata",
-                error: SafariApprovalVault.Error.unavailable
-            )
-        }
-    }
-
     private func publicationMetadata() -> PublicationMetadata? {
-        guard let data = defaults.data(forKey: Self.publicationMetadataKey),
+        guard let data = metadata.data(),
               let metadata = try? JSONDecoder().decode(
                   PublicationMetadata.self,
                   from: data
@@ -1733,8 +1768,8 @@ final class SafariApprovalVaultHost {
             SafariApprovalDiagnostics.record("encode publication metadata", error: error)
             return
         }
-        defaults.set(data, forKey: Self.publicationMetadataKey)
-        if !synchronizeDefaults(defaults) {
+        self.metadata.set(data)
+        if !self.metadata.synchronize() {
             SafariApprovalDiagnostics.record(
                 "persist publication metadata",
                 error: SafariApprovalVault.Error.unavailable
@@ -1762,8 +1797,8 @@ final class SafariApprovalVaultHost {
             )
             cleared = false
         }
-        defaults.removeObject(forKey: Self.publicationMetadataKey)
-        _ = synchronizeDefaults(defaults)
+        metadata.remove()
+        _ = metadata.synchronize()
         return cleared
     }
 

@@ -2,6 +2,7 @@
 
 import Cocoa
 
+@MainActor
 protocol PreviewAccountCellDelegate: AnyObject {
     func didToggleCheckmark(_ sender: NSTableRowView)
 }

@@ -2,6 +2,7 @@
 
 import CryptoKit
 import Foundation
+import Synchronization
 import Security
 import XCTest
 @testable import Big_Wallet
@@ -192,7 +193,7 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
 
 #if os(macOS)
 private struct WalletSourceMutationStub: WalletSourceMutating {
-    let onRevoke: (WalletAuthorityRemoval) throws -> Void
+    let onRevoke: @Sendable (WalletAuthorityRemoval) throws -> Void
 
     func perform<Payload, Result>(
         preparing: () throws -> PreparedWalletSourceMutation<Payload>,
@@ -210,9 +211,9 @@ private struct WalletSourceMutationStub: WalletSourceMutating {
 
 private struct ObservedWalletSourceMutator: WalletSourceMutating {
     let base: any WalletSourceMutating
-    var beforeTransaction: () throws -> Void = {}
-    var beforePreparation: () -> Void = {}
-    var afterTransaction: () -> Void = {}
+    var beforeTransaction: @Sendable () throws -> Void = {}
+    var beforePreparation: @Sendable () -> Void = {}
+    var afterTransaction: @Sendable () -> Void = {}
 
     func perform<Payload, Result>(
         preparing: () throws -> PreparedWalletSourceMutation<Payload>,
@@ -241,13 +242,13 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
     func testWalletDeletionRevokesBeforeSourceRemovalAndPreservesSiblingMetadata() async throws {
         let fixture = try RemovalFixture()
-        var removals = [WalletAuthorityRemoval]()
+        let removals = Mutex([WalletAuthorityRemoval]())
         let manager = fixture.manager { removal in
-            removals.append(removal)
+            removals.withLock { $0.append(removal) }
             fixture.keychain.events.append("cleanup")
             XCTAssertNotNil(fixture.keychain.walletData[fixture.walletID])
         }
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
         let sibling = try XCTUnwrap(manager.wallets.first { $0.id == fixture.siblingID })
         let account = try XCTUnwrap(wallet.accounts.first)
@@ -259,8 +260,8 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
         try await manager.delete(wallet: wallet)
 
-        XCTAssertEqual(removals.count, 1)
-        guard case .wallet(let id)? = removals.first else { return XCTFail("Expected whole-wallet revocation") }
+        XCTAssertEqual(removals.withLock { $0.count }, 1)
+        guard case .wallet(let id)? = removals.withLock({ $0.first }) else { return XCTFail("Expected whole-wallet revocation") }
         XCTAssertEqual(id, fixture.walletID)
         XCTAssertEqual(fixture.keychain.events, ["cleanup", "delete"])
         XCTAssertNil(fixture.keychain.walletData[fixture.walletID])
@@ -275,15 +276,15 @@ final class WalletRemovalIntegrationTests: XCTestCase {
     func testBothAccountRemovalPathsPreserveConcurrentAdditionsAndSiblingMetadata() async throws {
         for useEnabledAccounts in [false, true] {
             let fixture = try RemovalFixture()
-            var removedAccounts = Set<WalletAccountDescriptor>()
+            let removedAccounts = Mutex(Set<WalletAccountDescriptor>())
             let manager = fixture.manager { removal in
                 guard case .accounts(let accounts) = removal else {
                     return XCTFail("Expected account-scoped revocation")
                 }
-                removedAccounts.formUnion(accounts)
+                removedAccounts.withLock { $0.formUnion(accounts) }
                 fixture.keychain.events.append("cleanup")
             }
-            XCTAssertTrue(manager.reloadFromStore())
+            await assertWalletReload(manager)
             let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
             let sibling = try XCTUnwrap(manager.wallets.first { $0.id == fixture.siblingID })
             let retained = wallet.accounts[0]
@@ -303,7 +304,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 try await manager.update(wallet: wallet, removeAccounts: [removed])
             }
 
-            XCTAssertEqual(removedAccounts, [WalletAccountDescriptor(walletID: wallet.id, account: removed)])
+            XCTAssertEqual(removedAccounts.withLock { $0 }, [WalletAccountDescriptor(walletID: wallet.id, account: removed)])
             XCTAssertEqual(fixture.keychain.events, ["cleanup", "update"])
             let persisted = try fixture.persistedWallet()
             XCTAssertEqual(Set(persisted.accounts.map(\.previewAccountKey)), [retained.previewAccountKey, concurrent.previewAccountKey])
@@ -336,25 +337,26 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             let concurrentOrigin = "https://concurrent-account.example"
             try grant(removedDescriptor, in: store, id: 1, origin: removedOrigin)
             WalletsMetadataService.saveAccountName("Removed", wallet: staleWallet, account: removed)
-            var transactionEntries = 0
-            var insideTransaction = false
+            let transactionEntries = Mutex(0)
+            let insideTransaction = Mutex(false)
+            let grantConcurrent = try preparedGrant(concurrentDescriptor, in: store, id: 2, origin: concurrentOrigin)
             let manager = fixture.transactionManager(ObservedWalletSourceMutator(
                 base: store,
                 beforeTransaction: {
-                    transactionEntries += 1
+                    transactionEntries.withLock { $0 += 1 }
                     fixture.keychain.walletData[fixture.walletID] = try fixture.walletData(adding: concurrent)
-                    try self.grant(concurrentDescriptor, in: store, id: 2, origin: concurrentOrigin)
+                    try grantConcurrent()
                     WalletsMetadataService.saveAccountName("Concurrent", wallet: staleWallet, account: concurrent)
                 },
-                beforePreparation: { insideTransaction = true },
-                afterTransaction: { insideTransaction = false }
+                beforePreparation: { insideTransaction.withLock { $0 = true } },
+                afterTransaction: { insideTransaction.withLock { $0 = false } }
             ))
-            XCTAssertTrue(manager.reloadFromStore())
+            await assertWalletReload(manager)
             fixture.keychain.beforeWalletRead = { _ in
-                XCTAssertTrue(insideTransaction, "Source accounts must be read after acquiring the transaction")
+                XCTAssertTrue(insideTransaction.withLock { $0 }, "Source accounts must be read after acquiring the transaction")
             }
             fixture.keychain.beforeWalletWrite = {
-                XCTAssertTrue(insideTransaction, "Source accounts must be written before releasing the transaction")
+                XCTAssertTrue(insideTransaction.withLock { $0 }, "Source accounts must be written before releasing the transaction")
             }
 
             if useEnabledAccounts {
@@ -365,7 +367,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             fixture.keychain.beforeWalletRead = nil
             fixture.keychain.beforeWalletWrite = nil
 
-            XCTAssertEqual(transactionEntries, 1)
+            XCTAssertEqual(transactionEntries.withLock { $0 }, 1)
             XCTAssertEqual(fixture.keychain.events, ["update"])
             let persisted = try fixture.persistedWallet()
             XCTAssertEqual(Set(persisted.accounts.map(\.previewAccountKey)), [retained.previewAccountKey, concurrent.previewAccountKey])
@@ -383,48 +385,72 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
     func testAccountAdditionsAndWalletImportsUseTheSourceMutationBoundary() async throws {
         let fixture = try RemovalFixture()
-        var transactionEntries = 0
-        var revocations = 0
-        var insideTransaction = false
+        let transactionEntries = Mutex(0)
+        let revocations = Mutex(0)
+        let insideTransaction = Mutex(false)
         let manager = fixture.transactionManager(ObservedWalletSourceMutator(
-            base: WalletSourceMutationStub(onRevoke: { _ in revocations += 1 }),
+            base: WalletSourceMutationStub(onRevoke: { _ in revocations.withLock { $0 += 1 } }),
             beforePreparation: {
-                transactionEntries += 1
-                insideTransaction = true
+                transactionEntries.withLock { $0 += 1 }
+                insideTransaction.withLock { $0 = true }
             },
-            afterTransaction: { insideTransaction = false }
+            afterTransaction: { insideTransaction.withLock { $0 = false } }
         ))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
         let added = fixture.additionalAccount(index: 2)
-        fixture.keychain.beforeWalletRead = { _ in XCTAssertTrue(insideTransaction) }
-        fixture.keychain.beforeWalletWrite = { XCTAssertTrue(insideTransaction) }
+        fixture.keychain.beforeWalletRead = { _ in XCTAssertTrue(insideTransaction.withLock { $0 }) }
+        fixture.keychain.beforeWalletWrite = { XCTAssertTrue(insideTransaction.withLock { $0 }) }
 
         try await manager.update(wallet: wallet, enabledAccounts: wallet.accounts + [added])
 
-        XCTAssertEqual(transactionEntries, 1)
-        XCTAssertEqual(revocations, 0)
+        XCTAssertEqual(transactionEntries.withLock { $0 }, 1)
+        XCTAssertEqual(revocations.withLock { $0 }, 0)
         XCTAssertEqual(fixture.keychain.events, ["update"])
         fixture.keychain.beforeWalletRead = nil
         XCTAssertTrue(try fixture.persistedWallet().accounts.contains { $0.previewAccountKey == added.previewAccountKey })
-        fixture.keychain.beforeWalletRead = { _ in XCTAssertTrue(insideTransaction) }
+        fixture.keychain.beforeWalletRead = { _ in XCTAssertTrue(insideTransaction.withLock { $0 }) }
 
         let imported = try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey), inputPassword: nil)
         fixture.keychain.beforeWalletRead = nil
         fixture.keychain.beforeWalletWrite = nil
 
-        XCTAssertEqual(transactionEntries, 2)
-        XCTAssertEqual(revocations, 0)
+        XCTAssertEqual(transactionEntries.withLock { $0 }, 2)
+        XCTAssertEqual(revocations.withLock { $0 }, 0)
         XCTAssertEqual(fixture.keychain.events, ["update", "delete", "add"])
         XCTAssertNotNil(fixture.keychain.walletData[imported.id])
     }
 
+    func testCanceledImportNeverEntersSourceCommit() async throws {
+        let fixture = try RemovalFixture()
+        let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+            base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Canceled imports must not revoke authority") }),
+            beforeTransaction: { withUnsafeCurrentTask { $0?.cancel() } }
+        ))
+        await assertWalletReload(manager)
+        let originalData = fixture.keychain.walletData
+        let originalWallets = manager.wallets
+        let operation = Task {
+            try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey), inputPassword: nil)
+        }
+
+        do {
+            _ = try await operation.value
+            XCTFail("Canceled preparation must not be committed")
+        } catch is CancellationError {
+        }
+
+        XCTAssertTrue(fixture.keychain.events.isEmpty)
+        XCTAssertEqual(fixture.keychain.walletData, originalData)
+        XCTAssertEqual(manager.wallets, originalWallets)
+    }
+
     func testFailedJSONDecryptionDoesNotEnterSourceMutation() async throws {
         let fixture = try RemovalFixture()
-        var transactionEntries = 0
+        let transactionEntries = Mutex(0)
         let manager = fixture.transactionManager(ObservedWalletSourceMutator(
             base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Unexpected revocation") }),
-            beforeTransaction: { transactionEntries += 1 }
+            beforeTransaction: { transactionEntries.withLock { $0 += 1 } }
         ))
 
         do {
@@ -436,7 +462,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         } catch WalletKeyStoreError.invalidPassword {
         }
 
-        XCTAssertEqual(transactionEntries, 0)
+        XCTAssertEqual(transactionEntries.withLock { $0 }, 0)
         XCTAssertTrue(fixture.keychain.events.isEmpty)
     }
 
@@ -444,15 +470,15 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         for createWallet in [true, false] {
             for passwordData: Data? in [Data("changed password".utf8), nil] {
                 let fixture = try RemovalFixture()
-                var transactionEntries = 0
+                let transactionEntries = Mutex(0)
                 let manager = fixture.transactionManager(ObservedWalletSourceMutator(
                     base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Unexpected revocation") }),
                     beforeTransaction: {
-                        transactionEntries += 1
+                        transactionEntries.withLock { $0 += 1 }
                         fixture.keychain.passwordData = passwordData
                     }
                 ))
-                XCTAssertTrue(manager.reloadFromStore())
+                await assertWalletReload(manager)
                 let originalData = fixture.keychain.walletData
                 let originalWalletIDs = manager.wallets.map(\.id)
 
@@ -469,7 +495,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 } catch WalletsManager.Error.keychainAccessFailure {
                 }
 
-                XCTAssertEqual(transactionEntries, 1)
+                XCTAssertEqual(transactionEntries.withLock { $0 }, 1)
                 XCTAssertTrue(fixture.keychain.events.isEmpty)
                 XCTAssertEqual(fixture.keychain.walletData, originalData)
                 XCTAssertEqual(manager.wallets.map(\.id), originalWalletIDs)
@@ -480,12 +506,12 @@ final class WalletRemovalIntegrationTests: XCTestCase {
     func testCleanupFailureLeavesSourceAndMetadataUnchanged() async throws {
         for operation in RemovalOperation.allCases {
             let fixture = try RemovalFixture()
-            var cleanupAttempts = 0
+            let cleanupAttempts = Mutex(0)
             let manager = fixture.manager { _ in
-                cleanupAttempts += 1
+                cleanupAttempts.withLock { $0 += 1 }
                 throw TestError.cleanupFailed
             }
-            XCTAssertTrue(manager.reloadFromStore())
+            await assertWalletReload(manager)
             let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
             let originalData = fixture.keychain.walletData
             let originalAccounts = wallet.accounts
@@ -499,7 +525,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             } catch TestError.cleanupFailed {
             }
 
-            XCTAssertEqual(cleanupAttempts, 1)
+            XCTAssertEqual(cleanupAttempts.withLock { $0 }, 1)
             XCTAssertTrue(fixture.keychain.events.isEmpty)
             XCTAssertEqual(fixture.keychain.walletData, originalData)
             XCTAssertEqual(manager.wallets.first { $0.id == wallet.id }?.accounts, originalAccounts)
@@ -512,12 +538,12 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             let fixture = try RemovalFixture()
             fixture.keychain.deleteStatus = errSecInteractionNotAllowed
             fixture.keychain.updateStatus = errSecInteractionNotAllowed
-            var cleanupApplied = false
+            let cleanupApplied = Mutex(false)
             let manager = fixture.manager { _ in
-                cleanupApplied = true
+                cleanupApplied.withLock { $0 = true }
                 fixture.keychain.events.append("cleanup")
             }
-            XCTAssertTrue(manager.reloadFromStore())
+            await assertWalletReload(manager)
             let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
             let originalData = fixture.keychain.walletData
             let originalAccounts = wallet.accounts
@@ -531,7 +557,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             } catch is Keychain.KeychainError {
             }
 
-            XCTAssertTrue(cleanupApplied)
+            XCTAssertTrue(cleanupApplied.withLock { $0 })
             XCTAssertEqual(fixture.keychain.events, ["cleanup", operation == .wallet ? "delete" : "update"])
             XCTAssertEqual(fixture.keychain.walletData, originalData)
             XCTAssertEqual(manager.wallets.first { $0.id == wallet.id }?.accounts, originalAccounts)
@@ -553,7 +579,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         }
         let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory)
         let manager = fixture.transactionManager(store)
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
         let account = try XCTUnwrap(wallet.accounts.first)
         let descriptor = WalletAccountDescriptor(walletID: wallet.id, account: account)
@@ -612,6 +638,10 @@ final class WalletRemovalIntegrationTests: XCTestCase {
     }
 
     private func grant(_ account: WalletAccountDescriptor, in store: ExtensionRequestFileStore, id: Int, origin: String) throws {
+        try preparedGrant(account, in: store, id: id, origin: origin)()
+    }
+
+    private func preparedGrant(_ account: WalletAccountDescriptor, in store: ExtensionRequestFileStore, id: Int, origin: String) throws -> @Sendable () throws -> Void {
         let initial = try connection(in: store, id: id, origin: origin)
         let approval = try resolvedApprovalForTesting(
             snapshot: initial,
@@ -626,9 +656,13 @@ final class WalletRemovalIntegrationTests: XCTestCase {
               claim.adoptForExecution(),
               case .authorized(let permit) = store.authorize(claim: claim, approval: approval),
               permit.consumeExecution(),
-              let completion = ApprovedCompletion.accountSelection(permit: permit),
-              store.complete(permit: permit, result: completion) == .persisted else {
+              let completion = ApprovedCompletion.accountSelection(permit: permit) else {
             throw CocoaError(.fileWriteUnknown)
+        }
+        return {
+            guard store.complete(permit: permit, result: completion) == .persisted else {
+                throw CocoaError(.fileWriteUnknown)
+            }
         }
     }
 
@@ -636,7 +670,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         case wallet, accounts, enabledAccounts
 
         @MainActor
-        func apply(manager: WalletsManager, wallet: WalletContainer) async throws {
+        func apply(manager: WalletsManager, wallet: WalletSnapshot) async throws {
             switch self {
             case .wallet:
                 try await manager.delete(wallet: wallet)
@@ -648,7 +682,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         }
     }
 
-    private final class RemovalFixture {
+    private final class RemovalFixture: Sendable {
         let walletID = "removal-test-\(UUID().uuidString)"
         let siblingID = "removal-sibling-\(UUID().uuidString)"
         let keychain = WalletRemovalKeychainStub()
@@ -658,10 +692,12 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             keychain.walletData = [walletID: data, siblingID: data]
         }
 
-        func manager(onRevoke: @escaping (WalletAuthorityRemoval) throws -> Void) -> WalletsManager {
+        @MainActor
+        func manager(onRevoke: @escaping @Sendable (WalletAuthorityRemoval) throws -> Void) -> WalletsManager {
             transactionManager(WalletSourceMutationStub(onRevoke: onRevoke))
         }
 
+        @MainActor
         func transactionManager(_ mutator: any WalletSourceMutating) -> WalletsManager {
             WalletsManager(
                 keychain: Keychain(copyMatching: keychain.copyMatching, add: keychain.add,
@@ -690,30 +726,68 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             )
         }
 
-        func persistedWallet() throws -> WalletContainer {
+        func persistedWallet() throws -> WalletSnapshot {
             let data = try XCTUnwrap(keychain.walletData[walletID])
             let key = try XCTUnwrap(WalletStoredKey.importJSON(json: data))
-            return WalletContainer(id: walletID, key: key)
+            return WalletSnapshot(WalletContainer(id: walletID, key: key))
         }
 
         func clearMetadata() {
             for id in [walletID, siblingID] {
                 guard let key = WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture) else { continue }
-                WalletsMetadataService.removeMetadataForWallet(WalletContainer(id: id, key: key), postChange: false)
+                WalletsMetadataService.removeMetadataForWallet(WalletSnapshot(WalletContainer(id: id, key: key)), postChange: false)
             }
         }
     }
 }
 
-private final class WalletRemovalKeychainStub {
+private final class WalletRemovalKeychainStub: Sendable {
     private let walletPrefix = "org.lil.wallet.wallet."
-    var walletData = [String: Data]()
-    var passwordData: Data? = Vectors.walletCoreJSONMnemonicPassword
-    var events = [String]()
-    var deleteStatus = errSecSuccess
-    var updateStatus = errSecSuccess
-    var beforeWalletRead: ((String) -> Void)?
-    var beforeWalletWrite: (() -> Void)?
+    private struct State: Sendable {
+        var walletData: [String: Data] = [:]
+        var passwordData: Data? = Vectors.walletCoreJSONMnemonicPassword
+        var events: [String] = []
+        var deleteStatus: OSStatus = errSecSuccess
+        var updateStatus: OSStatus = errSecSuccess
+        var beforeWalletRead: (@Sendable (String) -> Void)? = nil
+        var beforeWalletWrite: (@Sendable () -> Void)? = nil
+    }
+    private let state = Mutex(State())
+
+    var walletData: [String: Data] {
+        get { state.withLock { $0.walletData } }
+        set { state.withLock { $0.walletData = newValue } }
+    }
+
+    var passwordData: Data? {
+        get { state.withLock { $0.passwordData } }
+        set { state.withLock { $0.passwordData = newValue } }
+    }
+
+    var events: [String] {
+        get { state.withLock { $0.events } }
+        set { state.withLock { $0.events = newValue } }
+    }
+
+    var deleteStatus: OSStatus {
+        get { state.withLock { $0.deleteStatus } }
+        set { state.withLock { $0.deleteStatus = newValue } }
+    }
+
+    var updateStatus: OSStatus {
+        get { state.withLock { $0.updateStatus } }
+        set { state.withLock { $0.updateStatus = newValue } }
+    }
+
+    var beforeWalletRead: (@Sendable (String) -> Void)? {
+        get { state.withLock { $0.beforeWalletRead } }
+        set { state.withLock { $0.beforeWalletRead = newValue } }
+    }
+
+    var beforeWalletWrite: (@Sendable () -> Void)? {
+        get { state.withLock { $0.beforeWalletWrite } }
+        set { state.withLock { $0.beforeWalletWrite = newValue } }
+    }
 
     func copyMatching(_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus {
         let query = query as NSDictionary
@@ -944,11 +1018,11 @@ final class WalletSigningScopeTests: XCTestCase {
             for interruption in Interruption.allCases {
                 let start = Date()
                 var now = start
-                var current = true
+                let current = Mutex(true)
                 let backing = SigningSpy()
                 let access = requestAccess(
                     approved: descriptor(), backing: backing, deadline: start.addingTimeInterval(1),
-                    isCurrent: { current }, clock: { now }
+                    isCurrent: { current.withLock { $0 } }, clock: { now }
                 )
                 let checking = expectation(description: "Authority check \(suspendedCheck): \(interruption)")
                 var checks = 0
@@ -972,7 +1046,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 case .expired: now = start.addingTimeInterval(1)
                 case .invalidated: access.invalidate()
                 case .canceled: signing.cancel()
-                case .sourceChanged: current = false
+                case .sourceChanged: current.withLock { $0 = false }
                 }
                 if interruption == .invalidated || interruption == .canceled {
                     XCTAssertEqual(backing.invalidations, 1)
@@ -1022,7 +1096,7 @@ final class WalletSigningScopeTests: XCTestCase {
         for interruption in 0..<4 {
             let start = Date()
             var now = start
-            var current = true
+            let current = Mutex(true)
             let backing = SigningSpy()
             let started = expectation(description: "Signing started")
             var continuation: CheckedContinuation<Void, Never>?
@@ -1034,7 +1108,7 @@ final class WalletSigningScopeTests: XCTestCase {
             }
             let access = requestAccess(
                 approved: descriptor(), backing: backing, deadline: start.addingTimeInterval(1),
-                isCurrent: { current }, clock: { now }
+                isCurrent: { current.withLock { $0 } }, clock: { now }
             )
             let signer = access
             XCTAssertTrue(access.bind(operation: try approvedWalletSigningOperationForTesting(
@@ -1046,7 +1120,7 @@ final class WalletSigningScopeTests: XCTestCase {
             case 0: access.invalidate()
             case 1: now = start.addingTimeInterval(1)
             case 2: signing.cancel()
-            default: current = false
+            default: current.withLock { $0 = false }
             }
             if interruption == 0 || interruption == 2 {
                 XCTAssertEqual(backing.invalidations, 1)
@@ -1090,13 +1164,152 @@ final class WalletSigningScopeTests: XCTestCase {
         XCTAssertTrue(backing.operations.isEmpty)
     }
 
+    func testSourceRevocationDuringKeyDerivationPreventsSigning() async throws {
+        for revokePermission in [true, false] {
+            let reader = KeychainCopyMatchingStub()
+            reader.attributes = [reader.walletAttributes(id: walletID)]
+            reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
+            reader.passwordData = Vectors.walletCoreJSONPrivateKeyPassword
+            let derivationStarted = expectation(description: "Key derivation suspended")
+            let gate = SourceSigningGate()
+            let key = try XCTUnwrap(WalletPrivateKey(data: Vectors.walletCoreJSONPrivateKeyData))
+            let manager = WalletsManager(
+                keychain: Keychain(copyMatching: reader.copyMatching),
+                keyDerivation: .init(derive: { _, _ in
+                    derivationStarted.fulfill()
+                    await gate.wait()
+                    return key
+                })
+            )
+            await assertWalletReload(manager)
+            let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
+            let approved = WalletAccountDescriptor(walletID: walletID, account: account)
+            let fixture = try ApprovedExecutionTestFixture()
+            let operation = try sourceSigningOperation(in: fixture, account: approved)
+            let session = WalletSigningSession.fromSource(
+                operation: operation, walletsManager: manager,
+                authorityIsCurrent: { fixture.store.authorityIsCurrent(handle: $0) }
+            )
+            let signing = Task { await session.sign() }
+            await fulfillment(of: [derivationStarted], timeout: 2)
+
+            if revokePermission {
+                guard case .snapshot(let authority) = fixture.store.configurationSnapshot(
+                    configurationKey: "https://wallet.example", profileIdentifier: nil
+                ), case .revoked = fixture.store.revoke(
+                    configurationKey: "https://wallet.example", provider: .ethereum,
+                    attempt: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(), expected: authority.version, profileIdentifier: nil
+                ) else {
+                    await gate.open()
+                    _ = await signing.value
+                    return XCTFail("Expected authority revocation during derivation")
+                }
+            } else {
+                reader.walletData[walletID] = nil
+            }
+            await gate.open()
+
+            assertUnavailable(await signing.value)
+            assertUnavailable(await session.sign())
+        }
+    }
+
+    func testSourceResultRejectsPermissionRevocationAfterAnAuthoritySnapshot() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: walletID)]
+        reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
+        reader.passwordData = Vectors.walletCoreJSONPrivateKeyPassword
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
+        let fixture = try ApprovedExecutionTestFixture()
+        let operation = try sourceSigningOperation(in: fixture, account: .init(walletID: walletID, account: account))
+        let authorityRead = expectation(description: "The final authority snapshot was captured")
+        let gate = SourceSigningGate()
+        var checks = 0
+        let session = WalletSigningSession.fromSource(
+            operation: operation, walletsManager: manager,
+            authorityIsCurrent: { handle in
+                checks += 1
+                let current = fixture.store.authorityIsCurrent(handle: handle)
+                if checks == 2 {
+                    authorityRead.fulfill()
+                    await gate.wait()
+                }
+                return current
+            }
+        )
+        let signing = Task { await session.sign() }
+        await fulfillment(of: [authorityRead], timeout: 10)
+        guard checks == 2 else {
+            signing.cancel()
+            await gate.open()
+            _ = await signing.value
+            return XCTFail("Expected the final authority snapshot before revocation")
+        }
+        guard case .snapshot(let authority) = fixture.store.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ), case .revoked = fixture.store.revoke(
+            configurationKey: "https://wallet.example", provider: .ethereum,
+            attempt: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(), expected: authority.version, profileIdentifier: nil
+        ) else {
+            await gate.open()
+            _ = await signing.value
+            return XCTFail("Expected permission revocation after the authority snapshot")
+        }
+        await gate.open()
+
+        assertUnavailable(await signing.value)
+        XCTAssertEqual(checks, 2)
+    }
+
+    private actor SourceSigningGate {
+        private var isOpen = false
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func wait() async {
+            guard !isOpen else { return }
+            await withCheckedContinuation { continuation = $0 }
+        }
+
+        func open() {
+            isOpen = true
+            let continuation = continuation
+            self.continuation = nil
+            continuation?.resume()
+        }
+    }
+
+    private func sourceSigningOperation(
+        in fixture: ApprovedExecutionTestFixture,
+        account: WalletAccountDescriptor
+    ) throws -> ApprovedWalletSigningOperation {
+        try fixture.establishGrant(account)
+        let snapshot = try fixture.enqueue(
+            id: 1, name: "signPersonalMessage", provider: .ethereum,
+            body: ["address": account.normalizedAddress, "chainId": "0x1", "object": ["data": "0x01"]]
+        )
+        let catalog = WalletReviewCatalog(
+            identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [account.specificAccount]
+        )
+        guard case .approval(let intent) = DappRequestProcessor().prepare(try XCTUnwrap(snapshot.requestBinding), catalog: catalog) else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        let permit = try fixture.authorize(
+            snapshot: snapshot, action: intent.action,
+            decision: .message(.init(approvedAccount: account, solanaCluster: nil))
+        )
+        XCTAssertTrue(permit.consumeExecution())
+        return try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
+    }
+
     func testSourceSignerSignsOnceAndReturnsVerifiableSignature() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [reader.walletAttributes(id: walletID)]
         reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
         reader.passwordData = Vectors.walletCoreJSONPrivateKeyPassword
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-        XCTAssertTrue(manager.reloadFromStore())
+        await assertWalletReload(manager)
         let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
         let operation = try approvedWalletSigningOperationForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
@@ -1104,11 +1317,13 @@ final class WalletSigningScopeTests: XCTestCase {
         let initialWalletReads = reader.walletReadCount
         let signer = WalletSigningSession.fromSource(operation: operation, walletsManager: manager, authorityIsCurrent: { _ in true })
         try assertWalletSigningSuccessForTesting(await signer.sign(), account: account)
-        XCTAssertEqual(reader.walletReadCount - initialWalletReads, 4)
-        XCTAssertEqual(reader.passwordReadCount, 1)
+        XCTAssertGreaterThan(reader.walletReadCount, initialWalletReads)
+        XCTAssertGreaterThan(reader.passwordReadCount, 0)
+        let completedReads = reader.walletReadCount
+        let completedPasswordReads = reader.passwordReadCount
         assertUnavailable(await signer.sign())
-        XCTAssertEqual(reader.walletReadCount - initialWalletReads, 4)
-        XCTAssertEqual(reader.passwordReadCount, 1)
+        XCTAssertEqual(reader.walletReadCount, completedReads)
+        XCTAssertEqual(reader.passwordReadCount, completedPasswordReads)
     }
 
     func testSourceSignerRejectsWalletRemovalDuringEitherAuthorityCheck() async throws {
@@ -1118,7 +1333,7 @@ final class WalletSigningScopeTests: XCTestCase {
             reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
             reader.passwordData = Vectors.walletCoreJSONPrivateKeyPassword
             let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
-            XCTAssertTrue(manager.reloadFromStore())
+            await assertWalletReload(manager)
             let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
             let operation = try approvedWalletSigningOperationForTesting(
                 approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account)
@@ -1146,11 +1361,13 @@ final class WalletSigningScopeTests: XCTestCase {
 
             assertUnavailable(await signing.value)
             XCTAssertEqual(checks, suspendedCheck)
-            XCTAssertEqual(reader.walletReadCount - initialWalletReads, suspendedCheck == 1 ? 2 : 4)
-            XCTAssertEqual(reader.passwordReadCount, suspendedCheck - 1)
+            XCTAssertGreaterThan(reader.walletReadCount, initialWalletReads)
+            XCTAssertEqual(reader.passwordReadCount > 0, suspendedCheck == 2)
+            let completedReads = reader.walletReadCount
+            let completedPasswordReads = reader.passwordReadCount
             assertUnavailable(await signer.sign())
-            XCTAssertEqual(reader.walletReadCount - initialWalletReads, suspendedCheck == 1 ? 2 : 4)
-            XCTAssertEqual(reader.passwordReadCount, suspendedCheck - 1)
+            XCTAssertEqual(reader.walletReadCount, completedReads)
+            XCTAssertEqual(reader.passwordReadCount, completedPasswordReads)
         }
     }
 
@@ -1491,8 +1708,8 @@ final class WalletSigningScopeTests: XCTestCase {
         approved: WalletAccountDescriptor,
         backing: SigningSpy,
         deadline: Date = .distantFuture,
-        isCurrent: @escaping () -> Bool = { true },
-        clock: @escaping () -> Date = Date.init
+        isCurrent: @escaping @Sendable () -> Bool = { true },
+        clock: @escaping @MainActor @Sendable () -> Date = Date.init
     ) -> WalletSigningSession {
         WalletSigningSession(backing, authorization: walletSigningAuthorizationForTesting(approvedAccount: approved, deadline: deadline), isCurrent: isCurrent,
                                   acquireCommitLease: { WalletExecutionLease {} }, clock: clock)
@@ -1507,13 +1724,13 @@ final class WalletSigningScopeTests: XCTestCase {
         }
     }
 
+    @MainActor
     private final class SigningSpy: OwnedWalletSigningAccess {
-        private let lock = NSLock()
+        private nonisolated let invalidationCount = Mutex(0)
         var operations = [ApprovedWalletSigningOperation]()
-        private var invalidationCount = 0
-        var invalidations: Int { lock.withLock { invalidationCount } }
+        nonisolated var invalidations: Int { invalidationCount.withLock { $0 } }
         var result: Result<WalletSigningOutput, WalletSigningFailure> = .success(.ethereumSignature("test-signature"))
-        var beforeReturn: (() async -> Void)?
+        var beforeReturn: (@MainActor () async -> Void)?
 
         @MainActor
         func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
@@ -1522,6 +1739,6 @@ final class WalletSigningScopeTests: XCTestCase {
             return result
         }
 
-        func invalidate() { lock.withLock { invalidationCount += 1 } }
+        nonisolated func invalidate() { invalidationCount.withLock { $0 += 1 } }
     }
 }

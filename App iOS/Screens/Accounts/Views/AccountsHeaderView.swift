@@ -2,6 +2,7 @@
 
 import UIKit
 
+@MainActor
 protocol AccountsHeaderViewDelegate: AnyObject {
     func didTapEditButton(_ sender: AccountsHeaderView, sectionIndex: Int)
 }

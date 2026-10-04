@@ -6,6 +6,7 @@ final class WalletWindowController: NSWindowController {
     var approvalPeer: PeerMeta?
 }
 
+@MainActor
 struct Window {
     
     private static var isClosingAllWindows = false
@@ -150,10 +151,12 @@ struct Window {
     
 }
 
+@MainActor
 extension NSStoryboard {
     static let main = NSStoryboard(name: "Main", bundle: nil)
 }
 
+@MainActor
 func instantiate<ViewController: NSViewController>(_ type: ViewController.Type) -> ViewController {
     return NSStoryboard.main.instantiateController(withIdentifier: String(describing: type)) as! ViewController
 }

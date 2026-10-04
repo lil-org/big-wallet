@@ -2,6 +2,7 @@
 
 import Cocoa
 
+@MainActor
 struct Images {
     
     static var multicoinWalletPreferences: NSImage { systemName("ellipsis.rectangle") }

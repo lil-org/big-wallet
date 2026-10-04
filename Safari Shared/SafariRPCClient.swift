@@ -5,7 +5,8 @@ import Foundation
 @testable import Big_Wallet
 #endif
 
-final class SafariRPCClient {
+final class SafariRPCClient: Sendable {
+    enum Error: Swift.Error { case invalidResponse }
 
     private static let replaySafeMethods: Set<String> = [
         "eth_accounts",
@@ -57,32 +58,33 @@ final class SafariRPCClient {
         self.authorizationProvider = authorizationProvider
     }
 
-    func send(endpoint: EthereumRPCEndpoint,
-              body: Data,
-              expectedResponseID: Int,
-              completion: @escaping ([String: Any]?) -> Void) {
-        Task {
-            do {
-                let authorization: AlchemyAuthorization?
-                if endpoint.allowsAlchemyAuthorization {
-                    authorization = try await self.authorizationProvider.authorization(
-                        for: endpoint.url
-                    )
-                } else {
-                    authorization = nil
-                }
-                let response = try await self.performSend(
-                    endpoint: endpoint,
-                    body: body,
-                    authorization: authorization,
-                    didRetryUnauthorized: false,
-                    expectedResponseID: expectedResponseID
-                )
-                completion(response)
-            } catch {
-                completion(nil)
-            }
+    @concurrent
+    func send(
+        endpoint: EthereumRPCEndpoint,
+        body: Data,
+        expectedResponseID: Int
+    ) async throws -> WireProtocol.JSONObject {
+        try Task.checkCancellation()
+        let authorization: AlchemyAuthorization?
+        if endpoint.allowsAlchemyAuthorization {
+            authorization = try await authorizationProvider.authorization(for: endpoint.url)
+        } else {
+            authorization = nil
         }
+        try Task.checkCancellation()
+        let response = try await performSend(
+            endpoint: endpoint,
+            body: body,
+            authorization: authorization,
+            didRetryUnauthorized: false,
+            expectedResponseID: expectedResponseID
+        )
+        try Task.checkCancellation()
+        guard let response, let snapshot = WireProtocol.JSONObject(response) else {
+            throw Error.invalidResponse
+        }
+        try Task.checkCancellation()
+        return snapshot
     }
 
     private func performSend(endpoint: EthereumRPCEndpoint,
@@ -91,6 +93,7 @@ final class SafariRPCClient {
                              didRetryUnauthorized: Bool,
                              expectedResponseID: Int) async throws
         -> [String: Any]? {
+        try Task.checkCancellation()
         let url = endpoint.url
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -104,6 +107,7 @@ final class SafariRPCClient {
             for: request,
             delegate: redirectDelegate
         )
+        try Task.checkCancellation()
         guard !redirectDelegate.didRejectRedirect else { return nil }
         if let httpResponse = response as? HTTPURLResponse,
            httpResponse.statusCode == 401,
@@ -114,19 +118,19 @@ final class SafariRPCClient {
                     afterUnauthorized: authorization,
                     for: url
                 )
+                try Task.checkCancellation()
                 return Self.responseDictionary(
                     from: data,
                     expectedResponseID: expectedResponseID
                 )
             }
 
-            guard let replacement = try await self.authorizationProvider
-                .replacementAuthorization(
-                    afterUnauthorized: authorization,
-                    for: url
-                ) else {
-                return nil
-            }
+            let replacement = try await self.authorizationProvider.replacementAuthorization(
+                afterUnauthorized: authorization,
+                for: url
+            )
+            try Task.checkCancellation()
+            guard let replacement else { return nil }
             return try await self.performSend(
                 endpoint: endpoint,
                 body: body,

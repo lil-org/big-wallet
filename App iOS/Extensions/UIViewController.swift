@@ -3,7 +3,7 @@
 import ObjectiveC
 import UIKit
 
-private var adaptiveLargeTitleAdditionalSafeAreaTopKey: UInt8 = 0
+@MainActor private var adaptiveLargeTitleAdditionalSafeAreaTopKey: UInt8 = 0
 
 fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
 

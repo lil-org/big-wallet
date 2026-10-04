@@ -1,25 +1,23 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 
-final class OneShotGate: @unchecked Sendable {
-
-    private let lock = NSLock()
-    private var isAvailable = true
+final class OneShotGate: Sendable {
+    private let isAvailable = Mutex(true)
 
     func claim() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard isAvailable else { return false }
-        isAvailable = false
-        return true
+        isAvailable.withLock { available in
+            guard available else { return false }
+            available = false
+            return true
+        }
     }
-
 }
 
-final class GasService {
+actor GasService {
 
-    struct Info: Equatable {
+    struct Info: Equatable, Sendable {
         let recommendedPriorityFee: BigUInt
         let highPriorityFee: BigUInt
 
@@ -60,7 +58,7 @@ final class GasService {
         }
     }
 
-    struct Estimate: Equatable {
+    struct Estimate: Equatable, Sendable {
         let info: Info?
         let nextBaseFee: BigUInt?
         let currentBaseFee: BigUInt?
@@ -173,333 +171,185 @@ final class GasService {
         )
     }
 
-    private let rpc: EthereumFeeRPCClient
+    private let rpc: any EthereumFeeRPCClient
 
-    init(rpc: EthereumFeeRPCClient = EthereumRPC()) {
+    init(rpc: any EthereumFeeRPCClient = EthereumRPC()) {
         self.rpc = rpc
     }
 
     func fetchEstimate(
         endpoint: EthereumRPCEndpoint,
-        chainID: Int? = nil,
-        cancellation: EthereumRequestCancellation? = nil,
-        completion: @escaping (Estimate) -> Void
-    ) {
-        let completionGate = OneShotGate()
-        let cacheKey = FeeMarketCapabilityCache.Key(
-            chainID: chainID,
-            endpointURL: endpoint.url.absoluteString
-        )
+        chainID: Int? = nil
+    ) async throws -> Estimate {
+        try Task.checkCancellation()
+        let cacheKey = FeeMarketCapabilityCache.Key(chainID: chainID, endpointURL: endpoint.url.absoluteString)
+        let catalogObservation = endpoint.catalogFeeMarketObservation()
         var resolvedEndpointChainID: BigUInt?
+        var knownSupport = catalogObservation
 
-        func complete(_ estimate: Estimate) {
-            guard completionGate.claim() else { return }
-            DispatchQueue.main.async {
-                guard cancellation?.isCancelled != true else { return }
-                completion(estimate)
+        if let chainID {
+            guard chainID > 0 else { return Estimate(info: nil, nextBaseFee: nil) }
+            let encodedChainID: String?
+            do {
+                encodedChainID = try await rpc.fetchChainID(endpoint: endpoint)
+            } catch {
+                try Task.checkCancellation()
+                encodedChainID = nil
             }
-        }
-
-        func fetchGasPrice(
-            completion: @escaping (BigUInt?) -> Void
-        ) {
-            rpc.fetchGasPrice(
-                endpoint: endpoint,
-                cancellation: cancellation
-            ) { result in
-                guard cancellation?.isCancelled != true else { return }
-                guard case .success(let value) = result,
-                      let gasPrice = Self.validQuantity(value) else {
-                    completion(nil)
-                    return
+            try Task.checkCancellation()
+            if let encodedChainID, let actualChainID = EthereumQuantity.parseUInt256(encodedChainID) {
+                guard actualChainID == BigUInt(UInt64(chainID)) else {
+                    return Estimate(info: nil, nextBaseFee: nil, endpointChainID: actualChainID)
                 }
-                completion(gasPrice)
+                resolvedEndpointChainID = actualChainID
+                let cachedSupport = Self.capabilityCache.value(for: cacheKey)
+                knownSupport =
+                    catalogObservation == .eip1559 || cachedSupport == .eip1559
+                    ? .eip1559 : catalogObservation ?? cachedSupport
             }
         }
-
-        func completeLegacy() {
-            fetchGasPrice { gasPrice in
-                complete(Estimate(
-                    info: nil,
-                    nextBaseFee: nil,
-                    support: .legacy,
-                    gasPrice: gasPrice,
-                    endpointChainID: resolvedEndpointChainID
-                ))
-            }
+        let query = Query(endpoint: endpoint, endpointChainID: resolvedEndpointChainID, cacheKey: cacheKey)
+        let block: EthereumLatestBlock
+        do {
+            block = try await rpc.fetchLatestBlock(endpoint: endpoint)
+        } catch {
+            try Task.checkCancellation()
+            return knownSupport == .eip1559 ? try await unknown(query) : try await legacy(query)
+        }
+        try Task.checkCancellation()
+        guard let blockNumber = block.number, let parsedBlockNumber = Self.validQuantity(blockNumber) else {
+            return try await unknown(query)
+        }
+        let blockBaseFee: BigUInt?
+        switch block.baseFeeField {
+        case .encoded(let encoded):
+            guard let parsed = Self.validQuantity(encoded) else { return try await unknown(query) }
+            blockBaseFee = parsed
+        case .null:
+            return try await unknown(query)
+        case .missing:
+            blockBaseFee = nil
         }
 
-        func completeUnknown(
-            currentBaseFee: BigUInt? = nil,
-            nextBaseFee: BigUInt? = nil
-        ) {
-            fetchGasPrice { gasPrice in
-                complete(Estimate(
-                    info: nil,
-                    nextBaseFee: nextBaseFee,
-                    currentBaseFee: currentBaseFee,
-                    support: .unknown,
-                    gasPrice: gasPrice,
-                    endpointChainID: resolvedEndpointChainID
-                ))
-            }
-        }
-
-        func completeIdentityFailure(actualChainID: BigUInt? = nil) {
-            complete(Estimate(
-                info: nil,
-                nextBaseFee: nil,
-                support: .unknown,
-                endpointChainID: actualChainID
-            ))
-        }
-
-        func finishEIP1559(
-            history: EthereumFeeHistory?,
-            currentBaseFee: BigUInt,
-            nextBaseFee: BigUInt
-        ) {
-            if let history,
-               let info = Self.priorityInfo(from: history) {
-                complete(Estimate(
-                    info: info,
-                    nextBaseFee: nextBaseFee,
-                    currentBaseFee: currentBaseFee,
-                    support: .eip1559,
-                    endpointChainID: resolvedEndpointChainID
-                ))
-                return
-            }
-
-            rpc.fetchMaxPriorityFeePerGas(
-                endpoint: endpoint,
-                cancellation: cancellation
-            ) { priorityResult in
-                guard cancellation?.isCancelled != true else { return }
-                if case .success(let value) = priorityResult,
-                   let priority = Self.validQuantity(value),
-                   let info = Info.relative(
-                       to: Self.cappedAdoptedPriorityFee(
-                           max(
-                               priority,
-                               PreparedTransactionFee.minimumPriorityFeePerGas
-                           ),
-                           currentBaseFee: currentBaseFee
-                       )
-                   ) {
-                    complete(Estimate(
-                        info: info,
-                        nextBaseFee: nextBaseFee,
-                        currentBaseFee: currentBaseFee,
-                        support: .eip1559,
-                        endpointChainID: resolvedEndpointChainID
-                    ))
-                    return
-                }
-
-                fetchGasPrice { gasPrice in
-                    let referencePriority = gasPrice.map {
-                        Self.cappedAdoptedPriorityFee(
-                            $0 > currentBaseFee
-                                ? $0 - currentBaseFee
-                                : PreparedTransactionFee
-                                    .minimumPriorityFeePerGas,
-                            currentBaseFee: currentBaseFee
-                        )
-                    }
-                    complete(Estimate(
-                        info: referencePriority.flatMap {
-                            Info.relative(to: $0)
-                        },
-                        nextBaseFee: nextBaseFee,
-                        currentBaseFee: currentBaseFee,
-                        support: .eip1559,
-                        gasPrice: gasPrice,
-                        endpointChainID: resolvedEndpointChainID
-                    ))
-                }
-            }
-        }
-
-        func inspectFeeHistory(
-            for block: EthereumLatestBlock,
-            knownSupport: EthereumFeeMarketSupport?
-        ) {
-            guard let blockNumber = block.number,
-                  let parsedBlockNumber = Self.validQuantity(blockNumber) else {
-                completeUnknown()
-                return
-            }
-
-            let blockBaseFee: BigUInt?
-            switch block.baseFeeField {
-            case .encoded(let baseFeeHex):
-                guard let baseFee = Self.validQuantity(baseFeeHex) else {
-                    completeUnknown()
-                    return
-                }
-                blockBaseFee = baseFee
-            case .null:
-                completeUnknown()
-                return
-            case .missing:
-                blockBaseFee = nil
-            }
-
-            rpc.fetchFeeHistory(
+        let history: EthereumFeeHistory
+        do {
+            history = try await rpc.fetchFeeHistory(
                 endpoint: endpoint,
                 blockCount: Self.feeHistoryBlockCount,
                 newestBlock: parsedBlockNumber.toHexString(withPrefix: true),
-                rewardPercentiles: Self.rewardPercentiles,
-                cancellation: cancellation
-            ) { result in
-                guard cancellation?.isCancelled != true else { return }
-                switch result {
-                case .success(let history):
-                    guard let parsedHistoryFees = Self.baseFees(from: history)
-                    else {
-                        completeUnknown(
-                            currentBaseFee: blockBaseFee,
-                            nextBaseFee: blockBaseFee
-                        )
-                        return
-                    }
-                    guard let blockBaseFee else {
-                        completeUnknown()
-                        return
-                    }
-                    guard blockBaseFee == parsedHistoryFees.current else {
-                        completeUnknown(currentBaseFee: blockBaseFee)
-                        return
-                    }
-                    if resolvedEndpointChainID != nil {
-                        Self.capabilityCache.set(.eip1559, for: cacheKey)
-                    }
-                    finishEIP1559(
-                        history: history,
-                        currentBaseFee: parsedHistoryFees.current,
-                        nextBaseFee: parsedHistoryFees.next
-                    )
-                case .failure(let error):
-                    if (error as? EthereumRPCError)?.isMethodNotFound == true {
-                        if let blockBaseFee {
-                            if resolvedEndpointChainID != nil {
-                                Self.capabilityCache.set(
-                                    .eip1559,
-                                    for: cacheKey
-                                )
-                            }
-                            finishEIP1559(
-                                history: nil,
-                                currentBaseFee: blockBaseFee,
-                                nextBaseFee: blockBaseFee
-                            )
-                        } else if knownSupport != .eip1559 {
-                            if resolvedEndpointChainID != nil {
-                                Self.capabilityCache.set(.legacy, for: cacheKey)
-                            }
-                            completeLegacy()
-                        } else {
-                            completeUnknown(
-                                currentBaseFee: blockBaseFee,
-                                nextBaseFee: blockBaseFee
-                            )
-                        }
-                    } else if knownSupport == .eip1559,
-                              let blockBaseFee {
-                        finishEIP1559(
-                            history: nil,
-                            currentBaseFee: blockBaseFee,
-                            nextBaseFee: blockBaseFee
-                        )
-                    } else if knownSupport == .legacy,
-                              blockBaseFee == nil {
-                        completeLegacy()
-                    } else {
-                        completeUnknown(
-                            currentBaseFee: blockBaseFee,
-                            nextBaseFee: blockBaseFee
-                        )
-                    }
+                rewardPercentiles: Self.rewardPercentiles
+            )
+        } catch {
+            try Task.checkCancellation()
+            if (error as? EthereumRPCError)?.isMethodNotFound == true {
+                if let blockBaseFee {
+                    cache(.eip1559, for: query)
+                    return try await eip1559(
+                        query, history: nil, currentBaseFee: blockBaseFee, nextBaseFee: blockBaseFee)
                 }
-            }
-        }
-
-        func startDetection(knownSupport: EthereumFeeMarketSupport?) {
-            rpc.fetchLatestBlock(
-                endpoint: endpoint,
-                cancellation: cancellation
-            ) { result in
-                guard cancellation?.isCancelled != true else { return }
-                switch result {
-                case .success(let block):
-                    inspectFeeHistory(
-                        for: block,
-                        knownSupport: knownSupport
-                    )
-                case .failure:
-                    if knownSupport == .eip1559 {
-                        completeUnknown()
-                    } else {
-                        completeLegacy()
-                    }
+                if knownSupport != .eip1559 {
+                    cache(.legacy, for: query)
+                    return try await legacy(query)
                 }
+            } else if knownSupport == .eip1559, let blockBaseFee {
+                return try await eip1559(query, history: nil, currentBaseFee: blockBaseFee, nextBaseFee: blockBaseFee)
+            } else if knownSupport == .legacy, blockBaseFee == nil {
+                return try await legacy(query)
             }
+            return try await unknown(query, currentBaseFee: blockBaseFee, nextBaseFee: blockBaseFee)
         }
-
-        let catalogObservation = endpoint.catalogFeeMarketObservation()
-
-        guard let chainID else {
-            startDetection(knownSupport: catalogObservation)
-            return
+        try Task.checkCancellation()
+        guard let parsedHistoryFees = Self.baseFees(from: history) else {
+            return try await unknown(query, currentBaseFee: blockBaseFee, nextBaseFee: blockBaseFee)
         }
-        guard chainID > 0 else {
-            completeIdentityFailure()
-            return
+        guard let blockBaseFee else { return try await unknown(query) }
+        guard blockBaseFee == parsedHistoryFees.current else {
+            return try await unknown(query, currentBaseFee: blockBaseFee)
         }
+        cache(.eip1559, for: query)
+        return try await eip1559(
+            query, history: history, currentBaseFee: parsedHistoryFees.current, nextBaseFee: parsedHistoryFees.next)
+    }
 
-        let expectedChainID = BigUInt(UInt64(chainID))
-        rpc.fetchChainID(
-            endpoint: endpoint,
-            cancellation: cancellation
-        ) { result in
-            guard cancellation?.isCancelled != true else { return }
-            guard case .success(let encodedChainID) = result,
-                  let actualChainID = EthereumQuantity.parseUInt256(
-                      encodedChainID
-                  ) else {
-                startDetection(knownSupport: catalogObservation)
-                return
-            }
-            guard actualChainID == expectedChainID else {
-                completeIdentityFailure(actualChainID: actualChainID)
-                return
-            }
+    func fetchEstimate(network: EthereumNetwork) async throws -> Estimate {
+        try await fetchEstimate(endpoint: network.rpcEndpoint, chainID: network.chainId)
+    }
 
-            resolvedEndpointChainID = actualChainID
-            let cachedSupport = Self.capabilityCache.value(for: cacheKey)
-            let knownSupport: EthereumFeeMarketSupport?
-            if catalogObservation == .eip1559 ||
-                cachedSupport == .eip1559 {
-                knownSupport = .eip1559
-            } else {
-                knownSupport = catalogObservation ?? cachedSupport
-            }
-            startDetection(knownSupport: knownSupport)
+    private struct Query: Sendable {
+        let endpoint: EthereumRPCEndpoint
+        let endpointChainID: BigUInt?
+        let cacheKey: FeeMarketCapabilityCache.Key
+    }
+
+    private func cache(_ support: EthereumFeeMarketSupport, for query: Query) {
+        guard query.endpointChainID != nil else { return }
+        Self.capabilityCache.set(support, for: query.cacheKey)
+    }
+
+    private func gasPrice(for query: Query) async throws -> BigUInt? {
+        do {
+            let value = try await rpc.fetchGasPrice(endpoint: query.endpoint)
+            try Task.checkCancellation()
+            return Self.validQuantity(value)
+        } catch {
+            try Task.checkCancellation()
+            return nil
         }
     }
 
-    func fetchEstimate(
-        network: EthereumNetwork,
-        cancellation: EthereumRequestCancellation? = nil,
-        completion: @escaping (Estimate) -> Void
-    ) {
-        fetchEstimate(
-            endpoint: network.rpcEndpoint,
-            chainID: network.chainId,
-            cancellation: cancellation,
-            completion: completion
-        )
+    private func legacy(_ query: Query) async throws -> Estimate {
+        Estimate(
+            info: nil, nextBaseFee: nil, support: .legacy, gasPrice: try await gasPrice(for: query),
+            endpointChainID: query.endpointChainID)
+    }
+
+    private func unknown(_ query: Query, currentBaseFee: BigUInt? = nil, nextBaseFee: BigUInt? = nil) async throws
+        -> Estimate
+    {
+        Estimate(
+            info: nil, nextBaseFee: nextBaseFee, currentBaseFee: currentBaseFee, support: .unknown,
+            gasPrice: try await gasPrice(for: query), endpointChainID: query.endpointChainID)
+    }
+
+    private func eip1559(
+        _ query: Query,
+        history: EthereumFeeHistory?,
+        currentBaseFee: BigUInt,
+        nextBaseFee: BigUInt
+    ) async throws -> Estimate {
+        if let history, let info = Self.priorityInfo(from: history) {
+            return Estimate(
+                info: info, nextBaseFee: nextBaseFee, currentBaseFee: currentBaseFee, support: .eip1559,
+                endpointChainID: query.endpointChainID)
+        }
+        let priority: BigUInt?
+        do {
+            let value = try await rpc.fetchMaxPriorityFeePerGas(endpoint: query.endpoint)
+            try Task.checkCancellation()
+            priority = Self.validQuantity(value)
+        } catch {
+            try Task.checkCancellation()
+            priority = nil
+        }
+        if let priority,
+            let info = Info.relative(
+                to: Self.cappedAdoptedPriorityFee(
+                    max(priority, PreparedTransactionFee.minimumPriorityFeePerGas), currentBaseFee: currentBaseFee))
+        {
+            return Estimate(
+                info: info, nextBaseFee: nextBaseFee, currentBaseFee: currentBaseFee, support: .eip1559,
+                endpointChainID: query.endpointChainID)
+        }
+        let gasPrice = try await gasPrice(for: query)
+        let referencePriority = gasPrice.map {
+            Self.cappedAdoptedPriorityFee(
+                $0 > currentBaseFee ? $0 - currentBaseFee : PreparedTransactionFee.minimumPriorityFeePerGas,
+                currentBaseFee: currentBaseFee)
+        }
+        return Estimate(
+            info: referencePriority.flatMap(Info.relative(to:)), nextBaseFee: nextBaseFee,
+            currentBaseFee: currentBaseFee, support: .eip1559, gasPrice: gasPrice,
+            endpointChainID: query.endpointChainID)
     }
 
     static func resetCapabilityCacheForTests() {
@@ -569,35 +419,26 @@ final class GasService {
     }
 }
 
-private final class FeeMarketCapabilityCache: @unchecked Sendable {
-
-    struct Key: Hashable {
+private final class FeeMarketCapabilityCache: Sendable {
+    struct Key: Hashable, Sendable {
         let chainID: Int?
         let endpointURL: String
     }
 
-    private let lock = NSLock()
-    private var values = [Key: EthereumFeeMarketSupport]()
+    private let values = Mutex([Key: EthereumFeeMarketSupport]())
 
     func value(for key: Key) -> EthereumFeeMarketSupport? {
-        lock.lock()
-        defer { lock.unlock() }
-        return values[key]
+        values.withLock { $0[key] }
     }
 
     func set(_ support: EthereumFeeMarketSupport, for key: Key) {
         guard support != .unknown else { return }
-        lock.lock()
-        values[key] = support
-        lock.unlock()
+        values.withLock { $0[key] = support }
     }
 
     func removeAll() {
-        lock.lock()
-        values.removeAll()
-        lock.unlock()
+        values.withLock { $0.removeAll() }
     }
-
 }
 
 struct GasSpeedConfiguration {

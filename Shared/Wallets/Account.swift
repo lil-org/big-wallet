@@ -6,7 +6,7 @@ import UIKit
 import Cocoa
 #endif
 
-struct WalletPreviewAccountKey: Hashable {
+struct WalletPreviewAccountKey: Hashable, Sendable {
     let coin: WalletCoin
     let derivationPath: String
 }
@@ -33,6 +33,7 @@ extension WalletAccount {
         return withoutCommonPart.prefix(4) + "..." + withoutCommonPart.suffix(4)
     }
     
+    @MainActor
     var image: PlatformSpecificImage? {
         switch coin {
         case .ethereum:
@@ -53,6 +54,7 @@ extension WalletAccount {
     
 }
 
+@MainActor
 private enum SolanaAccountIcon {
 
     private static let canvasSize = CGSize(width: 32, height: 32)

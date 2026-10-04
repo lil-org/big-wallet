@@ -47,6 +47,7 @@ class RightClickTableView: NSTableView {
     
 }
 
+@MainActor
 protocol TableViewMenuSource: AnyObject {
     
     func menuForRow(_ row: Int) -> NSMenu?

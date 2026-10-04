@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import LocalAuthentication
 
 class ApproveTransactionViewController: NSViewController {
 
@@ -28,7 +27,9 @@ class ApproveTransactionViewController: NSViewController {
     private let agent = Agent.shared
     private let ethereum = Ethereum.shared
     private let priceService = PriceService.shared
-    private var authenticationContext: LAContext?
+    private var authenticationTask: Task<Void, Never>?
+    private var balanceTask: Task<Void, Never>?
+    private var priceTask: Task<Void, Never>?
     private var authenticationToken: TransactionApprovalRequestToken?
     private var coordinator: TransactionApprovalCoordinator!
     private var approvalSnapshot: TransactionApprovalSnapshot!
@@ -67,6 +68,12 @@ class ApproveTransactionViewController: NSViewController {
         return new
     }
     
+    isolated deinit {
+        authenticationTask?.cancel()
+        balanceTask?.cancel()
+        priceTask?.cancel()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         reviewLifetime.register(self)
@@ -75,8 +82,10 @@ class ApproveTransactionViewController: NSViewController {
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
         
-        priceService.update { [weak self] in
-            self?.updateTextView()
+        priceTask = Task { [weak self, priceService] in
+            await priceService.update()
+            guard let self, !Task.isCancelled, reviewLifetime.isActive else { return }
+            updateTextView()
         }
         titleLabel.stringValue = Strings.sendTransaction
         speedSlider.isContinuous = true
@@ -97,9 +106,13 @@ class ApproveTransactionViewController: NSViewController {
         updateInterface()
         coordinator.startPreparation(forceGasCheck: false)
         
-        ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
-            self?.balance = balance.eth(shortest: true) + " " + (self?.chain.symbol ?? "")
-            self?.updateTextView()
+        let network = chain!
+        let address = account.address
+        balanceTask = Task { [weak self, ethereum] in
+            guard let balance = try? await ethereum.getBalance(network: network, address: address),
+                  let self, !Task.isCancelled, reviewLifetime.isActive else { return }
+            self.balance = balance.eth(shortest: true) + " " + network.symbol
+            updateTextView()
         }
         
     }
@@ -155,14 +168,12 @@ class ApproveTransactionViewController: NSViewController {
             return
         }
         authenticationToken = token
-        authenticationContext = agent.askAuthentication(
-            for: .approval(returningTo: self, lifetime: reviewLifetime),
-            reason: .sendTransaction
-        ) { [weak self] succeeded in
-            guard let self,
-                  reviewLifetime.isActive else { return }
+        let authentication = Agent.AuthenticationContext.approval(returningTo: .init(self), lifetime: reviewLifetime)
+        authenticationTask = Task { [weak self, agent] in
+            let succeeded = await agent.askAuthentication(for: authentication, reason: .sendTransaction)
+            guard let self, !Task.isCancelled, reviewLifetime.isActive else { return }
             if authenticationToken == token {
-                authenticationContext = nil
+                authenticationTask = nil
                 authenticationToken = nil
             }
             coordinator.authenticationCompleted(
@@ -174,8 +185,8 @@ class ApproveTransactionViewController: NSViewController {
 
     private func cancelAuthentication() {
         authenticationToken = nil
-        authenticationContext?.invalidate()
-        authenticationContext = nil
+        authenticationTask?.cancel()
+        authenticationTask = nil
     }
 
     private func presentOrDeferApprovalAlert(
@@ -531,6 +542,8 @@ extension ApproveTransactionViewController:
     NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
+        balanceTask?.cancel()
+        priceTask?.cancel()
         cancelAuthentication()
         pendingApprovalAlert = nil
         sheetState = .idle

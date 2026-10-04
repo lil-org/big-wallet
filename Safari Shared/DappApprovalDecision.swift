@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 
 enum DappApprovalDecision: Equatable, Sendable {
 
@@ -239,16 +240,15 @@ final class ApprovalReview {
 
 }
 
-fileprivate final class ConsentAuthorizationUse: @unchecked Sendable {
-    private let lock = NSLock()
-    private var consumed = false
+fileprivate final class ConsentAuthorizationUse: Sendable {
+    private let consumed = Mutex(false)
 
     func consume() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !consumed else { return false }
-        consumed = true
-        return true
+        consumed.withLock { consumed in
+            guard !consumed else { return false }
+            consumed = true
+            return true
+        }
     }
 }
 

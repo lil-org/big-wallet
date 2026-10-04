@@ -1,15 +1,13 @@
 // ∅ 2026 lil org
 
-import UIKit
+import CoreGraphics
 
 extension CGFloat {
-    
-    static let pixel: CGFloat = {
-        #if os(visionOS)
-        return 1
-        #else
-        return 1.0 / UIScreen.main.scale
-        #endif
-    }()
-    
+    static func pixel(displayScale: CGFloat) -> CGFloat {
+#if os(visionOS)
+        1
+#else
+        1 / Swift.max(displayScale, 1)
+#endif
+    }
 }

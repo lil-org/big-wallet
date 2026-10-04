@@ -5,31 +5,32 @@ import XCTest
 @MainActor
 final class ResponseDeliveryPollerTests: XCTestCase {
     private let modes: [ResponseDeliveryPoller.Maintenance] = [.none, .quiet, .interactive]
-    private let configurationKey = "https://wallet.example"
+    private nonisolated let configurationKey = "https://wallet.example"
 
     func testEachModeForwardsTheExactIdentityAndPreparesOnlyAfterReadiness() async {
+        let expectedConfigurationKey = configurationKey
         for mode in modes {
             let handle = makeHandle()
             let expected = delivery(handle)
-            var calls = [String]()
+            let calls = LockedTestValue([String]())
             let poller = ResponseDeliveryPoller(
                 responseStatus: { receivedHandle, key in
                     XCTAssertEqual(receivedHandle, handle)
-                    XCTAssertEqual(key, self.configurationKey)
-                    calls.append("status")
+                    XCTAssertEqual(key, expectedConfigurationKey)
+                    calls.withValue { $0.append("status") }
                     return .ready
                 },
                 maintain: { receivedHandle, key, receivedMode in
                     XCTAssertEqual(receivedHandle, handle)
-                    XCTAssertEqual(key, self.configurationKey)
+                    XCTAssertEqual(key, expectedConfigurationKey)
                     XCTAssertEqual(receivedMode, mode)
-                    calls.append("maintain:\(receivedMode.rawValue)")
+                    calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                     return .ready
                 },
                 prepareDelivery: { receivedHandle, key in
                     XCTAssertEqual(receivedHandle, handle)
-                    XCTAssertEqual(key, self.configurationKey)
-                    calls.append("prepare")
+                    XCTAssertEqual(key, expectedConfigurationKey)
+                    calls.withValue { $0.append("prepare") }
                     return .response(expected)
                 }
             )
@@ -39,7 +40,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             )
 
             assertResult(result, equals: .response(expected))
-            XCTAssertEqual(calls, [statusCall(mode), "prepare"])
+            XCTAssertEqual(calls.value, [statusCall(mode), "prepare"])
         }
     }
 
@@ -49,14 +50,14 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         ]
         for mode in modes {
             for (status, expected) in statuses {
-                var calls = [String]()
+                let calls = LockedTestValue([String]())
                 let poller = ResponseDeliveryPoller(
                     responseStatus: { _, _ in
-                        calls.append("status")
+                        calls.withValue { $0.append("status") }
                         return status
                     },
                     maintain: { _, _, receivedMode in
-                        calls.append("maintain:\(receivedMode.rawValue)")
+                        calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                         return status
                     },
                     prepareDelivery: { _, _ in
@@ -70,7 +71,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 )
 
                 assertResult(result, equals: expected)
-                XCTAssertEqual(calls, [statusCall(mode)])
+                XCTAssertEqual(calls.value, [statusCall(mode)])
             }
         }
     }
@@ -78,12 +79,12 @@ final class ResponseDeliveryPollerTests: XCTestCase {
     func testPreparationCanDowngradeAnObservedReadyStatusInAnyMode() async {
         for mode in modes {
             for prepared in [ExtensionBridge.ResponseReadResult.pending, .missing, .unavailable] {
-                var preparations = 0
+                let preparations = LockedTestValue(0)
                 let poller = ResponseDeliveryPoller(
                     responseStatus: { _, _ in .ready },
                     maintain: { _, _, _ in .ready },
                     prepareDelivery: { _, _ in
-                        preparations += 1
+                        preparations.withValue { $0 += 1 }
                         return prepared
                     }
                 )
@@ -93,7 +94,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 )
 
                 assertResult(result, equals: prepared)
-                XCTAssertEqual(preparations, 1)
+                XCTAssertEqual(preparations.value, 1)
             }
         }
     }
@@ -136,16 +137,16 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             for status in [ExtensionBridge.ResponseStatusResult.ready, .pending, .missing] {
                 let started = expectation(description: "status operation started")
                 let gate = ApprovalResolution<Void>()
-                var calls = [String]()
+                let calls = LockedTestValue([String]())
                 let poller = ResponseDeliveryPoller(
                     responseStatus: { _, _ in
-                        calls.append("status")
+                        calls.withValue { $0.append("status") }
                         started.fulfill()
                         await gate.value()
                         return status
                     },
                     maintain: { _, _, receivedMode in
-                        calls.append("maintain:\(receivedMode.rawValue)")
+                        calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                         started.fulfill()
                         await gate.value()
                         return status
@@ -168,7 +169,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
 
                 guard let result else { return XCTFail("Expected canceled poll result") }
                 assertResult(result, equals: .unavailable)
-                XCTAssertEqual(calls, [statusCall(mode)])
+                XCTAssertEqual(calls.value, [statusCall(mode)])
             }
         }
     }
@@ -179,12 +180,12 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             let expected = delivery(handle)
             let started = expectation(description: "delivery preparation started")
             let gate = ApprovalResolution<Void>()
-            var preparations = 0
+            let preparations = LockedTestValue(0)
             let poller = ResponseDeliveryPoller(
                 responseStatus: { _, _ in .ready },
                 maintain: { _, _, _ in .ready },
                 prepareDelivery: { _, _ in
-                    preparations += 1
+                    preparations.withValue { $0 += 1 }
                     started.fulfill()
                     await gate.value()
                     return .response(expected)
@@ -203,32 +204,32 @@ final class ResponseDeliveryPollerTests: XCTestCase {
 
             guard let result else { return XCTFail("Expected canceled poll result") }
             assertResult(result, equals: .unavailable)
-            XCTAssertEqual(preparations, 1)
+            XCTAssertEqual(preparations.value, 1)
         }
     }
 
     func testPendingPollDoesNotRecoverExpiredStorageOrWriteOrSynchronize() async throws {
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        var writes = 0
-        var synchronizations = 0
+        let now = LockedTestValue(Date(timeIntervalSince1970: 1_800_000_000))
+        let writes = LockedTestValue(0)
+        let synchronizations = LockedTestValue(0)
         let (root, store) = try makeStore(dependencies: .init(
-            clock: { now },
+            clock: { now.value },
             atomicWrite: { data, url in
-                writes += 1
+                writes.withValue { $0 += 1 }
                 try ApprovalStoreTestPersistence.write(data, url)
             },
             synchronizePublishedFile: { url in
-                synchronizations += 1
+                synchronizations.withValue { $0 += 1 }
                 try ApprovalStoreTestPersistence.synchronize(url)
             }
         ))
-        let handle = try enqueue(store: store, now: now)
-        now.addTimeInterval(151)
+        let handle = try enqueue(store: store, now: now.value)
+        now.withValue { $0.addTimeInterval(151) }
         let profileURL = root.appendingPathComponent("profiles-v9/default.state")
         let originalData = try Data(contentsOf: profileURL)
         let originalPaths = try FileManager.default.subpathsOfDirectory(atPath: root.path).sorted()
-        writes = 0
-        synchronizations = 0
+        writes.value = 0
+        synchronizations.value = 0
         let poller = storePoller(store)
 
         let result = await poller.poll(
@@ -236,43 +237,43 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         )
 
         assertResult(result, equals: .pending)
-        XCTAssertEqual(writes, 0)
-        XCTAssertEqual(synchronizations, 0)
+        XCTAssertEqual(writes.value, 0)
+        XCTAssertEqual(synchronizations.value, 0)
         XCTAssertEqual(try Data(contentsOf: profileURL), originalData)
         XCTAssertEqual(try FileManager.default.subpathsOfDirectory(atPath: root.path).sorted(), originalPaths)
     }
 
     func testCompletedPollRequiresDurabilityAndLeavesAcknowledgementExplicit() async throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        var failSynchronization = false
-        var synchronizations = 0
+        let failSynchronization = LockedTestValue(false)
+        let synchronizations = LockedTestValue(0)
         let (_, store) = try makeStore(dependencies: .init(
             clock: { now },
             atomicWrite: ApprovalStoreTestPersistence.write,
             synchronizePublishedFile: { url in
-                synchronizations += 1
-                if failSynchronization { throw CocoaError(.fileWriteUnknown) }
+                synchronizations.withValue { $0 += 1 }
+                if failSynchronization.value { throw CocoaError(.fileWriteUnknown) }
                 try ApprovalStoreTestPersistence.synchronize(url)
             }
         ))
         let handle = try enqueue(store: store, now: now)
         XCTAssertEqual(store.completeImmediate(handle: handle, resolution: .failure(.userRejected)), .persisted)
         let poller = storePoller(store)
-        synchronizations = 0
-        failSynchronization = true
+        synchronizations.value = 0
+        failSynchronization.value = true
 
         let unavailable = await poller.poll(
             handle: handle, configurationKey: configurationKey, maintenance: .none
         )
 
         assertResult(unavailable, equals: .unavailable)
-        XCTAssertEqual(synchronizations, 1)
-        failSynchronization = false
+        XCTAssertEqual(synchronizations.value, 1)
+        failSynchronization.value = false
         let delivered = await poller.poll(
             handle: handle, configurationKey: configurationKey, maintenance: .none
         )
         guard case .response(let response) = delivered else { return XCTFail("Expected durable response") }
-        XCTAssertEqual(synchronizations, 2)
+        XCTAssertEqual(synchronizations.value, 2)
         XCTAssertEqual((response["response"] as? [String: Any])?["kind"] as? String, "error")
         guard case .available(let unacknowledged) = store.list(profileIdentifier: nil) else {
             return XCTFail("Expected response listing")
@@ -313,7 +314,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         XCTAssertTrue(permit.consumeExecution())
         let completion = try XCTUnwrap(ApprovedCompletion.accountSelection(permit: permit))
         XCTAssertEqual(fixture.store.complete(permit: permit, result: completion), .persisted)
-        var revokedRevision: Int?
+        let revokedRevision = LockedTestValue<Int?>(nil)
         let poller = ResponseDeliveryPoller(
             responseStatus: { handle, key in
                 let status = fixture.store.responseStatus(handle: handle, configurationKey: key)
@@ -328,7 +329,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                     XCTFail("Expected revocation between status and preparation")
                     return .unavailable
                 }
-                revokedRevision = revoked.version.revisions.ethereum
+                revokedRevision.value = revoked.version.revisions.ethereum
                 return status
             },
             maintain: { _, _, _ in
@@ -350,12 +351,12 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         XCTAssertEqual(response["result"] as? [String], [account.normalizedAddress])
         XCTAssertEqual(response["approvalCommitted"] as? Bool, true)
         XCTAssertEqual((state["ethereum"] as? [String: String])?["address"], "")
-        XCTAssertEqual((state["revisions"] as? [String: Int])?["ethereum"], revokedRevision)
+        XCTAssertEqual((state["revisions"] as? [String: Int])?["ethereum"], revokedRevision.value)
         guard case .snapshot(let current) = fixture.store.configurationSnapshot(
             configurationKey: configurationKey, profileIdentifier: nil
         ) else { return XCTFail("Expected current authority") }
         XCTAssertNil(current.ethereumAccount)
-        XCTAssertEqual(current.version.revisions.ethereum, revokedRevision)
+        XCTAssertEqual(current.version.revisions.ethereum, revokedRevision.value)
     }
 
     private func makeHandle() -> ExtensionBridge.Handle {
@@ -366,12 +367,12 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         mode == .none ? "status" : "maintain:\(mode.rawValue)"
     }
 
-    private func delivery(_ handle: ExtensionBridge.Handle) -> [String: Any] {
-        [
+    private func delivery(_ handle: ExtensionBridge.Handle) -> WireProtocol.JSONObject {
+        WireProtocol.JSONObject([
             "id": handle.id,
             "response": ["id": handle.id, "result": ["signed"], "approvalCommitted": true],
             "state": ["context": String(repeating: "a", count: 64), "revisions": ["ethereum": 3, "solana": 2]],
-        ]
+        ])!
     }
 
     private func assertResult(
@@ -384,7 +385,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         case (.pending, .pending), (.missing, .missing), (.unavailable, .unavailable):
             break
         case (.response(let actual), .response(let expected)):
-            XCTAssertEqual(actual as NSDictionary, expected as NSDictionary, file: file, line: line)
+            XCTAssertEqual(actual.json as NSDictionary, expected.json as NSDictionary, file: file, line: line)
         default:
             XCTFail("Unexpected poll result", file: file, line: line)
         }

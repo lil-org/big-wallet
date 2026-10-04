@@ -40,16 +40,16 @@ actor ApprovalResolution<Value: Sendable> {
             resolve(timeoutValue)
             return await value()
         }
-        let operationTask = Task {
+        let operationTask = Task.detached {
             let result = await operation()
-            if !resolve(result) {
+            if await self.resolve(result) == false {
                 onDiscardedValue(result)
             }
         }
-        let timeoutTask = Task {
+        let timeoutTask = Task.detached {
             await waitForTimeout()
             guard !Task.isCancelled else { return }
-            resolve(timeoutValue) {
+            await self.resolve(timeoutValue) {
                 operationTask.cancel()
             }
         }
@@ -62,7 +62,7 @@ actor ApprovalResolution<Value: Sendable> {
         } onCancel: {
             guard case .resolveTimeout = callerCancellation else { return }
             operationTask.cancel()
-            Task { await self.resolve(timeoutValue) }
+            Task.detached { await self.resolve(timeoutValue) }
         }
     }
 

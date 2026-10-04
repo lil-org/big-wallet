@@ -2,6 +2,7 @@
 
 import CoreFoundation
 import Foundation
+import Synchronization
 #if os(macOS) && DEBUG
 import AppKit
 #endif
@@ -192,11 +193,11 @@ struct SharedDefaults {
 #else
     static let suiteName = "group.org.lil.wallet"
 #endif
-    static let defaults = UserDefaults(suiteName: suiteName)
+    static var defaults: UserDefaults? { UserDefaults(suiteName: suiteName) }
     
     static let customEthereumNetworksKey = "customEthereumNetworks"
     private static let customEthereumNetworkNodeKeyPrefix = "customEthereumNetworkNode_"
-    private static let customNetworksStorageLock = NSLock()
+    private static let customNetworksStorageLock = Mutex(())
     private static let customNetworksStorageFileLock = CrossProcessFileLock(
         fileURL: FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: suiteName
@@ -418,22 +419,20 @@ struct SharedDefaults {
     }
 
     private static func withCustomNetworksStorageLock<T>(_ body: () -> T) -> T {
-        customNetworksStorageLock.lock()
-        defer { customNetworksStorageLock.unlock() }
-        return body()
+        customNetworksStorageLock.withLock { _ in body() }
     }
     
 }
 
-enum CustomNetworkSnapshotLoadResult {
+enum CustomNetworkSnapshotLoadResult: Sendable {
     case loaded(CustomNetworkSnapshot)
     case unavailable
     case corrupt
 }
 
-struct CustomNetworkSnapshot {
+struct CustomNetworkSnapshot: Sendable {
 
-    struct Entry {
+    struct Entry: Sendable {
         let resolvedNetwork: ResolvedEthereumNetwork
         let definition: EthereumNetworkFromDapp
 
@@ -511,66 +510,62 @@ struct CustomNetworkSnapshot {
 
 }
 
-final class CustomNetworkCache {
-
+final class CustomNetworkCache: Sendable {
     static let shared = CustomNetworkCache(
         loader: { SharedDefaults.loadCustomNetworkSnapshot() },
         observesDarwinChanges: true
     )
 
-    private let lock = NSLock()
-    private let loader: () -> CustomNetworkSnapshotLoadResult
-    private var cachedSnapshot: CustomNetworkSnapshot?
-    private var needsReload = true
-    private var changeObserver: DarwinNotificationObserver?
+    private struct State {
+        var cachedSnapshot: CustomNetworkSnapshot?
+        var needsReload = true
+        var changeObserver: DarwinNotificationObserver?
+    }
 
-    init(loader: @escaping () -> CustomNetworkSnapshotLoadResult,
+    private let state = Mutex(State())
+    private let loader: @Sendable () -> CustomNetworkSnapshotLoadResult
+
+    init(loader: @escaping @Sendable () -> CustomNetworkSnapshotLoadResult,
          observesDarwinChanges: Bool = false) {
         self.loader = loader
-        self.changeObserver = nil
-
         if observesDarwinChanges {
-            self.changeObserver = DarwinNotificationObserver(
+            let observer = DarwinNotificationObserver(
                 name: CustomNetworkChangeNotification.name
             ) { [weak self] in
                 self?.invalidate()
             }
+            state.withLock { $0.changeObserver = observer }
         }
     }
 
     func snapshot() -> CustomNetworkSnapshot {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if !needsReload, let cachedSnapshot {
-            return cachedSnapshot
+        state.withLock { state in
+            if !state.needsReload, let cachedSnapshot = state.cachedSnapshot {
+                return cachedSnapshot
+            }
+            switch loader() {
+            case .loaded(let loadedSnapshot):
+                state.cachedSnapshot = loadedSnapshot
+                state.needsReload = false
+            case .unavailable:
+                break
+            case .corrupt:
+                state.cachedSnapshot = .empty
+                state.needsReload = false
+            }
+            return state.cachedSnapshot ?? .empty
         }
-
-        switch loader() {
-        case .loaded(let loadedSnapshot):
-            cachedSnapshot = loadedSnapshot
-            needsReload = false
-        case .unavailable:
-            break
-        case .corrupt:
-            cachedSnapshot = .empty
-            needsReload = false
-        }
-        return cachedSnapshot ?? .empty
     }
 
     func invalidate() {
-        lock.lock()
-        needsReload = true
-        lock.unlock()
+        state.withLock { $0.needsReload = true }
     }
-
 }
 
 enum CustomNetworkChangeNotification {
 
     static let identifier = "org.lil.wallet.customEthereumNetworksDidChange.v1"
-    static let name = CFNotificationName(rawValue: identifier as CFString)
+    static var name: CFNotificationName { CFNotificationName(rawValue: identifier as CFString) }
 
     static func post() {
         CFNotificationCenterPostNotification(
@@ -584,13 +579,14 @@ enum CustomNetworkChangeNotification {
 
 }
 
-private final class DarwinNotificationObserver {
+private final class DarwinNotificationObserver: Sendable {
 
-    private let name: CFNotificationName
-    private let callback: () -> Void
+    private let identifier: String
+    private var name: CFNotificationName { CFNotificationName(rawValue: identifier as CFString) }
+    private let callback: @Sendable () -> Void
 
-    init(name: CFNotificationName, callback: @escaping () -> Void) {
-        self.name = name
+    init(name: CFNotificationName, callback: @escaping @Sendable () -> Void) {
+        identifier = name.rawValue as String
         self.callback = callback
 
         CFNotificationCenterAddObserver(

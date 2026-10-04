@@ -1,7 +1,24 @@
 import CryptoKit
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
+
+final class LockedTestValue<Value: Sendable>: Sendable {
+    private let state: Mutex<Value>
+
+    init(_ value: Value) { state = Mutex(value) }
+
+    var value: Value {
+        get { state.withLock { $0 } }
+        set { state.withLock { $0 = newValue } }
+    }
+
+    @discardableResult
+    func withValue<Result: Sendable>(_ operation: (inout Value) throws -> Result) rethrows -> Result {
+        try state.withLock { try operation(&$0) }
+    }
+}
 
 extension ExtensionRequestFileStore {
     func withRevokedWalletAuthority<Result>(
@@ -302,10 +319,9 @@ func reviewActionForTesting(
     }
 }
 
-private final class ApprovalFixtureResources: NSObject, XCTestObservation, @unchecked Sendable {
+private final class ApprovalFixtureResources: NSObject, XCTestObservation, Sendable {
     static let shared = ApprovalFixtureResources()
-    private let lock = NSLock()
-    private var directories = [URL]()
+    private let directories = Mutex([URL]())
 
     override private init() {
         super.init()
@@ -313,13 +329,13 @@ private final class ApprovalFixtureResources: NSObject, XCTestObservation, @unch
     }
 
     func retain(_ directory: URL) {
-        lock.withLock { directories.append(directory) }
+        directories.withLock { $0.append(directory) }
     }
 
     func testBundleDidFinish(_ testBundle: Bundle) {
-        let directories = lock.withLock {
-            let retained = self.directories
-            self.directories.removeAll()
+        let directories = directories.withLock { directories in
+            let retained = directories
+            directories.removeAll()
             return retained
         }
         for directory in directories { try? FileManager.default.removeItem(at: directory) }
@@ -328,15 +344,21 @@ private final class ApprovalFixtureResources: NSObject, XCTestObservation, @unch
 
 @MainActor
 final class ApprovedExecutionTestFixture {
-    private final class Identifiers {
-        var next: UUID?
+    private final class Identifiers: Sendable {
+        private let state = Mutex<UUID?>(nil)
+        var next: UUID? {
+            get { state.withLock { $0 } }
+            set { state.withLock { $0 = newValue } }
+        }
         func take() -> UUID {
-            defer { next = nil }
-            return next ?? UUID()
+            state.withLock { next in
+                defer { next = nil }
+                return next ?? UUID()
+            }
         }
     }
 
-    let store: ExtensionRequestFileStore
+    nonisolated let store: ExtensionRequestFileStore
     let now: Date
     private let identifiers: Identifiers
 
@@ -460,13 +482,13 @@ extension XCTestCase {
         )
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let now = deadline.addingTimeInterval(-150)
-        var identifiers = [UUID(), handle.token.value, UUID(), UUID()]
+        let identifiers = LockedTestValue([UUID(), handle.token.value, UUID(), UUID()])
         let store = ExtensionRequestFileStore(
             rootURL: directory,
             directoryBoundary: directory,
             dependencies: .init(
                 clock: { now },
-                token: { identifiers.removeFirst() },
+                token: { identifiers.withValue { $0.removeFirst() } },
                 atomicWrite: ApprovalStoreTestPersistence.write
             )
         )
@@ -518,9 +540,9 @@ func walletSigningAuthorizationForTesting(
 func makeWalletSigningSessionForTesting(
     _ access: any OwnedWalletSigningAccess = TestWalletSigningAccess(),
     authorization: WalletSigningAuthorization,
-    isCurrent: @escaping () -> Bool = { true },
-    acquireCommitLease: (() async -> WalletExecutionLease?)? = nil,
-    clock: @escaping () -> Date = Date.init
+    isCurrent: @escaping @Sendable () -> Bool = { true },
+    acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
+    clock: @escaping @MainActor @Sendable () -> Date = { Date() }
 ) -> WalletSigningSession {
     WalletSigningSession(
         BorrowedWalletSignerForTesting(access),
@@ -552,27 +574,29 @@ final class TestWalletSigningAccess: OwnedWalletSigningAccess {
 }
 
 final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
-    private let lock = NSLock()
-    private var access: (any OwnedWalletSigningAccess)?
-    private var invalidations = 0
+    private struct State {
+        var access: (any OwnedWalletSigningAccess)?
+        var invalidations = 0
+    }
+    private let state: Mutex<State>
 
-    var invalidationCount: Int { lock.withLock { invalidations } }
+    var invalidationCount: Int { state.withLock { $0.invalidations } }
 
     init(_ access: any OwnedWalletSigningAccess = TestWalletSigningAccess()) {
-        self.access = access
+        state = Mutex(State(access: access))
     }
 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        guard let access = lock.withLock({ access }) else { return .failure(.authorizationUnavailable) }
+        guard let access = state.withLock({ $0.access }) else { return .failure(.authorizationUnavailable) }
         return await access.sign(operation)
     }
 
     func invalidate() {
-        let access = lock.withLock {
-            invalidations += 1
-            let access = self.access
-            self.access = nil
+        let access = state.withLock { state in
+            state.invalidations += 1
+            let access = state.access
+            state.access = nil
             return access
         }
         access?.invalidate()
@@ -705,16 +729,15 @@ func assertWalletSigningSuccessForTesting(
     }
 }
 
-private final class ApprovalStoreWrites: @unchecked Sendable {
-    private let lock = NSLock()
-    private var failures = [Bool]()
+private final class ApprovalStoreWrites: Sendable {
+    private let failures = Mutex([Bool]())
 
     func failNext(afterWriting: Bool = false) {
-        lock.withLock { failures.append(afterWriting) }
+        failures.withLock { $0.append(afterWriting) }
     }
 
     func write(_ data: Data, to url: URL) throws {
-        let failure = lock.withLock { failures.isEmpty ? nil : failures.removeFirst() }
+        let failure = failures.withLock { $0.isEmpty ? nil : $0.removeFirst() }
         if failure == false { throw CocoaError(.fileWriteUnknown) }
         try ApprovalStoreTestPersistence.write(data, url)
         if failure == true { throw CocoaError(.fileWriteUnknown) }
@@ -738,7 +761,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var nextRejectResult: ExtensionBridge.StoreMutationResult?
     private var nextAbandonResult: ExtensionBridge.StoreMutationResult?
     private var nextClaimResult: ExtensionBridge.ApprovalClaimResult?
-    private var nextLoadTransform: ((ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot)?
+    private var nextLoadTransform: (@Sendable (ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot)?
     private var nextCompletionReceipt: ExtensionBridge.NativeDeliveryReceipt?
     private var shouldFailNextCompletion = false
     private var shouldFailNextAuthorization = false
@@ -783,12 +806,21 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         try FileManager.default.removeItem(at: rootURL)
     }
 
-    func enqueue(
+    nonisolated(nonsending) func enqueue(
         rawObject: [String: Any],
         profileIdentifier: UUID? = nil,
         approvedAccount: WalletAccountDescriptor? = nil
     ) async throws -> ExtensionBridge.Snapshot {
-        var rawObject = rawObject
+        guard let object = WireProtocol.JSONObject(rawObject) else { throw CocoaError(.coderInvalidValue) }
+        return try await enqueue(object: object, profileIdentifier: profileIdentifier, approvedAccount: approvedAccount)
+    }
+
+    private func enqueue(
+        object: WireProtocol.JSONObject,
+        profileIdentifier: UUID?,
+        approvedAccount: WalletAccountDescriptor?
+    ) async throws -> ExtensionBridge.Snapshot {
+        var rawObject = object.json
         rawObject["admissionDeadline"] = Int(clock().addingTimeInterval(
             ExtensionBridge.requestTTL
         ).timeIntervalSince1970 * 1_000)
@@ -934,9 +966,9 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             account.coin == .solana && authority.solanaAccount == account { return }
         let ethereum = account.coin == .ethereum
         let id = Int.random(in: 1_000_000...2_000_000)
-        let body: [String: Any] = ethereum
+        let body = try XCTUnwrap(WireProtocol.JSONObject(ethereum
             ? ["address": "", "chainId": chainID]
-            : ["publicKey": "", "object": [String: Any]()]
+            : ["publicKey": "", "object": [String: Any]()]))
         let request = try XCTUnwrap(SafariRequest(json: [
             "id": id, "name": ethereum ? "requestAccounts" : "connect",
             "provider": ethereum ? "ethereum" : "solana",
@@ -946,7 +978,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             "admissionDeadline": Int(clock().addingTimeInterval(ExtensionBridge.requestTTL).timeIntervalSince1970 * 1_000),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "authority": authority.version.json,
-            "body": body,
+            "body": body.json,
         ]))
         let raw: [String: Any] = [
             "id": request.id, "name": request.name, "provider": request.provider.rawValue,
@@ -954,7 +986,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             "enqueueAttempt": request.enqueueAttempt,
             "admissionDeadline": Int(request.admissionDeadline.timeIntervalSince1970 * 1_000),
             "workflowVersion": request.workflowVersion, "authority": authority.version.json,
-            "body": body,
+            "body": body.json,
         ]
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
               case .accepted(let handle, _, _, _, _) = await bridge.enqueue(ingress: ingress, profileIdentifier: profileIdentifier) else {
@@ -982,7 +1014,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         _ = await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
     }
 
-    func transformNextLoad(_ transform: @escaping (ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot) {
+    func transformNextLoad(_ transform: @escaping @Sendable (ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot) {
         nextLoadTransform = transform
     }
 
@@ -998,7 +1030,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     func checkpointApprovalWasCommitted(handle: ExtensionBridge.Handle) -> Bool {
         committedCheckpoints.contains(handle)
     }
-    func response(handle: ExtensionBridge.Handle) async -> [String: Any]? {
+    nonisolated(nonsending) func response(handle: ExtensionBridge.Handle) async -> [String: Any]? {
         guard let snapshot = try? await snapshot(handle: handle),
               case .response(let response) = await bridge.prepareResponseDelivery(
                 id: handle.id, configurationKey: snapshot.configurationKey,

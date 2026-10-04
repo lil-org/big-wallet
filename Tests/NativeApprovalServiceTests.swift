@@ -759,6 +759,10 @@
             XCTAssertEqual(f.launches.count, 1)
         }
 
+        private func blockMainActor(until signal: DispatchSemaphore) -> DispatchTimeoutResult {
+            signal.wait(timeout: .now() + 5)
+        }
+
         func testDeliveryDeadlineCompletesWhileMainActorIsBlocked() async throws {
             let f = try fixture()
             let clock = f.clock
@@ -782,7 +786,7 @@
                 clock.advance(to: deadline)
             }
             advanceClock.signal()
-            let completedWhileBlocked = completed.wait(timeout: .now() + 5)
+            let completedWhileBlocked = blockMainActor(until: completed)
 
             XCTAssertEqual(completedWhileBlocked, .success)
             let result = await delivery.value

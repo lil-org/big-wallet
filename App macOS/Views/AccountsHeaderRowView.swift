@@ -2,6 +2,7 @@
 
 import Cocoa
 
+@MainActor
 protocol AccountsHeaderDelegate: AnyObject {
     
     func didClickEditAccounts(sender: NSTableRowView)

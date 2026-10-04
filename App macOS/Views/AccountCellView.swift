@@ -15,12 +15,8 @@ class AccountCellView: NSTableRowView {
     }
     @IBOutlet weak var addressTextField: NSTextField!
     
-    override func awakeFromNib() {
-        super.awakeFromNib()
-        wantsLayer = true
-    }
-    
     func setup(account: WalletAccount, walletId: String, isSelected: Bool, isDisabled: Bool, showsAccountSelection: Bool = false) {
+        wantsLayer = true
         self.showsAccountSelection = showsAccountSelection
         addressImageView.image = account.image
         addressTextField.stringValue = account.nameOrCroppedAddress(walletId: walletId)

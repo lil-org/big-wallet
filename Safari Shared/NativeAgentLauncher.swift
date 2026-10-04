@@ -20,11 +20,7 @@ final class NativeAgentLauncher {
         }
     }
 
-    typealias Launch = @MainActor (
-        HelperTarget,
-        URL,
-        @escaping (Bool) -> Void
-    ) -> Void
+    typealias Launch = @MainActor @Sendable (HelperTarget, URL) async -> Bool
     struct RuntimeHelper: Sendable {
         let processIdentifier: Int32
         let bundleURL: URL?
@@ -118,14 +114,14 @@ final class NativeAgentLauncher {
         }
     }
 
-    struct Dependencies {
+    struct Dependencies: Sendable {
         let helperURL: @MainActor () -> URL?
         let validate: @MainActor (URL) async -> Bool
         let helpers: @MainActor () -> [RuntimeHelper]
         let helper: @MainActor (Int32) -> RuntimeHelper?
         let identity: @MainActor (Int32) -> AmbientRuntimeIdentity?
         let launch: Launch
-        let uptime: () -> UInt64
+        let uptime: @Sendable () -> UInt64
         let sleepUntil: @MainActor (UInt64) async -> Void
 
         static var live: Self {
@@ -271,15 +267,22 @@ final class NativeAgentLauncher {
             return false
         }
         let resolution = ApprovalResolution<Bool>()
-        return await withTaskCancellationHandler {
-            guard !Task.isCancelled, isPending() else { return false }
-            dependencies.launch(selectedTarget, route.url) { succeeded in
-                let delivered = succeeded && isPending()
-                Task.detached { await resolution.resolve(delivered) }
+        let launch = dependencies.launch
+        let uptime = dependencies.uptime
+        let operation = Task {
+            guard !Task.isCancelled, uptime() < deadline else {
+                await resolution.resolve(false)
+                return
             }
-            return await resolution.value()
+            let succeeded = await launch(selectedTarget, route.url)
+            await resolution.resolve(succeeded && !Task.isCancelled && uptime() < deadline)
+        }
+        defer { operation.cancel() }
+        return await withTaskCancellationHandler {
+            await resolution.value()
         } onCancel: {
-            Task { await resolution.resolve(false) }
+            operation.cancel()
+            Task.detached { await resolution.resolve(false) }
         }
     }
 

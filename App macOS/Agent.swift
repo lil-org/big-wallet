@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import LocalAuthentication
 
 struct PendingWalletOpenIntent {
     private(set) var isPending = false
@@ -74,7 +73,7 @@ final class NativeApprovalWindowCloseObserver {
         self.notificationObserver = nil
     }
 
-    deinit {
+    isolated deinit {
         if let notificationObserver {
             NotificationCenter.default.removeObserver(notificationObserver)
         }
@@ -89,6 +88,10 @@ class Agent: NSObject {
     final class WeakViewControllerReference {
         weak var value: NSViewController?
 
+        init(_ value: NSViewController? = nil) {
+            self.value = value
+        }
+
         func reactivateWindow() {
             guard let value,
                   let window = value.viewIfLoaded?.window,
@@ -98,16 +101,25 @@ class Agent: NSObject {
         }
     }
 
+    @MainActor
+    private final class WeakWindowReference {
+        weak var value: NSWindow?
+
+        init(_ value: NSWindow?) {
+            self.value = value
+        }
+    }
+
     enum LocalAuthenticationResolution: Equatable {
         case authenticated
         case showPassword
         case failed
     }
 
-    enum AuthenticationContext {
+    enum AuthenticationContext: Sendable {
         case startup
-        case walletManagement(returningTo: NSViewController)
-        case approval(returningTo: NSViewController, lifetime: NativeApprovalReviewLifetime)
+        case walletManagement(returningTo: WeakViewControllerReference)
+        case approval(returningTo: WeakViewControllerReference, lifetime: NativeApprovalReviewLifetime)
     }
 
     enum MissingPasswordApprovalAction: Equatable {
@@ -214,6 +226,8 @@ class Agent: NSObject {
     private var isReady = false
     private var didEnterPasswordOnStart = false
     private var isAuthenticatingOnStart = false
+    private var startupAuthentication: Task<Void, Never>?
+    private var onboardingTask: Task<Void, Never>?
     private let startupAuthenticationPresentation = WeakViewControllerReference()
     private var welcomeWindowController: NSWindowController?
     private var welcomeWindowCloseObserver: NativeApprovalWindowCloseObserver?
@@ -356,30 +370,24 @@ class Agent: NSObject {
     private func requestStartupAuthenticationIfNeeded() {
         guard !isAuthenticatingOnStart else { return }
         isAuthenticatingOnStart = true
-        askAuthentication(
-            for: .startup,
-            reason: .start
-        ) { [weak self] success in
+        startupAuthentication = Task { [weak self] in
             guard let self else { return }
-            self.isAuthenticatingOnStart = false
-            self.startupAuthenticationPresentation.value = nil
+            let success = await askAuthentication(for: .startup, reason: .start)
+            isAuthenticatingOnStart = false
+            startupAuthenticationPresentation.value = nil
+            guard !Task.isCancelled else { return }
             guard success else {
-                self.pendingWalletOpenIntent.cancel()
-                self.cancelPendingApprovals()
+                pendingWalletOpenIntent.cancel()
+                cancelPendingApprovals()
                 return
             }
-            self.didEnterPasswordOnStart = true
-            self.resumePendingWork()
+            didEnterPasswordOnStart = true
+            resumePendingWork()
         }
     }
-    
-    @discardableResult
-    func askAuthentication(
-        for authentication: AuthenticationContext,
-        reason: AuthenticationReason,
-        completion: @escaping (Bool) -> Void
-    ) -> LAContext? {
-        let returningController: NSViewController?
+
+    func askAuthentication(for authentication: AuthenticationContext, reason: AuthenticationReason) async -> Bool {
+        let returningController: WeakViewControllerReference?
         let reviewLifetime: NativeApprovalReviewLifetime?
         switch authentication {
         case .startup:
@@ -392,68 +400,75 @@ class Agent: NSObject {
             returningController = controller
             reviewLifetime = lifetime
         }
+        guard !Task.isCancelled, reviewLifetime?.isActive != false else { return false }
         let onStart = returningController == nil
-        let originalWindow = returningController?.viewIfLoaded?.window
-        guard reviewLifetime?.isActive != false else { return nil }
-        let context = LAContext()
-        var error: NSError?
-        let canDoLocalAuthentication = context.canEvaluatePolicy(
-            .deviceOwnerAuthenticationWithBiometrics,
-            error: &error
-        )
-        
-        func showPasswordScreen() {
-            guard reviewLifetime?.isActive != false else { return }
-            let window = originalWindow ?? Window.showNew(closeOthers: onStart).window
-            let presentation = WeakViewControllerReference()
-            let passwordViewController = PasswordViewController.with(
-                mode: .enter,
-                reason: reason,
-                reviewLifetime: reviewLifetime
-            ) { [weak window] success in
-                guard reviewLifetime?.isActive != false,
-                      window?.contentViewController === presentation.value
-                else { return }
-                if let returningController {
-                    window?.contentViewController = returningController
-                } else {
-                    Window.closeWindow(idToClose: window?.windowNumber)
+        let originalWindow = WeakWindowReference(returningController?.value?.viewIfLoaded?.window)
+        guard onStart || returningController?.value != nil else { return false }
+
+        func showPasswordScreen() async -> Bool {
+            guard !Task.isCancelled, reviewLifetime?.isActive != false else { return false }
+            let response = AuthenticationResponse()
+            return await response.wait { response in
+                let window = originalWindow.value ?? Window.showNew(closeOthers: onStart).window
+                let presentation = WeakViewControllerReference()
+                let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason, reviewLifetime: reviewLifetime) { [weak window] success in
+                    guard reviewLifetime?.isActive != false,
+                          window?.contentViewController === presentation.value else {
+                        response.resolve(false)
+                        return
+                    }
+                    if let returningController = returningController?.value {
+                        window?.contentViewController = returningController
+                    } else {
+                        Window.closeWindow(idToClose: window?.windowNumber)
+                    }
+                    response.resolve(success)
                 }
-                completion(success)
+                passwordViewController.retainedReturnController = returningController?.value
+                presentation.value = passwordViewController
+                window?.contentViewController = passwordViewController
+                if onStart { startupAuthenticationPresentation.value = passwordViewController }
             }
-            presentation.value = passwordViewController
-            window?.contentViewController = passwordViewController
-            if onStart {
-                startupAuthenticationPresentation.value = passwordViewController
-            }
-        }
-        
-        guard canDoLocalAuthentication else {
-            showPasswordScreen()
-            return nil
         }
 
-        context.localizedCancelTitle = Strings.cancel
-        context.evaluatePolicy(
-            .deviceOwnerAuthentication,
-            localizedReason: reason.title
-        ) { success, _ in
-            DispatchQueue.main.async {
-                guard reviewLifetime?.isActive != false else { return }
-                switch Self.localAuthenticationResolution(
-                    success: success,
-                    onStart: onStart
-                ) {
-                case .authenticated:
-                    completion(true)
-                case .showPassword:
-                    showPasswordScreen()
-                case .failed:
-                    completion(false)
+        guard DeviceAuthentication.canUseBiometrics else { return await showPasswordScreen() }
+        let outcome = await DeviceAuthentication.attemptBiometrics(reason: reason.title)
+        guard !Task.isCancelled, reviewLifetime?.isActive != false else { return false }
+        switch Self.localAuthenticationResolution(success: outcome == .succeeded, onStart: onStart) {
+        case .authenticated: return true
+        case .showPassword: return await showPasswordScreen()
+        case .failed: return false
+        }
+    }
+
+    @MainActor
+    private final class AuthenticationResponse {
+        private var continuation: CheckedContinuation<Bool, Never>?
+        private var result: Bool?
+
+        func wait(_ present: (AuthenticationResponse) -> Void) async -> Bool {
+            guard !Task.isCancelled else { return false }
+            return await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    if let result {
+                        continuation.resume(returning: result)
+                    } else {
+                        self.continuation = continuation
+                        present(self)
+                    }
                 }
+            } onCancel: {
+                Task { @MainActor in self.resolve(false) }
             }
         }
-        return context
+
+        func resolve(_ result: Bool) {
+            guard self.result == nil else { return }
+            self.result = result
+            let continuation = continuation
+            self.continuation = nil
+            continuation?.resume(returning: result)
+        }
     }
 
     static func localAuthenticationResolution(
@@ -515,11 +530,10 @@ class Agent: NSObject {
 
     private func requestDockOnboarding() {
         guard dockOnboardingHandoff.begin() else { return }
-        DockAppLauncher.openDockApp { [weak self] succeeded in
-            guard let self,
-                  dockOnboardingHandoff.finish(succeeded: succeeded) else {
-                return
-            }
+        onboardingTask = Task { [weak self] in
+            let succeeded = await DockAppLauncher.openDockApp()
+            guard let self, !Task.isCancelled,
+                  dockOnboardingHandoff.finish(succeeded: succeeded) else { return }
             pendingWalletOpenIntent.cancel()
         }
     }
@@ -786,7 +800,7 @@ extension Agent.ActiveApproval {
     ) {
         let controller = approvalWindow()
         let window = controller.window
-        var authenticationContext: LAContext?
+        var authenticationTask: Task<Void, Never>?
         var didResolveAuthentication = false
         let approveViewController = ApproveViewController.with(
             subject: action.subject,
@@ -807,13 +821,17 @@ extension Agent.ActiveApproval {
                 coordinator.reject()
                 return
             }
-            authenticationContext = agent?.askAuthentication(
-                for: .approval(returningTo: returningController, lifetime: review),
-                reason: action.subject.asAuthenticationReason
-            ) { [weak self, weak window] success in
-                guard let self, acceptsActions(for: review), !didResolveAuthentication else { return }
+            let authentication = Agent.AuthenticationContext.approval(returningTo: .init(returningController), lifetime: review)
+            authenticationTask?.cancel()
+            authenticationTask = Task { [weak self, weak window, weak agent] in
+                guard let agent else { return }
+                let success = await agent.askAuthentication(
+                    for: authentication,
+                    reason: action.subject.asAuthenticationReason
+                )
+                guard let self, !Task.isCancelled, acceptsActions(for: review), !didResolveAuthentication else { return }
                 didResolveAuthentication = true
-                authenticationContext = nil
+                authenticationTask = nil
                 if success, case .approved(let cluster) = decision {
                     coordinator.approveMessage(solanaCluster: cluster)
                     (window?.contentViewController as? ApproveViewController)?.enableWaiting()
@@ -823,8 +841,8 @@ extension Agent.ActiveApproval {
             }
         }
         approveViewController.localWindowCloseCompletion = {
-            authenticationContext?.invalidate()
-            authenticationContext = nil
+            authenticationTask?.cancel()
+            authenticationTask = nil
             didResolveAuthentication = true
         }
         controller.contentViewController = approveViewController
@@ -924,22 +942,17 @@ extension Agent.ActiveApproval {
     }
 }
 
+@MainActor
 enum DockAppLauncher {
 
-    static func openDockApp(completion: @escaping (Bool) -> Void) {
-        guard let dockAppURL else {
-            completion(false)
-            return
-        }
+    static func openDockApp() async -> Bool {
+        guard let dockAppURL, !Task.isCancelled else { return false }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         configuration.allowsRunningApplicationSubstitution = false
-        NSWorkspace.shared.openApplication(
-            at: dockAppURL,
-            configuration: configuration
-        ) { application, error in
-            DispatchQueue.main.async {
-                completion(application != nil && error == nil)
+        return await withCheckedContinuation { continuation in
+            NSWorkspace.shared.openApplication(at: dockAppURL, configuration: configuration) { application, error in
+                continuation.resume(returning: application != nil && error == nil)
             }
         }
     }

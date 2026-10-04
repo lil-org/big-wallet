@@ -3,6 +3,7 @@
 import Cocoa
 
 class PasswordViewController: NSViewController {
+    var retainedReturnController: NSViewController?
     
     static func with(
         mode: Mode,
@@ -28,6 +29,7 @@ class PasswordViewController: NSViewController {
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
     private var didCallCompletion = false
+    private var initialRefreshTask: Task<Void, Never>?
     private var reviewLifetime: NativeApprovalReviewLifetime?
 
     private var isCreatingPassword: Bool {
@@ -66,12 +68,20 @@ class PasswordViewController: NSViewController {
             reasonLabel.stringValue = ""
         }
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
-        DispatchQueue.main.async { [weak self] in
+        initialRefreshTask = Task { [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             self?.walletsChanged()
         }
     }
 
-    deinit {
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        initialRefreshTask?.cancel()
+    }
+
+    isolated deinit {
+        initialRefreshTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
     
@@ -150,6 +160,7 @@ class PasswordViewController: NSViewController {
             didCallCompletion = true
             NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
             completion?(result)
+            retainedReturnController = nil
         }
     }
 
@@ -184,6 +195,7 @@ extension PasswordViewController: NSWindowDelegate {
 extension PasswordViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
+        retainedReturnController = nil
         didCallCompletion = true
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         completion = nil

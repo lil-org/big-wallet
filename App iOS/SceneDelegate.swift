@@ -7,6 +7,7 @@ private let feedbackShortcutItemType = "org.lil.wallet.feedback"
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
+    private var foregroundTask: Task<Void, Never>?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard (scene as? UIWindowScene) != nil else { return }
@@ -22,11 +23,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
-        WalletsManager.shared.handleExternalWalletStoreChange()
-        SafariApprovalVaultHost.shared.reconcile()
-        Task { await ExtensionBridge.shared.performMaintenance() }
+        foregroundTask?.cancel()
+        foregroundTask = Task {
+            await WalletsManager.shared.handleExternalWalletStoreChange()
+            guard !Task.isCancelled else { return }
+            await SafariApprovalVaultHost.shared.reconcile()
+            await ExtensionBridge.shared.performMaintenance()
+        }
     }
     
+    func sceneDidDisconnect(_ scene: UIScene) {
+        foregroundTask?.cancel()
+        foregroundTask = nil
+    }
+
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         if shortcutItem.type == feedbackShortcutItemType {
             UIApplication.shared.open(.quickFeedbackMail)

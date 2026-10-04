@@ -13,6 +13,8 @@ class PasswordViewController: UIViewController {
     private let keychain = Keychain.shared
     private var mode = Mode.create
     private var isSaving = false
+    private var authenticationTask: Task<Void, Never>?
+    private var saveTask: Task<Void, Never>?
     var passwordToRepeat: String?
     
     @IBOutlet weak var passwordTextField: UITextField! {
@@ -38,6 +40,17 @@ class PasswordViewController: UIViewController {
         }
     }
     
+    isolated deinit {
+        saveTask?.cancel()
+        authenticationTask?.cancel()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        saveTask?.cancel()
+        authenticationTask?.cancel()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
@@ -77,9 +90,7 @@ class PasswordViewController: UIViewController {
         if !viewDidAppear {
             viewDidAppear = true
             if mode == .enter {
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100)) { [weak self] in
-                    self?.askForLocalAuthentication()
-                }
+                askForLocalAuthentication()
             }
         }
     }
@@ -98,11 +109,15 @@ class PasswordViewController: UIViewController {
     }
     
     private func askForLocalAuthentication() {
-        LocalAuthentication.attempt(reason: Strings.enterWallet, presentPasswordAlertFrom: nil, passwordReason: nil) { [weak self] success in
+        authenticationTask?.cancel()
+        authenticationTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            let success = await LocalAuthentication.attempt(reason: Strings.enterWallet, presentPasswordAlertFrom: { nil }, passwordReason: nil)
+            guard let self, !Task.isCancelled, viewIfLoaded?.window != nil else { return }
             if success {
-                self?.showAccountsList()
+                showAccountsList()
             } else {
-                self?.didFailLocalAuthentication()
+                didFailLocalAuthentication()
             }
         }
     }
@@ -139,13 +154,14 @@ class PasswordViewController: UIViewController {
                 isSaving = true
                 okButton.isEnabled = false
                 navigationController?.view.isUserInteractionEnabled = false
-                Task {
-                    defer {
-                        isSaving = false
-                        okButton.isEnabled = true
-                        navigationController?.view.isUserInteractionEnabled = true
-                    }
-                    if await keychain.save(password: password) {
+                saveTask = Task { [weak self, keychain] in
+                    let saved = await keychain.save(password: password)
+                    guard let self else { return }
+                    isSaving = false
+                    okButton.isEnabled = true
+                    navigationController?.view.isUserInteractionEnabled = true
+                    guard !Task.isCancelled else { return }
+                    if saved {
                         showAccountsList()
                     } else {
                         showMessageAlert(text: Strings.somethingWentWrong)

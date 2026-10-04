@@ -2,7 +2,7 @@
 
 import Foundation
 
-final class ExtensionRequestStoreFiles {
+final class ExtensionRequestStoreFiles: Sendable {
     private typealias AtomicWrite = ExtensionRequestFileStore.AtomicWrite
     private typealias SynchronizePublishedFile = ExtensionRequestFileStore.SynchronizePublishedFile
     private typealias ReadData = ExtensionRequestFileStore.ReadData
@@ -61,7 +61,7 @@ final class ExtensionRequestStoreFiles {
     private let readData: ReadData
     private let readFileSize: ReadFileSize
     private let removeItem: RemoveItem
-    private let fileManager = FileManager.default
+    private var fileManager: FileManager { FileManager.default }
 
     init(
         rootURL: URL?,
@@ -318,6 +318,20 @@ final class ExtensionRequestStoreFiles {
     }
 
     func withRequiredLock<T>(_ body: () throws -> T) throws -> T {
+        let lock = try acquireRequiredLock()
+        defer { lock.release() }
+        removeOrphanedTemporaryFilesLocked()
+        return try body()
+    }
+
+    func withLockIfAvailable<T>(_ body: () throws -> T) rethrows -> T? {
+        guard let lock = try? acquireRequiredLock() else { return nil }
+        defer { lock.release() }
+        removeOrphanedTemporaryFilesLocked()
+        return try body()
+    }
+
+    private func acquireRequiredLock() throws -> CrossProcessFileLock {
         guard let rootURL, let storeLock else { throw WalletAuthorityRemovalError.unavailable }
         do {
             try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -325,16 +339,11 @@ final class ExtensionRequestStoreFiles {
             resourceValues.isExcludedFromBackup = true
             var mutableRootURL = rootURL
             try mutableRootURL.setResourceValues(resourceValues)
-            try storeLock.acquire(
-                timeoutNanoseconds: lockTimeout,
-                pollNanoseconds: lockPoll
-            )
+            try storeLock.acquire(timeoutNanoseconds: lockTimeout, pollNanoseconds: lockPoll)
+            return storeLock
         } catch {
             throw WalletAuthorityRemovalError.unavailable
         }
-        defer { storeLock.release() }
-        removeOrphanedTemporaryFilesLocked()
-        return try body()
     }
 
     private func removeOrphanedTemporaryFilesLocked() {

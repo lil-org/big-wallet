@@ -4,9 +4,9 @@ import Foundation
 
 extension SafariRequest {
 
-    struct Solana {
+    struct Solana: Sendable {
 
-        enum Method: String {
+        enum Method: String, Sendable {
             case connect
             case signMessage
             case signTransaction
@@ -14,7 +14,7 @@ extension SafariRequest {
             case signAndSendTransaction
         }
 
-        enum MessageEncoding: Equatable {
+        enum MessageEncoding: Equatable, Sendable {
             case hex
             case utf8
 
@@ -37,7 +37,8 @@ extension SafariRequest {
         let messages: [String]?
         let displayHex: Bool
         let signMessageEncoding: MessageEncoding?
-        let sendOptions: [String: Any]?
+        private let sendOptionsObject: WireProtocol.JSONObject?
+        var sendOptions: [String: Any]? { sendOptionsObject?.json }
         let onlyIfTrusted: Bool
 
         init?(name: String, json: [String: Any]) {
@@ -66,7 +67,7 @@ extension SafariRequest {
             } else {
                 self.signMessageEncoding = display?.lowercased() == "utf8" ? .utf8 : .hex
             }
-            self.sendOptions = parameters?["options"] as? [String: Any]
+            self.sendOptionsObject = (parameters?["options"] as? [String: Any]).flatMap { WireProtocol.JSONObject($0) }
         }
 
 

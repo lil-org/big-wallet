@@ -64,16 +64,18 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertEqual(covered, Set(WireProtocol.Message.allCases))
     }
 
-    func testValidatedObjectDetachesMutableFoundationContainers() throws {
+    func testValidatedObjectDetachesMutableFoundationContainersAcrossTasks() async throws {
         let item = NSMutableDictionary(dictionary: ["value": "original"])
         let items = NSMutableArray(object: item)
         let source = NSMutableDictionary(dictionary: ["id": 91, "result": ["items": items]])
-        let object = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: source))
+        let snapshot = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: source))
+        let transfer = Task.detached { snapshot }
 
         source["id"] = 92
         item["value"] = "changed"
         items.add("later")
 
+        let object = await transfer.value
         XCTAssertEqual(object.contract, .rpcResponse)
         XCTAssertEqual(object.json["id"] as? Int, 91)
         let result = try XCTUnwrap(object.json["result"] as? [String: Any])

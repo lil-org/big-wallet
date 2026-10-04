@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
@@ -225,27 +226,16 @@ final class WalletAuthorityRevocationLedgerTests: XCTestCase {
         XCTAssertEqual(Set(ledger.accountRemovals.map(\.sequence)), Set(1...8))
     }
 
-    private final class ConcurrentResults: @unchecked Sendable {
-        private let lock = NSLock()
-        private var committed = [Int]()
-        private var failures = [String]()
-
-        func didCommit(_ writer: Int) {
-            lock.lock()
-            defer { lock.unlock() }
-            committed.append(writer)
+    private final class ConcurrentResults: Sendable {
+        private struct State {
+            var committed = [Int]()
+            var failures = [String]()
         }
-
-        func fail(_ message: String) {
-            lock.lock()
-            defer { lock.unlock() }
-            failures.append(message)
-        }
-
+        private let state = Mutex(State())
+        func didCommit(_ writer: Int) { state.withLock { $0.committed.append(writer) } }
+        func fail(_ message: String) { state.withLock { $0.failures.append(message) } }
         func snapshot() -> (committed: [Int], failures: [String]) {
-            lock.lock()
-            defer { lock.unlock() }
-            return (committed, failures)
+            state.withLock { ($0.committed, $0.failures) }
         }
     }
 

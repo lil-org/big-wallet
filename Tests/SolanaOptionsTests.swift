@@ -1,11 +1,113 @@
 // ∅ 2026 lil org
 
 import XCTest
+import Synchronization
 @testable import Big_Wallet
 
 private typealias Vectors = WalletCoreProxyTestVectors
 
+@MainActor
 final class SolanaOptionsTests: XCTestCase {
+
+    func testCancellationDuringAuthorizationInvalidationDoesNotStartConfirmation() async throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let entered = SolanaTestSignal()
+        let released = SolanaTestSignal()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            return (
+                try Self.httpResponse(for: request, statusCode: 401),
+                Data(#"{"jsonrpc":"2.0","id":1,"result":"test-signature"}"#.utf8)
+            )
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+        let provider = SuspendedSolanaInvalidation(entered: entered, released: released)
+        let solana = Solana(urlSession: session, rpcConfiguration: .bundled, authorizationProvider: provider)
+        let signed = try signedTransactionFixture()
+        let operation = Task {
+            try await solana.sendSignedTransaction(signed, cluster: .mainnetBeta, sendOptions: .init(confirmationCommitment: .finalized))
+        }
+        await entered.wait()
+        operation.cancel()
+        await released.signal()
+        do {
+            _ = try await operation.value
+            XCTFail("Cancellation must be checked after authorization invalidation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(recorder.snapshot().map(\.method), ["sendTransaction"])
+    }
+
+    func testCancelledSubmissionDoesNotAuthorizeOrSend() async throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            throw SolanaRPCStubError.unexpectedRequest
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+        let authorization = SolanaAuthorizationProviderStub(token: "initial-token")
+        let solana = Solana(urlSession: session, rpcConfiguration: .bundled, authorizationProvider: authorization)
+        let signed = try signedTransactionFixture()
+        let operation = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await solana.sendSignedTransaction(signed, cluster: .mainnetBeta, sendOptions: .init())
+        }
+        do {
+            _ = try await operation.value
+            XCTFail("A cancelled submission must not start")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertTrue(recorder.snapshot().isEmpty)
+        XCTAssertEqual(authorization.authorizationCallCount, 0)
+    }
+
+    func testCancellationDuringConfirmationSleepDoesNotResubmit() async throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let sleeping = SolanaTestSignal()
+        let session = makeRPCSession { request in
+            let method = try recorder.record(request)
+            let body: String
+            switch method {
+            case "sendTransaction": body = #"{"jsonrpc":"2.0","id":1,"result":"test-signature"}"#
+            case "getSignatureStatuses": body = #"{"jsonrpc":"2.0","id":1,"result":{"value":[null]}}"#
+            default: throw SolanaRPCStubError.unexpectedMethod
+            }
+            return (try Self.httpResponse(for: request), Data(body.utf8))
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+        let solana = Solana(
+            urlSession: session,
+            rpcConfiguration: .bundled,
+            timing: .init(now: { Date() }, sleep: { _ in
+                await sleeping.signal()
+                try await Task.sleep(for: .seconds(3_600))
+            })
+        )
+        let signed = try signedTransactionFixture()
+        let operation = Task {
+            try await solana.sendSignedTransaction(signed, cluster: .testnet, sendOptions: .init(confirmationCommitment: .finalized))
+        }
+        await sleeping.wait()
+        operation.cancel()
+        do {
+            _ = try await operation.value
+            XCTFail("Cancellation must stop confirmation polling")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(recorder.snapshot().map(\.method), ["sendTransaction", "getSignatureStatuses"])
+    }
 
     func testSolanaSendOptionsAcceptClusterHintAliases() {
         let aliases: [(String, Solana.Cluster)] = [
@@ -173,7 +275,7 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(Solana.RPCSource.publicFallback.displayName, Strings.publicRPC)
     }
 
-    func testSolanaMissingEndpointDoesNotAuthorizeOrSubmit() throws {
+    func testSolanaMissingEndpointDoesNotAuthorizeOrSubmit() async throws {
         let recorder = SolanaRPCRequestRecorder()
         let session = makeRPCSession { request in
             _ = try recorder.record(request)
@@ -191,31 +293,32 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completed = expectation(description: "Missing endpoints rejected")
-        completed.expectedFulfillmentCount = 2
 
         for cluster in [Solana.Cluster.mainnetBeta, .devnet] {
-            solana.sendSignedTransaction(
-                signedTransaction,
-                cluster: cluster,
-                sendOptions: Solana.PreparedSendOptions(
-                    clusterHint: cluster,
-                    confirmationCommitment: nil
-                )
-            ) { result in
-                XCTAssertEqual(result, .failure(.rpcUnavailable))
-                completed.fulfill()
+            let result: Result<String, Solana.SendTransactionError>
+            do {
+                result = .success(try await solana.sendSignedTransaction(
+                    signedTransaction,
+                    cluster: cluster,
+                    sendOptions: Solana.PreparedSendOptions(
+                        clusterHint: cluster,
+                        confirmationCommitment: nil
+                    )
+                ))
+            } catch {
+                result = .failure(error as? Solana.SendTransactionError ?? .unknown)
             }
+            XCTAssertEqual(result, .failure(.rpcUnavailable))
+
         }
 
-        wait(for: [completed], timeout: 5)
         XCTAssertTrue(recorder.snapshot().isEmpty)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 0)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSolanaDevnetSubmissionAndConfirmationReuseResolvedEndpoint() throws {
+    func testSolanaDevnetSubmissionAndConfirmationReuseResolvedEndpoint() async throws {
         let sentinelURL = try XCTUnwrap(URL(string: "https://sentinel.example/devnet"))
         let configuration = Solana.RPCConfiguration { network in
             if network == "solana-devnet" {
@@ -249,21 +352,22 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(description: "Solana transaction confirmed")
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .devnet,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .devnet,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .devnet,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .devnet,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         let requests = recorder.snapshot()
         XCTAssertEqual(requests.map(\.method), ["sendTransaction", "getSignatureStatuses"])
         XCTAssertEqual(requests.map(\.url), [sentinelURL, sentinelURL])
@@ -273,7 +377,7 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSolanaInjectedKeylessAlchemyEndpointNeverInvokesAuthorizationProvider() throws {
+    func testSolanaInjectedKeylessAlchemyEndpointNeverInvokesAuthorizationProvider() async throws {
         let keylessCustomURL = try XCTUnwrap(
             URL(string: "https://solana-devnet.g.alchemy.com/v2")
         )
@@ -302,21 +406,22 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(description: "Custom keyless endpoint completed")
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .devnet,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .devnet,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .devnet,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .devnet,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(recorder.snapshot().map(\.url), [keylessCustomURL])
         XCTAssertEqual(
             recorder.snapshot().map(\.authorization),
@@ -327,7 +432,7 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSolanaDoesNotSubmitWhenAuthorizationAcquisitionFails() throws {
+    func testSolanaDoesNotSubmitWhenAuthorizationAcquisitionFails() async throws {
         let recorder = SolanaRPCRequestRecorder()
         let session = makeRPCSession { request in
             _ = try recorder.record(request)
@@ -353,30 +458,29 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Authorization failure returned before submission"
-        )
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertEqual(result, .failure(.notSubmitted))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertEqual(result, .failure(.notSubmitted))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertTrue(recorder.snapshot().isEmpty)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSolanaSubmissionHonorsResultFrom401WithoutReplay() throws {
+    func testSolanaSubmissionHonorsResultFrom401WithoutReplay() async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -405,23 +509,22 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Successful submission returned before authorization replay"
-        )
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
@@ -433,7 +536,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaMainnetReplaysSubmissionOnceWithReplacementAuthorizationAfter401()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -472,25 +575,23 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Submission recovered with replacement authorization"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 2)
         let requests = recorder.snapshot()
         XCTAssertEqual(
@@ -504,7 +605,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaPersistentSubmission401IsTerminalAfterOneReplacement()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -535,28 +636,26 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Persistent submission authorization failure returned"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(
-                result,
-                .failure(.rpcError(message: "unauthorized", code: 401))
-            )
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(
+            result,
+            .failure(.rpcError(message: "unauthorized", code: 401))
+        )
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 2)
         let requests = recorder.snapshot()
         XCTAssertEqual(
@@ -574,7 +673,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaSubmissionDoesNotReplayWhenReplacementAuthorizationFails()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let session = makeRPCSession { request in
@@ -602,28 +701,26 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Replacement authorization failure returned"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(
-                result,
-                .failure(.rpcError(message: "unauthorized", code: 401))
-            )
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(
+            result,
+            .failure(.rpcError(message: "unauthorized", code: 401))
+        )
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(recorder.snapshot().count, 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
@@ -631,7 +728,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaPersistentConfirmation401ContinuesPollingWithFreshAuthorization()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -683,25 +780,23 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Confirmation recovered on a later poll"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 4)
         let requests = recorder.snapshot()
         XCTAssertEqual(
@@ -737,7 +832,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaPersistentConfirmation401StopsAfterOneFreshPoll()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -780,34 +875,32 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Persistent confirmation authorization failed"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(
-                result,
-                .failure(
-                    .confirmationFailed(
-                        signature: "test-signature",
-                        message: "unauthorized",
-                        code: 401
-                    )
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
+        }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(
+            result,
+            .failure(
+                .confirmationFailed(
+                    signature: "test-signature",
+                    message: "unauthorized",
+                    code: 401
                 )
             )
-            completion.fulfill()
-        }
+        )
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 4)
         XCTAssertEqual(
             recorder.snapshot().map(\.authorization),
@@ -830,7 +923,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaPersistentConfirmationAuthorizationAcquisitionFailureIsBounded()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let session = makeRPCSession { request in
@@ -858,33 +951,31 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Authorization acquisition failure was bounded"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            guard case .failure(
-                .confirmationFailed(let signature, _, let code)
-            ) = result else {
-                XCTFail("Expected a shaped confirmation failure, got \(result)")
-                completion.fulfill()
-                return
-            }
-            XCTAssertEqual(signature, "test-signature")
-            XCTAssertNil(code)
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        guard case .failure(
+            .confirmationFailed(let signature, _, let code)
+        ) = result else {
+            XCTFail("Expected a shaped confirmation failure, got \(result)")
 
-        wait(for: [completion], timeout: 5)
+            return
+        }
+        XCTAssertEqual(signature, "test-signature")
+        XCTAssertNil(code)
+
         XCTAssertEqual(recorder.snapshot().count, 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 3)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
@@ -892,7 +983,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaConfirmationRetriesPollingWhenReplacementAuthorizationFails()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -949,25 +1040,23 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Confirmation polling recovered without resubmission"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 3)
         XCTAssertEqual(
             recorder.snapshot().map(\.method),
@@ -991,7 +1080,7 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaConfirmation403PreservesPollingWithoutAuthorizationRefresh()
-        throws {
+        async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -1048,25 +1137,23 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Forbidden confirmation response stayed retryable"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 3)
         XCTAssertEqual(
             recorder.snapshot().map(\.method),
@@ -1089,7 +1176,7 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSolanaDoesNotRefreshAuthorizationAfter403() throws {
+    func testSolanaDoesNotRefreshAuthorizationAfter403() async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -1116,22 +1203,22 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(description: "Forbidden response returned")
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertEqual(result, .failure(.rpcError(message: "forbidden", code: 403)))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertEqual(result, .failure(.rpcError(message: "forbidden", code: 403)))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 1)
         XCTAssertEqual(recorder.snapshot().map(\.authorization), ["Bearer current-token"])
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
@@ -1139,8 +1226,8 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaSubmissionDoesNotRefreshAuthorizationAfterNetworkFailure()
-        throws {
-        try assertSolanaSubmissionDoesNotRecoverAuthorization(
+        async throws {
+        try await assertSolanaSubmissionDoesNotRecoverAuthorization(
             expectedResult: .failure(.unknown)
         ) { _ in
             throw URLError(.networkConnectionLost)
@@ -1148,8 +1235,8 @@ final class SolanaOptionsTests: XCTestCase {
     }
 
     func testSolanaSubmissionDoesNotRefreshAuthorizationForHTTP200RPCError()
-        throws {
-        try assertSolanaSubmissionDoesNotRecoverAuthorization(
+        async throws {
+        try await assertSolanaSubmissionDoesNotRecoverAuthorization(
             expectedResult: .failure(
                 .rpcError(message: "already processed", code: -32_002)
             )
@@ -1163,7 +1250,7 @@ final class SolanaOptionsTests: XCTestCase {
         }
     }
 
-    func testSolanaPublicTestnetNeverReceivesAlchemyAuthorization() throws {
+    func testSolanaPublicTestnetNeverReceivesAlchemyAuthorization() async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let session = makeRPCSession { request in
@@ -1185,28 +1272,29 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(description: "Public testnet transaction sent")
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .testnet,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .testnet,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .testnet,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .testnet,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(recorder.snapshot().map(\.authorization), [String?](repeating: nil, count: 1))
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 0)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSolanaPublicTestnet401PreservesConfirmationPolling() throws {
+    func testSolanaPublicTestnet401PreservesConfirmationPolling() async throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()
         let requestCount = LockedSolanaCounter()
@@ -1255,24 +1343,23 @@ final class SolanaOptionsTests: XCTestCase {
             authorizationProvider: authorizationProvider
         )
         let signedTransaction = try signedTransactionFixture()
-        let completion = expectation(
-            description: "Public testnet confirmation recovered"
-        )
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .testnet,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .testnet,
-                confirmationCommitment: .finalized
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread)
-            XCTAssertEqual(result, .success("test-signature"))
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .testnet,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .testnet,
+                    confirmationCommitment: .finalized
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(result, .success("test-signature"))
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(requestCount.value, 3)
         XCTAssertEqual(
             recorder.snapshot().map(\.authorization),
@@ -1288,7 +1375,7 @@ final class SolanaOptionsTests: XCTestCase {
         response: @escaping SolanaOptionsURLProtocol.RequestHandler,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let recorder = SolanaRPCRequestRecorder()
         let session = makeRPCSession { request in
             _ = try recorder.record(request)
@@ -1312,25 +1399,23 @@ final class SolanaOptionsTests: XCTestCase {
             file: file,
             line: line
         )
-        let completion = expectation(
-            description: "Non-401 submission failure returned"
-        )
-        completion.assertForOverFulfill = true
 
-        solana.sendSignedTransaction(
-            signedTransaction,
-            cluster: .mainnetBeta,
-            sendOptions: Solana.PreparedSendOptions(
-                clusterHint: .mainnetBeta,
-                confirmationCommitment: nil
-            )
-        ) { result in
-            XCTAssertTrue(Thread.isMainThread, file: file, line: line)
-            XCTAssertEqual(result, expectedResult, file: file, line: line)
-            completion.fulfill()
+        let result: Result<String, Solana.SendTransactionError>
+        do {
+            result = .success(try await solana.sendSignedTransaction(
+                signedTransaction,
+                cluster: .mainnetBeta,
+                sendOptions: Solana.PreparedSendOptions(
+                    clusterHint: .mainnetBeta,
+                    confirmationCommitment: nil
+                )
+            ))
+        } catch {
+            result = .failure(error as? Solana.SendTransactionError ?? .unknown)
         }
+        XCTAssertTrue(Thread.isMainThread, file: file, line: line)
+        XCTAssertEqual(result, expectedResult, file: file, line: line)
 
-        wait(for: [completion], timeout: 5)
         XCTAssertEqual(recorder.snapshot().count, 1, file: file, line: line)
         XCTAssertEqual(
             recorder.snapshot().map(\.authorization),
@@ -1386,7 +1471,7 @@ final class SolanaOptionsTests: XCTestCase {
         return URLSession(configuration: configuration)
     }
 
-    private static func httpResponse(
+    private nonisolated static func httpResponse(
         for request: URLRequest,
         statusCode: Int = 200
     ) throws -> HTTPURLResponse {
@@ -1405,17 +1490,50 @@ final class SolanaOptionsTests: XCTestCase {
 
 }
 
-private final class SolanaRPCRequestRecorder {
+private struct SuspendedSolanaInvalidation: Big_Wallet.AlchemyAuthorizationProviding {
+    let entered: SolanaTestSignal
+    let released: SolanaTestSignal
 
-    struct RecordedRequest: Equatable {
+    func authorization(for url: URL) async throws -> Big_Wallet.AlchemyAuthorization? {
+        Big_Wallet.AlchemyAuthorization(token: "initial-token")
+    }
+
+    func replacementAuthorization(afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization, for url: URL) async throws -> Big_Wallet.AlchemyAuthorization? {
+        nil
+    }
+
+    func invalidateAuthorization(afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization, for url: URL) async {
+        await entered.signal()
+        await released.wait()
+    }
+}
+
+private actor SolanaTestSignal {
+    private var signaled = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        guard !signaled else { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    func signal() {
+        signaled = true
+        waiter?.resume()
+        waiter = nil
+    }
+}
+
+private final class SolanaRPCRequestRecorder: Sendable {
+
+    struct RecordedRequest: Equatable, Sendable {
         let method: String
         let url: URL
         let authorization: String?
         let body: Data
     }
 
-    private let lock = NSLock()
-    private var requests = [RecordedRequest]()
+    private let requests = Mutex([RecordedRequest]())
 
     func record(_ request: URLRequest) throws -> String {
         guard let url = request.url,
@@ -1426,21 +1544,17 @@ private final class SolanaRPCRequestRecorder {
             throw SolanaRPCStubError.invalidRequest
         }
 
-        lock.lock()
-        requests.append(RecordedRequest(
+        requests.withLock { requests in requests.append(RecordedRequest(
             method: method,
             url: url,
             authorization: request.value(forHTTPHeaderField: "Authorization"),
             body: body
-        ))
-        lock.unlock()
+        )) }
         return method
     }
 
     func snapshot() -> [RecordedRequest] {
-        lock.lock()
-        defer { lock.unlock() }
-        return requests
+        requests.withLock { $0 }
     }
 
     private static func bodyData(from request: URLRequest) throws -> Data? {
@@ -1478,176 +1592,97 @@ private enum SolanaAuthorizationStubError: Error {
     case unavailable
 }
 
-private final class SolanaAuthorizationProviderStub:
-    Big_Wallet.AlchemyAuthorizationProviding,
-    @unchecked Sendable {
-
-    private let lock = NSLock()
-    private var currentToken: String?
+private final class SolanaAuthorizationProviderStub: Big_Wallet.AlchemyAuthorizationProviding, Sendable {
+    private struct State {
+        var currentToken: String?
+        var authorizationCalls = 0
+        var replacementCalls = 0
+        var invalidatedTokens = [String]()
+        var invalidationURLs = [URL]()
+    }
+    private let state: Mutex<State>
     private let replacementToken: String?
     private let replacementError: Error?
     private let tokenAfterInvalidation: String?
     private let authorizationErrorStartingAtCall: Int?
-    private let authorizedHosts = Set([
-        "solana-mainnet.g.alchemy.com",
-        "solana-devnet.g.alchemy.com",
-    ])
-    private var storedAuthorizationCallCount = 0
-    private var storedReplacementCallCount = 0
-    private var storedInvalidatedTokens = [String]()
-    private var storedInvalidationURLs = [URL]()
+    private let authorizedHosts = Set(["solana-mainnet.g.alchemy.com", "solana-devnet.g.alchemy.com"])
 
-    init(
-        token: String? = nil,
-        replacementToken: String? = nil,
-        replacementError: Error? = nil,
-        tokenAfterInvalidation: String? = nil,
-        authorizationErrorStartingAtCall: Int? = nil
-    ) {
-        self.currentToken = token
+    init(token: String? = nil, replacementToken: String? = nil,
+         replacementError: Error? = nil, tokenAfterInvalidation: String? = nil,
+         authorizationErrorStartingAtCall: Int? = nil) {
+        self.state = Mutex(State(currentToken: token))
         self.replacementToken = replacementToken
         self.replacementError = replacementError
         self.tokenAfterInvalidation = tokenAfterInvalidation
-        self.authorizationErrorStartingAtCall =
-            authorizationErrorStartingAtCall
+        self.authorizationErrorStartingAtCall = authorizationErrorStartingAtCall
     }
 
-    var authorizationCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedAuthorizationCallCount
-    }
-
-    var replacementCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedReplacementCallCount
-    }
-
-    var invalidationCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedInvalidatedTokens.count
-    }
-
-    var invalidatedTokens: [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedInvalidatedTokens
-    }
-
-    var invalidationURLs: [URL] {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedInvalidationURLs
-    }
+    var authorizationCallCount: Int { state.withLock { $0.authorizationCalls } }
+    var replacementCallCount: Int { state.withLock { $0.replacementCalls } }
+    var invalidationCallCount: Int { state.withLock { $0.invalidatedTokens.count } }
+    var invalidatedTokens: [String] { state.withLock { $0.invalidatedTokens } }
+    var invalidationURLs: [URL] { state.withLock { $0.invalidationURLs } }
 
     func authorization(for url: URL) async throws -> Big_Wallet.AlchemyAuthorization? {
-        let (token, shouldFail) = recordAuthorizationCall(for: url)
-        if shouldFail {
-            throw SolanaAuthorizationStubError.unavailable
+        try state.withLock { state in
+            state.authorizationCalls += 1
+            if let threshold = authorizationErrorStartingAtCall, state.authorizationCalls >= threshold {
+                throw SolanaAuthorizationStubError.unavailable
+            }
+            guard authorizedHosts.contains(url.host ?? "") else { return nil }
+            return state.currentToken.map { Big_Wallet.AlchemyAuthorization(token: $0) }
         }
-        return token.map { Big_Wallet.AlchemyAuthorization(token: $0) }
     }
 
     func replacementAuthorization(
-        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization,
-        for url: URL
+        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization, for url: URL
     ) async throws -> Big_Wallet.AlchemyAuthorization? {
-        let replacementToken = recordReplacementCall(for: url)
-        if let replacementError {
-            throw replacementError
+        let token = state.withLock { state -> String? in
+            state.replacementCalls += 1
+            guard authorizedHosts.contains(url.host ?? "") else { return nil }
+            state.currentToken = replacementToken
+            return replacementToken
         }
-        return replacementToken.map { Big_Wallet.AlchemyAuthorization(token: $0) }
+        if let replacementError { throw replacementError }
+        return token.map { Big_Wallet.AlchemyAuthorization(token: $0) }
     }
 
     func invalidateAuthorization(
-        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization,
-        for url: URL
+        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization, for url: URL
     ) async {
-        recordInvalidation(token: rejected.token, url: url)
-    }
-
-    private func recordAuthorizationCall(
-        for url: URL
-    ) -> (token: String?, shouldFail: Bool) {
-        lock.lock()
-        defer { lock.unlock() }
-        storedAuthorizationCallCount += 1
-        let shouldFail = authorizationErrorStartingAtCall.map {
-            storedAuthorizationCallCount >= $0
-        } ?? false
-        let token = authorizedHosts.contains(url.host ?? "")
-            ? currentToken
-            : nil
-        return (token, shouldFail)
-    }
-
-    private func recordReplacementCall(for url: URL) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        storedReplacementCallCount += 1
-        guard authorizedHosts.contains(url.host ?? "") else { return nil }
-        currentToken = replacementToken
-        return replacementToken
-    }
-
-    private func recordInvalidation(token: String, url: URL) {
-        lock.lock()
-        defer { lock.unlock() }
-        storedInvalidatedTokens.append(token)
-        storedInvalidationURLs.append(url)
-        if let tokenAfterInvalidation {
-            currentToken = tokenAfterInvalidation
+        state.withLock { state in
+            state.invalidatedTokens.append(rejected.token)
+            state.invalidationURLs.append(url)
+            if let tokenAfterInvalidation { state.currentToken = tokenAfterInvalidation }
         }
     }
-
 }
 
-private final class LockedSolanaCounter {
-
-    private let lock = NSLock()
-    private var storedValue = 0
-
-    var value: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedValue
-    }
-
+private final class LockedSolanaCounter: Sendable {
+    private let storage = Mutex(0)
+    var value: Int { storage.withLock { $0 } }
     @discardableResult
     func increment() -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        storedValue += 1
-        return storedValue
+        storage.withLock { $0 += 1; return $0 }
     }
-
 }
 
 private final class SolanaOptionsURLProtocol: URLProtocol {
 
-    typealias RequestHandler = (URLRequest) throws -> (HTTPURLResponse, Data)
+    typealias RequestHandler = @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
 
-    private static let requestHandlerLock = NSLock()
-    private static var requestHandler: RequestHandler?
+    private static let requestHandler = Mutex<RequestHandler?>(nil)
 
     static func setRequestHandler(_ handler: @escaping RequestHandler) {
-        requestHandlerLock.lock()
-        requestHandler = handler
-        requestHandlerLock.unlock()
+        requestHandler.withLock { $0 = handler }
     }
 
     static func removeRequestHandler() {
-        requestHandlerLock.lock()
-        requestHandler = nil
-        requestHandlerLock.unlock()
+        requestHandler.withLock { $0 = nil }
     }
 
     private static func currentRequestHandler() -> RequestHandler? {
-        requestHandlerLock.lock()
-        defer { requestHandlerLock.unlock() }
-        return requestHandler
+        requestHandler.withLock { $0 }
     }
 
     override class func canInit(with request: URLRequest) -> Bool {

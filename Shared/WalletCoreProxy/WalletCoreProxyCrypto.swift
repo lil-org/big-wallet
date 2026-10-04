@@ -4,6 +4,7 @@ import CommonCrypto
 import CryptoKit
 import Dispatch
 import Foundation
+import Synchronization
 
 enum PBKDF2 {
     private static let maxDerivedKeyLength = 1024
@@ -409,9 +410,11 @@ enum Scrypt {
     }
 
     private static let maxCacheEntries = 16
-    private static let cacheLock = NSLock()
-    private static var cache = [CacheKey: Data]()
-    private static var cacheOrder = [CacheKey]()
+    private struct CacheState {
+        var values = [CacheKey: Data]()
+        var order = [CacheKey]()
+    }
+    private static let cache = Mutex(CacheState())
 
     private static var testCacheEnabled: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -428,19 +431,17 @@ enum Scrypt {
     }
 
     private static func cachedKey(for cacheKey: CacheKey) -> Data? {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        return cache[cacheKey]
+        cache.withLock { $0.values[cacheKey] }
     }
 
     private static func storeCachedKey(_ derivedKey: Data, for cacheKey: CacheKey) {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        cache[cacheKey] = derivedKey
-        cacheOrder.removeAll { $0 == cacheKey }
-        cacheOrder.append(cacheKey)
-        while cacheOrder.count > maxCacheEntries {
-            cache.removeValue(forKey: cacheOrder.removeFirst())
+        cache.withLock { state in
+            state.values[cacheKey] = derivedKey
+            state.order.removeAll { $0 == cacheKey }
+            state.order.append(cacheKey)
+            while state.order.count > maxCacheEntries {
+                state.values.removeValue(forKey: state.order.removeFirst())
+            }
         }
     }
 #endif
@@ -502,6 +503,17 @@ enum Scrypt {
         return output
     }
 
+    // concurrentPerform joins before these borrowed buffers expire; each worker writes disjoint ranges.
+    private struct ROMixBuffers: @unchecked Sendable {
+        let input: UnsafePointer<UInt32>
+        let output: UnsafeMutablePointer<UInt32>
+        let statuses: UnsafeMutablePointer<Int32>
+
+        func mix(worker: Int, n: Int, r: Int, start: Int, count: Int) {
+            statuses[worker] = bwScryptROMixBlocksRange(input, output, n, r, start, count)
+        }
+    }
+
     @_optimize(speed)
     private static func deriveROMixParallel(input: [UInt32], output: inout [UInt32], n: Int, r: Int, p: Int) -> Bool {
         let blockWords = 32 * r
@@ -528,15 +540,11 @@ enum Scrypt {
 
                 let baseWorkerBlockCount = p / workerCount
                 let extraBlocks = p % workerCount
+                let buffers = ROMixBuffers(input: inputBase, output: outputBase, statuses: statuses)
                 DispatchQueue.concurrentPerform(iterations: workerCount) { workerIndex in
                     let blockCount = baseWorkerBlockCount + (workerIndex < extraBlocks ? 1 : 0)
                     let blockStart = workerIndex * baseWorkerBlockCount + min(workerIndex, extraBlocks)
-                    statuses[workerIndex] = bwScryptROMixBlocksRange(inputBase,
-                                                                     outputBase,
-                                                                     n,
-                                                                     r,
-                                                                     blockStart,
-                                                                     blockCount)
+                    buffers.mix(worker: workerIndex, n: n, r: r, start: blockStart, count: blockCount)
                 }
 
                 for workerIndex in 0..<workerCount where statuses[workerIndex] != 1 {

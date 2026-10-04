@@ -1,6 +1,10 @@
 import XCTest
 @testable import Big_Wallet
 
+private func blockApprovalResolutionOperation(_ signal: DispatchSemaphore) {
+    signal.wait()
+}
+
 @MainActor
 final class ApprovalResolutionTests: XCTestCase {
     func testResolutionBeforeWaitingPreservesOptionalNil() async {
@@ -114,6 +118,33 @@ final class ApprovalResolutionTests: XCTestCase {
         await fulfillment(of: [returned, discarded], timeout: 1)
         let late = await resolution.resolve(43)
         XCTAssertFalse(late)
+    }
+
+    func testBlockingOperationCannotBlockTheResolutionDeadline() async {
+        let timeout = ApprovalResolution<Void>()
+        let release = DispatchSemaphore(value: 0)
+        let started = expectation(description: "blocking operation started")
+        let finished = expectation(description: "deadline resolved independently")
+        let task = Task {
+            let result = await ApprovalResolution<Int>().value(
+                timeoutValue: -1,
+                callerCancellation: .ignore,
+                waitForTimeout: { await timeout.value() },
+                operation: {
+                    started.fulfill()
+                    blockApprovalResolutionOperation(release)
+                    return 42
+                }
+            )
+            finished.fulfill()
+            return result
+        }
+        await fulfillment(of: [started], timeout: 1)
+        await timeout.resolve(())
+        await fulfillment(of: [finished], timeout: 1)
+        release.signal()
+        let result = await task.value
+        XCTAssertEqual(result, -1)
     }
 
     func testSuccessfulOperationCancelsTimerAndPreservesOptionalNil() async {

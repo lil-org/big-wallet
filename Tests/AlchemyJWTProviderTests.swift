@@ -3,13 +3,12 @@
 import CryptoKit
 import Foundation
 import XCTest
+import Synchronization
 @testable import Big_Wallet
 
-final class AlchemyJWTProviderTests: XCTestCase {
+private let alchemyURL = URL(string: "https://eth-mainnet.g.alchemy.com/v2")!
 
-    private let alchemyURL = URL(
-        string: "https://eth-mainnet.g.alchemy.com/v2"
-    )!
+final class AlchemyJWTProviderTests: XCTestCase {
 
     func testStrictAlchemyEndpointPredicate() throws {
         let accepted = [
@@ -429,7 +428,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let tokens = try await withThrowingTaskGroup(of: String?.self) { group in
             for _ in 0..<20 {
                 group.addTask {
-                    try await provider.authorization(for: self.alchemyURL)?.token
+                    try await provider.authorization(for: alchemyURL)?.token
                 }
             }
 
@@ -469,7 +468,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         }
         await firstFetchGate.waitUntilStarted()
         let rpc = Task {
-            try await provider.authorization(for: self.alchemyURL)?.token
+            try await provider.authorization(for: alchemyURL)?.token
         }
         await waitUntil { refreshLock.attemptCount >= 2 }
         await firstFetchGate.release()
@@ -644,7 +643,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(authorization?.token, current.token)
         await waitUntil {
             let authorization = try? await provider.authorization(
-                for: self.alchemyURL
+                for: alchemyURL
             )
             return authorization?.token == replacement.token
         }
@@ -1517,7 +1516,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             persistenceRepairMaximumDelayNanoseconds: 50_000_000,
             now: now
         )
-        let alchemyURL = self.alchemyURL
+        let alchemyURL = alchemyURL
 
         let current = try await provider.authorization(for: alchemyURL)
         XCTAssertEqual(current?.token, newer.token)
@@ -1533,7 +1532,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 for: alchemyURL
             )
         }
-        XCTAssertTrue(store.waitUntilSaveIsBlocked())
+        let saveIsBlocked = await store.waitUntilSaveIsBlocked()
+        XCTAssertTrue(saveIsBlocked)
 
         let completionFlag = TestAlchemyJWTCompletionFlag()
         let replacementTask = Task.detached {
@@ -1795,7 +1795,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         let demand = Task {
-            try await provider.authorization(for: self.alchemyURL)
+            try await provider.authorization(for: alchemyURL)
         }
         await waitUntil { await broker.fetchCount == 1 }
 
@@ -2076,9 +2076,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         let prewarm = provider.prewarm()
-        XCTAssertTrue(refreshLock.waitForFirstAttempt())
+        let firstAttemptStarted = await refreshLock.waitForFirstAttempt()
+        XCTAssertTrue(firstAttemptStarted)
         let demand = Task {
-            try await provider.authorization(for: self.alchemyURL)
+            try await provider.authorization(for: alchemyURL)
         }
         await waitUntil { await broker.fetchCount == 1 }
         refreshLock.unblockFirstAttempt()
@@ -2156,7 +2157,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let prewarm = provider.prewarm()
         await firstFetchGate.waitUntilStarted()
         let demand = Task {
-            try await provider.authorization(for: self.alchemyURL)
+            try await provider.authorization(for: alchemyURL)
         }
 
         await waitUntil(timeout: 1) {
@@ -2205,7 +2206,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         }
         await firstFetchGate.waitUntilStarted()
         let demand = Task {
-            try await provider.authorization(for: self.alchemyURL)
+            try await provider.authorization(for: alchemyURL)
         }
         await waitUntil { refreshLock.attemptCount >= 2 }
         await Task.yield()
@@ -2251,7 +2252,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         }
         await firstFetchGate.waitUntilStarted()
         let demand = Task {
-            try await provider.authorization(for: self.alchemyURL)
+            try await provider.authorization(for: alchemyURL)
         }
         await waitUntil { refreshLock.attemptCount >= 2 }
         await Task.yield()
@@ -3720,38 +3721,24 @@ private enum TestBrokerError: Error {
     case unavailable
 }
 
-private final class TestAlchemyJWTCompletionFlag: @unchecked Sendable {
-
-    private let lock = NSLock()
-    private var storedIsCompleted = false
-
-    var isCompleted: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedIsCompleted
-    }
-
-    func markCompleted() {
-        lock.lock()
-        storedIsCompleted = true
-        lock.unlock()
-    }
-
+private final class TestAlchemyJWTCompletionFlag: Sendable {
+    private let completed = Mutex(false)
+    var isCompleted: Bool { completed.withLock { $0 } }
+    func markCompleted() { completed.withLock { $0 = true } }
 }
 
-private final class BlockingSaveAlchemyJWTStore:
-    @unchecked Sendable,
-    AlchemyJWTStoring {
-
+private final class BlockingSaveAlchemyJWTStore: Sendable, AlchemyJWTStoring {
+    private struct GateState {
+        var shouldBlockNextSave = false
+        var didStartSave = false
+        var didReleaseBlockedSave = false
+    }
     private let store: TestAlchemyJWTStore
-    private let gateLock = NSLock()
-    private let saveStarted = DispatchSemaphore(value: 0)
+    private let gate = Mutex(GateState())
     private let saveRelease = DispatchSemaphore(value: 0)
-    private var shouldBlockNextSave = false
-    private var didReleaseBlockedSave = false
 
     init(record: AlchemyJWTRecord?) {
-        self.store = TestAlchemyJWTStore(record: record)
+        store = TestAlchemyJWTStore(record: record)
     }
 
     var record: AlchemyJWTRecord? {
@@ -3759,326 +3746,203 @@ private final class BlockingSaveAlchemyJWTStore:
         set { store.record = newValue }
     }
 
-    var state: AlchemyJWTPersistedState? {
-        return store.state
-    }
+    var state: AlchemyJWTPersistedState? { store.state }
 
     func blockNextSave() {
-        gateLock.lock()
-        shouldBlockNextSave = true
-        didReleaseBlockedSave = false
-        gateLock.unlock()
+        gate.withLock { $0 = GateState(shouldBlockNextSave: true) }
     }
 
-    func waitUntilSaveIsBlocked(
-        timeout: TimeInterval = 2
-    ) -> Bool {
-        return saveStarted.wait(timeout: .now() + timeout) == .success
+    func waitUntilSaveIsBlocked(timeout: TimeInterval = 2) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(timeout))
+        while !gate.withLock({ $0.didStartSave }), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return gate.withLock { $0.didStartSave }
     }
 
     func releaseBlockedSave() {
-        gateLock.lock()
-        guard !didReleaseBlockedSave else {
-            gateLock.unlock()
-            return
+        let shouldRelease = gate.withLock { state in
+            guard !state.didReleaseBlockedSave else { return false }
+            state.didReleaseBlockedSave = true
+            return true
         }
-        didReleaseBlockedSave = true
-        gateLock.unlock()
-        saveRelease.signal()
+        if shouldRelease { saveRelease.signal() }
     }
 
-    func load() throws -> AlchemyJWTPersistedState? {
-        return try store.load()
-    }
+    func load() throws -> AlchemyJWTPersistedState? { try store.load() }
 
     func save(_ state: AlchemyJWTPersistedState) throws {
-        gateLock.lock()
-        let shouldBlock = shouldBlockNextSave
-        shouldBlockNextSave = false
-        gateLock.unlock()
-
-        if shouldBlock {
-            saveStarted.signal()
-            saveRelease.wait()
+        let shouldBlock = gate.withLock { gate in
+            guard gate.shouldBlockNextSave else { return false }
+            gate.shouldBlockNextSave = false
+            gate.didStartSave = true
+            return true
         }
+        if shouldBlock { saveRelease.wait() }
         try store.save(state)
     }
-
 }
 
-private final class TestAlchemyJWTStore:
-    @unchecked Sendable,
-    AlchemyJWTStoring {
-
-    private let lock = NSLock()
-    private var storedState: AlchemyJWTPersistedState?
-    private var loads = 0
-    private var saves = 0
-    private var configuredLoadError: AlchemyJWTStorageError?
-    private var configuredSaveError: AlchemyJWTStorageError?
+private final class TestAlchemyJWTStore: Sendable, AlchemyJWTStoring {
+    private struct State {
+        var persisted: AlchemyJWTPersistedState?
+        var loads = 0
+        var saves = 0
+        var loadError: AlchemyJWTStorageError?
+        var saveError: AlchemyJWTStorageError?
+    }
+    private let storage: Mutex<State>
 
     init(
         record: AlchemyJWTRecord?,
         loadError: AlchemyJWTStorageError? = nil,
         saveError: AlchemyJWTStorageError? = nil
     ) {
-        self.storedState = record.map {
-            AlchemyJWTPersistedState(
-                revision: 1,
-                record: $0,
-                tombstones: []
-            )
-        }
-        self.configuredLoadError = loadError
-        self.configuredSaveError = saveError
+        storage = Mutex(State(
+            persisted: record.map { AlchemyJWTPersistedState(revision: 1, record: $0, tombstones: []) },
+            loadError: loadError,
+            saveError: saveError
+        ))
     }
 
     var record: AlchemyJWTRecord? {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return storedState?.record
-        }
+        get { storage.withLock { $0.persisted?.record } }
         set {
-            lock.lock()
-            let nextRevision = (storedState?.revision ?? 0) + 1
-            storedState = AlchemyJWTPersistedState(
-                revision: nextRevision,
-                record: newValue,
-                tombstones: storedState?.tombstones ?? []
-            )
-            lock.unlock()
+            storage.withLock { state in
+                state.persisted = AlchemyJWTPersistedState(
+                    revision: (state.persisted?.revision ?? 0) + 1,
+                    record: newValue,
+                    tombstones: state.persisted?.tombstones ?? []
+                )
+            }
         }
     }
 
-    var state: AlchemyJWTPersistedState? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedState
-    }
-
-    func replaceState(_ state: AlchemyJWTPersistedState?) {
-        lock.lock()
-        storedState = state
-        lock.unlock()
-    }
+    var state: AlchemyJWTPersistedState? { storage.withLock { $0.persisted } }
+    func replaceState(_ state: AlchemyJWTPersistedState?) { storage.withLock { $0.persisted = state } }
 
     var loadError: AlchemyJWTStorageError? {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return configuredLoadError
-        }
-        set {
-            lock.lock()
-            configuredLoadError = newValue
-            lock.unlock()
-        }
+        get { storage.withLock { $0.loadError } }
+        set { storage.withLock { $0.loadError = newValue } }
     }
 
     var saveError: AlchemyJWTStorageError? {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return configuredSaveError
-        }
-        set {
-            lock.lock()
-            configuredSaveError = newValue
-            lock.unlock()
-        }
+        get { storage.withLock { $0.saveError } }
+        set { storage.withLock { $0.saveError = newValue } }
     }
 
-    var loadCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return loads
-    }
-
-    var saveCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return saves
-    }
+    var loadCount: Int { storage.withLock { $0.loads } }
+    var saveCount: Int { storage.withLock { $0.saves } }
 
     func load() throws -> AlchemyJWTPersistedState? {
-        lock.lock()
-        defer { lock.unlock() }
-        loads += 1
-        if let configuredLoadError {
-            throw configuredLoadError
+        try storage.withLock { state in
+            state.loads += 1
+            if let error = state.loadError { throw error }
+            return state.persisted
         }
-        return storedState
     }
 
-    func save(_ state: AlchemyJWTPersistedState) throws {
-        lock.lock()
-        if let configuredSaveError {
-            lock.unlock()
-            throw configuredSaveError
+    func save(_ value: AlchemyJWTPersistedState) throws {
+        try storage.withLock { state in
+            if let error = state.saveError { throw error }
+            state.persisted = value
+            state.saves += 1
         }
-        storedState = state
-        saves += 1
-        lock.unlock()
     }
 
     func resetCounts() {
-        lock.lock()
-        loads = 0
-        saves = 0
-        lock.unlock()
+        storage.withLock { $0.loads = 0; $0.saves = 0 }
     }
-
 }
 
-private final class TestEncodedAlchemyJWTStore:
-    @unchecked Sendable,
-    AlchemyJWTStoring {
-
-    private let lock = NSLock()
-    private var data: Data
-    private var saves = 0
-
-    init(data: Data) {
-        self.data = data
+private final class TestEncodedAlchemyJWTStore: Sendable, AlchemyJWTStoring {
+    private struct State {
+        var data: Data
+        var saves = 0
     }
+    private let storage: Mutex<State>
 
+    init(data: Data) { storage = Mutex(State(data: data)) }
     var state: AlchemyJWTPersistedState? {
-        lock.lock()
-        defer { lock.unlock() }
-        return AlchemyJWTPersistedState.decodePersistenceData(data)
+        storage.withLock { AlchemyJWTPersistedState.decodePersistenceData($0.data) }
     }
-
-    var saveCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return saves
-    }
+    var saveCount: Int { storage.withLock { $0.saves } }
 
     func load() throws -> AlchemyJWTPersistedState? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let state = AlchemyJWTPersistedState
-            .decodePersistenceData(data) else {
-            throw AlchemyJWTStorageError.invalidData
+        try storage.withLock { value in
+            guard let decoded = AlchemyJWTPersistedState.decodePersistenceData(value.data) else {
+                throw AlchemyJWTStorageError.invalidData
+            }
+            return decoded
         }
-        return state
     }
 
     func save(_ state: AlchemyJWTPersistedState) throws {
         let encoded = try JSONEncoder().encode(state)
-        lock.lock()
-        data = encoded
-        saves += 1
-        lock.unlock()
+        storage.withLock { $0.data = encoded; $0.saves += 1 }
     }
-
 }
 
-private final class TestAlchemyJWTRefreshLock:
-    @unchecked Sendable,
-    AlchemyJWTRefreshLocking {
-
+private final class TestAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLocking {
+    private struct Counts {
+        var acquisitions = 0
+        var attempts = 0
+    }
     private let semaphore: DispatchSemaphore
-    private let countLock = NSLock()
-    private var acquisitions = 0
-    private var attempts = 0
+    private let counts = Mutex(Counts())
 
     init(isAvailable: Bool = true) {
-        self.semaphore = DispatchSemaphore(value: isAvailable ? 1 : 0)
+        semaphore = DispatchSemaphore(value: isAvailable ? 1 : 0)
     }
 
-    var acquireCount: Int {
-        countLock.lock()
-        defer { countLock.unlock() }
-        return acquisitions
-    }
-
-    var attemptCount: Int {
-        countLock.lock()
-        defer { countLock.unlock() }
-        return attempts
-    }
+    var acquireCount: Int { counts.withLock { $0.acquisitions } }
+    var attemptCount: Int { counts.withLock { $0.attempts } }
 
     func tryAcquire() throws -> Bool {
-        countLock.lock()
-        attempts += 1
-        countLock.unlock()
-
-        guard semaphore.wait(timeout: .now()) == .success else {
-            return false
-        }
-        countLock.lock()
-        acquisitions += 1
-        countLock.unlock()
+        counts.withLock { $0.attempts += 1 }
+        guard semaphore.wait(timeout: .now()) == .success else { return false }
+        counts.withLock { $0.acquisitions += 1 }
         return true
     }
 
-    func release() {
-        semaphore.signal()
-    }
-
-    func makeAvailable() {
-        semaphore.signal()
-    }
-
+    func release() { semaphore.signal() }
+    func makeAvailable() { semaphore.signal() }
 }
 
-private final class BlockingFirstAlchemyJWTRefreshLock:
-    @unchecked Sendable,
-    AlchemyJWTRefreshLocking {
-
-    private let stateLock = NSLock()
-    private let firstAttemptEntered = DispatchSemaphore(value: 0)
+private final class BlockingFirstAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLocking {
     private let firstAttemptRelease = DispatchSemaphore(value: 0)
-    private var isFirstAttempt = true
+    private let isFirstAttempt = Mutex(true)
 
     func tryAcquire() throws -> Bool {
-        stateLock.lock()
-        let shouldBlock = isFirstAttempt
-        isFirstAttempt = false
-        stateLock.unlock()
-
-        if shouldBlock {
-            firstAttemptEntered.signal()
-            firstAttemptRelease.wait()
+        let shouldBlock = isFirstAttempt.withLock { value in
+            defer { value = false }
+            return value
         }
+        if shouldBlock { firstAttemptRelease.wait() }
         return false
     }
 
     func release() {}
 
-    func waitForFirstAttempt() -> Bool {
-        return firstAttemptEntered.wait(timeout: .now() + 2) == .success
+    func waitForFirstAttempt() async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while isFirstAttempt.withLock({ $0 }), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return isFirstAttempt.withLock { !$0 }
     }
 
-    func unblockFirstAttempt() {
-        firstAttemptRelease.signal()
-    }
-
+    func unblockFirstAttempt() { firstAttemptRelease.signal() }
 }
 
-private final class TestAlchemyJWTSleeper: @unchecked Sendable {
-
-    private let lock = NSLock()
-    private var recordedDurations: [UInt64] = []
-
-    var durations: [UInt64] {
-        lock.lock()
-        defer { lock.unlock() }
-        return recordedDurations
-    }
-
+private final class TestAlchemyJWTSleeper: Sendable {
+    private let recordedDurations = Mutex([UInt64]())
+    var durations: [UInt64] { recordedDurations.withLock { $0 } }
     func sleep(_ nanoseconds: UInt64) async throws {
-        record(nanoseconds)
+        recordedDurations.withLock { $0.append(nanoseconds) }
     }
-
-    private func record(_ nanoseconds: UInt64) {
-        lock.lock()
-        recordedDurations.append(nanoseconds)
-        lock.unlock()
-    }
-
 }
 
 private actor TestAlchemyJWTProactiveSleeper {
@@ -4229,67 +4093,46 @@ private actor TestAlchemyJWTBrokerFirstFetchGate {
 
 }
 
-private final class TestAlchemyJWTClock: @unchecked Sendable {
-
-    private let lock = NSLock()
-    private var currentDate: Date
+private final class TestAlchemyJWTClock: Sendable {
+    private struct State {
+        var date: Date
+        var uptimeOffsetNanoseconds: UInt64 = 0
+    }
+    private let state: Mutex<State>
     private let baseUptimeNanoseconds: UInt64
     private let advancesWithRealTime: Bool
-    private var uptimeOffsetNanoseconds: UInt64 = 0
 
-    init(
-        now: Date,
-        advancesWithRealTime: Bool = true
-    ) {
-        self.currentDate = now
-        self.baseUptimeNanoseconds =
-            DispatchTime.now().uptimeNanoseconds
+    init(now: Date, advancesWithRealTime: Bool = true) {
+        state = Mutex(State(date: now))
+        baseUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
         self.advancesWithRealTime = advancesWithRealTime
     }
 
-    var date: Date {
-        lock.lock()
-        defer { lock.unlock() }
-        return currentDate
-    }
+    var date: Date { state.withLock { $0.date } }
 
     var uptimeNanoseconds: UInt64 {
-        lock.lock()
-        defer { lock.unlock() }
-        let current = advancesWithRealTime
-            ? DispatchTime.now().uptimeNanoseconds
-            : baseUptimeNanoseconds
-        let (adjusted, overflow) = current.addingReportingOverflow(
-            uptimeOffsetNanoseconds
-        )
-        return overflow ? UInt64.max : adjusted
+        state.withLock { state in
+            let current = advancesWithRealTime ? DispatchTime.now().uptimeNanoseconds : baseUptimeNanoseconds
+            let (adjusted, overflow) = current.addingReportingOverflow(state.uptimeOffsetNanoseconds)
+            return overflow ? UInt64.max : adjusted
+        }
     }
 
     func advance(by interval: TimeInterval) {
-        lock.lock()
-        currentDate = currentDate.addingTimeInterval(interval)
-        if interval > 0 {
-            uptimeOffsetNanoseconds = addingNanoseconds(
-                interval,
-                to: uptimeOffsetNanoseconds
-            )
+        state.withLock { state in
+            state.date = state.date.addingTimeInterval(interval)
+            if interval > 0 {
+                state.uptimeOffsetNanoseconds = addingNanoseconds(interval, to: state.uptimeOffsetNanoseconds)
+            }
         }
-        lock.unlock()
     }
 
     func adjustWallTime(by interval: TimeInterval) {
-        lock.lock()
-        currentDate = currentDate.addingTimeInterval(interval)
-        lock.unlock()
+        state.withLock { $0.date = $0.date.addingTimeInterval(interval) }
     }
 
     func advanceUptime(by interval: TimeInterval) {
-        lock.lock()
-        uptimeOffsetNanoseconds = addingNanoseconds(
-            interval,
-            to: uptimeOffsetNanoseconds
-        )
-        lock.unlock()
+        state.withLock { $0.uptimeOffsetNanoseconds = addingNanoseconds(interval, to: $0.uptimeOffsetNanoseconds) }
     }
 
     private func addingNanoseconds(

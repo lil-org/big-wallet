@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import LocalAuthentication
 import SafariServices
 
 enum NativeAccountSelectionMode {
@@ -81,12 +80,17 @@ class AccountsListViewController: NSViewController {
     var walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     private var preferencesButton: NSButton?
-    private var authenticationContext: LAContext?
+    private var authenticationTask: Task<Void, Never>?
+    private var keyExportTask: Task<Void, Never>?
+    private var managementTask: Task<Void, Never>?
+    private var menuTask: Task<Void, Never>?
+    private var safariPreferencesTask: Task<Void, Never>?
+    private var walletMutationTasks = [UUID: Task<Void, Never>]()
     private var isClosed = false
     private var reviewLifetime: NativeApprovalReviewLifetime?
     private var isOpeningWalletManagement = false
     var accountSelection: NativeAccountSelectionSession?
-    var openWalletManagement: (@escaping (Bool) -> Void) -> Void = DockAppLauncher.openDockApp
+    var openWalletManagement: @MainActor () async -> Bool = DockAppLauncher.openDockApp
     var newWalletId: String?
     var getBackToRect: CGRect?
     
@@ -150,7 +154,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private var wallets: [WalletContainer] {
+    private var wallets: [WalletSnapshot] {
         return walletsManager.wallets
     }
 
@@ -183,6 +187,15 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    isolated deinit {
+        keyExportTask?.cancel()
+        safariPreferencesTask?.cancel()
+        walletMutationTasks.values.forEach { $0.cancel() }
+        authenticationTask?.cancel()
+        managementTask?.cancel()
+        menuTask?.cancel()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         reviewLifetime = accountSelection?.lifetime
@@ -443,18 +456,39 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    private func startWalletMutation(showsFailure: Bool = true, _ operation: @escaping @MainActor () async throws -> WalletSnapshot?) {
+        let id = UUID()
+        walletMutationTasks[id] = Task { [weak self, walletsManager] in
+            defer { self?.walletMutationTasks.removeValue(forKey: id) }
+            do {
+                let created = try await operation()
+                let secret: String?
+                if let created {
+                    secret = try? await walletsManager.exportMnemonic(wallet: created)
+                } else {
+                    secret = nil
+                }
+                guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+                if let created {
+                    newWalletId = created.id
+                    blinkNewWalletCellIfNeeded()
+                    if let secret { presentSecret(secret, showingMnemonic: true) }
+                }
+            } catch {
+                guard let self, !Task.isCancelled, acceptsManagementActions, showsFailure else { return }
+                presentMessageAlert(Strings.somethingWentWrong, style: .informational)
+            }
+        }
+    }
+
     private func createNewAccountAndShowSecretWords() {
         guard acceptsManagementActions else { return }
-        Task {
-            guard acceptsManagementActions,
-                  let wallet = try? await walletsManager.createWallet(),
-                  acceptsManagementActions else { return }
-            newWalletId = wallet.id
-            blinkNewWalletCellIfNeeded()
-            showKey(wallet: wallet, specificAccount: nil)
+        startWalletMutation(showsFailure: false) { [walletsManager] in
+            try await walletsManager.createWallet()
         }
     }
     
+
     private func getBackToRectIfNeeded() {
         guard let rect = getBackToRect else { return }
         getBackToRect = nil
@@ -497,8 +531,9 @@ class AccountsListViewController: NSViewController {
               !isOpeningWalletManagement else { return }
         isOpeningWalletManagement = true
         tableView.reloadData()
-        openWalletManagement { [weak self] succeeded in
-            guard let self else { return }
+        managementTask = Task { [weak self, openWalletManagement] in
+            let succeeded = await openWalletManagement()
+            guard let self, !Task.isCancelled else { return }
             isOpeningWalletManagement = false
             guard acceptsUserActions else { return }
             tableView.reloadData()
@@ -539,7 +574,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func walletForRow(_ row: Int) -> WalletContainer? {
+    private func walletForRow(_ row: Int) -> WalletSnapshot? {
         guard cellModels.indices.contains(row) else { return nil }
         let item = cellModels[row]
         switch item {
@@ -576,9 +611,12 @@ class AccountsListViewController: NSViewController {
 
     @objc private func didClickEnableSafariExtension() {
         guard acceptsManagementActions else { return }
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: Identifiers.safariExtensionBundle) { error in
-            guard error != nil else { return }
-            DispatchQueue.main.async {
+        safariPreferencesTask?.cancel()
+        safariPreferencesTask = Task { [weak self] in
+            do {
+                try await SFSafariApplication.showPreferencesForExtension(withIdentifier: Identifiers.safariExtensionBundle)
+            } catch {
+                guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                 NSWorkspace.shared.open(URL.iosSafariGuide)
             }
         }
@@ -629,18 +667,13 @@ class AccountsListViewController: NSViewController {
             return
         }
         
-        Task {
-            guard acceptsManagementActions else { return }
-            do {
-                try await walletsManager.update(wallet: wallet, removeAccounts: [account])
-            } catch {
-                guard acceptsManagementActions else { return }
-                presentMessageAlert(Strings.somethingWentWrong, style: .informational)
-            }
+        startWalletMutation { [walletsManager] in
+            try await walletsManager.update(wallet: wallet, removeAccounts: [account])
+            return nil
         }
     }
     
-    private func warnOnLastAccountRemovalAttempt(wallet: WalletContainer) {
+    private func warnOnLastAccountRemovalAttempt(wallet: WalletSnapshot) {
         let alert = Alert()
         alert.messageText = Strings.removingTheLastAccount
         alert.alertStyle = .critical
@@ -656,7 +689,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func warnBeforeRemoving(wallet: WalletContainer) {
+    private func warnBeforeRemoving(wallet: WalletSnapshot) {
         let alert = Alert()
         alert.messageText = Strings.removedWalletsCantBeRecovered
         alert.alertStyle = .critical
@@ -666,13 +699,11 @@ class AccountsListViewController: NSViewController {
             guard let self,
                   acceptsManagementActions else { return }
             if response == .alertFirstButtonReturn {
-                authenticationContext = agent.askAuthentication(
-                    for: .walletManagement(returningTo: self),
-                    reason: .removeWallet
-                ) { [weak self] allowed in
-                    guard let self,
-                          acceptsManagementActions else { return }
-                    authenticationContext = nil
+                let presentation = Agent.WeakViewControllerReference(self)
+                authenticationTask?.cancel()
+                authenticationTask = Task { [weak self, agent] in
+                    let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: .removeWallet)
+                    guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                     Window.activateWindow(view.window)
                     if allowed {
                         removeWallet(wallet)
@@ -682,10 +713,10 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func removeWallet(_ wallet: WalletContainer) {
-        Task {
-            guard acceptsManagementActions else { return }
-            try? await walletsManager.delete(wallet: wallet)
+    private func removeWallet(_ wallet: WalletSnapshot) {
+        startWalletMutation(showsFailure: false) { [walletsManager] in
+            try await walletsManager.delete(wallet: wallet)
+            return nil
         }
     }
     
@@ -732,7 +763,7 @@ class AccountsListViewController: NSViewController {
         warnBeforeShowingKey(wallet: wallet, specificAccount: account)
     }
     
-    private func warnBeforeShowingKey(wallet: WalletContainer, specificAccount: WalletAccount?) {
+    private func warnBeforeShowingKey(wallet: WalletSnapshot, specificAccount: WalletAccount?) {
         let alert = Alert()
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         alert.messageText = showingMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
@@ -746,13 +777,11 @@ class AccountsListViewController: NSViewController {
                 let reason: AuthenticationReason = showingMnemonic
                     ? .showSecretWords
                     : .showPrivateKey
-                authenticationContext = agent.askAuthentication(
-                    for: .walletManagement(returningTo: self),
-                    reason: reason
-                ) { [weak self] allowed in
-                    guard let self,
-                          acceptsManagementActions else { return }
-                    authenticationContext = nil
+                let presentation = Agent.WeakViewControllerReference(self)
+                authenticationTask?.cancel()
+                authenticationTask = Task { [weak self, agent] in
+                    let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: reason)
+                    guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                     Window.activateWindow(view.window)
                     if allowed {
                         showKey(
@@ -765,26 +794,28 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func showKey(wallet: WalletContainer, specificAccount: WalletAccount?) {
-        guard acceptsManagementActions else { return }
-        guard let currentWallet = walletsManager.currentWallet(id: wallet.id) else { return }
-
-        let secret: String
-        let showingMnemonic = currentWallet.isMnemonic && specificAccount == nil
-        
-        if let account = specificAccount {
-            guard currentWallet.hasAccountMatching(account),
-                  let privateKeyString = try? walletsManager.exportPrivateKey(wallet: currentWallet, account: account)
-            else { return }
-            secret = privateKeyString
-        } else if currentWallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: currentWallet) {
-            secret = mnemonicString
-        } else if let privateKeyString = try? walletsManager.exportPrivateKey(wallet: currentWallet) {
-            secret = privateKeyString
-        } else {
-            return
+    private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?) {
+        guard acceptsManagementActions,
+              let wallet = walletsManager.currentWallet(id: wallet.id) else { return }
+        let showingMnemonic = wallet.isMnemonic && specificAccount == nil
+        keyExportTask?.cancel()
+        keyExportTask = Task { [weak self, walletsManager] in
+            let secret: String
+            do {
+                if showingMnemonic {
+                    secret = try await walletsManager.exportMnemonic(wallet: wallet)
+                } else {
+                    secret = try await walletsManager.exportPrivateKey(wallet: wallet, account: specificAccount)
+                }
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+            presentSecret(secret, showingMnemonic: showingMnemonic)
         }
-        
+    }
+
+    private func presentSecret(_ secret: String, showingMnemonic: Bool) {
         let alert = Alert()
         alert.messageText = showingMnemonic ? Strings.secretWords : Strings.privateKey
         alert.informativeText = secret
@@ -838,8 +869,10 @@ class AccountsListViewController: NSViewController {
     
     private func showMenuOnCellSelection(row: Int) {
         guard acceptsManagementActions else { return }
-        Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
-            guard let self, acceptsManagementActions,
+        menuTask?.cancel()
+        menuTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(10)) } catch { return }
+            guard let self, !Task.isCancelled, acceptsManagementActions,
                   tableView.selectedRow == row else { return }
             var point = NSEvent.mouseLocation
             point.x += 1
@@ -956,7 +989,7 @@ extension AccountsListViewController: TableViewMenuSource {
 
         let item = cellModels[row]
         let account: WalletAccount
-        let wallet: WalletContainer
+        let wallet: WalletSnapshot
         
         switch item {
         case .mnemonicWalletHeader, .privateKeyWalletsHeader, .addAccountOption,
@@ -1169,9 +1202,19 @@ extension AccountsListViewController: NSTableViewDataSource {
 extension AccountsListViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
+        keyExportTask?.cancel()
+        keyExportTask = nil
+        safariPreferencesTask?.cancel()
+        safariPreferencesTask = nil
+        walletMutationTasks.values.forEach { $0.cancel() }
+        walletMutationTasks.removeAll()
         cancelMenuTracking()
-        authenticationContext?.invalidate()
-        authenticationContext = nil
+        authenticationTask?.cancel()
+        authenticationTask = nil
+        managementTask?.cancel()
+        managementTask = nil
+        menuTask?.cancel()
+        menuTask = nil
         endAllSheets()
     }
 

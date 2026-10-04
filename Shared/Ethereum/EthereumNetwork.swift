@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 
 enum EthereumFeeMarketSupport: String, Codable, Equatable, Hashable, Sendable {
 
@@ -12,18 +13,18 @@ enum EthereumFeeMarketSupport: String, Codable, Equatable, Hashable, Sendable {
 
 struct EthereumFeeMarketHint: Codable, Equatable, Hashable, Sendable {
 
-    private static let checkedAtFormatter: ISO8601DateFormatter = {
+    private static let checkedAtFormatter = Mutex({
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
-    }()
+    }())
 
     let support: EthereumFeeMarketSupport
     let checkedAt: String
     let observedEndpoint: String
 
     var checkedAtDate: Date? {
-        Self.checkedAtFormatter.date(from: checkedAt)
+        Self.checkedAtFormatter.withLock { $0.date(from: checkedAt) }
     }
 
     func matches(endpointURL: URL) -> Bool {

@@ -5,6 +5,8 @@ import Cocoa
 class ImportViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
+    private var validationTask: Task<Void, Never>?
+    private var importTask: Task<Void, Never>?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     private var isImporting = false
     
@@ -19,6 +21,17 @@ class ImportViewController: NSViewController {
     @IBOutlet weak var cancelButton: NSButton!
     @IBOutlet weak var okButton: NSButton!
     
+    isolated deinit {
+        validationTask?.cancel()
+        importTask?.cancel()
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        validationTask?.cancel()
+        importTask?.cancel()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         cancelButton.title = Strings.cancel
@@ -51,9 +64,7 @@ class ImportViewController: NSViewController {
         passwordTextField.isAutomaticTextCompletionEnabled = false
         passwordTextField.alignment = .center
         
-        DispatchQueue.main.async { [weak passwordTextField] in
-            passwordTextField?.becomeFirstResponder()
-        }
+        alert.window.initialFirstResponder = passwordTextField
         if alert.runModal() == .alertFirstButtonReturn {
             importWith(
                 input: input,
@@ -67,21 +78,29 @@ class ImportViewController: NSViewController {
         isImporting = true
         okButton.isEnabled = false
         cancelButton.isEnabled = false
-        Task {
-            defer {
-                isImporting = false
-                okButton.isEnabled = inputValidationResult != .invalid
-                cancelButton.isEnabled = true
-            }
+        importTask = Task { [weak self, walletsManager] in
             do {
                 let wallet = try await walletsManager.addWallet(input: input, inputPassword: password)
+                guard let self else { return }
+                finishImporting()
+                guard !Task.isCancelled else { return }
                 showAccountsList(newWalletId: wallet.id)
             } catch {
+                guard let self else { return }
+                finishImporting()
+                guard !Task.isCancelled else { return }
                 presentMessageAlert(Strings.failedToImportWallet, style: .critical)
             }
         }
     }
+
+    private func finishImporting() {
+        isImporting = false
+        okButton.isEnabled = inputValidationResult != .invalid
+        cancelButton.isEnabled = true
+    }
     
+
     private func showAccountsList(newWalletId: String?) {
         let accountsListViewController = instantiate(AccountsListViewController.self)
         accountsListViewController.newWalletId = newWalletId
@@ -97,8 +116,15 @@ class ImportViewController: NSViewController {
 extension ImportViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        inputValidationResult = walletsManager.validateWalletInput(textField.stringValue)
-        okButton.isEnabled = !isImporting && inputValidationResult != .invalid
+        validationTask?.cancel()
+        let input = textField.stringValue
+        okButton.isEnabled = false
+        validationTask = Task { [weak self, walletsManager] in
+            let result = await walletsManager.validateWalletInput(input)
+            guard let self, !Task.isCancelled, textField.stringValue == input else { return }
+            inputValidationResult = result
+            okButton.isEnabled = !isImporting && result != .invalid
+        }
     }
     
 }

@@ -297,17 +297,30 @@ final class PopupRequestSessions {
     }
 
 #if os(iOS) || os(visionOS)
-    static let shared = PopupRequestSessions(
-        store: ExtensionBridge.shared,
-        requestProcessor: DappRequestProcessor(),
-        walletEnvironment: PopupWalletEnvironment(
+    static let shared: PopupRequestSessions = {
+        let processor = DappRequestProcessor()
+        let environment = PopupWalletEnvironment(
             reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() },
             unlockWallets: {
                 await SafariApprovalVault.shared.unlockResult(reason: $0, authorization: $1)
             }
-        ),
-        loadsTransactionContext: true
-    )
+        )
+        let operations = TransactionApprovalOperations.live(ethereum: .shared)
+        return PopupRequestSessions(
+            store: ExtensionBridge.shared,
+            requestProcessor: processor,
+            walletEnvironment: environment,
+            loadsTransactionContext: true,
+            transactionApprovalOperations: operations,
+            invalidateNetworkCache: { CustomNetworkCache.shared.invalidate() },
+            selectionNetworkResolver: { Networks.withChainIdHex($0) },
+            signingNetworkResolver: { Nodes.resolution(chainId: $0).resolvedNetwork },
+            broadcastSender: DappBroadcastSender(),
+            broadcastTimeoutNanoseconds: DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
+            clock: { Date() },
+            waitForExecutionDeadline: nil
+        )
+    }()
 #endif
 
     private let store: PopupRequestStore
@@ -318,17 +331,39 @@ final class PopupRequestSessions {
     private let invalidateNetworkCache: () -> Void
     private let selectionNetworkResolver: (String) -> EthereumNetwork?
     private let signingNetworkResolver: (Int) -> ResolvedEthereumNetwork?
-    private let clock: () -> Date
+    private let clock: @MainActor @Sendable () -> Date
     private let durableApprovalExecutor: DurableApprovalExecutor
     private let presenter: PopupApprovalStatePresenter
     private var entries = [ExtensionBridge.Handle: RequestEntry]()
+
+    convenience init(
+        store: PopupRequestStore,
+        requestProcessor: DappRequestProcessing,
+        walletEnvironment: PopupWalletEnvironment,
+        loadsTransactionContext: Bool,
+        transactionApprovalOperations: TransactionApprovalOperations? = nil,
+        invalidateNetworkCache: @escaping () -> Void = { CustomNetworkCache.shared.invalidate() },
+        selectionNetworkResolver: @escaping (String) -> EthereumNetwork? = { Networks.withChainIdHex($0) },
+        signingNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = { Nodes.resolution(chainId: $0).resolvedNetwork },
+        broadcastSender: (any ApprovedBroadcastSending)? = nil,
+        broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
+        clock: @escaping @MainActor @Sendable () -> Date = { Date() }
+    ) {
+        self.init(
+            store: store, requestProcessor: requestProcessor, walletEnvironment: walletEnvironment,
+            loadsTransactionContext: loadsTransactionContext, transactionApprovalOperations: transactionApprovalOperations,
+            invalidateNetworkCache: invalidateNetworkCache, selectionNetworkResolver: selectionNetworkResolver,
+            signingNetworkResolver: signingNetworkResolver, broadcastSender: broadcastSender,
+            broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds, clock: clock, waitForExecutionDeadline: nil
+        )
+    }
 
     init(
         store: PopupRequestStore,
         requestProcessor: DappRequestProcessing,
         walletEnvironment: PopupWalletEnvironment,
         loadsTransactionContext: Bool,
-        transactionApprovalOperations: TransactionApprovalOperations = .live(),
+        transactionApprovalOperations: TransactionApprovalOperations? = nil,
         invalidateNetworkCache: @escaping () -> Void = {
             CustomNetworkCache.shared.invalidate()
         },
@@ -342,13 +377,13 @@ final class PopupRequestSessions {
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping () -> Date = Date.init,
-        waitForExecutionDeadline: (@MainActor (Date) async -> Void)? = nil
+        clock: @escaping @MainActor @Sendable () -> Date = { Date() },
+        waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
         self.walletEnvironment = walletEnvironment
-        self.transactionApprovalOperations = transactionApprovalOperations
+        self.transactionApprovalOperations = transactionApprovalOperations ?? .live()
         self.loadsTransactionContext = loadsTransactionContext
         self.invalidateNetworkCache = invalidateNetworkCache
         self.selectionNetworkResolver = selectionNetworkResolver
@@ -1269,17 +1304,13 @@ final class PopupRequestSessions {
         }
         transactionSession.start()
         guard loadsTransactionContext else { return }
-        PriceService.shared.update()
-        Ethereum.shared.getBalance(
-            network: action.chain,
-            address: action.account.address
-        ) { [weak transactionSession] balance in
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    transactionSession?.balance =
-                        balance.eth(shortest: true) + " " + action.chain.symbol
-                }
-            }
+        Task { await PriceService.shared.update() }
+        Task { [weak transactionSession] in
+            guard let balance = try? await Ethereum.shared.getBalance(
+                network: action.chain,
+                address: action.account.address
+            ) else { return }
+            transactionSession?.balance = balance.eth(shortest: true) + " " + action.chain.symbol
         }
     }
 

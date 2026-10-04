@@ -89,9 +89,8 @@ enum NativeAgentRuntime {
     @MainActor
     static func launchApplication(
         target: NativeAgentLauncher.HelperTarget,
-        routeURL: URL,
-        completion: @escaping (Bool) -> Void
-    ) {
+        routeURL: URL
+    ) async -> Bool {
 #if os(macOS)
         switch target {
         case .running(
@@ -113,8 +112,7 @@ enum NativeAgentRuntime {
                       withWorkflowVersion: ExtensionBridge.workflowVersion,
                       expectedVersion: version
                   ) else {
-                completion(false)
-                return
+                return false
             }
             let event = NSAppleEventDescriptor(
                 eventClass: AEEventClass(kInternetEventClass),
@@ -134,30 +132,33 @@ enum NativeAgentRuntime {
                     options: [.noReply, .neverInteract],
                     timeout: 1
                 )
-                completion(true)
+                return true
             } catch {
                 logger.error("Helper route delivery failed: \((error as NSError).code)")
-                completion(false)
+                return false
             }
         case .launch(let helperURL):
             let configuration = applicationLaunchConfiguration()
-            NSWorkspace.shared.open(
-                [routeURL],
-                withApplicationAt: helperURL,
-                configuration: configuration
-            ) { _, error in
-                if let error {
-                    logger.error("Helper launch failed: \((error as NSError).domain, privacy: .public) \((error as NSError).code)")
+            return await withCheckedContinuation { continuation in
+                NSWorkspace.shared.open(
+                    [routeURL],
+                    withApplicationAt: helperURL,
+                    configuration: configuration
+                ) { _, error in
+                    if let error {
+                        logger.error("Helper launch failed: \((error as NSError).domain, privacy: .public) \((error as NSError).code)")
+                    }
+                    continuation.resume(returning: error == nil)
                 }
-                completion(error == nil)
             }
         }
 #else
-        completion(false)
+        return false
 #endif
     }
 
 #if os(macOS)
+    @MainActor
     static func applicationLaunchConfiguration() -> NSWorkspace.OpenConfiguration {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
@@ -169,16 +170,19 @@ enum NativeAgentRuntime {
 #endif
 
 #if os(macOS)
+    @MainActor
     static func runningHelpers() -> [NativeAgentLauncher.RuntimeHelper] {
         NSRunningApplication.runningApplications(
             withBundleIdentifier: "org.lil.wallet.ambient"
         ).map(runtimeHelper)
     }
 
+    @MainActor
     static func runningHelper(processIdentifier: Int32) -> NativeAgentLauncher.RuntimeHelper? {
         NSRunningApplication(processIdentifier: processIdentifier).map(runtimeHelper)
     }
 
+    @MainActor
     private static func runtimeHelper(_ application: NSRunningApplication) -> NativeAgentLauncher.RuntimeHelper {
         let processIdentifier = application.processIdentifier
         let processStartDate = AmbientRuntimeIdentity.processStartDate(

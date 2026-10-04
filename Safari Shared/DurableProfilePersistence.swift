@@ -1,22 +1,22 @@
 import Darwin
 import Foundation
 
-struct DurableProfilePersistence {
-    enum FileKind {
+struct DurableProfilePersistence: Sendable {
+    enum FileKind: Sendable {
         case regular, directory, other
     }
 
-    struct Operations {
-        var openDirectory: (String) throws -> Int32
-        var openFile: (Int32, String, Int32, mode_t) throws -> Int32
-        var fileKind: (Int32) throws -> FileKind
-        var entryKind: (Int32, String) throws -> FileKind?
-        var write: (Int32, UnsafeRawPointer, Int) throws -> Int
-        var fullSync: (Int32) throws -> Void
-        var syncDirectory: (Int32) throws -> Void
-        var rename: (Int32, String, String) throws -> Void
-        var unlink: (Int32, String) throws -> Void
-        var close: (Int32) -> Void
+    struct Operations: Sendable {
+        var openDirectory: @Sendable (String) throws -> Int32
+        var openFile: @Sendable (Int32, String, Int32, mode_t) throws -> Int32
+        var fileKind: @Sendable (Int32) throws -> FileKind
+        var entryKind: @Sendable (Int32, String) throws -> FileKind?
+        var write: @Sendable (Int32, UnsafeRawPointer, Int) throws -> Int
+        var fullSync: @Sendable (Int32) throws -> Void
+        var syncDirectory: @Sendable (Int32) throws -> Void
+        var rename: @Sendable (Int32, String, String) throws -> Void
+        var unlink: @Sendable (Int32, String) throws -> Void
+        var close: @Sendable (Int32) -> Void
 
         static let live = Operations(
             openDirectory: { path in
@@ -75,12 +75,12 @@ struct DurableProfilePersistence {
 
     private let directoryBoundary: URL
     private let operations: Operations
-    private let temporaryName: () -> String
+    private let temporaryName: @Sendable () -> String
 
     init(
         directoryBoundary: URL,
         operations: Operations = .live,
-        temporaryName: @escaping () -> String = {
+        temporaryName: @escaping @Sendable () -> String = {
             ".profile-write-\(UUID().uuidString.lowercased()).tmp"
         }
     ) {

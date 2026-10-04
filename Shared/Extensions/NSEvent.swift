@@ -5,7 +5,8 @@ import AppKit
 
 extension NSEvent {
 
-    static func addCommandQShortcutMonitor(_ handler: @escaping (NSEvent) -> NSEvent?) -> Any? {
+    @MainActor
+    static func addCommandQShortcutMonitor(_ handler: @escaping @MainActor (NSEvent) -> NSEvent?) -> Any? {
         return addLocalMonitorForEvents(matching: .keyDown) { event in
             guard event.isCommandQShortcut else { return event }
             return handler(event)

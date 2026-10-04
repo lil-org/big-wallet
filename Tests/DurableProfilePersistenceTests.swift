@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
@@ -133,10 +134,10 @@ final class DurableProfilePersistenceTests: XCTestCase {
             try writer.replace(Data("checkpoint".utf8), at: profile)
             var operations = DurableProfilePersistence.Operations.live
             let fullSync = operations.fullSync
-            var flushes = 0
+            let flushes = LockedTestValue(0)
             operations.fullSync = { descriptor in
-                flushes += 1
-                if flushes == 2 { throw POSIXError(.EIO) }
+                flushes.withValue { $0 += 1 }
+                if flushes.value == 2 { throw POSIXError(.EIO) }
                 try fullSync(descriptor)
             }
             let interrupted = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
@@ -159,20 +160,20 @@ final class DurableProfilePersistenceTests: XCTestCase {
             var operations = DurableProfilePersistence.Operations.live
             let openDirectory = operations.openDirectory
             let syncDirectory = operations.syncDirectory
-            var paths = [Int32: String]()
-            var synchronizedPaths = [String]()
-            var shouldFail = true
+            let paths = LockedTestValue([Int32: String]())
+            let synchronizedPaths = LockedTestValue([String]())
+            let shouldFail = LockedTestValue(true)
             let parent = profile.deletingLastPathComponent().deletingLastPathComponent().path
             operations.openDirectory = { path in
                 let descriptor = try openDirectory(path)
-                paths[descriptor] = path
+                paths.withValue { $0[descriptor] = path }
                 return descriptor
             }
             operations.syncDirectory = { descriptor in
-                let path = try XCTUnwrap(paths[descriptor])
-                synchronizedPaths.append(path)
-                if shouldFail, path == parent {
-                    shouldFail = false
+                let path = try XCTUnwrap(paths.value[descriptor])
+                synchronizedPaths.withValue { $0.append(path) }
+                if shouldFail.value, path == parent {
+                    shouldFail.value = false
                     throw POSIXError(.EIO)
                 }
                 try syncDirectory(descriptor)
@@ -181,11 +182,11 @@ final class DurableProfilePersistenceTests: XCTestCase {
             let checkpoint = Data("checkpoint".utf8)
             XCTAssertThrowsError(try writer.replace(checkpoint, at: profile))
             XCTAssertEqual(try Data(contentsOf: profile), checkpoint)
-            XCTAssertEqual(synchronizedPaths, [profile.deletingLastPathComponent().path, parent])
+            XCTAssertEqual(synchronizedPaths.value, [profile.deletingLastPathComponent().path, parent])
 
-            synchronizedPaths.removeAll()
+            synchronizedPaths.withValue { $0.removeAll() }
             try writer.synchronizePublishedFile(at: profile)
-            XCTAssertEqual(synchronizedPaths, [profile.deletingLastPathComponent().path, parent, boundary.path])
+            XCTAssertEqual(synchronizedPaths.value, [profile.deletingLastPathComponent().path, parent, boundary.path])
             XCTAssertEqual(try Data(contentsOf: profile), checkpoint)
             XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: profile.deletingLastPathComponent().path), ["profile.state"])
         }
@@ -259,27 +260,164 @@ final class DurableProfilePersistenceTests: XCTestCase {
         try body(boundary, directory.appendingPathComponent("profile.state"))
     }
 
-    private final class DiskModel {
-        private struct File {
+    private final class DiskModel: Sendable {
+        private let state = Mutex(DiskState())
+        var events: [String] {
+            get { state.withLock { $0.events } }
+            set { state.withLock { $0.events = newValue } }
+        }
+        var failures: [String: [POSIXErrorCode]] {
+            get { state.withLock { $0.failures } }
+            set { state.withLock { $0.failures = newValue } }
+        }
+        var maximumWrite: Int {
+            get { state.withLock { $0.maximumWrite } }
+            set { state.withLock { $0.maximumWrite = newValue } }
+        }
+        var createFlags: Int32? {
+            get { state.withLock { $0.createFlags } }
+        }
+        var createMode: mode_t? {
+            get { state.withLock { $0.createMode } }
+        }
+        var openDescriptors: Set<Int32> {
+            get { state.withLock { $0.openDescriptors } }
+        }
+        var hasTemporaryEntry: Bool {
+            get { state.withLock { $0.hasTemporaryEntry } }
+        }
+        var published: Data? {
+            get { state.withLock { $0.published } }
+        }
+        var durablePublished: Data? {
+            get { state.withLock { $0.durablePublished } }
+        }
+        func contents(at path: String) -> Data? { state.withLock { $0.contents(at: path) } }
+        func crash() { state.withLock { $0.crash() } }
+
+        var operations: DurableProfilePersistence.Operations {
+            .init(
+                openDirectory: { path in
+                    try self.state.withLock { model in
+                    try model.event("openDirectory:\(path)")
+                    return model.allocate(.directory(path))
+
+                    }
+                },
+                openFile: { directory, name, flags, mode in
+                    try self.state.withLock { model in
+                    let path = try model.path(directory, name)
+                    if flags & O_CREAT != 0 {
+                        try model.event("create")
+                        model.createFlags = flags
+                        model.createMode = mode
+                        guard model.entries[path] == nil else { throw POSIXError(.EEXIST) }
+                        let file = model.nextFile
+                        model.nextFile += 1
+                        model.files[file] = DiskState.File(contents: Data(), durableContents: Data())
+                        model.entries[path] = file
+                        return model.allocate(.file(file))
+                    }
+                    try model.event("openPublished")
+                    guard let file = model.entries[path] else { throw POSIXError(.ENOENT) }
+                    return model.allocate(.file(file))
+
+                    }
+                },
+                fileKind: { descriptor in
+                    try self.state.withLock { model in
+                    try model.event("kind")
+                    guard case .file = model.descriptors[descriptor] else { return .other }
+                    return .regular
+
+                    }
+                },
+                entryKind: { directory, name in
+                    try self.state.withLock { model in
+                    try model.event("entryKind")
+                    return model.entries[try model.path(directory, name)] == nil ? nil : .regular
+
+                    }
+                },
+                write: { descriptor, bytes, count in
+                    try self.state.withLock { model in
+                    model.writes += 1
+                    try model.event("write:\(model.writes)")
+                    let file = try model.file(descriptor)
+                    let written = min(model.maximumWrite, count)
+                    model.files[file]?.contents.append(bytes.assumingMemoryBound(to: UInt8.self), count: written)
+                    return written
+
+                    }
+                },
+                fullSync: { descriptor in
+                    try self.state.withLock { model in
+                    model.fullSyncs += 1
+                    try model.event("full:\(model.fullSyncs)")
+                    let file = try model.file(descriptor)
+                    let contents = model.files[file]?.contents ?? Data()
+                    model.files[file]?.durableContents = contents
+                    model.durableEntries = model.synchronizedEntries
+
+                    }
+                },
+                syncDirectory: { descriptor in
+                    try self.state.withLock { model in
+                    guard case .directory(let path) = model.descriptors[descriptor] else { throw POSIXError(.EBADF) }
+                    try model.event("sync:\(path)")
+                    model.synchronizedEntries = model.synchronizedEntries.filter { model.parent($0.key) != path }
+                    for (name, file) in model.entries where model.parent(name) == path {
+                        model.synchronizedEntries[name] = file
+                    }
+
+                    }
+                },
+                rename: { directory, source, destination in
+                    try self.state.withLock { model in
+                    try model.event("rename")
+                    let sourcePath = try model.path(directory, source)
+                    let destinationPath = try model.path(directory, destination)
+                    guard let file = model.entries.removeValue(forKey: sourcePath) else { throw POSIXError(.ENOENT) }
+                    model.entries[destinationPath] = file
+
+                    }
+                },
+                unlink: { directory, name in
+                    _ = try self.state.withLock { model in
+                    model.entries.removeValue(forKey: try model.path(directory, name))
+
+                    }
+                },
+                close: { descriptor in
+                    self.state.withLock { model in
+                        _ = model.descriptors.removeValue(forKey: descriptor)
+                    }
+                }
+            )
+        }
+    }
+
+    private final class DiskState {
+        struct File {
             var contents: Data
             var durableContents: Data
         }
 
-        private enum Descriptor {
+        enum Descriptor {
             case directory(String)
             case file(Int)
         }
 
-        private let profilePath = "/group/bridge/profiles/profile.state"
-        private var files = [1: File(contents: Data("old checkpoint".utf8), durableContents: Data("old checkpoint".utf8))]
-        private var entries = ["/group/bridge/profiles/profile.state": 1]
-        private var synchronizedEntries = ["/group/bridge/profiles/profile.state": 1]
-        private var durableEntries = ["/group/bridge/profiles/profile.state": 1]
-        private var descriptors = [Int32: Descriptor]()
-        private var nextDescriptor: Int32 = 10
-        private var nextFile = 2
-        private var writes = 0
-        private var fullSyncs = 0
+        let profilePath = "/group/bridge/profiles/profile.state"
+        var files = [1: File(contents: Data("old checkpoint".utf8), durableContents: Data("old checkpoint".utf8))]
+        var entries = ["/group/bridge/profiles/profile.state": 1]
+        var synchronizedEntries = ["/group/bridge/profiles/profile.state": 1]
+        var durableEntries = ["/group/bridge/profiles/profile.state": 1]
+        var descriptors = [Int32: Descriptor]()
+        var nextDescriptor: Int32 = 10
+        var nextFile = 2
+        var writes = 0
+        var fullSyncs = 0
         var events = [String]()
         var failures = [String: [POSIXErrorCode]]()
         var maximumWrite = Int.max
@@ -293,75 +431,6 @@ final class DurableProfilePersistenceTests: XCTestCase {
 
         func contents(at path: String) -> Data? { entries[path].flatMap { files[$0]?.contents } }
 
-        var operations: DurableProfilePersistence.Operations {
-            .init(
-                openDirectory: { path in
-                    try self.event("openDirectory:\(path)")
-                    return self.allocate(.directory(path))
-                },
-                openFile: { directory, name, flags, mode in
-                    let path = try self.path(directory, name)
-                    if flags & O_CREAT != 0 {
-                        try self.event("create")
-                        self.createFlags = flags
-                        self.createMode = mode
-                        guard self.entries[path] == nil else { throw POSIXError(.EEXIST) }
-                        let file = self.nextFile
-                        self.nextFile += 1
-                        self.files[file] = File(contents: Data(), durableContents: Data())
-                        self.entries[path] = file
-                        return self.allocate(.file(file))
-                    }
-                    try self.event("openPublished")
-                    guard let file = self.entries[path] else { throw POSIXError(.ENOENT) }
-                    return self.allocate(.file(file))
-                },
-                fileKind: { descriptor in
-                    try self.event("kind")
-                    guard case .file = self.descriptors[descriptor] else { return .other }
-                    return .regular
-                },
-                entryKind: { directory, name in
-                    try self.event("entryKind")
-                    return self.entries[try self.path(directory, name)] == nil ? nil : .regular
-                },
-                write: { descriptor, bytes, count in
-                    self.writes += 1
-                    try self.event("write:\(self.writes)")
-                    let file = try self.file(descriptor)
-                    let written = min(self.maximumWrite, count)
-                    self.files[file]?.contents.append(bytes.assumingMemoryBound(to: UInt8.self), count: written)
-                    return written
-                },
-                fullSync: { descriptor in
-                    self.fullSyncs += 1
-                    try self.event("full:\(self.fullSyncs)")
-                    let file = try self.file(descriptor)
-                    let contents = self.files[file]?.contents ?? Data()
-                    self.files[file]?.durableContents = contents
-                    self.durableEntries = self.synchronizedEntries
-                },
-                syncDirectory: { descriptor in
-                    guard case .directory(let path) = self.descriptors[descriptor] else { throw POSIXError(.EBADF) }
-                    try self.event("sync:\(path)")
-                    self.synchronizedEntries = self.synchronizedEntries.filter { self.parent($0.key) != path }
-                    for (name, file) in self.entries where self.parent(name) == path {
-                        self.synchronizedEntries[name] = file
-                    }
-                },
-                rename: { directory, source, destination in
-                    try self.event("rename")
-                    let sourcePath = try self.path(directory, source)
-                    let destinationPath = try self.path(directory, destination)
-                    guard let file = self.entries.removeValue(forKey: sourcePath) else { throw POSIXError(.ENOENT) }
-                    self.entries[destinationPath] = file
-                },
-                unlink: { directory, name in
-                    self.entries.removeValue(forKey: try self.path(directory, name))
-                },
-                close: { self.descriptors.removeValue(forKey: $0) }
-            )
-        }
 
         func crash() {
             entries = durableEntries
@@ -372,7 +441,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
             }
         }
 
-        private func event(_ name: String) throws {
+        func event(_ name: String) throws {
             events.append(name)
             guard var queued = failures[name], !queued.isEmpty else { return }
             let code = queued.removeFirst()
@@ -380,24 +449,24 @@ final class DurableProfilePersistenceTests: XCTestCase {
             throw POSIXError(code)
         }
 
-        private func allocate(_ descriptor: Descriptor) -> Int32 {
+        func allocate(_ descriptor: Descriptor) -> Int32 {
             let value = nextDescriptor
             nextDescriptor += 1
             descriptors[value] = descriptor
             return value
         }
 
-        private func path(_ directory: Int32, _ name: String) throws -> String {
+        func path(_ directory: Int32, _ name: String) throws -> String {
             guard case .directory(let path) = descriptors[directory] else { throw POSIXError(.EBADF) }
             return path + "/" + name
         }
 
-        private func file(_ descriptor: Int32) throws -> Int {
+        func file(_ descriptor: Int32) throws -> Int {
             guard case .file(let file) = descriptors[descriptor] else { throw POSIXError(.EBADF) }
             return file
         }
 
-        private func parent(_ path: String) -> String {
+        func parent(_ path: String) -> String {
             URL(fileURLWithPath: path).deletingLastPathComponent().path
         }
     }

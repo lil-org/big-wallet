@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 
 struct Defaults {
 
@@ -15,16 +16,16 @@ struct Defaults {
         static let didMigrateLegacyDefaults = "didMigrateLegacyDefaults"
     }
 
-    private static let userDefaults: UserDefaults = {
+    private static let userDefaults = Mutex<UserDefaults>({
         guard let sharedDefaults = SharedDefaults.defaults else {
             return .standard
         }
         migrateLegacyDefaultsIfNeeded(to: sharedDefaults)
         return sharedDefaults
-    }()
+    }())
 
     static func synchronize() {
-        userDefaults.synchronize()
+        _ = userDefaults.withLock { $0.synchronize() }
     }
 
     private static func migrateLegacyDefaultsIfNeeded(to sharedDefaults: UserDefaults) {
@@ -133,21 +134,25 @@ struct Defaults {
 
     static var walletsAndAccountsNames: [String: String]? {
         get {
-            userDefaults.object(forKey: Keys.walletsAndAccountsNames) as? [String: String]
+            userDefaults.withLock { $0.object(forKey: Keys.walletsAndAccountsNames) as? [String: String] }
         }
         set {
-            userDefaults.set(newValue, forKey: Keys.walletsAndAccountsNames)
-            synchronize()
+            userDefaults.withLock {
+                $0.set(newValue, forKey: Keys.walletsAndAccountsNames)
+                $0.synchronize()
+            }
         }
     }
     
     static var latestReviewRequestDate: Date? {
         get {
-            userDefaults.object(forKey: Keys.latestReviewRequestDate) as? Date
+            userDefaults.withLock { $0.object(forKey: Keys.latestReviewRequestDate) as? Date }
         }
         set {
-            userDefaults.set(newValue, forKey: Keys.latestReviewRequestDate)
-            synchronize()
+            userDefaults.withLock {
+                $0.set(newValue, forKey: Keys.latestReviewRequestDate)
+                $0.synchronize()
+            }
         }
     }
     

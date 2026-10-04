@@ -223,7 +223,7 @@ struct ResponseToExtension: Sendable {
 
 }
 
-struct RPCResponseToExtension {
+struct RPCResponseToExtension: Sendable {
     private let wire: WireProtocol.ValidatedObject
 
     init?(upstream: [String: Any], expectedResponseID: Int) {

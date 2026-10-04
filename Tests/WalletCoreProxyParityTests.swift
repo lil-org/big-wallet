@@ -122,12 +122,12 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
             "App iOS",
             "App macOS",
             "App visionOS",
+            "Big Wallet Ambient",
             "Safari iOS",
             "Safari macOS",
             "Safari Shared",
             "Safari visionOS",
             "Shared",
-            "Tools",
         ]
         let forbiddenImports = [
             "WalletCore",
@@ -883,6 +883,36 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(invalidSolanaPrefixedPublicKey, coin: .solana), "")
     }
 
+}
+
+final class WalletCoreProxyParallelDerivationTests: XCTestCase {
+    func testConcurrentDerivationsMatchOpenSSLVectors() async {
+        let expected = [
+            "f7510ce5d6ef9bc0de25c4201698697c2304f6db22017bbb72cac0dabe3addc4",
+            "bf309c0c9a3f4af09af58984c880da6ee3d571bc252148f64a215192b1f04472",
+            "5c5e58e1c0fe192d1f84fb31e18ecf36877ec6337fd73d71820c1a6bcfd74774",
+            "da05b00d34f08e6fcefef95b356ed2985e04b8d3b8f00b94a22c609e7e871295",
+        ]
+        let results = await withTaskGroup(of: (Int, String).self) { group in
+            for index in 0..<8 {
+                group.addTask {
+                    let key = Scrypt.deriveKey(
+                        password: Data("swift-6-parallel".utf8),
+                        salt: Data("swift-6-\(index % 4)".utf8),
+                        n: 16, r: 1, p: 4, dkLen: 32
+                    )
+                    return (index, WalletCrypto.hexString(data: key))
+                }
+            }
+            var values = [(Int, String)]()
+            for await value in group { values.append(value) }
+            return values
+        }
+        XCTAssertEqual(results.count, 8)
+        for (index, value) in results {
+            XCTAssertEqual(value, expected[index % expected.count])
+        }
+    }
 }
 
 final class ScryptROMixShimTests: XCTestCase {

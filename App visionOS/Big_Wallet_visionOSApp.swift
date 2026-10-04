@@ -9,12 +9,10 @@ struct Big_Wallet_visionOSApp: App {
     
     @Environment(\.scenePhase) private var scenePhase
     @State private var showAccountsView = false
+    @State private var accountPresentationRequest = 0
 
     init() {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
-        SafariApprovalVaultHost.shared.start(
-            backgroundTask: SafariApprovalVaultHost.backgroundTask(using: .shared)
-        )
     }
     
     var body: some Scene {
@@ -24,27 +22,33 @@ struct Big_Wallet_visionOSApp: App {
                     AccountsViewControllerWrapper()
                 } else {
                     PasswordViewControllerWrapper(successHandler: {
-                        DispatchQueue.main.async {
-                            showAccountsView = true
-                        }
+                        accountPresentationRequest += 1
                     })
                 }
             }
-        }
-        .defaultSize(CGSize(width: 420, height: 555))
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .active:
+            .task(id: accountPresentationRequest) {
+                guard accountPresentationRequest > 0 else { return }
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                showAccountsView = true
+            }
+            .task {
+                await WalletsManager.shared.start()
+                guard !Task.isCancelled else { return }
+                let backgroundTask = SafariApprovalVaultHost.backgroundTask(using: .shared)
+                await SafariApprovalVaultHost.shared.start(backgroundTask: backgroundTask)
+            }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
                 AlchemyJWTProvider.prewarmForApplicationLifecycle()
-                WalletsManager.shared.handleExternalWalletStoreChange()
-                SafariApprovalVaultHost.shared.reconcile()
-                Task { await ExtensionBridge.shared.performMaintenance() }
-            case .background, .inactive:
-                break
-            @unknown default:
-                break
+                await WalletsManager.shared.handleExternalWalletStoreChange()
+                guard !Task.isCancelled else { return }
+                await SafariApprovalVaultHost.shared.reconcile()
+                await ExtensionBridge.shared.performMaintenance()
             }
         }
+        .defaultSize(CGSize(width: 420, height: 555))
+
     }
 }
 

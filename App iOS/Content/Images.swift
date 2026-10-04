@@ -2,6 +2,7 @@
 
 import UIKit
 
+@MainActor
 struct Images {
     
     static var noData: UIImage { systemName("wind") }

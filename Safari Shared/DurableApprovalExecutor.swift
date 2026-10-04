@@ -14,14 +14,14 @@ final class DurableApprovalExecutor {
 
         let handle: ExtensionBridge.Handle
         let executionDeadline: Date
-        private let clock: () -> Date
-        private let waitForDeadline: @MainActor (Date) async -> Void
+        private let clock: @MainActor @Sendable () -> Date
+        private let waitForDeadline: (@MainActor @Sendable (Date) async -> Void)?
 
         fileprivate init(
             handle: ExtensionBridge.Handle,
             executionDeadline: Date,
-            clock: @escaping () -> Date,
-            waitForDeadline: @escaping @MainActor (Date) async -> Void
+            clock: @escaping @MainActor @Sendable () -> Date,
+            waitForDeadline: (@MainActor @Sendable (Date) async -> Void)?
         ) {
             self.handle = handle
             self.executionDeadline = executionDeadline
@@ -38,10 +38,19 @@ final class DurableApprovalExecutor {
                 onTimeout()
                 return .expired
             }
+            let executionDeadline = self.executionDeadline
+            let customWait = waitForDeadline
+            let monotonicDeadline = ContinuousClock.now + .seconds(max(0, executionDeadline.timeIntervalSince(clock())))
             let result = await ApprovalResolution<DeadlineResult<Value>>().value(
                 timeoutValue: .expired,
                 callerCancellation: .ignore,
-                waitForTimeout: { await waitForDeadline(executionDeadline) },
+                waitForTimeout: {
+                    if let customWait {
+                        await customWait(executionDeadline)
+                    } else {
+                        try? await ContinuousClock().sleep(until: monotonicDeadline, tolerance: nil)
+                    }
+                },
                 onDiscardedValue: { result in
                     if case .value(let value) = result { discardValue(value) }
                 },
@@ -63,9 +72,9 @@ final class DurableApprovalExecutor {
         }
     }
 
-    typealias SourceSignerFactory = (
+    typealias SourceSignerFactory = @MainActor @Sendable (
         ApprovedWalletSigningOperation,
-        @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
+        @escaping @MainActor @Sendable (ExtensionBridge.Handle) async -> Bool
     ) -> any WalletSigning
 
     enum SigningAccess {
@@ -84,7 +93,7 @@ final class DurableApprovalExecutor {
         case abandon
     }
 
-    enum Resolution {
+    enum Resolution: Sendable {
         case approved(ResolvedDappApproval)
         case immediate(ImmediateResolution)
         case abandon
@@ -104,8 +113,21 @@ final class DurableApprovalExecutor {
     private let requestProcessor: DappRequestProcessing
     private let broadcastSender: any ApprovedBroadcastSending
     private let broadcastTimeoutNanoseconds: UInt64
-    private let clock: () -> Date
-    private let waitForExecutionDeadline: @MainActor (Date) async -> Void
+    private let clock: @MainActor @Sendable () -> Date
+    private let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
+
+    convenience init(
+        store: PopupRequestStore,
+        requestProcessor: DappRequestProcessing? = nil,
+        broadcastSender: (any ApprovedBroadcastSending)? = nil,
+        broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
+        clock: @escaping @MainActor @Sendable () -> Date = { Date() }
+    ) {
+        self.init(
+            store: store, requestProcessor: requestProcessor, broadcastSender: broadcastSender,
+            broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds, clock: clock, waitForExecutionDeadline: nil
+        )
+    }
 
     init(
         store: PopupRequestStore,
@@ -113,23 +135,21 @@ final class DurableApprovalExecutor {
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping () -> Date = Date.init,
-        waitForExecutionDeadline: (@MainActor (Date) async -> Void)? = nil
+        clock: @escaping @MainActor @Sendable () -> Date = Date.init,
+        waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
     ) {
         self.store = store
         self.requestProcessor = requestProcessor ?? DappRequestProcessor()
         self.broadcastSender = broadcastSender ?? DappBroadcastSender()
         self.broadcastTimeoutNanoseconds = broadcastTimeoutNanoseconds
         self.clock = clock
-        self.waitForExecutionDeadline = waitForExecutionDeadline ?? { deadline in
-            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSince(clock()))))
-        }
+        self.waitForExecutionDeadline = waitForExecutionDeadline
     }
 
     func execute(
         claim: ExtensionBridge.ApprovalClaim,
         prepare: @MainActor (ClaimContext) async -> Preparation,
-        resolve: @MainActor (ReviewConsent) -> Resolution
+        resolve: @escaping @MainActor @Sendable (ReviewConsent) async -> Resolution
     ) async -> Result {
         guard claim.adoptForExecution() else { return .ownershipLost }
         defer { claim.releaseUnapproved() }
@@ -160,7 +180,12 @@ final class DurableApprovalExecutor {
         guard claim.authority.isDecisionFresh(for: claim.request, at: clock()) else {
             return await complete(claim: claim, resolution: Self.staleResolution)
         }
-        switch resolve(consent) {
+        guard case .value(let resolution) = await context.runBeforeDeadline(operation: {
+            await resolve(consent)
+        }) else {
+            return await abandon(claim: claim)
+        }
+        switch resolution {
         case .approved(let approval):
             guard claim.authority.isDecisionFresh(for: claim.request, at: clock()) else {
                 return await complete(claim: claim, resolution: Self.staleResolution)

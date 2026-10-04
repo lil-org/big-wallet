@@ -311,11 +311,13 @@ struct DappBroadcastSender: ApprovedBroadcastSending {
         signedTransaction: String,
         network: ResolvedEthereumNetwork
     ) async -> Result<String, EthereumSendFailure> {
-        await awaitCancellableCallback { completion in
-            Ethereum.shared.sendSignedTransaction(
-                signedTransaction, network: network.network, completion: completion
-            )
-        } ?? .failure(.transport)
+        do {
+            return .success(try await Ethereum.shared.sendSignedTransaction(
+                signedTransaction, network: network.network
+            ))
+        } catch {
+            return .failure(error as? EthereumSendFailure ?? .transport)
+        }
     }
 
     func sendSolana(
@@ -323,11 +325,13 @@ struct DappBroadcastSender: ApprovedBroadcastSending {
         cluster: Solana.Cluster,
         options: Solana.PreparedSendOptions
     ) async -> Result<String, Solana.SendTransactionError> {
-        await awaitCancellableCallback { completion in
-            Solana.shared.sendSignedTransaction(
-                signedTransaction, cluster: cluster, sendOptions: options, completion: completion
-            )
-        } ?? .failure(.unknown)
+        do {
+            return .success(try await Solana.shared.sendSignedTransaction(
+                signedTransaction, cluster: cluster, sendOptions: options
+            ))
+        } catch {
+            return .failure(error as? Solana.SendTransactionError ?? .unknown)
+        }
     }
 }
 

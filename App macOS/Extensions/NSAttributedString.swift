@@ -4,6 +4,7 @@ import AppKit
 
 extension NSAttributedString {
     
+    @MainActor
     static func accountImageAttachment(account: WalletAccount) -> NSAttributedString {
         let attachment = NSTextAttachment()
         attachment.image = account.image?.withCornerRadius(7)

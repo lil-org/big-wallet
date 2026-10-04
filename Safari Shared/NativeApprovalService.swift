@@ -67,18 +67,18 @@ actor NativeApprovalService {
         case delivery, manualRecovery
     }
 
-    struct Dependencies {
+    struct Dependencies: Sendable {
         let launcher: NativeAgentLauncher
-        let load: (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
-        let responseStatus: (
+        let load: @Sendable (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
+        let responseStatus: @Sendable (
             ExtensionBridge.Handle, String
         ) async -> ExtensionBridge.ResponseStatusResult
-        let maintainProfile: (UUID?) async -> Void
-        let clearReceipt: (
+        let maintainProfile: @Sendable (UUID?) async -> Void
+        let clearReceipt: @Sendable (
             ExtensionBridge.Handle,
             ExtensionBridge.NativeDeliveryReceipt
         ) async -> ExtensionBridge.StoreMutationResult
-        let uptime: () -> UInt64
+        let uptime: @Sendable () -> UInt64
         let sleepUntil: @Sendable (UInt64) async -> Void
 
         @MainActor
@@ -120,7 +120,7 @@ actor NativeApprovalService {
         }
     }
 
-    private struct DeliveryJob {
+    private struct DeliveryJob: Sendable {
         let route: NativeAgentRoute
         let deadline: UInt64
         let preparationFinished: ApprovalResolution<Void>

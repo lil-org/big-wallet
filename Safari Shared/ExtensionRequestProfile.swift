@@ -3,7 +3,7 @@
 import Foundation
 import CryptoKit
 
-struct ExtensionRequestProfile {
+struct ExtensionRequestProfile: Sendable {
     var state: State
 
     func request(for record: Record) -> SafariRequest? {
@@ -22,14 +22,14 @@ struct ExtensionRequestProfile {
         state.records[index].complete(response: response, at: date)
     }
 
-    struct ActiveRequestPayload: Codable {
+    struct ActiveRequestPayload: Codable, Sendable {
         let name: String
         let provider: InpageProvider
         let admissionDeadlineMilliseconds: Int
         let bodyData: Data
         let body: SafariRequest.Body
 
-        private enum CodingKeys: String, CodingKey {
+        private enum CodingKeys: String, CodingKey, Sendable {
             case name, provider, admissionDeadlineMilliseconds, bodyData
         }
 
@@ -91,7 +91,7 @@ struct ExtensionRequestProfile {
         }
     }
 
-    struct State: Codable {
+    struct State: Codable, Sendable {
         let schemaVersion: Int
         let workflowVersion: Int
         let profileIdentifier: UUID?
@@ -105,7 +105,7 @@ struct ExtensionRequestProfile {
         var invalidOrigins = Set<String>()
         var invalidOriginsContainer = false
 
-        private enum CodingKeys: String, CodingKey {
+        private enum CodingKeys: String, CodingKey, Sendable {
             case schemaVersion, workflowVersion, profileIdentifier, authorityEpoch, revocationCursor
             case authoritySequence, reclaimedAuthorityRevision, origins, mutationReceipts, records
         }
@@ -148,7 +148,7 @@ struct ExtensionRequestProfile {
         }
     }
 
-    struct DecodedOrigin: Decodable {
+    struct DecodedOrigin: Decodable, Sendable {
         let value: OriginState?
 
         init(from decoder: Decoder) throws {
@@ -156,7 +156,7 @@ struct ExtensionRequestProfile {
         }
     }
 
-    struct OriginState: Codable {
+    struct OriginState: Codable, Sendable {
         var ethereumAccount: WalletAccountDescriptor?
         var ethereumChainId = "0x1"
         var solanaAccount: WalletAccountDescriptor?
@@ -167,7 +167,7 @@ struct ExtensionRequestProfile {
         }
     }
 
-    struct MutationReceipt: Codable {
+    struct MutationReceipt: Codable, Sendable {
         let configurationKey: String
         let provider: InpageProvider
         let attempt: String
@@ -175,18 +175,18 @@ struct ExtensionRequestProfile {
         let createdAt: Date
     }
 
-    struct Record: Codable {
-        struct NativeApproval: Codable {
+    struct Record: Codable, Sendable {
+        struct NativeApproval: Codable, Sendable {
             let approvedAt: Date
             let receipt: ExtensionBridge.NativeDeliveryReceipt
         }
 
-        enum PendingApproval: Codable {
+        enum PendingApproval: Codable, Sendable {
             case unowned
             case delivered(ExtensionBridge.NativeDeliveryReceipt)
         }
 
-        enum ClaimedApproval: Codable {
+        enum ClaimedApproval: Codable, Sendable {
             case ordinary(deadline: Date)
             case native(NativeApproval, context: ExtensionBridge.NativeExecutionContext)
 
@@ -210,12 +210,12 @@ struct ExtensionRequestProfile {
             }
         }
 
-        enum BroadcastApproval: Codable {
+        enum BroadcastApproval: Codable, Sendable {
             case ordinary
             case native(NativeApproval)
         }
 
-        enum State: Codable {
+        enum State: Codable, Sendable {
             case pending(request: ActiveRequestPayload, approval: PendingApproval)
             case claimed(claimID: UUID, request: ActiveRequestPayload, approval: ClaimedApproval)
             case broadcastPrepared(
@@ -350,7 +350,7 @@ struct ExtensionRequestProfile {
             return true
         }
 
-        enum DeliveryChange {
+        enum DeliveryChange: Sendable {
             case changed, unchanged, ownershipLost
         }
 
@@ -378,7 +378,7 @@ struct ExtensionRequestProfile {
             return .changed
         }
 
-        enum Acknowledgment {
+        enum Acknowledgment: Sendable {
             case recorded, alreadyRecorded, notCompleted
         }
 
@@ -407,11 +407,11 @@ struct ExtensionRequestProfile {
         }
     }
 
-    enum PendingDeadlineTransition {
+    enum PendingDeadlineTransition: Sendable {
         case active(SafariRequest), expired, unavailable
     }
 
-    enum AuthorityStatus { case current, stale, inconsistentGrant }
+    enum AuthorityStatus: Sendable { case current, stale, inconsistentGrant }
 
     static let profileSchemaVersion = 9
     static let maximumProfileBytes =
@@ -424,7 +424,7 @@ struct ExtensionRequestProfile {
     static let maximumRevision = 9_007_199_254_740_991
     static let futureSkew = ExtensionBridge.admissionDeadlineFutureSkew
 
-    struct ReceiptIdentity {
+    struct ReceiptIdentity: Sendable {
         let nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce
         let runtimeInstanceIdentifier: UUID
     }
@@ -895,7 +895,7 @@ struct ExtensionRequestProfile {
         ) == true
     }
 
-    struct Maintenance {
+    struct Maintenance: Sendable {
         let changed: Bool
         let operationLocksToRemove: [ExtensionBridge.Handle]
     }

@@ -1,5 +1,6 @@
 #if os(macOS)
     import Foundation
+    import Synchronization
     import XCTest
     @testable import Big_Wallet
 
@@ -9,8 +10,8 @@
         helpers: @escaping @MainActor () -> [NativeAgentLauncher.RuntimeHelper] = { [] },
         helper: @escaping @MainActor (Int32) -> NativeAgentLauncher.RuntimeHelper? = { _ in nil },
         identity: @escaping @MainActor (Int32) -> AmbientRuntimeIdentity? = { _ in nil },
-        launch: @escaping NativeAgentLauncher.Launch = { _, _, completion in completion(false) },
-        uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+        launch: @escaping NativeAgentLauncher.Launch = { _, _ in false },
+        uptime: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
         sleepUntil: @escaping @MainActor (UInt64) async -> Void = { deadline in
             let now = DispatchTime.now().uptimeNanoseconds
             if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
@@ -31,7 +32,7 @@
         clearReceipt:
             @escaping @MainActor (ExtensionBridge.Handle, ExtensionBridge.NativeDeliveryReceipt) async ->
             ExtensionBridge.StoreMutationResult = { _, _ in .ownershipLost },
-        uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+        uptime: @escaping @Sendable () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
         sleepUntil: @escaping @Sendable (UInt64) async -> Void = { deadline in
             let now = DispatchTime.now().uptimeNanoseconds
             if deadline > now { try? await Task.sleep(nanoseconds: deadline - now) }
@@ -48,65 +49,71 @@
 
     @MainActor
     final class NativeApprovalServiceTestFixture {
-        final class Clock: @unchecked Sendable {
-            private let lock = NSLock()
-            private var uptime: UInt64 = 1_000_000_000
-            private var wallTime = Date(timeIntervalSince1970: 1_800_000_000)
-            private var waiters = [UUID: (UInt64, CheckedContinuation<Void, Never>)]()
+        final class Clock: Sendable {
+            private struct State {
+                var uptime: UInt64 = 1_000_000_000
+                var wallTime = Date(timeIntervalSince1970: 1_800_000_000)
+                var waiters = [UUID: (UInt64, CheckedContinuation<Void, Never>)]()
+            }
+            private let state = Mutex(State())
 
-            var now: UInt64 { lock.withLock { uptime } }
-            var date: Date { lock.withLock { wallTime } }
-            var deadlines: [UInt64] { lock.withLock { waiters.values.map { $0.0 }.sorted() } }
+            var now: UInt64 { state.withLock { $0.uptime } }
+            var date: Date { state.withLock { $0.wallTime } }
+            var deadlines: [UInt64] { state.withLock { $0.waiters.values.map { $0.0 }.sorted() } }
 
             func sleepUntil(_ deadline: UInt64) async {
                 let id = UUID()
                 await withTaskCancellationHandler {
                     await withCheckedContinuation { continuation in
-                        let shouldWait = lock.withLock {
-                            guard !Task.isCancelled, deadline > uptime else { return false }
-                            waiters[id] = (deadline, continuation)
+                        let shouldWait = state.withLock { state in
+                            guard !Task.isCancelled, deadline > state.uptime else { return false }
+                            state.waiters[id] = (deadline, continuation)
                             return true
                         }
                         if !shouldWait { continuation.resume() }
                     }
                 } onCancel: {
-                    let continuation = self.lock.withLock { self.waiters.removeValue(forKey: id)?.1 }
+                    let continuation = self.state.withLock { $0.waiters.removeValue(forKey: id)?.1 }
                     continuation?.resume()
                 }
             }
 
             func advance(to deadline: UInt64) {
-                let ready = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
-                    guard deadline >= uptime else { return [] }
-                    wallTime += Double(deadline - uptime) / 1_000_000_000
-                    uptime = deadline
-                    let ready = waiters.filter { $0.value.0 <= uptime }
-                    for id in ready.keys { waiters[id] = nil }
+                let ready = state.withLock { state -> [CheckedContinuation<Void, Never>] in
+                    guard deadline >= state.uptime else { return [] }
+                    state.wallTime += Double(deadline - state.uptime) / 1_000_000_000
+                    state.uptime = deadline
+                    let ready = state.waiters.filter { $0.value.0 <= state.uptime }
+                    for id in ready.keys { state.waiters[id] = nil }
                     return ready.values.map { $0.1 }
                 }
                 ready.forEach { $0.resume() }
             }
         }
 
-        final class Gate: @unchecked Sendable {
-            private let lock = NSLock()
-            private var isOpen = false
-            private var waiters = [CheckedContinuation<Void, Never>]()
+        final class Gate: Sendable {
+            private struct State {
+                var isOpen = false
+                var waiters = [CheckedContinuation<Void, Never>]()
+            }
+            private let state = Mutex(State())
+
             func wait() async {
                 await withCheckedContinuation { continuation in
-                    let shouldWait = lock.withLock {
-                        guard !isOpen else { return false }
-                        waiters.append(continuation)
+                    let shouldWait = state.withLock { state in
+                        guard !state.isOpen else { return false }
+                        state.waiters.append(continuation)
                         return true
                     }
                     if !shouldWait { continuation.resume() }
                 }
             }
+
             func open() {
-                let pending = lock.withLock {
-                    isOpen = true
-                    let pending = waiters
-                    waiters.removeAll()
+                let pending = state.withLock { state in
+                    state.isOpen = true
+                    let pending = state.waiters
+                    state.waiters.removeAll()
                     return pending
                 }
                 pending.forEach { $0.resume() }
@@ -251,16 +258,12 @@
                 },
                 helper: helper,
                 identity: { self.processes[$0] },
-                launch: { target, url, completion in
-                    guard let route = NativeAgentRoute(url: url) else {
-                        completion(false)
-                        return
-                    }
+                launch: { target, url in
+                    guard let route = NativeAgentRoute(url: url) else { return false }
                     self.launches.append((target, route, self.clock.now))
-                    if let onLaunch = self.onLaunch {
-                        onLaunch(target, route, completion)
-                    } else {
-                        completion(false)
+                    guard let onLaunch = self.onLaunch else { return false }
+                    return await withCheckedContinuation { continuation in
+                        onLaunch(target, route) { continuation.resume(returning: $0) }
                     }
                 },
                 uptime: { [clock] in clock.now }, sleepUntil: clock.sleepUntil

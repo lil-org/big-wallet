@@ -2,7 +2,7 @@
 
 import Foundation
 
-struct NetworkCatalogNativeCurrency: Codable, Equatable {
+struct NetworkCatalogNativeCurrency: Codable, Equatable, Sendable {
 
     let name: String
     let symbol: String
@@ -10,7 +10,7 @@ struct NetworkCatalogNativeCurrency: Codable, Equatable {
 
 }
 
-struct NetworkCatalogRecord: Codable, Equatable {
+struct NetworkCatalogRecord: Codable, Equatable, Sendable {
 
     let chainId: Int
     let name: String
@@ -79,7 +79,7 @@ enum NetworkCatalogLoadError: Error, Equatable {
 
 }
 
-struct NetworkCatalog {
+struct NetworkCatalog: Sendable {
 
     static let resourceName = "NetworkCatalog"
 
@@ -279,7 +279,7 @@ struct ResolvedEthereumNetwork: Equatable, Sendable {
 
 }
 
-enum EthereumNetworkResolution: Equatable {
+enum EthereumNetworkResolution: Equatable, Sendable {
 
     case resolved(ResolvedEthereumNetwork)
     case catalogOwnedButUnavailable
@@ -292,7 +292,7 @@ enum EthereumNetworkResolution: Equatable {
 
 }
 
-struct NetworkResolver {
+struct NetworkResolver: Sendable {
 
     static let main: NetworkResolver = {
         let catalog: NetworkCatalog?
@@ -321,7 +321,7 @@ struct NetworkResolver {
 
     private let catalogOwnedChainIds: Set<Int>
     private let resolvedCatalogByChainId: [Int: ResolvedEthereumNetwork]
-    private let customSnapshot: () -> CustomNetworkSnapshot
+    private let customSnapshot: @Sendable () -> CustomNetworkSnapshot
 
     init(catalog: NetworkCatalog?,
          catalogOwnedChainIds: Set<Int>,
@@ -330,7 +330,8 @@ struct NetworkResolver {
              record in
              return record.rpcURL()
          },
-         customSnapshot: @escaping () -> CustomNetworkSnapshot) {
+        customSnapshot: @escaping @Sendable () -> CustomNetworkSnapshot
+    ) {
         let catalogMatchesOwnership = catalog?.records.count == catalogOwnedChainIds.count
             && catalog?.records.allSatisfy {
                 catalogOwnedChainIds.contains($0.chainId)

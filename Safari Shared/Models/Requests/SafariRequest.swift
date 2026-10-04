@@ -2,7 +2,7 @@
 
 import Foundation
 
-struct SafariRequest {
+struct SafariRequest: Sendable {
 
     let id: Int
     let name: String
@@ -21,7 +21,7 @@ struct SafariRequest {
         Date(timeIntervalSince1970: TimeInterval(admissionDeadlineMilliseconds) / 1_000)
     }
     
-    enum Body {
+    enum Body: Sendable {
         case unknown(Unknown)
         case ethereum(Ethereum)
         case solana(Solana)

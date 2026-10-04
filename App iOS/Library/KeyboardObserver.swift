@@ -2,7 +2,9 @@
 
 import UIKit
 
+@MainActor
 protocol KeyboardObserver: UIResponder {
+    var keyboardUpdateTask: Task<Void, Never>? { get set }
     func keyboardWill(show: Bool, animtaionOptions: UIView.AnimationOptions, duration: Double)
 }
 
@@ -29,7 +31,10 @@ extension KeyboardObserver {
             duration = 0
         }
         
-        DispatchQueue.main.async { [weak self] in
+        keyboardUpdateTask?.cancel()
+        keyboardUpdateTask = Task { [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             self?.keyboardWill(show: willShow, animtaionOptions: animtaionOptions, duration: duration)
         }
     }

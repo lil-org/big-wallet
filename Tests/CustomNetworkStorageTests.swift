@@ -125,7 +125,7 @@ final class CustomNetworkStorageTests: XCTestCase {
             forKey: SharedDefaults.customEthereumNetworksKey
         )
         let cache = CustomNetworkCache(loader: {
-            SharedDefaults.loadCustomNetworkSnapshotResult(from: defaults)
+            SharedDefaults.loadCustomNetworkSnapshotResult(from: UserDefaults(suiteName: suiteName)!)
         })
         XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
 
@@ -161,7 +161,7 @@ final class CustomNetworkStorageTests: XCTestCase {
             forKey: SharedDefaults.customEthereumNetworksKey
         )
         let cache = CustomNetworkCache(loader: {
-            SharedDefaults.loadCustomNetworkSnapshotResult(from: defaults)
+            SharedDefaults.loadCustomNetworkSnapshotResult(from: UserDefaults(suiteName: suiteName)!)
         })
         XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
 

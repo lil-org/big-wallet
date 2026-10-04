@@ -21,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let runtimeIdentity = AmbientRuntimeIdentity.current()
 
     private var commandQBlockerMonitor: Any?
+    private var startupTask: Task<Void, Never>?
     private var allowsProgrammaticTermination = false
 
     override init() {
@@ -56,12 +57,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             NSApplication.shared.terminate(nil)
             return
         }
-        agent.start(
-            openOnLaunch: false,
-            runtimeIdentity: runtimeIdentity
-        )
-        walletsManager.start()
-        Task { await ExtensionBridge.shared.performMaintenance() }
+        startupTask = Task { [walletsManager, agent] in
+            await walletsManager.start()
+            guard !Task.isCancelled else { return }
+            agent.start(openOnLaunch: false, runtimeIdentity: runtimeIdentity)
+            await ExtensionBridge.shared.performMaintenance()
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -99,6 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        startupTask?.cancel()
         _ = runtimeIdentity?.clearForCurrentProcess()
         if let commandQBlockerMonitor {
             NSEvent.removeMonitor(commandQBlockerMonitor)

@@ -1,23 +1,24 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 
 final class ExtensionRequestFileStore: WalletSourceMutating {
     enum WalletAuthorityRemovalError: Error {
         case unavailable
     }
 
-    typealias AtomicWrite = (Data, URL) throws -> Void
-    typealias SynchronizePublishedFile = (URL) throws -> Void
-    typealias ReadData = (URL) throws -> Data
-    typealias ReadFileSize = (URL) throws -> Int?
-    typealias RemoveItem = (URL) throws -> Void
-    typealias CompleteChainAddition = (ExtensionBridge.ApprovedExecutionPermit) -> Bool
+    typealias AtomicWrite = @Sendable (Data, URL) throws -> Void
+    typealias SynchronizePublishedFile = @Sendable (URL) throws -> Void
+    typealias ReadData = @Sendable (URL) throws -> Data
+    typealias ReadFileSize = @Sendable (URL) throws -> Int?
+    typealias RemoveItem = @Sendable (URL) throws -> Void
+    typealias CompleteChainAddition = @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> Bool
 
-    struct Dependencies {
-        let clock: () -> Date
-        let token: () -> UUID
-        let revocationEpoch: () -> UUID
+    struct Dependencies: Sendable {
+        let clock: @Sendable () -> Date
+        let token: @Sendable () -> UUID
+        let revocationEpoch: @Sendable () -> UUID
         let crossProcessLock: CrossProcessFileLock?
         let crossProcessLockTimeoutNanoseconds: UInt64
         let crossProcessLockPollNanoseconds: UInt64
@@ -30,20 +31,20 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let completeChainAddition: CompleteChainAddition
 
         init(
-            clock: @escaping () -> Date = Date.init,
-            token: @escaping () -> UUID = UUID.init,
-            revocationEpoch: @escaping () -> UUID = UUID.init,
+            clock: @escaping @Sendable () -> Date = { Date() },
+            token: @escaping @Sendable () -> UUID = { UUID() },
+            revocationEpoch: @escaping @Sendable () -> UUID = { UUID() },
             crossProcessLock: CrossProcessFileLock? = nil,
             crossProcessLockTimeoutNanoseconds: UInt64 = 1_000_000_000,
             crossProcessLockPollNanoseconds: UInt64 = 10_000_000,
             atomicWrite: AtomicWrite? = nil,
             synchronizePublishedFile: SynchronizePublishedFile? = nil,
             persistenceOperations: DurableProfilePersistence.Operations = .live,
-            readData: @escaping ReadData = ExtensionRequestFileStore.defaultReadData,
-            readFileSize: @escaping ReadFileSize = ExtensionRequestFileStore.defaultReadFileSize,
-            removeItem: @escaping RemoveItem = ExtensionRequestFileStore.defaultRemoveItem,
+            readData: @escaping ReadData = { try ExtensionRequestFileStore.defaultReadData($0) },
+            readFileSize: @escaping ReadFileSize = { try ExtensionRequestFileStore.defaultReadFileSize($0) },
+            removeItem: @escaping RemoveItem = { try ExtensionRequestFileStore.defaultRemoveItem($0) },
             completeChainAddition: @escaping CompleteChainAddition =
-                EthereumDappRequestProcessor.completeApprovedChainAddition
+                { EthereumDappRequestProcessor.completeApprovedChainAddition(permit: $0) }
         ) {
             self.clock = clock
             self.token = token
@@ -74,12 +75,12 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         case unavailable
     }
 
-    private let clock: () -> Date
-    private let token: () -> UUID
-    private let revocationEpoch: () -> UUID
+    private let clock: @Sendable () -> Date
+    private let token: @Sendable () -> UUID
+    private let revocationEpoch: @Sendable () -> UUID
     private let completeChainAddition: CompleteChainAddition
     private let files: ExtensionRequestStoreFiles
-    private var codec: ExtensionRequestProfileCodec
+    private let codec = Mutex(ExtensionRequestProfileCodec())
 
     private typealias ProfileState = ExtensionRequestProfile.State
     private typealias Record = ExtensionRequestProfile.Record
@@ -123,7 +124,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         token = dependencies.token
         revocationEpoch = dependencies.revocationEpoch
         completeChainAddition = dependencies.completeChainAddition
-        codec = ExtensionRequestProfileCodec()
         files = ExtensionRequestStoreFiles(
             rootURL: rootURL,
             directoryBoundary: directoryBoundary,
@@ -423,7 +423,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 return .rejected
             }
 
-            guard let boundRequest = codec.bind(ingress.request, data: ingress.canonicalData, authority: currentAuthority) else { return .rejected }
+            guard let boundRequest = codec.withLock({ $0.bind(ingress.request, data: ingress.canonicalData, authority: currentAuthority) }) else { return .rejected }
 
             var record = Record(
                 id: ingress.request.id,
@@ -873,8 +873,31 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             if case .native(let approvedAt, _) = claim.authority,
                approvedAt != approval.approvedAt { return .ownershipLost }
             guard claim.lifecycle.authorize(approval) else { return .ownershipLost }
-            return .authorized(.init(claim: claim, approval: approval, clock: clock))
+            return .authorized(.init(claim: claim, approval: approval, clock: clock, authorityStore: self))
         }
+    }
+
+    fileprivate func withCurrentAuthority<Result>(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        _ operation: () throws -> Result
+    ) rethrows -> Result? {
+        try files.withLockIfAvailable { () throws -> Result? in
+            let claim = permit.claim
+            guard case .state(let profile) = recoverProfileLocked(
+                profileIdentifier: claim.handle.profileIdentifier, now: clock()
+            ) else { return nil }
+            let now = clock()
+            guard claim.lifecycle.isSigningAuthorized(now: now),
+                  let record = profile.state.records.first(where: { $0.handle == claim.handle }),
+                  case .claimed(let claimID, _, _) = record.state,
+                  claim.matches(handle: record.handle, value: claimID),
+                  claim.binding.matches(record),
+                  record.nativeDeliveryReceipt == claim.nativeReceipt,
+                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
+                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled)
+            else { return nil }
+            return try operation()
+        } ?? nil
     }
 
     func prepareBroadcast(
@@ -1071,8 +1094,11 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                       files.synchronizeProfileLocked(handle.profileIdentifier) else {
                     return .unavailable
                 }
-                return .response(["id": handle.id, "response": response,
-                    "state": ExtensionRequestProfile.authoritySnapshot(profile.state, configurationKey: configurationKey).json])
+                guard let delivery = WireProtocol.JSONObject([
+                    "id": handle.id, "response": response,
+                    "state": ExtensionRequestProfile.authoritySnapshot(profile.state, configurationKey: configurationKey).json,
+                ]) else { return .unavailable }
+                return .response(delivery)
             }
         }
     }
@@ -1175,10 +1201,10 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         case .corrupt: return .corrupt
         case .unavailable: return .unavailable
         }
-        guard let decoded = codec.decodeProfile(
+        guard let decoded = codec.withLock({ $0.decodeProfile(
             data, expectedIdentifier: profileIdentifier,
             recoverAuthority: false, now: now
-        ) else { return .corrupt }
+        ) }) else { return .corrupt }
         return .state(decoded.profile)
     }
 
@@ -1236,13 +1262,13 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let decoded: ExtensionRequestProfileCodec.DecodedProfile?
         switch operation {
         case .reconcileAuthority:
-            decoded = codec.decodeProfile(
+            decoded = codec.withLock { $0.decodeProfile(
                 data, expectedIdentifier: profileIdentifier, recoverAuthority: false, now: now
-            )
+            ) }
         case .recoverRequests:
-            decoded = codec.decodeProfile(
+            decoded = codec.withLock { $0.decodeProfile(
                 data, expectedIdentifier: profileIdentifier, recoverAuthority: true, now: now
-            )
+            ) }
         }
         guard let decoded else { return .corrupt }
         var profile = decoded.profile
@@ -1415,7 +1441,7 @@ extension ExtensionRequestProfile {
 }
 
 extension ExtensionBridge {
-    struct RequestBinding: Equatable, @unchecked Sendable {
+    struct RequestBinding: Equatable, Sendable {
         let handle: Handle
         let request: SafariRequest
         fileprivate let fingerprint: Data
@@ -1437,7 +1463,7 @@ extension ExtensionBridge {
         }
     }
 
-    fileprivate final class ExecutionLifecycle: @unchecked Sendable {
+    fileprivate final class ExecutionLifecycle: Sendable {
         private enum AuthorizationStage { case before, after }
         private enum DispatchSlot { case ready, consumed }
         private enum Phase {
@@ -1456,9 +1482,11 @@ extension ExtensionBridge {
         let executionID = UUID()
         let signingDeadline: Date
         private let lease: OperationLease
-        private let lock = NSLock()
-        private var phase = Phase.claimed
-        private var signing = SigningSlot.unissued
+        private struct State {
+            var phase = Phase.claimed
+            var signing = SigningSlot.unissued
+        }
+        private let state = Mutex(State())
 
         init(
             record: ExtensionRequestProfile.Record,
@@ -1476,15 +1504,15 @@ extension ExtensionBridge {
         }
 
         var isPreparing: Bool {
-            lock.withLock {
-                if case .preparing = phase { return true }
+            state.withLock { state in
+                if case .preparing = state.phase { return true }
                 return false
             }
         }
 
         var wasNeverAuthorized: Bool {
-            lock.withLock {
-                switch phase {
+            state.withLock { state in
+                switch state.phase {
                 case .claimed, .preparing, .closed(.before): true
                 case .authorized, .executing, .checkpointed, .closed(.after): false
                 }
@@ -1492,8 +1520,8 @@ extension ExtensionBridge {
         }
 
         var canCompleteUnapproved: Bool {
-            lock.withLock {
-                switch phase {
+            state.withLock { state in
+                switch state.phase {
                 case .preparing, .closed(.before): true
                 case .claimed, .authorized, .executing, .checkpointed, .closed(.after): false
                 }
@@ -1501,8 +1529,8 @@ extension ExtensionBridge {
         }
 
         var hasActiveApprovedOwnership: Bool {
-            lock.withLock {
-                switch phase {
+            state.withLock { state in
+                switch state.phase {
                 case .authorized, .executing, .checkpointed: true
                 case .claimed, .preparing, .closed: false
                 }
@@ -1510,39 +1538,39 @@ extension ExtensionBridge {
         }
 
         var isClosed: Bool {
-            lock.withLock {
-                if case .closed = phase { return true }
+            state.withLock { state in
+                if case .closed = state.phase { return true }
                 return false
             }
         }
 
         func adoptForExecution() -> Bool {
-            lock.withLock {
-                guard case .claimed = phase else { return false }
-                phase = .preparing
+            state.withLock { state in
+                guard case .claimed = state.phase else { return false }
+                state.phase = .preparing
                 return true
             }
         }
 
         func authorize(_ approval: ResolvedDappApproval) -> Bool {
-            lock.withLock {
-                guard case .preparing = phase, approval.consumeAuthorization() else { return false }
-                phase = .authorized
+            state.withLock { state in
+                guard case .preparing = state.phase, approval.consumeAuthorization() else { return false }
+                state.phase = .authorized
                 return true
             }
         }
 
         func consumeExecution(now: Date) -> Bool {
-            lock.withLock {
-                guard case .authorized = phase, executionTimeIsCurrent(now) else { return false }
-                phase = .executing
+            state.withLock { state in
+                guard case .authorized = state.phase, executionTimeIsCurrent(now) else { return false }
+                state.phase = .executing
                 return true
             }
         }
 
         func isExecuting(now: Date) -> Bool {
-            lock.withLock {
-                guard case .executing = phase else { return false }
+            state.withLock { state in
+                guard case .executing = state.phase else { return false }
                 return executionTimeIsCurrent(now)
             }
         }
@@ -1556,11 +1584,11 @@ extension ExtensionBridge {
         }
 
         func consumeSigningOperation(now: Date) -> Bool {
-            lock.withLock {
-                guard signingTimeIsCurrent(now), case .unissued = signing else { return false }
-                switch phase {
+            state.withLock { state in
+                guard signingTimeIsCurrent(now), case .unissued = state.signing else { return false }
+                switch state.phase {
                 case .authorized, .executing:
-                    signing = .issued
+                    state.signing = .issued
                     return true
                 case .claimed, .preparing, .checkpointed, .closed:
                     return false
@@ -1569,11 +1597,11 @@ extension ExtensionBridge {
         }
 
         func bindSigningOperation(to sessionID: UUID, now: Date) -> Bool {
-            lock.withLock {
-                guard signingTimeIsCurrent(now), case .issued = signing else { return false }
-                switch phase {
+            state.withLock { state in
+                guard signingTimeIsCurrent(now), case .issued = state.signing else { return false }
+                switch state.phase {
                 case .authorized, .executing:
-                    signing = .bound(sessionID)
+                    state.signing = .bound(sessionID)
                     return true
                 case .claimed, .preparing, .checkpointed, .closed:
                     return false
@@ -1582,28 +1610,28 @@ extension ExtensionBridge {
         }
 
         func beginSigningAttempt(for sessionID: UUID, now: Date) -> Bool {
-            lock.withLock {
-                guard case .executing = phase, signingTimeIsCurrent(now),
-                      case .bound(let boundID) = signing, boundID == sessionID else { return false }
-                signing = .signing(sessionID)
+            state.withLock { state in
+                guard case .executing = state.phase, signingTimeIsCurrent(now),
+                      case .bound(let boundID) = state.signing, boundID == sessionID else { return false }
+                state.signing = .signing(sessionID)
                 return true
             }
         }
 
         func consumeSigningUse(now: Date) -> Bool {
-            lock.withLock {
-                guard case .executing = phase, signingTimeIsCurrent(now),
-                      case .signing(let sessionID) = signing else { return false }
-                signing = .signed(sessionID)
+            state.withLock { state in
+                guard case .executing = state.phase, signingTimeIsCurrent(now),
+                      case .signing(let sessionID) = state.signing else { return false }
+                state.signing = .signed(sessionID)
                 return true
             }
         }
 
         func finishSigningAttempt(for sessionID: UUID) {
-            lock.withLock {
-                switch signing {
+            state.withLock { state in
+                switch state.signing {
                 case .bound(let current), .signing(let current), .signed(let current):
-                    if current == sessionID { signing = .finished }
+                    if current == sessionID { state.signing = .finished }
                 case .unissued, .issued, .finished:
                     break
                 }
@@ -1611,9 +1639,9 @@ extension ExtensionBridge {
         }
 
         func isSigningAttemptCurrent(for sessionID: UUID, now: Date) -> Bool {
-            lock.withLock {
-                guard case .executing = phase, signingTimeIsCurrent(now) else { return false }
-                switch signing {
+            state.withLock { state in
+                guard case .executing = state.phase, signingTimeIsCurrent(now) else { return false }
+                switch state.signing {
                 case .signing(let current), .signed(let current): return current == sessionID
                 case .unissued, .issued, .bound, .finished: return false
                 }
@@ -1621,17 +1649,17 @@ extension ExtensionBridge {
         }
 
         func isSigningAuthorized(now: Date) -> Bool {
-            lock.withLock {
-                guard case .executing = phase else { return false }
+            state.withLock { state in
+                guard case .executing = state.phase else { return false }
                 return signingTimeIsCurrent(now)
             }
         }
 
         func checkpoint(broadcast: PreparedBroadcast) -> Bool {
-            lock.withLock {
-                switch phase {
+            state.withLock { state in
+                switch state.phase {
                 case .executing:
-                    phase = .checkpointed(broadcast, .ready)
+                    state.phase = .checkpointed(broadcast, .ready)
                     return true
                 case .checkpointed(let checkpointed, _):
                     return checkpointed.hasSameIdentity(as: broadcast)
@@ -1642,20 +1670,20 @@ extension ExtensionBridge {
         }
 
         func consumeDispatch(broadcast: PreparedBroadcast) -> Bool {
-            lock.withLock {
-                guard case .checkpointed(let checkpointed, .ready) = phase,
+            state.withLock { state in
+                guard case .checkpointed(let checkpointed, .ready) = state.phase,
                       checkpointed.hasSameIdentity(as: broadcast) else { return false }
-                phase = .checkpointed(checkpointed, .consumed)
+                state.phase = .checkpointed(checkpointed, .consumed)
                 return true
             }
         }
 
         @discardableResult
         func closeUnapproved() -> Bool {
-            let closed = lock.withLock {
-                switch phase {
+            let closed = state.withLock { state in
+                switch state.phase {
                 case .claimed, .preparing:
-                    phase = .closed(.before)
+                    state.phase = .closed(.before)
                     return true
                 case .authorized, .executing, .checkpointed, .closed:
                     return false
@@ -1667,13 +1695,13 @@ extension ExtensionBridge {
 
         @discardableResult
         func closeApproved(includingCheckpoint: Bool = true) -> Bool {
-            let closed = lock.withLock {
-                switch phase {
+            let closed = state.withLock { state in
+                switch state.phase {
                 case .authorized, .executing:
-                    phase = .closed(.after)
+                    state.phase = .closed(.after)
                     return true
                 case .checkpointed where includingCheckpoint:
-                    phase = .closed(.after)
+                    state.phase = .closed(.after)
                     return true
                 case .claimed, .preparing, .checkpointed, .closed:
                     return false
@@ -1724,10 +1752,11 @@ extension ExtensionBridge {
         static func == (lhs: Self, rhs: Self) -> Bool { lhs.lifecycle === rhs.lifecycle }
     }
 
-    final class ApprovedExecutionPermit: Equatable, @unchecked Sendable {
+    final class ApprovedExecutionPermit: Equatable, Sendable {
         fileprivate let claim: ApprovalClaim
         private let resolvedApproval: ResolvedDappApproval
-        private let clock: () -> Date
+        private let authorityStore: ExtensionRequestFileStore
+        private let clock: @Sendable () -> Date
 
         var executionID: UUID { claim.lifecycle.executionID }
         var signingDeadline: Date { claim.lifecycle.signingDeadline }
@@ -1737,10 +1766,21 @@ extension ExtensionBridge {
         var executionDeadline: Date { claim.executionDeadline }
         var approval: DappApprovalValidator.Approval { resolvedApproval.approval }
 
-        fileprivate init(claim: ApprovalClaim, approval: ResolvedDappApproval, clock: @escaping () -> Date) {
+        fileprivate init(
+            claim: ApprovalClaim,
+            approval: ResolvedDappApproval,
+            clock: @escaping @Sendable () -> Date,
+            authorityStore: ExtensionRequestFileStore
+        ) {
             self.claim = claim
             resolvedApproval = approval
             self.clock = clock
+            self.authorityStore = authorityStore
+        }
+
+        // The callback runs under the authority file lock and must not reenter the bridge or mutate wallet source.
+        func withCurrentAuthority<Result>(_ operation: () throws -> Result) rethrows -> Result? {
+            try authorityStore.withCurrentAuthority(permit: self, operation)
         }
 
         func consumeExecution() -> Bool { claim.lifecycle.consumeExecution(now: clock()) }
@@ -1772,7 +1812,7 @@ extension ExtensionBridge {
         static func == (lhs: ApprovedExecutionPermit, rhs: ApprovedExecutionPermit) -> Bool { lhs === rhs }
     }
 
-    final class BroadcastDispatchPermit: Equatable, @unchecked Sendable {
+    final class BroadcastDispatchPermit: Equatable, Sendable {
         let broadcast: PreparedBroadcast
         let approvedPermit: ApprovedExecutionPermit
 

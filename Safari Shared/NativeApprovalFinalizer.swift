@@ -15,19 +15,38 @@ final class NativeApprovalFinalizer {
     )
 
     private let store: NativeApprovalStore
-    private let refreshWalletCatalog: () -> WalletReviewCatalog?
+    private let refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?
     private let makeSigner: DurableApprovalExecutor.SourceSignerFactory
     private let networkResolver: (String) -> EthereumNetwork?
     private let transactionNetworkResolver: (Int) -> ResolvedEthereumNetwork?
     private let executor: DurableApprovalExecutor
 
+    convenience init(
+        store: NativeApprovalStore,
+        requestProcessor: DappRequestProcessing,
+        makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
+        networkResolver: @escaping (String) -> EthereumNetwork? = { Networks.withChainIdHex($0) },
+        transactionNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = { Nodes.resolution(chainId: $0).resolvedNetwork },
+        clock: @escaping @MainActor @Sendable () -> Date = { Date() },
+        broadcastSender: (any ApprovedBroadcastSending)? = nil,
+        broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds
+    ) {
+        self.init(
+            store: store, requestProcessor: requestProcessor,
+            refreshWalletCatalog: {
+                guard await WalletsManager.shared.start() else { return nil }
+                return WalletsManager.shared.reviewCatalog()
+            },
+            makeSigner: makeSigner, networkResolver: networkResolver,
+            transactionNetworkResolver: transactionNetworkResolver, clock: clock,
+            broadcastSender: broadcastSender, broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds
+        )
+    }
+
     init(
         store: NativeApprovalStore,
         requestProcessor: DappRequestProcessing,
-        refreshWalletCatalog: @escaping () -> WalletReviewCatalog? = {
-            guard WalletsManager.shared.start() else { return nil }
-            return WalletsManager.shared.reviewCatalog()
-        },
+        refreshWalletCatalog: @escaping @MainActor () async -> WalletReviewCatalog?,
         makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
         networkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
@@ -35,7 +54,7 @@ final class NativeApprovalFinalizer {
         transactionNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = {
             Nodes.resolution(chainId: $0).resolvedNetwork
         },
-        clock: @escaping () -> Date = Date.init,
+        clock: @escaping @MainActor @Sendable () -> Date = Date.init,
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds
@@ -115,7 +134,7 @@ final class NativeApprovalFinalizer {
         }
     }
 
-    private func resolve(_ consent: ReviewConsent) -> DurableApprovalExecutor.Resolution {
+    private func resolve(_ consent: ReviewConsent) async -> DurableApprovalExecutor.Resolution {
         if case .addEthereumChain(let action) = consent.intent.action {
             if let resolution = EthereumDappRequestProcessor.chainAdditionResolution(action.chainToAdd) {
                 return .immediate(resolution)
@@ -132,7 +151,7 @@ final class NativeApprovalFinalizer {
         } else {
             currentNetwork = nil
         }
-        guard let catalog = refreshWalletCatalog() else { return .abandon }
+        guard let catalog = await refreshWalletCatalog() else { return .abandon }
         return resolvedConsent(
             consent,
             accounts: catalog.orderedAccounts,

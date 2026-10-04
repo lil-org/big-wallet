@@ -353,58 +353,29 @@ enum TransactionApprovalOutput {
     case completion(Transaction?)
 }
 
-struct TransactionApprovalOperations {
-
-    typealias Prepare = (
-        _ transaction: Transaction,
-        _ forceGasCheck: Bool,
-        _ network: EthereumNetwork,
-        _ onUpdate: @escaping (Transaction) -> Void,
-        _ onFeeEstimate: @escaping (GasService.Estimate) -> Void,
-        _ completion: @escaping (
-            Result<Transaction, TransactionPreparationFailure>
-        ) -> Void
-    ) -> EthereumRequestCancellation
-
-    typealias Preflight = (
-        _ transaction: Transaction,
-        _ network: EthereumNetwork,
-        _ completion: @escaping (TransactionFeePreflightResult) -> Void
-    ) -> EthereumRequestCancellation
+struct TransactionApprovalOperations: Sendable {
+    typealias Prepare =
+        @MainActor (Transaction, Bool, EthereumNetwork) -> AsyncThrowingStream<TransactionPreparationEvent, Error>
+    typealias Preflight = @MainActor @Sendable (Transaction, EthereumNetwork) async throws -> TransactionFeePreflightResult
 
     let prepare: Prepare
     let preflight: Preflight
 
-    static func live(
-        ethereum: Ethereum = .shared
-    ) -> TransactionApprovalOperations {
+    nonisolated init(prepare: @escaping Prepare, preflight: @escaping Preflight) {
+        self.prepare = prepare
+        self.preflight = preflight
+    }
+
+    static func live(ethereum: Ethereum = .shared) -> TransactionApprovalOperations {
         TransactionApprovalOperations(
-            prepare: {
-                transaction,
-                forceGasCheck,
-                network,
-                onUpdate,
-                onFeeEstimate,
-                completion in
-                ethereum.prepareTransaction(
-                    transaction,
-                    forceGasCheck: forceGasCheck,
-                    network: network,
-                    onUpdate: onUpdate,
-                    onFeeEstimate: onFeeEstimate,
-                    completion: completion
-                )
+            prepare: { transaction, forceGasCheck, network in
+                ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: network)
             },
-            preflight: { transaction, network, completion in
-                ethereum.preflightTransactionFee(
-                    transaction,
-                    network: network,
-                    completion: completion
-                )
+            preflight: { transaction, network in
+                try await ethereum.preflightTransactionFee(transaction, network: network)
             }
         )
     }
-
 }
 
 struct TransactionApprovalReducer {
@@ -1017,7 +988,7 @@ final class TransactionApprovalCoordinator {
 
     private final class ActiveRequest {
         let token: TransactionApprovalRequestToken
-        var cancellation: EthereumRequestCancellation?
+        var task: Task<Void, Never>?
 
         init(token: TransactionApprovalRequestToken) {
             self.token = token
@@ -1222,62 +1193,66 @@ final class TransactionApprovalCoordinator {
         guard reducer.isCurrent(token) else { return }
         let request = ActiveRequest(token: token)
         activeRequest = request
-        let cancellation = operations.prepare(
-            transaction,
-            forceGasCheck,
-            reducer.state.network,
-            { [weak self] transaction in
-                self?.send(.preparationUpdate(token, transaction))
-            },
-            { [weak self] estimate in
-                self?.send(.preparationEstimate(token, estimate))
-            },
-            { [weak self] result in
-                self?.send(.preparationResult(token, result))
+        let stream = operations.prepare(transaction, forceGasCheck, reducer.state.network)
+        request.task = Task { [weak self] in
+            do {
+                for try await event in stream {
+                    try Task.checkCancellation()
+                    guard let self else { return }
+                    switch event {
+                    case .transactionUpdated(let value):
+                        send(.preparationUpdate(token, value))
+                    case .feeEstimate(let estimate):
+                        send(.preparationEstimate(token, estimate))
+                    case .ready(let value):
+                        send(.preparationResult(token, .success(value)))
+                    }
+                }
+            } catch is CancellationError {
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.send(
+                    .preparationResult(token, .failure(error as? TransactionPreparationFailure ?? .invalidTransaction)))
             }
-        )
-        if activeRequest === request {
-            request.cancellation = cancellation
-        } else {
-            cancellation.cancel()
+            self?.clearActiveRequest(token)
         }
     }
 
-    private func runPreflight(
-        token: TransactionApprovalRequestToken,
-        transaction: Transaction
-    ) {
+    private func runPreflight(token: TransactionApprovalRequestToken, transaction: Transaction) {
         guard reducer.isCurrent(token) else { return }
         let request = ActiveRequest(token: token)
         activeRequest = request
-        let cancellation = operations.preflight(
-            transaction,
-            reducer.state.network
-        ) { [weak self] result in
-            self?.send(.preflightResult(token, result))
-        }
-        if activeRequest === request {
-            request.cancellation = cancellation
-        } else {
-            cancellation.cancel()
+        let operation = operations.preflight
+        let network = reducer.state.network
+        request.task = Task { [weak self] in
+            do {
+                try Task.checkCancellation()
+                let result = try await operation(transaction, network)
+                try Task.checkCancellation()
+                self?.send(.preflightResult(token, result))
+            } catch is CancellationError {
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.send(
+                    .preflightResult(token, .unavailable(transaction, GasService.Estimate(info: nil, nextBaseFee: nil)))
+                )
+            }
+            self?.clearActiveRequest(token)
         }
     }
 
     private func cancelActiveRequest() {
         let request = activeRequest
         activeRequest = nil
-        request?.cancellation?.cancel()
+        request?.task?.cancel()
     }
 
-    private func clearActiveRequest(
-        _ token: TransactionApprovalRequestToken
-    ) {
+    private func clearActiveRequest(_ token: TransactionApprovalRequestToken) {
         guard activeRequest?.token == token else { return }
         activeRequest = nil
     }
 
-    deinit {
-        activeRequest?.cancellation?.cancel()
+    isolated deinit {
+        activeRequest?.task?.cancel()
     }
-
 }

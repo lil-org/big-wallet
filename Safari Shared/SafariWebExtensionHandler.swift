@@ -76,24 +76,27 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             return
         }
         let profileIdentifier = item.userInfo?[SFExtensionProfileKey] as? UUID
+        // Foundation's borrowed context is handed exclusively to one terminal responder.
+        nonisolated(unsafe) let transferredContext = context
+        let responder = ExtensionRequestResponder(context: transferredContext)
         if json["subject"] != nil {
             guard JSONSerialization.isValidJSONObject(json),
                   let data = try? JSONSerialization.data(withJSONObject: json) else {
-                context.cancelRequest(withError: HandlerError.invalidMessage)
+                responder.cancelRequest(withError: HandlerError.invalidMessage)
                 return
             }
             handleInternal(
                 data: data,
                 profileIdentifier: profileIdentifier,
                 privateBrowsing: privateBrowsing,
-                context: context
+                context: responder
             )
         } else {
             handleDapp(
                 message: json,
                 profileIdentifier: profileIdentifier,
                 privateBrowsing: privateBrowsing,
-                context: context
+                context: responder
             )
         }
     }
@@ -102,7 +105,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         data: Data,
         profileIdentifier: UUID?,
         privateBrowsing: Bool,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         guard let request = try? JSONDecoder().decode(InternalSafariRequest.self, from: data),
               ExtensionBridge.isInternalPayloadAllowed(
@@ -166,7 +169,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         request: InternalSafariRequest,
         profileIdentifier: UUID?,
         privateBrowsing: Bool,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         guard !privateBrowsing else {
             context.cancelRequest(withError: HandlerError.unsupportedOperation)
@@ -204,7 +207,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         message: [String: Any],
         profileIdentifier: UUID?,
         privateBrowsing: Bool,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         guard let wire = WireProtocol.object(.dappRequest, value: message),
               let request = SafariRequest(wire: wire) else {
@@ -384,7 +387,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         request: InternalSafariRequest,
         profileIdentifier: UUID?,
         privateBrowsing: Bool,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         guard !privateBrowsing else {
             context.cancelRequest(withError: HandlerError.unsupportedOperation)
@@ -500,7 +503,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static func respondPoll(
         _ result: ExtensionBridge.ResponseReadResult,
         id: Int,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         let response: [String: Any]
         switch result {
@@ -509,7 +512,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                ResponseToExtension(json: terminal)?.addsEthereumChain == true {
                 CustomNetworkCache.shared.invalidate()
             }
-            response = delivery
+            response = delivery.json
         case .pending: response = ["id": id, "pending": true]
         case .missing: response = ["id": id, "missing": true]
         case .unavailable: response = ["id": id, "unavailable": true]
@@ -520,7 +523,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static func respondStatus(
         _ status: ExtensionBridge.ResponseStatusResult,
         id: Int,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         let key: String
         switch status {
@@ -536,7 +539,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         id: Int,
         chainId: String,
         body: String,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         guard let chainIdNumber = Int(hexString: chainId),
               let resolvedNetwork = Nodes.resolution(chainId: chainIdNumber).resolvedNetwork,
@@ -544,15 +547,18 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             Self.respond(with: ["id": id, "error": Self.genericRPCFailureMessage], contract: .rpcResponse, context: context)
             return
         }
-        Self.rpcClient.send(
-            endpoint: resolvedNetwork.rpcEndpoint,
-            body: httpBody,
-            expectedResponseID: id
-        ) { response in
-            if let response,
-               let projected = RPCResponseToExtension(upstream: response, expectedResponseID: id) {
+        Task {
+            do {
+                let response = try await Self.rpcClient.send(
+                    endpoint: resolvedNetwork.rpcEndpoint,
+                    body: httpBody,
+                    expectedResponseID: id
+                )
+                guard let projected = RPCResponseToExtension(upstream: response.json, expectedResponseID: id) else {
+                    throw SafariRPCClient.Error.invalidResponse
+                }
                 Self.respond(with: projected.json, contract: .rpcResponse, context: context)
-            } else {
+            } catch {
                 Self.respond(
                     with: ["id": id, "error": Self.genericRPCFailureMessage],
                     contract: .rpcResponse,
@@ -565,7 +571,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static func respond(
         with response: [String: Any],
         contract: WireProtocol.Message,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         guard let object = WireProtocol.object(contract, value: response) else {
             context.cancelRequest(withError: HandlerError.invalidMessage)
@@ -576,17 +582,15 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private static func respond(
         with response: WireProtocol.ValidatedObject,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
-        let item = NSExtensionItem()
-        item.userInfo = [SFExtensionMessageKey: response.json]
-        context.completeRequest(returningItems: [item], completionHandler: nil)
+        context.complete(with: response)
     }
 
     private static func respond(
         with response: ResponseToExtension,
         for request: SafariRequest,
-        context: NSExtensionContext
+        context: ExtensionRequestResponder
     ) {
         respond(with: boundedDappResponse(response, for: request), contract: .nativeResponse, context: context)
     }
@@ -615,7 +619,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }
 
 #if os(macOS)
-    private func openNativeAgent(id: Int, context: NSExtensionContext) {
+    private func openNativeAgent(id: Int, context: ExtensionRequestResponder) {
         Task {
             let opened = await Self.nativeApprovalService.openWallet()
             guard opened else {

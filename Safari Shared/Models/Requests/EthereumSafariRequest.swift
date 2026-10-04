@@ -2,9 +2,9 @@
 
 extension SafariRequest {
     
-    struct Ethereum {
+    struct Ethereum: Sendable {
         
-        enum Method: String {
+        enum Method: String, Sendable {
             case signTransaction
             case signPersonalMessage
             case signTypedMessage
@@ -18,7 +18,8 @@ extension SafariRequest {
         let address: String
         let currentChainId: Int?
         let switchToChainId: Int?
-        let parameters: [String: Any]?
+        private let parametersObject: WireProtocol.JSONObject?
+        var parameters: [String: Any]? { parametersObject?.json }
         
         init?(name: String, json: [String: Any]) {
             guard let method = Method(rawValue: name),
@@ -34,7 +35,7 @@ extension SafariRequest {
             }
             
             let parameters = json["object"] as? [String: Any]
-            self.parameters = parameters
+            self.parametersObject = parameters.flatMap { WireProtocol.JSONObject($0) }
             
             if let toChainId = parameters?["chainId"] as? String, let chainId = Int(hexString: toChainId) {
                 self.switchToChainId = chainId

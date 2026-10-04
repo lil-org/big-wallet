@@ -2,67 +2,13 @@
 
 import Foundation
 
-private final class CancellableCallbackState<Value: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Value?, Never>?
-    private var isFinished = false
-
-    func install(_ continuation: CheckedContinuation<Value?, Never>) -> Bool {
-        lock.lock()
-        guard !isFinished else {
-            lock.unlock()
-            continuation.resume(returning: nil)
-            return false
-        }
-        self.continuation = continuation
-        lock.unlock()
-        return true
-    }
-
-    func resume(returning value: Value?) {
-        lock.lock()
-        guard !isFinished else {
-            lock.unlock()
-            return
-        }
-        isFinished = true
-        let continuation = continuation
-        self.continuation = nil
-        lock.unlock()
-        continuation?.resume(returning: value)
-    }
-}
-
-func awaitCancellableCallback<Value: Sendable>(
-    isolation: isolated (any Actor)? = #isolation,
-    _ start: (@escaping @Sendable (Value) -> Void) -> Void
-) async -> Value? {
-    let state = CancellableCallbackState<Value>()
-    return await withTaskCancellationHandler(
-        operation: {
-            await withCheckedContinuation(isolation: isolation) { continuation in
-                guard state.install(continuation) else { return }
-                start { state.resume(returning: $0) }
-            }
-        },
-        onCancel: {
-            state.resume(returning: nil)
-        },
-        isolation: isolation
-    )
-}
-
+@concurrent
 func awaitBackgroundOperation<Value: Sendable>(
     _ operation: @escaping @Sendable () -> Value
 ) async -> Value? {
-    return await withTaskGroup(of: Value?.self) { group in
-        group.addTask {
-            guard !Task.isCancelled else { return nil }
-            let value = operation()
-            return Task.isCancelled ? nil : value
-        }
-        return await group.next() ?? nil
-    }
+    guard !Task.isCancelled else { return nil }
+    let value = operation()
+    return Task.isCancelled ? nil : value
 }
 
 struct BoundApprovalIntent: Sendable {
@@ -77,10 +23,10 @@ struct BoundApprovalIntent: Sendable {
 
 struct DappRequestProcessor: DappRequestProcessing {
 
-    private let ethereumNetworkResolver: @MainActor (Int) -> EthereumNetworkResolution
+    private let ethereumNetworkResolver: @MainActor @Sendable (Int) -> EthereumNetworkResolution
 
     nonisolated init(
-        ethereumNetworkResolver: @escaping @MainActor (Int) -> EthereumNetworkResolution = {
+        ethereumNetworkResolver: @escaping @MainActor @Sendable (Int) -> EthereumNetworkResolution = {
             Nodes.resolution(chainId: $0)
         }
     ) {

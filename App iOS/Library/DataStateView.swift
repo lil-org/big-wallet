@@ -6,6 +6,7 @@ enum DataState: CaseIterable {
     case hasData, loading, failedToLoad, noData, unknown
 }
 
+@MainActor
 protocol DataStateContainer: AnyObject {
     
     var dataState: DataState { get set }
@@ -13,7 +14,13 @@ protocol DataStateContainer: AnyObject {
 }
 
 class DataStateView: UIView {
+    var keyboardUpdateTask: Task<Void, Never>?
+
+    isolated deinit {
+        keyboardUpdateTask?.cancel()
+    }
     
+    @MainActor
     private class Configuration {
         
         let description: String?

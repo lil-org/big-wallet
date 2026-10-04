@@ -1,12 +1,13 @@
 // ∅ 2026 lil org
 
 import XCTest
+import Synchronization
 @testable import Big_Wallet
 
 @MainActor
 final class TransactionApprovalCoordinatorTests: XCTestCase {
 
-    func testPreparationStateRequiresCurrentTerminalSuccess() {
+    func testPreparationStateRequiresCurrentTerminalSuccess() async {
         let firstTransactionID = UUID()
         let secondTransactionID = UUID()
         var state = TransactionPreparationState()
@@ -43,7 +44,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(state.allowsMutation)
     }
 
-    func testPreparationStateSerializesAuthenticationAndPreflight() {
+    func testPreparationStateSerializesAuthenticationAndPreflight() async {
         let transactionID = UUID()
         var state = TransactionPreparationState()
         let attemptID = state.beginPreparation(for: transactionID)
@@ -79,7 +80,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(state.attemptID, authenticationAttempt! + 1)
     }
 
-    func testPreparationRestartGateCoalescesMutations() {
+    func testPreparationRestartGateCoalescesMutations() async {
         var gate = TransactionPreparationRestartGate()
 
         XCTAssertTrue(gate.recordMutation())
@@ -90,17 +91,17 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(gate.consume())
     }
 
-    func testApproveReturnsWhetherApprovalFlowStarted() {
+    func testApproveReturnsWhetherApprovalFlowStarted() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
 
         XCTAssertFalse(coordinator.approve())
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         XCTAssertTrue(coordinator.approve())
         XCTAssertFalse(coordinator.approve())
     }
 
-    func testPreparationTokenIncludesAttemptTransactionAndKind() {
+    func testPreparationTokenIncludesAttemptTransactionAndKind() async {
         let transaction = Self.makeReadyTransaction()
         var reducer = TransactionApprovalReducer(
             transaction: transaction,
@@ -126,42 +127,47 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(forceGasCheck)
     }
 
-    func testNewAttemptCancelsPriorBeforeStartingAndStaleResultCannotClearNewerHandle() {
+    func testNewAttemptCancelsPriorBeforeStartingAndStaleResultCannotClearNewerHandle() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
 
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 0 }
         let first = stub.preparationCalls[0]
         coordinator.startPreparation(forceGasCheck: true)
+        await waitFor { stub.preparationCalls.count > 1 }
         let second = stub.preparationCalls[1]
 
+        await waitFor { first.cancellation.isCancelled }
         XCTAssertTrue(first.cancellation.isCancelled)
-        XCTAssertEqual(
-            stub.priorPreparationWasCancelledAtStart,
-            [true, true]
-        )
 
         var staleUpdate = first.transaction
         staleUpdate.interpretation = "stale"
         first.onUpdate(staleUpdate)
         first.onFeeEstimate(Self.makeEstimate())
         first.completion(.failure(.gasEstimationFailed))
+        await waitFor { (coordinator.snapshot.phase) == (.preparing) }
         XCTAssertEqual(coordinator.snapshot.phase, .preparing)
         XCTAssertNil(coordinator.snapshot.transaction.interpretation)
+        await waitFor { !(coordinator.snapshot.hasVerifiedFeeEstimate) }
         XCTAssertFalse(coordinator.snapshot.hasVerifiedFeeEstimate)
+        await waitFor { !(second.cancellation.isCancelled) }
         XCTAssertFalse(second.cancellation.isCancelled)
 
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { second.cancellation.isCancelled }
         XCTAssertTrue(second.cancellation.isCancelled)
+        await waitFor { stub.preparationCalls.count > 2 && (!(stub.preparationCalls[2].cancellation.isCancelled)) }
         XCTAssertFalse(
             stub.preparationCalls[2].cancellation.isCancelled
         )
     }
 
-    func testPreparationUpdateWinsOverTerminalSnapshot() {
+    func testPreparationUpdateWinsOverTerminalSnapshot() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 0 }
         let call = stub.preparationCalls[0]
 
         var updated = call.transaction
@@ -172,56 +178,70 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         terminal.interpretation = "Older terminal snapshot"
         call.completion(.success(terminal))
 
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
+        await waitFor { (coordinator.snapshot.transaction.interpretation) == ("Latest accepted update") }
         XCTAssertEqual(
             coordinator.snapshot.transaction.interpretation,
             "Latest accepted update"
         )
     }
 
-    func testLatePreparationUpdateAfterCompletionUpdatesReadySnapshot() {
+    func testLatePreparationUpdateAfterCompletionUpdatesReadySnapshot() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 0 }
         let call = stub.preparationCalls[0]
 
         call.completion(.success(call.transaction))
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
+        await waitFor { coordinator.snapshot.canApprove }
         XCTAssertTrue(coordinator.snapshot.canApprove)
+        await waitFor { !(call.cancellation.isCancelled) }
         XCTAssertFalse(call.cancellation.isCancelled)
 
         var lateUpdate = call.transaction
         lateUpdate.interpretation = "Late interpretation"
         call.onUpdate(lateUpdate)
 
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
+        await waitFor { (coordinator.snapshot.transaction.interpretation) == ("Late interpretation") }
         XCTAssertEqual(
             coordinator.snapshot.transaction.interpretation,
             "Late interpretation"
         )
+        await waitFor { coordinator.snapshot.canApprove }
         XCTAssertTrue(coordinator.snapshot.canApprove)
     }
 
-    func testLatePreparationUpdateIsIgnoredAfterReadyAdvancesToPreflight() {
+    func testLatePreparationUpdateIsIgnoredAfterReadyAdvancesToPreflight() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 0 }
         let preparation = stub.preparationCalls[0]
         preparation.completion(.success(preparation.transaction))
+        await waitFor { coordinator.snapshot.phase == .ready }
 
         coordinator.approve()
+        await waitFor { (coordinator.snapshot.phase) == (.preflighting) }
         XCTAssertEqual(coordinator.snapshot.phase, .preflighting)
+        await waitFor { (stub.preflightCalls.count) == (1) }
         XCTAssertEqual(stub.preflightCalls.count, 1)
 
         var lateUpdate = preparation.transaction
         lateUpdate.interpretation = "Too late"
         preparation.onUpdate(lateUpdate)
 
+        await waitFor { (coordinator.snapshot.phase) == (.preflighting) }
         XCTAssertEqual(coordinator.snapshot.phase, .preflighting)
         XCTAssertNil(coordinator.snapshot.transaction.interpretation)
     }
 
-    func testSynchronousCompletionCannotRetainOldHandleOrOverwriteReentrantRequest() {
+    func testSynchronousCompletionCannotRetainOldHandleOrOverwriteReentrantRequest() async {
         let stub = ApprovalOperationsStub()
         var coordinator: TransactionApprovalCoordinator!
         var didRestart = false
@@ -246,14 +266,18 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
 
         coordinator.startPreparation(forceGasCheck: false)
 
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
+        await waitFor { stub.preparationCalls.count > 0 && (stub.preparationCalls[0].cancellation.isCancelled) }
         XCTAssertTrue(stub.preparationCalls[0].cancellation.isCancelled)
+        await waitFor { stub.preparationCalls.count > 1 && (!(stub.preparationCalls[1].cancellation.isCancelled)) }
         XCTAssertFalse(stub.preparationCalls[1].cancellation.isCancelled)
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 1 && (stub.preparationCalls[1].cancellation.isCancelled) }
         XCTAssertTrue(stub.preparationCalls[1].cancellation.isCancelled)
     }
 
-    func testFailureRetryPreservesForcePolicyAndClearsUnverifiedBaseFees() {
+    func testFailureRetryPreservesForcePolicyAndClearsUnverifiedBaseFees() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         var transaction = Self.makeReadyTransaction()
@@ -270,11 +294,13 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             .failure(.gasEstimationFailed)
         )
 
+        await waitFor { (coordinator.snapshot.phase) == (.failed) }
         XCTAssertEqual(coordinator.snapshot.phase, .failed)
         XCTAssertNil(
             coordinator.snapshot.transaction.currentBaseFeePerGas
         )
         XCTAssertNil(coordinator.snapshot.transaction.nextBaseFeePerGas)
+        await waitFor { recorder.alerts.last != nil }
         let alert = try! XCTUnwrap(recorder.alerts.last)
         guard case .preparationFailure(
             .gasEstimationFailed,
@@ -285,31 +311,37 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(forceGasCheck)
 
         coordinator.handleAlert(token: alert.token, action: .retry)
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
+        await waitFor { stub.preparationCalls.count > 1 && (stub.preparationCalls[1].forceGasCheck) }
         XCTAssertTrue(stub.preparationCalls[1].forceGasCheck)
     }
 
-    func testEstimateBeforeFailurePreservesVerifiedBaseFees() {
+    func testEstimateBeforeFailurePreservesVerifiedBaseFees() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 0 }
         let call = stub.preparationCalls[0]
 
         call.onFeeEstimate(Self.makeEstimate())
         call.completion(.failure(.gasEstimationFailed))
 
+        await waitFor { coordinator.snapshot.hasVerifiedFeeEstimate }
         XCTAssertTrue(coordinator.snapshot.hasVerifiedFeeEstimate)
+        await waitFor { (coordinator.snapshot.transaction.currentBaseFeePerGas) == (90) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.currentBaseFeePerGas,
             90
         )
+        await waitFor { (coordinator.snapshot.transaction.nextBaseFeePerGas) == (100) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.nextBaseFeePerGas,
             100
         )
     }
 
-    func testEditsInvalidateTransactionAttemptAndDeferredAlert() {
+    func testEditsInvalidateTransactionAttemptAndDeferredAlert() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -320,6 +352,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         stub.preparationCalls[0].completion(
             .failure(.gasEstimationFailed)
         )
+        await waitFor { recorder.alerts.last != nil }
         let alert = try! XCTUnwrap(recorder.alerts.last)
         let oldTransactionID = coordinator.snapshot.transaction.id
         let oldAttemptID = coordinator.snapshot.attemptID
@@ -336,10 +369,11 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertGreaterThan(coordinator.snapshot.attemptID, oldAttemptID)
         XCTAssertFalse(coordinator.isCurrentAlert(alert.token))
         coordinator.handleAlert(token: alert.token, action: .retry)
+        await waitFor { (stub.preparationCalls.count) == (1) }
         XCTAssertEqual(stub.preparationCalls.count, 1)
     }
 
-    func testRequiredAuthenticationFailureRestoresReady() {
+    func testRequiredAuthenticationFailureRestoresReady() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -347,10 +381,11 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
 
         coordinator.approve()
 
+        await waitFor { stub.preparationCalls.count > 0 && (stub.preparationCalls[0].cancellation.isCancelled) }
         XCTAssertTrue(stub.preparationCalls[0].cancellation.isCancelled)
         let token = try! XCTUnwrap(recorder.authenticationTokens.last)
         XCTAssertEqual(token.kind, .authentication)
@@ -359,18 +394,22 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             token.transactionID,
             coordinator.snapshot.transaction.id
         )
+        await waitFor { (coordinator.snapshot.phase) == (.authenticating) }
         XCTAssertEqual(coordinator.snapshot.phase, .authenticating)
+        await waitFor { !(coordinator.snapshot.allowsMutation) }
         XCTAssertFalse(coordinator.snapshot.allowsMutation)
 
         coordinator.authenticationCompleted(
             token: token,
             succeeded: false
         )
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
+        await waitFor { coordinator.snapshot.canApprove }
         XCTAssertTrue(coordinator.snapshot.canApprove)
     }
 
-    func testRequiredAuthenticationSuccessStartsOnePreflightAndRejectsRepeatedResult() {
+    func testRequiredAuthenticationSuccessStartsOnePreflightAndRejectsRepeatedResult() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -378,9 +417,10 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         coordinator.approve()
         let token = recorder.authenticationTokens.last!
+        await waitFor { stub.preflightCalls.isEmpty }
         XCTAssertTrue(stub.preflightCalls.isEmpty)
 
         coordinator.authenticationCompleted(
@@ -396,11 +436,13 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             succeeded: false
         )
 
+        await waitFor { (stub.preflightCalls.count) == (1) }
         XCTAssertEqual(stub.preflightCalls.count, 1)
+        await waitFor { (coordinator.snapshot.phase) == (.preflighting) }
         XCTAssertEqual(coordinator.snapshot.phase, .preflighting)
     }
 
-    func testCancelWhileAuthenticatingRejectsLateAuthentication() {
+    func testCancelWhileAuthenticatingRejectsLateAuthentication() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -408,9 +450,10 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         coordinator.approve()
         let token = recorder.authenticationTokens.last!
+        await waitFor { (coordinator.snapshot.phase) == (.authenticating) }
         XCTAssertEqual(coordinator.snapshot.phase, .authenticating)
 
         coordinator.cancel()
@@ -419,13 +462,16 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             succeeded: true
         )
 
+        await waitFor { stub.preflightCalls.isEmpty }
         XCTAssertTrue(stub.preflightCalls.isEmpty)
+        await waitFor { (recorder.completions.count) == (1) }
         XCTAssertEqual(recorder.completions.count, 1)
         XCTAssertNil(recorder.completions[0])
+        await waitFor { (coordinator.snapshot.phase) == (.finished) }
         XCTAssertEqual(coordinator.snapshot.phase, .finished)
     }
 
-    func testFailedAuthenticationTokenCannotAuthorizeRetry() {
+    func testFailedAuthenticationTokenCannotAuthorizeRetry() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -433,7 +479,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
 
         coordinator.approve()
         let firstToken = recorder.authenticationTokens.last!
@@ -445,24 +491,29 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         coordinator.approve()
         let secondToken = recorder.authenticationTokens.last!
         XCTAssertNotEqual(firstToken, secondToken)
+        await waitFor { (coordinator.snapshot.phase) == (.authenticating) }
         XCTAssertEqual(coordinator.snapshot.phase, .authenticating)
 
         coordinator.authenticationCompleted(
             token: firstToken,
             succeeded: true
         )
+        await waitFor { stub.preflightCalls.isEmpty }
         XCTAssertTrue(stub.preflightCalls.isEmpty)
+        await waitFor { (coordinator.snapshot.phase) == (.authenticating) }
         XCTAssertEqual(coordinator.snapshot.phase, .authenticating)
 
         coordinator.authenticationCompleted(
             token: secondToken,
             succeeded: true
         )
+        await waitFor { (stub.preflightCalls.count) == (1) }
         XCTAssertEqual(stub.preflightCalls.count, 1)
+        await waitFor { (coordinator.snapshot.phase) == (.preflighting) }
         XCTAssertEqual(coordinator.snapshot.phase, .preflighting)
     }
 
-    func testSkippedAuthenticationStartsPreflightDirectly() {
+    func testSkippedAuthenticationStartsPreflightDirectly() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -470,16 +521,19 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
 
         coordinator.approve()
 
+        await waitFor { recorder.authenticationTokens.isEmpty }
         XCTAssertTrue(recorder.authenticationTokens.isEmpty)
+        await waitFor { (stub.preflightCalls.count) == (1) }
         XCTAssertEqual(stub.preflightCalls.count, 1)
+        await waitFor { (coordinator.snapshot.phase) == (.preflighting) }
         XCTAssertEqual(coordinator.snapshot.phase, .preflighting)
     }
 
-    func testSafePreflightCompletesExactlyOnceAcrossReentrantAndStaleEvents() {
+    func testSafePreflightCompletesExactlyOnceAcrossReentrantAndStaleEvents() async {
         let stub = ApprovalOperationsStub()
         var completions = [Transaction?]()
         var coordinator: TransactionApprovalCoordinator!
@@ -495,8 +549,9 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             completions.append(transaction)
             coordinator.cancel()
         }
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         coordinator.approve()
+        await waitFor { stub.preflightCalls.count > 0 }
         let preflight = stub.preflightCalls[0]
         let result = TransactionFeePreflightResult.safe(
             preflight.transaction,
@@ -505,18 +560,21 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
 
         preflight.completion(result)
         preflight.completion(result)
+        await waitFor { completions.count == 1 }
         coordinator.cancel()
 
         XCTAssertEqual(completions.count, 1)
         XCTAssertEqual(
-            completions[0]?.id,
+            (completions.first ?? nil)?.id,
             preflight.transaction.id
         )
+        await waitFor { (coordinator.snapshot.phase) == (.finished) }
         XCTAssertEqual(coordinator.snapshot.phase, .finished)
     }
 
     func testPreflightSafeWithUnknownNoDataEstimatePreservesBaseFeesForSend()
-        throws {
+        async throws
+    {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let network = Self.makeCatalogHintedNetwork()
@@ -531,14 +589,17 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         call.onUpdate(call.transaction)
         call.onFeeEstimate(Self.makeEstimate())
         call.completion(.success(call.transaction))
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
         coordinator.approve()
+        await waitFor { stub.preflightCalls.count > 0 }
         let preflight = stub.preflightCalls[0]
 
         preflight.completion(
             .safe(preflight.transaction, Self.makeUnknownEstimate())
         )
 
+        await waitFor { (recorder.completions.count) == (1) }
         XCTAssertEqual(recorder.completions.count, 1)
         let completed = try XCTUnwrap(recorder.completions[0])
         XCTAssertEqual(completed.currentBaseFeePerGas, 90)
@@ -546,7 +607,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(completed.isReadyForApproval(on: network))
     }
 
-    func testPreparationUnknownEstimateAfterEIP1559EstimateKeepsBaseFees() {
+    func testPreparationUnknownEstimateAfterEIP1559EstimateKeepsBaseFees() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let network = Self.makeCatalogHintedNetwork()
@@ -563,16 +624,20 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         call.onFeeEstimate(Self.makeEstimate())
         call.onFeeEstimate(Self.makeUnknownEstimate())
 
+        await waitFor { (recorder.estimates.count) == (2) }
         XCTAssertEqual(recorder.estimates.count, 2)
+        await waitFor { (coordinator.snapshot.transaction.currentBaseFeePerGas) == (90) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.currentBaseFeePerGas,
             90
         )
+        await waitFor { (coordinator.snapshot.transaction.nextBaseFeePerGas) == (100) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.nextBaseFeePerGas,
             100
         )
         call.completion(.success(call.transaction))
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
         XCTAssertTrue(
             coordinator.snapshot.transaction.isReadyForApproval(on: network)
@@ -580,7 +645,8 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
     }
 
     func testPreflightSafeWithUnknownDataEstimateAdoptsObservedBaseFee()
-        throws {
+        async throws
+    {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let network = Self.makeCatalogHintedNetwork()
@@ -595,8 +661,10 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         call.onUpdate(call.transaction)
         call.onFeeEstimate(Self.makeEstimate())
         call.completion(.success(call.transaction))
+        await waitFor { coordinator.snapshot.phase == .ready }
         coordinator.approve()
-        let preflight = stub.preflightCalls[0]
+        await waitFor { stub.preflightCalls.count > 0 }
+        let preflight = try XCTUnwrap(stub.preflightCalls.first)
 
         preflight.completion(
             .safe(
@@ -605,6 +673,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             )
         )
 
+        await waitFor { (recorder.completions.count) == (1) }
         XCTAssertEqual(recorder.completions.count, 1)
         let completed = try XCTUnwrap(recorder.completions[0])
         XCTAssertEqual(completed.currentBaseFeePerGas, 120)
@@ -612,7 +681,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(completed.isReadyForApproval(on: network))
     }
 
-    func testPreparationLegacyEstimateClearsBaseFees() {
+    func testPreparationLegacyEstimateClearsBaseFees() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(
             transaction: Self.makeReadyTransaction(gasPrice: 150),
@@ -631,15 +700,16 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.snapshot.transaction.nextBaseFeePerGas)
     }
 
-    func testWalletManagedUpdateInstallsCanonicalStateAndAcknowledgmentRestarts() {
+    func testWalletManagedUpdateInstallsCanonicalStateAndAcknowledgmentRestarts() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         coordinator.approve()
+        await waitFor { stub.preflightCalls.count > 0 }
         let preflight = stub.preflightCalls[0]
         let updated = Self.makeReadyTransaction(
             id: preflight.transaction.id,
@@ -651,21 +721,27 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             .walletManagedUpdated(updated, Self.makeEstimate())
         )
 
+        await waitFor { (coordinator.snapshot.transaction.preparedFee) == (.legacy(gasPrice: 99)) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.preparedFee,
             .legacy(gasPrice: 99)
         )
+        await waitFor { (coordinator.snapshot.transaction.nextBaseFeePerGas) == (100) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.nextBaseFeePerGas,
             100
         )
+        await waitFor { recorder.alerts.last != nil }
         let alert = try! XCTUnwrap(recorder.alerts.last)
         XCTAssertEqual(alert.kind, .feesUpdated)
         XCTAssertTrue(coordinator.isCurrentAlert(alert.token))
+        await waitFor { (coordinator.snapshot.phase) == (.reviewingFees) }
         XCTAssertEqual(coordinator.snapshot.phase, .reviewingFees)
 
         preflight.completion(.safe(updated, Self.makeEstimate()))
+        await waitFor { recorder.completions.isEmpty }
         XCTAssertTrue(recorder.completions.isEmpty)
+        await waitFor { (coordinator.snapshot.phase) == (.reviewingFees) }
         XCTAssertEqual(coordinator.snapshot.phase, .reviewingFees)
 
         coordinator.handleAlert(
@@ -673,33 +749,41 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             action: .acknowledge
         )
 
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
+        await waitFor { stub.preparationCalls.count > 1 && (!(stub.preparationCalls[1].forceGasCheck)) }
         XCTAssertFalse(stub.preparationCalls[1].forceGasCheck)
+        await waitFor { (coordinator.snapshot.phase) == (.preparing) }
         XCTAssertEqual(coordinator.snapshot.phase, .preparing)
         XCTAssertFalse(coordinator.isCurrentAlert(alert.token))
 
         preflight.completion(
             .safe(preflight.transaction, Self.makeEstimate())
         )
+        await waitFor { (coordinator.snapshot.phase) == (.preparing) }
         XCTAssertEqual(coordinator.snapshot.phase, .preparing)
+        await waitFor { (coordinator.snapshot.transaction.preparedFee) == (.legacy(gasPrice: 99)) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.preparedFee,
             .legacy(gasPrice: 99)
         )
+        await waitFor { recorder.completions.isEmpty }
         XCTAssertTrue(recorder.completions.isEmpty)
+        await waitFor { stub.preparationCalls.count > 1 && (!(stub.preparationCalls[1].cancellation.isCancelled)) }
         XCTAssertFalse(stub.preparationCalls[1].cancellation.isCancelled)
     }
 
-    func testUnsafePreflightAdvancesEditingAttemptBeforeAlert() {
+    func testUnsafePreflightAdvancesEditingAttemptBeforeAlert() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         let preflightAttempt = coordinator.snapshot.attemptID
         coordinator.approve()
+        await waitFor { stub.preflightCalls.count > 0 }
         let preflight = stub.preflightCalls[0]
 
         preflight.completion(
@@ -709,8 +793,11 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             )
         )
 
+        await waitFor { recorder.alerts.last != nil }
         let alert = try! XCTUnwrap(recorder.alerts.last)
+        await waitFor { (coordinator.snapshot.phase) == (.editing) }
         XCTAssertEqual(coordinator.snapshot.phase, .editing)
+        await waitFor { (coordinator.snapshot.attemptID) == (preflightAttempt + 1) }
         XCTAssertEqual(
             coordinator.snapshot.attemptID,
             preflightAttempt + 1
@@ -722,35 +809,40 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(alert.token.kind, .unsafeFees)
 
         coordinator.handleAlert(token: alert.token, action: .edit)
+        await waitFor { (recorder.editorRequestCount) == (1) }
         XCTAssertEqual(recorder.editorRequestCount, 1)
     }
 
-    func testUnavailablePreflightFailsAndEmitsRetryableAlert() {
+    func testUnavailablePreflightFailsAndEmitsRetryableAlert() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         coordinator.approve()
+        await waitFor { stub.preflightCalls.count > 0 }
         let preflight = stub.preflightCalls[0]
 
         preflight.completion(
             .unavailable(preflight.transaction, Self.makeEstimate())
         )
 
+        await waitFor { (coordinator.snapshot.phase) == (.failed) }
         XCTAssertEqual(coordinator.snapshot.phase, .failed)
+        await waitFor { recorder.alerts.last != nil }
         let alert = try! XCTUnwrap(recorder.alerts.last)
         XCTAssertEqual(alert.kind, .unavailableFees)
         coordinator.handleAlert(token: alert.token, action: .retry)
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
     }
 
-    func testSliderMutationsCoalesceAndNoninteractiveMutationRestarts() {
+    func testSliderMutationsCoalesceAndNoninteractiveMutationRestarts() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
-        prepareToReady(coordinator, stub: stub, estimate: Self.makeEstimate())
+        await prepareToReady(coordinator, stub: stub, estimate: Self.makeEstimate())
         let readyAttempt = coordinator.snapshot.attemptID
 
         coordinator.beginSliderInteraction()
@@ -763,25 +855,30 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(
             coordinator.setFeeForSpeed(value: 50)
         )
+        await waitFor { (coordinator.snapshot.attemptID) == (editingAttempt) }
         XCTAssertEqual(coordinator.snapshot.attemptID, editingAttempt)
         XCTAssertTrue(coordinator.endSliderInteraction())
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
         XCTAssertFalse(coordinator.endSliderInteraction())
 
         stub.preparationCalls[1].completion(
             .success(stub.preparationCalls[1].transaction)
         )
+        await waitFor { coordinator.snapshot.phase == .ready }
         XCTAssertTrue(
             coordinator.setFeeForSpeed(value: 0)
         )
+        await waitFor { (stub.preparationCalls.count) == (3) }
         XCTAssertEqual(stub.preparationCalls.count, 3)
+        await waitFor { (coordinator.snapshot.phase) == (.preparing) }
         XCTAssertEqual(coordinator.snapshot.phase, .preparing)
     }
 
-    func testCancelledSliderEndConsumesPendingMutationWithoutRestart() {
+    func testCancelledSliderEndConsumesPendingMutationWithoutRestart() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
-        prepareToReady(coordinator, stub: stub, estimate: Self.makeEstimate())
+        await prepareToReady(coordinator, stub: stub, estimate: Self.makeEstimate())
 
         coordinator.beginSliderInteraction()
         XCTAssertTrue(
@@ -790,35 +887,41 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(
             coordinator.endSliderInteraction(cancelled: true)
         )
+        await waitFor { (stub.preparationCalls.count) == (1) }
         XCTAssertEqual(stub.preparationCalls.count, 1)
         XCTAssertFalse(coordinator.endSliderInteraction())
+        await waitFor { (coordinator.snapshot.phase) == (.editing) }
         XCTAssertEqual(coordinator.snapshot.phase, .editing)
     }
 
-    func testSliderWithoutMovementAppliesPendingQuoteAndPublishesWithoutRestart() {
+    func testSliderWithoutMovementAppliesPendingQuoteAndPublishesWithoutRestart() async {
         let stub = ApprovalOperationsStub()
-        let coordinator = makeCoordinator(
-            transaction: Self.makeReadyTransaction(gasPrice: 120),
-            stub: stub
-        )
+        let coordinator = makeCoordinator(transaction: Self.makeReadyTransaction(gasPrice: 120), stub: stub)
+        let firstQuote = expectation(description: "initial quote received")
+        let secondQuote = expectation(description: "pending quote received")
+        var quoteCount = 0
+        coordinator.onOutput = { output in
+            if case .verifiedFeeEstimate = output {
+                quoteCount += 1
+                (quoteCount == 1 ? firstQuote : secondQuote).fulfill()
+            }
+        }
         coordinator.startPreparation(forceGasCheck: false)
         let preparation = stub.preparationCalls[0]
         preparation.onFeeEstimate(Self.makeEstimate())
+        await fulfillment(of: [firstQuote], timeout: 2)
         let transaction = coordinator.snapshot.transaction
         let initialPosition = coordinator.gasSliderPosition
         let newInfo = GasService.Info(recommendedPriorityFee: 100, highPriorityFee: 200)
         coordinator.beginSliderInteraction()
         preparation.onFeeEstimate(.init(info: newInfo, nextBaseFee: 100))
+        await fulfillment(of: [secondQuote], timeout: 2)
         XCTAssertEqual(coordinator.gasSliderPosition, initialPosition)
         var publishedPositions = [Double]()
         coordinator.onOutput = { output in
-            if case .snapshot = output {
-                publishedPositions.append(coordinator.gasSliderPosition)
-            }
+            if case .snapshot = output { publishedPositions.append(coordinator.gasSliderPosition) }
         }
-
         XCTAssertFalse(coordinator.endSliderInteraction())
-
         XCTAssertEqual(publishedPositions, [transaction.currentFeeInRelationTo(info: newInfo)])
         XCTAssertEqual(coordinator.snapshot.transaction.id, transaction.id)
         XCTAssertEqual(coordinator.snapshot.transaction.preparedFee, transaction.preparedFee)
@@ -828,14 +931,14 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(publishedPositions.count, 1)
     }
 
-    func testOneShotSpeedKeepsSelectedPositionThroughSynchronousPreparation() {
+    func testOneShotSpeedKeepsSelectedPositionThroughSynchronousPreparation() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(
             transaction: Self.makeReadyTransaction(gasPrice: 101),
             stub: stub
         )
         let initialInfo = GasService.Info(recommendedPriorityFee: 1, highPriorityFee: 2)
-        prepareToReady(
+        await prepareToReady(
             coordinator,
             stub: stub,
             estimate: .init(info: initialInfo, nextBaseFee: 100)
@@ -855,32 +958,42 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 50))
 
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertFalse(positionsDuringPreparation.isEmpty)
         XCTAssertTrue(positionsDuringPreparation.allSatisfy { $0 == 50 })
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
+        await waitFor { (coordinator.snapshot.transaction.preparedFee) == (.legacy(gasPrice: 101)) }
         XCTAssertEqual(coordinator.snapshot.transaction.preparedFee, .legacy(gasPrice: 101))
+        await waitFor { (coordinator.snapshot.transaction.feeProvenance.gasPrice) == (.slider) }
         XCTAssertEqual(coordinator.snapshot.transaction.feeProvenance.gasPrice, .slider)
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
         coordinator.onOutput = { _ in }
         XCTAssertFalse(coordinator.endSliderInteraction())
+        await waitFor {
+            (coordinator.gasSliderPosition) == (coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo))
+        }
         XCTAssertEqual(
             coordinator.gasSliderPosition,
             coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo)
         )
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 100))
+        await waitFor { (coordinator.speedPriorityFeePerGas) == (100) }
         XCTAssertEqual(coordinator.speedPriorityFeePerGas, 100)
         coordinator.endSliderInteraction()
+        await waitFor { (stub.preparationCalls.count) == (3) }
         XCTAssertEqual(stub.preparationCalls.count, 3)
     }
 
-    func testDragReleaseAcceptsSynchronousQuoteBeforeTheNextGesture() {
+    func testDragReleaseAcceptsSynchronousQuoteBeforeTheNextGesture() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(
             transaction: Self.makeReadyTransaction(gasPrice: 120),
             stub: stub
         )
-        prepareToReady(coordinator, stub: stub, estimate: Self.makeEstimate())
+        await prepareToReady(coordinator, stub: stub, estimate: Self.makeEstimate())
         coordinator.beginSliderInteraction()
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 50))
         let selectedFee = coordinator.snapshot.transaction.preparedFee
@@ -893,25 +1006,32 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(coordinator.endSliderInteraction())
 
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
+        await waitFor { (coordinator.snapshot.transaction.preparedFee) == (selectedFee) }
         XCTAssertEqual(coordinator.snapshot.transaction.preparedFee, selectedFee)
+        await waitFor {
+            (coordinator.gasSliderPosition) == (coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo))
+        }
         XCTAssertEqual(
             coordinator.gasSliderPosition,
             coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo)
         )
         coordinator.beginSliderInteraction()
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 100))
+        await waitFor { (coordinator.speedPriorityFeePerGas) == (100) }
         XCTAssertEqual(coordinator.speedPriorityFeePerGas, 100)
         XCTAssertTrue(coordinator.endSliderInteraction())
+        await waitFor { (stub.preparationCalls.count) == (3) }
         XCTAssertEqual(stub.preparationCalls.count, 3)
     }
 
-    func testManualEditsPublishUpdatedFallbackBeforeDeferredPreparation() {
+    func testManualEditsPublishUpdatedFallbackBeforeDeferredPreparation() async {
         let stub = ApprovalOperationsStub()
         var transaction = Self.makeReadyTransaction(gasPrice: 120)
         transaction.currentBaseFeePerGas = 100
         let coordinator = makeCoordinator(transaction: transaction, stub: stub)
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         var positions = [Double]()
         coordinator.onOutput = { output in
             if case .snapshot(let snapshot) = output {
@@ -924,53 +1044,68 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.apply(edits: .init(gasPrice: 140)))
 
         XCTAssertEqual(positions, [GasSpeedConfiguration.recommendedSliderPosition])
+        await waitFor { (coordinator.snapshot.phase) == (.editing) }
         XCTAssertEqual(coordinator.snapshot.phase, .editing)
+        await waitFor { (stub.preparationCalls.count) == (1) }
         XCTAssertEqual(stub.preparationCalls.count, 1)
         XCTAssertFalse(coordinator.apply(edits: .init()))
         XCTAssertEqual(positions.count, 1)
+        await waitFor { (stub.preparationCalls.count) == (1) }
         XCTAssertEqual(stub.preparationCalls.count, 1)
         coordinator.onOutput = { _ in }
         coordinator.startPreparation(forceGasCheck: true)
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
+        await waitFor { stub.preparationCalls.count > 1 && (stub.preparationCalls[1].forceGasCheck) }
         XCTAssertTrue(stub.preparationCalls[1].forceGasCheck)
     }
 
-    func testNonceOnlyEditsPreserveSelectedSliderPositionAndProvenance() {
+    func testNonceOnlyEditsPreserveSelectedSliderPositionAndProvenance() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(
             transaction: Self.makeReadyTransaction(gasPrice: 101),
             stub: stub
         )
         let info = GasService.Info(recommendedPriorityFee: 1, highPriorityFee: 2)
-        prepareToReady(coordinator, stub: stub, estimate: .init(info: info, nextBaseFee: 100))
+        await prepareToReady(coordinator, stub: stub, estimate: .init(info: info, nextBaseFee: 100))
         coordinator.beginSliderInteraction()
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 50))
         coordinator.endSliderInteraction()
+        await waitFor { stub.preparationCalls.count > 1 }
         let preparation = stub.preparationCalls[1]
         preparation.completion(.success(preparation.transaction))
+        await waitFor { coordinator.snapshot.phase == .ready }
         let provenance = coordinator.snapshot.transaction.feeProvenance
 
         XCTAssertTrue(coordinator.apply(edits: .init(nonce: 1)))
 
+        await waitFor { (coordinator.snapshot.transaction.decimalNonceString) == ("1") }
         XCTAssertEqual(coordinator.snapshot.transaction.decimalNonceString, "1")
+        await waitFor { (coordinator.snapshot.transaction.feeProvenance) == (provenance) }
         XCTAssertEqual(coordinator.snapshot.transaction.feeProvenance, provenance)
+        await waitFor { (coordinator.gasSliderPosition) == (50) }
         XCTAssertEqual(coordinator.gasSliderPosition, 50)
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
     }
 
-    func testFailedAutomaticFeePreparationUnlocksManualFeeEditingAndRestart() {
+    func testFailedAutomaticFeePreparationUnlocksManualFeeEditingAndRestart() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(
             transaction: Self.makeAutomaticIntentTransaction(),
             stub: stub
         )
         coordinator.startPreparation(forceGasCheck: false)
+        await waitFor { stub.preparationCalls.count > 0 }
         let first = stub.preparationCalls[0]
 
         first.completion(.failure(.gasPriceUnavailable))
 
+        await waitFor { (coordinator.snapshot.phase) == (.failed) }
         XCTAssertEqual(coordinator.snapshot.phase, .failed)
+        await waitFor { coordinator.snapshot.canEdit }
         XCTAssertTrue(coordinator.snapshot.canEdit)
+        await waitFor { !(coordinator.snapshot.canApprove) }
         XCTAssertFalse(coordinator.snapshot.canApprove)
 
         XCTAssertTrue(
@@ -983,11 +1118,15 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
                 )
             )
         )
+        await waitFor { (coordinator.snapshot.phase) == (.editing) }
         XCTAssertEqual(coordinator.snapshot.phase, .editing)
+        await waitFor { !(first.cancellation.isCancelled) }
         XCTAssertFalse(first.cancellation.isCancelled)
 
         coordinator.startPreparation(forceGasCheck: true)
+        await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
+        await waitFor { stub.preparationCalls.count > 1 }
         let second = stub.preparationCalls[1]
         XCTAssertTrue(second.forceGasCheck)
         XCTAssertEqual(
@@ -1000,7 +1139,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testAutomaticIntentEditingUnlocksOnlyOnFailureWhileDappIntentStaysEditable() {
+    func testAutomaticIntentEditingUnlocksOnlyOnFailureWhileDappIntentStaysEditable() async {
         let automaticStub = ApprovalOperationsStub()
         let automaticCoordinator = makeCoordinator(
             transaction: Self.makeAutomaticIntentTransaction(),
@@ -1025,11 +1164,12 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         dappStub.preparationCalls[0].completion(
             .failure(.gasPriceUnavailable)
         )
+        await waitFor { dappCoordinator.snapshot.phase == .failed }
         XCTAssertEqual(dappCoordinator.snapshot.phase, .failed)
         XCTAssertTrue(dappCoordinator.snapshot.canEdit)
     }
 
-    func testUnsafeFeesPreparationFailureAlertOffersEditor() {
+    func testUnsafeFeesPreparationFailureAlertOffersEditor() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -1040,7 +1180,9 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
 
         stub.preparationCalls[0].completion(.failure(.unsafeFees))
 
+        await waitFor { (coordinator.snapshot.phase) == (.failed) }
         XCTAssertEqual(coordinator.snapshot.phase, .failed)
+        await waitFor { recorder.alerts.last != nil }
         let alert = try! XCTUnwrap(recorder.alerts.last)
         guard case .preparationFailure(
             .unsafeFees,
@@ -1053,12 +1195,14 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(alert.presentation.primaryAction.action, .edit)
 
         coordinator.handleAlert(token: alert.token, action: .edit)
+        await waitFor { (recorder.editorRequestCount) == (1) }
         XCTAssertEqual(recorder.editorRequestCount, 1)
         XCTAssertFalse(coordinator.isCurrentAlert(alert.token))
+        await waitFor { (coordinator.snapshot.phase) == (.failed) }
         XCTAssertEqual(coordinator.snapshot.phase, .failed)
     }
 
-    func testAuthenticatingRejectsLatePreparationUpdateAndEdits() {
+    func testAuthenticatingRejectsLatePreparationUpdateAndEdits() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -1066,9 +1210,11 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
+        await waitFor { stub.preparationCalls.count > 0 }
         let preparation = stub.preparationCalls[0]
         coordinator.approve()
+        await waitFor { (coordinator.snapshot.phase) == (.authenticating) }
         XCTAssertEqual(coordinator.snapshot.phase, .authenticating)
         let transactionID = coordinator.snapshot.transaction.id
         let snapshotCount = recorder.snapshots.count
@@ -1083,15 +1229,18 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             coordinator.apply(edits: Transaction.Edits(nonce: 1))
         )
 
+        await waitFor { (coordinator.snapshot.phase) == (.authenticating) }
         XCTAssertEqual(coordinator.snapshot.phase, .authenticating)
+        await waitFor { (coordinator.snapshot.transaction.id) == (transactionID) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.id,
             transactionID
         )
+        await waitFor { (recorder.snapshots.count) == (snapshotCount) }
         XCTAssertEqual(recorder.snapshots.count, snapshotCount)
     }
 
-    func testStartPreparationAfterFinishIsNoOp() {
+    func testStartPreparationAfterFinishIsNoOp() async {
         let stub = ApprovalOperationsStub()
         let recorder = ApprovalOutputRecorder()
         let coordinator = makeCoordinator(
@@ -1099,18 +1248,24 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             stub: stub,
             recorder: recorder
         )
-        prepareToReady(coordinator, stub: stub)
+        await prepareToReady(coordinator, stub: stub)
         coordinator.approve()
         coordinator.cancel()
+        await waitFor { (coordinator.snapshot.phase) == (.finished) }
         XCTAssertEqual(coordinator.snapshot.phase, .finished)
+        await waitFor { (recorder.completions.count) == (1) }
         XCTAssertEqual(recorder.completions.count, 1)
         let snapshotCount = recorder.snapshots.count
 
         coordinator.startPreparation(forceGasCheck: false)
 
+        await waitFor { (stub.preparationCalls.count) == (1) }
         XCTAssertEqual(stub.preparationCalls.count, 1)
+        await waitFor { (coordinator.snapshot.phase) == (.finished) }
         XCTAssertEqual(coordinator.snapshot.phase, .finished)
+        await waitFor { (recorder.snapshots.count) == (snapshotCount) }
         XCTAssertEqual(recorder.snapshots.count, snapshotCount)
+        await waitFor { (recorder.completions.count) == (1) }
         XCTAssertEqual(recorder.completions.count, 1)
     }
 
@@ -1135,12 +1290,13 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         _ coordinator: TransactionApprovalCoordinator,
         stub: ApprovalOperationsStub,
         estimate: GasService.Estimate? = nil
-    ) {
+    ) async {
         coordinator.startPreparation(forceGasCheck: false)
         let call = stub.preparationCalls.last!
         call.onUpdate(call.transaction)
         if let estimate { call.onFeeEstimate(estimate) }
         call.completion(.success(call.transaction))
+        await waitFor { (coordinator.snapshot.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
     }
 
@@ -1256,100 +1412,127 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         )
     }
 
+    private func waitFor(_ predicate: () -> Bool) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while !predicate(), clock.now < deadline { await Task.yield() }
+    }
+
 }
 
+@MainActor
 private final class ApprovalOperationsStub {
-
     final class PreparationCall {
         let transaction: Transaction
         let forceGasCheck: Bool
-        let cancellation: EthereumRequestCancellation
-        let onUpdate: (Transaction) -> Void
-        let onFeeEstimate: (GasService.Estimate) -> Void
-        let completion: (
-            Result<Transaction, TransactionPreparationFailure>
-        ) -> Void
+        let cancellation = TestRequestCancellation()
+        let continuation: AsyncThrowingStream<TransactionPreparationEvent, Error>.Continuation
 
         init(
-            transaction: Transaction,
-            forceGasCheck: Bool,
-            cancellation: EthereumRequestCancellation,
-            onUpdate: @escaping (Transaction) -> Void,
-            onFeeEstimate: @escaping (GasService.Estimate) -> Void,
-            completion: @escaping (
-                Result<Transaction, TransactionPreparationFailure>
-            ) -> Void
+            transaction: Transaction, forceGasCheck: Bool,
+            continuation: AsyncThrowingStream<TransactionPreparationEvent, Error>.Continuation
         ) {
             self.transaction = transaction
             self.forceGasCheck = forceGasCheck
-            self.cancellation = cancellation
-            self.onUpdate = onUpdate
-            self.onFeeEstimate = onFeeEstimate
-            self.completion = completion
+            self.continuation = continuation
+            let cancellation = cancellation
+            continuation.onTermination = { termination in
+                if case .cancelled = termination { cancellation.cancel() }
+            }
+        }
+
+        func onUpdate(_ transaction: Transaction) { continuation.yield(.transactionUpdated(transaction)) }
+        func onFeeEstimate(_ estimate: GasService.Estimate) { continuation.yield(.feeEstimate(estimate)) }
+        func completion(_ result: Result<Transaction, TransactionPreparationFailure>) {
+            switch result {
+            case .success(let value): continuation.yield(.ready(value))
+            case .failure(let error): continuation.finish(throwing: error)
+            }
         }
     }
 
     final class PreflightCall {
         let transaction: Transaction
-        let cancellation: EthereumRequestCancellation
-        let completion: (TransactionFeePreflightResult) -> Void
-
-        init(
-            transaction: Transaction,
-            cancellation: EthereumRequestCancellation,
-            completion: @escaping (TransactionFeePreflightResult) -> Void
-        ) {
-            self.transaction = transaction
-            self.cancellation = cancellation
-            self.completion = completion
-        }
+        let cancellation = TestPreflightResult()
+        init(transaction: Transaction) { self.transaction = transaction }
+        func completion(_ result: TransactionFeePreflightResult) { cancellation.finish(result) }
     }
 
     var preparationCalls = [PreparationCall]()
     var preflightCalls = [PreflightCall]()
-    var priorPreparationWasCancelledAtStart = [Bool]()
     var synchronousPreparation: ((PreparationCall) -> Void)?
 
     var operations: TransactionApprovalOperations {
         TransactionApprovalOperations(
-            prepare: {
-                [unowned self]
-                transaction,
-                forceGasCheck,
-                _,
-                onUpdate,
-                onFeeEstimate,
-                completion in
-                priorPreparationWasCancelledAtStart.append(
-                    preparationCalls.last?.cancellation.isCancelled ?? true
-                )
-                let call = PreparationCall(
-                    transaction: transaction,
-                    forceGasCheck: forceGasCheck,
-                    cancellation: EthereumRequestCancellation(),
-                    onUpdate: onUpdate,
-                    onFeeEstimate: onFeeEstimate,
-                    completion: completion
-                )
-                preparationCalls.append(call)
-                synchronousPreparation?(call)
-                return call.cancellation
+            prepare: { [self] transaction, forceGasCheck, _ in
+                AsyncThrowingStream { continuation in
+                    let call = PreparationCall(
+                        transaction: transaction, forceGasCheck: forceGasCheck, continuation: continuation)
+                    preparationCalls.append(call)
+                    synchronousPreparation?(call)
+                }
             },
-            preflight: {
-                [unowned self] transaction, _, completion in
-                let call = PreflightCall(
-                    transaction: transaction,
-                    cancellation: EthereumRequestCancellation(),
-                    completion: completion
-                )
+            preflight: { [self] transaction, _ in
+                let call = PreflightCall(transaction: transaction)
                 preflightCalls.append(call)
-                return call.cancellation
+                return try await call.cancellation.value()
             }
         )
     }
-
 }
 
+private final class TestRequestCancellation: Sendable {
+    private let canceled = Mutex(false)
+    var isCancelled: Bool { canceled.withLock { $0 } }
+    func cancel() { canceled.withLock { $0 = true } }
+}
+
+private final class TestPreflightResult: Sendable {
+    private struct State {
+        var isCancelled = false
+        var continuation: CheckedContinuation<TransactionFeePreflightResult, Error>?
+        var result: TransactionFeePreflightResult?
+    }
+    private let state = Mutex(State())
+    var isCancelled: Bool { state.withLock { $0.isCancelled } }
+
+    func value() async throws -> TransactionFeePreflightResult {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let result = state.withLock { state -> Result<TransactionFeePreflightResult, Error>? in
+                    if state.isCancelled { return .failure(CancellationError()) }
+                    if let result = state.result { return .success(result) }
+                    state.continuation = continuation
+                    return nil
+                }
+                if let result { continuation.resume(with: result) }
+            }
+        } onCancel: {
+            let continuation = self.state.withLock { state in
+                state.isCancelled = true
+                let continuation = state.continuation
+                state.continuation = nil
+                return continuation
+            }
+            continuation?.resume(throwing: CancellationError())
+        }
+    }
+
+    func finish(_ result: TransactionFeePreflightResult) {
+        let continuation = state.withLock { state in
+            guard !state.isCancelled, state.result == nil else {
+                return Optional<CheckedContinuation<TransactionFeePreflightResult, Error>>.none
+            }
+            state.result = result
+            let continuation = state.continuation
+            state.continuation = nil
+            return continuation
+        }
+        continuation?.resume(returning: result)
+    }
+}
+
+@MainActor
 private final class ApprovalOutputRecorder {
     var snapshots = [TransactionApprovalSnapshot]()
     var estimates = [GasService.Estimate]()

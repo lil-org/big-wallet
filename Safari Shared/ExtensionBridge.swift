@@ -3,6 +3,7 @@
 import CryptoKit
 import CoreFoundation
 import Foundation
+import Synchronization
 
 enum WalletAuthorityRemoval: Sendable {
     case wallet(id: String)
@@ -21,7 +22,7 @@ struct PreparedWalletSourceMutation<Payload> {
     let authorityRemovals: [WalletAuthorityRemoval]
 }
 
-protocol WalletSourceMutating {
+protocol WalletSourceMutating: Sendable {
     func perform<Payload, Result>(
         preparing: () throws -> PreparedWalletSourceMutation<Payload>,
         beforeCommit: () throws -> Void,
@@ -29,7 +30,7 @@ protocol WalletSourceMutating {
     ) throws -> Result
 }
 
-enum NativeApprovalTiming {
+enum NativeApprovalTiming: Sendable {
     static let recoveryTimeout: TimeInterval = 10
     static let recoveryRetryInterval: TimeInterval = 1
     static let recoveryRetryNanoseconds = UInt64(recoveryRetryInterval * 1_000_000_000)
@@ -45,7 +46,7 @@ enum NativeApprovalTiming {
 }
 
 actor ExtensionBridge {
-    enum PrivateBrowsingContextExtraction: Equatable {
+    enum PrivateBrowsingContextExtraction: Equatable, Sendable {
         case missing, value(Bool), malformed
     }
     
@@ -158,7 +159,7 @@ actor ExtensionBridge {
         var requestToken: String { token.rawValue }
     }
 
-    enum Phase: String, Codable { case queued, approving, responded }
+    enum Phase: String, Codable, Sendable { case queued, approving, responded }
 
     enum ManualSwitchRequestState: String, Sendable {
         case pending, approved, completed
@@ -183,19 +184,19 @@ actor ExtensionBridge {
         }
     }
 
-    struct Snapshot {
-        enum State {
+    struct Snapshot: Sendable {
+        enum State: Sendable {
             case queued(request: SafariRequest, approval: QueuedApproval)
             case approving(request: SafariRequest, nativeApproval: NativeApproval?)
             case responded
         }
 
-        enum QueuedApproval {
+        enum QueuedApproval: Sendable {
             case unowned
             case delivered(NativeDeliveryReceipt)
         }
 
-        struct NativeApproval {
+        struct NativeApproval: Sendable {
             let receipt: NativeDeliveryReceipt
             let approvedAt: Date
             let executionContext: NativeExecutionContext?
@@ -363,8 +364,8 @@ actor ExtensionBridge {
         }
     }
 
-    enum AuthorityReadResult { case snapshot(AuthoritySnapshot), unavailable }
-    enum AuthorityMutationResult { case revoked(AuthoritySnapshot), stale(AuthoritySnapshot), unavailable }
+    enum AuthorityReadResult: Sendable { case snapshot(AuthoritySnapshot), unavailable }
+    enum AuthorityMutationResult: Sendable { case revoked(AuthoritySnapshot), stale(AuthoritySnapshot), unavailable }
 
     struct RecoveryRequest: Sendable {
         let handle: Handle
@@ -378,7 +379,7 @@ actor ExtensionBridge {
         }
     }
 
-    enum RecoveryRequestsResult { case available([RecoveryRequest]), unavailable }
+    enum RecoveryRequestsResult: Sendable { case available([RecoveryRequest]), unavailable }
 
     struct NativeExecutionContext: Codable, Equatable, Sendable {
         let revisions: ProviderRevisions
@@ -445,7 +446,7 @@ actor ExtensionBridge {
         }
     }
 
-    struct Ingress {
+    struct Ingress: Sendable {
         let request: SafariRequest
         let canonicalData: Data
         let fingerprint: Data
@@ -453,7 +454,7 @@ actor ExtensionBridge {
         let replayOnly: Bool
     }
 
-    final class OperationLease: @unchecked Sendable {
+    final class OperationLease: Sendable {
         let fileURL: URL
         private let lock: CrossProcessFileLock
 
@@ -472,7 +473,7 @@ actor ExtensionBridge {
         case new, replay, coalesced
     }
 
-    enum EnqueueResult {
+    enum EnqueueResult: Sendable {
         case accepted(
             handle: Handle,
             approvalRequired: Bool,
@@ -484,41 +485,41 @@ actor ExtensionBridge {
         case expired, rejected, manualSwitchCapacityReached, unavailable
     }
 
-    enum AdmissionDeadlineDisposition: Equatable {
+    enum AdmissionDeadlineDisposition: Equatable, Sendable {
         case admissible, expired, invalid
     }
 
-    enum DappIngressResult { case accepted(Ingress), payloadTooLarge, invalid }
-    enum SnapshotResult { case found(Snapshot), missing, unavailable }
-    enum SnapshotsResult { case available([Handle: Snapshot]), unavailable }
+    enum DappIngressResult: Sendable { case accepted(Ingress), payloadTooLarge, invalid }
+    enum SnapshotResult: Sendable { case found(Snapshot), missing, unavailable }
+    enum SnapshotsResult: Sendable { case available([Handle: Snapshot]), unavailable }
 
-    enum ApprovalClaimResult: Equatable {
+    enum ApprovalClaimResult: Equatable, Sendable {
         case claimed(ApprovalClaim), executing, responded, missing, unavailable
     }
 
-    enum NativeExecutionClaimResult: Equatable {
+    enum NativeExecutionClaimResult: Equatable, Sendable {
         case claimed(ApprovalClaim)
         case ownershipLost, executing, responded, missing, unavailable
     }
 
-    enum StoreMutationResult: Equatable {
+    enum StoreMutationResult: Equatable, Sendable {
         case persisted, ownershipLost, retryablePersistenceFailure
     }
 
-    enum NativeInterruptionResult: Equatable {
+    enum NativeInterruptionResult: Equatable, Sendable {
         case interrupted, responseReady, ownershipLost, retryablePersistenceFailure
     }
 
-    enum AuthorizeExecutionResult: Equatable {
+    enum AuthorizeExecutionResult: Equatable, Sendable {
         case authorized(ApprovedExecutionPermit), ownershipLost, retryablePersistenceFailure
     }
 
-    enum BroadcastPreparationResult: Equatable {
+    enum BroadcastPreparationResult: Equatable, Sendable {
         case prepared(BroadcastDispatchPermit), ownershipLost, retryablePersistenceFailure
     }
 
-    enum ResponseReadResult { case response([String: Any]), pending, missing, unavailable }
-    enum ResponseStatusResult: Equatable { case pending, ready, missing, unavailable }
+    enum ResponseReadResult: Sendable { case response(WireProtocol.JSONObject), pending, missing, unavailable }
+    enum ResponseStatusResult: Equatable, Sendable { case pending, ready, missing, unavailable }
 
     static let workflowVersion = WireProtocol.workflowVersion
     static let maximumPayloadBytes = WireProtocol.maximumPayloadBytes
@@ -878,7 +879,7 @@ actor ExtensionBridge {
     
 }
 
-protocol PopupRequestStore: AnyObject {
+protocol PopupRequestStore: AnyObject, Sendable {
     func authorityIsCurrent(handle: ExtensionBridge.Handle) async -> Bool
     func list(profileIdentifier: UUID?) async -> ExtensionBridge.SnapshotsResult
     func load(handle: ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult
@@ -917,3 +918,29 @@ protocol NativeApprovalStore: PopupRequestStore {
 }
 
 extension ExtensionBridge: NativeApprovalStore {}
+
+final class ExtensionRequestResponder: Sendable {
+    private let context: Mutex<NSExtensionContext?>
+
+    init(context: sending NSExtensionContext) {
+        self.context = Mutex(context)
+    }
+
+    func cancelRequest(withError error: Error) {
+        context.withLock { context in
+            guard let current = context else { return }
+            context = nil
+            current.cancelRequest(withError: error)
+        }
+    }
+
+    func complete(with response: WireProtocol.ValidatedObject) {
+        context.withLock { context in
+            guard let current = context else { return }
+            context = nil
+            let item = NSExtensionItem()
+            item.userInfo = ["message": response.json]
+            current.completeRequest(returningItems: [item], completionHandler: nil)
+        }
+    }
+}

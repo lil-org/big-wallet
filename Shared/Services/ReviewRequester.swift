@@ -6,6 +6,7 @@ import AppKit
 import UIKit
 #endif
 
+@MainActor
 struct ReviewRequster {
     
     static func didClickAppStoreReviewButton() {
