@@ -225,6 +225,157 @@ final class DappRequestProcessorTests: XCTestCase {
         ) else { return XCTFail("A changed network must invalidate the accepted transaction") }
     }
 
+    func testApprovalResolverDistinguishesUnavailableCatalogAndKeysFromRemovedAccount() async throws {
+        let (fixture, action, review) = try processorTransactionReview()
+        let account = WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+        let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+            action.transaction, reviewedNetwork: action.resolvedNetwork, approvedAccount: account
+        ))
+        let consent = try XCTUnwrap(review.acceptTransaction(execution: execution, approvedAt: fixture.now))
+        let unavailable = WalletReviewCatalog(
+            identity: processorCatalog(accounts: [action.account]).identity,
+            orderedAccounts: [], knownAccounts: [account]
+        )
+        for catalog in [nil, unavailable] {
+            var reads = 0
+            let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+                reads += 1
+                return catalog
+            }, networkResolver: { _ in
+                XCTFail("Unavailable wallet access must not resolve a transaction route")
+                return .missing
+            })
+            guard case .reviewRequired = result else { return XCTFail("Unavailable data requires fresh review") }
+            XCTAssertEqual(reads, 1)
+            XCTAssertTrue(consent.authorizationIsAvailable)
+        }
+        let removed = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+            processorCatalog(accounts: [])
+        }, networkResolver: { _ in
+            XCTFail("A removed account must fail before network resolution")
+            return .unavailable
+        })
+        guard case .immediate(.failure(let error)) = removed else { return XCTFail("A removed account is terminal") }
+        XCTAssertEqual(error.code, 4100)
+    }
+
+    func testApprovalResolverReadsCurrentNetworkAfterCatalogSuspension() async throws {
+        let (fixture, action, review) = try processorTransactionReview()
+        let account = WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+        let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+            action.transaction, reviewedNetwork: action.resolvedNetwork, approvedAccount: account
+        ))
+        let consent = try XCTUnwrap(review.acceptTransaction(execution: execution, approvedAt: fixture.now))
+        let changedNetwork = ResolvedEthereumNetwork(
+            network: action.chain, source: action.rpcSource == .custom ? .alchemy : .custom
+        )
+        var network = action.resolvedNetwork
+        var events = [String]()
+        let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+            events.append("catalog")
+            await Task.yield()
+            network = changedNetwork
+            return processorCatalog(accounts: [action.account])
+        }, networkResolver: { chainID in
+            events.append("network")
+            XCTAssertEqual(chainID, action.chain.chainId)
+            return .resolved(network)
+        })
+        guard case .immediate(.failure(let error)) = result else { return XCTFail("Changed route must reject consent") }
+        XCTAssertEqual(error.code, 4100)
+        XCTAssertEqual(events, ["catalog", "network"])
+
+        for lookup in [ApprovalNetworkResolution.unavailable, .missing] {
+            let resolved = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+                processorCatalog(accounts: [action.account])
+            }, networkResolver: { _ in lookup })
+            switch (lookup, resolved) {
+            case (.unavailable, .reviewRequired): break
+            case (.missing, .immediate(.failure(let error))):
+                XCTAssertEqual(error.code, ProviderResponseError.internalErrorCode)
+            default: XCTFail("Missing routes and unavailable storage need distinct outcomes")
+            }
+        }
+    }
+
+    func testApprovalResolverDiscardsSupersededConsentAfterCatalogSuspension() async throws {
+        let (fixture, action, review) = try processorTransactionReview()
+        let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(
+            action.transaction, reviewedNetwork: action.resolvedNetwork,
+            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
+        ))
+        let consent = try XCTUnwrap(review.acceptTransaction(execution: execution, approvedAt: fixture.now))
+        var current = true
+        let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+            await Task.yield()
+            current = false
+            return nil
+        }, networkResolver: { _ in
+            XCTFail("Superseded review must not resolve a network")
+            return .unavailable
+        }, isCurrent: { current })
+        guard case .abandon = result else { return XCTFail("Supersession is not temporary data unavailability") }
+        consent.invalidateAuthorization()
+        let replay = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+            XCTFail("Consumed consent must not load context")
+            return nil
+        })
+        guard case .abandon = replay else { return XCTFail("Consumed consent must not be retried") }
+    }
+
+    func testApprovalResolverDisconnectDoesNotRequireItsFormerNetwork() async throws {
+        let fixture = try ApprovedExecutionTestFixture()
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        try fixture.establishGrant(WalletAccountDescriptor(walletID: "wallet", account: account))
+        let snapshot = try fixture.enqueue(id: 46, name: "switchAccount", provider: .unknown, body: [:])
+        guard case .approval(let intent) = DappRequestProcessor().prepare(
+            try XCTUnwrap(snapshot.requestBinding), catalog: processorCatalog(accounts: [account])
+        ) else { return XCTFail("Expected account selection") }
+        let consent = try XCTUnwrap(ApprovalReview(intent: intent).acceptAccounts(
+            selection: .init(accounts: [], ethereumChainID: "0x1"), approvedAt: fixture.now
+        ))
+        let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+            processorCatalog(accounts: [])
+        }, networkResolver: { _ in
+            XCTFail("Disconnect must not depend on an old network")
+            return .unavailable
+        })
+        guard case .approved(let resolved) = result,
+              case .accountSelection(_, let selection) = resolved.approval.kind else {
+            return XCTFail("Expected an approved disconnect")
+        }
+        XCTAssertTrue(selection.accounts.isEmpty)
+        XCTAssertNil(selection.network)
+    }
+
+    func testApprovalResolverChainAdditionNeverReadsWalletCatalog() async throws {
+        let fixture = try ApprovedExecutionTestFixture()
+        var network = approvedEthereumNetwork()
+        network.chainId = "0x7ffffffffffffffe"
+        let definition = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(network)) as? [String: Any])
+        let snapshot = try fixture.enqueue(
+            id: 47, name: "addEthereumChain", provider: .ethereum,
+            body: ["address": "", "chainId": "0x1", "object": definition]
+        )
+        guard case .approval(let intent) = DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepareWithoutWallets(
+            try XCTUnwrap(snapshot.requestBinding)
+        ) else { return XCTFail("Expected wallet-independent chain addition") }
+        let consent = try XCTUnwrap(ApprovalReview(intent: intent).acceptAddEthereumChain(approvedAt: fixture.now))
+        for networkState in [ApprovalNetworkResolution.missing, .unavailable] {
+            let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+                XCTFail("Chain addition must not read or authenticate wallets")
+                return nil
+            }, networkResolver: { _ in networkState })
+            switch (networkState, result) {
+            case (.missing, .approved(let resolved)):
+                guard case .addEthereumChain = resolved.approval.kind else { return XCTFail("Expected chain addition") }
+            case (.unavailable, .reviewRequired): break
+            default: XCTFail("Expected approval or fresh review according to network availability")
+            }
+        }
+    }
+
     func testTransactionConsentUsesAcceptedExecutionFields() throws {
         let (fixture, action, review) = try processorTransactionReview()
         var accepted = action.transaction
@@ -389,7 +540,7 @@ final class DappRequestProcessorTests: XCTestCase {
             body: ["address": account.address, "chainId": "0x1", "object": definition]
         )
         definition["rpcUrls"] = ["https://different.example/rpc"]
-        guard case .approval(let networkIntent) = DappRequestProcessor().prepare(
+        guard case .approval(let networkIntent) = DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(
             try XCTUnwrap(networkSnapshot.requestBinding), catalog: catalog
         ), case .addEthereumChain(let addition) = networkIntent.action else {
             return XCTFail("Expected a canonical network review")
@@ -2214,8 +2365,8 @@ final class DappRequestProcessorTests: XCTestCase {
 
         let catalog = processorCatalog(accounts: [])
         for preparation in [
-            DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: catalog),
-            try XCTUnwrap(DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request))),
+            DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(try requestBindingForTesting(request), catalog: catalog),
+            try XCTUnwrap(DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepareWithoutWallets(try requestBindingForTesting(request))),
         ] {
             guard case let .immediate(responseResolution) = preparation else {
                 return XCTFail("Expected wallet-independent response")
@@ -2299,6 +2450,35 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
+    func testEthereumPreparationPreservesUnavailableNetworkStatus() throws {
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let account = processorAccount(privateKey: key, coin: .ethereum)
+        let catalog = processorCatalog(accounts: [account])
+        let requests = [
+            try ethereumRequest(method: "signTransaction", address: account.address,
+                                parameters: ["from": account.address, "to": account.address, "value": "0x1"]),
+            try ethereumRequest(method: "switchEthereumChain", address: account.address,
+                                parameters: ["chainId": "0xa"]),
+            try addEthereumChainRequest(chainId: "0x7ffffffffffffffe").request,
+        ]
+        let processor = DappRequestProcessor(ethereumNetworkResolver: { _ in .unavailable })
+        for request in requests {
+            let binding = try requestBindingForTesting(request)
+            guard case .unavailable? = processor.prepareWithoutWallets(binding),
+                  case .unavailable = processor.prepare(binding, catalog: catalog) else {
+                return XCTFail("Unavailable networks must not produce terminal responses")
+            }
+        }
+        let missing = DappRequestProcessor(ethereumNetworkResolver: { _ in .missing })
+        for (request, code) in zip(requests.prefix(2), [-32603, 4902]) {
+            guard case .immediate(let resolution)? = missing.prepareWithoutWallets(try requestBindingForTesting(request)) else {
+                return XCTFail("Confirmed missing networks must still produce terminal responses")
+            }
+            let response = try XCTUnwrap(resolution.response(for: request))
+            XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, code)
+        }
+    }
+
     func testEthereumPreparationDefersOnlyWhenCatalogIsRequired() throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: key, coin: .ethereum)
@@ -2319,6 +2499,8 @@ final class DappRequestProcessorTests: XCTestCase {
             let catalog = processorCatalog(accounts: [account])
             let prepared = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: catalog)
             switch prepared {
+            case .unavailable:
+                XCTFail("Expected available test network")
             case .approval(let intent):
                 switch (testCase.method, intent.action) {
                 case ("requestAccounts", .selectAccount(let action)):
@@ -2345,10 +2527,10 @@ final class DappRequestProcessorTests: XCTestCase {
         let request = try addEthereumChainRequest(chainId: "0x7ffffffffffffffe").request
         let catalog = processorCatalog(accounts: [])
         guard case .approval(let withWalletsIntent) =
-                DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: catalog),
+                DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(try requestBindingForTesting(request), catalog: catalog),
               case .addEthereumChain(let withWallets) = withWalletsIntent.action,
               case .approval(let withoutWalletsIntent) =
-                DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)),
+                DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepareWithoutWallets(try requestBindingForTesting(request)),
               case .addEthereumChain(let withoutWallets) = withoutWalletsIntent.action else {
             return XCTFail("Expected wallet-independent chain approval")
         }

@@ -499,7 +499,7 @@ actor ExtensionBridge {
 
     enum NativeExecutionClaimResult: Equatable, Sendable {
         case claimed(ApprovalClaim)
-        case ownershipLost, executing, responded, missing, unavailable
+        case ownershipLost, executing, responded, missing, unavailable, reviewRequired
     }
 
     enum StoreMutationResult: Equatable, Sendable {
@@ -741,18 +741,8 @@ actor ExtensionBridge {
 
     func load(handle: Handle) -> SnapshotResult { store.load(handle: handle) }
     func claim(handle: Handle) -> ApprovalClaimResult { store.claim(handle: handle) }
-    func claimNativeExecution(
-        handle: Handle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        approvedAt: Date
-    ) -> NativeExecutionClaimResult {
-        store.claimNativeExecution(
-            handle: handle,
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier,
-            approvedAt: approvedAt
-        )
+    func claimNativeExecution(consent: ReviewConsent) -> NativeExecutionClaimResult {
+        store.claimNativeExecution(consent: consent)
     }
 
     func recordNativeDeliveryReceipt(
@@ -818,6 +808,10 @@ actor ExtensionBridge {
     }
 
     func abandon(claim: ApprovalClaim) -> StoreMutationResult { store.abandon(claim: claim) }
+
+    func returnToReview(claim: ApprovalClaim, consent: ReviewConsent) -> StoreMutationResult {
+        store.returnToReview(claim: claim, consent: consent)
+    }
 
     func completeImmediate(handle: Handle, resolution: ImmediateResolution) -> StoreMutationResult {
         store.completeImmediate(handle: handle, resolution: resolution)
@@ -887,6 +881,10 @@ protocol PopupRequestStore: AnyObject, Sendable {
     func completeImmediate(handle: ExtensionBridge.Handle, resolution: ImmediateResolution) async -> ExtensionBridge.StoreMutationResult
     func reject(handle: ExtensionBridge.Handle) async -> ExtensionBridge.StoreMutationResult
     func abandon(claim: ExtensionBridge.ApprovalClaim) async -> ExtensionBridge.StoreMutationResult
+    func returnToReview(
+        claim: ExtensionBridge.ApprovalClaim,
+        consent: ReviewConsent
+    ) async -> ExtensionBridge.StoreMutationResult
     func authorize(
         claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval
@@ -909,12 +907,7 @@ protocol PopupRequestStore: AnyObject, Sendable {
 extension ExtensionBridge: PopupRequestStore {}
 
 protocol NativeApprovalStore: PopupRequestStore {
-    func claimNativeExecution(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        approvedAt: Date
-    ) async -> ExtensionBridge.NativeExecutionClaimResult
+    func claimNativeExecution(consent: ReviewConsent) async -> ExtensionBridge.NativeExecutionClaimResult
 }
 
 extension ExtensionBridge: NativeApprovalStore {}

@@ -557,6 +557,23 @@ final class CustomNetworkCache: Sendable {
         }
     }
 
+    func refreshSnapshot() -> CustomNetworkSnapshotLoadResult {
+        state.withLock { state in
+            let result = loader()
+            switch result {
+            case .loaded(let snapshot):
+                state.cachedSnapshot = snapshot
+                state.needsReload = false
+            case .unavailable:
+                state.needsReload = true
+            case .corrupt:
+                state.cachedSnapshot = .empty
+                state.needsReload = false
+            }
+            return result
+        }
+    }
+
     func invalidate() {
         state.withLock { $0.needsReload = true }
     }

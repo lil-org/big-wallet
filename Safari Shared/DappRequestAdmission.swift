@@ -73,13 +73,20 @@ final class DappRequestAdmission {
                     queued: .approvalRequired
                 )
             }
+            if let account = binding.request.authorizedAccount,
+               catalog.availability(of: account) == .unavailable {
+                return await currentAdmissionDisposition(
+                    handle: handle,
+                    queued: .approvalRequired
+                )
+            }
             preparation = requestProcessor.prepare(
                 binding,
                 catalog: catalog
             )
         }
         switch preparation {
-        case .approval:
+        case .approval, .unavailable:
             return await currentAdmissionDisposition(
                 handle: handle,
                 queued: .approvalRequired

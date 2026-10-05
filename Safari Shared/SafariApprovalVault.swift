@@ -854,25 +854,36 @@ final class SafariApprovalVault: Sendable {
     }
 
     func reviewCatalog() -> WalletReviewCatalog? {
-        return withLock {
+        guard let catalog = approvalCatalog(),
+              catalog.knownAccounts.isEmpty || !catalog.orderedAccounts.isEmpty else { return nil }
+        return catalog
+    }
+
+    func approvalCatalog() -> WalletReviewCatalog? {
+        withLock {
             guard let record = loadEnvelopeRecordLocked() else { return nil }
-            return reviewCatalog(in: record)
+            return approvalCatalog(in: record)
         }
     }
 
     private func reviewCatalog(in record: EnvelopeRecord) -> WalletReviewCatalog? {
+        let catalog = approvalCatalog(in: record)
+        return catalog.knownAccounts.isEmpty || !catalog.orderedAccounts.isEmpty ? catalog : nil
+    }
+
+    private func approvalCatalog(in record: EnvelopeRecord) -> WalletReviewCatalog {
         let identities = record.keyIdentities
         let availability = identities.isEmpty ? [:] : keyStore.availability(identities: identities)
         let accounts = identities.filter {
             availability[$0]?.permitsPublishedEnvelope == true
         }.map(\.account.specificAccount)
-        guard identities.isEmpty || !accounts.isEmpty else { return nil }
         return WalletReviewCatalog(
             identity: WalletCatalogIdentity(
                 generation: record.envelope.generation,
                 catalogData: record.catalog.data
             ),
-            orderedAccounts: accounts
+            orderedAccounts: accounts,
+            knownAccounts: Set(record.catalog.catalog.accounts)
         )
     }
 

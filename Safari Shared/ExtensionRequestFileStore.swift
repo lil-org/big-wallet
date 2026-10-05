@@ -690,13 +690,10 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         }
     }
 
-    func claimNativeExecution(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        approvedAt: Date
-    ) -> ExtensionBridge.NativeExecutionClaimResult {
-        files.withLock(or: .unavailable) {
+    func claimNativeExecution(consent: ReviewConsent) -> ExtensionBridge.NativeExecutionClaimResult {
+        let handle = consent.binding.handle
+        let approvedAt = consent.approvedAt
+        return files.withLock(or: .unavailable) {
             guard case .state(var profile) = recoverProfileLocked(
                 profileIdentifier: handle.profileIdentifier,
                 now: clock()
@@ -707,10 +704,9 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             switch profile.state.records[index].state {
             case .pending(_, let pendingApproval):
                 guard case .delivered(let receipt) = pendingApproval,
-                      receipt.matches(
-                          nativeDeliveryNonce: nativeDeliveryNonce,
-                          runtimeInstanceIdentifier: runtimeInstanceIdentifier
-                      ) else { return .ownershipLost }
+                      receipt == consent.nativeReceipt,
+                      consent.binding.matches(profile.state.records[index]) else { return .ownershipLost }
+                guard consent.authorizationIsAvailable else { return .reviewRequired }
                 let now = clock()
                 guard approvedAt.timeIntervalSince1970.isFinite,
                       approvedAt >= profile.state.records[index].createdAt,
@@ -752,7 +748,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                     request: parsedRequest,
                     value: claimID,
                     lease: lease,
-                    authority: .native(approvedAt: approval.approvedAt, context: executionContext)
+                    authority: .native(approvedAt: approval.approvedAt, context: executionContext),
+                    nativeConsent: consent
                 )
                 return .claimed(claim)
             case .claimed, .broadcastPrepared:
@@ -768,6 +765,39 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) -> ExtensionBridge.StoreMutationResult {
         guard claim.lifecycle.closeUnapproved() else { return .ownershipLost }
         return recoverAbandoned(claim)
+    }
+
+    func returnToReview(
+        claim: ExtensionBridge.ApprovalClaim,
+        consent: ReviewConsent
+    ) -> ExtensionBridge.StoreMutationResult {
+        files.withLock(or: .retryablePersistenceFailure) {
+            guard claim.lifecycle.isPreparing, claim.lifecycle.wasNeverAuthorized,
+                  claim.matchesConsent(consent) else { return .ownershipLost }
+            guard case .state(var profile) = recoverProfileLocked(
+                profileIdentifier: claim.handle.profileIdentifier, now: clock()
+            ) else { return .retryablePersistenceFailure }
+            let now = clock()
+            guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
+                  case .claimed(let claimID, _, _) = profile.state.records[index].state,
+                  claim.matches(handle: claim.handle, value: claimID),
+                  claim.binding.matches(profile.state.records[index]),
+                  profile.state.records[index].nativeDeliveryReceipt == claim.nativeReceipt,
+                  ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state),
+                  profile.state.records[index].authorizesExecution(
+                      authority: claim.authority, now: now, isCancelled: Task.isCancelled
+                  ),
+                  now < claim.request.admissionDeadline else { return .ownershipLost }
+            claim.lifecycle.nativeConsent?.invalidateAuthorization()
+            consent.invalidateAuthorization()
+            guard profile.state.records[index].returnToReview(),
+                  writeProfileLocked(profile, failureRecovery: .readBack) else {
+                return .retryablePersistenceFailure
+            }
+            claim.releaseUnapproved()
+            files.removeOperationLockLocked(handle: claim.handle)
+            return .persisted
+        }
     }
 
     func completeImmediate(
@@ -854,7 +884,9 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard claim.lifecycle.isPreparing,
                   approval.binding == claim.binding,
                   approval.approvedAt.timeIntervalSince1970.isFinite,
-                  approval.nativeReceipt == claim.nativeReceipt else { return .ownershipLost }
+                  approval.nativeReceipt == claim.nativeReceipt,
+                  claim.lifecycle.nativeConsent.map({ approval.sharesAuthorization(with: $0) }) ?? true
+            else { return .ownershipLost }
             guard case .state(let profile) = recoverProfileLocked(
                 profileIdentifier: claim.handle.profileIdentifier, now: clock()
             ) else { return .retryablePersistenceFailure }
@@ -1479,6 +1511,7 @@ extension ExtensionBridge {
         let authority: ExecutionAuthority
         let value: UUID
         let nativeReceipt: NativeDeliveryReceipt?
+        let nativeConsent: ReviewConsent?
         let executionID = UUID()
         let signingDeadline: Date
         private let lease: OperationLease
@@ -1493,10 +1526,12 @@ extension ExtensionBridge {
             request: SafariRequest,
             value: UUID,
             lease: OperationLease,
-            authority: ExecutionAuthority
+            authority: ExecutionAuthority,
+            nativeConsent: ReviewConsent?
         ) {
             binding = .init(record: record, request: request)
             self.authority = authority
+            self.nativeConsent = nativeConsent
             self.value = value
             self.lease = lease
             nativeReceipt = record.nativeDeliveryReceipt
@@ -1729,10 +1764,12 @@ extension ExtensionBridge {
             request: SafariRequest,
             value: UUID,
             lease: OperationLease,
-            authority: ExecutionAuthority
+            authority: ExecutionAuthority,
+            nativeConsent: ReviewConsent? = nil
         ) {
             lifecycle = ExecutionLifecycle(
-                record: record, request: request, value: value, lease: lease, authority: authority
+                record: record, request: request, value: value, lease: lease, authority: authority,
+                nativeConsent: nativeConsent
             )
         }
 
@@ -1742,7 +1779,10 @@ extension ExtensionBridge {
 
         func matchesConsent(_ consent: ReviewConsent) -> Bool {
             guard binding == consent.binding, nativeReceipt == consent.nativeReceipt else { return false }
-            if case .native(let approvedAt, _) = authority { return approvedAt == consent.approvedAt }
+            if case .native(let approvedAt, _) = authority {
+                return approvedAt == consent.approvedAt &&
+                    lifecycle.nativeConsent?.sharesAuthorization(with: consent) == true
+            }
             return true
         }
 

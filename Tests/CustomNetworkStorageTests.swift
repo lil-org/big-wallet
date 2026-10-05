@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
@@ -146,6 +147,30 @@ final class CustomNetworkStorageTests: XCTestCase {
             return XCTFail("Expected valid records to be salvaged")
         }
         XCTAssertEqual(snapshot.orderedEntries.map(\.chainId), [64_240])
+    }
+
+    func testFreshSnapshotReportsReadFailureWhileUIRetainsLastGoodSnapshot() throws {
+        let snapshot = CustomNetworkSnapshot(records: [
+            customNetwork(chainId: 64_240, rpcURLs: ["https://reviewed.example"]),
+        ])
+        let result = Mutex(CustomNetworkSnapshotLoadResult.loaded(snapshot))
+        let cache = CustomNetworkCache(loader: { result.withLock { $0 } })
+        XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
+
+        result.withLock { $0 = .unavailable }
+        guard case .unavailable = cache.refreshSnapshot() else {
+            return XCTFail("A fresh approval read must expose temporary storage failure")
+        }
+        XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
+
+        result.withLock { $0 = .corrupt }
+        guard case .corrupt = cache.refreshSnapshot() else { return XCTFail("Expected corrupt storage status") }
+        XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
+
+        result.withLock { $0 = .loaded(snapshot) }
+        guard case .loaded(let recovered) = cache.refreshSnapshot() else { return XCTFail("Expected a fresh recovered snapshot") }
+        XCTAssertNotNil(recovered.entriesByChainId[64_240])
+        XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
     }
 
     func testLastValidDuplicateWins() throws {

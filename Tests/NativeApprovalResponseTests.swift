@@ -94,8 +94,9 @@ final class NativeApprovalResponseTests: XCTestCase {
 
     func testRevokedAuthorityNeverCallsSigner() async throws {
         let underlying = AuthorityTestAccess()
-        let signer = try signer(access: underlying, authorityIsCurrent: { _ in false })
-        let result = await signer.sign()
+        let context = try signingContext(access: underlying)
+        revokeAuthority(in: context.fixture)
+        let result = await context.signer.sign()
         guard case .failure(.authorizationUnavailable) = result else {
             return XCTFail("Revoked authority must not sign")
         }
@@ -105,10 +106,9 @@ final class NativeApprovalResponseTests: XCTestCase {
 
     func testRevocationDuringSigningDiscardsSignature() async throws {
         let underlying = AuthorityTestAccess()
-        var isCurrent = true
-        underlying.operation = { isCurrent = false }
-        let signer = try signer(access: underlying, authorityIsCurrent: { _ in isCurrent })
-        let result = await signer.sign()
+        let context = try signingContext(access: underlying)
+        underlying.operation = { self.revokeAuthority(in: context.fixture) }
+        let result = await context.signer.sign()
         guard case .failure(.authorizationUnavailable) = result else {
             return XCTFail("A signature produced after revocation must not escape")
         }
@@ -116,36 +116,63 @@ final class NativeApprovalResponseTests: XCTestCase {
         XCTAssertTrue(underlying.invalidated)
     }
 
-    func testCurrentAuthorityReturnsSignatureAfterCheckingTheStoredHandleTwice() async throws {
+    func testCurrentAuthorityReturnsSignatureOnce() async throws {
         let underlying = AuthorityTestAccess()
-        var handles = [ExtensionBridge.Handle]()
-        let signer = try signer(access: underlying, authorityIsCurrent: { handle in
-            handles.append(handle)
-            return true
-        })
-        let result = await signer.sign()
+        let context = try signingContext(access: underlying)
+        let result = await context.signer.sign()
         guard case .success(.ethereumSignature("signed")) = result else {
             return XCTFail("Expected authorized signature")
         }
-        XCTAssertEqual(handles, [signer.authorization.handle, signer.authorization.handle])
+        guard case .failure(.authorizationUnavailable) = await context.signer.sign() else {
+            return XCTFail("An authorized signature must be returned only once")
+        }
         XCTAssertEqual(underlying.calls, 1)
         XCTAssertTrue(underlying.invalidated)
     }
 
-    private func signer(
-        access: AuthorityTestAccess,
-        authorityIsCurrent: @escaping @MainActor (ExtensionBridge.Handle) async -> Bool
-    ) throws -> WalletSigningSession {
-        let operation = try approvedWalletSigningOperationForTesting(approvedAccount: .init(
-            walletID: "approved-wallet",
-            coin: .ethereum,
+    private func revokeAuthority(in fixture: ApprovedExecutionTestFixture) {
+        guard case .snapshot(let authority) = fixture.store.configurationSnapshot(
+            configurationKey: "https://wallet.example", profileIdentifier: nil
+        ), case .revoked = fixture.store.revoke(
+            configurationKey: "https://wallet.example", provider: .ethereum,
+            attempt: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            expected: authority.version, profileIdentifier: nil
+        ) else {
+            return XCTFail("Expected durable authority revocation")
+        }
+    }
+
+    private func signingContext(
+        access: AuthorityTestAccess
+    ) throws -> (signer: WalletSigningSession, fixture: ApprovedExecutionTestFixture) {
+        let account = WalletAccountDescriptor(
+            walletID: "approved-wallet", coin: .ethereum,
             normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
             derivationPath: "m/44'/60'/0'/0/0"
-        ))
+        )
+        let fixture = try ApprovedExecutionTestFixture()
+        try fixture.establishGrant(account)
+        let snapshot = try fixture.enqueue(
+            id: 1, name: "signPersonalMessage", provider: .ethereum,
+            body: ["address": account.normalizedAddress, "chainId": "0x1", "object": ["data": "0x01"]]
+        )
+        let catalog = WalletReviewCatalog(
+            identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [account.specificAccount]
+        )
+        guard case .approval(let intent) = DappRequestProcessor().prepare(
+            try XCTUnwrap(snapshot.requestBinding), catalog: catalog
+        ) else { throw CocoaError(.coderInvalidValue) }
+        let permit = try fixture.authorize(
+            snapshot: snapshot, action: intent.action,
+            decision: .message(.init(approvedAccount: account, solanaCluster: nil))
+        )
+        XCTAssertTrue(permit.consumeExecution())
+        let operation = try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
         let session = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: authorityIsCurrent))
-        return session
+        XCTAssertTrue(session.bind(operation: operation))
+        return (session, fixture)
     }
+
 }
 
 @MainActor

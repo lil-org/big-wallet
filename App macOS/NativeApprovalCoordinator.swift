@@ -361,6 +361,10 @@ final class NativeApprovalCoordinator {
     var isAwaitingAuthentication: Bool { phase == .awaitingAuthentication }
     var isFinished: Bool { phase == .finished }
     var isPaused: Bool { phase == .paused }
+    var requiresExplicitReviewRetry: Bool {
+        if case .paused(.prepareReview) = state { return hasAuthenticated }
+        return false
+    }
     var isDormant: Bool { isPaused && !hasAuthenticated }
     var canReactivate: Bool {
         hasAuthenticated && !isFinished && phase != .rejecting
@@ -794,6 +798,8 @@ final class NativeApprovalCoordinator {
                 guard work.mayAttempt else { break }
                 if let preparation {
                     switch preparation {
+                    case .unavailable:
+                        work.update { $0.pause() }
                     case .approval(let intent):
                         guard intent.binding == binding else {
                             work.update { $0.failAndReject() }
@@ -948,6 +954,14 @@ final class NativeApprovalCoordinator {
                     work.update { $0.finish() }
                 case .interruptionRequired:
                     work.update { $0.interruptApproval() }
+                case .reviewRequired:
+                    work.update {
+                        if work.environment.now() < $0.terminalDeadline {
+                            $0.enterState(.paused(.prepareReview))
+                        } else {
+                            $0.finish()
+                        }
+                    }
                 case .pending:
                     work.update {
                         if work.environment.now() < $0.terminalDeadline {

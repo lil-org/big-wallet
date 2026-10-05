@@ -86,7 +86,7 @@ func preparationForTesting(
            transaction.chain.chainId == chainID {
             return .resolved(transaction.resolvedNetwork)
         }
-        return Nodes.resolution(chainId: chainID)
+        return .missing
     })
     return processor.prepare(binding, catalog: reviewCatalogForTesting(action: action, accounts: accounts))
 }
@@ -1117,19 +1117,11 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         return result
     }
-    func claimNativeExecution(
-        handle: ExtensionBridge.Handle,
-        nativeDeliveryNonce: ExtensionBridge.NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        approvedAt: Date
-    ) async -> ExtensionBridge.NativeExecutionClaimResult {
+    func claimNativeExecution(consent: ReviewConsent) async -> ExtensionBridge.NativeExecutionClaimResult {
         guard !isClosing else { return .unavailable }
         activeOperations += 1
         defer { finishOperation() }
-        let result = await bridge.claimNativeExecution(
-            handle: handle, nativeDeliveryNonce: nativeDeliveryNonce,
-            runtimeInstanceIdentifier: runtimeInstanceIdentifier, approvedAt: approvedAt
-        )
+        let result = await bridge.claimNativeExecution(consent: consent)
         if case .claimed(let claim) = result {
             eventValues.append("nativeClaim")
             let observer = nextClaimObserver
@@ -1185,6 +1177,16 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             return result
         }
         return await bridge.abandon(claim: claim)
+    }
+    func returnToReview(
+        claim: ExtensionBridge.ApprovalClaim,
+        consent: ReviewConsent
+    ) async -> ExtensionBridge.StoreMutationResult {
+        guard !isClosing else { return .ownershipLost }
+        activeOperations += 1
+        defer { finishOperation() }
+        eventValues.append("returnToReview")
+        return await bridge.returnToReview(claim: claim, consent: consent)
     }
     func authorize(
         claim: ExtensionBridge.ApprovalClaim,

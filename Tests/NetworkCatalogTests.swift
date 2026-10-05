@@ -956,6 +956,40 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(loadCount.value, 2)
     }
 
+    func testApprovalNetworkResolutionUsesFreshStatusInsteadOfCachedCustomRoutes() throws {
+        let snapshot = CustomNetworkSnapshot(records: [
+            customRecord(chainId: 64_240, name: "Reviewed", rpcURL: "https://reviewed.example"),
+        ])
+        let resolver = NetworkResolver(
+            catalog: try NetworkCatalog(records: []), catalogOwnedChainIds: [],
+            customSnapshot: {
+                XCTFail("Approval resolution must not use the UI snapshot")
+                return snapshot
+            }
+        )
+        XCTAssertEqual(resolver.approvalResolution(chainId: 64_240, freshCustomSnapshot: { .unavailable }), .unavailable)
+        XCTAssertEqual(resolver.approvalResolution(chainId: 64_240, freshCustomSnapshot: { .corrupt }), .unavailable)
+        XCTAssertEqual(resolver.approvalResolution(chainId: 64_240, freshCustomSnapshot: { .loaded(.empty) }), .missing)
+        let expected = try XCTUnwrap(snapshot.entriesByChainId[64_240]?.resolvedNetwork)
+        XCTAssertEqual(resolver.approvalResolution(chainId: 64_240, freshCustomSnapshot: { .loaded(snapshot) }), .resolved(expected))
+    }
+
+    func testApprovalNetworkResolutionKeepsBundledRoutesIndependentOfCustomStorage() throws {
+        let catalog = try NetworkCatalog(records: [record(chainId: 1, alchemyNetwork: "eth-mainnet")])
+        let resolver = NetworkResolver(catalog: catalog, catalogOwnedChainIds: [1], customSnapshot: { .empty })
+        let result = resolver.approvalResolution(chainId: 1, freshCustomSnapshot: {
+            XCTFail("A bundled network must not depend on custom storage")
+            return .unavailable
+        })
+        guard case .resolved(let network) = result else { return XCTFail("Expected the bundled route") }
+        XCTAssertEqual(network.network.chainId, 1)
+        let unavailable = NetworkResolver(catalog: nil, catalogOwnedChainIds: [1], customSnapshot: { .empty })
+        XCTAssertEqual(unavailable.approvalResolution(chainId: 1, freshCustomSnapshot: {
+            XCTFail("Missing bundled configuration must not fall back to a custom route")
+            return .loaded(.empty)
+        }), .unavailable)
+    }
+
     func testCustomNetworkCacheRetainsLastGoodSnapshotAfterReloadFailure() async throws {
         let snapshot = CustomNetworkSnapshot(records: [
             customRecord(

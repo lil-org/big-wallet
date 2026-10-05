@@ -2711,6 +2711,152 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.interruptionCount, 0)
     }
 
+    func testUnavailableReviewPreparationRequiresExplicitRetry() async throws {
+        let clock = Clock()
+        let waits = ScheduledWaits()
+        var available = false
+        var preparations = 0
+        var completions = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            prepareWithoutWallets: {
+                preparations += 1
+                return available ? self.approvalPreparation($0) : .unavailable
+            }
+        ))
+        defer { waits.resumeAll() }
+        fixture.store.completeHandler = { _, _, _, _ in completions += 1; return .persisted }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertTrue(fixture.coordinator.requiresExplicitReviewRetry)
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(completions, 0)
+
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(completions, 0)
+
+        available = true
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(preparations, 3)
+        XCTAssertEqual(completions, 0)
+    }
+
+    func testTemporaryResolutionFailureRequiresExplicitRetryAndNewConsent() async throws {
+        let clock = Clock()
+        let waits = ScheduledWaits()
+        var preparations = 0
+        var consents = [ReviewConsent]()
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            prepareWithoutWallets: {
+                preparations += 1
+                return self.approvalPreparation($0)
+            },
+            attemptNativeDecision: { _, consent in
+                consents.append(consent)
+                if consents.count == 1 {
+                    consent.invalidateAuthorization()
+                    return .reviewRequired
+                }
+                return .responseReady
+            }
+        ))
+        defer { waits.resumeAll() }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await waitForState(fixture.coordinator, .paused)
+
+        XCTAssertTrue(fixture.coordinator.requiresExplicitReviewRetry)
+        XCTAssertTrue(fixture.coordinator.hasAuthenticated)
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(consents.count, 1)
+        XCTAssertFalse(consents[0].authorizationIsAvailable)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.store.interruptionCount, 0)
+        guard case .retryRequired? = fixture.coordinator.currentPresentation?.presentation else {
+            return XCTFail("Temporary resolution failure must offer a fresh review")
+        }
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await Task.yield()
+        XCTAssertEqual(consents.count, 1)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertFalse(fixture.coordinator.requiresExplicitReviewRetry)
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(consents.count, 1)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(consents.count, 2)
+        XCTAssertFalse(consents[0].sharesAuthorization(with: consents[1]))
+        XCTAssertEqual(consents[0].binding, consents[1].binding)
+        XCTAssertEqual(consents[0].nativeReceipt, consents[1].nativeReceipt)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.store.interruptionCount, 0)
+    }
+
+    func testTemporaryResolutionRetryCannotExtendOriginalAdmissionDeadline() async throws {
+        let clock = Clock()
+        let waits = ScheduledWaits()
+        var decisions = 0
+        var preparations = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            prepareWithoutWallets: {
+                preparations += 1
+                return self.approvalPreparation($0)
+            },
+            attemptNativeDecision: { _, consent in
+                decisions += 1
+                consent.invalidateAuthorization()
+                return .reviewRequired
+            }
+        ))
+        defer { waits.resumeAll() }
+        let deadline = try XCTUnwrap(fixture.store.snapshot?.request?.admissionDeadline)
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await waitForState(fixture.coordinator, .paused)
+        clock.now = deadline
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(decisions, 1)
+        XCTAssertEqual(fixture.store.interruptionCount, 0)
+    }
+
+    func testReviewRetryReturnedAfterAdmissionDeadlineFinishesWithoutPausing() async throws {
+        let clock = Clock()
+        let fixture = try makeFixture(clock: clock, attemptNativeDecision: { snapshot, consent in
+            consent.invalidateAuthorization()
+            clock.now = snapshot.request!.admissionDeadline
+            return .reviewRequired
+        })
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertFalse(fixture.coordinator.requiresExplicitReviewRetry)
+        XCTAssertEqual(fixture.store.interruptionCount, 0)
+        XCTAssertFalse(fixture.events.presentations.contains {
+            if case .retryRequired = $0 { return true }
+            return false
+        })
+    }
+
     func testPendingExecutionReturningToQueueInterruptsWithoutReplayingDecision() async throws {
         let clock = Clock()
         let waits = ScheduledWaits()

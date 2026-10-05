@@ -73,8 +73,7 @@ final class DurableApprovalExecutor {
     }
 
     typealias SourceSignerFactory = @MainActor @Sendable (
-        ApprovedWalletSigningOperation,
-        @escaping @MainActor @Sendable (ExtensionBridge.Handle) async -> Bool
+        ApprovedWalletSigningOperation
     ) -> any WalletSigning
 
     enum SigningAccess {
@@ -90,12 +89,14 @@ final class DurableApprovalExecutor {
 
     enum Preparation {
         case ready(consent: ReviewConsent, signing: SigningAccess)
+        case rejected(ImmediateResolution)
         case abandon
     }
 
     enum Resolution: Sendable {
         case approved(ResolvedDappApproval)
         case immediate(ImmediateResolution)
+        case reviewRequired
         case abandon
     }
 
@@ -103,6 +104,7 @@ final class DurableApprovalExecutor {
         case persisted
         case ownershipLost
         case retryablePersistenceFailure
+        case reviewRequired
         case abandoned
     }
 
@@ -165,6 +167,8 @@ final class DurableApprovalExecutor {
         case .ready(let preparedConsent, let preparedSigning):
             consent = preparedConsent
             signing = preparedSigning
+        case .rejected(let resolution):
+            return await complete(claim: claim, resolution: resolution)
         case .abandon:
             return await abandon(claim: claim)
         }
@@ -193,6 +197,13 @@ final class DurableApprovalExecutor {
             return await executeApproved(claim: claim, approval: approval, signing: signing, context: context)
         case .immediate(let resolution):
             return await complete(claim: claim, resolution: resolution)
+        case .reviewRequired:
+            signing.session?.invalidate()
+            switch await store.returnToReview(claim: claim, consent: consent) {
+            case .persisted: return .reviewRequired
+            case .ownershipLost: return .ownershipLost
+            case .retryablePersistenceFailure: return .retryablePersistenceFailure
+            }
         case .abandon:
             return await abandon(claim: claim)
         }
@@ -299,13 +310,11 @@ final class DurableApprovalExecutor {
             return nil
         case .unlocked(let session):
             guard let operation = ApprovedWalletSigningOperation(permit: permit),
-                  session.bind(operation: operation, authorityIsCurrent: {
-                      await self.store.authorityIsCurrent(handle: $0)
-                  }) else { return nil }
+                  session.bind(operation: operation) else { return nil }
             return session
         case .source(let factory):
             guard let operation = ApprovedWalletSigningOperation(permit: permit) else { return nil }
-            return factory(operation) { await self.store.authorityIsCurrent(handle: $0) }
+            return factory(operation)
         }
     }
 

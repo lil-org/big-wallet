@@ -23,11 +23,11 @@ struct BoundApprovalIntent: Sendable {
 
 struct DappRequestProcessor: DappRequestProcessing {
 
-    private let ethereumNetworkResolver: @MainActor @Sendable (Int) -> EthereumNetworkResolution
+    private let ethereumNetworkResolver: @MainActor @Sendable (Int) -> ApprovalNetworkResolution
 
     nonisolated init(
-        ethereumNetworkResolver: @escaping @MainActor @Sendable (Int) -> EthereumNetworkResolution = {
-            Nodes.resolution(chainId: $0)
+        ethereumNetworkResolver: @escaping @MainActor @Sendable (Int) -> ApprovalNetworkResolution = {
+            NetworkResolver.main.approvalResolution(chainId: $0)
         }
     ) {
         self.ethereumNetworkResolver = ethereumNetworkResolver
@@ -91,6 +91,8 @@ struct DappRequestProcessor: DappRequestProcessing {
         to binding: ExtensionBridge.RequestBinding
     ) -> DappRequestPreparation {
         switch preparation {
+        case .unavailable:
+            return .unavailable
         case .immediate(let resolution):
             return .immediate(resolution)
         case .approval(let action):

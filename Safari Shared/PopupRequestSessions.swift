@@ -268,6 +268,7 @@ final class PopupRequestSessions {
 
     private enum AuthenticationOutcome: Sendable {
         case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
+        case rejected(ImmediateResolution)
         case abandoned(feedback: String?)
     }
 
@@ -276,6 +277,7 @@ final class PopupRequestSessions {
         case immediateResponse(ImmediateResponsePersistence.State)
         case absent
         case secureSetupRequired
+        case unavailable
     }
 
     private final class ImmediateResponsePersistence {
@@ -301,6 +303,7 @@ final class PopupRequestSessions {
         let processor = DappRequestProcessor()
         let environment = PopupWalletEnvironment(
             reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() },
+            approvalCatalog: { SafariApprovalVault.shared.approvalCatalog() },
             unlockWallets: {
                 await SafariApprovalVault.shared.unlockResult(reason: $0, authorization: $1)
             }
@@ -314,7 +317,7 @@ final class PopupRequestSessions {
             transactionApprovalOperations: operations,
             invalidateNetworkCache: { CustomNetworkCache.shared.invalidate() },
             selectionNetworkResolver: { Networks.withChainIdHex($0) },
-            signingNetworkResolver: { Nodes.resolution(chainId: $0).resolvedNetwork },
+            approvalNetworkResolver: { NetworkResolver.main.approvalResolution(chainId: $0) },
             broadcastSender: DappBroadcastSender(),
             broadcastTimeoutNanoseconds: DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
             clock: { Date() },
@@ -330,7 +333,7 @@ final class PopupRequestSessions {
     private let loadsTransactionContext: Bool
     private let invalidateNetworkCache: () -> Void
     private let selectionNetworkResolver: (String) -> EthereumNetwork?
-    private let signingNetworkResolver: (Int) -> ResolvedEthereumNetwork?
+    private let approvalNetworkResolver: (Int) -> ApprovalNetworkResolution
     private let clock: @MainActor @Sendable () -> Date
     private let durableApprovalExecutor: DurableApprovalExecutor
     private let presenter: PopupApprovalStatePresenter
@@ -344,7 +347,7 @@ final class PopupRequestSessions {
         transactionApprovalOperations: TransactionApprovalOperations? = nil,
         invalidateNetworkCache: @escaping () -> Void = { CustomNetworkCache.shared.invalidate() },
         selectionNetworkResolver: @escaping (String) -> EthereumNetwork? = { Networks.withChainIdHex($0) },
-        signingNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = { Nodes.resolution(chainId: $0).resolvedNetwork },
+        approvalNetworkResolver: @escaping (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
         clock: @escaping @MainActor @Sendable () -> Date = { Date() }
@@ -353,7 +356,7 @@ final class PopupRequestSessions {
             store: store, requestProcessor: requestProcessor, walletEnvironment: walletEnvironment,
             loadsTransactionContext: loadsTransactionContext, transactionApprovalOperations: transactionApprovalOperations,
             invalidateNetworkCache: invalidateNetworkCache, selectionNetworkResolver: selectionNetworkResolver,
-            signingNetworkResolver: signingNetworkResolver, broadcastSender: broadcastSender,
+            approvalNetworkResolver: approvalNetworkResolver, broadcastSender: broadcastSender,
             broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds, clock: clock, waitForExecutionDeadline: nil
         )
     }
@@ -370,9 +373,8 @@ final class PopupRequestSessions {
         selectionNetworkResolver: @escaping (String) -> EthereumNetwork? = {
             Networks.withChainIdHex($0)
         },
-        signingNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = {
-            guard case .resolved(let network) = Nodes.resolution(chainId: $0) else { return nil }
-            return network
+        approvalNetworkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
+            NetworkResolver.main.approvalResolution(chainId: $0)
         },
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 =
@@ -387,7 +389,7 @@ final class PopupRequestSessions {
         self.loadsTransactionContext = loadsTransactionContext
         self.invalidateNetworkCache = invalidateNetworkCache
         self.selectionNetworkResolver = selectionNetworkResolver
-        self.signingNetworkResolver = signingNetworkResolver
+        self.approvalNetworkResolver = approvalNetworkResolver
         self.clock = clock
         durableApprovalExecutor = DurableApprovalExecutor(
             store: store,
@@ -652,6 +654,10 @@ final class PopupRequestSessions {
             guard let walletAccess = walletEnvironment.currentReviewCatalog() else {
                 return .secureSetupRequired
             }
+            if let account = binding.request.authorizedAccount,
+               walletAccess.availability(of: account) == .unavailable {
+                return .secureSetupRequired
+            }
             preparedCatalog = walletAccess
             preparation = requestProcessor.prepare(
                 binding,
@@ -659,6 +665,8 @@ final class PopupRequestSessions {
             )
         }
         switch preparation {
+        case .unavailable:
+            return .unavailable
         case .immediate(let response):
             persistImmediateResponse(response, handle: snapshot.handle)
             return .immediateResponse(.working)
@@ -737,6 +745,12 @@ final class PopupRequestSessions {
         let sessionWasCached = entries[handle]?.session != nil
         let activeSession = activeSession(snapshot: snapshot)
         guard case .available(let session) = activeSession else {
+            if case .unavailable = activeSession {
+                return PopupApprovalStatePresenter.errorState(
+                    id: handle.id, actions: [.retry, .reject],
+                    host: snapshot.host, error: Strings.failedToLoad
+                )
+            }
             if case .secureSetupRequired = activeSession {
                 return presenter.secureSetupRequiredState(
                     id: handle.id,
@@ -902,53 +916,31 @@ final class PopupRequestSessions {
             accounts: accounts,
             ethereumChainID: chainId
         )
-        guard let resolved = DappApprovalValidator.resolveSelection(
+        let selectedChainID = selection.ethereumChainID ?? action.network?.chainIdHexString
+        guard let resolvedAccounts = DappApprovalValidator.resolveSelectionAccounts(
             action: action,
             selection: selection,
-            accounts: reviewedCatalog.orderedAccounts,
-            network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                .flatMap(selectionNetworkResolver)
+            accounts: reviewedCatalog.orderedAccounts
         ) else {
             session.setFeedback(Strings.somethingWentWrong)
             return true
         }
+        if !resolvedAccounts.isEmpty {
+            let hasValidChainID = selectedChainID.flatMap { Int(hexString: $0) }.map { $0 > 0 } ?? false
+            let requiresEthereumNetwork = resolvedAccounts.contains { $0.account.coin == .ethereum }
+            guard selectedChainID == nil || hasValidChainID,
+                  !requiresEthereumNetwork || hasValidChainID else {
+                session.setFeedback(Strings.somethingWentWrong)
+                return true
+            }
+        }
         session.selectionDraft = .init(
-            selectedAccounts: Set(resolved.accounts),
-            network: resolved.network
+            selectedAccounts: Set(resolvedAccounts),
+            network: selectedChainID.flatMap(selectionNetworkResolver)
         )
         var accepted = true
         let claimed = await runClaimedApproval(for: session) { _, _ in
-            guard let refreshedCatalog = self.refreshWalletsAndNetworks() else {
-                session.setFeedback(Strings.somethingWentWrong)
-                return .abandon
-            }
-            guard refreshedCatalog.identity == reviewedCatalog.identity else {
-                return .abandon
-            }
-            guard let refreshed = DappApprovalValidator.resolveSelection(
-                action: action,
-                selection: selection,
-                accounts: refreshedCatalog.orderedAccounts,
-                network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                    .flatMap(self.selectionNetworkResolver)
-            ) else {
-                session.selectionDraft = .init(
-                    selectedAccounts: [],
-                    network: (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                        .flatMap(self.selectionNetworkResolver)
-                )
-                session.setFeedback(Strings.somethingWentWrong)
-                return .abandon
-            }
-            session.selectionDraft = .init(
-                selectedAccounts: Set(refreshed.accounts),
-                network: refreshed.network
-            )
-            let acceptedSelection = DappApprovalDecision.AccountSelection(
-                accounts: selection.accounts,
-                ethereumChainID: refreshed.network?.chainIdHexString ?? selection.ethereumChainID
-            )
-            guard let consent = session.acceptAccounts(acceptedSelection, approvedAt: self.clock()) else {
+            guard let consent = session.acceptAccounts(selection, approvedAt: self.clock()) else {
                 accepted = false
                 return .abandon
             }
@@ -1019,9 +1011,15 @@ final class PopupRequestSessions {
                         succeeded: false
                     )
                 }
-                if case .abandoned(let feedback?) = authentication,
-                   self.isCurrent(session, token: token) {
-                    session.setFeedback(feedback)
+                switch authentication {
+                case .rejected(let resolution):
+                    return .rejected(resolution)
+                case .abandoned(let feedback):
+                    if let feedback, self.isCurrent(session, token: token) {
+                        session.setFeedback(feedback)
+                    }
+                case .unlocked:
+                    break
                 }
                 return .abandon
             }
@@ -1056,13 +1054,16 @@ final class PopupRequestSessions {
             } else {
                 decision = .message(.init(approvedAccount: approvedAccount, solanaCluster: cluster))
             }
-            guard await self.validateSigningAccess(
-                for: session,
-                reviewedAction: action,
-                token: token,
-                catalog: catalog,
-                signer: signer
-            ) else { return .abandon }
+            switch await self.validateSigningAccess(
+                for: session, token: token, catalog: catalog, signer: signer
+            ) {
+            case .unlocked:
+                break
+            case .rejected(let resolution):
+                return .rejected(resolution)
+            case .abandoned:
+                return .abandon
+            }
             let consent: ReviewConsent?
             switch decision {
             case .transaction(let execution):
@@ -1080,34 +1081,37 @@ final class PopupRequestSessions {
 
     private func validateSigningAccess(
         for session: PopupRequestSession,
-        reviewedAction: DappRequestAction,
         token: UUID,
         catalog: WalletReviewCatalog,
         signer: WalletSigningSession
-    ) async -> Bool {
-        guard isCurrent(session, token: token) else { return false }
+    ) async -> AuthenticationOutcome {
+        guard isCurrent(session, token: token) else { return .abandoned(feedback: nil) }
         let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
-        guard clock() < signer.authorization.signingDeadline else { return false }
-        let walletsAvailable = refreshWalletsAndNetworks() != nil
-        let networkMatches: Bool
-        if case .approveTransaction(let action) = reviewedAction {
-            if let current = signingNetworkResolver(action.chain.chainId) {
-                networkMatches = DappApprovalDecision.NetworkIdentity(current) ==
-                    DappApprovalDecision.NetworkIdentity(action.resolvedNetwork)
-            } else {
-                networkMatches = false
-            }
-        } else {
-            networkMatches = true
+        guard isCurrent(session, token: token), authorityIsCurrent,
+              clock() < signer.authorization.signingDeadline else { return .abandoned(feedback: nil) }
+        if let failure = signingAccountFailure(
+            signer.approvedAccount, request: session.request,
+            catalog: walletEnvironment.currentApprovalCatalog()
+        ) { return failure }
+        guard session.reviewCatalog?.identity == catalog.identity,
+              signer.validateCurrent(), isCurrent(session, token: token) else {
+            return .abandoned(feedback: nil)
         }
-        guard authorityIsCurrent,
-              walletsAvailable,
-              session.reviewCatalog?.identity == catalog.identity,
-              signer.validateCurrent(),
-              networkMatches else {
-            return false
+        return .unlocked(catalog: catalog, session: signer)
+    }
+
+    private func signingAccountFailure(
+        _ account: WalletAccountDescriptor,
+        request: SafariRequest,
+        catalog: WalletReviewCatalog?
+    ) -> AuthenticationOutcome? {
+        guard let catalog else { return .abandoned(feedback: nil) }
+        switch DappApprovalResolver.signingAccountResolution(account, request: request, catalog: catalog) {
+        case .immediate(let resolution): return .rejected(resolution)
+        case .reviewRequired: return .abandoned(feedback: Strings.somethingWentWrong)
+        case nil: return nil
+        case .approved, .abandon: return .abandoned(feedback: nil)
         }
-        return isCurrent(session, token: token)
     }
 
     private func runClaimedApproval(
@@ -1131,21 +1135,12 @@ final class PopupRequestSessions {
                 }
                 return await prepare(context, token)
             }, resolve: { consent in
-                let accounts: [SpecificWalletAccount]
-                if case .addEthereumChain = consent.intent.action {
-                    accounts = []
-                } else {
-                    guard let catalog = self.refreshWalletsAndNetworks() else { return .abandon }
-                    accounts = catalog.orderedAccounts
-                }
-                guard self.isCurrent(session, token: token) else { return .abandon }
-                let transactionNetwork = consent.transactionChainID.flatMap(self.signingNetworkResolver)
-                guard case .success(let resolved) = consent.resolve(
-                    accounts: accounts,
-                    transactionNetwork: transactionNetwork,
-                    selectionNetworkResolver: self.selectionNetworkResolver
-                ) else { return .abandon }
-                return .approved(resolved)
+                await DappApprovalResolver.resolve(
+                    consent,
+                    refreshWalletCatalog: { self.walletEnvironment.currentApprovalCatalog() },
+                    networkResolver: self.approvalNetworkResolver,
+                    isCurrent: { self.isCurrent(session, token: token) }
+                )
             })
             await finishExecution(result, for: session, token: token)
             return accepted
@@ -1198,21 +1193,21 @@ final class PopupRequestSessions {
         case .canceled:
             return .abandoned(feedback: nil)
         case .unavailable:
-            guard let currentCatalog = walletEnvironment.currentReviewCatalog(),
-                  currentCatalog.identity == session.reviewCatalog?.identity,
-                  currentCatalog.orderedAccounts.contains(where: {
-                      authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
-                  }) else {
-                return .abandoned(feedback: nil)
-            }
+            if let failure = signingAccountFailure(
+                authorization.approvedAccount, request: session.request,
+                catalog: walletEnvironment.currentApprovalCatalog()
+            ) { return failure }
             return .abandoned(feedback: Strings.somethingWentWrong)
         case .unlocked(let catalog, let signer):
+            if let failure = signingAccountFailure(
+                authorization.approvedAccount, request: session.request, catalog: catalog
+            ) {
+                signer.invalidate()
+                return failure
+            }
             guard let reviewedIdentity = session.reviewCatalog?.identity,
                   catalog.identity == reviewedIdentity,
                   signer.authorization == authorization,
-                  catalog.orderedAccounts.contains(where: {
-                      authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
-                  }),
                   signer.validateCurrent() else {
                 signer.invalidate()
                 return .abandoned(feedback: nil)
@@ -1256,7 +1251,7 @@ final class PopupRequestSessions {
                 discardSession(handle: session.handle)
             }
             return
-        case .ownershipLost:
+        case .ownershipLost, .reviewRequired:
             break
         case .abandoned:
             guard isCurrent(session, token: token) else { return }
@@ -1267,7 +1262,7 @@ final class PopupRequestSessions {
                let catalog = refreshWalletsAndNetworks(),
                catalog.identity == session.reviewCatalog?.identity,
                case .approveTransaction(let action) = session.preparedAction,
-               let network = signingNetworkResolver(action.chain.chainId),
+               case .resolved(let network) = approvalNetworkResolver(action.chain.chainId),
                DappApprovalDecision.NetworkIdentity(network) == DappApprovalDecision.NetworkIdentity(action.resolvedNetwork),
                isCurrent(session, token: token) {
                 _ = session.returnToReview(token: token)

@@ -180,7 +180,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 handle: access.authorization.handle, deadline: access.authorization.signingDeadline
             )
         )
-        guard access.bind(operation: operation, authorityIsCurrent: { _ in true }) else {
+        guard access.bind(operation: operation) else {
             XCTAssertFalse(expectedSuccess, "Expected authorization to bind", file: file, line: line)
             return
         }
@@ -512,6 +512,37 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         keys.removeAllKeys()
         XCTAssertNil(vault.reviewCatalog())
+    }
+
+    func testApprovalCatalogDistinguishesInaccessibleKeysFromRemovedAccountsWithoutAuthentication() throws {
+        let source = try accountCountFixture(2)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let publication = try vault.publish(source: source, integrityKey: integrityKey)
+        let identities = source.catalog.accounts.map {
+            SafariApprovalKeyIdentity(generation: publication.generation, account: $0)
+        }
+        keys.availabilityOverrides[identities[0]] = .unavailable(errSecIO)
+        let partial = try XCTUnwrap(vault.approvalCatalog())
+        XCTAssertEqual(partial.knownAccounts, Set(source.catalog.accounts))
+        XCTAssertEqual(partial.availability(of: identities[0].account), .unavailable)
+        XCTAssertEqual(partial.availability(of: identities[1].account), .available)
+        XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts, [identities[1].account.specificAccount])
+
+        keys.removeKey(identity: identities[1])
+        let inaccessible = try XCTUnwrap(vault.approvalCatalog())
+        XCTAssertTrue(inaccessible.orderedAccounts.isEmpty)
+        XCTAssertEqual(inaccessible.knownAccounts, partial.knownAccounts)
+        XCTAssertTrue(identities.allSatisfy { inaccessible.availability(of: $0.account) == .unavailable })
+        XCTAssertNil(vault.reviewCatalog())
+        let removed = WalletAccountDescriptor(walletID: "removed-wallet", account: identities[0].account.account)
+        XCTAssertEqual(inaccessible.availability(of: removed), .removed)
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+
+        try FileManager.default.removeItem(at: url)
+        XCTAssertNil(vault.approvalCatalog())
     }
 
     func testSiblingKeyLossAfterUnlockPreservesSigningAndCommitLease() async throws {

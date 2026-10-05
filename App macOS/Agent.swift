@@ -921,7 +921,7 @@ extension Agent.ActiveApproval {
     fileprivate func restorePresentation(retryPaused: Bool, using agent: Agent) {
         guard !isRetired, coordinator.canReactivate else { return }
         restorePresentation()
-        if coordinator.isPaused && retryPaused {
+        if coordinator.isPaused && retryPaused && !coordinator.requiresExplicitReviewRetry {
             coordinator.retryRecovery()
         }
         agent.renderCurrentPresentation(

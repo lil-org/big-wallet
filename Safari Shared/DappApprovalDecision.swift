@@ -243,6 +243,8 @@ final class ApprovalReview {
 fileprivate final class ConsentAuthorizationUse: Sendable {
     private let consumed = Mutex(false)
 
+    var isAvailable: Bool { consumed.withLock { !$0 } }
+
     func consume() -> Bool {
         consumed.withLock { consumed in
             guard !consumed else { return false }
@@ -270,7 +272,7 @@ struct ApprovalResolutionContext: Sendable {
 
 struct ReviewConsent: Sendable {
     let intent: BoundApprovalIntent
-    private let authorizationUse: ConsentAuthorizationUse
+    fileprivate let authorizationUse: ConsentAuthorizationUse
     let decision: DappApprovalDecision
     let approvedAt: Date
     let nativeReceipt: ExtensionBridge.NativeDeliveryReceipt?
@@ -290,36 +292,14 @@ struct ReviewConsent: Sendable {
 
     var binding: ExtensionBridge.RequestBinding { intent.binding }
     var request: SafariRequest { binding.request }
+    var authorizationIsAvailable: Bool { authorizationUse.isAvailable }
 
-    var transactionChainID: Int? {
-        guard case .approveTransaction(let action) = intent.action else { return nil }
-        return action.chain.chainId
+    func sharesAuthorization(with other: ReviewConsent) -> Bool {
+        authorizationUse === other.authorizationUse
     }
 
     func invalidateAuthorization() {
         _ = authorizationUse.consume()
-    }
-
-    @MainActor
-    func resolve(
-        accounts: [SpecificWalletAccount],
-        transactionNetwork: ResolvedEthereumNetwork?,
-        selectionNetworkResolver: (String) -> EthereumNetwork?
-    ) -> Result<ResolvedDappApproval, DappApprovalValidator.Failure> {
-        let selectionNetwork: EthereumNetwork?
-        switch (intent.action, decision) {
-        case (.selectAccount(let action), .accountSelection(let selection)),
-             (.switchAccount(let action), .accountSelection(let selection)):
-            selectionNetwork = (selection.ethereumChainID ?? action.network?.chainIdHexString)
-                .flatMap(selectionNetworkResolver)
-        default:
-            selectionNetwork = nil
-        }
-        return resolve(context: .init(
-            accounts: accounts,
-            selectionNetwork: selectionNetwork,
-            transactionNetwork: transactionNetwork
-        ))
     }
 
     @MainActor
@@ -364,6 +344,131 @@ struct ResolvedDappApproval: Sendable {
 
     func consumeAuthorization() -> Bool {
         authorizationUse.consume()
+    }
+
+    func sharesAuthorization(with consent: ReviewConsent) -> Bool {
+        authorizationUse === consent.authorizationUse
+    }
+}
+
+@MainActor
+enum DappApprovalResolver {
+    static func resolve(
+        _ consent: ReviewConsent,
+        refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?,
+        networkResolver: (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
+        isCurrent: @MainActor () -> Bool = { true }
+    ) async -> DurableApprovalExecutor.Resolution {
+        guard !Task.isCancelled, isCurrent(), consent.authorizationIsAvailable else { return .abandon }
+        if case .addEthereumChain(let action) = consent.intent.action {
+            guard let chainID = Int(hexString: action.chainToAdd.chainId), chainID > 0 else {
+                return .immediate(.failure(.internalError))
+            }
+            let network: EthereumNetworkResolution
+            switch networkResolver(chainID) {
+            case .resolved(let resolved): network = .resolved(resolved)
+            case .missing: network = .unknown
+            case .unavailable: return .reviewRequired
+            }
+            if let immediate = EthereumDappRequestProcessor.chainAdditionResolution(
+                action.chainToAdd, networkResolver: { _ in network }
+            ) {
+                return .immediate(immediate)
+            }
+            return resolve(consent, context: .init(accounts: []))
+        }
+
+        let catalog = await refreshWalletCatalog()
+        guard !Task.isCancelled, isCurrent(), consent.authorizationIsAvailable else { return .abandon }
+        guard let catalog else { return .reviewRequired }
+        if let account = consent.intent.action.signingAccount,
+           let resolution = signingAccountResolution(account, request: consent.request, catalog: catalog) {
+            return resolution
+        }
+
+        let selectionNetwork: EthereumNetwork?
+        let transactionNetwork: ResolvedEthereumNetwork?
+        switch (consent.intent.action, consent.decision) {
+        case (.selectAccount(let action), .accountSelection(let selection)),
+             (.switchAccount(let action), .accountSelection(let selection)):
+            if selection.accounts.contains(where: { catalog.availability(of: $0) == .removed }) {
+                return .immediate(.failure(.internalError))
+            }
+            if selection.accounts.contains(where: { catalog.availability(of: $0) == .unavailable }) {
+                return .reviewRequired
+            }
+            if !selection.accounts.isEmpty,
+               let chainID = selection.ethereumChainID ?? action.network?.chainIdHexString {
+                guard let value = Int(hexString: chainID), value > 0 else {
+                    return .immediate(.failure(.internalError))
+                }
+                switch networkResolver(value) {
+                case .resolved(let network): selectionNetwork = network.network
+                case .missing: return .immediate(.failure(.internalError))
+                case .unavailable: return .reviewRequired
+                }
+            } else {
+                selectionNetwork = nil
+            }
+            transactionNetwork = nil
+        case (.approveTransaction(let action), _):
+            switch networkResolver(action.chain.chainId) {
+            case .resolved(let network): transactionNetwork = network
+            case .missing: return .immediate(.failure(.internalError))
+            case .unavailable: return .reviewRequired
+            }
+            selectionNetwork = nil
+        default:
+            selectionNetwork = nil
+            transactionNetwork = nil
+        }
+        guard !Task.isCancelled, isCurrent(), consent.authorizationIsAvailable else { return .abandon }
+        return resolve(consent, context: .init(
+            accounts: catalog.orderedAccounts,
+            selectionNetwork: selectionNetwork,
+            transactionNetwork: transactionNetwork
+        ))
+    }
+
+    static func signingAccountResolution(
+        _ account: WalletAccountDescriptor,
+        request: SafariRequest,
+        catalog: WalletReviewCatalog
+    ) -> DurableApprovalExecutor.Resolution? {
+        switch catalog.availability(of: account) {
+        case .available: return nil
+        case .unavailable: return .reviewRequired
+        case .removed: return .immediate(missingSigningAccountResolution(for: request))
+        }
+    }
+
+    static func missingSigningAccountResolution(for request: SafariRequest) -> ImmediateResolution {
+        switch request.body {
+        case .ethereum(let body):
+            return body.method == .signTransaction
+                ? staleResolution
+                : .failure(.init(message: Strings.somethingWentWrong))
+        case .solana(let body):
+            return .solanaAuthorizationDenied(publicKey: body.publicKey)
+        case .unknown:
+            return .failure(.internalError)
+        }
+    }
+
+    private static func resolve(
+        _ consent: ReviewConsent,
+        context: ApprovalResolutionContext
+    ) -> DurableApprovalExecutor.Resolution {
+        switch consent.resolve(context: context) {
+        case .success(let approval): return .approved(approval)
+        case .failure(.accountUnavailable): return .immediate(missingSigningAccountResolution(for: consent.request))
+        case .failure(.staleTransaction), .failure(.staleAccount): return .immediate(staleResolution)
+        case .failure(.invalidDecision): return .immediate(.failure(.internalError))
+        }
+    }
+
+    private static var staleResolution: ImmediateResolution {
+        .failure(ProviderResponseError(message: Strings.providerNotReady, code: 4100))
     }
 }
 
@@ -476,6 +581,23 @@ enum DappApprovalValidator {
         accounts: [SpecificWalletAccount],
         network: EthereumNetwork?
     ) -> Selection? {
+        guard let resolvedAccounts = resolveSelectionAccounts(
+            action: action, selection: selection, accounts: accounts
+        ) else { return nil }
+        let chainID = selection.ethereumChainID ?? action.network?.chainIdHexString
+        if !resolvedAccounts.isEmpty {
+            guard chainID == nil || network != nil,
+                  !resolvedAccounts.contains(where: { $0.account.coin == .ethereum }) ||
+                    network != nil else { return nil }
+        }
+        return Selection(accounts: resolvedAccounts, network: network)
+    }
+
+    static func resolveSelectionAccounts(
+        action: SelectAccountAction,
+        selection: DappApprovalDecision.AccountSelection,
+        accounts: [SpecificWalletAccount]
+    ) -> [SpecificWalletAccount]? {
         var resolvedAccounts = [SpecificWalletAccount]()
         var selectedCoins = Set<WalletCoin>()
         for identity in selection.accounts {
@@ -488,14 +610,9 @@ enum DappApprovalValidator {
             guard matches.count == 1 else { return nil }
             resolvedAccounts.append(matches[0])
         }
-        let chainID = selection.ethereumChainID ?? action.network?.chainIdHexString
         if resolvedAccounts.isEmpty {
             guard !action.initiallyConnectedProviders.isEmpty else { return nil }
-        } else {
-            guard chainID == nil || network != nil,
-                  !resolvedAccounts.contains(where: { $0.account.coin == .ethereum }) ||
-                    network != nil else { return nil }
         }
-        return Selection(accounts: resolvedAccounts, network: network)
+        return resolvedAccounts
     }
 }

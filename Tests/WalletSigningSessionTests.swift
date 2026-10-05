@@ -18,16 +18,7 @@ final class WalletSigningSessionTests: XCTestCase {
         )
         let releaseLock = DispatchSemaphore(value: 0)
         defer { releaseLock.signal() }
-        var releaseTask: Task<Void, Never>?
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in
-            if releaseTask == nil {
-                releaseTask = Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(20))
-                    releaseLock.signal()
-                }
-            }
-            return true
-        }))
+        XCTAssertTrue(session.bind(operation: operation))
         sourceCheckThreads.withLock { $0.removeAll() }
         let lockHeld = expectation(description: "Approval store lock held by another worker")
         let holder = Task.detached {
@@ -37,10 +28,14 @@ final class WalletSigningSessionTests: XCTestCase {
             } ?? false
         }
         await fulfillment(of: [lockHeld], timeout: 2)
+        let releaseTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(20))
+            releaseLock.signal()
+        }
 
         let result = await session.sign()
         let released = await holder.value
-        await releaseTask?.value
+        await releaseTask.value
 
         XCTAssertTrue(released)
         guard case .success(.ethereumSignature("signed")) = result else {
@@ -57,9 +52,9 @@ final class WalletSigningSessionTests: XCTestCase {
             material, authorization: operation.authorization, isCurrent: { true }
         )
         let different = try self.operation(requestID: 2)
-        XCTAssertFalse(session.bind(operation: different, authorityIsCurrent: { _ in true }))
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
-        XCTAssertFalse(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+        XCTAssertFalse(session.bind(operation: different))
+        XCTAssertTrue(session.bind(operation: operation))
+        XCTAssertFalse(session.bind(operation: operation))
 
         guard case .success(.ethereumSignature("signed")) = await session.sign() else {
             return XCTFail("The original authorized operation must sign")
@@ -85,7 +80,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 return WalletExecutionLease { released.fulfill() }
             }
         )
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+        XCTAssertTrue(session.bind(operation: operation))
         guard case .failure(.failedToSign) = await session.sign() else {
             return XCTFail("The signing failure must be preserved")
         }
@@ -118,7 +113,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 return await resolution.value()
             }
         )
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+        XCTAssertTrue(session.bind(operation: operation))
         let acquisition = Task { await session.takeCommitLease() }
         await fulfillment(of: [acquisitionStarted], timeout: 1)
         XCTAssertEqual(material.erasureCount, 1)
@@ -146,7 +141,7 @@ final class WalletSigningSessionTests: XCTestCase {
             isCurrent: { true },
             acquireCommitLease: { WalletExecutionLease(release: {}) }
         )
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+        XCTAssertTrue(session.bind(operation: operation))
         let signing = Task { await session.sign() }
         await fulfillment(of: [signingStarted], timeout: 1)
         guard case .failure(.authorizationUnavailable) = await session.sign() else {
@@ -181,8 +176,8 @@ final class WalletSigningSessionTests: XCTestCase {
         let first = WalletSigningSession(firstMaterial, authorization: operation.authorization, isCurrent: { true })
         let second = WalletSigningSession(secondMaterial, authorization: operation.authorization, isCurrent: { true })
         let copiedOperation = operation
-        XCTAssertTrue(first.bind(operation: operation, authorityIsCurrent: { _ in true }))
-        XCTAssertFalse(second.bind(operation: copiedOperation, authorityIsCurrent: { _ in true }))
+        XCTAssertTrue(first.bind(operation: operation))
+        XCTAssertFalse(second.bind(operation: copiedOperation))
         second.invalidate()
         XCTAssertTrue(permit.consumeExecution())
         guard case .success = await first.sign(),
@@ -202,7 +197,7 @@ final class WalletSigningSessionTests: XCTestCase {
             ))
             let material = SessionSigningMaterial { .success(.ethereumSignature("forbidden")) }
             let session = WalletSigningSession(material, authorization: operation.authorization, isCurrent: { true })
-            XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+            XCTAssertTrue(session.bind(operation: operation))
             if released {
                 XCTAssertTrue(permit.consumeExecution())
                 permit.releaseLease()
@@ -225,7 +220,7 @@ final class WalletSigningSessionTests: XCTestCase {
             return .success(.ethereumSignature("discarded"))
         }
         let session = WalletSigningSession(material, authorization: operation.authorization, isCurrent: { true })
-        XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+        XCTAssertTrue(session.bind(operation: operation))
         XCTAssertTrue(permit.consumeExecution())
         guard case .failure(.authorizationUnavailable) = await session.sign() else {
             return XCTFail("A result must not escape after execution ownership is released")
@@ -240,22 +235,20 @@ final class WalletSigningSessionTests: XCTestCase {
                 normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
                 derivationPath: "m/44'/60'/0'/0/0"
             ))
-            let material = SessionSigningMaterial { .success(.ethereumSignature("discarded")) }
-            let session = WalletSigningSession(material, authorization: operation.authorization, isCurrent: { true })
             let authorityCheckStarted = expectation(description: "Authority check \(suspendedCheck) started")
-            let resolution = ApprovalResolution<Bool>()
-            var authorityChecks = 0
-            XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in
-                authorityChecks += 1
-                guard authorityChecks == suspendedCheck else { return true }
-                authorityCheckStarted.fulfill()
-                return await resolution.value()
-            }))
+            let sourceCheck = WalletSigningSourceCheckGate(started: authorityCheckStarted)
+            defer { sourceCheck.release() }
+            let material = SessionSigningMaterial { .success(.ethereumSignature("discarded")) }
+            let session = WalletSigningSession(
+                material, authorization: operation.authorization, isCurrent: sourceCheck.check
+            )
+            XCTAssertTrue(session.bind(operation: operation))
+            sourceCheck.arm(check: suspendedCheck)
             XCTAssertTrue(permit.consumeExecution())
             let signing = Task { await session.sign() }
             await fulfillment(of: [authorityCheckStarted], timeout: 1)
             permit.releaseLease()
-            await resolution.resolve(true)
+            sourceCheck.release()
 
             guard case .failure(.authorizationUnavailable) = await signing.value else {
                 return XCTFail("Ownership lost during authority check \(suspendedCheck) must invalidate signing")
@@ -289,7 +282,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 isCurrent: { true },
                 clock: { now }
             )
-            XCTAssertTrue(session.bind(operation: operation, authorityIsCurrent: { _ in true }))
+            XCTAssertTrue(session.bind(operation: operation))
 
             let result = await session.sign()
             if offset < 0 {
@@ -316,6 +309,50 @@ final class WalletSigningSessionTests: XCTestCase {
             ),
             requestID: requestID
         )
+    }
+}
+
+final class WalletSigningSourceCheckGate: Sendable {
+    private struct State {
+        var suspendedCheck: Int?
+        var checks = 0
+        var isCurrent = true
+    }
+
+    private let state = Mutex(State())
+    private let started: XCTestExpectation
+    private let released = DispatchSemaphore(value: 0)
+
+    init(started: XCTestExpectation) {
+        self.started = started
+    }
+
+    func arm(check: Int) {
+        state.withLock {
+            $0.suspendedCheck = check
+            $0.checks = 0
+        }
+    }
+
+    func check() -> Bool {
+        let shouldSuspend = state.withLock { state in
+            guard let suspendedCheck = state.suspendedCheck else { return false }
+            state.checks += 1
+            return state.checks == suspendedCheck
+        }
+        if shouldSuspend {
+            started.fulfill()
+            guard released.wait(timeout: .now() + 5) == .success else { return false }
+        }
+        return state.withLock { $0.isCurrent }
+    }
+
+    func invalidateSource() {
+        state.withLock { $0.isCurrent = false }
+    }
+
+    func release() {
+        released.signal()
     }
 }
 
@@ -534,7 +571,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
             authorization: operation.authorization,
             isCurrent: { true }
         )
-        guard session.bind(operation: operation, authorityIsCurrent: { _ in true }) else {
+        guard session.bind(operation: operation) else {
             return .failure(.authorizationUnavailable)
         }
         return await session.sign()

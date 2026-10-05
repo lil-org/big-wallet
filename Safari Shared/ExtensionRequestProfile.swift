@@ -398,6 +398,17 @@ struct ExtensionRequestProfile: Sendable {
             return true
         }
 
+        mutating func returnToReview() -> Bool {
+            guard case .claimed(_, let request, let approval) = state else { return false }
+            switch approval {
+            case .ordinary:
+                state = .pending(request: request, approval: .unowned)
+            case .native(let approved, _):
+                state = .pending(request: request, approval: .delivered(approved.receipt))
+            }
+            return true
+        }
+
         mutating func complete(response: Data, at date: Date) {
             state = .completed(
                 since: max(createdAt, date),

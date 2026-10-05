@@ -292,6 +292,12 @@ enum EthereumNetworkResolution: Equatable, Sendable {
 
 }
 
+enum ApprovalNetworkResolution: Equatable, Sendable {
+    case resolved(ResolvedEthereumNetwork)
+    case missing
+    case unavailable
+}
+
 struct NetworkResolver: Sendable {
 
     static let main: NetworkResolver = {
@@ -388,6 +394,23 @@ struct NetworkResolver: Sendable {
             return .unknown
         }
         return .resolved(resolvedNetwork)
+    }
+
+    func approvalResolution(
+        chainId: Int,
+        freshCustomSnapshot: () -> CustomNetworkSnapshotLoadResult = { CustomNetworkCache.shared.refreshSnapshot() }
+    ) -> ApprovalNetworkResolution {
+        if let network = resolvedCatalogByChainId[chainId] {
+            return .resolved(network)
+        }
+        if catalogOwnedChainIds.contains(chainId) { return .unavailable }
+        switch freshCustomSnapshot() {
+        case .loaded(let snapshot):
+            guard let network = snapshot.entriesByChainId[chainId]?.resolvedNetwork else { return .missing }
+            return .resolved(network)
+        case .unavailable, .corrupt:
+            return .unavailable
+        }
     }
 
     func rpcURL(chainId: Int) -> URL? {

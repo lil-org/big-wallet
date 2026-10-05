@@ -3,7 +3,7 @@
 import Foundation
 
 enum NativeApprovalFinalizationResult: Equatable {
-    case responseReady, pending, interruptionRequired
+    case responseReady, pending, reviewRequired, interruptionRequired
 }
 
 @MainActor
@@ -17,16 +17,14 @@ final class NativeApprovalFinalizer {
     private let store: NativeApprovalStore
     private let refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?
     private let makeSigner: DurableApprovalExecutor.SourceSignerFactory
-    private let networkResolver: (String) -> EthereumNetwork?
-    private let transactionNetworkResolver: (Int) -> ResolvedEthereumNetwork?
+    private let networkResolver: (Int) -> ApprovalNetworkResolution
     private let executor: DurableApprovalExecutor
 
     convenience init(
         store: NativeApprovalStore,
         requestProcessor: DappRequestProcessing,
         makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
-        networkResolver: @escaping (String) -> EthereumNetwork? = { Networks.withChainIdHex($0) },
-        transactionNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = { Nodes.resolution(chainId: $0).resolvedNetwork },
+        networkResolver: @escaping (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
         clock: @escaping @MainActor @Sendable () -> Date = { Date() },
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
         broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds
@@ -38,7 +36,7 @@ final class NativeApprovalFinalizer {
                 return WalletsManager.shared.reviewCatalog()
             },
             makeSigner: makeSigner, networkResolver: networkResolver,
-            transactionNetworkResolver: transactionNetworkResolver, clock: clock,
+            clock: clock,
             broadcastSender: broadcastSender, broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds
         )
     }
@@ -48,11 +46,8 @@ final class NativeApprovalFinalizer {
         requestProcessor: DappRequestProcessing,
         refreshWalletCatalog: @escaping @MainActor () async -> WalletReviewCatalog?,
         makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
-        networkResolver: @escaping (String) -> EthereumNetwork? = {
-            Networks.withChainIdHex($0)
-        },
-        transactionNetworkResolver: @escaping (Int) -> ResolvedEthereumNetwork? = {
-            Nodes.resolution(chainId: $0).resolvedNetwork
+        networkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
+            NetworkResolver.main.approvalResolution(chainId: $0)
         },
         clock: @escaping @MainActor @Sendable () -> Date = Date.init,
         broadcastSender: (any ApprovedBroadcastSending)? = nil,
@@ -61,15 +56,13 @@ final class NativeApprovalFinalizer {
     ) {
         self.store = store
         self.refreshWalletCatalog = refreshWalletCatalog
-        self.makeSigner = makeSigner ?? { operation, authorityIsCurrent in
+        self.makeSigner = makeSigner ?? { operation in
             WalletSigningSession.fromSource(
                 operation: operation,
-                authorityIsCurrent: authorityIsCurrent,
                 clock: clock
             )
         }
         self.networkResolver = networkResolver
-        self.transactionNetworkResolver = transactionNetworkResolver
         executor = DurableApprovalExecutor(
             store: store,
             requestProcessor: requestProcessor,
@@ -106,16 +99,13 @@ final class NativeApprovalFinalizer {
             return .interruptionRequired
         }
         let claim: ExtensionBridge.ApprovalClaim
-        switch await store.claimNativeExecution(
-            handle: snapshot.handle,
-            nativeDeliveryNonce: receipt.nativeDeliveryNonce,
-            runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier,
-            approvedAt: consent.approvedAt
-        ) {
+        switch await store.claimNativeExecution(consent: consent) {
         case .claimed(let value):
             claim = value
         case .executing:
             return .pending
+        case .reviewRequired:
+            return .reviewRequired
         case .responded, .missing:
             consent.invalidateAuthorization()
             return .responseReady
@@ -129,74 +119,18 @@ final class NativeApprovalFinalizer {
         switch result {
         case .persisted:
             return .responseReady
+        case .reviewRequired:
+            return .reviewRequired
         case .ownershipLost, .retryablePersistenceFailure, .abandoned:
             return .interruptionRequired
         }
     }
 
     private func resolve(_ consent: ReviewConsent) async -> DurableApprovalExecutor.Resolution {
-        if case .addEthereumChain(let action) = consent.intent.action {
-            if let resolution = EthereumDappRequestProcessor.chainAdditionResolution(action.chainToAdd) {
-                return .immediate(resolution)
-            }
-            return resolvedConsent(consent, accounts: [], transactionNetwork: nil)
-        }
-        CustomNetworkCache.shared.invalidate()
-        let currentNetwork: ResolvedEthereumNetwork?
-        if let chainID = consent.transactionChainID {
-            guard let network = transactionNetworkResolver(chainID) else {
-                return .immediate(.failure(.internalError))
-            }
-            currentNetwork = network
-        } else {
-            currentNetwork = nil
-        }
-        guard let catalog = await refreshWalletCatalog() else { return .abandon }
-        return resolvedConsent(
+        await DappApprovalResolver.resolve(
             consent,
-            accounts: catalog.orderedAccounts,
-            transactionNetwork: currentNetwork
+            refreshWalletCatalog: refreshWalletCatalog,
+            networkResolver: networkResolver
         )
-    }
-
-    private func resolvedConsent(
-        _ consent: ReviewConsent,
-        accounts: [SpecificWalletAccount],
-        transactionNetwork: ResolvedEthereumNetwork?
-    ) -> DurableApprovalExecutor.Resolution {
-        switch consent.resolve(
-            accounts: accounts,
-            transactionNetwork: transactionNetwork,
-            selectionNetworkResolver: networkResolver
-        ) {
-        case .success(let approval):
-            return .approved(approval)
-        case .failure(.accountUnavailable):
-            return .immediate(missingSigningAccountResolution(for: consent.request))
-        case .failure(.staleTransaction), .failure(.staleAccount):
-            return .immediate(Self.staleResolution)
-        case .failure(.invalidDecision):
-            return .immediate(.failure(.internalError))
-        }
-    }
-
-    private func missingSigningAccountResolution(for request: SafariRequest) -> ImmediateResolution {
-        switch request.body {
-        case .ethereum(let body):
-            return body.method == .signTransaction
-                ? Self.staleResolution
-                : .failure(.init(message: Strings.somethingWentWrong))
-        case .solana(let body):
-            return .solanaAuthorizationDenied(publicKey: body.publicKey)
-        case .unknown:
-            return .failure(.internalError)
-        }
-    }
-
-    private static var staleResolution: ImmediateResolution {
-        .failure(ProviderResponseError(
-            message: Strings.providerNotReady,
-            code: 4100
-        ))
     }
 }
