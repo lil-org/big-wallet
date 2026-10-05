@@ -366,24 +366,33 @@ final class WalletsManagerPreviewTests: XCTestCase {
             "wallet-b": Vectors.walletCoreJSONPrivateKeyFixture,
         ]
         var metadataReloadCount = 0
+        var publishedWalletIDs = [[String]]()
+        weak var observedManager: WalletsManager?
         let manager = WalletsManager(
             keychain: Keychain(copyMatching: reader.copyMatching),
-            reloadMetadata: { metadataReloadCount += 1 }
+            reloadMetadata: { metadataReloadCount += 1 },
+            publishLocalChange: {
+                publishedWalletIDs.append(observedManager?.wallets.map(\.id) ?? [])
+            }
         )
+        observedManager = manager
 
         await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a", "wallet-b"])
         XCTAssertEqual(metadataReloadCount, 1)
+        XCTAssertEqual(publishedWalletIDs, [["wallet-a", "wallet-b"]])
 
         reader.walletReadStatuses["wallet-b"] = errSecInteractionNotAllowed
         await assertWalletReload(manager, succeeds: false)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a", "wallet-b"])
         XCTAssertEqual(metadataReloadCount, 1)
+        XCTAssertEqual(publishedWalletIDs, [["wallet-a", "wallet-b"]])
 
         reader.walletReadStatuses["wallet-b"] = errSecItemNotFound
         await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
         XCTAssertEqual(metadataReloadCount, 2)
+        XCTAssertEqual(publishedWalletIDs, [["wallet-a", "wallet-b"], ["wallet-a"]])
     }
 
     func testWalletReloadTreatsInvalidJSONAsSkippableAndEmptyStoreAsAvailable() async throws {
@@ -451,7 +460,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
         XCTAssertEqual(metadataReloadCount, 1)
-        XCTAssertEqual(localPublicationCount, 0)
+        XCTAssertEqual(localPublicationCount, 1)
     }
 
     func testExternalWalletChangeRetriesOnlyOnNextExplicitEvent() async throws {
@@ -476,14 +485,14 @@ final class WalletsManagerPreviewTests: XCTestCase {
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
         XCTAssertEqual(metadataReloadCount, 1)
-        XCTAssertEqual(localPublicationCount, 0)
+        XCTAssertEqual(localPublicationCount, 1)
 
         reader.attributesStatus = errSecSuccess
         await manager.handleExternalWalletStoreChange()
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-b"])
         XCTAssertEqual(metadataReloadCount, 2)
-        XCTAssertEqual(localPublicationCount, 1)
+        XCTAssertEqual(localPublicationCount, 2)
     }
 
     func testExternalReloadPublishesAppliedStateDespiteLateCancellation() async throws {
@@ -511,7 +520,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
 
         XCTAssertTrue(reload.isCancelled)
         XCTAssertTrue(manager.wallets.isEmpty)
-        XCTAssertEqual(localPublicationCount, 1)
+        XCTAssertEqual(localPublicationCount, 2)
     }
 
     private func testHDWallet(file: StaticString = #filePath, line: UInt = #line) throws -> WalletHDWallet {

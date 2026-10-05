@@ -118,6 +118,7 @@ final class WalletsManager: NSObject {
         do {
             let state = try await repository.reload()
             apply(state)
+            publishLocalChange()
             return true
         } catch {
             return false
@@ -237,8 +238,7 @@ final class WalletsManager: NSObject {
     }
 
     func handleExternalWalletStoreChange() async {
-        guard await reloadFromStore() else { return }
-        publishLocalChange()
+        _ = await reloadFromStore()
     }
 
     func previewAccountsPager(wallet: WalletSnapshot) -> PreviewAccountsPager {
