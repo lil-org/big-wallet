@@ -138,7 +138,7 @@ final class PopupApprovalStatePresenter {
             host: host,
             content: .review(PopupReview(
                 reviewToken: review.reviewToken,
-                title: title(for: review.content.action),
+                title: title(for: review.content),
                 content: content
             ), actions: actions, feedback: error)
         )
@@ -153,8 +153,8 @@ final class PopupApprovalStatePresenter {
         return Locale.Language(identifier: language).characterDirection == .rightToLeft ? .rtl : .ltr
     }
 
-    private func title(for action: DappRequestAction) -> String {
-        switch action {
+    private func title(for content: PopupRequestSession.ReviewContent) -> String {
+        switch content {
         case .selectAccount: return Strings.connectWallet
         case .switchAccount: return Strings.switchAccount
         case .approveMessage(let action): return action.subject.title

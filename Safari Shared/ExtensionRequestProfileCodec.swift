@@ -55,17 +55,37 @@ struct ExtensionRequestProfileCodec: Sendable {
         )
     }
 
-    private func repairAuthority(
+    private func resetAuthority(
         _ stored: ProfileState,
         expectedIdentifier: UUID?,
         now: Date
     ) -> ValidatedProfile? {
-        guard let repair = ExtensionRequestProfile.repairAuthorityState(stored, expectedIdentifier: expectedIdentifier),
-              var profile = validate(repair.state, expectedIdentifier: expectedIdentifier) else { return nil }
-        for key in repair.invalidOrigins {
+        guard let state = ExtensionRequestProfile.resetAuthorityState(stored, expectedIdentifier: expectedIdentifier),
+              var profile = validate(state, expectedIdentifier: expectedIdentifier) else { return nil }
+        for key in profile.state.origins.keys {
             guard profile.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now) else { return nil }
         }
         return profile
+    }
+
+    private func permissionsAreValid(_ profile: ProfileState) -> Bool {
+        guard !profile.permissionDecodingFailed,
+              profile.origins.count <= ExtensionRequestProfile.maximumOrigins,
+              (try? Self.encode(profile.origins).count).map({ $0 <= ExtensionRequestProfile.maximumAuthorityBytes }) == true,
+              profile.origins.allSatisfy({ key, origin in
+                  ExtensionRequestProfile.validConfigurationKey(key) &&
+                      ExtensionRequestProfile.validOrigin(origin, sequence: profile.authoritySequence)
+              }),
+              profile.mutationReceipts.allSatisfy({ profile.origins[$0.configurationKey] != nil }) else { return false }
+        return profile.records.allSatisfy { record in
+            guard profile.origins[record.configurationKey] != nil else { return false }
+            switch record.state {
+            case .pending, .claimed:
+                return ExtensionRequestProfile.authorityStatus(record, in: profile) != .inconsistentGrant
+            case .broadcastPrepared, .completed:
+                return true
+            }
+        }
     }
 
     private func validate(
@@ -77,12 +97,10 @@ struct ExtensionRequestProfileCodec: Sendable {
               profile.workflowVersion == ExtensionBridge.workflowVersion,
               profile.profileIdentifier == expectedIdentifier,
               profile.revocationCursor.sequence >= 0,
-              profile.invalidOrigins.isEmpty, !profile.invalidOriginsContainer,
+              permissionsAreValid(profile),
               profile.authoritySequence >= 0, profile.authoritySequence <= ExtensionRequestProfile.maximumRevision,
               profile.reclaimedAuthorityRevision >= 0,
               profile.reclaimedAuthorityRevision <= profile.authoritySequence,
-              profile.origins.count <= ExtensionRequestProfile.maximumOrigins,
-              (try? Self.encode(profile.origins).count).map({ $0 <= ExtensionRequestProfile.maximumAuthorityBytes }) == true,
               profile.mutationReceipts.count <= ExtensionRequestProfile.maximumMutationReceipts,
               Set(profile.mutationReceipts.map(\.attempt)).count == profile.mutationReceipts.count,
               profile.mutationReceipts.allSatisfy({ receipt in
@@ -90,13 +108,9 @@ struct ExtensionRequestProfileCodec: Sendable {
                     (receipt.provider == .ethereum || receipt.provider == .solana) &&
                     ExtensionBridge.isValidEnqueueAttempt(receipt.attempt) &&
                     receipt.createdAt.timeIntervalSince1970.isFinite &&
-                    receipt.expected.context == ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: receipt.configurationKey).version.context &&
-                    profile.origins[receipt.configurationKey] != nil
+                    receipt.expected.context == ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: receipt.configurationKey).version.context
               }),
               (try? Self.encode(profile.mutationReceipts).count).map({ $0 <= ExtensionRequestProfile.maximumMutationReceiptBytes }) == true,
-              profile.origins.allSatisfy({ key, origin in
-                  ExtensionRequestProfile.validConfigurationKey(key) && ExtensionRequestProfile.validOrigin(origin, sequence: profile.authoritySequence)
-              }),
               active.count <= ExtensionBridge.maximumRequests,
               Dictionary(grouping: active, by: \.configurationKey).values.allSatisfy({
                   $0.count <= ExtensionBridge.maximumRequestsPerHost
@@ -118,7 +132,6 @@ struct ExtensionRequestProfileCodec: Sendable {
                   record.revisions.ethereum <= profile.authoritySequence,
                   record.revisions.solana <= profile.authoritySequence,
                   (record.claimedApproval?.deadline).map({ $0.timeIntervalSince1970.isFinite }) ?? true,
-                  profile.origins[record.configurationKey] != nil,
                   ExtensionBridge.isValidIdentity(
                       host: record.host,
                       configurationKey: record.configurationKey
@@ -224,28 +237,18 @@ struct ExtensionRequestProfileCodec: Sendable {
             return DecodedProfile(profile: cachedProfile.profile, requiresAuthorityPublication: false)
         }
         cachedProfile = nil
-        guard var state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
+        guard let state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
               state.revocationCursor.sequence >= 0,
               state.authoritySequence >= 0,
               state.authoritySequence <= ExtensionRequestProfile.maximumRevision,
               state.reclaimedAuthorityRevision >= 0,
               state.reclaimedAuthorityRevision <= state.authoritySequence else { return nil }
-        for record in state.records {
-            switch record.state {
-            case .pending, .claimed:
-                if ExtensionRequestProfile.authorityStatus(record, in: state) == .inconsistentGrant {
-                    state.invalidOrigins.insert(record.configurationKey)
-                }
-            case .broadcastPrepared, .completed:
-                break
-            }
-        }
         if let profile = validate(state, expectedIdentifier: expectedIdentifier) {
             cachedProfile = (data, profile)
             return DecodedProfile(profile: profile, requiresAuthorityPublication: false)
         }
-        guard recoverAuthority,
-              let repaired = repairAuthority(state, expectedIdentifier: expectedIdentifier, now: now) else {
+        guard recoverAuthority, !permissionsAreValid(state),
+              let repaired = resetAuthority(state, expectedIdentifier: expectedIdentifier, now: now) else {
             return nil
         }
         return DecodedProfile(profile: repaired, requiresAuthorityPublication: true)

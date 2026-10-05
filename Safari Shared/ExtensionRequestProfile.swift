@@ -102,8 +102,7 @@ struct ExtensionRequestProfile: Sendable {
         var origins: [String: OriginState]
         var mutationReceipts: [MutationReceipt]
         var records: [Record]
-        var invalidOrigins = Set<String>()
-        var invalidOriginsContainer = false
+        var permissionDecodingFailed = false
 
         private enum CodingKeys: String, CodingKey, Sendable {
             case schemaVersion, workflowVersion, profileIdentifier, authorityEpoch, revocationCursor
@@ -138,21 +137,12 @@ struct ExtensionRequestProfile: Sendable {
             reclaimedAuthorityRevision = try values.decode(Int.self, forKey: .reclaimedAuthorityRevision)
             mutationReceipts = try values.decode([MutationReceipt].self, forKey: .mutationReceipts)
             records = try values.decode([Record].self, forKey: .records)
-            if let decodedOrigins = try? values.decode([String: DecodedOrigin].self, forKey: .origins) {
-                origins = decodedOrigins.compactMapValues(\.value)
-                invalidOrigins = Set(decodedOrigins.filter { $0.value.value == nil }.keys)
+            if let decodedOrigins = try? values.decode([String: OriginState].self, forKey: .origins) {
+                origins = decodedOrigins
             } else {
                 origins = [:]
-                invalidOriginsContainer = true
+                permissionDecodingFailed = true
             }
-        }
-    }
-
-    struct DecodedOrigin: Decodable, Sendable {
-        let value: OriginState?
-
-        init(from decoder: Decoder) throws {
-            value = try? OriginState(from: decoder)
         }
     }
 
@@ -1090,10 +1080,10 @@ struct ExtensionRequestProfile: Sendable {
         return invalidateStaleRequests(configurationKey: configurationKey, excluding: nil, now: now)
     }
 
-    static func repairAuthorityState(
+    static func resetAuthorityState(
         _ stored: State,
         expectedIdentifier: UUID?
-    ) -> (state: State, invalidOrigins: Set<String>)? {
+    ) -> State? {
         guard stored.schemaVersion == Self.profileSchemaVersion,
               stored.workflowVersion == ExtensionBridge.workflowVersion,
               stored.profileIdentifier == expectedIdentifier,
@@ -1102,23 +1092,15 @@ struct ExtensionRequestProfile: Sendable {
                   $0.revisions.ethereum <= stored.authoritySequence && $0.revisions.solana <= stored.authoritySequence
               }) else { return nil }
         let referencedOrigins = Set(stored.records.map(\.configurationKey) + stored.mutationReceipts.map(\.configurationKey))
-        let invalidOrigins = stored.invalidOrigins
-            .union(stored.origins.filter { !Self.validOrigin($0.value, sequence: stored.authoritySequence) }.keys)
-            .union(referencedOrigins.subtracting(stored.origins.keys))
-        guard stored.invalidOriginsContainer || !invalidOrigins.isEmpty,
-              invalidOrigins.allSatisfy(Self.validConfigurationKey),
-              Set(stored.origins.keys).union(invalidOrigins).count <= Self.maximumOrigins else { return nil }
+        guard referencedOrigins.allSatisfy(Self.validConfigurationKey),
+              referencedOrigins.count <= Self.maximumOrigins else { return nil }
 
         var state = stored
         guard let revision = Self.nextRevision(in: &state) else { return nil }
-        if stored.invalidOriginsContainer {
-            state.reclaimedAuthorityRevision = revision
-        }
-        for key in invalidOrigins {
-            state.origins[key] = OriginState(revisions: Self.revisions(ethereum: revision, solana: revision))
-        }
-        state.invalidOrigins.removeAll()
-        state.invalidOriginsContainer = false
-        return (state, invalidOrigins)
+        state.reclaimedAuthorityRevision = revision
+        let disconnected = OriginState(revisions: Self.revisions(ethereum: revision, solana: revision))
+        state.origins = Dictionary(uniqueKeysWithValues: referencedOrigins.map { ($0, disconnected) })
+        state.permissionDecodingFailed = false
+        return state
     }
 }

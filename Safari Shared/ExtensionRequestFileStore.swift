@@ -987,7 +987,9 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         guard claim.lifecycle.canCompleteUnapproved,
               let response = resolution.response(for: claim.request) else { return .ownershipLost }
         defer { claim.releaseUnapproved() }
-        return completeExecution(claim: claim, approvedPermit: nil) { _ in response }
+        return files.withLock(or: .retryablePersistenceFailure) {
+            completeUnapprovedLocked(claim: claim, response: response)
+        }
     }
 
     func complete(
@@ -996,87 +998,121 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) -> ExtensionBridge.StoreMutationResult {
         guard let response = result.response(for: permit) else { return .ownershipLost }
         defer { permit.releaseLease() }
-        return completeExecution(claim: permit.claim, approvedPermit: permit) { _ in
-            guard response.addsEthereumChain else { return response }
-            guard self.completeChainAddition(permit) else {
-                return ApprovedCompletion.failure(
-                    .init(message: Strings.somethingWentWrong), permit: permit
-                )?.response(for: permit)
-            }
-            return response
+        return files.withLock(or: .retryablePersistenceFailure) {
+            completeApprovedLocked(permit: permit, response: response)
         }
     }
 
-    private func completeExecution(
+    private func completeUnapprovedLocked(
         claim: ExtensionBridge.ApprovalClaim,
-        approvedPermit: ExtensionBridge.ApprovedExecutionPermit?,
-        response makeResponse: (SafariRequest) -> ResponseToExtension?
+        response: ResponseToExtension
     ) -> ExtensionBridge.StoreMutationResult {
-        files.withLock(or: .retryablePersistenceFailure) {
-            guard approvedPermit != nil || claim.lifecycle.wasNeverAuthorized else { return .ownershipLost }
-            let observingClosed = claim.lifecycle.isClosed
-            let loaded = observingClosed ? observeProfileFileLocked(
-                at: files.profileURL(claim.handle.profileIdentifier),
-                profileIdentifier: claim.handle.profileIdentifier,
-                now: clock()
-            ) : recoverProfileLocked(
-                profileIdentifier: claim.handle.profileIdentifier, now: clock()
-            )
-            guard case .state(var profile) = loaded else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
-                  claim.binding.matches(profile.state.records[index]) else { return .ownershipLost }
-            let claimID: UUID
-            let recoveryResponseData: Data?
-            switch profile.state.records[index].state {
-            case .claimed(let value, _, _):
-                guard !observingClosed else { return .ownershipLost }
-                claimID = value
-                recoveryResponseData = nil
-            case .broadcastPrepared(let value, _, let recoveryResponse, _):
-                guard !observingClosed, approvedPermit != nil else { return .ownershipLost }
-                claimID = value
-                recoveryResponseData = recoveryResponse
-            case .completed:
-                guard files.synchronizeProfileLocked(claim.handle.profileIdentifier) else {
-                    return .retryablePersistenceFailure
-                }
-                if let approvedPermit { approvedPermit.releaseLease() }
-                else { claim.releaseUnapproved() }
-                return .persisted
-            case .pending:
-                return .ownershipLost
-            }
-            let authorizationTime = clock()
-            let ownsCompletion = approvedPermit == nil
-                ? claim.lifecycle.isPreparing
-                : claim.lifecycle.hasActiveApprovedOwnership
-            guard ownsCompletion,
-                  claim.matches(handle: claim.handle, value: claimID),
-                  (recoveryResponseData != nil || approvedPermit?.isExecuting != false),
-                  (recoveryResponseData != nil || ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state)),
-                  (recoveryResponseData != nil || profile.state.records[index].authorizesExecution(
-                      authority: claim.authority, now: authorizationTime, isCancelled: Task.isCancelled
-                  )),
-                  let request = profile.request(for: profile.state.records[index]),
-                  let response = makeResponse(request),
-                  let responseData = ExtensionRequestProfileCodec.boundedResponseData(
-                      response, request: request, recoveryResponseData: recoveryResponseData
-                  ) else { return .ownershipLost }
-            let completing = profile.state.records[index]
-            if recoveryResponseData == nil {
-                guard profile.applyAuthorityEffect(response, record: completing, now: authorizationTime) else {
-                    return .ownershipLost
-                }
-            }
-            profile.complete(at: index, response: responseData, date: authorizationTime)
-            let closed = approvedPermit == nil
-                ? claim.lifecycle.closeUnapproved()
-                : claim.lifecycle.closeApproved()
-            guard closed else { return .ownershipLost }
-            guard writeProfileLocked(profile) else { return .retryablePersistenceFailure }
-            files.removeOperationLockLocked(handle: claim.handle)
-            return .persisted
+        guard claim.lifecycle.wasNeverAuthorized else { return .ownershipLost }
+        if claim.lifecycle.isClosed {
+            return observeClosedCompletionLocked(binding: claim.binding)
         }
+        guard case .state(var profile) = recoverProfileLocked(
+            profileIdentifier: claim.handle.profileIdentifier, now: clock()
+        ) else { return .retryablePersistenceFailure }
+        guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
+              claim.binding.matches(profile.state.records[index]) else { return .ownershipLost }
+        let record = profile.state.records[index]
+        switch record.state {
+        case .claimed(let claimID, _, _):
+            let now = clock()
+            guard claim.lifecycle.isPreparing,
+                  claim.matches(handle: record.handle, value: claimID),
+                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
+                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled),
+                  let request = profile.request(for: record),
+                  let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request),
+                  profile.applyAuthorityEffect(response, record: record, now: now) else { return .ownershipLost }
+            return publishCompletionLocked(profile: &profile, index: index, responseData: responseData, completedAt: now) {
+                claim.lifecycle.closeUnapproved()
+            }
+        case .completed:
+            return synchronizedMutationResultLocked(claim.handle.profileIdentifier)
+        case .pending, .broadcastPrepared:
+            return .ownershipLost
+        }
+    }
+
+    private func completeApprovedLocked(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        response: ResponseToExtension
+    ) -> ExtensionBridge.StoreMutationResult {
+        let claim = permit.claim
+        if claim.lifecycle.isClosed {
+            return observeClosedCompletionLocked(binding: claim.binding)
+        }
+        guard case .state(var profile) = recoverProfileLocked(
+            profileIdentifier: claim.handle.profileIdentifier, now: clock()
+        ) else { return .retryablePersistenceFailure }
+        guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
+              claim.binding.matches(profile.state.records[index]) else { return .ownershipLost }
+        let record = profile.state.records[index]
+        switch record.state {
+        case .claimed(let claimID, _, _):
+            let now = clock()
+            guard claim.lifecycle.hasActiveApprovedOwnership,
+                  claim.matches(handle: record.handle, value: claimID),
+                  permit.isExecuting,
+                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
+                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled),
+                  let request = profile.request(for: record) else { return .ownershipLost }
+            var response = response
+            if response.addsEthereumChain, !completeChainAddition(permit) {
+                guard let failure = ApprovedCompletion.failure(
+                    .init(message: Strings.somethingWentWrong), permit: permit
+                )?.response(for: permit) else { return .ownershipLost }
+                response = failure
+            }
+            guard let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request),
+                  profile.applyAuthorityEffect(response, record: record, now: now) else { return .ownershipLost }
+            return publishCompletionLocked(profile: &profile, index: index, responseData: responseData, completedAt: now) {
+                claim.lifecycle.closeApproved()
+            }
+        case .broadcastPrepared(let claimID, _, let recoveryResponse, _):
+            guard claim.lifecycle.hasActiveApprovedOwnership,
+                  claim.matches(handle: record.handle, value: claimID),
+                  let request = profile.request(for: record),
+                  let responseData = ExtensionRequestProfileCodec.boundedResponseData(
+                      response, request: request, recoveryResponseData: recoveryResponse
+                  ) else { return .ownershipLost }
+            return publishCompletionLocked(profile: &profile, index: index, responseData: responseData, completedAt: clock()) {
+                claim.lifecycle.closeApproved()
+            }
+        case .completed:
+            return synchronizedMutationResultLocked(claim.handle.profileIdentifier)
+        case .pending:
+            return .ownershipLost
+        }
+    }
+
+    private func observeClosedCompletionLocked(
+        binding: ExtensionBridge.RequestBinding
+    ) -> ExtensionBridge.StoreMutationResult {
+        guard case .state(let profile) = observeProfileFileLocked(
+            at: files.profileURL(binding.handle.profileIdentifier),
+            profileIdentifier: binding.handle.profileIdentifier, now: clock()
+        ) else { return .retryablePersistenceFailure }
+        guard let record = profile.state.records.first(where: { $0.handle == binding.handle }),
+              binding.matches(record), case .completed = record.state else { return .ownershipLost }
+        return synchronizedMutationResultLocked(binding.handle.profileIdentifier)
+    }
+
+    private func publishCompletionLocked(
+        profile: inout ValidatedProfile,
+        index: Int,
+        responseData: Data,
+        completedAt: Date,
+        closeOwnership: () -> Bool
+    ) -> ExtensionBridge.StoreMutationResult {
+        profile.complete(at: index, response: responseData, date: completedAt)
+        guard closeOwnership() else { return .ownershipLost }
+        guard writeProfileLocked(profile) else { return .retryablePersistenceFailure }
+        files.removeOperationLockLocked(handle: profile.state.records[index].handle)
+        return .persisted
     }
 
     func abandon(permit: ExtensionBridge.ApprovedExecutionPermit) -> ExtensionBridge.StoreMutationResult {

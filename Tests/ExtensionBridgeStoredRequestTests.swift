@@ -259,7 +259,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(afterRemoval.solanaAccount, solana)
     }
 
-    func testMalformedPermissionsDisconnectOnlyAffectedOriginAndPermitReconnection() async throws {
+    func testMalformedPermissionsDisconnectWholeProfileAndPermitReconnection() async throws {
         let account = authorityTestAccount()
         let solana = WalletAccountDescriptor(walletID: account.walletID, coin: .solana,
             normalizedAddress: String(repeating: "1", count: 32), derivationPath: "m/44'/501'/0'/0'")
@@ -319,9 +319,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             XCTAssertEqual(secondRecovered.version.context, secondBefore.version.context)
             XCTAssertEqual(secondRecovered.version.revisions, recovered.version.revisions)
             let retained = try await removalSnapshot(host: "healthy.example")
-            XCTAssertEqual(retained.ethereumAccount, account)
-            XCTAssertEqual(retained.ethereumChainId, healthy.ethereumChainId)
-            XCTAssertEqual(retained.version, healthy.version)
+            XCTAssertNil(retained.ethereumAccount)
+            XCTAssertEqual(retained.ethereumChainId, "0x1")
+            XCTAssertEqual(retained.version.context, healthy.version.context)
+            XCTAssertEqual(retained.version.revisions, recovered.version.revisions)
             XCTAssertEqual(try Data(contentsOf: profileURL(otherProfile)), otherProfileData)
             let repeated = try await removalSnapshot()
             XCTAssertEqual(repeated.version, recovered.version)
@@ -365,6 +366,102 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let origin = try XCTUnwrap(origins["https://wallet.example"] as? [String: Any])
         let revisions = try XCTUnwrap(origin["revisions"] as? [String: Int])
         XCTAssertEqual(revisions["ethereum"], recovered.version.revisions.ethereum)
+    }
+
+    func testPermissionRecoveryDiscardsInvalidKeysMissingOriginsAndOversizedMaps() async throws {
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_060)
+        let original = try storedProfile()
+        let sequence = try XCTUnwrap(original["authoritySequence"] as? Int)
+        let originalOrigins = try XCTUnwrap(original["origins"] as? [String: Any])
+        let origin = try XCTUnwrap(originalOrigins["https://wallet.example"])
+        var invalidKey = originalOrigins
+        invalidKey["not an origin"] = origin
+        var excessiveCount = Dictionary(uniqueKeysWithValues: (0...ExtensionRequestProfile.maximumOrigins).map {
+            ("https://site-\($0).example", origin)
+        })
+        excessiveCount["https://wallet.example"] = origin
+        var largeOrigins = Dictionary(uniqueKeysWithValues: (0..<400).map { index in
+            let component = String(repeating: "%E4%B8%AD", count: 26)
+            let key = "file:///tmp/\(index)/" + Array(repeating: component, count: 12).joined(separator: "/")
+            XCTAssertTrue(ExtensionRequestProfile.validConfigurationKey(key))
+            return (key, origin)
+        })
+        largeOrigins["https://wallet.example"] = origin
+        let largeData = try PropertyListSerialization.data(fromPropertyList: largeOrigins, format: .binary, options: 0)
+        XCTAssertGreaterThan(largeData.count, ExtensionRequestProfile.maximumAuthorityBytes)
+
+        for origins in [invalidKey, [:], excessiveCount, largeOrigins] {
+            var profile = original
+            profile["origins"] = origins
+            let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+            XCTAssertLessThan(data.count, ExtensionRequestProfile.maximumProfileBytes)
+            try data.write(to: defaultProfileURL, options: .atomic)
+            let recovered = try await removalSnapshot()
+            XCTAssertNil(recovered.ethereumAccount)
+            XCTAssertEqual(recovered.version.revisions.ethereum, sequence + 1)
+            XCTAssertEqual(recovered.version.revisions.solana, sequence + 1)
+            let persisted = try storedProfile()
+            XCTAssertEqual((persisted["origins"] as? [String: Any])?.count, 1)
+            XCTAssertEqual(persisted["reclaimedAuthorityRevision"] as? Int, sequence + 1)
+            let repeated = try await removalSnapshot()
+            XCTAssertEqual(repeated.version, recovered.version)
+        }
+    }
+
+    func testPermissionRecoveryRejectsFutureRecordRevisionsAndExhaustedSequence() async throws {
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_070)
+        let original = try storedProfile()
+        let sequence = try XCTUnwrap(original["authoritySequence"] as? Int)
+        for exhausted in [false, true] {
+            var profile = original
+            profile["origins"] = "corrupt permissions"
+            if exhausted {
+                profile["authoritySequence"] = ExtensionRequestProfile.maximumRevision
+            } else {
+                var records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+                var authority = try XCTUnwrap(records[0]["authority"] as? [String: Any])
+                authority["revisions"] = ["ethereum": sequence + 1, "solana": sequence]
+                records[0]["authority"] = authority
+                profile["records"] = records
+            }
+            try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+                .write(to: defaultProfileURL, options: .atomic)
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
+    }
+
+    func testPermissionRecoveryPreservesDisconnectReceiptsAndRejectsDamagedReceipts() async throws {
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_080)
+        _ = try await grantAuthority(authorityTestAccount(), id: 64_081, host: "healthy.example")
+        let authority = try await removalSnapshot()
+        let attempt = attempt(for: 64_082)
+        guard case .revoked = await bridge.revoke(configurationKey: "https://wallet.example", provider: .ethereum,
+            attempt: attempt, expected: authority.version, profileIdentifier: nil) else {
+            return XCTFail("Expected disconnect receipt")
+        }
+        let original = try storedProfile()
+        let receipts = try XCTUnwrap(original["mutationReceipts"] as? [[String: Any]])
+        try mutateStoredPermissions { $0["https://healthy.example"] = "corrupt permissions" }
+        let recovered = try await removalSnapshot()
+        let healthy = try await removalSnapshot(host: "healthy.example")
+        XCTAssertNil(healthy.ethereumAccount)
+        let retainedReceipts = try XCTUnwrap(storedProfile()["mutationReceipts"] as? [[String: Any]])
+        XCTAssertTrue(NSArray(array: receipts).isEqual(to: retainedReceipts))
+        guard case .revoked(let replayed) = await bridge.revoke(configurationKey: "https://wallet.example", provider: .ethereum,
+            attempt: attempt, expected: authority.version, profileIdentifier: nil) else {
+            return XCTFail("Expected receipt replay after reset")
+        }
+        XCTAssertEqual(replayed.version, recovered.version)
+        XCTAssertNil(replayed.ethereumAccount)
+
+        for malformed: Any in ["corrupt receipts", receipts + receipts] {
+            var profile = original
+            profile["origins"] = "corrupt permissions"
+            profile["mutationReceipts"] = malformed
+            try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+                .write(to: defaultProfileURL, options: .atomic)
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
     }
 
     func testIncompatiblePermissionContainerDisconnectsAllOriginsWithoutDiscardingRequestHistory() async throws {
@@ -412,7 +509,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     XCTAssertEqual((delivery.state["ethereum"] as? [String: String])?["address"], "")
                 } else {
                     XCTAssertTrue(persistedRecords.isEmpty)
+                    XCTAssertEqual((persisted["origins"] as? [String: Any])?.count, 0)
                 }
+                XCTAssertEqual(persisted["reclaimedAuthorityRevision"] as? Int, recovered.version.revisions.ethereum)
+                let unknown = try await removalSnapshot(host: "unknown.example")
+                XCTAssertEqual(unknown.version.revisions, recovered.version.revisions)
                 let repeated = try await removalSnapshot()
                 XCTAssertEqual(repeated.version, recovered.version)
             }
@@ -443,6 +544,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = broadcastPermit.recoveryResponse
         let checkpoint = await prepareReviewedBroadcast(broadcastPermit, in: bridge)
         XCTAssertEqual(checkpoint, .persisted)
+        _ = try await grantAuthority(account, id: 64_016, host: "healthy.example")
+        let healthySigning = try makeFixture(id: 64_017, name: "signPersonalMessage", host: "healthy.example")
+        let healthyHandle = try accepted(await bridge.enqueue(ingress: healthySigning.ingress, profileIdentifier: nil)).handle
+        let recovery = try makeFixture(id: 64_018, host: "healthy.example")
+        let recoveryHandle = try accepted(await bridge.enqueue(ingress: recovery.ingress, profileIdentifier: nil)).handle
+        let liveBroadcast = try makeTransactionFixture(id: 64_019, host: "healthy.example")
+        let liveHandle = try accepted(await bridge.enqueue(ingress: liveBroadcast.ingress, profileIdentifier: nil)).handle
+        let liveClaim = try approvalClaim(await bridge.claim(handle: liveHandle))
+        let livePermit = try reviewedExecution(liveClaim)
+        let liveCheckpoint = await prepareReviewedBroadcast(livePermit, in: bridge)
+        XCTAssertEqual(liveCheckpoint, .persisted)
         let originalRecords = try XCTUnwrap(storedProfile()["records"] as? [[String: Any]])
         let originalCheckpoint = try XCTUnwrap(originalRecords.first { $0["id"] as? Int == broadcast.request.id })
         let originalCompleted = try XCTUnwrap(originalRecords.first { $0["id"] as? Int == completed.request.id })
@@ -450,7 +562,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
         let disconnected = try await removalSnapshot()
         XCTAssertNil(disconnected.ethereumAccount)
-        for handle in [pending.handle, claimed.handle, selectionHandle] {
+        for handle in [pending.handle, claimed.handle, selectionHandle, healthyHandle] {
             let delivery = try await deliveredAuthority(handle)
             XCTAssertEqual((delivery.response["error"] as? [String: Any])?["code"] as? Int, 4100)
         }
@@ -459,6 +571,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let retainedCompleted = try XCTUnwrap(recoveredRecords.first { $0["id"] as? Int == completed.request.id })
         XCTAssertTrue(NSDictionary(dictionary: originalCheckpoint).isEqual(to: retainedCheckpoint))
         XCTAssertTrue(NSDictionary(dictionary: originalCompleted).isEqual(to: retainedCompleted))
+        let liveLock = CrossProcessFileLock(fileURL: operationLockURL(liveHandle))
+        XCTAssertFalse(try liveLock.tryAcquireExisting())
+        let liveCompletion = await completeReviewedExecution(livePermit, in: bridge)
+        XCTAssertEqual(liveCompletion, .persisted)
+        let liveResponse = try await deliveredAuthority(liveHandle)
+        XCTAssertEqual(liveResponse.response as NSDictionary, livePermit.response.json as NSDictionary)
+        XCTAssertEqual(liveResponse.response["approvalCommitted"] as? Bool, true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: operationLockURL(liveHandle).path))
+        let recoveryCompletion = await bridge.completeImmediate(handle: recoveryHandle, resolution: immediateResolution(for: recovery.request))
+        XCTAssertEqual(recoveryCompletion, .persisted)
+        let recoveredAddress = try await deliveredAuthority(recoveryHandle)
+        XCTAssertEqual(recoveredAddress.response["result"] as? String, "0xsigned")
 
         _ = await completeReviewedExecution(selectionPermit, in: bridge)
         _ = await completeReviewedExecution(permit, in: bridge)
@@ -542,6 +666,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testPermissionRecoveryDoesNotMaskUnsupportedEnvelopeOrDamagedRequestHistory() async throws {
         _ = try await grantAuthority(authorityTestAccount(), id: 64_040)
+        let pending = try await admittedSigning(authorityTestAccount(), id: 64_041)
         try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
         let original = try storedProfile()
         var invalidProfiles = [[String: Any]]()
@@ -565,6 +690,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         records[0]["requestFingerprint"] = "invalid transaction history"
         invalidRecord["records"] = records
         invalidProfiles.append(invalidRecord)
+        var invalidPending = original
+        var pendingRecords = try XCTUnwrap(original["records"] as? [[String: Any]])
+        let pendingIndex = try XCTUnwrap(pendingRecords.firstIndex { $0["id"] as? Int == pending.handle.id })
+        pendingRecords[pendingIndex]["requestFingerprint"] = Data(repeating: 0, count: 32)
+        invalidPending["records"] = pendingRecords
+        invalidProfiles.append(invalidPending)
 
         for profile in invalidProfiles {
             let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
@@ -5699,6 +5830,107 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
+    func testChainAdditionIsNotRepeatedAfterTerminalWriteFailure() async throws {
+        for writesBeforeFailing in [false, true] {
+            let directory = rootURL.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let failWrite = LockedTestValue(false)
+            let failSynchronization = LockedTestValue(true)
+            let additions = LockedTestValue(0)
+            let publications = LockedTestValue(0)
+            let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory, dependencies: .init(
+                clock: { [clock = clock!] in clock.now },
+                atomicWrite: { data, url in
+                    guard failWrite.value else {
+                        return try ApprovalStoreTestPersistence.write(data, url)
+                    }
+                    publications.withValue { $0 += 1 }
+                    if writesBeforeFailing { try ApprovalStoreTestPersistence.write(data, url) }
+                    throw Failure.injectedWrite
+                },
+                synchronizePublishedFile: { url in
+                    if failSynchronization.value { throw Failure.injectedWrite }
+                    try ApprovalStoreTestPersistence.synchronize(url)
+                },
+                completeChainAddition: { permit in
+                    XCTAssertTrue(permit.isExecuting)
+                    additions.withValue { $0 += 1 }
+                    return true
+                }
+            ))
+            let permit = try authorizeChainAddition(in: store)
+            guard case .completed(let completion) = await DappRequestProcessor().execute(permit: permit, signer: nil) else {
+                return XCTFail("Expected approved chain addition")
+            }
+            failWrite.value = true
+            XCTAssertEqual(store.complete(permit: permit, result: completion), .retryablePersistenceFailure)
+            XCTAssertEqual(store.complete(permit: permit, result: completion),
+                writesBeforeFailing ? .retryablePersistenceFailure : .ownershipLost)
+            failSynchronization.value = false
+            XCTAssertEqual(store.complete(permit: permit, result: completion),
+                writesBeforeFailing ? .persisted : .ownershipLost)
+            XCTAssertEqual(additions.value, 1)
+            XCTAssertEqual(publications.value, 1)
+        }
+    }
+
+    @MainActor
+    func testUnrelatedCompletionDoesNotConsumeRightfulExecution() async throws {
+        let firstFixture = try makeTransactionFixture(id: 76_050)
+        let firstHandle = try accepted(await bridge.enqueue(ingress: firstFixture.ingress, profileIdentifier: nil)).handle
+        let secondFixture = try makeTransactionFixture(id: 76_051)
+        let secondHandle = try accepted(await bridge.enqueue(ingress: secondFixture.ingress, profileIdentifier: nil)).handle
+        let first = try reviewedExecution(approvalClaim(await bridge.claim(handle: firstHandle)))
+        let second = try reviewedExecution(approvalClaim(await bridge.claim(handle: secondHandle)))
+        let mismatch = await completeReviewedExecution(first, result: second.completion, in: bridge)
+        XCTAssertEqual(mismatch, .ownershipLost)
+        XCTAssertTrue(first.permit.isExecuting)
+        let competingLock = CrossProcessFileLock(fileURL: operationLockURL(firstHandle))
+        XCTAssertFalse(try competingLock.tryAcquireExisting())
+        let firstResult = await completeReviewedExecution(first, in: bridge)
+        let secondResult = await completeReviewedExecution(second, in: bridge)
+        XCTAssertEqual(firstResult, .persisted)
+        XCTAssertEqual(secondResult, .persisted)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: operationLockURL(firstHandle).path))
+    }
+
+    func testClosedUnapprovedCompletionObservesWithoutMaintenanceOrRepublication() async throws {
+        for (index, writesBeforeFailing) in [false, true].enumerated() {
+            let profileIdentifier = UUID()
+            let fixture = try profileFixture(makeFixture(id: 76_060 + index * 3), profileIdentifier: profileIdentifier)
+            let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: profileIdentifier)).handle
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            XCTAssertTrue(claim.adoptForExecution())
+            let expiring = try profileFixture(makeFixture(id: 76_061 + index * 3,
+                admissionDeadline: clock.now.addingTimeInterval(1)), profileIdentifier: profileIdentifier)
+            _ = try accepted(await bridge.enqueue(ingress: expiring.ingress, profileIdentifier: profileIdentifier))
+            let abandoned = try profileFixture(makeFixture(id: 76_062 + index * 3), profileIdentifier: profileIdentifier)
+            let abandonedHandle = try accepted(await bridge.enqueue(ingress: abandoned.ingress, profileIdentifier: profileIdentifier)).handle
+            let abandonedClaim = try approvalClaim(await bridge.claim(handle: abandonedHandle))
+            let publications = LockedTestValue(0)
+            let synchronizations = LockedTestValue(0)
+            let writer = makeBridge(clock: { [clock = clock!] in clock.now }, atomicWrite: { data, url in
+                publications.withValue { $0 += 1 }
+                if writesBeforeFailing { try ApprovalStoreTestPersistence.write(data, url) }
+                throw Failure.injectedWrite
+            }, synchronizePublishedFile: { url in
+                synchronizations.withValue { $0 += 1 }
+                try ApprovalStoreTestPersistence.synchronize(url)
+            })
+            let first = await writer.complete(claim: claim, resolution: immediateResolution(for: fixture.request))
+            XCTAssertEqual(first, .retryablePersistenceFailure)
+            abandonedClaim.releaseUnapproved()
+            clock.now.addTimeInterval(2)
+            let stored = try Data(contentsOf: profileURL(profileIdentifier))
+            let repeated = await writer.complete(claim: claim, resolution: immediateResolution(for: fixture.request))
+            XCTAssertEqual(repeated, writesBeforeFailing ? .persisted : .ownershipLost)
+            XCTAssertEqual(publications.value, 1)
+            XCTAssertEqual(synchronizations.value, writesBeforeFailing ? 1 : 0)
+            XCTAssertEqual(try Data(contentsOf: profileURL(profileIdentifier)), stored)
+        }
+    }
+
+    @MainActor
     func testFailedChainAdditionDoesNotChangeSelectedNetwork() async throws {
         let additions = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
@@ -5737,6 +5969,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     ) throws -> ExtensionBridge.ApprovedExecutionPermit {
         let template = try makeFixture(id: 76_040, name: "addEthereumChain")
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        guard case .snapshot(let authority) = store.configurationSnapshot(
+            configurationKey: template.request.configurationKey, profileIdentifier: nil
+        ) else { throw Failure.expectedValue }
+        raw["authority"] = authority.version.json
         raw["body"] = ["address": "", "chainId": "0x1", "object": [
             "chainId": "0x7ffffffffffffffe", "chainName": "Test Network",
             "rpcUrls": ["https://rpc.example"], "blockExplorerUrls": [],
@@ -5745,7 +5981,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try authorityFixture(raw)
         let handle = try accepted(store.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let claim = try approvalClaim(store.claim(handle: handle))
-        let approval = try reviewedApproval(claim)
+        guard case .found(let snapshot) = store.load(handle: handle) else { throw Failure.expectedValue }
+        let consent = try Self.reviewedConsent(snapshot, approvedAt: clock.now)
+        let approval = try consent.resolve(context: approvalResolutionContextForTesting(
+            action: consent.intent.action, decision: consent.decision, accounts: []
+        )).get()
         guard claim.adoptForExecution(),
               case .authorized(let permit) = store.authorize(claim: claim, approval: approval) else {
             throw Failure.expectedValue

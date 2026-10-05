@@ -2929,6 +2929,98 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(reviewed.initiallyConnectedProviders, prepared.initiallyConnectedProviders)
             XCTAssertEqual(session.reviewToken, token)
             XCTAssertEqual(session.presentationRevision, revision)
+            guard case .review(let presentation) = session.presentation else {
+                return XCTFail("Expected selection presentation")
+            }
+            let presented: SelectAccountAction
+            switch presentation.content {
+            case .selectAccount(let action):
+                XCTAssertFalse(switchesAccount)
+                presented = action
+            case .switchAccount(let action):
+                XCTAssertTrue(switchesAccount)
+                presented = action
+            default:
+                return XCTFail("Selection presentation changed the action kind")
+            }
+            XCTAssertEqual(presented.selectedAccounts, reviewed.selectedAccounts)
+            XCTAssertEqual(presented.network, reviewed.network)
+            XCTAssertEqual(presentation.reviewToken, token)
+        }
+    }
+
+    func testTransactionPresentationRetainsEditsAndSessionWithoutChangingIntent() async throws {
+        let fixture = try ApprovedExecutionTestFixture()
+        try fixture.establishGrant(popupTestAccountDescriptor(), network: popupTransactionNetwork())
+        let snapshot = try fixture.enqueue(id: 43, name: "signTransaction", provider: .ethereum, body: [
+            "address": popupTestAccount().address,
+            "chainId": popupTransactionNetwork().chainIdHexString,
+            "object": ["from": popupTestAccount().address,
+                       "to": popupReadyTransaction().to,
+                       "nonce": "0x0", "gas": "0x5208", "gasPrice": "0xa", "value": "0x0"],
+        ])
+        let session = PopupRequestSession(intent: try reviewIntentForTesting(
+            binding: XCTUnwrap(snapshot.requestBinding), action: popupTransactionAction()
+        ), transactionApprovalOperations: popupImmediateTransactionOperations())
+        let transaction = try XCTUnwrap(session.transaction)
+        defer { session.invalidate() }
+        transaction.start()
+        await settleTransactionPreparation(transaction)
+        guard case .approveTransaction(let original) = session.preparedAction else {
+            return XCTFail("Expected transaction intent")
+        }
+        XCTAssertTrue(transaction.applyEdits(.custom(.init(
+            nonce: "7", gasPriceGwei: "0.00000002",
+            maxPriorityFeePerGasGwei: nil, maxFeePerGasGwei: nil
+        )), chain: popupTransactionNetwork()))
+        await settleTransactionPreparation(transaction)
+        let token = try XCTUnwrap(session.beginApproval())
+        XCTAssertTrue(session.acceptClaim(token: token))
+        XCTAssertTrue(session.returnToReview(token: token))
+        XCTAssertNotEqual(session.reviewToken, token)
+        session.rotateReviewToken()
+
+        for _ in 0..<2 {
+            guard case .review(let presentation) = session.presentation,
+                  case .approveTransaction(let action, let presented) = presentation.content,
+                  case .approveTransaction(let canonical) = session.preparedAction else {
+                return XCTFail("Expected transaction presentation")
+            }
+            XCTAssertTrue(presented === transaction)
+            XCTAssertEqual(presented.snapshot.transaction.decimalNonceString, "7")
+            XCTAssertEqual(presented.snapshot.transaction.preparedFee, .legacy(gasPrice: 20))
+            XCTAssertEqual(action.transaction.id, original.transaction.id)
+            XCTAssertEqual(action.transaction.nonce, original.transaction.nonce)
+            XCTAssertEqual(action.transaction.preparedFee, original.transaction.preparedFee)
+            XCTAssertEqual(canonical.transaction.nonce, original.transaction.nonce)
+            XCTAssertEqual(canonical.transaction.preparedFee, original.transaction.preparedFee)
+        }
+    }
+
+    func testReviewPresentationTitlesCoverEveryAction() throws {
+        let selection = SelectAccountAction(coinType: .ethereum, selectedAccounts: [], initiallyConnectedProviders: [], network: nil)
+        let message = SignMessageAction(subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
+            meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8))))
+        guard case .approveTransaction(let action) = popupTransactionAction() else {
+            return XCTFail("Expected transaction action")
+        }
+        let transaction = PopupTransactionSession(action: action, operations: unusedPopupTransactionOperations())
+        let cases: [(PopupRequestSession.ReviewContent, String)] = [
+            (.selectAccount(selection), Strings.connectWallet),
+            (.switchAccount(selection), Strings.switchAccount),
+            (.approveMessage(message), message.subject.title),
+            (.approveTransaction(action: action, transaction: transaction), Strings.sendTransaction),
+            (.addEthereumChain(.init(chainToAdd: popupTestNetwork())), Strings.addNetwork),
+        ]
+        let presenter = PopupApprovalStatePresenter()
+        for (content, title) in cases {
+            let state = presenter.state(id: 43, presentation: .review(.init(
+                reviewToken: UUID(), content: content, reviewCatalog: nil, feedback: nil
+            )))
+            guard case .review(let review, _, _) = state.content else {
+                return XCTFail("Expected review title")
+            }
+            XCTAssertEqual(review.title, title)
         }
     }
 

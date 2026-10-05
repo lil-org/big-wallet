@@ -24,16 +24,11 @@ final class PopupRequestSession {
         case approveMessage(SignMessageAction)
         case approveTransaction(action: SendTransactionAction, transaction: PopupTransactionSession)
         case addEthereumChain(AddEthereumChainAction)
+    }
 
-        var action: DappRequestAction {
-            switch self {
-            case .selectAccount(let action): .selectAccount(action)
-            case .switchAccount(let action): .switchAccount(action)
-            case .approveMessage(let action): .approveMessage(action)
-            case .approveTransaction(let action, _): .approveTransaction(action)
-            case .addEthereumChain(let action): .addEthereumChain(action)
-            }
-        }
+    private enum ReviewSupport {
+        case ordinary
+        case transaction(PopupTransactionSession)
     }
 
     struct SelectionDraft {
@@ -61,7 +56,7 @@ final class PopupRequestSession {
     let handle: ExtensionBridge.Handle
     let request: SafariRequest
     let reviewCatalog: WalletReviewCatalog?
-    fileprivate let preparedContent: ReviewContent
+    private let reviewSupport: ReviewSupport
     private var approvalReview: ApprovalReview
     var selectionDraft: SelectionDraft?
     private var lifecycle: Lifecycle
@@ -69,9 +64,9 @@ final class PopupRequestSession {
     private(set) var presentationRevision: UInt64 = 0
 
     var binding: ExtensionBridge.RequestBinding { approvalReview.binding }
-    var preparedAction: DappRequestAction { preparedContent.action }
+    var preparedAction: DappRequestAction { approvalReview.action }
     var transaction: PopupTransactionSession? {
-        guard case .approveTransaction(_, let transaction) = preparedContent else { return nil }
+        guard case .transaction(let transaction) = reviewSupport else { return nil }
         return transaction
     }
 
@@ -83,19 +78,12 @@ final class PopupRequestSession {
         handle = intent.binding.handle
         request = intent.binding.request
         switch intent.action {
-        case .selectAccount(let action):
-            preparedContent = .selectAccount(action)
-        case .switchAccount(let action):
-            preparedContent = .switchAccount(action)
-        case .approveMessage(let action):
-            preparedContent = .approveMessage(action)
         case .approveTransaction(let action):
-            preparedContent = .approveTransaction(
-                action: action,
-                transaction: PopupTransactionSession(action: action, operations: transactionApprovalOperations)
+            reviewSupport = .transaction(
+                PopupTransactionSession(action: action, operations: transactionApprovalOperations)
             )
-        case .addEthereumChain(let action):
-            preparedContent = .addEthereumChain(action)
+        case .selectAccount, .switchAccount, .approveMessage, .addEthereumChain:
+            reviewSupport = .ordinary
         }
         approvalReview = ApprovalReview(intent: intent)
         self.reviewCatalog = reviewCatalog
@@ -187,17 +175,29 @@ final class PopupRequestSession {
         }
     }
 
-    var reviewAction: DappRequestAction { reviewContent.action }
-
-    private var reviewContent: ReviewContent {
-        guard let selectionDraft else { return preparedContent }
-        switch preparedContent {
+    var reviewAction: DappRequestAction {
+        guard let selectionDraft else { return preparedAction }
+        switch preparedAction {
         case .selectAccount(let action):
             return .selectAccount(selectionDraft.applying(to: action))
         case .switchAccount(let action):
             return .switchAccount(selectionDraft.applying(to: action))
         case .approveMessage, .approveTransaction, .addEthereumChain:
-            return preparedContent
+            return preparedAction
+        }
+    }
+
+    private var reviewContent: ReviewContent {
+        switch reviewAction {
+        case .selectAccount(let action): return .selectAccount(action)
+        case .switchAccount(let action): return .switchAccount(action)
+        case .approveMessage(let action): return .approveMessage(action)
+        case .approveTransaction(let action):
+            guard case .transaction(let transaction) = reviewSupport else {
+                preconditionFailure("Transaction review requires its session")
+            }
+            return .approveTransaction(action: action, transaction: transaction)
+        case .addEthereumChain(let action): return .addEthereumChain(action)
         }
     }
 
@@ -678,7 +678,8 @@ final class PopupRequestSessions {
                 transactionApprovalOperations: transactionApprovalOperations
             )
             entries[snapshot.handle] = .session(session)
-            if case .approveTransaction(let action, let transaction) = session.preparedContent {
+            if case .approveTransaction(let action) = session.preparedAction,
+               let transaction = session.transaction {
                 setupTransaction(transaction, for: session, action: action)
             }
             return .available(session)

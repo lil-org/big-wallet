@@ -48,7 +48,7 @@ The vault publishes a generation only after every account key is stored. If an a
 
 Each document loads a native snapshot before exposing accounts, then serves account and chain reads from memory. Explicit connection and signing requests still consult native authority. Cross-tab notifications contain only invalidation hints, and receiving documents fetch their own snapshots. Old browser connection storage is ignored; upgrading requires sites to reconnect but does not remove wallets or custom networks.
 
-Within a supported native profile, incompatible permission data resets to disconnected state so sites can reconnect. Recovery advances permission revisions, invalidates pending approvals for the affected sites, and preserves request identities, completed results, and broadcast recovery records. It requires valid profile identity and transaction records, and a successful durable write.
+Within a supported native profile, any corruption in the site-permission map disconnects every site in that Safari profile and resets selected Ethereum chains to mainnet. Sites can then reconnect. Recovery advances permission revisions, invalidates pending approvals that depend on those permissions, and preserves request identities, completed results, broadcast recovery records, and valid disconnect receipts. It requires valid profile identity, revision metadata, and transaction records, and a successful durable write. Wallets, custom-network definitions, and other Safari profiles remain unchanged.
 
 Disconnect revokes uncommitted requests immediately. Explicitly approved work can finish after its tab closes, and a transaction already committed for broadcast can finish after disconnect. Response retries never restore a revoked grant or repeat its mutation.
 
