@@ -114,13 +114,16 @@ struct DappRequestProcessor: DappRequestProcessing {
                   let signer else { return .rollback }
             switch await signer.sign() {
             case .success(let output):
-                if let completion = ApprovedCompletion.signed(output, permit: permit) {
-                    return .completed(completion)
+                guard permit.isExecuting else { return .rollback }
+                guard output.executionID == permit.executionID else {
+                    return Self.approvedFailure(.internalError, permit: permit)
                 }
-                if let broadcast = PreparedBroadcast.signed(output, permit: permit) {
-                    return .broadcast(broadcast)
+                switch output {
+                case .response(let response):
+                    return .completed(ApprovedCompletion(signed: response))
+                case .broadcast(let broadcast):
+                    return .broadcast(PreparedBroadcast(signed: broadcast))
                 }
-                return Self.approvedFailure(.internalError, permit: permit)
             case .failure(.authorizationUnavailable):
                 return .rollback
             case .failure(.failedToSign):

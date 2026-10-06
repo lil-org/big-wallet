@@ -504,8 +504,8 @@ final class PopupRequestSessionsTests: XCTestCase {
             let deadline = setup.claim.executionDeadline
             if boundary == .responseCompletion { await store.setPermitCompletionHook { clock.now = deadline } }
             if boundary == .broadcastCheckpoint { await store.setBroadcastCheckpointHook { clock.now = deadline } }
-            let processor = CompactPopupProcessor(execute: { _, _, _, permit in
-                boundary == .broadcastCheckpoint ? popupPreparedBroadcast(permit: permit)
+            let processor = CompactPopupProcessor(execute: { _, _, signer, permit in
+                boundary == .broadcastCheckpoint ? await popupPreparedBroadcast(permit: permit, signer: signer)
                     : approvedFailureForTesting(.internalError, permit: permit)
             }) { _ in .immediate(.failure(.internalError)) }
             let executor = DurableApprovalExecutor(
@@ -543,8 +543,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let deadline = setup.claim.executionDeadline
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                popupPreparedBroadcast(permit: permit)
+            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                await popupPreparedBroadcast(permit: permit, signer: signer)
             }) { _ in .immediate(.failure(.internalError)) },
             broadcastSender: PopupBroadcastSender { _, _ in
                 await store.record("send")
@@ -574,8 +574,8 @@ final class PopupRequestSessionsTests: XCTestCase {
             await store.setBroadcastCheckpointHook { state.observeDurableCommit() }
             let executor = DurableApprovalExecutor(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                    broadcasts ? popupPreparedBroadcast(permit: permit)
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    broadcasts ? await popupPreparedBroadcast(permit: permit, signer: signer)
                         : approvedFailureForTesting(.internalError, permit: permit)
                 }) { _ in .immediate(.failure(.internalError)) },
                 broadcastSender: PopupBroadcastSender { _, _ in
@@ -648,16 +648,21 @@ final class PopupRequestSessionsTests: XCTestCase {
         var leases = 0
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                let prepared = await popupPreparedBroadcast(permit: permit, signer: signer)
+                guard case .broadcast = prepared else {
+                    XCTFail("Expected a signed broadcast before the operation stalls")
+                    return .rollback
+                }
                 await gate.wait()
                 XCTAssertTrue(Task.isCancelled)
                 late.fulfill()
-                return popupPreparedBroadcast(permit: permit)
+                return prepared
             }) { _ in .immediate(.failure(.internalError)) },
             broadcastSender: PopupBroadcastSender { _, _ in
                 XCTFail("Late prepared broadcast must not send")
                 return .failure(.transport)
-            }, clock: { setup.claim.executionDeadline.addingTimeInterval(-0.01) }
+            }, clock: { setup.claim.executionDeadline.addingTimeInterval(-0.1) }
         )
         let task = Task { @MainActor in
             let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(
@@ -666,7 +671,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                         deadline: setup.claim.executionDeadline
                     ),
                     acquireCommitLease: { leases += 1; return WalletExecutionLease(release: {}) },
-                    clock: { setup.claim.executionDeadline.addingTimeInterval(-0.01) }
+                    clock: { setup.claim.executionDeadline.addingTimeInterval(-0.1) }
                 )))
             XCTAssertEqual(result, .abandoned)
             finished.fulfill()
@@ -730,8 +735,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let started = expectation(description: "broadcast started after checkpoint")
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                popupPreparedBroadcast(permit: permit)
+            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                await popupPreparedBroadcast(permit: permit, signer: signer)
             }) { _ in .immediate(.failure(.internalError)) },
             broadcastSender: PopupBroadcastSender { _, _ in
                 await store.record("send")
@@ -742,7 +747,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             }
         )
         let task = Task { @MainActor in
-            await execute(executor, setup: setup, signing: .source { _ in TestWalletSigner() })
+            await execute(executor, setup: setup, signing: .source { makeWalletSignerForTesting($0) })
         }
         await fulfillment(of: [started], timeout: 1)
         task.cancel()
@@ -762,8 +767,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         await store.setBroadcastCheckpointCommittedHook { withUnsafeCurrentTask { $0?.cancel() } }
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                popupPreparedBroadcast(permit: permit)
+            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                await popupPreparedBroadcast(permit: permit, signer: signer)
             }) { _ in .immediate(.failure(.internalError)) },
             broadcastSender: PopupBroadcastSender { _, _ in
                 XCTAssertFalse(Task.isCancelled)
@@ -772,7 +777,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             }
         )
         let task = Task { @MainActor in
-            await execute(executor, setup: setup, signing: .source { _ in TestWalletSigner() })
+            await execute(executor, setup: setup, signing: .source { makeWalletSignerForTesting($0) })
         }
         let taskResult = await task.value
         XCTAssertEqual(taskResult, .persisted)
@@ -961,8 +966,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         var sendFinished = false
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                popupPreparedBroadcast(permit: permit)
+            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                await popupPreparedBroadcast(permit: permit, signer: signer)
             }) { _ in .immediate(.failure(.internalError)) },
             broadcastSender: PopupBroadcastSender { _, _ in
                 sendStarted = true
@@ -1300,7 +1305,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         )
         session.start()
         let fee = session.snapshot.transaction.preparedFee
-        let position = session.gasSliderPosition
+        let position = session.snapshot.gasSliderPosition
         let payloadData = try JSONSerialization.data(withJSONObject: [
             "interaction": "cancelled",
             "value": 200,
@@ -1314,7 +1319,7 @@ final class PopupRequestSessionsTests: XCTestCase {
 
         XCTAssertEqual(session.snapshot.transaction.preparedFee, fee)
         XCTAssertEqual(
-            session.gasSliderPosition,
+            session.snapshot.gasSliderPosition,
             position
         )
         XCTAssertEqual(preparationCount, 1)
@@ -1356,7 +1361,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         session.onChange = { [weak session] in
             guard let session else { return }
             if session.snapshot.transaction.speedPriorityFeeSource == .slider {
-                observedPositions.append(session.gasSliderPosition)
+                observedPositions.append(session.snapshot.gasSliderPosition)
             }
         }
         let payload = try JSONDecoder().decode(
@@ -1374,7 +1379,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(session.snapshot.transaction.speedPriorityFeeSource, .slider)
         XCTAssertFalse(observedPositions.isEmpty)
         XCTAssertTrue(observedPositions.allSatisfy { $0 == selectedPosition })
-        XCTAssertEqual(session.gasSliderPosition, selectedPosition)
+        XCTAssertEqual(session.snapshot.gasSliderPosition, selectedPosition)
     }
 
     func testPriorityFeeEditPreservesUntouchedFeeCapProvenance() async {
@@ -4144,7 +4149,7 @@ extension PopupRequestSessionsTests {
         let processor = CompactPopupProcessor(execute: { request, _, signer, permit in
             executions += 1
             guard let signer,
-                  case .success(.ethereumSignature("reviewed-signature")) = await signer.sign(),
+                  case .success(.response) = await signer.sign(),
                   case .failure(.authorizationUnavailable) = await signer.sign() else {
                 XCTFail("Only the first approved signing attempt may succeed")
                 return .rollback
@@ -4416,10 +4421,7 @@ extension PopupRequestSessionsTests {
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
             XCTAssertTrue(permit.isExecuting)
-            XCTAssertNil(PreparedBroadcast.signed(.ethereumTransaction(
-                signedTransaction: "0x01", transactionHash: "wrong-hash"
-            ), permit: permit))
-            return popupPreparedBroadcast(permit: permit)
+            return await popupPreparedBroadcast(permit: permit, signer: walletAccess)
         }) { request in
             .approval(popupTransactionAction())
         }
@@ -4481,14 +4483,14 @@ extension PopupRequestSessionsTests {
         }
         let processor = CompactPopupAccessProcessor(execute: { request, _, signer, permit in
             guard let signer,
-                  case .success(.ethereumTransaction) = await signer.sign() else {
+                  case .success(.broadcast(let signed)) = await signer.sign() else {
                 XCTFail("Expected approved signing before acquiring a lease")
                 return .rollback
             }
             XCTAssertTrue(access.validateCurrent())
             XCTAssertTrue(leaseState.isReleased)
             await store.record("signed")
-            return popupPreparedBroadcast(permit: permit)
+            return .broadcast(PreparedBroadcast(signed: signed))
         }) { _, _ in
             .approval(popupTransactionAction())
         }
@@ -4545,10 +4547,11 @@ extension PopupRequestSessionsTests {
 
         }
         let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess, permit in
+            let broadcast = await popupPreparedBroadcast(permit: permit, signer: walletAccess)
             if rotateDuringSigning {
                 accessIsCurrent.value = false
             }
-            return popupPreparedBroadcast(permit: permit)
+            return broadcast
         }) { request, _ in
             .approval(popupTransactionAction())
         }
@@ -5418,10 +5421,7 @@ extension PopupRequestSessionsTests {
             var currentCatalog = catalog
             let processor = PreparationRecordingDappRequestProcessor()
             var authentications = 0
-            let signingAccess = PopupRecordingWalletSigningAccess(
-                signatureOutput: provider == .ethereum
-                    ? .ethereumSignature("reviewed-signature") : .solanaSignature("reviewed-signature")
-            )
+            let signingAccess = PopupRecordingWalletSigningAccess()
             let controller = PopupRequestSessions(
                 store: store,
                 requestProcessor: processor,
@@ -5480,7 +5480,10 @@ extension PopupRequestSessionsTests {
                 requestToken: snapshot.handle.requestToken, reviewToken: freshToken, payload: [:]
             ), profileIdentifier: nil)
             let completed = await store.response(handle: snapshot.handle)
-            XCTAssertEqual(completed?["result"] as? String, "reviewed-signature")
+            let signature = try XCTUnwrap(completed?["result"] as? String)
+            let signatureData = provider == .ethereum
+                ? WalletCrypto.hexData(signature) : WalletCrypto.base58Decode(string: signature)
+            XCTAssertEqual(signatureData?.count, provider == .ethereum ? 65 : 64)
             XCTAssertEqual(processor.preparations, 2)
             XCTAssertEqual(authentications, 1)
             XCTAssertEqual(signingAccess.operations.count, 1)
@@ -5508,7 +5511,7 @@ extension PopupRequestSessionsTests {
             store: store,
             requestProcessor: CompactPopupAccessProcessor(execute: { _, _, signer, permit in
                 guard let signer,
-                      case .success(.ethereumSignature("reviewed-signature")) = await signer.sign() else {
+                      case .success(.response) = await signer.sign() else {
                     XCTFail("The available selected account must remain authorized to sign")
                     return .rollback
                 }
@@ -5813,7 +5816,7 @@ extension PopupRequestSessionsTests {
 
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
-            popupPreparedBroadcast(permit: permit)
+            await popupPreparedBroadcast(permit: permit, signer: walletAccess)
         }) { request in
             .approval(popupTransactionAction())
         }
@@ -6781,7 +6784,7 @@ extension PopupRequestSessionsTests {
 
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
-            popupPreparedBroadcast(permit: permit)
+            await popupPreparedBroadcast(permit: permit, signer: walletAccess)
         }) { request in
             .approval(popupTransactionAction())
         }
@@ -7575,11 +7578,11 @@ extension PopupRequestSessionsTests {
                 requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
                     executions += 1
                     guard let signer,
-                          case .success(.ethereumTransaction) = await signer.sign() else {
+                          case .success(.broadcast(let signed)) = await signer.sign() else {
                         XCTFail("Expected signing before the checkpoint attempt")
                         return .rollback
                     }
-                    return popupPreparedBroadcast(permit: permit)
+                    return .broadcast(PreparedBroadcast(signed: signed))
                 }) { _ in
                     .approval(popupTransactionAction())
                 },
@@ -7626,14 +7629,19 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
+            requestProcessor: CompactPopupProcessor(execute: { request, _, signer, permit in
+                let prepared = await popupPreparedBroadcast(permit: permit, signer: signer)
+                guard case .broadcast = prepared else {
+                    XCTFail("Expected a signed broadcast before cancellation")
+                    return .rollback
+                }
                 started.fulfill()
                 await gate.wait()
-                return popupPreparedBroadcast(permit: permit)
+                return prepared
             }) { _ in
                 .approval(popupTransactionAction())
             },
-                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
+                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) }, makeSigner: { makeWalletSignerForTesting($0) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
         let task = Task { await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization) }
         await fulfillment(of: [started], timeout: 1)
         task.cancel()
@@ -8358,10 +8366,10 @@ extension PopupRequestSessionsTests {
                         return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
 
         }
-        let processor = CompactPopupProcessor(execute: { request, _, _, permit in
+        let processor = CompactPopupProcessor(execute: { request, _, signer, permit in
                 executions += 1
                 if failure.hasPrefix("checkpoint") {
-                    return popupPreparedBroadcast(permit: permit)
+                    return await popupPreparedBroadcast(permit: permit, signer: signer)
                 }
                 return approvedFailureForTesting(.userRejected, permit: permit)
             }) { _ in .approval(action) }
@@ -8374,7 +8382,7 @@ extension PopupRequestSessionsTests {
                 store: store, requestProcessor: processor,
                 refreshWalletCatalog: {
                     WalletReviewCatalog(account: popupTestAccount())
-                }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
+                }, makeSigner: { makeWalletSignerForTesting($0) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
             var attempts = 0
             let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
                 delivered, authorization in
@@ -8472,12 +8480,12 @@ extension PopupRequestSessionsTests {
                     return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
 
         }
-        let processor = CompactPopupProcessor(execute: { request, _, _, permit in
+        let processor = CompactPopupProcessor(execute: { request, _, signer, permit in
                 executions += 1
-                return popupPreparedBroadcast(permit: permit)
+                return await popupPreparedBroadcast(permit: permit, signer: signer)
             }) { _ in .approval(action) }
             let finalizer = NativeApprovalFinalizer(store: store, requestProcessor: processor,
-                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
+                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) }, makeSigner: { makeWalletSignerForTesting($0) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
             var coordinator: NativeApprovalCoordinator?
             weak var weakCoordinator: NativeApprovalCoordinator?
             if failure == "authorization" {
@@ -8935,11 +8943,6 @@ private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess 
         var invalidations = 0
     }
     private let state = Mutex(State())
-    private let signatureOutput: WalletSigningOutput
-
-    init(signatureOutput: WalletSigningOutput = .ethereumSignature("reviewed-signature")) {
-        self.signatureOutput = signatureOutput
-    }
 
     var operations: [ApprovedWalletSigningOperation] {
         state.withLock { $0.recordedOperations }
@@ -8952,16 +8955,7 @@ private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
         state.withLock { $0.recordedOperations.append(operation) }
-        if case .ethereumTransaction(let transaction, let network) = operation.payload {
-            guard let key = WalletPrivateKey(data: Data(repeating: 1, count: 32)),
-                  case .success(let signed) = Ethereum.signedTransaction(
-                    transaction: transaction, privateKey: key, network: network.network
-                  ), let hash = Ethereum.transactionHash(signedTransaction: signed) else {
-                return .failure(.failedToSign)
-            }
-            return .success(.ethereumTransaction(signedTransaction: signed, transactionHash: hash))
-        }
-        return .success(signatureOutput)
+        return walletSigningResultForTesting(operation)
     }
 
     func invalidate() {
@@ -8995,21 +8989,16 @@ private final class PopupBroadcastSender: ApprovedBroadcastSending {
 
 @MainActor
 private func popupPreparedBroadcast(
-    permit: ExtensionBridge.ApprovedExecutionPermit
-) -> ApprovedExecutionResult {
-    guard case .signing(_, .ethereumTransaction(let transaction, let network)) = permit.approval.kind,
-          let key = WalletPrivateKey(data: Data(repeating: 1, count: 32)),
-          case .success(let signed) = Ethereum.signedTransaction(
-            transaction: transaction, privateKey: key, network: network.network
-          ), let hash = Ethereum.transactionHash(signedTransaction: signed),
-          let broadcast = PreparedBroadcast.signed(
-            .ethereumTransaction(signedTransaction: signed, transactionHash: hash),
-            permit: permit
-          ) else {
+    permit: ExtensionBridge.ApprovedExecutionPermit,
+    signer: (any WalletSigning)?
+) async -> ApprovedExecutionResult {
+    guard let signer,
+          case .success(.broadcast(let signed)) = await signer.sign(),
+          signed.executionID == permit.executionID else {
         if !Task.isCancelled { XCTFail("Expected a live approved transaction broadcast") }
         return .rollback
     }
-    return .broadcast(broadcast)
+    return .broadcast(PreparedBroadcast(signed: signed))
 }
 
 private extension WalletReviewCatalog {

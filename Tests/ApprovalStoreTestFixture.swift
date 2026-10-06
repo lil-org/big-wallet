@@ -538,7 +538,7 @@ func walletSigningAuthorizationForTesting(
 }
 
 func makeWalletSigningSessionForTesting(
-    _ access: any OwnedWalletSigningAccess = TestWalletSigningAccess(),
+    _ access: any OwnedWalletSigningAccess = OperationWalletSigningAccessForTesting(),
     authorization: WalletSigningAuthorization,
     isCurrent: @escaping @Sendable () -> Bool = { true },
     acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
@@ -573,6 +573,22 @@ final class TestWalletSigningAccess: OwnedWalletSigningAccess {
     func invalidate() {}
 }
 
+final class OperationWalletSigningAccessForTesting: OwnedWalletSigningAccess {
+    @MainActor
+    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        walletSigningResultForTesting(operation)
+    }
+
+    func invalidate() {}
+}
+
+@MainActor
+func makeWalletSignerForTesting(_ operation: ApprovedWalletSigningOperation) -> WalletSigningSession {
+    let session = makeWalletSigningSessionForTesting(authorization: operation.authorization)
+    XCTAssertTrue(session.bind(operation: operation))
+    return session
+}
+
 final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
     private struct State {
         var access: (any OwnedWalletSigningAccess)?
@@ -604,6 +620,48 @@ final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
 }
 
 let walletSigningTestMessage = Data("Bound wallet signing operation".utf8)
+
+func walletSigningResultForTesting(
+    _ operation: ApprovedWalletSigningOperation
+) -> Result<WalletSigningOutput, WalletSigningFailure> {
+    guard let key = WalletPrivateKey(data: Data(repeating: 1, count: 32)) else {
+        return .failure(.failedToSign)
+    }
+    return operation.sign(with: key)
+}
+
+func walletSigningOutputForTesting(
+    permit: ExtensionBridge.ApprovedExecutionPermit,
+    privateKey: WalletPrivateKey? = nil
+) throws -> WalletSigningOutput {
+    let operation = try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
+    let sessionID = UUID()
+    guard permit.bindSigningOperation(to: sessionID),
+          permit.beginSigningAttempt(for: sessionID) else {
+        throw WalletSigningFailure.authorizationUnavailable
+    }
+    defer { permit.finishSigningAttempt(for: sessionID) }
+    if let privateKey { return try operation.sign(with: privateKey).get() }
+    return try walletSigningResultForTesting(operation).get()
+}
+
+func walletSigningResponseForTesting(
+    _ output: WalletSigningOutput
+) throws -> ResponseToExtension {
+    guard case .response(let signed) = output else {
+        throw WalletSigningFailure.invalidTransaction
+    }
+    return signed.response
+}
+
+func preparedBroadcastForTesting(
+    permit: ExtensionBridge.ApprovedExecutionPermit
+) throws -> PreparedBroadcast {
+    guard case .broadcast(let signed) = try walletSigningOutputForTesting(permit: permit) else {
+        throw WalletSigningFailure.invalidTransaction
+    }
+    return PreparedBroadcast(signed: signed)
+}
 
 @MainActor
 func approvedWalletSigningOperationForTesting(
@@ -709,8 +767,10 @@ func assertWalletSigningSuccessForTesting(
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws {
-    switch try result.get() {
-    case .ethereumSignature(let signature):
+    let response = try walletSigningResponseForTesting(result.get())
+    let signature = try XCTUnwrap(response.json["result"] as? String, file: file, line: line)
+    switch account.coin {
+    case .ethereum:
         let signatureData = try XCTUnwrap(WalletCrypto.hexData(signature), file: file, line: line)
         let prefix = Data("\u{19}Ethereum Signed Message:\n\(walletSigningTestMessage.count)".utf8)
         let digest = WalletCrypto.keccak256(parts: [prefix, walletSigningTestMessage])
@@ -719,13 +779,11 @@ func assertWalletSigningSuccessForTesting(
             account.address.lowercased(),
             file: file, line: line
         )
-    case .solanaSignature(let signature):
+    case .solana:
         let signatureData = try XCTUnwrap(WalletCrypto.base58Decode(string: signature), file: file, line: line)
         let publicKeyData = try XCTUnwrap(WalletCrypto.base58Decode(string: account.address), file: file, line: line)
         let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
         XCTAssertTrue(publicKey.isValidSignature(signatureData, for: walletSigningTestMessage), file: file, line: line)
-    default:
-        XCTFail("Expected a signature for the approved message", file: file, line: line)
     }
 }
 

@@ -127,6 +127,120 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(forceGasCheck)
     }
 
+    func testReducerPublishesFrozenAndReleasedQuotesWithoutCoordinatorEffects() throws {
+        var transaction = Self.makeReadyTransaction(gasPrice: 120)
+        transaction.currentBaseFeePerGas = 100
+        var reducer = TransactionApprovalReducer(
+            transaction: transaction,
+            network: Self.makeNetwork(),
+            authenticationPolicy: .skipped
+        )
+        let preparation = reducer.reduce(.startPreparation(forceGasCheck: false))
+        guard case .runPreparation(let token, _, _) = preparation.last else {
+            return XCTFail("Expected a preparation effect")
+        }
+        let initial = try onlySnapshot(in: preparation)
+        XCTAssertTrue(initial.hasGasSpeedInfo)
+        XCTAssertEqual(initial.speedPriorityFeePerGas, 20)
+        XCTAssertEqual(initial.gasSliderPosition, GasSpeedConfiguration.recommendedSliderPosition)
+
+        _ = reducer.reduce(.preparationEstimate(token, Self.makeEstimate()))
+        XCTAssertTrue(reducer.reduce(.sliderInteractionBegan).isEmpty)
+        let newInfo = GasService.Info(recommendedPriorityFee: 100, highPriorityFee: 200)
+        let frozen = try onlySnapshot(in: reducer.reduce(.preparationEstimate(
+            token, .init(info: newInfo, nextBaseFee: 100, support: .eip1559)
+        )))
+        XCTAssertTrue(frozen.hasVerifiedFeeEstimate)
+        XCTAssertEqual(frozen.gasSliderPosition, initial.gasSliderPosition)
+        XCTAssertEqual(frozen.speedPriorityFeePerGas, 20)
+        XCTAssertEqual(frozen.transaction.feeProvenance, transaction.feeProvenance)
+
+        let release = reducer.reduce(.sliderInteractionEnded(cancelled: false))
+        XCTAssertEqual(release.count, 1)
+        let released = try onlySnapshot(in: release)
+        XCTAssertEqual(released.gasSliderPosition, transaction.currentFeeInRelationTo(info: newInfo))
+        XCTAssertEqual(released.transaction.id, transaction.id)
+        XCTAssertEqual(released.transaction.preparedFee, transaction.preparedFee)
+        XCTAssertEqual(released.transaction.feeProvenance, transaction.feeProvenance)
+        XCTAssertEqual(released.attemptID, token.attemptID)
+        XCTAssertEqual(frozen.gasSliderPosition, initial.gasSliderPosition)
+        XCTAssertTrue(reducer.reduce(.sliderInteractionEnded(cancelled: false)).isEmpty)
+    }
+
+    func testReducerOneShotSelectionFreezesNewQuoteAndRejectsStaleEstimate() throws {
+        var transaction = Self.makeReadyTransaction(gasPrice: 101)
+        transaction.currentBaseFeePerGas = 100
+        var reducer = TransactionApprovalReducer(
+            transaction: transaction,
+            network: Self.makeNetwork(),
+            authenticationPolicy: .skipped
+        )
+        let firstPreparation = reducer.reduce(.startPreparation(forceGasCheck: false))
+        guard case .runPreparation(let firstToken, _, _) = firstPreparation.last else {
+            return XCTFail("Expected a preparation effect")
+        }
+        let initialInfo = GasService.Info(recommendedPriorityFee: 1, highPriorityFee: 2)
+        _ = reducer.reduce(.preparationEstimate(firstToken, .init(info: initialInfo, nextBaseFee: 100)))
+        _ = reducer.reduce(.preparationResult(firstToken, .success(transaction)))
+
+        let selection = reducer.reduce(.setFeeForSpeed(50))
+        guard case .runPreparation(let nextToken, _, _) = selection.last else {
+            return XCTFail("Expected one-shot selection to start preparation")
+        }
+        let selected = try onlySnapshot(in: selection)
+        XCTAssertEqual(selected.gasSliderPosition, 50)
+        XCTAssertEqual(selected.transaction.feeProvenance.gasPrice, .slider)
+        XCTAssertEqual(selected.speedPriorityFeePerGas, 1)
+        XCTAssertNotEqual(nextToken, firstToken)
+
+        let newInfo = GasService.Info(recommendedPriorityFee: 100, highPriorityFee: 200)
+        let newEstimate = GasService.Estimate(info: newInfo, nextBaseFee: 100)
+        XCTAssertTrue(reducer.reduce(.preparationEstimate(firstToken, newEstimate)).isEmpty)
+        XCTAssertFalse(reducer.snapshot.hasVerifiedFeeEstimate)
+        XCTAssertEqual(reducer.snapshot.gasSliderPosition, 50)
+
+        let pending = try onlySnapshot(in: reducer.reduce(.preparationEstimate(nextToken, newEstimate)))
+        XCTAssertEqual(pending.gasSliderPosition, 50)
+        XCTAssertEqual(pending.transaction.preparedFee, selected.transaction.preparedFee)
+        let release = reducer.reduce(.sliderInteractionEnded(cancelled: false))
+        XCTAssertEqual(release.count, 1)
+        let released = try onlySnapshot(in: release)
+        XCTAssertEqual(released.gasSliderPosition, released.transaction.currentFeeInRelationTo(info: newInfo))
+        XCTAssertEqual(released.attemptID, nextToken.attemptID)
+        XCTAssertEqual(released.transaction.feeProvenance, selected.transaction.feeProvenance)
+        XCTAssertEqual(pending.gasSliderPosition, 50)
+    }
+
+    func testReducerManualEditsPublishFallbackAndNonceOnlyEditsRetainIt() throws {
+        var transaction = Self.makeReadyTransaction(gasPrice: 120)
+        transaction.currentBaseFeePerGas = 100
+        var reducer = TransactionApprovalReducer(
+            transaction: transaction,
+            network: Self.makeNetwork(),
+            authenticationPolicy: .skipped
+        )
+        let preparation = reducer.reduce(.startPreparation(forceGasCheck: false))
+        guard case .runPreparation(let token, _, _) = preparation.last else {
+            return XCTFail("Expected a preparation effect")
+        }
+        _ = reducer.reduce(.preparationResult(token, .success(transaction)))
+
+        let edited = try onlySnapshot(in: reducer.reduce(.applyEdits(.init(gasPrice: 140))))
+        XCTAssertEqual(edited.phase, .editing)
+        XCTAssertTrue(edited.hasGasSpeedInfo)
+        XCTAssertEqual(edited.speedPriorityFeePerGas, 40)
+        XCTAssertEqual(edited.gasSliderPosition, GasSpeedConfiguration.recommendedSliderPosition)
+        XCTAssertEqual(edited.transaction.feeProvenance.gasPrice, .manual)
+
+        let nonceEdited = try onlySnapshot(in: reducer.reduce(.applyEdits(.init(nonce: 1))))
+        XCTAssertEqual(nonceEdited.transaction.decimalNonceString, "1")
+        XCTAssertEqual(nonceEdited.transaction.feeProvenance, edited.transaction.feeProvenance)
+        XCTAssertEqual(nonceEdited.gasSliderPosition, edited.gasSliderPosition)
+        XCTAssertEqual(nonceEdited.speedPriorityFeePerGas, edited.speedPriorityFeePerGas)
+        XCTAssertTrue(reducer.reduce(.applyEdits(.init())).isEmpty)
+        XCTAssertEqual(reducer.snapshot.transaction.id, nonceEdited.transaction.id)
+    }
+
     func testNewAttemptCancelsPriorBeforeStartingAndStaleResultCannotClearNewerHandle() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(stub: stub)
@@ -624,8 +738,8 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         call.onFeeEstimate(Self.makeEstimate())
         call.onFeeEstimate(Self.makeUnknownEstimate())
 
-        await waitFor { (recorder.estimates.count) == (2) }
-        XCTAssertEqual(recorder.estimates.count, 2)
+        await waitFor { recorder.snapshots.filter(\.hasVerifiedFeeEstimate).count == 2 }
+        XCTAssertEqual(recorder.snapshots.filter(\.hasVerifiedFeeEstimate).count, 2)
         await waitFor { (coordinator.snapshot.transaction.currentBaseFeePerGas) == (90) }
         XCTAssertEqual(
             coordinator.snapshot.transaction.currentBaseFeePerGas,
@@ -894,6 +1008,49 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.snapshot.phase, .editing)
     }
 
+    func testQuantizedSliderMovePublishesPositionWithoutChangingFeeOrRestarting() async {
+        let stub = ApprovalOperationsStub()
+        let coordinator = makeCoordinator(
+            transaction: Self.makeReadyTransaction(gasPrice: 101),
+            stub: stub
+        )
+        let info = GasService.Info(recommendedPriorityFee: 1, highPriorityFee: 2)
+        await prepareToReady(coordinator, stub: stub, estimate: .init(info: info, nextBaseFee: 100))
+        coordinator.beginSliderInteraction()
+        XCTAssertTrue(coordinator.setFeeForSpeed(value: 50))
+        XCTAssertTrue(coordinator.endSliderInteraction())
+        await waitFor { stub.preparationCalls.count == 2 }
+        let preparation = stub.preparationCalls[1]
+        preparation.completion(.success(preparation.transaction))
+        await waitFor { coordinator.snapshot.phase == .ready }
+
+        let selected = coordinator.snapshot
+        var displayedSnapshot = selected
+        var publishedPositions = [Double]()
+        coordinator.onOutput = { output in
+            if case .snapshot(let snapshot) = output {
+                displayedSnapshot = snapshot
+                publishedPositions.append(snapshot.gasSliderPosition)
+            }
+        }
+        coordinator.beginSliderInteraction()
+
+        XCTAssertFalse(coordinator.setFeeForSpeed(value: 60))
+        XCTAssertFalse(coordinator.endSliderInteraction())
+
+        XCTAssertEqual(publishedPositions, [60])
+        XCTAssertEqual(displayedSnapshot.gasSliderPosition, 60)
+        XCTAssertEqual(displayedSnapshot.transaction.id, selected.transaction.id)
+        XCTAssertEqual(displayedSnapshot.transaction.preparedFee, selected.transaction.preparedFee)
+        XCTAssertEqual(displayedSnapshot.transaction.feeProvenance, selected.transaction.feeProvenance)
+        XCTAssertEqual(displayedSnapshot.phase, .ready)
+        XCTAssertEqual(stub.preparationCalls.count, 2)
+        XCTAssertFalse(coordinator.setFeeForSpeed(value: 60))
+        XCTAssertFalse(coordinator.endSliderInteraction())
+        XCTAssertEqual(publishedPositions, [60])
+        XCTAssertEqual(stub.preparationCalls.count, 2)
+    }
+
     func testSliderWithoutMovementAppliesPendingQuoteAndPublishesWithoutRestart() async {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(transaction: Self.makeReadyTransaction(gasPrice: 120), stub: stub)
@@ -901,7 +1058,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         let secondQuote = expectation(description: "pending quote received")
         var quoteCount = 0
         coordinator.onOutput = { output in
-            if case .verifiedFeeEstimate = output {
+            if case .snapshot(let snapshot) = output, snapshot.hasVerifiedFeeEstimate {
                 quoteCount += 1
                 (quoteCount == 1 ? firstQuote : secondQuote).fulfill()
             }
@@ -911,15 +1068,15 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         preparation.onFeeEstimate(Self.makeEstimate())
         await fulfillment(of: [firstQuote], timeout: 2)
         let transaction = coordinator.snapshot.transaction
-        let initialPosition = coordinator.gasSliderPosition
+        let initialPosition = coordinator.snapshot.gasSliderPosition
         let newInfo = GasService.Info(recommendedPriorityFee: 100, highPriorityFee: 200)
         coordinator.beginSliderInteraction()
         preparation.onFeeEstimate(.init(info: newInfo, nextBaseFee: 100))
         await fulfillment(of: [secondQuote], timeout: 2)
-        XCTAssertEqual(coordinator.gasSliderPosition, initialPosition)
+        XCTAssertEqual(coordinator.snapshot.gasSliderPosition, initialPosition)
         var publishedPositions = [Double]()
         coordinator.onOutput = { output in
-            if case .snapshot = output { publishedPositions.append(coordinator.gasSliderPosition) }
+            if case .snapshot(let snapshot) = output { publishedPositions.append(snapshot.gasSliderPosition) }
         }
         XCTAssertFalse(coordinator.endSliderInteraction())
         XCTAssertEqual(publishedPositions, [transaction.currentFeeInRelationTo(info: newInfo)])
@@ -951,8 +1108,8 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         }
         var positionsDuringPreparation = [Double]()
         coordinator.onOutput = { output in
-            if case .snapshot = output {
-                positionsDuringPreparation.append(coordinator.gasSliderPosition)
+            if case .snapshot(let snapshot) = output {
+                positionsDuringPreparation.append(snapshot.gasSliderPosition)
             }
         }
 
@@ -971,17 +1128,17 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         coordinator.onOutput = { _ in }
         XCTAssertFalse(coordinator.endSliderInteraction())
         await waitFor {
-            (coordinator.gasSliderPosition) == (coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo))
+            (coordinator.snapshot.gasSliderPosition) == (coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo))
         }
         XCTAssertEqual(
-            coordinator.gasSliderPosition,
+            coordinator.snapshot.gasSliderPosition,
             coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo)
         )
         await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 100))
-        await waitFor { (coordinator.speedPriorityFeePerGas) == (100) }
-        XCTAssertEqual(coordinator.speedPriorityFeePerGas, 100)
+        await waitFor { (coordinator.snapshot.speedPriorityFeePerGas) == (100) }
+        XCTAssertEqual(coordinator.snapshot.speedPriorityFeePerGas, 100)
         coordinator.endSliderInteraction()
         await waitFor { (stub.preparationCalls.count) == (3) }
         XCTAssertEqual(stub.preparationCalls.count, 3)
@@ -1011,16 +1168,16 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         await waitFor { (coordinator.snapshot.transaction.preparedFee) == (selectedFee) }
         XCTAssertEqual(coordinator.snapshot.transaction.preparedFee, selectedFee)
         await waitFor {
-            (coordinator.gasSliderPosition) == (coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo))
+            (coordinator.snapshot.gasSliderPosition) == (coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo))
         }
         XCTAssertEqual(
-            coordinator.gasSliderPosition,
+            coordinator.snapshot.gasSliderPosition,
             coordinator.snapshot.transaction.currentFeeInRelationTo(info: newInfo)
         )
         coordinator.beginSliderInteraction()
         XCTAssertTrue(coordinator.setFeeForSpeed(value: 100))
-        await waitFor { (coordinator.speedPriorityFeePerGas) == (100) }
-        XCTAssertEqual(coordinator.speedPriorityFeePerGas, 100)
+        await waitFor { (coordinator.snapshot.speedPriorityFeePerGas) == (100) }
+        XCTAssertEqual(coordinator.snapshot.speedPriorityFeePerGas, 100)
         XCTAssertTrue(coordinator.endSliderInteraction())
         await waitFor { (stub.preparationCalls.count) == (3) }
         XCTAssertEqual(stub.preparationCalls.count, 3)
@@ -1036,8 +1193,8 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         coordinator.onOutput = { output in
             if case .snapshot(let snapshot) = output {
                 XCTAssertEqual(snapshot.transaction.preparedFee, .legacy(gasPrice: 140))
-                XCTAssertEqual(coordinator.speedPriorityFeePerGas, 40)
-                positions.append(coordinator.gasSliderPosition)
+                XCTAssertEqual(snapshot.speedPriorityFeePerGas, 40)
+                positions.append(snapshot.gasSliderPosition)
             }
         }
 
@@ -1083,8 +1240,8 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.snapshot.transaction.decimalNonceString, "1")
         await waitFor { (coordinator.snapshot.transaction.feeProvenance) == (provenance) }
         XCTAssertEqual(coordinator.snapshot.transaction.feeProvenance, provenance)
-        await waitFor { (coordinator.gasSliderPosition) == (50) }
-        XCTAssertEqual(coordinator.gasSliderPosition, 50)
+        await waitFor { (coordinator.snapshot.gasSliderPosition) == (50) }
+        XCTAssertEqual(coordinator.snapshot.gasSliderPosition, 50)
         await waitFor { (stub.preparationCalls.count) == (2) }
         XCTAssertEqual(stub.preparationCalls.count, 2)
     }
@@ -1284,6 +1441,19 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             operations: stub.operations,
             onOutput: recorder?.record ?? { _ in }
         )
+    }
+
+    private func onlySnapshot(
+        in effects: [TransactionApprovalReducer.Effect],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> TransactionApprovalSnapshot {
+        let snapshots = effects.compactMap { effect -> TransactionApprovalSnapshot? in
+            guard case .snapshot(let snapshot) = effect else { return nil }
+            return snapshot
+        }
+        XCTAssertEqual(snapshots.count, 1, file: file, line: line)
+        return try XCTUnwrap(snapshots.first, file: file, line: line)
     }
 
     private func prepareToReady(
@@ -1535,7 +1705,6 @@ private final class TestPreflightResult: Sendable {
 @MainActor
 private final class ApprovalOutputRecorder {
     var snapshots = [TransactionApprovalSnapshot]()
-    var estimates = [GasService.Estimate]()
     var authenticationTokens = [TransactionApprovalRequestToken]()
     var alerts = [TransactionApprovalAlertIntent]()
     var editorRequestCount = 0
@@ -1545,8 +1714,6 @@ private final class ApprovalOutputRecorder {
         switch output {
         case .snapshot(let snapshot):
             snapshots.append(snapshot)
-        case .verifiedFeeEstimate(let estimate):
-            estimates.append(estimate)
         case .authenticationRequest(let token):
             authenticationTokens.append(token)
         case .alert(let alert):

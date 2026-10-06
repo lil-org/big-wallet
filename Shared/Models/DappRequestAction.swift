@@ -148,29 +148,9 @@ struct ApprovedCompletion: Sendable {
         )
     }
 
-    static func signed(
-        _ output: WalletSigningOutput,
-        permit: ExtensionBridge.ApprovedExecutionPermit
-    ) -> ApprovedCompletion? {
-        guard permit.isExecuting,
-              case .signing(_, let payload) = permit.approval.kind else { return nil }
-        let result: ResponseToExtension.Result
-        switch (payload, output) {
-        case (.signature(.ethereumPersonalMessage), .ethereumSignature(let signature)),
-             (.signature(.ethereumTypedData), .ethereumSignature(let signature)):
-            result = .string(signature)
-        case (.signature(.solanaMessage), .solanaSignature(let signature)),
-             (.signature(.solanaTransaction), .solanaSignature(let signature)):
-            result = .string(signature)
-        case (.signature(.solanaTransactions(let transactions)), .solanaSignatures(let signatures)):
-            guard transactions.count == signatures.count else { return nil }
-            result = .strings(signatures)
-        default:
-            return nil
-        }
-        return ApprovedCompletion(
-            permit: permit, response: ResponseToExtension(for: permit.request, payload: .result(result))
-        )
+    init(signed output: WalletSigningOutput.SignedResponse) {
+        executionID = output.executionID
+        value = output.response.markingApprovalCommitted()
     }
 
     static func chainAdded(
@@ -199,47 +179,17 @@ struct ApprovedCompletion: Sendable {
 }
 
 struct PreparedBroadcast: Sendable {
-    private enum Transaction: Sendable {
-        case ethereum(String, String, ResolvedEthereumNetwork)
-        case solana(String, String, Solana.Cluster, Solana.PreparedSendOptions)
-    }
-
     let executionID: UUID
     private let identity = UUID()
-    private let transaction: Transaction
+    private let transaction: WalletSigningOutput.SignedBroadcast.Transaction
 
-    private init(permit: ExtensionBridge.ApprovedExecutionPermit, transaction: Transaction) {
-        executionID = permit.executionID
-        self.transaction = transaction
+    init(signed output: WalletSigningOutput.SignedBroadcast) {
+        executionID = output.executionID
+        transaction = output.transaction
     }
 
     func hasSameIdentity(as other: Self) -> Bool {
         executionID == other.executionID && identity == other.identity
-    }
-
-    static func signed(
-        _ output: WalletSigningOutput,
-        permit: ExtensionBridge.ApprovedExecutionPermit
-    ) -> PreparedBroadcast? {
-        guard permit.isExecuting,
-              case .signing(_, let payload) = permit.approval.kind else { return nil }
-        let transaction: Transaction
-        switch (payload, output) {
-        case (.ethereumTransaction(_, let network),
-              .ethereumTransaction(let signed, let hash)):
-            guard Ethereum.transactionHash(signedTransaction: signed)?.caseInsensitiveCompare(hash) == .orderedSame
-            else { return nil }
-            transaction = .ethereum(signed, hash, network)
-        case (.solanaLegacyBroadcast(_, let options, let cluster),
-              .solanaTransaction(let signed, let signature)),
-             (.solanaSerializedBroadcast(_, let options, let cluster),
-              .solanaTransaction(let signed, let signature)):
-            guard Solana.transactionSignature(signedTransaction: signed) == signature else { return nil }
-            transaction = .solana(signed, signature, cluster, options)
-        default:
-            return nil
-        }
-        return PreparedBroadcast(permit: permit, transaction: transaction)
     }
 
     func recoveryCompletion(

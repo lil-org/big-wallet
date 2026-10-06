@@ -1175,11 +1175,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 retainedPermit = permit
                 if stage != "authorized" { XCTAssertTrue(permit.consumeExecution()) }
                 if stage == "broadcast" {
-                    let signed = WalletCoreProxyTestVectors.signedEmptySendTransaction
-                    let hash = try XCTUnwrap(Ethereum.transactionHash(signedTransaction: signed))
-                    let broadcast = try XCTUnwrap(PreparedBroadcast.signed(
-                        .ethereumTransaction(signedTransaction: signed, transactionHash: hash), permit: permit
-                    ))
+                    let broadcast = try preparedBroadcastForTesting(permit: permit)
                     guard case .prepared = await bridge.prepareBroadcast(permit: permit, broadcast: broadcast) else {
                         return XCTFail("Expected broadcast checkpoint")
                     }
@@ -9557,13 +9553,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             guard permit.consumeExecution() else { return .rollback }
             calls += 1
             if broadcasts {
-                guard case .signing(_, .ethereumTransaction) = permit.approval.kind else { return .rollback }
-                let signed = WalletCoreProxyTestVectors.signedEmptySendTransaction
-                guard let hash = Ethereum.transactionHash(signedTransaction: signed),
-                      let broadcast = PreparedBroadcast.signed(.ethereumTransaction(
-                        signedTransaction: signed, transactionHash: hash
-                      ), permit: permit) else { return .rollback }
-                return .broadcast(broadcast)
+                guard let signer, case .success(.broadcast(let signed)) = await signer.sign() else { return .rollback }
+                return .broadcast(PreparedBroadcast(signed: signed))
             }
             guard let completion = ApprovedCompletion.failure(.userRejected, permit: permit) else { return .rollback }
             return .completed(completion)
@@ -9758,28 +9749,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             completion = try XCTUnwrap(ApprovedCompletion.accountSelection(permit: permit))
         case .addEthereumChain:
             completion = try XCTUnwrap(ApprovedCompletion.chainAdded(permit: permit))
-        case .signing(_, let payload):
-            switch payload {
-            case .ethereumTransaction:
-                let signed = WalletCoreProxyTestVectors.signedEmptySendTransaction
-                let hash = try XCTUnwrap(Ethereum.transactionHash(signedTransaction: signed))
-                broadcast = try XCTUnwrap(PreparedBroadcast.signed(.ethereumTransaction(signedTransaction: signed, transactionHash: hash), permit: permit))
+        case .signing:
+            switch try walletSigningOutputForTesting(permit: permit) {
+            case .response(let signed):
+                completion = ApprovedCompletion(signed: signed)
+            case .broadcast(let signed):
+                broadcast = PreparedBroadcast(signed: signed)
                 completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
-            case .signature(.ethereumPersonalMessage), .signature(.ethereumTypedData):
-                completion = try XCTUnwrap(ApprovedCompletion.signed(.ethereumSignature("0xsigned"), permit: permit))
-            case .signature(.solanaMessage), .signature(.solanaTransaction):
-                completion = try XCTUnwrap(ApprovedCompletion.signed(.solanaSignature("1111"), permit: permit))
-            case .signature(.solanaTransactions):
-                throw Failure.expectedValue
-            case .solanaLegacyBroadcast(let transaction, _, _):
-                let signature = Data(repeating: 7, count: 64)
-                let signed = (Data([1]) + signature + transaction.preparedMessage.messageData).base64EncodedString()
-                broadcast = try XCTUnwrap(PreparedBroadcast.signed(.solanaTransaction(
-                    signedTransaction: signed, signature: WalletCrypto.base58Encode(data: signature)
-                ), permit: permit))
-                completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
-            case .solanaSerializedBroadcast:
-                throw Failure.expectedValue
             }
         }
         return ReviewedExecution(

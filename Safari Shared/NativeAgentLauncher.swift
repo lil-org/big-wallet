@@ -266,24 +266,17 @@ final class NativeAgentLauncher {
               !Task.isCancelled, isPending() else {
             return false
         }
-        let resolution = ApprovalResolution<Bool>()
         let launch = dependencies.launch
         let uptime = dependencies.uptime
-        let operation = Task {
-            guard !Task.isCancelled, uptime() < deadline else {
-                await resolution.resolve(false)
-                return
+        return await ApprovalResolution<Bool>().value(
+            timeoutValue: false,
+            callerCancellation: .resolveTimeout,
+            operation: { @MainActor in
+                guard !Task.isCancelled, uptime() < deadline else { return false }
+                let succeeded = await launch(selectedTarget, route.url)
+                return succeeded && !Task.isCancelled && uptime() < deadline
             }
-            let succeeded = await launch(selectedTarget, route.url)
-            await resolution.resolve(succeeded && !Task.isCancelled && uptime() < deadline)
-        }
-        defer { operation.cancel() }
-        return await withTaskCancellationHandler {
-            await resolution.value()
-        } onCancel: {
-            operation.cancel()
-            Task.detached { await resolution.resolve(false) }
-        }
+        )
     }
 
     private func assessRuntime(

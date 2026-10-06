@@ -1409,24 +1409,7 @@ actor SafariApprovalVaultHost {
         let sourceMAC: Data
     }
 
-    final class ReconciliationRetry: Sendable {
-        private let cancelled = Mutex(false)
-        private let operation: @Sendable () async -> Void
-
-        init(operation: @escaping @Sendable () async -> Void) {
-            self.operation = operation
-        }
-
-        var isCancelled: Bool { cancelled.withLock { $0 } }
-        func cancel() { cancelled.withLock { $0 = true } }
-        func perform() async {
-            guard !isCancelled else { return }
-            await operation()
-        }
-    }
-
     typealias SynchronizeDefaults = @Sendable (UserDefaults) -> Bool
-    typealias ScheduleReconciliationRetry = @Sendable (ReconciliationRetry) -> Void
     typealias BackgroundTask = @Sendable (@escaping @Sendable () -> Void) -> (@Sendable () -> Void)?
 
     private final class PublicationStorage: Sendable {
@@ -1452,11 +1435,11 @@ actor SafariApprovalVaultHost {
     private let integrityKeyStore: SafariApprovalIntegrityKeyStoring
     private let sourceSnapshot: @Sendable () async throws -> SafariApprovalSourceSnapshot?
     private let notificationCenter: NotificationCenter
-    private let scheduleReconciliationRetry: ScheduleReconciliationRetry
+    private let waitForReconciliationRetry: @Sendable () async throws -> Void
     private let protectedDataObservation = Mutex<VaultProtectedDataObservation?>(nil)
     private var backgroundTask: BackgroundTask?
     private var reconciliationTask: Task<Void, Never>?
-    private var reconciliationRetry: (id: UUID, work: ReconciliationRetry)?
+    private var reconciliationRetry: Task<Void, Never>?
     private var isPublishing = false
     private var reconciliationRequested = false
     private let waitToReconcile: @Sendable () async -> Void
@@ -1468,7 +1451,9 @@ actor SafariApprovalVaultHost {
         synchronizeDefaults: @escaping SynchronizeDefaults = { $0.synchronize() },
         notificationCenter: NotificationCenter = .default,
         waitToReconcile: @escaping @Sendable () async -> Void = {},
-        scheduleReconciliationRetry: ScheduleReconciliationRetry? = nil,
+        waitForReconciliationRetry: @escaping @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .milliseconds(100))
+        },
         sourceSnapshot: @escaping @Sendable () async throws -> SafariApprovalSourceSnapshot? = {
             try await WalletsManager.shared.safariApprovalSourceSnapshot()
         }
@@ -1478,14 +1463,11 @@ actor SafariApprovalVaultHost {
         self.integrityKeyStore = integrityKeyStore
         self.notificationCenter = notificationCenter
         self.waitToReconcile = waitToReconcile
-        self.scheduleReconciliationRetry = scheduleReconciliationRetry ?? { retry in
-            Task {
-                try? await Task.sleep(for: .milliseconds(100))
-                await retry.perform()
-            }
-        }
+        self.waitForReconciliationRetry = waitForReconciliationRetry
         self.sourceSnapshot = sourceSnapshot
     }
+
+    deinit { reconciliationRetry?.cancel() }
 
     @available(iOSApplicationExtension, unavailable)
     @available(visionOSApplicationExtension, unavailable)
@@ -1563,22 +1545,22 @@ actor SafariApprovalVaultHost {
 
     private func scheduleRetry() {
         guard reconciliationRetry == nil else { return }
-        let id = UUID()
-        let work = ReconciliationRetry { [weak self] in
-            await self?.retryReconciliation(id: id)
+        let waitForReconciliationRetry = waitForReconciliationRetry
+        reconciliationRetry = Task { [weak self] in
+            do { try await waitForReconciliationRetry() }
+            catch { return }
+            await self?.retryReconciliation()
         }
-        reconciliationRetry = (id, work)
-        scheduleReconciliationRetry(work)
     }
 
-    private func retryReconciliation(id: UUID) async {
-        guard reconciliationRetry?.id == id else { return }
+    private func retryReconciliation() {
+        guard !Task.isCancelled else { return }
         reconciliationRetry = nil
         reconcile()
     }
 
     private func cancelReconciliationRetry() {
-        reconciliationRetry?.work.cancel()
+        reconciliationRetry?.cancel()
         reconciliationRetry = nil
     }
 

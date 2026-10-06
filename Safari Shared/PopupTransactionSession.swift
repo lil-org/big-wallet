@@ -46,14 +46,6 @@ final class PopupTransactionSession {
         activeAlert != nil || snapshot.phase == .editing || snapshot.phase == .reviewingFees
     }
 
-    var hasGasSpeedInfo: Bool {
-        coordinator.hasGasSpeedInfo
-    }
-
-    var gasSliderPosition: Double {
-        coordinator.gasSliderPosition
-    }
-
     func start() {
         coordinator.startPreparation(forceGasCheck: false)
     }
@@ -186,7 +178,7 @@ final class PopupTransactionSession {
 
     private func receive(_ output: TransactionApprovalOutput) {
         switch output {
-        case .snapshot, .verifiedFeeEstimate:
+        case .snapshot:
             break
         case .alert:
             finishPreflight(with: .reviewRequired)

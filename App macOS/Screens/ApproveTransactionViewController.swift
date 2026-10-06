@@ -139,8 +139,6 @@ class ApproveTransactionViewController: NSViewController {
         case .snapshot(let snapshot):
             approvalSnapshot = snapshot
             updateInterface()
-        case .verifiedFeeEstimate:
-            break
         case .authenticationRequest(let token):
             authenticate(token: token)
         case .alert(let intent):
@@ -344,7 +342,7 @@ class ApproveTransactionViewController: NSViewController {
         guard approvalSnapshot.allowsMutation,
               chain.isEthMainnet,
               transaction.feeBasisBaseFeePerGas != nil,
-              coordinator.hasGasSpeedInfo else {
+              approvalSnapshot.hasGasSpeedInfo else {
             return false
         }
         guard transaction.preparedFee == nil else { return true }
@@ -366,7 +364,7 @@ class ApproveTransactionViewController: NSViewController {
     private func updateGasSliderValueIfNeeded() {
         guard gasSliderInteractionStartValue == nil,
               isSpeedConfigurationEnabled else { return }
-        let sliderValue = coordinator.gasSliderPosition
+        let sliderValue = approvalSnapshot.gasSliderPosition
         speedSlider.doubleValue = sliderValue
         displayedGasSliderValue = sliderValue
         updateSpeedAccessibilityDetail()
@@ -380,14 +378,14 @@ class ApproveTransactionViewController: NSViewController {
 
     private func updateSpeedAccessibilityDetail() {
         guard chain.isEthMainnet else { return }
-        let detail = !coordinator.hasGasSpeedInfo
+        let detail = !approvalSnapshot.hasGasSpeedInfo
             ? Strings.calculating.withEllipsis
             : speedAccessibilityDetail()
         speedSlider.setAccessibilityValueDescription(detail)
     }
 
     private func speedAccessibilityDetail() -> String {
-        let priority = coordinator.speedPriorityFeePerGas
+        let priority = approvalSnapshot.speedPriorityFeePerGas
         guard let priority else { return Strings.calculating.withEllipsis }
         let fee = "\(priority.compactGwei()) \(Strings.gwei)"
         return Transaction.editableGwei(fromWei: priority).map {
@@ -452,7 +450,7 @@ class ApproveTransactionViewController: NSViewController {
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
         guard approvalSnapshot.allowsMutation,
-              coordinator.hasGasSpeedInfo else {
+              approvalSnapshot.hasGasSpeedInfo else {
             finishGasSliderInteraction(cancelled: true)
             updateInterface()
             return

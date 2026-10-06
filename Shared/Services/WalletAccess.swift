@@ -212,17 +212,41 @@ enum WalletSigningFailure: Error, Equatable, Sendable {
 }
 
 enum WalletSigningOutput: Sendable {
-    case ethereumSignature(String)
-    case solanaSignature(String)
-    case solanaSignatures([String])
-    case ethereumTransaction(
-        signedTransaction: String,
-        transactionHash: String
-    )
-    case solanaTransaction(
-        signedTransaction: String,
-        signature: String
-    )
+    struct SignedResponse: Sendable {
+        let executionID: UUID
+        let response: ResponseToExtension
+
+        fileprivate init(permit: ExtensionBridge.ApprovedExecutionPermit, result: ResponseToExtension.Result) {
+            executionID = permit.executionID
+            response = ResponseToExtension(for: permit.request, payload: .result(result))
+        }
+    }
+
+    struct SignedBroadcast: Sendable {
+        enum Transaction: Sendable {
+            case ethereum(String, String, ResolvedEthereumNetwork)
+            case solana(String, String, Solana.Cluster, Solana.PreparedSendOptions)
+        }
+
+        let executionID: UUID
+        let transaction: Transaction
+
+        fileprivate init(permit: ExtensionBridge.ApprovedExecutionPermit, transaction: Transaction) {
+            executionID = permit.executionID
+            self.transaction = transaction
+        }
+    }
+
+    case response(SignedResponse)
+    case broadcast(SignedBroadcast)
+
+    var executionID: UUID {
+        switch self {
+        case .response(let value): value.executionID
+        case .broadcast(let value): value.executionID
+        }
+    }
+
 }
 
 struct WalletSigningAuthorization: Equatable, Sendable {
@@ -325,21 +349,21 @@ struct ApprovedWalletSigningOperation: Sendable {
             case .success(let signed):
                 guard let hash = Ethereum.transactionHash(signedTransaction: signed)
                 else { return .failure(.invalidTransaction) }
-                return .success(.ethereumTransaction(
-                    signedTransaction: signed, transactionHash: hash
-                ))
+                return .success(.broadcast(.init(
+                    permit: permit, transaction: .ethereum(signed, hash, network)
+                )))
             }
-        case .solanaLegacyBroadcast(let transaction, _, _):
+        case .solanaLegacyBroadcast(let transaction, let options, let cluster):
             return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
                     preparedLegacyTransaction: transaction, privateKey: privateKey
-                )
+                ), options: options, cluster: cluster
             )
-        case .solanaSerializedBroadcast(let transaction, _, _):
+        case .solanaSerializedBroadcast(let transaction, let options, let cluster):
             return solanaTransactionOutput(
                 Solana.signedTransactionForSignAndSend(
                     preparedSerializedTransaction: transaction, privateKey: privateKey
-                )
+                ), options: options, cluster: cluster
             )
         }
     }
@@ -352,11 +376,11 @@ struct ApprovedWalletSigningOperation: Sendable {
         case .ethereumPersonalMessage(let data):
             guard let signature = try? Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
-            return .success(.ethereumSignature(signature))
+            return signatureOutput(.string(signature))
         case .ethereumTypedData(let data):
             guard let signature = try? Ethereum.sign(typedData: data, privateKey: privateKey)
             else { return .failure(.failedToSign) }
-            return .success(.ethereumSignature(signature))
+            return signatureOutput(.string(signature))
         case .solanaMessage(let data):
             return solanaSignature(data, privateKey: privateKey)
         case .solanaTransaction(let transaction):
@@ -365,7 +389,7 @@ struct ApprovedWalletSigningOperation: Sendable {
             guard let signatures = Solana.sign(
                 messageDataList: transactions.map(\.messageData), privateKey: privateKey
             ), signatures.count == transactions.count else { return .failure(.failedToSign) }
-            return .success(.solanaSignatures(signatures))
+            return signatureOutput(.strings(signatures))
         }
     }
 
@@ -373,18 +397,25 @@ struct ApprovedWalletSigningOperation: Sendable {
         Result<WalletSigningOutput, WalletSigningFailure> {
         guard let signature = Solana.sign(messageData: data, privateKey: privateKey)
         else { return .failure(.failedToSign) }
-        return .success(.solanaSignature(signature))
+        return signatureOutput(.string(signature))
+    }
+
+    private func signatureOutput(_ result: ResponseToExtension.Result) ->
+        Result<WalletSigningOutput, WalletSigningFailure> {
+        .success(.response(.init(permit: permit, result: result)))
     }
 
     private func solanaTransactionOutput(
-        _ signedTransaction: String?
+        _ signedTransaction: String?,
+        options: Solana.PreparedSendOptions,
+        cluster: Solana.Cluster
     ) -> Result<WalletSigningOutput, WalletSigningFailure> {
         guard let signedTransaction,
               let signature = Solana.transactionSignature(signedTransaction: signedTransaction)
         else { return .failure(.invalidTransaction) }
-        return .success(.solanaTransaction(
-            signedTransaction: signedTransaction, signature: signature
-        ))
+        return .success(.broadcast(.init(
+            permit: permit, transaction: .solana(signedTransaction, signature, cluster, options)
+        )))
     }
 }
 

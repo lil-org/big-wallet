@@ -32,7 +32,7 @@ actor ApprovalResolution<Value: Sendable> {
     func value(
         timeoutValue: Value,
         callerCancellation: CallerCancellation,
-        waitForTimeout: @escaping @Sendable () async -> Void,
+        waitForTimeout: (@Sendable () async -> Void)? = nil,
         onDiscardedValue: @escaping @Sendable (Value) -> Void = { _ in },
         operation: @escaping @Sendable () async -> Value
     ) async -> Value {
@@ -46,15 +46,17 @@ actor ApprovalResolution<Value: Sendable> {
                 onDiscardedValue(result)
             }
         }
-        let timeoutTask = Task.detached {
-            await waitForTimeout()
-            guard !Task.isCancelled else { return }
-            await self.resolve(timeoutValue) {
-                operationTask.cancel()
+        let timeoutTask = waitForTimeout.map { waitForTimeout in
+            Task.detached {
+                await waitForTimeout()
+                guard !Task.isCancelled else { return }
+                await self.resolve(timeoutValue) {
+                    operationTask.cancel()
+                }
             }
         }
         defer {
-            timeoutTask.cancel()
+            timeoutTask?.cancel()
             operationTask.cancel()
         }
         return await withTaskCancellationHandler {

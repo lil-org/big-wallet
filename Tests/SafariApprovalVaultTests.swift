@@ -1431,7 +1431,8 @@ final class SafariApprovalVaultTests: XCTestCase {
     func testRequestScopeRechecksGenerationAfterSigning() async throws {
         let fixture = try fixture()
         let isCurrent = LockedTestValue(true)
-        let underlying = DerivationRaceWalletSigner(account: fixture.account) {
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: WalletCoreProxyTestVectors.walletCoreJSONPrivateKeyData))
+        let underlying = DerivationRaceWalletSigner(privateKey: privateKey) {
             isCurrent.value = false
         }
         let scoped = makeWalletSigningSessionForTesting(
@@ -1522,7 +1523,6 @@ final class SafariApprovalVaultTests: XCTestCase {
             let started = expectation(description: "Lease acquisition started")
             var continuation: CheckedContinuation<WalletExecutionLease?, Never>?
             let access = makeWalletSigningSessionForTesting(
-                DerivationRaceWalletSigner(account: account) {},
                 authorization: walletSigningAuthorizationForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: account)),
                 acquireCommitLease: {
                     await withCheckedContinuation {
@@ -3489,7 +3489,12 @@ final class SafariApprovalVaultTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let source = try fixture().source
-        let retries = LockedTestValue([SafariApprovalVaultHost.ReconciliationRetry]())
+        let retrySleeps = LockedTestValue([ApprovalResolution<Void>]())
+        let retryScheduled = [
+            expectation(description: "first retry scheduled"),
+            expectation(description: "second retry scheduled"),
+        ]
+        let sourceRead = expectation(description: "source read after contention ends")
         let sourceReads = LockedTestValue(0)
         let reconciliationQueue = ReconciliationTestGate(label: "SafariApprovalVaultHostTests.reconciliation")
         let host = SafariApprovalVaultHost(
@@ -3497,10 +3502,23 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaults(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            scheduleReconciliationRetry: { retry in retries.withValue { $0.append(retry) } },
+            waitForReconciliationRetry: {
+                let sleep = ApprovalResolution<Void>()
+                let index = retrySleeps.withValue { sleeps in
+                    sleeps.append(sleep)
+                    return sleeps.count - 1
+                }
+                guard retryScheduled.indices.contains(index) else {
+                    XCTFail("Unexpected retry")
+                    return
+                }
+                retryScheduled[index].fulfill()
+                await sleep.value()
+            },
             sourceSnapshot: {
                 XCTAssertFalse(Thread.isMainThread)
                 sourceReads.withValue { $0 += 1 }
+                sourceRead.fulfill()
                 return source
             }
         )
@@ -3510,6 +3528,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let startedAt = ContinuousClock.now
         await host.start(backgroundTask: { _ in {} })
         await host.waitForReconciliation()
+        await fulfillment(of: [retryScheduled[0]], timeout: 1)
         await host.start(backgroundTask: { _ in {} })
         await host.waitForReconciliation()
         await host.reconcile()
@@ -3518,21 +3537,18 @@ final class SafariApprovalVaultTests: XCTestCase {
         await host.waitForReconciliation()
         XCTAssertLessThan(startedAt.duration(to: .now), .seconds(1))
         XCTAssertEqual(sourceReads.value, 0)
-        XCTAssertEqual(retries.value.count, 1)
+        XCTAssertEqual(retrySleeps.value.count, 1)
         XCTAssertNil(vault.reviewCatalog())
 
-        let firstRetry = retries.value[0]
-        await firstRetry.perform()
+        await retrySleeps.value[0].resolve(())
+        await fulfillment(of: [retryScheduled[1]], timeout: 1)
         await host.waitForReconciliation()
         XCTAssertEqual(sourceReads.value, 0)
-        XCTAssertEqual(retries.value.count, 2)
-        await firstRetry.perform()
-        await host.waitForReconciliation()
-        XCTAssertEqual(retries.value.count, 2)
+        XCTAssertEqual(retrySleeps.value.count, 2)
 
         lease.release()
-        let secondRetry = retries.value[1]
-        await secondRetry.perform()
+        await retrySleeps.value[1].resolve(())
+        await fulfillment(of: [sourceRead], timeout: 1)
         await host.waitForReconciliation()
         XCTAssertEqual(sourceReads.value, 1)
         XCTAssertNotNil(vault.reviewCatalog())
@@ -3610,7 +3626,15 @@ final class SafariApprovalVaultTests: XCTestCase {
             let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
             defer { defaults.removePersistentDomain(forName: suite) }
             let source = try fixture().source
-            let retries = LockedTestValue([SafariApprovalVaultHost.ReconciliationRetry]())
+            let retrySleeps = LockedTestValue([ApprovalResolution<Void>]())
+            let retryScheduled = [
+                expectation(description: "deferred retry scheduled"),
+                expectation(description: "replacement retry scheduled"),
+            ]
+            let cancelledSleepReturned = expectation(description: "canceled sleep returned")
+            let unexpectedRetry = expectation(description: "canceled task must not replace current retry")
+            unexpectedRetry.isInverted = true
+            let replacementSourceRead = expectation(description: "replacement retry reconciled")
             let sourceReads = LockedTestValue(0)
             let reconciliationQueue = ReconciliationTestGate(label: "SafariApprovalVaultHostTests.reconciliation")
             let host = SafariApprovalVaultHost(
@@ -3618,9 +3642,26 @@ final class SafariApprovalVaultTests: XCTestCase {
                 defaults: UserDefaults(suiteName: suite)!,
                 integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
                 waitToReconcile: { await reconciliationQueue.wait() },
-                scheduleReconciliationRetry: { retry in retries.withValue { $0.append(retry) } },
+                waitForReconciliationRetry: {
+                    let sleep = ApprovalResolution<Void>()
+                    let index = retrySleeps.withValue { sleeps in
+                        sleeps.append(sleep)
+                        return sleeps.count - 1
+                    }
+                    guard retryScheduled.indices.contains(index) else {
+                        unexpectedRetry.fulfill()
+                        throw CancellationError()
+                    }
+                    retryScheduled[index].fulfill()
+                    await sleep.value()
+                    if index == 0 {
+                        XCTAssertTrue(Task.isCancelled)
+                        cancelledSleepReturned.fulfill()
+                    }
+                },
                 sourceSnapshot: {
-                    sourceReads.withValue { $0 += 1 }
+                    let count = sourceReads.withValue { $0 += 1; return $0 }
+                    if count == 3 { replacementSourceRead.fulfill() }
                     return source
                 }
             )
@@ -3630,8 +3671,8 @@ final class SafariApprovalVaultTests: XCTestCase {
             defer { lease.release() }
             await host.reconcile()
             await host.waitForReconciliation()
-            let retry = try XCTUnwrap(retries.value.first)
-            XCTAssertEqual(retries.value.count, 1)
+            await fulfillment(of: [retryScheduled[0]], timeout: 1)
+            XCTAssertEqual(retrySleeps.value.count, 1)
             lease.release()
 
             if mutate {
@@ -3642,11 +3683,24 @@ final class SafariApprovalVaultTests: XCTestCase {
                 await host.reconcile()
             }
             await host.waitForReconciliation()
-            XCTAssertTrue(retry.isCancelled)
             XCTAssertEqual(sourceReads.value, 2)
-            await retry.perform()
+
+            let replacementLease = try vault.acquireCoordinationLease()
+            defer { replacementLease.release() }
+            await host.reconcile()
+            await host.waitForReconciliation()
+            await fulfillment(of: [retryScheduled[1]], timeout: 1)
+            await retrySleeps.value[0].resolve(())
+            await fulfillment(of: [cancelledSleepReturned, unexpectedRetry], timeout: 0.1)
             await host.waitForReconciliation()
             XCTAssertEqual(sourceReads.value, 2)
+            XCTAssertEqual(retrySleeps.value.count, 2)
+
+            replacementLease.release()
+            await retrySleeps.value[1].resolve(())
+            await fulfillment(of: [replacementSourceRead], timeout: 1)
+            await host.waitForReconciliation()
+            XCTAssertEqual(sourceReads.value, 3)
             XCTAssertNotNil(vault.reviewCatalog())
         }
     }
@@ -5201,16 +5255,20 @@ private final class MemoryApprovalIntegrityKeyStore: SafariApprovalIntegrityKeyS
 }
 
 private final class DerivationRaceWalletSigner: OwnedWalletSigningAccess {
+    private let privateKey: WalletPrivateKey
     private let didDerive: @MainActor () -> Void
 
-    init(account: WalletAccount, didDerive: @escaping @MainActor () -> Void) {
+    init(privateKey: WalletPrivateKey, didDerive: @escaping @MainActor () -> Void) {
+        self.privateKey = privateKey
         self.didDerive = didDerive
     }
 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        let result = operation.sign(with: privateKey)
+        XCTAssertNoThrow(try result.get())
         didDerive()
-        return .success(.ethereumSignature("discarded-signature"))
+        return result
     }
 
     func invalidate() {}

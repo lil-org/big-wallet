@@ -83,6 +83,50 @@ final class ApprovalResolutionTests: XCTestCase {
         XCTAssertNil(retained)
     }
 
+    func testOperationWithoutTimeoutPreservesOptionalNil() async {
+        let value = await ApprovalResolution<Int?>().value(
+            timeoutValue: -1,
+            callerCancellation: .resolveTimeout,
+            operation: { nil }
+        )
+
+        XCTAssertNil(value)
+    }
+
+    func testCancellationWithoutTimeoutDiscardsUncooperativeOperationResult() async {
+        let releaseOperation = ApprovalResolution<Void>()
+        let started = expectation(description: "operation started")
+        let completed = expectation(description: "caller returns before operation")
+        let discarded = expectation(description: "late result discarded once")
+        discarded.assertForOverFulfill = true
+        let waiter = Task {
+            let value = await ApprovalResolution<Int>().value(
+                timeoutValue: -1,
+                callerCancellation: .resolveTimeout,
+                onDiscardedValue: { value in
+                    XCTAssertEqual(value, 42)
+                    discarded.fulfill()
+                },
+                operation: {
+                    started.fulfill()
+                    await releaseOperation.value()
+                    XCTAssertTrue(Task.isCancelled)
+                    return 42
+                }
+            )
+            completed.fulfill()
+            return value
+        }
+        await fulfillment(of: [started], timeout: 1)
+        waiter.cancel()
+        await fulfillment(of: [completed], timeout: 1)
+        await releaseOperation.resolve(())
+        let value = await waiter.value
+
+        XCTAssertEqual(value, -1)
+        await fulfillment(of: [discarded], timeout: 1)
+    }
+
     func testTimeoutCancelsUncooperativeOperationAndIgnoresLateValue() async {
         let resolution = ApprovalResolution<Int>()
         let timeout = ApprovalResolution<Void>()

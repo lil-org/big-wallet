@@ -120,7 +120,7 @@ final class NativeApprovalResponseTests: XCTestCase {
         let underlying = AuthorityTestAccess()
         let context = try signingContext(access: underlying)
         let result = await context.signer.sign()
-        guard case .success(.ethereumSignature("signed")) = result else {
+        guard case .success = result else {
             return XCTFail("Expected authorized signature")
         }
         guard case .failure(.authorizationUnavailable) = await context.signer.sign() else {
@@ -185,8 +185,9 @@ private final class AuthorityTestAccess: OwnedWalletSigningAccess {
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
         calls += 1
+        let result = walletSigningResultForTesting(operation)
         self.operation()
-        return .success(.ethereumSignature("signed"))
+        return result
     }
 
     nonisolated func invalidate() {

@@ -339,6 +339,9 @@ struct TransactionApprovalSnapshot {
     let suggestedNonce: String?
     let latestWalletSuggestedFee: PreparedTransactionFee?
     let hasVerifiedFeeEstimate: Bool
+    let hasGasSpeedInfo: Bool
+    let gasSliderPosition: Double
+    let speedPriorityFeePerGas: BigUInt?
     let allowsMutation: Bool
     let canApprove: Bool
     let canEdit: Bool
@@ -346,7 +349,6 @@ struct TransactionApprovalSnapshot {
 
 enum TransactionApprovalOutput {
     case snapshot(TransactionApprovalSnapshot)
-    case verifiedFeeEstimate(GasService.Estimate)
     case authenticationRequest(TransactionApprovalRequestToken)
     case alert(TransactionApprovalAlertIntent)
     case editorRequest
@@ -388,6 +390,7 @@ struct TransactionApprovalReducer {
         var restartGate = TransactionPreparationRestartGate()
         var suggestedNonce: String?
         var verifiedFeeEstimate: GasService.Estimate?
+        var gasSpeedConfiguration = GasSpeedConfiguration()
         var preparationForceGasCheck = false
         var isSliderInteractionActive = false
         var activeAlert: TransactionApprovalAlertIntent?
@@ -422,7 +425,7 @@ struct TransactionApprovalReducer {
         )
         case applyEdits(Transaction.Edits)
         case sliderInteractionBegan
-        case setFeeForSpeed(Double, GasService.Info)
+        case setFeeForSpeed(Double)
         case sliderInteractionEnded(cancelled: Bool)
         case finish(Transaction?)
     }
@@ -440,7 +443,6 @@ struct TransactionApprovalReducer {
             Transaction
         )
         case snapshot(TransactionApprovalSnapshot)
-        case verifiedFeeEstimate(GasService.Estimate)
         case authenticationRequest(TransactionApprovalRequestToken)
         case alert(TransactionApprovalAlertIntent)
         case editorRequest
@@ -484,6 +486,9 @@ struct TransactionApprovalReducer {
                 for: transaction.feeIntent
             ),
             hasVerifiedFeeEstimate: state.verifiedFeeEstimate != nil,
+            hasGasSpeedInfo: state.gasSpeedConfiguration.info != nil,
+            gasSliderPosition: state.gasSpeedConfiguration.sliderPosition(for: transaction),
+            speedPriorityFeePerGas: state.gasSpeedConfiguration.speedPriorityFeePerGas(for: transaction),
             allowsMutation: state.preparation.allowsMutation,
             canApprove: state.preparation.canApprove(
                 transactionID: transaction.id,
@@ -573,8 +578,8 @@ struct TransactionApprovalReducer {
             return apply(edits)
         case .sliderInteractionBegan:
             return beginSliderInteraction()
-        case .setFeeForSpeed(let value, let info):
-            return setFeeForSpeed(value: value, inRelationTo: info)
+        case .setFeeForSpeed(let value):
+            return setFeeForSpeed(value: value)
         case .sliderInteractionEnded(let cancelled):
             return endSliderInteraction(cancelled: cancelled)
         case .finish(let transaction):
@@ -602,7 +607,7 @@ struct TransactionApprovalReducer {
         )
         return [
             .cancelActiveRequest,
-            .snapshot(snapshot),
+            snapshotEffect(),
             .runPreparation(
                 token,
                 transaction,
@@ -622,7 +627,7 @@ struct TransactionApprovalReducer {
         state.transaction = transaction
         state.suggestedNonce =
             state.suggestedNonce ?? transaction.decimalNonceString
-        return [.snapshot(snapshot)]
+        return [snapshotEffect()]
     }
 
     private mutating func receivePreparationEstimate(
@@ -633,10 +638,7 @@ struct TransactionApprovalReducer {
             return []
         }
         install(estimate)
-        return [
-            .verifiedFeeEstimate(estimate),
-            .snapshot(snapshot),
-        ]
+        return [snapshotEffect()]
     }
 
     private mutating func receivePreparationResult(
@@ -657,7 +659,7 @@ struct TransactionApprovalReducer {
             }
             state.suggestedNonce =
                 state.suggestedNonce ?? prepared.decimalNonceString
-            return [.snapshot(snapshot)]
+            return [snapshotEffect()]
         case .failure(let failure):
             guard state.preparation.markFailed(
                 attemptID: token.attemptID,
@@ -680,7 +682,7 @@ struct TransactionApprovalReducer {
             state.activeAlert = alert
             return [
                 .clearActiveRequest(token),
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .alert(alert),
             ]
         }
@@ -710,7 +712,7 @@ struct TransactionApprovalReducer {
             )
             return [
                 .cancelActiveRequest,
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .authenticationRequest(token),
             ]
         case .skipped:
@@ -732,7 +734,7 @@ struct TransactionApprovalReducer {
             ) else {
                 return []
             }
-            return [.snapshot(snapshot)]
+            return [snapshotEffect()]
         }
         return beginPreflight(for: state.transaction)
     }
@@ -753,7 +755,7 @@ struct TransactionApprovalReducer {
         )
         return [
             .cancelActiveRequest,
-            .snapshot(snapshot),
+            snapshotEffect(),
             .runPreflight(token, transaction),
         ]
     }
@@ -774,8 +776,7 @@ struct TransactionApprovalReducer {
             state.preparation.finish()
             return [
                 .clearActiveRequest(token),
-                .verifiedFeeEstimate(estimate),
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .completion(state.transaction),
             ]
         case .walletManagedUpdated(let transaction, let estimate):
@@ -795,8 +796,7 @@ struct TransactionApprovalReducer {
             state.activeAlert = alert
             return [
                 .clearActiveRequest(token),
-                .verifiedFeeEstimate(estimate),
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .alert(alert),
             ]
         case .userControlledUnsafe(let transaction, let estimate):
@@ -816,8 +816,7 @@ struct TransactionApprovalReducer {
             state.activeAlert = alert
             return [
                 .clearActiveRequest(token),
-                .verifiedFeeEstimate(estimate),
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .alert(alert),
             ]
         case .unavailable(let transaction, let estimate):
@@ -837,8 +836,7 @@ struct TransactionApprovalReducer {
             state.activeAlert = alert
             return [
                 .clearActiveRequest(token),
-                .verifiedFeeEstimate(estimate),
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .alert(alert),
             ]
         }
@@ -856,7 +854,7 @@ struct TransactionApprovalReducer {
             where failure == .unsafeFees:
             state.activeAlert = nil
             return [
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .editorRequest,
             ]
         case (.preparationFailure(let failure, let forceGasCheck), .retry)
@@ -867,7 +865,7 @@ struct TransactionApprovalReducer {
         case (.unsafeFees, .edit):
             state.activeAlert = nil
             return [
-                .snapshot(snapshot),
+                snapshotEffect(),
                 .editorRequest,
             ]
         case (.unavailableFees, .retry):
@@ -876,49 +874,58 @@ struct TransactionApprovalReducer {
              (.unsafeFees, .cancel),
              (.unavailableFees, .cancel):
             state.activeAlert = nil
-            return [.snapshot(snapshot)]
+            return [snapshotEffect()]
         default:
             return []
         }
     }
 
     private mutating func apply(_ edits: Transaction.Edits) -> [Effect] {
+        let previousTransaction = state.transaction
         guard snapshot.canEdit, state.transaction.apply(edits) else {
             return []
         }
+        state.gasSpeedConfiguration.commitAppliedEdits(
+            edits,
+            from: previousTransaction,
+            to: state.transaction
+        )
         state.activeAlert = nil
         state.restartGate = TransactionPreparationRestartGate()
         state.isSliderInteractionActive = false
         state.preparation.beginEditing(state.transaction.id)
         return [
             .cancelActiveRequest,
-            .snapshot(snapshot),
+            snapshotEffect(),
         ]
     }
 
     private mutating func beginSliderInteraction() -> [Effect] {
         guard state.preparation.allowsMutation else { return [] }
+        state.gasSpeedConfiguration.markGasSliderInteraction()
         state.isSliderInteractionActive = true
         return []
     }
 
-    private mutating func setFeeForSpeed(
-        value: Double,
-        inRelationTo info: GasService.Info
-    ) -> [Effect] {
-        guard state.preparation.allowsMutation else {
-            return []
-        }
+    private mutating func setFeeForSpeed(value: Double) -> [Effect] {
+        guard state.preparation.allowsMutation,
+              state.transaction.feeBasisBaseFeePerGas != nil,
+              let info = state.gasSpeedConfiguration.info else { return [] }
+        state.gasSpeedConfiguration.markGasSliderInteraction()
         let previousFee = state.transaction.preparedFee
         let previousProvenance = state.transaction.feeProvenance
+        let previousPosition = state.gasSpeedConfiguration.sliderPosition(for: state.transaction)
         state.transaction.setFeeForSpeed(
             value: value,
             inRelationTo: info
         )
+        state.gasSpeedConfiguration.recordSelectedSliderPosition(value, for: state.transaction)
         guard state.transaction.preparedFee != previousFee ||
                 state.transaction.feeProvenance != previousProvenance else {
-            return []
+            let position = state.gasSpeedConfiguration.sliderPosition(for: state.transaction)
+            return position != previousPosition ? [snapshotEffect()] : []
         }
+        state.gasSpeedConfiguration.markGasSliderFeeChange()
 
         guard state.isSliderInteractionActive else {
             state.activeAlert = nil
@@ -931,7 +938,7 @@ struct TransactionApprovalReducer {
             state.preparation.beginEditing(state.transaction.id)
             effects.append(.cancelActiveRequest)
         }
-        effects.append(.snapshot(snapshot))
+        effects.append(snapshotEffect())
         return effects
     }
 
@@ -939,11 +946,12 @@ struct TransactionApprovalReducer {
         cancelled: Bool
     ) -> [Effect] {
         state.isSliderInteractionActive = false
-        guard state.restartGate.consume() else {
-            return []
-        }
-        guard !cancelled, state.preparation.allowsMutation else {
-            return []
+        let hadPendingMutation = state.restartGate.consume()
+        let didInstallPendingQuote = state.gasSpeedConfiguration.endGasSliderInteraction(
+            didChangeFee: !cancelled && hadPendingMutation
+        )
+        guard hadPendingMutation, !cancelled, state.preparation.allowsMutation else {
+            return didInstallPendingQuote ? [snapshotEffect()] : []
         }
         return startPreparation(forceGasCheck: false)
     }
@@ -961,7 +969,7 @@ struct TransactionApprovalReducer {
         state.preparation.finish()
         return [
             .cancelActiveRequest,
-            .snapshot(snapshot),
+            snapshotEffect(),
             .completion(transaction),
         ]
     }
@@ -979,6 +987,15 @@ struct TransactionApprovalReducer {
     private mutating func install(_ estimate: GasService.Estimate) {
         state.verifiedFeeEstimate = estimate
         estimate.applyBaseFeeContext(to: &state.transaction)
+        state.gasSpeedConfiguration.applyFetchedEstimate(estimate)
+    }
+
+    private mutating func snapshotEffect() -> Effect {
+        if let priorityFee = state.gasSpeedConfiguration.speedPriorityFeePerGas(for: state.transaction) {
+            state.gasSpeedConfiguration.installTransactionFallback(feePerGas: priorityFee)
+        }
+        state.gasSpeedConfiguration.synchronizeSelectedSliderPosition(with: state.transaction)
+        return .snapshot(snapshot)
     }
 
 }
@@ -996,7 +1013,6 @@ final class TransactionApprovalCoordinator {
     }
 
     private var reducer: TransactionApprovalReducer
-    private var gasSpeedConfiguration = GasSpeedConfiguration()
     private let operations: TransactionApprovalOperations
     private var activeRequest: ActiveRequest?
     var onOutput: (TransactionApprovalOutput) -> Void
@@ -1023,18 +1039,6 @@ final class TransactionApprovalCoordinator {
 
     var activeAlert: TransactionApprovalAlertIntent? {
         reducer.state.activeAlert
-    }
-
-    var hasGasSpeedInfo: Bool {
-        gasSpeedConfiguration.info != nil
-    }
-
-    var gasSliderPosition: Double {
-        gasSpeedConfiguration.sliderPosition(for: snapshot.transaction)
-    }
-
-    var speedPriorityFeePerGas: BigUInt? {
-        gasSpeedConfiguration.speedPriorityFeePerGas(for: snapshot.transaction)
     }
 
     func startPreparation(forceGasCheck: Bool) {
@@ -1068,60 +1072,28 @@ final class TransactionApprovalCoordinator {
 
     @discardableResult
     func apply(edits: Transaction.Edits) -> Bool {
-        let previousTransaction = snapshot.transaction
-        let effects = reducer.reduce(.applyEdits(edits))
-        let transaction = snapshot.transaction
-        let didChange = transaction.id != previousTransaction.id
-        if didChange {
-            gasSpeedConfiguration.commitAppliedEdits(
-                edits,
-                from: previousTransaction,
-                to: transaction
-            )
-        }
-        run(effects)
-        return didChange
+        send(.applyEdits(edits))
     }
 
     func beginSliderInteraction() {
-        guard snapshot.allowsMutation else { return }
-        gasSpeedConfiguration.markGasSliderInteraction()
         send(.sliderInteractionBegan)
     }
 
     @discardableResult
     func setFeeForSpeed(value: Double) -> Bool {
-        guard snapshot.allowsMutation,
-              snapshot.transaction.feeBasisBaseFeePerGas != nil,
-              let info = gasSpeedConfiguration.info else { return false }
-        gasSpeedConfiguration.markGasSliderInteraction()
         let previousTransaction = snapshot.transaction
-        let effects = reducer.reduce(.setFeeForSpeed(value, info))
+        let effects = reducer.reduce(.setFeeForSpeed(value))
         let transaction = snapshot.transaction
-        let didChange = transaction.preparedFee != previousTransaction.preparedFee ||
+        let didChangeFee = transaction.preparedFee != previousTransaction.preparedFee ||
             transaction.feeProvenance != previousTransaction.feeProvenance
-        gasSpeedConfiguration.recordSelectedSliderPosition(value, for: transaction)
-        if didChange {
-            gasSpeedConfiguration.markGasSliderFeeChange()
-        }
         run(effects)
-        return didChange
+        return didChangeFee
     }
 
     @discardableResult
     func endSliderInteraction(cancelled: Bool = false) -> Bool {
         let hadPendingMutation = reducer.state.restartGate.isPending
-        var effects = reducer.reduce(.sliderInteractionEnded(cancelled: cancelled))
-        let didInstallPendingQuote = gasSpeedConfiguration.endGasSliderInteraction(
-            didChangeFee: !cancelled && hadPendingMutation
-        )
-        if didInstallPendingQuote, !effects.contains(where: {
-            if case .snapshot = $0 { return true }
-            return false
-        }) {
-            effects.append(.snapshot(snapshot))
-        }
-        run(effects)
+        send(.sliderInteractionEnded(cancelled: cancelled))
         return hadPendingMutation
     }
 
@@ -1163,16 +1135,7 @@ final class TransactionApprovalCoordinator {
             case .runPreflight(let token, let transaction):
                 runPreflight(token: token, transaction: transaction)
             case .snapshot(let snapshot):
-                if let priorityFee = gasSpeedConfiguration.speedPriorityFeePerGas(
-                    for: snapshot.transaction
-                ) {
-                    gasSpeedConfiguration.installTransactionFallback(feePerGas: priorityFee)
-                }
-                gasSpeedConfiguration.synchronizeSelectedSliderPosition(with: snapshot.transaction)
                 onOutput(.snapshot(snapshot))
-            case .verifiedFeeEstimate(let estimate):
-                gasSpeedConfiguration.applyFetchedEstimate(estimate)
-                onOutput(.verifiedFeeEstimate(estimate))
             case .authenticationRequest(let token):
                 onOutput(.authenticationRequest(token))
             case .alert(let alert):

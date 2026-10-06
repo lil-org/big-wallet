@@ -548,25 +548,26 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(addition.chainToAdd.rpcUrls, network.rpcUrls)
     }
 
-    func testApprovedCompletionRejectsDifferentSigningFamiliesAndBatchLength() async throws {
-        let (ethereumRequest, ethereumApproval) = try processorMessageApproval(coin: .ethereum)
-        let (ethereumPermit, _) = try await executeProcessor(
-            request: ethereumRequest, approval: ethereumApproval,
-            signer: ProcessorWalletSigner(result: .success(.ethereumSignature("approved")))
-        )
-        XCTAssertNil(ApprovedCompletion.signed(.solanaSignature("wrong-family"), permit: ethereumPermit))
-        XCTAssertNil(PreparedBroadcast.signed(.ethereumSignature("approved"), permit: ethereumPermit))
-
-        let (solanaRequest, solanaApproval) = try processorMessageApproval(coin: .solana, batch: true)
-        let signatures = ["first", "second", "third"]
-        let (solanaPermit, _) = try await executeProcessor(
-            request: solanaRequest, approval: solanaApproval,
-            signer: ProcessorWalletSigner(result: .success(.solanaSignatures(signatures)))
-        )
-        XCTAssertNil(ApprovedCompletion.signed(.ethereumSignature("wrong-family"), permit: solanaPermit))
-        XCTAssertNil(ApprovedCompletion.signed(.solanaSignature("wrong-shape"), permit: solanaPermit))
-        XCTAssertNil(ApprovedCompletion.signed(.solanaSignatures(["first"]), permit: solanaPermit))
-        XCTAssertNotNil(ApprovedCompletion.signed(.solanaSignatures(signatures), permit: solanaPermit))
+    func testSignedCompletionsStayBoundToTheirExecution() async throws {
+        for coin in [WalletCoin.ethereum, .solana] {
+            let (request, approval) = try processorMessageApproval(coin: coin, batch: coin == .solana)
+            let permit = try processorPermit(request: request, approval: approval)
+            defer { permit.releaseLease() }
+            XCTAssertTrue(permit.consumeExecution())
+            guard case .response(let signed) = try walletSigningOutputForTesting(permit: permit) else {
+                return XCTFail("Expected an operation-bound signature response")
+            }
+            let completion = ApprovedCompletion(signed: signed)
+            XCTAssertNotNil(completion.response(for: permit))
+            let other = try processorPermit(request: request, approval: approval)
+            defer { other.releaseLease() }
+            XCTAssertTrue(other.consumeExecution())
+            XCTAssertNil(completion.response(for: other))
+            XCTAssertEqual(signed.executionID, permit.executionID)
+            if coin == .solana {
+                XCTAssertEqual((signed.response.json["result"] as? [String])?.count, 3)
+            }
+        }
     }
 
     func testSigningResolvesExactAuthorizedWalletAmongDuplicateAddresses() throws {
@@ -672,8 +673,7 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(data, Data("reviewed".utf8))
         XCTAssertEqual(action.meta, "reviewed")
 
-        let signature = try Ethereum.signPersonalMessage(data: data, privateKey: privateKey)
-        let signer = ProcessorWalletSigner(result: .success(.ethereumSignature(signature)))
+        let signer = ProcessorWalletSigner(privateKey: privateKey)
         let (permit, result) = try await executeProcessor(
             request: request,
             approval: try DappApprovalValidator.resolve(
@@ -776,17 +776,8 @@ final class DappRequestProcessorTests: XCTestCase {
         guard case .solanaLegacyBroadcast(let preparedTransaction, _) = action.payload else {
             return XCTFail("Expected a legacy broadcast payload")
         }
-        let signedTransaction = try XCTUnwrap(Solana.signedTransactionForSignAndSend(
-            preparedLegacyTransaction: preparedTransaction,
-            privateKey: privateKey
-        ))
-        let expectedSignature = try XCTUnwrap(Solana.transactionSignature(
-            signedTransaction: signedTransaction
-        ))
-        let signer = ProcessorWalletSigner(result: .success(.solanaTransaction(
-            signedTransaction: signedTransaction,
-            signature: expectedSignature
-        )))
+        XCTAssertEqual(preparedTransaction.preparedMessage.messageData, message)
+        let signer = ProcessorWalletSigner(privateKey: privateKey)
         let (permit, result) = try await executeProcessor(
             request: request,
             approval: try DappApprovalValidator.resolve(
@@ -841,32 +832,38 @@ final class DappRequestProcessorTests: XCTestCase {
             ), case .approveMessage(let action) = intent.action else {
                 return XCTFail("Expected a prepared Solana broadcast")
             }
-            let signed: String?
-            switch action.payload {
-            case .solanaLegacyBroadcast(let transaction, _):
-                signed = Solana.signedTransactionForSignAndSend(preparedLegacyTransaction: transaction, privateKey: key)
-            case .solanaSerializedBroadcast(let transaction, _):
-                signed = Solana.signedTransactionForSignAndSend(preparedSerializedTransaction: transaction, privateKey: key)
-            default:
-                return XCTFail("Expected a broadcast payload")
-            }
-            let signedTransaction = try XCTUnwrap(signed)
-            let signature = try XCTUnwrap(Solana.transactionSignature(signedTransaction: signedTransaction))
             let permit = try fixture.authorize(
                 snapshot: snapshot, action: .approveMessage(action),
                 decision: .message(.init(approvedAccount: descriptor, solanaCluster: .testnet))
             )
             defer { permit.releaseLease() }
             XCTAssertTrue(permit.consumeExecution())
-            XCTAssertNil(PreparedBroadcast.signed(.solanaTransaction(
-                signedTransaction: signedTransaction, signature: "wrong-signature"
-            ), permit: permit))
-            XCTAssertNil(PreparedBroadcast.signed(.ethereumSignature("wrong-family"), permit: permit))
-            let output = WalletSigningOutput.solanaTransaction(
-                signedTransaction: signedTransaction, signature: signature
+            guard case .broadcast(let signed) = try walletSigningOutputForTesting(permit: permit, privateKey: key) else {
+                return XCTFail("Expected a validated signed broadcast")
+            }
+            guard case .solana(let validatedBytes, let validatedSignature, _, _) = signed.transaction else {
+                return XCTFail("Expected a Solana broadcast")
+            }
+            let signatureBytes = try XCTUnwrap(WalletCrypto.base58Decode(string: validatedSignature))
+            let transactionBytes = try XCTUnwrap(Data(base64Encoded: validatedBytes))
+            let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: key.publicKeyData(coin: .solana))
+            XCTAssertTrue(publicKey.isValidSignature(signatureBytes, for: message))
+            XCTAssertEqual(transactionBytes, Data([1]) + signatureBytes + message)
+            XCTAssertEqual(Solana.transactionSignature(signedTransaction: validatedBytes), validatedSignature)
+            let checkpointed = PreparedBroadcast(signed: signed)
+            let other = PreparedBroadcast(signed: signed)
+            let unrelated = try processorPermit(request: permit.request, approval: permit.approval)
+            defer { unrelated.releaseLease() }
+            XCTAssertNil(checkpointed.recoveryCompletion(for: unrelated))
+            let substitutedResult = await DappRequestProcessor().execute(
+                permit: unrelated,
+                signer: ProcessorWalletSigner(result: .success(.broadcast(signed)))
             )
-            let checkpointed = try XCTUnwrap(PreparedBroadcast.signed(output, permit: permit))
-            let other = try XCTUnwrap(PreparedBroadcast.signed(output, permit: permit))
+            guard case .completed(let rejected) = substitutedResult else {
+                return XCTFail("A signed broadcast cannot be applied to another execution")
+            }
+            let rejection = try XCTUnwrap(rejected.response(for: unrelated))
+            XCTAssertEqual((rejection.json["error"] as? [String: Any])?["code"] as? Int, -32603)
             guard case .prepared(let dispatch) = fixture.store.prepareBroadcast(permit: permit, broadcast: checkpointed) else {
                 return XCTFail("Expected a durable broadcast checkpoint")
             }
@@ -875,7 +872,7 @@ final class DappRequestProcessorTests: XCTestCase {
             XCTAssertNil(substituted)
             XCTAssertEqual(sender.sends, 0)
             let completed = await checkpointed.dispatch(using: dispatch, sender: sender)
-            XCTAssertEqual(try XCTUnwrap(completed?.response(for: permit)).json["result"] as? String, signature)
+            XCTAssertEqual(try XCTUnwrap(completed?.response(for: permit)).json["result"] as? String, validatedSignature)
             let sent = try XCTUnwrap(sender.solanaSettings)
             XCTAssertEqual(sent.cluster, .testnet)
             XCTAssertEqual(sent.options.clusterHint, .devnet)
@@ -906,26 +903,26 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
-    func testProcessorRejectsWrongSigningOutputs() async throws {
-        let cases: [(WalletCoin, Bool, WalletSigningOutput)] = [
-            (.ethereum, false, .solanaSignature("wrong-family")),
-            (.solana, false, .ethereumSignature("wrong-family")),
-            (.solana, true, .solanaSignatures(["wrong-count"])),
-        ]
-        for (coin, batch, output) in cases {
-            let (request, approval) = try processorMessageApproval(coin: coin, batch: batch)
-            let signer = ProcessorWalletSigner(result: .success(output))
-            let (permit, result) = try await executeProcessor(
-                request: request, approval: approval, signer: signer
-            )
-            guard case .completed(let completion) = result else {
-                return XCTFail("Invalid signer output must produce a terminal failure")
+    func testProcessorRejectsSigningOutputsFromAnotherExecution() async throws {
+        for coin in [WalletCoin.ethereum, .solana] {
+            for batch in [false, true] where coin == .solana || !batch {
+                let (request, approval) = try processorMessageApproval(coin: coin, batch: batch)
+                let original = try processorPermit(request: request, approval: approval)
+                defer { original.releaseLease() }
+                XCTAssertTrue(original.consumeExecution())
+                let output = try walletSigningOutputForTesting(permit: original)
+                let signer = ProcessorWalletSigner(result: .success(output))
+                let (permit, result) = try await executeProcessor(request: request, approval: approval, signer: signer)
+                defer { permit.releaseLease() }
+                guard case .completed(let completion) = result else {
+                    return XCTFail("A result from another execution must produce a terminal failure")
+                }
+                let response = try XCTUnwrap(completion.response(for: permit))
+                XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, -32603)
+                XCTAssertNil(response.json["result"])
+                XCTAssertTrue(response.approvalCommitted)
+                XCTAssertEqual(signer.signCalls, 1)
             }
-            let response = try XCTUnwrap(completion.response(for: permit))
-            XCTAssertEqual((response.json["error"] as? [String: Any])?["code"] as? Int, -32603)
-            XCTAssertNil(response.json["result"])
-            XCTAssertTrue(response.approvalCommitted)
-            XCTAssertEqual(signer.signCalls, 1)
         }
     }
 
@@ -933,9 +930,8 @@ final class DappRequestProcessorTests: XCTestCase {
         for coin in [WalletCoin.ethereum, .solana] {
             let (request, approval) = try processorMessageApproval(coin: coin)
             let permit = try processorPermit(request: request, approval: approval)
-            let output: WalletSigningOutput = coin == .ethereum
-                ? .ethereumSignature("late") : .solanaSignature("late")
-            let signer = ProcessorWalletSigner(result: .success(output))
+            let signer = ProcessorWalletSigner()
+            signer.permit = permit
             let started = expectation(description: "signer suspended")
             var continuation: CheckedContinuation<Void, Never>?
             signer.beforeResult = {
@@ -1037,7 +1033,7 @@ final class DappRequestProcessorTests: XCTestCase {
 
     func testSolanaTypedSignerOutputsPreserveSignatureOrder() async throws {
         let (request, approval) = try processorMessageApproval(coin: .solana)
-        let singleSigner = ProcessorWalletSigner(result: .success(.solanaSignature("first")))
+        let singleSigner = ProcessorWalletSigner()
         let (singlePermit, singleResult) = try await executeProcessor(
             request: request, approval: approval, signer: singleSigner
         )
@@ -1045,10 +1041,13 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("A signature must produce a response")
         }
         let singleResponse = try XCTUnwrap(singleCompletion.response(for: singlePermit))
-        XCTAssertEqual(singleResponse.json["result"] as? String, "first")
+        let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
+        let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: key.publicKeyData(coin: .solana))
+        let singleSignature = try XCTUnwrap(singleResponse.json["result"] as? String)
+        let singleSignatureBytes = try XCTUnwrap(WalletCrypto.base58Decode(string: singleSignature))
+        XCTAssertTrue(publicKey.isValidSignature(singleSignatureBytes, for: Data("reviewed".utf8)))
 
-        let signatures = ["first", "second", "third"]
-        let batchSigner = ProcessorWalletSigner(result: .success(.solanaSignatures(signatures)))
+        let batchSigner = ProcessorWalletSigner()
         let (batchRequest, batchApproval) = try processorMessageApproval(coin: .solana, batch: true)
         let (batchPermit, batchResult) = try await executeProcessor(
             request: batchRequest, approval: batchApproval, signer: batchSigner
@@ -1057,7 +1056,16 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("A batch must produce a response")
         }
         let batchResponse = try XCTUnwrap(batchCompletion.response(for: batchPermit))
-        XCTAssertEqual(batchResponse.json["result"] as? [String], signatures)
+        guard case .signing(_, .signature(.solanaTransactions(let transactions))) = batchApproval.kind else {
+            return XCTFail("Expected approved Solana transaction messages")
+        }
+        let signatures = try XCTUnwrap(batchResponse.json["result"] as? [String])
+        XCTAssertEqual(signatures.count, transactions.count)
+        XCTAssertEqual(Set(signatures).count, signatures.count)
+        for (signature, transaction) in zip(signatures, transactions) {
+            let bytes = try XCTUnwrap(WalletCrypto.base58Decode(string: signature))
+            XCTAssertTrue(publicKey.isValidSignature(bytes, for: transaction.messageData))
+        }
         XCTAssertEqual(singleSigner.signCalls, 1)
         XCTAssertEqual(batchSigner.signCalls, 1)
     }
@@ -1076,13 +1084,15 @@ final class DappRequestProcessorTests: XCTestCase {
                 parameters: ["data": "0x7265766965776564"]
             )
         } else if batch {
-            let message = WalletCrypto.base58Encode(data: SolanaMessageFixture.wireMessage(
-                accountKeys: [key.publicKeyData(coin: .solana)],
-                bodyAfterBlockhash: Data([0])
-            ))
+            let messages = (1...3).map { seed in
+                WalletCrypto.base58Encode(data: SolanaMessageFixture.wireMessage(
+                    accountKeys: [key.publicKeyData(coin: .solana)],
+                    blockhashSeed: UInt8(seed), bodyAfterBlockhash: Data([0])
+                ))
+            }
             request = try solanaRequest(
                 method: "signAllTransactions", publicKey: account.address,
-                parameters: ["messages": [message, message, message]]
+                parameters: ["messages": messages]
             )
         } else {
             request = try solanaRequest(
@@ -1694,6 +1704,7 @@ final class DappRequestProcessorTests: XCTestCase {
         signer: (any WalletSigning)?
     ) async throws -> (ExtensionBridge.ApprovedExecutionPermit, ApprovedExecutionResult) {
         let permit = try processorPermit(request: request, approval: approval)
+        (signer as? ProcessorWalletSigner)?.permit = permit
         return (permit, await DappRequestProcessor().execute(permit: permit, signer: signer))
     }
 
@@ -3748,16 +3759,31 @@ private func processorCatalog(accounts: [WalletAccount]) -> WalletReviewCatalog 
 @MainActor
 private final class ProcessorWalletSigner: WalletSigning {
     nonisolated func invalidate() {}
-    private let result: Result<WalletSigningOutput, WalletSigningFailure>
+    private let result: Result<WalletSigningOutput, WalletSigningFailure>?
+    private let privateKey: WalletPrivateKey?
+    var permit: ExtensionBridge.ApprovedExecutionPermit?
     private(set) var signCalls = 0
     var beforeResult: (() async -> Void)?
 
-    init(result: Result<WalletSigningOutput, WalletSigningFailure>) {
+    init(result: Result<WalletSigningOutput, WalletSigningFailure>? = nil, privateKey: WalletPrivateKey? = nil) {
         self.result = result
+        self.privateKey = privateKey
     }
 
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
         signCalls += 1
+        let result: Result<WalletSigningOutput, WalletSigningFailure>
+        if let supplied = self.result {
+            result = supplied
+        } else if let permit {
+            do {
+                result = .success(try walletSigningOutputForTesting(permit: permit, privateKey: privateKey))
+            } catch {
+                result = .failure(error as? WalletSigningFailure ?? .failedToSign)
+            }
+        } else {
+            result = .failure(.authorizationUnavailable)
+        }
         await beforeResult?()
         return result
     }
