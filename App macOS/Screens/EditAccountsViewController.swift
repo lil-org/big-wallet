@@ -94,6 +94,8 @@ class EditAccountsViewController: NSViewController {
         isSaving = true
         updateOkButtonState()
         cancelButton.isEnabled = false
+        tableView.isEnabled = false
+        tableView.reloadData()
         mutationTask = Task { [weak self, walletsManager] in
             do {
                 try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
@@ -114,6 +116,8 @@ class EditAccountsViewController: NSViewController {
         isSaving = false
         updateOkButtonState()
         cancelButton.isEnabled = true
+        tableView.isEnabled = true
+        tableView.reloadData()
     }
 
     private func showAccountsList() {
@@ -126,6 +130,7 @@ class EditAccountsViewController: NSViewController {
     }
     
     private func toggleAccount(at row: Int) {
+        guard !isSaving else { return }
         cellModels[row].isEnabled.toggle()
         updateOkButtonState()
         if toggledIndexes.contains(row) {
@@ -268,6 +273,7 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
 extension EditAccountsViewController: NSTableViewDelegate {
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        guard !isSaving else { return false }
         if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? PreviewAccountCellView {
             rowView.toggle()
             toggleAccount(at: row)
@@ -287,6 +293,7 @@ extension EditAccountsViewController: NSTableViewDataSource {
                       image: model.account.image,
                       isEnabled: model.isEnabled,
                       delegate: self)
+        rowView.checkBox.isEnabled = !isSaving
         
         if row >= cellModels.count - previewAccountsPreloadThreshold {
             previewMoreAccountsIfNeeded()
