@@ -9,7 +9,8 @@
         "prebuild": "npm run protocol:check",
         "build": "esbuild index.js --bundle --minify --target=safari15 --format=iife --outfile=../Resources/inpage.js",
         "pretest": "npm run protocol:check",
-        "test": "node --test ../Tests/*.test.mjs"
+        "test": "node --test ../Tests/*.test.mjs",
+        "test:protocol-fuzz": "node ../../Scripts/fuzz_wire_protocol.mjs"
     },
     "repository": {
         "type": "git",

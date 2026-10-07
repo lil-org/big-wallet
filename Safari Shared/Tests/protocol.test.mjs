@@ -77,6 +77,7 @@ test("protocol snapshots retain captured builtins and isolate nested source muta
         const fail = () => { throw new Error("mutated builtin"); };
         Object.keys = Object.getOwnPropertyDescriptor = Object.create = Object.freeze = fail;
         Object.defineProperty = Reflect.ownKeys = Reflect.apply = fail;
+        String.prototype.normalize = fail;
         Array.isArray = Number.isSafeInteger = Number.isFinite = String = fail;
         Array.prototype.map = Array.prototype[Symbol.iterator] = fail;
         RegExp.prototype.exec = RegExp.prototype.test = fail;

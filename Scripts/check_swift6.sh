@@ -42,11 +42,16 @@ tsan() {
     xcodebuild -jobs 2 -enableCodeCoverage NO test -project Wallet.xcodeproj -scheme 'Tests macOS' -configuration Debug -destination "$mac_destination" -parallel-testing-enabled NO -collect-test-diagnostics never -enableThreadSanitizer YES -only-testing:'Tests macOS/AlchemyJWTProviderTests' -only-testing:'Tests macOS/SolanaOptionsTests' -only-testing:'Tests macOS/ApprovalResolutionTests' -only-testing:'Tests macOS/WalletSigningSessionTests' -only-testing:'Tests macOS/WalletSigningScopeTests' -only-testing:'Tests macOS/NativeApprovalServiceTests' -only-testing:'Tests macOS/TransactionInspectorTests' -only-testing:'Tests macOS/WalletsManagerPreviewTests' -only-testing:'Tests macOS/WalletCoreProxyParallelDerivationTests'
 }
 
+fuzz() {
+    node "$script_dir/fuzz_wire_protocol.mjs"
+}
+
 case "$mode" in
     build) build ;;
     test) test ;;
     performance) performance ;;
     tsan) tsan ;;
-    all) build; test; performance; tsan ;;
-    *) echo 'Usage: Scripts/check_swift6.sh [all|build|test|performance|tsan]' >&2; exit 2 ;;
+    fuzz) fuzz ;;
+    all) build; test; performance; tsan; fuzz ;;
+    *) echo 'Usage: Scripts/check_swift6.sh [all|build|test|performance|tsan|fuzz]' >&2; exit 2 ;;
 esac

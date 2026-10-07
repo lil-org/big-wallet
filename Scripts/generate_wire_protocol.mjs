@@ -206,6 +206,7 @@ const jsRuntime = String.raw`
     const regexpExec = RegExp.prototype.exec;
     const indexOf = String.prototype.indexOf;
     const slice = String.prototype.slice;
+    const normalize = String.prototype.normalize;
     const ErrorType = TypeError;
     const patterns = freeze({
         privateToken: /^[0-9a-f]{32}$/,
@@ -283,9 +284,15 @@ ${Object.entries(depthReservations).map(([name, reserved]) => `        case ${qu
         const previous = enter(value, context);
         try {
             const names = ownKeys(value);
-            const result = create(null);
+            const canonicalNames = create(null);
             for (let index = 0; index < names.length; index += 1) {
                 if (typeof names[index] !== "string") { invalid(); }
+                const canonicalName = apply(normalize, names[index], ["NFC"]);
+                if (apply(hasOwn, canonicalNames, [canonicalName])) { invalid(); }
+                put(canonicalNames, canonicalName, true);
+            }
+            const result = create(null);
+            for (let index = 0; index < names.length; index += 1) {
                 put(result, names[index], decodeItem(read(value, names[index]), context));
             }
             return freeze(result);
@@ -367,12 +374,12 @@ function swiftNode(rule, id) {
     let body;
     if (rule.ref) { body = `return ${swiftCall(types[rule.ref], "value")}`; }
     else if (Object.hasOwn(rule, "const")) {
-        body = typeof rule.const === "boolean" ? `return boolean(value) == ${rule.const}` : typeof rule.const === "number" ? `return number(value) == ${rule.const}` : rule.const === null ? "return value is NSNull" : `return (value as? String) == ${swiftLiteral(rule.const)}`;
-    } else if (rule.enum) { body = `guard let value = value as? String else { return false }\n        return ${rule.enum.map(item => `value == ${swiftLiteral(item)}`).join(" || ")}`; }
+        body = typeof rule.const === "boolean" ? `return boolean(value) == ${rule.const}` : typeof rule.const === "number" ? `return number(value) == ${rule.const}` : rule.const === null ? "return value is NSNull" : `guard let value = value as? String else { return false }\n        return exactString(value, ${swiftLiteral(rule.const)})`;
+    } else if (rule.enum) { body = `guard let value = value as? String else { return false }\n        return ${rule.enum.map(item => `exactString(value, ${swiftLiteral(item)})`).join(" || ")}`; }
     else if (rule.oneOf) { body = `return ${rule.oneOf.map(child => swiftCall(child, "value")).join(" || ")}`; }
     else switch (rule.type) {
     case "string": {
-        const checks = [rule.minLength !== undefined ? `value.utf16.count >= ${rule.minLength}` : null, rule.maxLength !== undefined ? `value.utf16.count <= ${rule.maxLength}` : null, rule.format ? `format${rule.format}(value)` : null, ...(rule.excluding || []).map(value => `value != ${swiftLiteral(value)}`)].filter(Boolean);
+        const checks = [rule.minLength !== undefined ? `value.utf16.count >= ${rule.minLength}` : null, rule.maxLength !== undefined ? `value.utf16.count <= ${rule.maxLength}` : null, rule.format ? `format${rule.format}(value)` : null, ...(rule.excluding || []).map(value => `!exactString(value, ${swiftLiteral(value)})`)].filter(Boolean);
         body = checks.length ? `guard let value = value as? String else { return false }\n        return ${checks.join(" && ")}` : "return value is String";
         break;
     }
@@ -397,9 +404,15 @@ function swiftNode(rule, id) {
 }
 
 const swiftRuntime = String.raw`
-    private static func exactKeys(_ value: [String: Any], required: Set<String>, optional: Set<String>) -> Bool {
-        let keys = Set(value.keys)
-        return required.isSubset(of: keys) && keys.isSubset(of: required.union(optional))
+    private static func exactKeys(_ value: [String: Any], required: [String], optional: [String]) -> Bool {
+        let keys = Set(value.keys.map { Data($0.utf8) })
+        let requiredKeys = Set(required.map { Data($0.utf8) })
+        let optionalKeys = Set(optional.map { Data($0.utf8) })
+        return requiredKeys.isSubset(of: keys) && keys.isSubset(of: requiredKeys.union(optionalKeys))
+    }
+
+    private static func exactString(_ value: String, _ expected: String) -> Bool {
+        value.utf8.elementsEqual(expected.utf8)
     }
 
     private static func number(_ value: Any) -> Double? {
@@ -467,10 +480,16 @@ const swiftRuntime = String.raw`
                 var result = [JSONValue]()
                 for item in array { guard let item = JSONValue(item, depth: depth + 1, maximumDepth: maximumDepth) else { return nil }; result.append(item) }
                 self = .array(result)
-            } else if let object = value as? [String: Any] {
-                guard depth < maximumDepth else { return nil }
+            } else if let object = value as? NSDictionary {
+                guard depth < maximumDepth,
+                      let keys = object.allKeys as? [String],
+                      Set(keys).count == object.count else { return nil }
                 var result = [String: JSONValue]()
-                for (key, item) in object { guard let item = JSONValue(item, depth: depth + 1, maximumDepth: maximumDepth) else { return nil }; result[key] = item }
+                for key in keys {
+                    guard let raw = object.object(forKey: key),
+                          let item = JSONValue(raw, depth: depth + 1, maximumDepth: maximumDepth) else { return nil }
+                    result[key] = item
+                }
                 self = .object(result)
             } else { return nil }
         }
@@ -527,7 +546,7 @@ function swift() {
     const objectAdapter = String.raw`    struct JSONObject: Sendable {
         private let values: [String: JSONValue]
 
-        init?(_ json: [String: Any], maximumDepth: Int = WireProtocol.maximumJSONDepth) {
+        init?(_ json: Any, maximumDepth: Int = WireProtocol.maximumJSONDepth) {
             guard case .object(let values) = JSONValue(json, maximumDepth: maximumDepth) else { return nil }
             self.values = values
         }
@@ -548,10 +567,19 @@ function swift() {
     }
 
     static func object(_ contract: Message, value: Any) -> ValidatedObject? {
-        guard let json = value as? [String: Any],
-              let object = JSONObject(json, maximumDepth: maximumJSONDepth(for: contract)),
+        guard let object = JSONObject(value, maximumDepth: maximumJSONDepth(for: contract)),
               validShape(contract, value: object.json) else { return nil }
         return ValidatedObject(contract: contract, object: object)
+    }
+
+    static func decode(_ message: Message, from data: Data) -> Any? {
+        guard let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { return nil }
+        return decode(message, value: value)
+    }
+
+    static func object(_ contract: Message, from data: Data) -> ValidatedObject? {
+        guard let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { return nil }
+        return object(contract, value: value)
     }
 
     static func object(_ contract: Message, from decoder: Decoder) throws -> ValidatedObject {

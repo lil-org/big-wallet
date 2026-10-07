@@ -279,6 +279,56 @@ final class WireProtocolTests: XCTestCase {
         }
     }
 
+    func testRawJSONRejectsCanonicallyEquivalentKeysBeforeDictionaryConversion() throws {
+        for (first, second) in [("é", "e\u{301}"), ("가", "가"), ("K", "K")] {
+            for object in ["{\"\(first)\":1,\"\(second)\":2}", "{\"\(second)\":1,\"\(first)\":2}"] {
+                for payload in [object, "[\(object)]", "{\"nested\":\(object)}"] {
+                    let data = Data("{\"id\":1,\"result\":\(payload)}".utf8)
+                    let source = try JSONSerialization.jsonObject(with: data)
+                    XCTAssertNil(WireProtocol.JSONObject(source))
+                    XCTAssertFalse(WireProtocol.validate(.rpcResponse, value: source))
+                    XCTAssertNil(WireProtocol.decode(.rpcResponse, value: source))
+                    XCTAssertNil(WireProtocol.object(.rpcResponse, value: source))
+                    XCTAssertNil(WireProtocol.decode(.rpcResponse, from: data))
+                    XCTAssertNil(WireProtocol.object(.rpcResponse, from: data))
+                }
+                let root = try JSONSerialization.jsonObject(with: Data(object.utf8))
+                XCTAssertNil(WireProtocol.JSONObject(root))
+            }
+        }
+    }
+
+    func testRawJSONPreservesUnambiguousNoncanonicalKeys() throws {
+        for key in ["e\u{301}", "가", "K", "__proto__", "constructor"] {
+            let data = Data("{\"id\":1,\"result\":{\"\(key)\":1,\"other\":2}}".utf8)
+            let source = try JSONSerialization.jsonObject(with: data)
+            let decoded = try XCTUnwrap(WireProtocol.decode(.rpcResponse, from: data))
+            let wire = try XCTUnwrap(WireProtocol.object(.rpcResponse, from: data))
+            XCTAssertEqual(try canonicalJSON(decoded), try canonicalJSON(source))
+            XCTAssertEqual(try canonicalJSON(wire.json), try canonicalJSON(source))
+        }
+    }
+
+    func testNativeCommandUsesExactKeysAndValidatedContractAtIngress() throws {
+        let ordinary = "\"configurationKey\":\"https://example.com\""
+        let alternative = "\"configurationKey\":\"https://other.example\""
+        for fields in [alternative, "\(ordinary),\(alternative)", "\(alternative),\(ordinary)"] {
+            let data = Data("{\"id\":1,\"workflowVersion\":\(WireProtocol.workflowVersion),\"subject\":\"getLatestConfiguration\",\(fields)}".utf8)
+            let source = try JSONSerialization.jsonObject(with: data)
+            XCTAssertNil(WireProtocol.object(.nativeCommand, value: source))
+            XCTAssertNil(WireProtocol.object(.nativeCommand, from: data))
+        }
+        let data = Data("{\"id\":1,\"workflowVersion\":\(WireProtocol.workflowVersion),\"subject\":\"getLatestConfiguration\",\(ordinary)}".utf8)
+        let wire = try XCTUnwrap(WireProtocol.object(.nativeCommand, from: data))
+        let request = try InternalSafariRequest(wire: wire)
+        guard case .page(.getLatestConfiguration(let key)) = request.command else {
+            return XCTFail("Expected configuration request")
+        }
+        XCTAssertEqual(key, "https://example.com")
+        let wrongContract = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: ["id": 1, "result": NSNull()]))
+        XCTAssertThrowsError(try InternalSafariRequest(wire: wrongContract))
+    }
+
     func testRPCContainerDepthLimitIncludesTheEnvelope() throws {
         XCTAssertEqual(WireProtocol.maximumJSONDepth, 64)
         let limit = WireProtocol.maximumJSONDepth(for: .rpcResponse)

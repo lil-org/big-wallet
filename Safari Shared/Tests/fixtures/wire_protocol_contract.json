@@ -7361,5 +7361,130 @@
         "approvalCommitted": true
       }
     }
+  },
+  {
+    "name": "Unicode accent key collision reverse=False",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "result": {
+        "é": 1,
+        "é": 2
+      }
+    }
+  },
+  {
+    "name": "Unicode accent key collision reverse=True",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "result": {
+        "é": 2,
+        "é": 1
+      }
+    }
+  },
+  {
+    "name": "Unicode accent unambiguous decomposed key",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "result": {
+        "é": 1,
+        "other": 2
+      }
+    }
+  },
+  {
+    "name": "Unicode hangul key collision reverse=False",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "result": {
+        "가": 1,
+        "가": 2
+      }
+    }
+  },
+  {
+    "name": "Unicode hangul key collision reverse=True",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "result": {
+        "가": 2,
+        "가": 1
+      }
+    }
+  },
+  {
+    "name": "Unicode hangul unambiguous decomposed key",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "result": {
+        "가": 1,
+        "other": 2
+      }
+    }
+  },
+  {
+    "name": "Unicode kelvin key collision reverse=False",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "result": {
+        "K": 1,
+        "K": 2
+      }
+    }
+  },
+  {
+    "name": "Unicode kelvin key collision reverse=True",
+    "type": "RPCResponse",
+    "valid": false,
+    "value": {
+      "id": 1,
+      "result": {
+        "K": 2,
+        "K": 1
+      }
+    }
+  },
+  {
+    "name": "Unicode kelvin unambiguous decomposed key",
+    "type": "RPCResponse",
+    "valid": true,
+    "value": {
+      "id": 1,
+      "result": {
+        "K": 1,
+        "other": 2
+      }
+    }
+  },
+  {
+    "name": "Known field rejects Kelvin alias",
+    "type": "SolanaConfiguration",
+    "valid": false,
+    "value": {
+      "publicKey": "11111111111111111111111111111111"
+    }
+  },
+  {
+    "name": "Known field rejects canonical collision",
+    "type": "SolanaConfiguration",
+    "valid": false,
+    "value": {
+      "publicKey": "11111111111111111111111111111111",
+      "publicKey": "11111111111111111111111111111111"
+    }
   }
 ]

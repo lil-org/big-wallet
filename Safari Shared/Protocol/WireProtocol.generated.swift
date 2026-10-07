@@ -226,7 +226,7 @@ enum WireProtocol {
     struct JSONObject: Sendable {
         private let values: [String: JSONValue]
 
-        init?(_ json: [String: Any], maximumDepth: Int = WireProtocol.maximumJSONDepth) {
+        init?(_ json: Any, maximumDepth: Int = WireProtocol.maximumJSONDepth) {
             guard case .object(let values) = JSONValue(json, maximumDepth: maximumDepth) else { return nil }
             self.values = values
         }
@@ -247,10 +247,19 @@ enum WireProtocol {
     }
 
     static func object(_ contract: Message, value: Any) -> ValidatedObject? {
-        guard let json = value as? [String: Any],
-              let object = JSONObject(json, maximumDepth: maximumJSONDepth(for: contract)),
+        guard let object = JSONObject(value, maximumDepth: maximumJSONDepth(for: contract)),
               validShape(contract, value: object.json) else { return nil }
         return ValidatedObject(contract: contract, object: object)
+    }
+
+    static func decode(_ message: Message, from data: Data) -> Any? {
+        guard let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { return nil }
+        return decode(message, value: value)
+    }
+
+    static func object(_ contract: Message, from data: Data) -> ValidatedObject? {
+        guard let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { return nil }
+        return object(contract, value: value)
     }
 
     static func object(_ contract: Message, from decoder: Decoder) throws -> ValidatedObject {
@@ -262,9 +271,15 @@ enum WireProtocol {
     }
 
 
-    private static func exactKeys(_ value: [String: Any], required: Set<String>, optional: Set<String>) -> Bool {
-        let keys = Set(value.keys)
-        return required.isSubset(of: keys) && keys.isSubset(of: required.union(optional))
+    private static func exactKeys(_ value: [String: Any], required: [String], optional: [String]) -> Bool {
+        let keys = Set(value.keys.map { Data($0.utf8) })
+        let requiredKeys = Set(required.map { Data($0.utf8) })
+        let optionalKeys = Set(optional.map { Data($0.utf8) })
+        return requiredKeys.isSubset(of: keys) && keys.isSubset(of: requiredKeys.union(optionalKeys))
+    }
+
+    private static func exactString(_ value: String, _ expected: String) -> Bool {
+        value.utf8.elementsEqual(expected.utf8)
     }
 
     private static func number(_ value: Any) -> Double? {
@@ -332,10 +347,16 @@ enum WireProtocol {
                 var result = [JSONValue]()
                 for item in array { guard let item = JSONValue(item, depth: depth + 1, maximumDepth: maximumDepth) else { return nil }; result.append(item) }
                 self = .array(result)
-            } else if let object = value as? [String: Any] {
-                guard depth < maximumDepth else { return nil }
+            } else if let object = value as? NSDictionary {
+                guard depth < maximumDepth,
+                      let keys = object.allKeys as? [String],
+                      Set(keys).count == object.count else { return nil }
                 var result = [String: JSONValue]()
-                for (key, item) in object { guard let item = JSONValue(item, depth: depth + 1, maximumDepth: maximumDepth) else { return nil }; result[key] = item }
+                for key in keys {
+                    guard let raw = object.object(forKey: key),
+                          let item = JSONValue(raw, depth: depth + 1, maximumDepth: maximumDepth) else { return nil }
+                    result[key] = item
+                }
                 self = .object(result)
             } else { return nil }
         }
@@ -429,17 +450,17 @@ enum WireProtocol {
 
     private static func n8(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "ethereum" || value == "solana"
+        return exactString(value, "ethereum") || exactString(value, "solana")
     }
 
     private static func n9(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "ethereum" || value == "solana" || value == "unknown"
+        return exactString(value, "ethereum") || exactString(value, "solana") || exactString(value, "unknown")
     }
 
     private static func n10(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "mainnetBeta" || value == "devnet" || value == "testnet"
+        return exactString(value, "mainnetBeta") || exactString(value, "devnet") || exactString(value, "testnet")
     }
 
     private static func n11(_ value: Any) -> Bool {
@@ -566,7 +587,7 @@ enum WireProtocol {
 
     private static func n34(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "ended" || value == "cancelled"
+        return exactString(value, "ended") || exactString(value, "cancelled")
     }
 
     private static func n35(_ value: Any) -> Bool {
@@ -584,7 +605,8 @@ enum WireProtocol {
     }
 
     private static func n38(_ value: Any) -> Bool {
-        return (value as? String) == "suggested"
+        guard let value = value as? String else { return false }
+        return exactString(value, "suggested")
     }
 
     private static func n39(_ value: Any) -> Bool {
@@ -598,7 +620,8 @@ enum WireProtocol {
     }
 
     private static func n40(_ value: Any) -> Bool {
-        return (value as? String) == "custom"
+        guard let value = value as? String else { return false }
+        return exactString(value, "custom")
     }
 
     private static func n41(_ value: Any) -> Bool {
@@ -609,7 +632,7 @@ enum WireProtocol {
 
     private static func n42(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "acknowledge" || value == "retry" || value == "edit" || value == "cancel"
+        return exactString(value, "acknowledge") || exactString(value, "retry") || exactString(value, "edit") || exactString(value, "cancel")
     }
 
     private static func n43(_ value: Any) -> Bool {
@@ -633,7 +656,8 @@ enum WireProtocol {
     }
 
     private static func n47(_ value: Any) -> Bool {
-        return (value as? String) == "openApp"
+        guard let value = value as? String else { return false }
+        return exactString(value, "openApp")
     }
 
     private static func n48(_ value: Any) -> Bool {
@@ -645,7 +669,8 @@ enum WireProtocol {
     }
 
     private static func n49(_ value: Any) -> Bool {
-        return (value as? String) == "getRecoveryRequests"
+        guard let value = value as? String else { return false }
+        return exactString(value, "getRecoveryRequests")
     }
 
     private static func n50(_ value: Any) -> Bool {
@@ -657,7 +682,8 @@ enum WireProtocol {
     }
 
     private static func n51(_ value: Any) -> Bool {
-        return (value as? String) == "getPendingRequests"
+        guard let value = value as? String else { return false }
+        return exactString(value, "getPendingRequests")
     }
 
     private static func n52(_ value: Any) -> Bool {
@@ -671,7 +697,8 @@ enum WireProtocol {
     }
 
     private static func n53(_ value: Any) -> Bool {
-        return (value as? String) == "rpc"
+        guard let value = value as? String else { return false }
+        return exactString(value, "rpc")
     }
 
     private static func n54(_ value: Any) -> Bool {
@@ -684,7 +711,8 @@ enum WireProtocol {
     }
 
     private static func n55(_ value: Any) -> Bool {
-        return (value as? String) == "getLatestConfiguration"
+        guard let value = value as? String else { return false }
+        return exactString(value, "getLatestConfiguration")
     }
 
     private static func n56(_ value: Any) -> Bool {
@@ -700,7 +728,8 @@ enum WireProtocol {
     }
 
     private static func n57(_ value: Any) -> Bool {
-        return (value as? String) == "disconnect"
+        guard let value = value as? String else { return false }
+        return exactString(value, "disconnect")
     }
 
     private static func n58(_ value: Any) -> Bool {
@@ -723,7 +752,8 @@ enum WireProtocol {
     }
 
     private static func n61(_ value: Any) -> Bool {
-        return (value as? String) == "pollResponse"
+        guard let value = value as? String else { return false }
+        return exactString(value, "pollResponse")
     }
 
     private static func n62(_ value: Any) -> Bool {
@@ -732,7 +762,7 @@ enum WireProtocol {
 
     private static func n63(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "none" || value == "quiet" || value == "interactive"
+        return exactString(value, "none") || exactString(value, "quiet") || exactString(value, "interactive")
     }
 
     private static func n64(_ value: Any) -> Bool {
@@ -746,7 +776,8 @@ enum WireProtocol {
     }
 
     private static func n65(_ value: Any) -> Bool {
-        return (value as? String) == "acknowledgeResponse"
+        guard let value = value as? String else { return false }
+        return exactString(value, "acknowledgeResponse")
     }
 
     private static func n66(_ value: Any) -> Bool {
@@ -760,7 +791,8 @@ enum WireProtocol {
     }
 
     private static func n67(_ value: Any) -> Bool {
-        return (value as? String) == "showApproval"
+        guard let value = value as? String else { return false }
+        return exactString(value, "showApproval")
     }
 
     private static func n68(_ value: Any) -> Bool {
@@ -773,7 +805,8 @@ enum WireProtocol {
     }
 
     private static func n69(_ value: Any) -> Bool {
-        return (value as? String) == "getApprovalState"
+        guard let value = value as? String else { return false }
+        return exactString(value, "getApprovalState")
     }
 
     private static func n70(_ value: Any) -> Bool {
@@ -786,7 +819,8 @@ enum WireProtocol {
     }
 
     private static func n71(_ value: Any) -> Bool {
-        return (value as? String) == "retryApproval"
+        guard let value = value as? String else { return false }
+        return exactString(value, "retryApproval")
     }
 
     private static func n72(_ value: Any) -> Bool {
@@ -799,7 +833,8 @@ enum WireProtocol {
     }
 
     private static func n73(_ value: Any) -> Bool {
-        return (value as? String) == "rejectRequest"
+        guard let value = value as? String else { return false }
+        return exactString(value, "rejectRequest")
     }
 
     private static func n74(_ value: Any) -> Bool {
@@ -814,7 +849,8 @@ enum WireProtocol {
     }
 
     private static func n75(_ value: Any) -> Bool {
-        return (value as? String) == "approveRequest"
+        guard let value = value as? String else { return false }
+        return exactString(value, "approveRequest")
     }
 
     private static func n76(_ value: Any) -> Bool {
@@ -833,7 +869,8 @@ enum WireProtocol {
     }
 
     private static func n78(_ value: Any) -> Bool {
-        return (value as? String) == "setTransactionSpeed"
+        guard let value = value as? String else { return false }
+        return exactString(value, "setTransactionSpeed")
     }
 
     private static func n79(_ value: Any) -> Bool {
@@ -852,7 +889,8 @@ enum WireProtocol {
     }
 
     private static func n81(_ value: Any) -> Bool {
-        return (value as? String) == "applyTransactionEdits"
+        guard let value = value as? String else { return false }
+        return exactString(value, "applyTransactionEdits")
     }
 
     private static func n82(_ value: Any) -> Bool {
@@ -871,7 +909,8 @@ enum WireProtocol {
     }
 
     private static func n84(_ value: Any) -> Bool {
-        return (value as? String) == "resolveApprovalAlert"
+        guard let value = value as? String else { return false }
+        return exactString(value, "resolveApprovalAlert")
     }
 
     private static func n85(_ value: Any) -> Bool {
@@ -926,7 +965,8 @@ enum WireProtocol {
     }
 
     private static func n94(_ value: Any) -> Bool {
-        return (value as? String) == "ethereum"
+        guard let value = value as? String else { return false }
+        return exactString(value, "ethereum")
     }
 
     private static func n95(_ value: Any) -> Bool {
@@ -942,7 +982,8 @@ enum WireProtocol {
     }
 
     private static func n97(_ value: Any) -> Bool {
-        return (value as? String) == "solana"
+        guard let value = value as? String else { return false }
+        return exactString(value, "solana")
     }
 
     private static func n98(_ value: Any) -> Bool {
@@ -975,7 +1016,7 @@ enum WireProtocol {
 
     private static func n103(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "signTransaction" || value == "signPersonalMessage" || value == "signTypedMessage" || value == "ecRecover" || value == "requestAccounts" || value == "addEthereumChain" || value == "switchEthereumChain"
+        return exactString(value, "signTransaction") || exactString(value, "signPersonalMessage") || exactString(value, "signTypedMessage") || exactString(value, "ecRecover") || exactString(value, "requestAccounts") || exactString(value, "addEthereumChain") || exactString(value, "switchEthereumChain")
     }
 
     private static func n104(_ value: Any) -> Bool {
@@ -993,7 +1034,7 @@ enum WireProtocol {
 
     private static func n106(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "connect" || value == "signMessage" || value == "signTransaction" || value == "signAllTransactions" || value == "signAndSendTransaction"
+        return exactString(value, "connect") || exactString(value, "signMessage") || exactString(value, "signTransaction") || exactString(value, "signAllTransactions") || exactString(value, "signAndSendTransaction")
     }
 
     private static func n107(_ value: Any) -> Bool {
@@ -1061,12 +1102,13 @@ enum WireProtocol {
     }
 
     private static func n114(_ value: Any) -> Bool {
-        return (value as? String) == "unknown"
+        guard let value = value as? String else { return false }
+        return exactString(value, "unknown")
     }
 
     private static func n115(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "switchAccount"
+        return exactString(value, "switchAccount")
     }
 
     private static func n116(_ value: Any) -> Bool {
@@ -1112,11 +1154,12 @@ enum WireProtocol {
 
     private static func n123(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value != "switchAccount"
+        return !exactString(value, "switchAccount")
     }
 
     private static func n124(_ value: Any) -> Bool {
-        return (value as? String) == "result"
+        guard let value = value as? String else { return false }
+        return exactString(value, "result")
     }
 
     private static func n125(_ value: Any) -> Bool {
@@ -1136,7 +1179,8 @@ enum WireProtocol {
     }
 
     private static func n127(_ value: Any) -> Bool {
-        return (value as? String) == "error"
+        guard let value = value as? String else { return false }
+        return exactString(value, "error")
     }
 
     private static func n128(_ value: Any) -> Bool {
@@ -1155,11 +1199,13 @@ enum WireProtocol {
     }
 
     private static func n130(_ value: Any) -> Bool {
-        return (value as? String) == "switchAccount"
+        guard let value = value as? String else { return false }
+        return exactString(value, "switchAccount")
     }
 
     private static func n131(_ value: Any) -> Bool {
-        return (value as? String) == "multiple"
+        guard let value = value as? String else { return false }
+        return exactString(value, "multiple")
     }
 
     private static func n132(_ value: Any) -> Bool {
@@ -1194,7 +1240,8 @@ enum WireProtocol {
     }
 
     private static func n136(_ value: Any) -> Bool {
-        return (value as? String) == "configuration"
+        guard let value = value as? String else { return false }
+        return exactString(value, "configuration")
     }
 
     private static func n137(_ value: Any) -> Bool {
@@ -1209,7 +1256,8 @@ enum WireProtocol {
     }
 
     private static func n139(_ value: Any) -> Bool {
-        return (value as? String) == "configurationError"
+        guard let value = value as? String else { return false }
+        return exactString(value, "configurationError")
     }
 
     private static func n140(_ value: Any) -> Bool {
@@ -1251,7 +1299,7 @@ enum WireProtocol {
 
     private static func n144(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "new" || value == "replay" || value == "coalesced"
+        return exactString(value, "new") || exactString(value, "replay") || exactString(value, "coalesced")
     }
 
     private static func n145(_ value: Any) -> Bool {
@@ -1383,7 +1431,7 @@ enum WireProtocol {
 
     private static func n167(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "pending" || value == "approved" || value == "completed"
+        return exactString(value, "pending") || exactString(value, "approved") || exactString(value, "completed")
     }
 
     private static func n168(_ value: Any) -> Bool {
@@ -1419,7 +1467,8 @@ enum WireProtocol {
     }
 
     private static func n174(_ value: Any) -> Bool {
-        return (value as? String) == "2.0"
+        guard let value = value as? String else { return false }
+        return exactString(value, "2.0")
     }
 
     private static func n175(_ value: Any) -> Bool {
@@ -1549,7 +1598,8 @@ enum WireProtocol {
     }
 
     private static func n190(_ value: Any) -> Bool {
-        return (value as? String) == "accountSelection"
+        guard let value = value as? String else { return false }
+        return exactString(value, "accountSelection")
     }
 
     private static func n191(_ value: Any) -> Bool {
@@ -1581,7 +1631,8 @@ enum WireProtocol {
     }
 
     private static func n196(_ value: Any) -> Bool {
-        return (value as? String) == "signMessage"
+        guard let value = value as? String else { return false }
+        return exactString(value, "signMessage")
     }
 
     private static func n197(_ value: Any) -> Bool {
@@ -1629,7 +1680,8 @@ enum WireProtocol {
     }
 
     private static func n202(_ value: Any) -> Bool {
-        return (value as? String) == "sendTransaction"
+        guard let value = value as? String else { return false }
+        return exactString(value, "sendTransaction")
     }
 
     private static func n203(_ value: Any) -> Bool {
@@ -1655,7 +1707,8 @@ enum WireProtocol {
     }
 
     private static func n207(_ value: Any) -> Bool {
-        return (value as? String) == "addChain"
+        guard let value = value as? String else { return false }
+        return exactString(value, "addChain")
     }
 
     private static func n208(_ value: Any) -> Bool {
@@ -1674,7 +1727,8 @@ enum WireProtocol {
     }
 
     private static func n210(_ value: Any) -> Bool {
-        return (value as? String) == "review"
+        guard let value = value as? String else { return false }
+        return exactString(value, "review")
     }
 
     private static func n211(_ value: Any) -> Bool {
@@ -1684,7 +1738,7 @@ enum WireProtocol {
 
     private static func n212(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "approve" || value == "reject" || value == "editTransaction" || value == "setTransactionSpeed" || value == "resolveApprovalAlert"
+        return exactString(value, "approve") || exactString(value, "reject") || exactString(value, "editTransaction") || exactString(value, "setTransactionSpeed") || exactString(value, "resolveApprovalAlert")
     }
 
     private static func n213(_ value: Any) -> Bool {
@@ -1708,7 +1762,7 @@ enum WireProtocol {
 
     private static func n216(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "retry" || value == "reject"
+        return exactString(value, "retry") || exactString(value, "reject")
     }
 
     private static func n217(_ value: Any) -> Bool {
@@ -1722,7 +1776,7 @@ enum WireProtocol {
 
     private static func n218(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "missing" || value == "authenticating" || value == "working"
+        return exactString(value, "missing") || exactString(value, "authenticating") || exactString(value, "working")
     }
 
     private static func n219(_ value: Any) -> Bool {
@@ -1790,7 +1844,7 @@ enum WireProtocol {
 
     private static func n229(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "ltr" || value == "rtl"
+        return exactString(value, "ltr") || exactString(value, "rtl")
     }
 
     private static func n230(_ value: Any) -> Bool {
@@ -1806,7 +1860,8 @@ enum WireProtocol {
     }
 
     private static func n232(_ value: Any) -> Bool {
-        return (value as? String) == "ok"
+        guard let value = value as? String else { return false }
+        return exactString(value, "ok")
     }
 
     private static func n233(_ value: Any) -> Bool {
@@ -1821,7 +1876,8 @@ enum WireProtocol {
     }
 
     private static func n235(_ value: Any) -> Bool {
-        return (value as? String) == "ignored"
+        guard let value = value as? String else { return false }
+        return exactString(value, "ignored")
     }
 
     private static func n236(_ value: Any) -> Bool {
@@ -1836,7 +1892,8 @@ enum WireProtocol {
     }
 
     private static func n238(_ value: Any) -> Bool {
-        return (value as? String) == "unavailable"
+        guard let value = value as? String else { return false }
+        return exactString(value, "unavailable")
     }
 
     private static func n239(_ value: Any) -> Bool {
@@ -1899,11 +1956,13 @@ enum WireProtocol {
     }
 
     private static func n249(_ value: Any) -> Bool {
-        return (value as? String) == "big-wallet-provider-v1"
+        guard let value = value as? String else { return false }
+        return exactString(value, "big-wallet-provider-v1")
     }
 
     private static func n250(_ value: Any) -> Bool {
-        return (value as? String) == "request"
+        guard let value = value as? String else { return false }
+        return exactString(value, "request")
     }
 
     private static func n251(_ value: Any) -> Bool {
@@ -1948,12 +2007,13 @@ enum WireProtocol {
     }
 
     private static func n257(_ value: Any) -> Bool {
-        return (value as? String) == "big-wallet-content-v1"
+        guard let value = value as? String else { return false }
+        return exactString(value, "big-wallet-content-v1")
     }
 
     private static func n258(_ value: Any) -> Bool {
         guard let value = value as? String else { return false }
-        return value == "response" || value == "rpc"
+        return exactString(value, "response") || exactString(value, "rpc")
     }
 
     private static func n259(_ value: Any) -> Bool {
@@ -1973,7 +2033,8 @@ enum WireProtocol {
     }
 
     private static func n262(_ value: Any) -> Bool {
-        return (value as? String) == "responseReady"
+        guard let value = value as? String else { return false }
+        return exactString(value, "responseReady")
     }
 
     private static func n263(_ value: Any) -> Bool {
@@ -1997,7 +2058,8 @@ enum WireProtocol {
     }
 
     private static func n266(_ value: Any) -> Bool {
-        return (value as? String) == "pendingRequestAvailable"
+        guard let value = value as? String else { return false }
+        return exactString(value, "pendingRequestAvailable")
     }
 
     private static func n267(_ value: Any) -> Bool {
@@ -2009,7 +2071,8 @@ enum WireProtocol {
     }
 
     private static func n268(_ value: Any) -> Bool {
-        return (value as? String) == "configurationInvalidated"
+        guard let value = value as? String else { return false }
+        return exactString(value, "configurationInvalidated")
     }
 
     private static func n269(_ value: Any) -> Bool {
@@ -2025,7 +2088,8 @@ enum WireProtocol {
     }
 
     private static func n270(_ value: Any) -> Bool {
-        return (value as? String) == "manualSwitchAcknowledged"
+        guard let value = value as? String else { return false }
+        return exactString(value, "manualSwitchAcknowledged")
     }
 
     private static func n271(_ value: Any) -> Bool {
@@ -2037,7 +2101,8 @@ enum WireProtocol {
     }
 
     private static func n272(_ value: Any) -> Bool {
-        return (value as? String) == "workflowProbe"
+        guard let value = value as? String else { return false }
+        return exactString(value, "workflowProbe")
     }
 
     private static func n273(_ value: Any) -> Bool {
@@ -2058,7 +2123,8 @@ enum WireProtocol {
     }
 
     private static func n275(_ value: Any) -> Bool {
-        return (value as? String) == "manualSwitchIntent"
+        guard let value = value as? String else { return false }
+        return exactString(value, "manualSwitchIntent")
     }
 
     private static func n276(_ value: Any) -> Bool {
@@ -2093,7 +2159,8 @@ enum WireProtocol {
     }
 
     private static func n279(_ value: Any) -> Bool {
-        return (value as? String) == "message-to-wallet"
+        guard let value = value as? String else { return false }
+        return exactString(value, "message-to-wallet")
     }
 
     private static func n280(_ value: Any) -> Bool {
@@ -2130,7 +2197,8 @@ enum WireProtocol {
     }
 
     private static func n283(_ value: Any) -> Bool {
-        return (value as? String) == "getResponse"
+        guard let value = value as? String else { return false }
+        return exactString(value, "getResponse")
     }
 
     private static func n284(_ value: Any) -> Bool {
@@ -2142,7 +2210,8 @@ enum WireProtocol {
     }
 
     private static func n285(_ value: Any) -> Bool {
-        return (value as? String) == "updatePendingRequestBadge"
+        guard let value = value as? String else { return false }
+        return exactString(value, "updatePendingRequestBadge")
     }
 
     private static func n286(_ value: Any) -> Bool {
@@ -2157,7 +2226,8 @@ enum WireProtocol {
     }
 
     private static func n287(_ value: Any) -> Bool {
-        return (value as? String) == "applyCompletedResponse"
+        guard let value = value as? String else { return false }
+        return exactString(value, "applyCompletedResponse")
     }
 
     private static func n288(_ value: Any) -> Bool {

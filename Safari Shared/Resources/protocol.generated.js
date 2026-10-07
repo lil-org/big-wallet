@@ -21,6 +21,7 @@
     const regexpExec = RegExp.prototype.exec;
     const indexOf = String.prototype.indexOf;
     const slice = String.prototype.slice;
+    const normalize = String.prototype.normalize;
     const ErrorType = TypeError;
     const patterns = freeze({
         privateToken: /^[0-9a-f]{32}$/,
@@ -100,9 +101,15 @@
         const previous = enter(value, context);
         try {
             const names = ownKeys(value);
-            const result = create(null);
+            const canonicalNames = create(null);
             for (let index = 0; index < names.length; index += 1) {
                 if (typeof names[index] !== "string") { invalid(); }
+                const canonicalName = apply(normalize, names[index], ["NFC"]);
+                if (apply(hasOwn, canonicalNames, [canonicalName])) { invalid(); }
+                put(canonicalNames, canonicalName, true);
+            }
+            const result = create(null);
+            for (let index = 0; index < names.length; index += 1) {
                 put(result, names[index], decodeItem(read(value, names[index]), context));
             }
             return freeze(result);

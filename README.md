@@ -18,13 +18,15 @@ Use Xcode 27 or newer with Swift 6.4. All native targets use Swift 6 language mo
 
 Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
 
-Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test suites, Safari protocol tests, Release crypto performance gates, and focused Thread Sanitizer checks. Individual stages are `build`, `test`, `performance`, and `tsan`. The script uses Xcode's default DerivedData, runs simulator suites serially, and disables coverage collection so sandboxed host profiling files are not required. Set `SWIFT6_IOS_DESTINATION` and `SWIFT6_VISIONOS_DESTINATION` to select installed simulator destinations. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
+Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test suites, Safari protocol tests, Release crypto performance gates, focused Thread Sanitizer checks, and differential protocol fuzzing. Individual stages are `build`, `test`, `performance`, `tsan`, and `fuzz`. The script uses Xcode's default DerivedData, runs simulator suites serially, and disables coverage collection so sandboxed host profiling files are not required. Set `SWIFT6_IOS_DESTINATION` and `SWIFT6_VISIONOS_DESTINATION` to select installed simulator destinations. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
 
 ### Safari wire protocol
 
 `Safari Shared/Protocol/wire-protocol.json` defines the shared Swift and JavaScript wire contract. After editing it, run `node Scripts/generate_wire_protocol.mjs --write`, then `Scripts/build_inpage_provider.sh` to rebuild the page provider. Commit the definition and generated files together.
 
 `Scripts/check_wire_protocol.sh` checks that the generated files are current without modifying them. Xcode builds, npm build/test commands, version bumps, and release preflight run this check. The generator uses Node.js built-ins and adds no package dependencies. `BUILD_VERSION` remains release metadata in `bridge_wire.js` and is updated by the existing version-bump script.
+
+Run `node Scripts/fuzz_wire_protocol.mjs` to compare the production JavaScript and Swift codecs with independent fixtures, mandatory boundary cases, and seeded mutations. Failures are minimized and saved for replay. Commands and the Unicode-key regression found by the harness are documented in [the protocol README](Safari%20Shared/Protocol/README.md#differential-fuzzing).
 
 ### Safari authorization
 

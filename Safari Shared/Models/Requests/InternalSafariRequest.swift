@@ -181,7 +181,12 @@ struct InternalSafariRequest: Decodable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        let fields = NativeRequestFields(try WireProtocol.object(.nativeCommand, from: decoder).json)
+        try self.init(wire: WireProtocol.object(.nativeCommand, from: decoder))
+    }
+
+    init(wire: WireProtocol.ValidatedObject) throws {
+        let fields = NativeRequestFields(wire.json)
+        guard wire.contract == .nativeCommand else { throw fields.invalid("contract") }
         id = try fields.value("id")
         workflowVersion = try fields.value("workflowVersion")
         let subject: String = try fields.value("subject")

@@ -63,7 +63,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems.first as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
-              var json = message as? [String: Any] else {
+              var json = WireProtocol.JSONObject(message)?.json else {
             context.cancelRequest(withError: HandlerError.invalidMessage)
             return
         }
@@ -80,13 +80,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         nonisolated(unsafe) let transferredContext = context
         let responder = ExtensionRequestResponder(context: transferredContext)
         if json["subject"] != nil {
-            guard JSONSerialization.isValidJSONObject(json),
-                  let data = try? JSONSerialization.data(withJSONObject: json) else {
-                responder.cancelRequest(withError: HandlerError.invalidMessage)
-                return
-            }
             handleInternal(
-                data: data,
+                message: json,
                 profileIdentifier: profileIdentifier,
                 privateBrowsing: privateBrowsing,
                 context: responder
@@ -102,12 +97,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }
 
     private func handleInternal(
-        data: Data,
+        message: [String: Any],
         profileIdentifier: UUID?,
         privateBrowsing: Bool,
         context: ExtensionRequestResponder
     ) {
-        guard let request = try? JSONDecoder().decode(InternalSafariRequest.self, from: data),
+        guard let wire = WireProtocol.object(.nativeCommand, value: message),
+              let request = try? InternalSafariRequest(wire: wire),
+              let data = ExtensionBridge.payloadData(message),
               ExtensionBridge.isInternalPayloadAllowed(
                   command: request.command,
                   byteCount: data.count
