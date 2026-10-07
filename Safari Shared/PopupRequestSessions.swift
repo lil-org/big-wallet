@@ -824,9 +824,7 @@ final class PopupRequestSessions {
               session.canBeginApproval else {
             return .ignored
         }
-        guard authorityIsCurrent else {
-            return await completeStaleApproval(snapshot: snapshot, session: session)
-        }
+        guard authorityIsCurrent else { return .unavailable }
         let action = session.reviewAction
         switch action {
         case .selectAccount(let selectAction), .switchAccount(let selectAction):
@@ -866,29 +864,6 @@ final class PopupRequestSessions {
             guard claimed, accepted else { return .ignored }
         }
         return .ok()
-    }
-
-    private func completeStaleApproval(
-        snapshot: ExtensionBridge.Snapshot,
-        session: PopupRequestSession
-    ) async -> PopupCommandStatus {
-        guard snapshot.phase == .queued else { return .ignored }
-        session.transaction?.invalidate()
-        let resolution = ImmediateResolution.failure(ProviderResponseError(
-            message: Strings.providerNotReady,
-            code: 4100
-        ))
-        switch await store.completeImmediate(handle: snapshot.handle, resolution: resolution) {
-        case .persisted:
-            discardSession(handle: snapshot.handle)
-            return .ok()
-        case .ownershipLost:
-            discardSession(handle: snapshot.handle)
-            return .ignored
-        case .retryablePersistenceFailure:
-            session.fail(Strings.failedToLoad)
-            return .unavailable
-        }
     }
 
     private func approveAccountSelection(

@@ -6841,7 +6841,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(finalEvents.filter { $0 == "complete" }.count, 1)
     }
 
-    func testNativeAuthorityMismatchCompletesBeforeAuthenticationOrResolve() async throws {
+    func testUnavailableAuthorityPreservesReviewForRetry() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(
             id: 9,
@@ -6891,14 +6891,27 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
 
-        XCTAssertEqual(response["status"] as? String, "ok")
-        XCTAssertEqual(events, ["complete"])
-        XCTAssertEqual(errorCode, 4100)
+        XCTAssertEqual(response["status"] as? String, "unavailable")
+        XCTAssertEqual(events, [])
+        XCTAssertNil(errorCode)
         XCTAssertEqual(authenticationCount, 0)
         XCTAssertEqual(resolveCount, 0)
+
+        let pending = try await store.snapshot(handle: snapshot.handle)
+        XCTAssertEqual(pending.phase, .queued)
+        let preservedToken = try await materializeToken(controller: controller, snapshot: snapshot)
+        XCTAssertEqual(preservedToken, token)
+
+        await store.setAuthorityCurrent(true)
+        let retried = await controller.dispatchJSON(request: approve, profileIdentifier: nil)
+        XCTAssertEqual(retried["status"] as? String, "ok")
+        XCTAssertEqual(authenticationCount, 1)
+        XCTAssertEqual(resolveCount, 1)
+        let retryError = await store.completedErrorCode(handle: snapshot.handle)
+        XCTAssertEqual(retryError, 4001)
     }
 
-    func testManualSelectionRequiresCurrentNativeAuthority() async throws {
+    func testRevokedAuthorityCannotBeApproved() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(
             id: 11,
@@ -6927,7 +6940,16 @@ extension PopupRequestSessionsTests {
             loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
-        await store.setAuthorityCurrent(false)
+        let request = try XCTUnwrap(snapshot.request)
+        guard case .snapshot(let authority) = await store.bridge.configurationSnapshot(
+            configurationKey: request.configurationKey, profileIdentifier: nil
+        ), case .revoked = await store.bridge.revoke(
+            configurationKey: request.configurationKey, provider: .ethereum,
+            attempt: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            expected: authority.version, profileIdentifier: nil
+        ) else {
+            return XCTFail("Expected account connection to be revoked")
+        }
         let approve = try popupCommand(
             subject: "approveRequest",
             id: snapshot.handle.id,
@@ -6943,7 +6965,7 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
 
-        XCTAssertEqual(events, ["complete"])
+        XCTAssertEqual(events, [])
         XCTAssertEqual(errorCode, 4100)
         XCTAssertEqual(authenticationCount, 0)
     }
