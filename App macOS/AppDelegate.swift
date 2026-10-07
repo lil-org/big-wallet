@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        agent.applicationDidBecomeActive()
         foregroundTask?.cancel()
         foregroundTask = Task { [walletsManager] in
             await walletsManager.handleExternalWalletStoreChange()

@@ -2,19 +2,22 @@
 
 import UIKit
 
-class PasswordViewController: UIViewController {
+class PasswordViewController: UIViewController, DataStateContainer {
     
     enum Mode {
-        case create, repeatAfterCreate, enter
+        case create, repeatAfterCreate, enter, unavailable
     }
     
     var showAccountsListOnVision: (() -> Void)?
     
-    private let keychain = Keychain.shared
-    private var mode = Mode.create
+    var keychain = Keychain.shared
+    private var mode = Mode.unavailable
     private var isSaving = false
     private var authenticationTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
+    private var navigationTask: Task<Void, Never>?
+    private var shouldDiscardCreationStack = false
+    private var isVisible = false
     var passwordToRepeat: String?
     
     @IBOutlet weak var passwordTextField: UITextField! {
@@ -37,18 +40,29 @@ class PasswordViewController: UIViewController {
             return Strings.repeatPassword
         case .enter:
             return Strings.enterPassword
+        case .unavailable:
+            return Strings.failedToLoad
         }
     }
     
     isolated deinit {
         saveTask?.cancel()
         authenticationTask?.cancel()
+        navigationTask?.cancel()
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         saveTask?.cancel()
         authenticationTask?.cancel()
+        navigationTask?.cancel()
+        isVisible = false
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isVisible = false
     }
 
     override func viewDidLoad() {
@@ -56,15 +70,21 @@ class PasswordViewController: UIViewController {
         okButton.setTitle(Strings.ok, for: .normal)
         navigationItem.backButtonDisplayMode = .minimal
         
-        if passwordToRepeat != nil {
-            switchToMode(.repeatAfterCreate)
-        } else if keychain.password != nil {
-            switchToMode(.enter)
-        } else {
-            switchToMode(.create)
-        }
+        configureDataState(.failedToLoad, actionHandler: { [weak self] in
+            self?.refreshPasswordState()
+        })
+        if passwordToRepeat != nil { mode = .repeatAfterCreate }
+        refreshPasswordState()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applicationBecameActive),
+            name: UIApplication.didBecomeActiveNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(applicationBecameActive), name: .walletsChanged, object: nil
+        )
         
         if mode == .enter {
+            initialOverlayView.isHidden = false
 #if os(iOS)
             navigationController?.setNavigationBarHidden(true, animated: false)
 #endif
@@ -80,13 +100,16 @@ class PasswordViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if mode != .enter {
+        if viewDidAppear { refreshPasswordState() }
+        if mode == .create || mode == .repeatAfterCreate {
             focusOnPasswordTextField()
         }
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        isVisible = true
+        discardCreationStackWhenVisible()
         if !viewDidAppear {
             viewDidAppear = true
             if mode == .enter {
@@ -98,6 +121,71 @@ class PasswordViewController: UIViewController {
     private func switchToMode(_ mode: Mode) {
         self.mode = mode
         updateAdaptiveTitleLayout()
+    }
+
+    @discardableResult
+    private func refreshPasswordState() -> Bool {
+        guard !isSaving else { return false }
+        do {
+            switch try keychain.passwordState() {
+            case .present:
+                if mode != .enter {
+                    shouldDiscardCreationStack = mode == .create || mode == .repeatAfterCreate || shouldDiscardCreationStack
+                    clearPasswordDrafts()
+                    switchToMode(.enter)
+                    discardCreationStackWhenVisible()
+                }
+            case .missing:
+                shouldDiscardCreationStack = false
+                if mode != .create && mode != .repeatAfterCreate {
+                    clearPasswordDrafts()
+                    switchToMode(.create)
+                }
+            }
+            dataState = .hasData
+            passwordTextField.isEnabled = true
+            okButton.isEnabled = true
+            initialOverlayView.isHidden = true
+            return true
+        } catch {
+            showPasswordUnavailable()
+            return false
+        }
+    }
+
+    private func clearPasswordDrafts() {
+        passwordToRepeat = nil
+        passwordTextField.text = nil
+    }
+
+    private func discardCreationStackWhenVisible() {
+        guard isVisible, shouldDiscardCreationStack else { return }
+        navigationTask?.cancel()
+        navigationTask = Task { [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled, isVisible, mode == .enter,
+                  shouldDiscardCreationStack, let navigationController,
+                  navigationController.topViewController === self else { return }
+            shouldDiscardCreationStack = false
+            navigationController.setViewControllers([self], animated: false)
+        }
+    }
+
+    private func showPasswordUnavailable() {
+        shouldDiscardCreationStack = mode == .create || mode == .repeatAfterCreate || shouldDiscardCreationStack
+        clearPasswordDrafts()
+        switchToMode(.unavailable)
+        passwordTextField.resignFirstResponder()
+        passwordTextField.isEnabled = false
+        okButton.isEnabled = false
+        initialOverlayView.isHidden = true
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        dataState = .failedToLoad
+    }
+
+    @objc private func applicationBecameActive() {
+        guard viewIfLoaded?.window != nil, !isSaving else { return }
+        refreshPasswordState()
     }
 
     private func updateAdaptiveTitleLayout() {
@@ -115,8 +203,10 @@ class PasswordViewController: UIViewController {
             let success = await LocalAuthentication.attempt(reason: Strings.enterWallet, presentPasswordAlertFrom: { nil }, passwordReason: nil)
             guard let self, !Task.isCancelled, viewIfLoaded?.window != nil else { return }
             if success {
+                guard refreshPasswordState(), mode == .enter else { return }
                 showAccountsList()
             } else {
+                guard refreshPasswordState(), mode == .enter else { return }
                 didFailLocalAuthentication()
             }
         }
@@ -139,12 +229,16 @@ class PasswordViewController: UIViewController {
     
     private func proceedIfPossible() {
         guard !isSaving else { return }
+        let previousMode = mode
+        guard refreshPasswordState(), mode == previousMode else { return }
         switch mode {
         case .create:
             if passwordTextField.text?.isOkAsPassword == true {
                 let passwordViewController = instantiate(PasswordViewController.self, from: .main)
                 passwordViewController.passwordToRepeat = passwordTextField.text
+                passwordViewController.keychain = keychain
                 passwordViewController.showAccountsListOnVision = showAccountsListOnVision
+                passwordTextField.text = nil
                 navigationController?.pushViewController(passwordViewController, animated: true)
             } else {
                 showMessageAlert(text: Strings.typeAtLeast)
@@ -155,31 +249,50 @@ class PasswordViewController: UIViewController {
                 okButton.isEnabled = false
                 navigationController?.view.isUserInteractionEnabled = false
                 saveTask = Task { [weak self, keychain] in
-                    let saved = await keychain.save(password: password)
+                    let result: Result<Keychain.PasswordCreationResult, Error>
+                    do { result = .success(try await keychain.createPasswordIfMissing(password)) }
+                    catch { result = .failure(error) }
+                    defer {
+                        if case .success(.created) = result { WalletStoreSync.postLocalAndExternalChange() }
+                    }
                     guard let self else { return }
                     isSaving = false
                     okButton.isEnabled = true
                     navigationController?.view.isUserInteractionEnabled = true
                     guard !Task.isCancelled else { return }
-                    if saved {
+                    switch result {
+                    case .success(.created):
+                        clearPasswordDrafts()
                         showAccountsList()
-                    } else {
-                        showMessageAlert(text: Strings.somethingWentWrong)
+                    case .success(.alreadyExists):
+                        clearPasswordDrafts()
+                        shouldDiscardCreationStack = true
+                        switchToMode(.unavailable)
+                        if !refreshPasswordState() || mode != .enter { showPasswordUnavailable() }
+                    case .failure:
+                        showPasswordUnavailable()
                     }
                 }
             } else {
                 showMessageAlert(text: Strings.passwordDoesNotMatch)
             }
         case .enter:
-            if passwordTextField.text == keychain.password {
-                showAccountsList()
-            } else {
-                showMessageAlert(text: Strings.passwordDoesNotMatch)
+            do {
+                if try DeviceAuthentication.verify(password: passwordTextField.text ?? "", keychain: keychain) {
+                    showAccountsList()
+                } else {
+                    showMessageAlert(text: Strings.passwordDoesNotMatch)
+                }
+            } catch {
+                showPasswordUnavailable()
             }
+        case .unavailable:
+            break
         }
     }
     
     private func showAccountsList() {
+        clearPasswordDrafts()
 #if os(visionOS)
         showAccountsListOnVision?()
 #else

@@ -466,6 +466,38 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         XCTAssertTrue(fixture.keychain.events.isEmpty)
     }
 
+    func testExistingWalletDecryptsWithBOMPrefixedStoredPassword() async throws {
+        let fixture = try RemovalFixture()
+        let stored = Data([0xef, 0xbb, 0xbf]) + Vectors.walletCoreJSONMnemonicPassword
+        fixture.keychain.passwordData = stored
+        let manager = fixture.manager { _ in XCTFail("Export must not revoke authority") }
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+
+        let mnemonic = try await manager.exportMnemonic(wallet: wallet)
+
+        XCTAssertEqual(mnemonic, Vectors.walletCoreJSONMnemonic)
+        XCTAssertEqual(fixture.keychain.passwordData, stored)
+        XCTAssertTrue(fixture.keychain.events.isEmpty)
+    }
+
+    func testImportedWalletRoundTripsWithBOMPrefixedStoredPassword() async throws {
+        let input = WalletCrypto.hexString(data: Vectors.onePrivateKey)
+        for count in 1...2 {
+            let fixture = try RemovalFixture()
+            let stored = Data((String(repeating: "\u{feff}", count: count) + "password").utf8)
+            fixture.keychain.passwordData = stored
+            fixture.keychain.walletData = [:]
+            let manager = fixture.manager { _ in XCTFail("Import must not revoke authority") }
+
+            let wallet = try await manager.addWallet(input: input, inputPassword: nil)
+            let exported = try await manager.exportPrivateKey(wallet: wallet)
+
+            XCTAssertEqual(exported, input)
+            XCTAssertEqual(fixture.keychain.passwordData, stored)
+        }
+    }
+
     func testWalletCreationAndImportRejectChangedOrMissingPasswordBeforeCommit() async throws {
         for createWallet in [true, false] {
             for passwordData: Data? in [Data("changed password".utf8), nil] {

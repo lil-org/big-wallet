@@ -665,7 +665,7 @@ private enum WalletKeyPreparation {
     @concurrent
     static func prepareNewWallet(input: String?, inputPassword: String?, password: Data) async throws -> WalletRepository.PreparedCreation {
         try Task.checkCancellation()
-        guard let passwordString = String(data: password, encoding: .utf8) else { throw WalletsManager.Error.keychainAccessFailure }
+        let passwordString = String(decoding: password, as: UTF8.self)
         let wallet: WalletContainer
         if let input {
             let trimmed = input.singleSpaced

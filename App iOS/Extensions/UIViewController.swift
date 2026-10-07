@@ -228,6 +228,19 @@ fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
 }
 
 extension UIViewController {
+    func dismissAfterCurrentTransition(animated: Bool, completion: @escaping @MainActor @Sendable () -> Void = {}) {
+        if isBeingPresented, let transition = transitionCoordinator,
+           transition.animate(alongsideTransition: nil, completion: { _ in
+               self.dismissAfterCurrentTransition(animated: animated, completion: completion)
+           }) { return }
+        if isBeingDismissed, let transition = transitionCoordinator,
+           transition.animate(alongsideTransition: nil, completion: { _ in completion() }) { return }
+        guard presentingViewController != nil else {
+            completion()
+            return
+        }
+        dismiss(animated: animated, completion: completion)
+    }
     
     var inNavigationController: UINavigationController {
         let navigationController = UINavigationController()

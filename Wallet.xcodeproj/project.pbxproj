@@ -7,6 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */; };
+		DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */; };
+		B88AC23A97E5D2325D6A47E9 /* PasswordStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */; };
+		5437CD9FC0D7C097A8830E54 /* PasswordStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */; };
+		876E9FF013C22F4A21A5E26D /* NativeSecretAlertPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC2E171219948EE197A1FE1E /* NativeSecretAlertPresentationTests.swift */; };
+		30C1FE53E2DDBDE640E59529 /* SecretAlertPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00763481BF42CDF20948490A /* SecretAlertPresentationTests.swift */; };
+		6B819B9E76242B268EEB3AE1 /* SecretAlertPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00763481BF42CDF20948490A /* SecretAlertPresentationTests.swift */; };
+		3F8D2802A7D082B74C8463DB /* SecretHandlingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6400C7E35F7F1D6AC49150C /* SecretHandlingTests.swift */; };
+		D036C5CB6B19DF985F136E67 /* SecretHandlingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6400C7E35F7F1D6AC49150C /* SecretHandlingTests.swift */; };
+		96D4C08725EDE51487E3D8CD /* SecretHandlingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6400C7E35F7F1D6AC49150C /* SecretHandlingTests.swift */; };
+		3D21F2836F718C4D85704B47 /* SecretAlertPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9E566B616955D17AB2413AD /* SecretAlertPresentation.swift */; };
+		5E8078B98E67D28C7DB4366B /* SecretAlertPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9E566B616955D17AB2413AD /* SecretAlertPresentation.swift */; };
+		007F1C5985FEBF705F776AD8 /* SecretPresentationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */; };
+		40343842C622D71519A25A55 /* SecretPresentationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */; };
+		3E928EDD41EF798B09ECFB79 /* SecretPresentationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */; };
+		65FE125EDB868C412908EB5C /* SecretPresentationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */; };
+		092600FCE385DB215EF29231 /* SecretClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */; };
+		B02AE20901AF708B51837229 /* SecretClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */; };
+		E311C12DD6B8BF2730B708C2 /* SecretClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */; };
+		08D4E4254082334408EC786C /* SecretClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */; };
 		C0DE00900000000000000011 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
 		C0DE0B100000000000000011 /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
 		C0DE00900000000000000012 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
@@ -980,6 +1000,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCancellationTests.swift; sourceTree = "<group>"; };
+		89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordStorageTests.swift; sourceTree = "<group>"; };
+		FC2E171219948EE197A1FE1E /* NativeSecretAlertPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSecretAlertPresentationTests.swift; sourceTree = "<group>"; };
+		00763481BF42CDF20948490A /* SecretAlertPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretAlertPresentationTests.swift; sourceTree = "<group>"; };
+		E6400C7E35F7F1D6AC49150C /* SecretHandlingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretHandlingTests.swift; sourceTree = "<group>"; };
+		C9E566B616955D17AB2413AD /* SecretAlertPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretAlertPresentation.swift; sourceTree = "<group>"; };
+		F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretPresentationSession.swift; sourceTree = "<group>"; };
+		F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretClipboard.swift; sourceTree = "<group>"; };
 		C0DE00900000000000000001 /* ApprovalResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolution.swift; sourceTree = "<group>"; };
 		C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseDeliveryPoller.swift; sourceTree = "<group>"; };
 		C0DE00900000000000000002 /* ApprovalResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalResolutionTests.swift; sourceTree = "<group>"; };
@@ -1304,6 +1332,11 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */,
+				89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */,
+				FC2E171219948EE197A1FE1E /* NativeSecretAlertPresentationTests.swift */,
+				00763481BF42CDF20948490A /* SecretAlertPresentationTests.swift */,
+				E6400C7E35F7F1D6AC49150C /* SecretHandlingTests.swift */,
 				B10BC9FBB397CFE426CC719F /* WireProtocolTests.swift */,
 				C0DE00500000000000000002 /* NativeApprovalResponseTests.swift */,
 				D0A300012FD1000000000001 /* SafariApprovalVaultTests.swift */,
@@ -1605,6 +1638,7 @@
 		2C96D394276237F600687301 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				C9E566B616955D17AB2413AD /* SecretAlertPresentation.swift */,
 				2C96D3A72763D13400687301 /* DataStateView.swift */,
 				2CE059362763D60A0042D844 /* KeyboardObserver.swift */,
 				2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */,
@@ -1769,6 +1803,8 @@
 		2CF255A4275A483600AE54B9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */,
+				F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */,
 				D0A100012FD1000000000001 /* WalletAccess.swift */,
 				2FA300000000000000000001 /* AlchemyJWTProvider.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
@@ -3051,6 +3087,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5E8078B98E67D28C7DB4366B /* SecretAlertPresentation.swift in Sources */,
+				65FE125EDB868C412908EB5C /* SecretPresentationSession.swift in Sources */,
+				08D4E4254082334408EC786C /* SecretClipboard.swift in Sources */,
 				5215FF67CA0E8CA32268D4E0 /* WireProtocol.generated.swift in Sources */,
 				D0A201012FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101022FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3159,6 +3198,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E928EDD41EF798B09ECFB79 /* SecretPresentationSession.swift in Sources */,
+				E311C12DD6B8BF2730B708C2 /* SecretClipboard.swift in Sources */,
 				FC8A8A89536DE09243F38F9E /* WireProtocol.generated.swift in Sources */,
 				C0DE00500000000000000011 /* NativeAgentRuntime.swift in Sources */,
 				D0A101032FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3285,6 +3326,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3D21F2836F718C4D85704B47 /* SecretAlertPresentation.swift in Sources */,
+				007F1C5985FEBF705F776AD8 /* SecretPresentationSession.swift in Sources */,
+				092600FCE385DB215EF29231 /* SecretClipboard.swift in Sources */,
 				CC016593D3B281F8CFAA8C3E /* WireProtocol.generated.swift in Sources */,
 				D0A201022FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101042FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3485,6 +3529,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */,
+				30C1FE53E2DDBDE640E59529 /* SecretAlertPresentationTests.swift in Sources */,
+				3F8D2802A7D082B74C8463DB /* SecretHandlingTests.swift in Sources */,
 				4C2F013FEDB06A8169F69B5C /* WireProtocolTests.swift in Sources */,
 				D0A301012FD1000000000001 /* SafariApprovalVaultTests.swift in Sources */,
 				BF5C00112FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
@@ -3528,6 +3575,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				40343842C622D71519A25A55 /* SecretPresentationSession.swift in Sources */,
+				B02AE20901AF708B51837229 /* SecretClipboard.swift in Sources */,
 				751F21D762F3E444CE09A22D /* WireProtocol.generated.swift in Sources */,
 				D0A101062FD1000000000001 /* WalletAccess.swift in Sources */,
 				FA86DF9CB5F9EB40DF73ED7C /* AppDelegate.swift in Sources */,
@@ -3742,6 +3791,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */,
+				B88AC23A97E5D2325D6A47E9 /* PasswordStorageTests.swift in Sources */,
+				876E9FF013C22F4A21A5E26D /* NativeSecretAlertPresentationTests.swift in Sources */,
+				D036C5CB6B19DF985F136E67 /* SecretHandlingTests.swift in Sources */,
 				3A2EDE14A0F3D547B03063A3 /* WireProtocolTests.swift in Sources */,
 				C0DE00500000000000000013 /* NativeApprovalResponseTests.swift in Sources */,
 				BF5C00122FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,
@@ -3786,6 +3839,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5437CD9FC0D7C097A8830E54 /* PasswordStorageTests.swift in Sources */,
+				6B819B9E76242B268EEB3AE1 /* SecretAlertPresentationTests.swift in Sources */,
+				96D4C08725EDE51487E3D8CD /* SecretHandlingTests.swift in Sources */,
 				3D9C6245FF110F3BCEDEF760 /* WireProtocolTests.swift in Sources */,
 				D0A301022FD1000000000001 /* SafariApprovalVaultTests.swift in Sources */,
 				BF5C00132FB5000000000000 /* PopupRequestSessionsTests.swift in Sources */,

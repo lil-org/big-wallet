@@ -68,6 +68,91 @@ final class NativeAccountSelectionSession {
     }
 }
 
+@MainActor
+final class NativeSecretAlertPresentation: NSObject {
+    let token: SecretPresentationSession.Token
+    let alert = Alert()
+    let secretField = NSTextField(wrappingLabelWithString: "")
+
+    private let session: SecretPresentationSession
+    private let canCopy: () -> Bool
+    private let copy: (String) -> Void
+    private let didEnd: () -> Void
+    private var hasEnded = false
+
+    static func acceptsKeyWindow(
+        _ keyWindow: NSWindow?,
+        owner: NSWindow,
+        presentation: NativeSecretAlertPresentation?
+    ) -> Bool {
+        guard let keyWindow, keyWindow.isKeyWindow else { return false }
+        return keyWindow === owner || keyWindow === presentation?.alert.window
+    }
+
+    init(
+        session: SecretPresentationSession,
+        token: SecretPresentationSession.Token,
+        title: String,
+        canCopy: @escaping () -> Bool,
+        copy: @escaping (String) -> Void = { SecretClipboard.shared.copy($0) },
+        didEnd: @escaping () -> Void = {}
+    ) {
+        self.session = session
+        self.token = token
+        self.canCopy = canCopy
+        self.copy = copy
+        self.didEnd = didEnd
+        super.init()
+        alert.messageText = title
+        alert.alertStyle = .informational
+        secretField.isSelectable = false
+        secretField.isEditable = false
+        secretField.preferredMaxLayoutWidth = 320
+        alert.accessoryView = secretField
+        alert.addButton(withTitle: Strings.ok)
+        let copyButton = alert.addButton(withTitle: Strings.copy)
+        copyButton.target = self
+        copyButton.action = #selector(copyButtonClicked)
+    }
+
+    func present(for window: NSWindow) {
+        guard !hasEnded, let secret = session.value(for: token), canCopy() else {
+            dismiss()
+            return
+        }
+        secretField.stringValue = secret
+        secretField.frame = NSRect(x: 0, y: 0, width: 320, height: secretField.fittingSize.height)
+        alert.beginSheetModal(for: window) { [weak self] response in
+            self?.finish(response)
+        }
+    }
+
+    @objc private func copyButtonClicked() {
+        finish(.alertSecondButtonReturn)
+    }
+
+    func finish(_ response: NSApplication.ModalResponse) {
+        guard !hasEnded else { return }
+        let secret = response == .alertSecondButtonReturn && canCopy()
+            ? session.value(for: token) : nil
+        dismiss()
+        if let secret { copy(secret) }
+    }
+
+    func dismiss() {
+        guard !hasEnded else { return }
+        hasEnded = true
+        secretField.stringValue = ""
+        alert.informativeText = ""
+        if session.isCurrent(token) { session.invalidate() }
+        if let window = alert.window.sheetParent {
+            window.endSheet(alert.window, returnCode: .abort)
+        }
+        alert.window.orderOut(nil)
+        didEnd()
+    }
+}
+
 class AccountsListViewController: NSViewController {
 
     enum HeaderMode: Equatable {
@@ -86,6 +171,11 @@ class AccountsListViewController: NSViewController {
     private var menuTask: Task<Void, Never>?
     private var safariPreferencesTask: Task<Void, Never>?
     private var walletMutationTasks = [UUID: Task<Void, Never>]()
+    private let secretSession = SecretPresentationSession()
+    private var secretToken: SecretPresentationSession.Token?
+    private var secretAuthenticationToken: SecretPresentationSession.Token?
+    private weak var secretOwnerWindow: NSWindow?
+    private var secretPresentation: NativeSecretAlertPresentation?
     private var isClosed = false
     private var reviewLifetime: NativeApprovalReviewLifetime?
     private var isOpeningWalletManagement = false
@@ -188,6 +278,8 @@ class AccountsListViewController: NSViewController {
     }
     
     isolated deinit {
+        secretSession.invalidate()
+        secretPresentation?.dismiss()
         keyExportTask?.cancel()
         safariPreferencesTask?.cancel()
         walletMutationTasks.values.forEach { $0.cancel() }
@@ -216,6 +308,14 @@ class AccountsListViewController: NSViewController {
         updateCellModels()
         tableView.reloadData()
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        for name in [NSApplication.willResignActiveNotification, NSApplication.willHideNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(secretApplicationWillDeactivate), name: name, object: nil)
+        }
+        for name in [NSWindow.willCloseNotification, NSWindow.willMiniaturizeNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(secretWindowWillDisappear), name: name, object: nil)
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(secretWindowDidResignKey), name: NSWindow.didResignKeyNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(secretWindowDidBecomeKey), name: NSWindow.didBecomeKeyNotification, object: nil)
         
         if let preselectedAccount = accountSelection?.selectedAccounts.first {
             scrollTo(specificWalletAccount: preselectedAccount)
@@ -229,6 +329,85 @@ class AccountsListViewController: NSViewController {
         blinkNewWalletCellIfNeeded()
         view.window?.delegate = self
         
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        if secretAuthenticationToken == nil { invalidateSecretPresentation() }
+    }
+
+    private var secretOwnerIsActive: Bool {
+        guard acceptsManagementActions, NSApp.isActive,
+              let window = secretOwnerWindow,
+              window.isVisible, !window.isMiniaturized,
+              window.contentViewController === self,
+              viewIfLoaded?.window === window else { return false }
+        return NativeSecretAlertPresentation.acceptsKeyWindow(
+            NSApp.keyWindow,
+            owner: window,
+            presentation: secretPresentation
+        )
+    }
+
+    private func beginSecretPresentation() -> SecretPresentationSession.Token? {
+        invalidateSecretPresentation()
+        secretOwnerWindow = viewIfLoaded?.window
+        guard secretOwnerIsActive else {
+            secretOwnerWindow = nil
+            return nil
+        }
+        let token = secretSession.begin()
+        secretToken = token
+        return token
+    }
+
+    private func canPresentSecret(for token: SecretPresentationSession.Token) -> Bool {
+        secretToken == token && secretSession.isCurrent(token) && secretOwnerIsActive
+    }
+
+    private func invalidateSecretPresentation() {
+        secretSession.invalidate()
+        secretToken = nil
+        if secretAuthenticationToken != nil {
+            authenticationTask?.cancel()
+            authenticationTask = nil
+        }
+        secretAuthenticationToken = nil
+        keyExportTask?.cancel()
+        keyExportTask = nil
+        let presentation = secretPresentation
+        secretPresentation = nil
+        secretOwnerWindow = nil
+        presentation?.dismiss()
+    }
+
+    @objc private func secretApplicationWillDeactivate() {
+        guard secretAuthenticationToken == nil else { return }
+        invalidateSecretPresentation()
+    }
+
+    @objc private func secretWindowWillDisappear(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === secretOwnerWindow || window === secretPresentation?.alert.window else { return }
+        invalidateSecretPresentation()
+    }
+
+    @objc private func secretWindowDidResignKey(_ notification: Notification) {
+        guard secretAuthenticationToken == nil, let token = secretToken,
+              let window = notification.object as? NSWindow,
+              window === secretOwnerWindow || window === secretPresentation?.alert.window else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, secretToken == token, !secretOwnerIsActive else { return }
+            invalidateSecretPresentation()
+        }
+    }
+
+    @objc private func secretWindowDidBecomeKey(_ notification: Notification) {
+        guard secretAuthenticationToken == nil, secretToken != nil,
+              let window = notification.object as? NSWindow,
+              window !== secretOwnerWindow, window !== secretPresentation?.alert.window else { return }
+        invalidateSecretPresentation()
     }
     
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
@@ -456,25 +635,27 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func startWalletMutation(showsFailure: Bool = true, _ operation: @escaping @MainActor () async throws -> WalletSnapshot?) {
+    private func startWalletMutation(
+        showsFailure: Bool = true,
+        revealToken: SecretPresentationSession.Token? = nil,
+        _ operation: @escaping @MainActor () async throws -> WalletSnapshot?
+    ) {
         let id = UUID()
-        walletMutationTasks[id] = Task { [weak self, walletsManager] in
+        walletMutationTasks[id] = Task { [weak self] in
             defer { self?.walletMutationTasks.removeValue(forKey: id) }
             do {
                 let created = try await operation()
-                let secret: String?
-                if let created {
-                    secret = try? await walletsManager.exportMnemonic(wallet: created)
-                } else {
-                    secret = nil
-                }
                 guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                 if let created {
                     newWalletId = created.id
                     blinkNewWalletCellIfNeeded()
-                    if let secret { presentSecret(secret, showingMnemonic: true) }
+                    guard let revealToken, canPresentSecret(for: revealToken) else { return }
+                    showKey(wallet: created, specificAccount: nil, token: revealToken)
                 }
             } catch {
+                if let revealToken, self?.secretToken == revealToken {
+                    self?.invalidateSecretPresentation()
+                }
                 guard let self, !Task.isCancelled, acceptsManagementActions, showsFailure else { return }
                 presentMessageAlert(Strings.somethingWentWrong, style: .informational)
             }
@@ -482,8 +663,8 @@ class AccountsListViewController: NSViewController {
     }
 
     private func createNewAccountAndShowSecretWords() {
-        guard acceptsManagementActions else { return }
-        startWalletMutation(showsFailure: false) { [walletsManager] in
+        guard acceptsManagementActions, let token = beginSecretPresentation() else { return }
+        startWalletMutation(showsFailure: false, revealToken: token) { [walletsManager] in
             try await walletsManager.createWallet()
         }
     }
@@ -772,26 +953,34 @@ class AccountsListViewController: NSViewController {
             guard let self,
                   acceptsManagementActions else { return }
             if response == .alertFirstButtonReturn {
+                guard let token = beginSecretPresentation() else { return }
                 let reason: AuthenticationReason = showingMnemonic
                     ? .showSecretWords
                     : .showPrivateKey
                 let presentation = Agent.WeakViewControllerReference(self)
                 authenticationTask?.cancel()
+                secretAuthenticationToken = token
                 authenticationTask = Task { [weak self, agent] in
                     let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: reason)
-                    guard let self, allowed, !Task.isCancelled, acceptsManagementActions else { return }
-                    Window.activateWindow(view.window)
+                    guard let self, secretToken == token else { return }
+                    secretAuthenticationToken = nil
+                    authenticationTask = nil
+                    guard allowed, !Task.isCancelled, canPresentSecret(for: token) else {
+                        invalidateSecretPresentation()
+                        return
+                    }
                     showKey(
                         wallet: wallet,
-                        specificAccount: specificAccount
+                        specificAccount: specificAccount,
+                        token: token
                     )
                 }
             }
         }
     }
     
-    private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?) {
-        guard acceptsManagementActions,
+    private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?, token: SecretPresentationSession.Token) {
+        guard canPresentSecret(for: token),
               let wallet = walletsManager.currentWallet(id: wallet.id) else { return }
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         keyExportTask?.cancel()
@@ -804,27 +993,30 @@ class AccountsListViewController: NSViewController {
                     secret = try await walletsManager.exportPrivateKey(wallet: wallet, account: specificAccount)
                 }
             } catch {
+                if self?.secretToken == token { self?.invalidateSecretPresentation() }
                 return
             }
-            guard let self, !Task.isCancelled, acceptsManagementActions else { return }
-            presentSecret(secret, showingMnemonic: showingMnemonic)
+            guard let self, !Task.isCancelled, canPresentSecret(for: token) else { return }
+            keyExportTask = nil
+            presentSecret(secret, showingMnemonic: showingMnemonic, token: token)
         }
     }
 
-    private func presentSecret(_ secret: String, showingMnemonic: Bool) {
-        let alert = Alert()
-        alert.messageText = showingMnemonic ? Strings.secretWords : Strings.privateKey
-        alert.informativeText = secret
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: Strings.ok)
-        alert.addButton(withTitle: Strings.copy)
-        presentAlert(alert) { [weak self] response in
-            guard let self,
-                  acceptsManagementActions else { return }
-            if response != .alertFirstButtonReturn {
-                NSPasteboard.general.clearAndSetString(secret)
+    private func presentSecret(_ secret: String, showingMnemonic: Bool, token: SecretPresentationSession.Token) {
+        guard canPresentSecret(for: token), let window = secretOwnerWindow,
+              secretSession.store(secret, for: token) else { return }
+        let presentation = NativeSecretAlertPresentation(
+            session: secretSession,
+            token: token,
+            title: showingMnemonic ? Strings.secretWords : Strings.privateKey,
+            canCopy: { [weak self] in self?.canPresentSecret(for: token) == true },
+            didEnd: { [weak self] in
+                guard let self, secretToken == token else { return }
+                invalidateSecretPresentation()
             }
-        }
+        )
+        secretPresentation = presentation
+        presentation.present(for: window)
     }
     
     private func updateCellModels() {
@@ -1198,8 +1390,7 @@ extension AccountsListViewController: NSTableViewDataSource {
 extension AccountsListViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        keyExportTask?.cancel()
-        keyExportTask = nil
+        invalidateSecretPresentation()
         safariPreferencesTask?.cancel()
         safariPreferencesTask = nil
         walletMutationTasks.values.forEach { $0.cancel() }

@@ -222,6 +222,7 @@ class Agent: NSObject {
     }
 
     static let shared = Agent()
+    var keychain = Keychain.shared
     private var didStart = false
     private var isReady = false
     private var didEnterPasswordOnStart = false
@@ -232,6 +233,8 @@ class Agent: NSObject {
     private var welcomeWindowController: NSWindowController?
     private var welcomeWindowCloseObserver: NativeApprovalWindowCloseObserver?
     private var walletWindowController: NSWindowController?
+    private var passwordUnavailableWindowController: NSWindowController?
+    private var isPresentingCredentialWindow = false
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
     private var dockOnboardingHandoff = DockOnboardingHandoff()
     private var nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner?
@@ -246,10 +249,6 @@ class Agent: NSObject {
         super.init()
     }
     
-    private var hasPassword: Bool {
-        Keychain.shared.password != nil
-    }
-
     func start(
         openOnLaunch: Bool,
         runtimeIdentity: AmbientRuntimeIdentity? = nil
@@ -344,16 +343,20 @@ class Agent: NSObject {
     private func resumePendingWork() {
         guard isReady else { return }
         startPendingApprovals()
-
-        guard hasPassword else {
-            guard pendingWalletOpenIntent.isPending ||
-                    approvalInbox.hasAwaitingAuthentication else { return }
+        guard pendingWalletOpenIntent.isPending || approvalInbox.hasAwaitingAuthentication,
+              let passwordState = passwordStateForPendingWork() else { return }
+        guard passwordState == .present else {
             if CurrentApp.canCreatePassword {
                 showWelcomeIfNeeded()
             } else {
                 requestDockOnboarding()
             }
             return
+        }
+
+        if welcomeWindowController != nil {
+            didEnterPasswordOnStart = false
+            clearWelcomeWindowOwnership()
         }
 
         if didEnterPasswordOnStart {
@@ -373,12 +376,16 @@ class Agent: NSObject {
         startupAuthentication = Task { [weak self] in
             guard let self else { return }
             let success = await askAuthentication(for: .startup, reason: .start)
+            guard !Task.isCancelled else { return }
             isAuthenticatingOnStart = false
             startupAuthenticationPresentation.value = nil
-            guard !Task.isCancelled else { return }
             guard success else {
-                pendingWalletOpenIntent.cancel()
-                cancelPendingApprovals()
+                cancelCredentialPresentation()
+                return
+            }
+            guard let passwordState = passwordStateForPendingWork() else { return }
+            guard passwordState == .present else {
+                resumePendingWork()
                 return
             }
             didEnterPasswordOnStart = true
@@ -409,7 +416,19 @@ class Agent: NSObject {
             guard !Task.isCancelled, reviewLifetime?.isActive != false else { return false }
             let response = AuthenticationResponse()
             return await response.wait { response in
-                let window = originalWindow.value ?? Window.showNew(closeOthers: onStart).window
+                let wasPresenting = isPresentingCredentialWindow
+                if onStart {
+                    isPresentingCredentialWindow = true
+                    dismissPasswordUnavailableWindow()
+                }
+                defer { isPresentingCredentialWindow = wasPresenting }
+                let existingWindow = originalWindow.value
+                let window = existingWindow ?? Window.showNew(closeOthers: onStart).window
+                guard !Task.isCancelled, reviewLifetime?.isActive != false else {
+                    if existingWindow == nil { window?.close() }
+                    response.resolve(false)
+                    return
+                }
                 let presentation = WeakViewControllerReference()
                 let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason, reviewLifetime: reviewLifetime) { [weak window] success in
                     guard reviewLifetime?.isActive != false,
@@ -424,6 +443,7 @@ class Agent: NSObject {
                     }
                     response.resolve(success)
                 }
+                passwordViewController.keychain = keychain
                 passwordViewController.retainedReturnController = returningController?.value
                 presentation.value = passwordViewController
                 window?.contentViewController = passwordViewController
@@ -431,14 +451,20 @@ class Agent: NSObject {
             }
         }
 
-        guard DeviceAuthentication.canUseBiometrics else { return await showPasswordScreen() }
-        let outcome = await DeviceAuthentication.attemptBiometrics(reason: reason.title)
+        guard let outcome = await attemptDeviceAuthentication(reason: reason.title) else {
+            return await showPasswordScreen()
+        }
         guard !Task.isCancelled, reviewLifetime?.isActive != false else { return false }
         switch Self.localAuthenticationResolution(success: outcome == .succeeded, onStart: onStart) {
         case .authenticated: return true
         case .showPassword: return await showPasswordScreen()
         case .failed: return false
         }
+    }
+
+    func attemptDeviceAuthentication(reason: String) async -> DeviceAuthentication.Outcome? {
+        guard DeviceAuthentication.canUseBiometrics else { return nil }
+        return await DeviceAuthentication.attemptBiometrics(reason: reason)
     }
 
     @MainActor
@@ -492,7 +518,8 @@ class Agent: NSObject {
     private func handleReceiptOwnedApproval(_ key: ApprovalRouteKey) {
         guard let coordinator = approvalInbox.coordinator(for: key),
               coordinator.isAwaitingAuthentication else { return }
-        guard hasPassword else {
+        guard let passwordState = passwordStateForPendingWork() else { return }
+        guard passwordState == .present else {
             switch Self.missingPasswordApprovalAction(
                 canCreatePassword: CurrentApp.canCreatePassword
             ) {
@@ -524,8 +551,66 @@ class Agent: NSObject {
     }
 
     func applicationDidBecomeActive() {
-        guard approvalInbox.hasAwaitingAuthentication else { return }
+        guard pendingWalletOpenIntent.isPending || approvalInbox.hasAwaitingAuthentication else { return }
         resumePendingWork()
+    }
+
+    private func passwordStateForPendingWork() -> Keychain.PasswordState? {
+        do {
+            let state = try keychain.passwordState()
+            dismissPasswordUnavailableWindow()
+            return state
+        } catch {
+            showPasswordUnavailableWindow()
+            return nil
+        }
+    }
+
+    private func showPasswordUnavailableWindow() {
+        guard !isPresentingCredentialWindow else { return }
+        if let controller = passwordUnavailableWindowController,
+           let window = controller.window, Window.isVisibleContentWindow(window) {
+            return
+        }
+        isPresentingCredentialWindow = true
+        defer { isPresentingCredentialWindow = false }
+        let controller = Window.showNew(closeOthers: false)
+        passwordUnavailableWindowController = controller
+        controller.contentViewController = WaitingViewController.with(
+            reason: Strings.failedToLoad,
+            isWorking: false,
+            retryAction: { [weak self] in self?.resumePendingWork() }
+        ) { [weak self, weak controller] in
+            guard let self, let controller,
+                  passwordUnavailableWindowController === controller else { return }
+            passwordUnavailableWindowController = nil
+            cancelCredentialPresentation()
+        }
+    }
+
+    private func cancelCredentialPresentation() {
+        let setupWindow = welcomeWindowController
+        let authenticationPresentation = startupAuthenticationPresentation.value
+        let authenticationWindow = authenticationPresentation?.viewIfLoaded?.window
+        pendingWalletOpenIntent.cancel()
+        clearWelcomeWindowOwnership()
+        startupAuthentication?.cancel()
+        startupAuthentication = nil
+        isAuthenticatingOnStart = false
+        startupAuthenticationPresentation.value = nil
+        cancelPendingApprovals()
+        dismissPasswordUnavailableWindow()
+        setupWindow?.close()
+        if authenticationWindow?.contentViewController === authenticationPresentation {
+            authenticationWindow?.close()
+        }
+    }
+
+    private func dismissPasswordUnavailableWindow() {
+        guard let controller = passwordUnavailableWindowController else { return }
+        passwordUnavailableWindowController = nil
+        controller.window?.delegate = nil
+        controller.close()
     }
 
     private func requestDockOnboarding() {
@@ -539,6 +624,7 @@ class Agent: NSObject {
     }
 
     private func showWelcomeIfNeeded() {
+        guard !isPresentingCredentialWindow else { return }
         if let windowController = welcomeWindowController,
            let window = windowController.window,
            Window.isVisibleContentWindow(window) {
@@ -546,29 +632,40 @@ class Agent: NSObject {
             Window.activateWindow(window)
             return
         }
+        isPresentingCredentialWindow = true
+        defer { isPresentingCredentialWindow = false }
         clearWelcomeWindowOwnership()
         let windowController = Window.showNew(closeOthers: true)
         welcomeWindowController = windowController
-        let closeObserver = NativeApprovalWindowCloseObserver {
+        let cancelOnboarding: () -> Void = {
             [weak self, weak windowController] in
-            self?.clearWelcomeWindowOwnership(matching: windowController)
+            self?.cancelWelcomeWindow(matching: windowController)
         }
+        let closeObserver = NativeApprovalWindowCloseObserver(onClose: cancelOnboarding)
         welcomeWindowCloseObserver = closeObserver
         if let window = windowController.window {
             closeObserver.observe(window)
         }
-        let welcomeViewController = WelcomeViewController.new {
-            [weak self] createdPassword in
-            guard let self else { return }
+        let welcomeViewController = WelcomeViewController.new(onboardingCancelled: cancelOnboarding) {
+            [weak self, weak windowController] createdPassword in
+            guard let self, let windowController,
+                  self.welcomeWindowController === windowController else { return }
+            self.clearWelcomeWindowOwnership(matching: windowController)
             if createdPassword {
                 self.didEnterPasswordOnStart = true
             } else {
-                guard self.hasPassword else { return }
                 self.didEnterPasswordOnStart = false
             }
             self.resumePendingWork()
         }
+        welcomeViewController.keychain = keychain
         windowController.contentViewController = welcomeViewController
+    }
+
+    private func cancelWelcomeWindow(matching windowController: NSWindowController?) {
+        guard let windowController, welcomeWindowController === windowController else { return }
+        clearWelcomeWindowOwnership(matching: windowController)
+        cancelCredentialPresentation()
     }
 
     private func clearWelcomeWindowOwnership(
@@ -664,8 +761,7 @@ class Agent: NSObject {
     }
 
     @objc private func walletsChanged() {
-        guard hasPassword,
-              approvalInbox.hasAwaitingAuthentication ||
+        guard approvalInbox.hasAwaitingAuthentication ||
                 pendingWalletOpenIntent.isPending else { return }
         resumePendingWork()
     }

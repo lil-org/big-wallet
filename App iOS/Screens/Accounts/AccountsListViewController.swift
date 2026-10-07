@@ -30,6 +30,19 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var authenticationTask: Task<Void, Never>?
     private var keyExportTask: Task<Void, Never>?
     private var walletMutationTask: Task<Void, Never>?
+    private var isVisibleForSecretPresentation = false
+    private weak var secretScene: UIWindowScene?
+    private(set) lazy var secretPresentation = SecretAlertPresentation(isActive: { [weak self] in
+        self?.canPresentSecret == true
+    })
+
+    var canPresentSecret: Bool {
+        guard isVisibleForSecretPresentation, let window = viewIfLoaded?.window,
+              window.windowScene?.activationState == .foregroundActive,
+              secretScene == nil || window.windowScene === secretScene else { return false }
+        return !isBeingDismissed && !isMovingFromParent &&
+            navigationController?.isBeingDismissed != true
+    }
     
     private var wallets: [WalletSnapshot] {
         return walletsManager.wallets
@@ -53,6 +66,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         loadTask?.cancel()
         authenticationTask?.cancel()
         walletMutationTask?.cancel()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        isVisibleForSecretPresentation = false
+        invalidateSecretPresentation()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -95,6 +115,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateCellModels()
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(secretSceneDeactivated(_:)), name: UIScene.willDeactivateNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(secretSceneExited(_:)), name: UIScene.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(secretSceneExited(_:)), name: UIScene.didDisconnectNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(secretProtectedDataUnavailable), name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
     }
 
     override func viewDidLayoutSubviews() {
@@ -110,6 +134,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             guard !Task.isCancelled else { return }
             self?.navigationController?.navigationBar.sizeToFit()
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        isVisibleForSecretPresentation = true
     }
     
     private func walletForIndexPath(_ indexPath: IndexPath) -> WalletSnapshot {
@@ -245,13 +274,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func createNewWalletAndShowSecretWords() {
-        performWalletMutation { [walletsManager] in
+        guard let token = beginSecretPresentation() else { return }
+        performWalletMutation(revealToken: token) { [walletsManager] in
             try await walletsManager.createWallet()
         }
     }
     
 
     private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?) {
+        guard let token = beginSecretPresentation() else { return }
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         keyExportTask?.cancel()
         keyExportTask = Task { [weak self, walletsManager] in
@@ -263,22 +294,47 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                     secret = try await walletsManager.exportPrivateKey(wallet: wallet, account: specificAccount)
                 }
             } catch {
+                self?.secretPresentation.finish(token, copying: false)
                 return
             }
-            guard let self, !Task.isCancelled, viewIfLoaded?.window != nil else { return }
-            presentSecret(secret, showingMnemonic: showingMnemonic)
+            guard let self, !Task.isCancelled, secretPresentation.accepts(token) else { return }
+            presentSecret(secret, showingMnemonic: showingMnemonic, token: token)
         }
     }
 
-    private func presentSecret(_ secret: String, showingMnemonic: Bool) {
-        let alert = UIAlertController(title: showingMnemonic ? Strings.secretWords : Strings.privateKey, message: secret, preferredStyle: .alert)
-        let okAction = UIAlertAction(title: Strings.ok, style: .default)
-        let cancelAction = UIAlertAction(title: Strings.copy, style: .default) { _ in
-            UIPasteboard.general.string = secret
-        }
-        alert.addAction(cancelAction)
-        alert.addAction(okAction)
-        present(alert, animated: true)
+    private func presentSecret(_ secret: String, showingMnemonic: Bool, token: SecretAlertPresentation.Token) {
+        secretPresentation.show(secret, title: showingMnemonic ? Strings.secretWords : Strings.privateKey, token: token, from: self)
+    }
+
+    func beginSecretPresentation() -> SecretAlertPresentation.Token? {
+        keyExportTask?.cancel()
+        keyExportTask = nil
+        secretScene = viewIfLoaded?.window?.windowScene
+        return secretPresentation.begin()
+    }
+
+    private func invalidateSecretPresentation() {
+        secretPresentation.invalidate()
+        keyExportTask?.cancel()
+        keyExportTask = nil
+    }
+
+    @objc private func secretSceneDeactivated(_ notification: Notification) {
+        guard let scene = notification.object as? UIWindowScene,
+              scene === secretScene || scene === viewIfLoaded?.window?.windowScene else { return }
+        invalidateSecretPresentation()
+    }
+
+    @objc private func secretSceneExited(_ notification: Notification) {
+        guard let scene = notification.object as? UIWindowScene,
+              scene === secretScene || scene === viewIfLoaded?.window?.windowScene else { return }
+        invalidateSecretPresentation()
+        authenticationTask?.cancel()
+    }
+
+    @objc private func secretProtectedDataUnavailable() {
+        invalidateSecretPresentation()
+        authenticationTask?.cancel()
     }
     
     private func importExistingWallet() {
@@ -448,29 +504,42 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
 
-    private func performWalletMutation(_ operation: @escaping @MainActor () async throws -> WalletSnapshot?) {
+    private func performWalletMutation(
+        revealToken: SecretAlertPresentation.Token? = nil,
+        _ operation: @escaping @MainActor () async throws -> WalletSnapshot?
+    ) {
         guard view.isUserInteractionEnabled else { return }
         setWalletMutationActive(true)
-        walletMutationTask = Task { [weak self, walletsManager] in
+        walletMutationTask = Task { [weak self] in
             do {
                 let created = try await operation()
-                let secret: String?
-                if let created {
-                    secret = try? await walletsManager.exportMnemonic(wallet: created)
-                } else {
-                    secret = nil
-                }
                 guard let self else { return }
                 setWalletMutationActive(false)
                 guard !Task.isCancelled else { return }
                 reloadData()
-                if let secret { presentSecret(secret, showingMnemonic: true) }
+                if let created, let revealToken, secretPresentation.accepts(revealToken) {
+                    exportCreatedWalletSecret(created, token: revealToken)
+                }
             } catch {
                 guard let self else { return }
                 setWalletMutationActive(false)
+                if let revealToken { secretPresentation.finish(revealToken, copying: false) }
                 guard !Task.isCancelled else { return }
                 showMessageAlert(text: Strings.somethingWentWrong)
             }
+        }
+    }
+
+    private func exportCreatedWalletSecret(_ wallet: WalletSnapshot, token: SecretAlertPresentation.Token) {
+        keyExportTask?.cancel()
+        keyExportTask = Task { [weak self, walletsManager] in
+            let secret = try? await walletsManager.exportMnemonic(wallet: wallet)
+            guard let self, !Task.isCancelled, secretPresentation.accepts(token) else { return }
+            guard let secret else {
+                secretPresentation.finish(token, copying: false)
+                return
+            }
+            presentSecret(secret, showingMnemonic: true, token: token)
         }
     }
 
@@ -486,12 +555,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let title = willExportMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: specificAccount?.nameOrCroppedAddress(walletId: wallet.id), preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
+            guard let self, let scene = viewIfLoaded?.window?.windowScene else { return }
             let reason = willExportMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
             let passwordReason = willExportMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
-            self?.authenticationTask?.cancel()
-            self?.authenticationTask = Task { [weak self] in
+            authenticationTask?.cancel()
+            authenticationTask = Task { [weak self, weak scene] in
                 let success = await LocalAuthentication.attempt(reason: reason, presentPasswordAlertFrom: { [weak self] in self }, passwordReason: passwordReason)
-                guard let self, success, !Task.isCancelled, viewIfLoaded?.window != nil else { return }
+                guard let self, let scene, success, !Task.isCancelled,
+                      viewIfLoaded?.window?.windowScene === scene, canPresentSecret else { return }
                 showKey(wallet: wallet, specificAccount: specificAccount)
             }
         }

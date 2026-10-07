@@ -17,7 +17,12 @@ struct Keychain: Sendable {
         case failedToSave(OSStatus)
         case failedToUpdate
         case failedToDelete(OSStatus)
+        case invalidPasswordData
+        case orphanedWallets
     }
+
+    enum PasswordState: Equatable, Sendable { case missing, present }
+    enum PasswordCreationResult: Equatable, Sendable { case created, alreadyExists }
     
     private let copyMatching: CopyMatching
     private let add: Add
@@ -68,49 +73,53 @@ struct Keychain: Sendable {
         
     }
     
-    var password: String? {
-        if let data = get(key: .password), let password = String(data: data, encoding: .utf8) {
-            return password
-        } else {
-            return nil
+    func readPassword() throws -> String? {
+        guard let data = try read(key: .password) else { return nil }
+        guard let password = String(data: data, encoding: .utf8), !password.isEmpty else {
+            throw KeychainError.invalidPasswordData
         }
+        return password
     }
     
     func readPasswordData() throws -> Data? {
-        try read(key: .password)
+        try readPassword().map { Data($0.utf8) }
     }
 
-    @discardableResult
-    @MainActor
-    func save(password: String) async -> Bool {
-        guard let data = password.data(using: .utf8) else { return false }
+    func passwordState() throws -> PasswordState {
+        if try readPasswordData() != nil { return .present }
+        guard try readAllWalletIDs().isEmpty else { throw KeychainError.orphanedWallets }
+        return .missing
+    }
+
+    func createPasswordIfMissing(_ password: String) async throws -> PasswordCreationResult {
+        let result: PasswordCreationResult
 #if os(iOS) || os(visionOS)
-        do {
-            try await SafariApprovalVaultHost.shared.performSourceMutation { willMutateSource in
-                try Task.checkCancellation()
-                try willMutateSource()
-                try save(data: data, key: .password)
-            }
-            return true
-        } catch {
-            return false
+        result = try await SafariApprovalVaultHost.shared.performSourceMutation { willMutateSource in
+            try createPasswordIfMissing(password, beforeInsert: willMutateSource)
         }
 #else
-        do {
-            try save(data: data, key: .password)
-            return true
-        } catch {
-            return false
-        }
+        result = try createPasswordIfMissing(password, beforeInsert: {})
 #endif
+        return result
     }
 
-#if os(macOS)
-    func createPasswordIfMissing(_ password: String) -> Bool {
-        guard let data = password.data(using: .utf8) else { return false }
-        return saveIfMissing(data: data, key: .password)
+    func createPasswordIfMissing(
+        _ password: String,
+        beforeInsert: () throws -> Void
+    ) throws -> PasswordCreationResult {
+        try Task.checkCancellation()
+        guard password.isOkAsPassword else { throw KeychainError.invalidPasswordData }
+        guard try passwordState() == .missing else { return .alreadyExists }
+        try Task.checkCancellation()
+        try beforeInsert()
+        try Task.checkCancellation()
+        let status = add(saveQuery(data: Data(password.utf8), key: .password) as CFDictionary, nil)
+        switch status {
+        case errSecSuccess: return .created
+        case errSecDuplicateItem: return .alreadyExists
+        default: throw KeychainError.failedToSave(status)
+        }
     }
-#endif
 
     func readAllWalletIDs() throws -> [String] {
         let items = try allStoredItemAttributes()
@@ -180,11 +189,6 @@ struct Keychain: Sendable {
         }
     }
 
-    private func saveIfMissing(data: Data, key: ItemKey) -> Bool {
-        let query = saveQuery(data: data, key: key)
-        return add(query as CFDictionary, nil) == errSecSuccess
-    }
-
     private func saveQuery(data: Data, key: ItemKey) -> [String: Any] {
         return [
             kSecClass as String: kSecClassGenericPassword,
@@ -231,10 +235,6 @@ struct Keychain: Sendable {
         }
     }
     
-    private func get(key: ItemKey) -> Data? {
-        return try? read(key: key)
-    }
-
     private func read(key: ItemKey) throws -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

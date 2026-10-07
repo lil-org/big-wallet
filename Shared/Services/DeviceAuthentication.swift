@@ -26,8 +26,11 @@ struct DeviceAuthentication {
         }
     }
 
-    static func verify(password: String) -> Bool {
-        password == Keychain.shared.password
+    static func verify(password: String, keychain: Keychain = .shared) throws -> Bool {
+        guard let stored = try keychain.readPassword() else {
+            throw Keychain.KeychainError.failedToRead(errSecItemNotFound)
+        }
+        return password == stored
     }
 
     @MainActor

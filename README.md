@@ -60,6 +60,12 @@ Removing a wallet or account durably records its revocation before changing the 
 
 Revocation history retains the latest removal of each wallet or account without expiry; repeated removals coalesce. If that history is lost or structurally corrupted, a new history generation invalidates old site permissions as profiles are accessed while preserving request and transaction recovery records. Unreadable storage or a failed durable write still prevents removal.
 
+### Password setup and secret exports
+
+Initial password setup only inserts a missing credential; it never replaces an existing password. Unreadable or malformed credentials, and wallet records without their password, stop setup and offer Retry. Competing setup sessions must authenticate with the credential that was actually stored.
+
+Seed phrases and private keys disappear when their scene or window becomes inactive or closes. Returning requires a fresh reveal and authentication. Secret clipboard copies stay on the current device and expire after 30 seconds. iOS and visionOS enforce expiration through the system; macOS uses elapsed time while the app is running, checks ownership before clearing, and clears its own copy on normal termination. Forced termination can prevent macOS cleanup. These controls do not guarantee erasure of Swift string storage or copies already obtained by another application.
+
 ### iPhone debugger launch stalls in Xcode 27
 
 On Xcode 27.0 (27A266a) with iOS 27.0 (24A437), device debugging can stall at "Configuring Observers for Extensions and XPC Services" with CoreDevice error 1001 for `com.apple.instruments.dtservicehub`. The `Wallet iOS` scheme disables "Debug XPC services used by app" while keeping the app's LLDB debugger enabled.

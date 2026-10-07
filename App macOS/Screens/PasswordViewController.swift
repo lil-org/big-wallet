@@ -9,12 +9,14 @@ class PasswordViewController: NSViewController {
         mode: Mode,
         reason: AuthenticationReason? = nil,
         reviewLifetime: NativeApprovalReviewLifetime? = nil,
+        onboardingCancelled: (() -> Void)? = nil,
         completion: ((Bool) -> Void)?
     ) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
         new.reason = reason
         new.reviewLifetime = reviewLifetime
+        new.onboardingCancelled = onboardingCancelled
         new.completion = completion
         return new
     }
@@ -23,14 +25,18 @@ class PasswordViewController: NSViewController {
         case create, repeatAfterCreate, enter
     }
     
-    private let keychain = Keychain.shared
+    var keychain = Keychain.shared
     private var mode = Mode.create
     private var reason: AuthenticationReason?
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
+    private var onboardingCancelled: (() -> Void)?
     private var didCallCompletion = false
     private var initialRefreshTask: Task<Void, Never>?
     private var reviewLifetime: NativeApprovalReviewLifetime?
+    private var isPasswordUnavailable = true
+    private var isSaving = false
+    private var saveTask: Task<Void, Never>?
 
     private var isCreatingPassword: Bool {
         switch mode {
@@ -39,6 +45,10 @@ class PasswordViewController: NSViewController {
         case .enter:
             return false
         }
+    }
+
+    private var canSubmitPassword: Bool {
+        mode == .enter ? !passwordTextField.stringValue.isEmpty : passwordTextField.stringValue.isOkAsPassword
     }
     
     @IBOutlet weak var reasonLabel: NSTextField!
@@ -61,6 +71,7 @@ class PasswordViewController: NSViewController {
         okButton.title = Strings.ok
         
         switchToMode(mode)
+        passwordTextField.isEnabled = false
         
         if let reason = reason, reason != .start {
             reasonLabel.stringValue = "\(Strings.to) " + reason.title.lowercased()
@@ -68,26 +79,30 @@ class PasswordViewController: NSViewController {
             reasonLabel.stringValue = ""
         }
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationBecameActive), name: NSApplication.didBecomeActiveNotification, object: nil)
         initialRefreshTask = Task { [weak self] in
             await Task.yield()
             guard !Task.isCancelled else { return }
-            self?.walletsChanged()
+            self?.refreshPasswordState()
         }
     }
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
         initialRefreshTask?.cancel()
+        saveTask?.cancel()
     }
 
     isolated deinit {
         initialRefreshTask?.cancel()
+        saveTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
     
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.delegate = self
+        refreshPasswordState()
     }
     
     func switchToMode(_ mode: Mode) {
@@ -107,7 +122,9 @@ class PasswordViewController: NSViewController {
     }
     
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard reviewLifetime?.isActive != false, !didCallCompletion else { return }
+        guard reviewLifetime?.isActive != false, !didCallCompletion, !isSaving else { return }
+        let wasUnavailable = isPasswordUnavailable
+        guard refreshPasswordState(), !wasUnavailable else { return }
         switch mode {
         case .create:
             switchToMode(.repeatAfterCreate)
@@ -118,36 +135,63 @@ class PasswordViewController: NSViewController {
                     callCompletion(result: false)
                     return
                 }
-                guard keychain.password == nil else {
-                    leaveCreateFlowForExistingPassword()
-                    return
-                }
-                guard keychain.createPasswordIfMissing(repeated) else {
-                    if keychain.password != nil {
-                        leaveCreateFlowForExistingPassword()
-                    } else {
-                        presentMessageAlert(
-                            Strings.somethingWentWrong,
-                            style: .informational
-                        )
+                isSaving = true
+                okButton.isEnabled = false
+                cancelButton.isEnabled = false
+                passwordTextField.isEnabled = false
+                saveTask = Task { [weak self, keychain] in
+                    let result: Result<Keychain.PasswordCreationResult, Error>
+                    do { result = .success(try await keychain.createPasswordIfMissing(repeated)) }
+                    catch { result = .failure(error) }
+                    defer {
+                        if case .success(.created) = result { WalletStoreSync.postLocalAndExternalChange() }
                     }
-                    return
+                    guard let self else { return }
+                    isSaving = false
+                    cancelButton.isEnabled = true
+                    guard !Task.isCancelled, reviewLifetime?.isActive != false, !didCallCompletion else { return }
+                    switch result {
+                    case .success(.created):
+                        callCompletion(result: true)
+                    case .success(.alreadyExists):
+                        passwordToRepeat = nil
+                        passwordTextField.stringValue = ""
+                        do {
+                            guard try keychain.passwordState() == .present else {
+                                showPasswordUnavailable()
+                                return
+                            }
+                            leaveCreateFlowForExistingPassword()
+                        } catch {
+                            showPasswordUnavailable()
+                        }
+                    case .failure:
+                        showPasswordUnavailable()
+                    }
                 }
-                callCompletion(result: true)
-                WalletStoreSync.postLocalAndExternalChange()
             }
         case .enter:
-            if keychain.password == passwordTextField.stringValue {
-                callCompletion(result: true)
+            do {
+                if try DeviceAuthentication.verify(password: passwordTextField.stringValue, keychain: keychain) {
+                    callCompletion(result: true)
+                }
+            } catch {
+                showPasswordUnavailable()
             }
         }
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        guard reviewLifetime?.isActive != false, !didCallCompletion else { return }
+        guard reviewLifetime?.isActive != false, !didCallCompletion, !isSaving else { return }
         switch mode {
         case .create:
-            view.window?.contentViewController = WelcomeViewController.new(completion: completion)
+            let welcome = WelcomeViewController.new(
+                onboardingCancelled: onboardingCancelled,
+                completion: completion
+            )
+            welcome.keychain = keychain
+            retire()
+            view.window?.contentViewController = welcome
         case .repeatAfterCreate:
             switchToMode(.create)
         case .enter:
@@ -156,17 +200,82 @@ class PasswordViewController: NSViewController {
     }
     
     private func callCompletion(result: Bool) {
-        if reviewLifetime?.isActive != false && !didCallCompletion {
-            didCallCompletion = true
-            NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
-            completion?(result)
-            retainedReturnController = nil
+        guard reviewLifetime?.isActive != false, !didCallCompletion else { return }
+        retire()
+        completion?(result)
+        retainedReturnController = nil
+    }
+
+    private func cancelOnboarding() {
+        guard !didCallCompletion else { return }
+        guard let onboardingCancelled else {
+            callCompletion(result: false)
+            return
         }
+        retire()
+        onboardingCancelled()
+        retainedReturnController = nil
+    }
+
+    private func retire() {
+        didCallCompletion = true
+        initialRefreshTask?.cancel()
+        saveTask?.cancel()
+        passwordToRepeat = nil
+        passwordTextField.stringValue = ""
+        NotificationCenter.default.removeObserver(self)
     }
 
     @objc private func walletsChanged() {
-        guard isCreatingPassword, keychain.password != nil else { return }
-        leaveCreateFlowForExistingPassword()
+        refreshPasswordState()
+    }
+
+    @objc private func applicationBecameActive() {
+        guard viewIfLoaded?.window != nil else { return }
+        refreshPasswordState()
+    }
+
+    @discardableResult
+    private func refreshPasswordState() -> Bool {
+        guard !isSaving, !didCallCompletion, reviewLifetime?.isActive != false else { return false }
+        do {
+            switch try keychain.passwordState() {
+            case .present:
+                if isCreatingPassword {
+                    leaveCreateFlowForExistingPassword()
+                    return false
+                }
+            case .missing:
+                guard isCreatingPassword else {
+                    showPasswordUnavailable()
+                    return false
+                }
+            }
+            isPasswordUnavailable = false
+            passwordTextField.isEnabled = true
+            okButton.title = Strings.ok
+            okButton.isEnabled = canSubmitPassword
+            switch mode {
+            case .create: titleLabel.stringValue = Strings.createPassword
+            case .repeatAfterCreate: titleLabel.stringValue = Strings.repeatPassword
+            case .enter: titleLabel.stringValue = Strings.enterPassword
+            }
+            return true
+        } catch {
+            showPasswordUnavailable()
+            return false
+        }
+    }
+
+    private func showPasswordUnavailable() {
+        isPasswordUnavailable = true
+        passwordToRepeat = nil
+        if mode == .repeatAfterCreate { mode = .create }
+        passwordTextField.stringValue = ""
+        passwordTextField.isEnabled = false
+        titleLabel.stringValue = Strings.failedToLoad
+        okButton.title = Strings.tryAgain
+        okButton.isEnabled = true
     }
 
     private func leaveCreateFlowForExistingPassword() {
@@ -178,7 +287,7 @@ class PasswordViewController: NSViewController {
 extension PasswordViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        okButton.isEnabled = passwordTextField.stringValue.isOkAsPassword
+        okButton.isEnabled = !isSaving && (isPasswordUnavailable || canSubmitPassword)
     }
     
 }
@@ -187,7 +296,8 @@ extension PasswordViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         guard reviewLifetime == nil else { return }
-        callCompletion(result: false)
+        if isCreatingPassword { cancelOnboarding() }
+        else { callCompletion(result: false) }
     }
     
 }
