@@ -703,11 +703,9 @@ class AccountsListViewController: NSViewController {
                 authenticationTask?.cancel()
                 authenticationTask = Task { [weak self, agent] in
                     let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: .removeWallet)
-                    guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+                    guard let self, allowed, !Task.isCancelled, acceptsManagementActions else { return }
                     Window.activateWindow(view.window)
-                    if allowed {
-                        removeWallet(wallet)
-                    }
+                    removeWallet(wallet)
                 }
             }
         }
@@ -781,14 +779,12 @@ class AccountsListViewController: NSViewController {
                 authenticationTask?.cancel()
                 authenticationTask = Task { [weak self, agent] in
                     let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: reason)
-                    guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+                    guard let self, allowed, !Task.isCancelled, acceptsManagementActions else { return }
                     Window.activateWindow(view.window)
-                    if allowed {
-                        showKey(
-                            wallet: wallet,
-                            specificAccount: specificAccount
-                        )
-                    }
+                    showKey(
+                        wallet: wallet,
+                        specificAccount: specificAccount
+                    )
                 }
             }
         }
